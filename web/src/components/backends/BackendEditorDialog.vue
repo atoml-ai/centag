@@ -124,7 +124,7 @@
         </div>
       </div>
 
-      <!-- Gemini 原生 vs OpenAI 兼容 说明 -->
+      <!-- Gemini 原生说明 -->
       <el-alert
         v-if="form.type === 'gemini'"
         type="success"
@@ -133,15 +133,6 @@
         class="gemini-hint"
         title="Gemini 原生 — 官方 / CLI 推荐"
         description="直接接入 Gemini 官方 API，支持所有原生特性。Gemini CLI 用户应选此类型。"
-      />
-      <el-alert
-        v-if="form.type === 'openai'"
-        type="info"
-        :closable="false"
-        show-icon
-        class="openai-compat-hint"
-        title="OpenAI 兼容 — 含用兼容 URL 访问 Gemini/Azure 的方式"
-        description="保持与 OpenAI SDK 的兼容性。也可用兼容端点 URL 代理访问 Gemini 等第三方服务。"
       />
 
       <!-- Gateway 专有能力：折叠，不打断主流程 -->
@@ -671,8 +662,7 @@ defineExpose({
   margin-top: 8px;
 }
 
-.gemini-hint,
-.openai-compat-hint {
+.gemini-hint {
   margin-bottom: 4px;
 }
 

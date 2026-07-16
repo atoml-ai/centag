@@ -97,8 +97,11 @@ func (s *Server) setupMinimalRoutes(configHandler *MinimalConfigHandler, pluginR
 		pluginRegistryAPI.RegisterRoutes(s.router.Group("/api/v1"))
 	}
 
-	// LLM proxy — open by default (clients do not use admin password)
+	// LLM proxy — open when no API keys configured; otherwise require Bearer key/JWT
 	v1 := s.router.Group("/v1")
+	if authHandler != nil {
+		v1.Use(authHandler.ProxyAuthOptionalMiddleware())
+	}
 	{
 		v1.POST("/chat/completions", s.proxyHandler.HandleChatCompletions)
 		v1.GET("/models", s.proxyHandler.ListModels)

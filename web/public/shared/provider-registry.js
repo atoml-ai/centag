@@ -281,6 +281,21 @@ const PROVIDER_REGISTRY = {
       { name: 'mimo-v2-pro', supports_tools: true, supports_images: false, supports_thinking: false, max_context_tokens: 128000 },
     ],
   },
+  opencode: {
+    id: 'opencode',
+    name: 'OpenCode Zen',
+    type: 'openai',
+    base_url: 'https://opencode.ai/zen/v1',
+    env_key: 'OPENCODE_API_KEY',
+    icon: '⚡',
+    description: 'OpenCode Zen 网关（含免费模型）— https://opencode.ai/zen',
+    default_models: [
+      { name: 'mimo-v2.5-free', supports_tools: true, supports_images: false, supports_thinking: false, max_context_tokens: 128000 },
+      { name: 'deepseek-v4-flash-free', supports_tools: true, supports_images: false, supports_thinking: false, max_context_tokens: 128000 },
+      { name: 'deepseek-v4-flash', supports_tools: true, supports_images: false, supports_thinking: false, max_context_tokens: 128000 },
+      { name: 'deepseek-v4-pro', supports_tools: true, supports_images: false, supports_thinking: false, max_context_tokens: 128000 },
+    ],
+  },
   bedrock: {
     id: 'bedrock',
     name: 'AWS Bedrock',

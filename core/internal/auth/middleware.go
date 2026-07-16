@@ -90,6 +90,11 @@ func extractBearerToken(c *gin.Context) string {
 	return c.Query("token")
 }
 
+// ExtractBearerToken is the exported form of extractBearerToken for other packages.
+func ExtractBearerToken(c *gin.Context) string {
+	return extractBearerToken(c)
+}
+
 // apiKeyPrefix is the well-known prefix for all LLM-Proxy API keys.
 const apiKeyPrefix = "llmproxy_"
 

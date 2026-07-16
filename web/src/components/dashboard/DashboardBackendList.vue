@@ -108,6 +108,12 @@ async function handleTest(backend: any) {
 function handleEdit(backend: any) {
   editorRef.value?.openEdit(backend)
 }
+
+function openCreate() {
+  editorRef.value?.openCreate()
+}
+
+defineExpose({ openCreate })
 </script>
 
 <style scoped>
