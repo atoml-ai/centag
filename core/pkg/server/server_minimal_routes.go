@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"centag/core/internal/auth"
+	"centag/core/pkg/config"
 	"centag/core/pkg/logger"
 	pluginregistry "centag/core/pkg/plugin/registry"
 
@@ -121,6 +122,7 @@ func (s *Server) setupMinimalRoutes(configHandler *MinimalConfigHandler, pluginR
 			backends.GET("/types", s.backendHandler.ListBackendTypes)
 			backends.GET("/export", s.backendHandler.ExportBackends)
 			backends.GET("/:id", s.backendHandler.GetBackend)
+			backends.GET("/:id/models", s.backendHandler.GetModels)
 			backends.POST("", s.backendHandler.CreateBackend)
 			backends.PUT("/:id", s.backendHandler.UpdateBackend)
 			backends.DELETE("/:id", s.backendHandler.DeleteBackend)
@@ -140,6 +142,10 @@ func (s *Server) setupMinimalRoutes(configHandler *MinimalConfigHandler, pluginR
 				defaults.PUT("", s.pipelineDefaultsHandler.UpdateDefaults)
 			}
 		}
+
+		// Proxy config (default backend / model)
+		protected.GET("/config/proxy", s.handleGetProxyConfig)
+		protected.PUT("/config/proxy", s.handleSaveProxyConfig)
 
 		// Lightweight usage stub for overview (P3 can enrich)
 		if s.tokenUsageHandler != nil {
@@ -171,4 +177,56 @@ func (s *Server) handleMinimalTokenUsage(c *gin.Context) {
 
 func (s *Server) handleMinimalTokenUsageDaily(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": []any{}})
+}
+
+// handleGetProxyConfig returns the current proxy config (default backend/model).
+func (s *Server) handleGetProxyConfig(c *gin.Context) {
+	cfg := config.Get()
+	if cfg == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "config not initialized"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data": gin.H{
+			"default_backend_id": cfg.Proxy.DefaultBackendID,
+			"default_model":      cfg.Proxy.DefaultModel,
+		},
+	})
+}
+
+// handleSaveProxyConfig updates the proxy config (default backend/model).
+func (s *Server) handleSaveProxyConfig(c *gin.Context) {
+	cfg := config.Get()
+	if cfg == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "config not initialized"})
+		return
+	}
+
+	var req struct {
+		DefaultBackendID *string `json:"default_backend_id"`
+		DefaultModel     *string `json:"default_model"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": err.Error()})
+		return
+	}
+
+	if req.DefaultBackendID != nil {
+		cfg.Proxy.DefaultBackendID = *req.DefaultBackendID
+	}
+	if req.DefaultModel != nil {
+		cfg.Proxy.DefaultModel = *req.DefaultModel
+	}
+
+	logger.Infof("[ProxyConfig] Updated default_backend_id=%q default_model=%q", cfg.Proxy.DefaultBackendID, cfg.Proxy.DefaultModel)
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "proxy config saved",
+		"data": gin.H{
+			"default_backend_id": cfg.Proxy.DefaultBackendID,
+			"default_model":      cfg.Proxy.DefaultModel,
+		},
+	})
 }
