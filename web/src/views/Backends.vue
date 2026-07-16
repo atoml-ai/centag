@@ -54,6 +54,7 @@
                   :title="healthStatusText(p.id)"
                 ></span>
                 <h4 class="card-title">{{ p.name }}</h4>
+                <span v-if="defaultBackendId === p.id" class="default-badge">默认</span>
                 <span class="provider-type-badge">{{ getTypeDisplayName(p.type) }}</span>
               </div>
               <div class="card-meta">
@@ -69,9 +70,12 @@
                 :class="{ highlight: m === p.probe_model }"
               >
                 {{ m }}
-                <template v-if="m === p.probe_model"> (探测)</template>
+                <template v-if="m === p.probe_model"> (默认)</template>
               </span>
               <span v-if="modelNames(p).length > 8" class="model-tag more">+{{ modelNames(p).length - 8 }}</span>
+            </div>
+            <div class="default-model-row" v-else-if="p.probe_model">
+              默认模型：<span class="model-tag highlight">{{ p.probe_model }}</span>
             </div>
           </div>
           <div class="card-footer">
@@ -79,7 +83,21 @@
               {{ healthProbing[p.id] ? '检测中...' : '检测' }}
             </button>
             <button class="btn btn-sm btn-outline" @click="editorRef?.openEdit(p)">编辑</button>
-            <button class="btn btn-sm btn-danger-text" @click="deleteProvider(p)" :disabled="loading">删除</button>
+            <button
+              class="btn btn-sm"
+              :class="defaultBackendId === p.id ? 'btn-default-active' : 'btn-outline'"
+              @click="setDefaultBackend(p)"
+              :disabled="loading || defaultBackendId === p.id"
+            >
+              {{ defaultBackendId === p.id ? '当前默认' : '设为默认' }}
+            </button>
+            <button
+              class="btn btn-sm btn-danger-outline"
+              :disabled="loading || defaultBackendId === p.id"
+              @click="deleteProvider(p)"
+            >
+              删除
+            </button>
           </div>
         </div>
       </div>
@@ -137,6 +155,8 @@ const healthStatuses = ref({})
 const healthErrors = ref({})
 /** @type {import('vue').Ref<Record<string,string>>} */
 const backendTypeNames = ref({})
+const defaultBackendId = ref('')
+const settingDefault = ref(false)
 
 const editorRef = ref(null)
 const editorVisible = ref(false)
@@ -144,6 +164,7 @@ const importInput = ref(null)
 
 onMounted(() => {
   fetchProviders()
+  loadDefaultBackend()
   listBackendTypes()
     .then((types) => {
       if (Array.isArray(types)) {
@@ -157,6 +178,37 @@ onMounted(() => {
       console.error('Failed to load backend types', err)
     })
 })
+
+async function loadDefaultBackend() {
+  try {
+    const res = await api.get('/api/v1/config/proxy')
+    const data = (res && res.data) ? res.data : res
+    defaultBackendId.value = (data && data.default_backend_id) || ''
+  } catch { /* ignore */ }
+}
+
+function getBackendDefaultModel(p) {
+  return p.default_model || p.probe_model || ''
+}
+
+async function setDefaultBackend(p) {
+  if (defaultBackendId.value === p.id) return
+  settingDefault.value = true
+  try {
+    const defaultModel = getBackendDefaultModel(p)
+    await api.put('/api/v1/config/proxy', {
+      default_backend_id: p.id,
+      default_model: defaultModel
+    })
+    defaultBackendId.value = p.id
+    ElMessage.success(`已将「${p.name}」设为默认后端，模型「${defaultModel || '未设置'}」`)
+  } catch (err) {
+    console.error('Set default backend failed', err)
+    ElMessage.error(err?.response?.data?.message || '设置默认后端失败')
+  } finally {
+    settingDefault.value = false
+  }
+}
 
 function fetchProviders() {
   loading.value = true
@@ -586,6 +638,16 @@ function handleImportFile(e) {
   color: var(--el-text-color-secondary, #909399);
   white-space: nowrap;
 }
+.default-badge {
+  font-size: 11px;
+  padding: 1px 8px;
+  border-radius: 10px;
+  background: var(--el-color-success-light-9, #f0f9eb);
+  color: var(--el-color-success, #67c23a);
+  border: 1px solid var(--el-color-success-light-3, #b3e19d);
+  white-space: nowrap;
+  font-weight: 500;
+}
 .card-meta {
   font-size: 12px;
   color: var(--el-text-color-secondary, #909399);
@@ -601,6 +663,11 @@ function handleImportFile(e) {
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
+  margin-top: 8px;
+}
+.default-model-row {
+  font-size: 12px;
+  color: var(--el-text-color-secondary, #909399);
   margin-top: 8px;
 }
 .model-tag {
@@ -693,6 +760,16 @@ function handleImportFile(e) {
 .btn-danger:hover:not(:disabled) {
   background: #f78989;
 }
+.btn-danger-outline {
+  background: var(--el-bg-color, #fff);
+  color: #f56c6c;
+  border-color: #f56c6c;
+}
+.btn-danger-outline:hover:not(:disabled) {
+  background: rgba(245,108,108,0.1);
+  color: #f78989;
+  border-color: #f78989;
+}
 .btn-danger-text {
   color: #f56c6c;
   border: none;
@@ -701,6 +778,15 @@ function handleImportFile(e) {
 }
 .btn-danger-text:hover:not(:disabled) {
   background: rgba(245,108,108,0.1);
+}
+.btn-default-active {
+  background: var(--el-color-success-light-9, #f0f9eb);
+  color: var(--el-color-success, #67c23a);
+  border-color: var(--el-color-success-light-3, #b3e19d);
+  cursor: default;
+}
+.btn-default-active:hover:not(:disabled) {
+  background: var(--el-color-success-light-9, #f0f9eb);
 }
 .btn-text {
   border: none;

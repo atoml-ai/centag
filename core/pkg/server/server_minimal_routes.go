@@ -29,11 +29,13 @@ func (s *Server) setupMinimalRoutes(configHandler *MinimalConfigHandler, pluginR
 	serveIndex := func(c *gin.Context) {
 		c.Header("Cache-Control", "no-cache, no-store, must-revalidate")
 		indexPath := filepath.Join(staticDir, "index.html")
-		if _, err := os.Stat(indexPath); err != nil {
+		data, err := os.ReadFile(indexPath)
+		if err != nil {
 			c.String(http.StatusNotFound, "WebUI not found. Build frontend into %s", staticDir)
 			return
 		}
-		c.File(indexPath)
+		c.Header("Content-Type", "text/html; charset=utf-8")
+		c.String(http.StatusOK, strings.Replace(string(data), "<html", `<html data-edition="minimal"`, 1))
 	}
 
 	// Custom static + SPA fallback (Gin Static returns 404 without hitting NoRoute).
@@ -217,6 +219,15 @@ func (s *Server) handleSaveProxyConfig(c *gin.Context) {
 	}
 	if req.DefaultModel != nil {
 		cfg.Proxy.DefaultModel = *req.DefaultModel
+	}
+
+	// Minimal edition: persist proxy config to data/proxy-config.yaml so it survives restarts.
+	if dataDir := config.ResolveDataDir(); dataDir != "" {
+		if err := config.SaveProxyConfigToFile(dataDir, cfg.Proxy); err != nil {
+			logger.Errorf("Failed to persist proxy config: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "failed to persist proxy config: " + err.Error()})
+			return
+		}
 	}
 
 	logger.Infof("[ProxyConfig] Updated default_backend_id=%q default_model=%q", cfg.Proxy.DefaultBackendID, cfg.Proxy.DefaultModel)

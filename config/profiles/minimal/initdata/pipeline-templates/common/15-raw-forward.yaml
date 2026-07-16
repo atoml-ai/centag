@@ -9,11 +9,14 @@ nodes:
   kind: proxy.transparent_forward
   implementation: builtin.transparent_forward
   name: 原始转发
-  backend: openai
-  model: gpt-4o-mini
+  backend: "{{system.default_backend}}"
+  model: "{{system.default_model}}"
   config:
-    backend: openai
-    model: gpt-4o-mini
+    backend: "{{system.default_backend}}"
+    model: "{{system.default_model}}"
+    template_vars:
+      backend: "system.default_backend"
+      model: "system.default_model"
     custom_config:
       default_scheme: https
   timeout: 120

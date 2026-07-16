@@ -1,6 +1,6 @@
 <template>
   <div class="backend-list">
-    <div v-for="b in backends" :key="b.id" class="backend-item">
+    <div v-for="b in backends" :key="b.id" class="backend-item" :class="{ 'is-default': defaultBackendId === b.id }">
       <div class="backend-left">
         <el-switch
           :model-value="b.enabled"
@@ -11,8 +11,16 @@
           @change="(enabled) => handleToggle(b, enabled)"
         />
         <div class="backend-info">
-          <div class="backend-name">{{ b.name }}</div>
+          <div class="backend-name">
+            {{ b.name }}
+            <el-tag v-if="defaultBackendId === b.id" type="success" size="small" effect="light" class="default-tag">
+              默认
+            </el-tag>
+          </div>
           <div class="backend-meta">{{ b.type }} · {{ b.base_url }}</div>
+          <div class="backend-default-model" v-if="b.probe_model || b.default_model">
+            默认模型：<span class="model-name">{{ b.default_model || b.probe_model }}</span>
+          </div>
         </div>
       </div>
       <div class="backend-right">
@@ -28,8 +36,27 @@
           >
             测试
           </el-button>
+          <el-button
+            size="small"
+            :type="defaultBackendId === b.id ? 'success' : 'default'"
+            :plain="defaultBackendId !== b.id"
+            :disabled="defaultBackendId === b.id || settingDefaultMap[b.id]"
+            :loading="settingDefaultMap[b.id]"
+            @click="handleSetDefault(b)"
+          >
+            {{ defaultBackendId === b.id ? '当前默认' : '设为默认' }}
+          </el-button>
           <el-button size="small" type="primary" plain @click="handleEdit(b)">
             编辑
+          </el-button>
+          <el-button
+            size="small"
+            type="danger"
+            plain
+            :disabled="defaultBackendId === b.id"
+            @click="handleDelete(b)"
+          >
+            删除
           </el-button>
         </div>
       </div>
@@ -45,11 +72,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ref, reactive, onMounted } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import BackendEditorDialog from '@/components/backends/BackendEditorDialog.vue'
-import { updateBackend } from '@/api'
+import { updateBackend, deleteBackend } from '@/api'
 import { getBackendTestMessage, testBackendConnection } from '@/utils/backendTest'
+import api from '@/api'
 
 defineProps<{
   backends: any[]
@@ -64,6 +92,39 @@ const editorRef = ref<InstanceType<typeof BackendEditorDialog> | null>(null)
 const editorVisible = ref(false)
 const testingMap = reactive<Record<string, boolean>>({})
 const togglingMap = reactive<Record<string, boolean>>({})
+const settingDefaultMap = reactive<Record<string, boolean>>({})
+const defaultBackendId = ref('')
+
+onMounted(() => {
+  loadDefaultBackend()
+})
+
+async function loadDefaultBackend() {
+  try {
+    const res: any = await api.get('/api/v1/config/proxy')
+    const data = res?.data ?? res
+    defaultBackendId.value = data?.default_backend_id || ''
+  } catch { /* ignore */ }
+}
+
+async function handleSetDefault(backend: any) {
+  if (defaultBackendId.value === backend.id) return
+  settingDefaultMap[backend.id] = true
+  try {
+    const defaultModel = backend.default_model || backend.probe_model || ''
+    await api.put('/api/v1/config/proxy', {
+      default_backend_id: backend.id,
+      default_model: defaultModel
+    })
+    defaultBackendId.value = backend.id
+    ElMessage.success(`已将「${backend.name || backend.id}」设为默认后端，模型「${defaultModel || '未设置'}」`)
+    emit('refresh')
+  } catch (error: any) {
+    ElMessage.error(error?.response?.data?.message || '设置默认后端失败')
+  } finally {
+    settingDefaultMap[backend.id] = false
+  }
+}
 
 async function handleToggle(backend: any, enabled: boolean) {
   togglingMap[backend.id] = true
@@ -109,11 +170,38 @@ function handleEdit(backend: any) {
   editorRef.value?.openEdit(backend)
 }
 
+async function handleDelete(backend: any) {
+  if (defaultBackendId.value === backend.id) {
+    ElMessage.warning('不能删除当前默认后端，请先设置其他后端为默认')
+    return
+  }
+  try {
+    await ElMessageBox.confirm(
+      `确定删除后端「${backend.name || backend.id}」吗？此操作不可恢复。`,
+      '确认删除',
+      { confirmButtonText: '删除', cancelButtonText: '取消', type: 'warning' }
+    )
+  } catch {
+    return
+  }
+  try {
+    await deleteBackend(backend.id)
+    ElMessage.success(`已删除后端「${backend.name || backend.id}」`)
+    emit('refresh')
+  } catch (error: any) {
+    ElMessage.error(error?.response?.data?.message || '删除后端失败')
+  }
+}
+
 function openCreate() {
   editorRef.value?.openCreate()
 }
 
-defineExpose({ openCreate })
+function reloadDefault() {
+  loadDefaultBackend()
+}
+
+defineExpose({ openCreate, reloadDefault })
 </script>
 
 <style scoped>
@@ -139,6 +227,17 @@ defineExpose({ openCreate })
   background: #f9fafb;
   border-radius: 6px;
   border: 1px solid #f3f4f6;
+  transition: all 0.2s;
+}
+
+.backend-item.is-default {
+  background: #f0f9eb;
+  border-color: #b3e19d;
+}
+
+.default-tag {
+  margin-left: 6px;
+  flex-shrink: 0;
 }
 
 .backend-left {
@@ -173,6 +272,17 @@ defineExpose({ openCreate })
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.backend-default-model {
+  font-size: 0.75rem;
+  color: #6b7280;
+  margin-top: 4px;
+}
+
+.backend-default-model .model-name {
+  color: #409eff;
+  font-weight: 500;
 }
 
 .backend-right {

@@ -1,18 +1,23 @@
-id: transparent-fast
-name: 透明模式（快）
-description: 标准客户端可用：直连已配置后端，不注入网关 system prompt
+id: transparent-proxy
+name: 透明模式
+description: 标准客户端可用：直连已配置后端，不注入网关 system prompt，原样保留客户端 messages
 version: "2.0"
-shortcut_code: '#tf'
+shortcut_code: '#t'
 nodes:
 - id: generate
   type: generator
   kind: llm.generate
   implementation: builtin.generator
   name: 透传生成
-  backend: openai
-  model: gpt-4o-mini
+  backend: "{{system.default_backend}}"
+  model: "{{system.default_model}}"
   config:
+    backend: "{{system.default_backend}}"
+    model: "{{system.default_model}}"
     prompt_template: '{{input}}'
+    template_vars:
+      backend: "system.default_backend"
+      model: "system.default_model"
   timeout: 120
   retry:
     max_attempts: 0
@@ -26,7 +31,7 @@ global_config:
   parallel_limit: 4
   log_level: info
 metadata:
-  aligned_proxy_mode: transparent-fast
+  aligned_proxy_mode: transparent-proxy
   profile: minimal
   features:
     - no_system_prompt_inject

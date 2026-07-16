@@ -1,64 +1,24 @@
 <template>
   <div class="home-pipeline-card" v-loading="loading">
-    <div class="default-section">
-      <div class="default-head">
-        <span class="section-label">系统默认流水线</span>
-        <el-button type="primary" link size="small" @click="$router.push('/pipelines')">
-          管理策略
-        </el-button>
-      </div>
-
-      <el-select
-        v-model="selectedDefaultId"
-        placeholder="选择默认流水线"
-        filterable
-        :disabled="!canEdit"
-        :loading="savingDefault"
-        class="default-select"
-        @change="handleDefaultChange"
-      >
-        <el-option
-          v-for="pipeline in pipelineOptions"
-          :key="pipeline.id"
-          :label="pipeline.name"
-          :value="pipeline.id"
-        >
-          <div class="option-row">
-            <span class="option-name">{{ pipeline.name }}</span>
-            <span class="option-meta">{{ pipeline.id }}</span>
-          </div>
-        </el-option>
-      </el-select>
-
-      <p v-if="canEdit" class="form-tip">
-        客户端未指定流水线时，将自动使用此项处理请求
-      </p>
-      <p v-else class="form-tip muted">
-        仅管理员可在首页修改系统默认流水线
-      </p>
-
-      <div v-if="currentDefault" class="current-default">
-        <el-tag size="small" type="warning" effect="light">当前生效</el-tag>
-        <span class="current-name">{{ currentDefault.name }}</span>
-        <span class="current-meta mono">{{ currentDefault.id }} · {{ currentDefault.nodes?.length || 0 }} 节点</span>
-      </div>
-    </div>
-
     <template v-if="pipelines.length > 0">
-      <el-divider style="margin: 12px 0" />
       <div class="pipeline-list-head">
         <span class="section-label">流水线列表</span>
         <span class="list-count">{{ pipelines.length }} 个</span>
       </div>
       <div class="pipeline-list">
-        <div v-for="pipeline in pipelines" :key="pipeline.id" class="pipeline-row">
+        <div
+          v-for="pipeline in pipelines"
+          :key="pipeline.id"
+          class="pipeline-row"
+          :class="{ 'is-default': pipeline.id === selectedDefaultId }"
+        >
           <div class="pipeline-main">
             <div class="pipeline-title-row">
               <span class="pipeline-name">{{ pipeline.name }}</span>
               <el-tag
                 v-if="pipeline.id === selectedDefaultId"
                 size="small"
-                type="warning"
+                type="success"
                 effect="light"
               >
                 默认
@@ -99,29 +59,48 @@
                 </el-button>
               </template>
             </PipelineFeatureGuard>
+            <el-button
+              v-if="canEdit"
+              size="small"
+              type="danger"
+              plain
+              :disabled="pipeline.id === selectedDefaultId"
+              @click="handleDelete(pipeline)"
+            >
+              删除
+            </el-button>
           </div>
         </div>
       </div>
     </template>
 
-    <el-empty v-else-if="!loading" description="暂无流水线，请先在策略管理中创建" :image-size="56">
-      <el-button type="primary" plain size="small" @click="$router.push('/pipelines')">
-        去创建
+    <el-empty v-else-if="!loading" description="暂无流水线" :image-size="56">
+      <el-button v-if="canEdit" type="primary" plain size="small" @click="openCreate">
+        创建流水线
       </el-button>
     </el-empty>
+
+    <PipelineCreateDialog
+      v-model="createInfoVisible"
+      :existing-ids="pipelines.map(p => p.id)"
+      @confirm="startCreateFromInfo"
+    />
 
     <PipelineEditorDialog
       v-model="editorVisible"
       :pipeline="editingPipeline"
+      :is-create="isCreating"
       @saved="handleEditorSaved"
     />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ref, computed, onMounted, watch, nextTick } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { Edit } from '@element-plus/icons-vue'
+import PipelineCreateDialog from '@/components/pipeline/PipelineCreateDialog.vue'
+import type { PipelineCreateInfo } from '@/components/pipeline/PipelineCreateDialog.vue'
 import PipelineEditorDialog from '@/components/pipeline/PipelineEditorDialog.vue'
 import PipelineFeatureGuard from '@/components/pipeline/PipelineFeatureGuard.vue'
 import { useEdition } from '@/composables/useEdition'
@@ -131,11 +110,16 @@ import {
   getPipeline,
   getPipelineDefaults,
   updatePipelineDefaults,
+  deletePipeline,
   parsePipelinesResponse,
   type AgentPatternPipeline
 } from '@/api/pipeline'
 
 const DISALLOWED_DEFAULT_IDS = new Set(['raw-forward', 'cache-hit', 'cache-mode'])
+
+const emit = defineEmits<{
+  'update:count': [count: number]
+}>()
 
 const { isPersonal, isMinimal } = useEdition()
 const authStore = useAuthStore()
@@ -147,22 +131,14 @@ const loading = ref(false)
 const savingDefault = ref(false)
 const editorVisible = ref(false)
 const editingPipeline = ref<AgentPatternPipeline | null>(null)
+const isCreating = ref(false)
+const createInfoVisible = ref(false)
 
 const canEdit = computed(() => isPersonal.value || isMinimal.value || authStore.isAdmin)
 
-const pipelineOptions = computed(() =>
-  pipelines.value
-    .filter(p => p.id && !DISALLOWED_DEFAULT_IDS.has(p.id))
-    .map(p => ({
-      id: p.id,
-      name: p.name || p.id,
-      nodes: p.nodes
-    }))
-)
-
-const currentDefault = computed(() =>
-  pipelines.value.find(p => p.id === selectedDefaultId.value) || null
-)
+watch(() => pipelines.value.length, (len) => {
+  emit('update:count', len)
+}, { immediate: true })
 
 async function loadPipelines() {
   loading.value = true
@@ -174,7 +150,7 @@ async function loadPipelines() {
 
     if (
       selectedDefaultId.value &&
-      !pipelineOptions.value.some(p => p.id === selectedDefaultId.value)
+      !pipelines.value.some(p => p.id === selectedDefaultId.value)
     ) {
       pipelines.value = [
         {
@@ -215,16 +191,36 @@ async function persistDefault(pipelineId: string) {
   }
 }
 
-function handleDefaultChange(pipelineId: string) {
-  persistDefault(pipelineId)
-}
-
 function selectDefault(pipelineId: string) {
   selectedDefaultId.value = pipelineId
   persistDefault(pipelineId)
 }
 
+async function handleDelete(pipeline: AgentPatternPipeline) {
+  if (pipeline.id === selectedDefaultId.value) {
+    ElMessage.warning('不能删除当前默认流水线，请先设置其他流水线为默认')
+    return
+  }
+  try {
+    await ElMessageBox.confirm(
+      `确定删除流水线「${pipeline.name || pipeline.id}」吗？此操作不可恢复。`,
+      '确认删除',
+      { confirmButtonText: '删除', cancelButtonText: '取消', type: 'warning' }
+    )
+  } catch {
+    return
+  }
+  try {
+    await deletePipeline(pipeline.id)
+    ElMessage.success(`已删除流水线「${pipeline.name || pipeline.id}」`)
+    loadPipelines()
+  } catch (error: any) {
+    ElMessage.error(error?.response?.data?.message || '删除流水线失败')
+  }
+}
+
 async function openEditor(pipeline: AgentPatternPipeline) {
+  isCreating.value = false
   try {
     const detail = await getPipeline(pipeline.id)
     editingPipeline.value = (detail as { data?: AgentPatternPipeline })?.data ?? detail as AgentPatternPipeline
@@ -234,6 +230,43 @@ async function openEditor(pipeline: AgentPatternPipeline) {
     editorVisible.value = true
     ElMessage.warning('已使用列表数据打开编辑器')
   }
+}
+
+function openCreate() {
+  createInfoVisible.value = true
+}
+
+function buildEmptyPipeline(info: Partial<PipelineCreateInfo> = {}): AgentPatternPipeline {
+  return {
+    id: info.id || `pipeline-${Date.now()}`,
+    name: info.name || '',
+    description: info.description || '',
+    version: info.version || '1.0',
+    shortcut_code: info.shortcut_code || '',
+    nodes: [],
+    global_config: {
+      timeout: 120,
+      max_retries: 3,
+      bypass_on_error: true,
+      stream_mode: false,
+      parallel_limit: 4,
+      log_level: 'info',
+      fallback_groups: [],
+      storage: undefined,
+      hooks: undefined
+    },
+    metadata: {}
+  }
+}
+
+async function startCreateFromInfo(info: PipelineCreateInfo) {
+  isCreating.value = true
+  editorVisible.value = false
+  editingPipeline.value = null
+  await nextTick()
+  editingPipeline.value = buildEmptyPipeline(info)
+  await nextTick()
+  editorVisible.value = true
 }
 
 function handleEditorSaved(savedPipeline?: AgentPatternPipeline) {
@@ -255,7 +288,7 @@ onMounted(() => {
   loadPipelines()
 })
 
-defineExpose({ reload: loadPipelines })
+defineExpose({ reload: loadPipelines, openCreate })
 </script>
 
 <style scoped>
@@ -268,13 +301,6 @@ defineExpose({ reload: loadPipelines })
   min-height: 0;
 }
 
-.default-section {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.default-head,
 .pipeline-list-head {
   display: flex;
   align-items: center;
@@ -286,42 +312,6 @@ defineExpose({ reload: loadPipelines })
   font-size: 0.8125rem;
   font-weight: 600;
   color: #374151;
-}
-
-.default-select {
-  width: 100%;
-}
-
-.form-tip {
-  margin: 0;
-  font-size: 0.75rem;
-  color: #6b7280;
-  line-height: 1.4;
-}
-
-.form-tip.muted {
-  color: #9ca3af;
-}
-
-.current-default {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
-  padding: 8px 10px;
-  border-radius: 8px;
-  background: #fffbeb;
-  border: 1px solid #fde68a;
-}
-
-.current-name {
-  font-weight: 500;
-  color: #92400e;
-}
-
-.current-meta {
-  font-size: 0.75rem;
-  color: #b45309;
 }
 
 .list-count {
@@ -349,6 +339,12 @@ defineExpose({ reload: loadPipelines })
   border: 1px solid #e5e7eb;
   border-radius: 8px;
   background: #f9fafb;
+  transition: all 0.2s;
+}
+
+.pipeline-row.is-default {
+  background: #f0f9eb;
+  border-color: #b3e19d;
 }
 
 .pipeline-main {
@@ -383,23 +379,6 @@ defineExpose({ reload: loadPipelines })
   align-items: center;
   gap: 4px;
   flex-shrink: 0;
-}
-
-.option-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  width: 100%;
-}
-
-.option-name {
-  font-weight: 500;
-}
-
-.option-meta {
-  font-size: 0.75rem;
-  color: #9ca3af;
 }
 
 .mono {

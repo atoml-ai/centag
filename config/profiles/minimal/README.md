@@ -73,10 +73,9 @@ backends:
 
 ### 流水线配置
 
-编辑 `initdata/pipeline-templates/` 目录下的文件：
+编辑 `initdata/pipeline-templates/common/` 目录下的文件：
 
 - `01-direct-backend.yaml` - 直连模式
-- `02-routing-mode.yaml` - 路由模式
 - `03-transparent-fast.yaml` / `14-transparent-proxy.yaml` - 透明模式（系统默认）
 - `15-raw-forward.yaml` - 原始 HTTP 转发（需 Target-URL / hostproxy）
 

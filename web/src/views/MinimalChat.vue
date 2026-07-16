@@ -1,97 +1,104 @@
 <template>
-  <div class="minimal-chat">
-    <!-- 顶部：流水线选择 -->
-    <div class="pipeline-bar">
-      <span class="pipeline-bar-label">选择流水线</span>
-      <el-select
-        v-model="selectedPipelineId"
-        placeholder="选择流水线"
-        size="default"
-        style="width: 260px"
-        :loading="pipelinesLoading"
-      >
-        <el-option
-          v-for="p in pipelines"
-          :key="p.id"
-          :label="p.name || p.id"
-          :value="p.id"
+  <el-dialog
+    v-model="visible"
+    title="AI 对话测试"
+    width="760px"
+    :close-on-click-modal="false"
+    destroy-on-close
+    class="minimal-chat-dialog"
+    @opened="onOpened"
+  >
+    <div class="minimal-chat-body">
+      <div class="pipeline-bar">
+        <span class="pipeline-bar-label">选择流水线</span>
+        <el-select
+          v-model="selectedPipelineId"
+          placeholder="选择流水线"
+          size="default"
+          style="width: 260px"
+          :loading="pipelinesLoading"
         >
-          <span>{{ p.name || p.id }}</span>
-          <span v-if="p.description" class="pipeline-option-desc">{{ p.description }}</span>
-        </el-option>
-      </el-select>
-      <span v-if="selectedPipeline" class="pipeline-hint">{{ selectedPipeline.description }}</span>
-    </div>
+          <el-option
+            v-for="p in pipelines"
+            :key="p.id"
+            :label="p.name || p.id"
+            :value="p.id"
+          >
+            <span>{{ p.name || p.id }}</span>
+            <span v-if="p.description" class="pipeline-option-desc">{{ p.description }}</span>
+          </el-option>
+        </el-select>
+        <span v-if="selectedPipeline" class="pipeline-hint">{{ selectedPipeline.description }}</span>
+      </div>
 
-    <!-- 对话区 -->
-    <div class="chat-container">
-      <div class="chat-messages" ref="messagesContainer">
-        <!-- 空态 -->
-        <div v-if="messages.length === 0" class="empty-state">
-          <el-icon :size="48" color="#c0c4cc"><ChatDotRound /></el-icon>
-          <p>选择流水线后开始对话</p>
-        </div>
-
-        <!-- 消息列表 -->
-        <div v-for="(msg, idx) in messages" :key="idx" :class="['message', msg.role]">
-          <div class="message-avatar">
-            <el-icon v-if="msg.role === 'user'" :size="18"><User /></el-icon>
-            <el-icon v-else :size="18"><Monitor /></el-icon>
+      <div class="chat-container">
+        <div class="chat-messages" ref="messagesContainer">
+          <div v-if="messages.length === 0" class="empty-state">
+            <el-icon :size="40" color="#c0c4cc"><ChatDotRound /></el-icon>
+            <p>选择流水线后发送消息测试后端</p>
           </div>
-          <div class="message-content">
-            <div class="message-text" v-html="renderMarkdown(msg.content)"></div>
-            <div v-if="msg.error" class="message-error">
-              <el-icon><WarningFilled /></el-icon> {{ msg.error }}
+
+          <div v-for="(msg, idx) in messages" :key="idx" :class="['message', msg.role]">
+            <div class="message-avatar">
+              <el-icon v-if="msg.role === 'user'" :size="16"><User /></el-icon>
+              <el-icon v-else :size="16"><Monitor /></el-icon>
+            </div>
+            <div class="message-content">
+              <div class="message-text" v-html="renderMarkdown(msg.content)"></div>
+              <div v-if="msg.error" class="message-error">
+                <el-icon><WarningFilled /></el-icon> {{ msg.error }}
+              </div>
+            </div>
+          </div>
+
+          <div v-if="loading" class="message assistant">
+            <div class="message-avatar"><el-icon :size="16"><Monitor /></el-icon></div>
+            <div class="message-content">
+              <div class="typing-indicator">
+                <span></span><span></span><span></span>
+              </div>
             </div>
           </div>
         </div>
 
-        <!-- 加载中 -->
-        <div v-if="loading" class="message assistant">
-          <div class="message-avatar"><el-icon :size="18"><Monitor /></el-icon></div>
-          <div class="message-content">
-            <div class="typing-indicator">
-              <span></span><span></span><span></span>
-            </div>
-          </div>
+        <div class="chat-input">
+          <el-input
+            v-model="inputText"
+            type="textarea"
+            :autosize="{ minRows: 1, maxRows: 4 }"
+            placeholder="输入消息..."
+            :disabled="loading"
+            @keydown.enter.exact.prevent="sendMessage"
+            ref="inputRef"
+          />
+          <el-button
+            type="primary"
+            :icon="Promotion"
+            :loading="loading"
+            :disabled="!inputText.trim() || !selectedPipelineId"
+            @click="sendMessage"
+            circle
+            size="large"
+          />
         </div>
       </div>
-
-      <!-- 输入区 -->
-      <div class="chat-input">
-        <el-input
-          v-model="inputText"
-          type="textarea"
-          :autosize="{ minRows: 1, maxRows: 4 }"
-          placeholder="输入消息..."
-          :disabled="loading"
-          @keydown.enter.exact.prevent="sendMessage"
-          ref="inputRef"
-        />
-        <el-button
-          type="primary"
-          :icon="Promotion"
-          :loading="loading"
-          :disabled="!inputText.trim() || !selectedPipelineId"
-          @click="sendMessage"
-          circle
-          size="large"
-        />
-      </div>
     </div>
-  </div>
+  </el-dialog>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, nextTick, onMounted } from 'vue'
+import { ref, computed, nextTick, watch } from 'vue'
 import { Promotion, User, Monitor, ChatDotRound, WarningFilled } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { getPipelines, type AgentPatternPipeline } from '@/api/pipeline'
+
 interface ChatMsg {
   role: 'user' | 'assistant'
   content: string
   error?: string
 }
+
+const visible = defineModel<boolean>({ default: false })
 
 const pipelines = ref<AgentPatternPipeline[]>([])
 const pipelinesLoading = ref(false)
@@ -150,7 +157,6 @@ async function sendMessage() {
   messages.value.push(assistantMsg)
 
   try {
-    // 使用 pipeline ID 作为 model 字段，后端会路由到对应流水线
     const modelField = `pipeline.${selectedPipelineId.value}`
 
     const response = await fetch('/v1/chat/completions', {
@@ -158,7 +164,7 @@ async function sendMessage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model: modelField,
-        messages: messages.value.slice(0, -2).map(m => ({
+        messages: messages.value.slice(0, -1).map(m => ({
           role: m.role,
           content: m.content
         })),
@@ -192,7 +198,6 @@ async function sendMessage() {
         try {
           const data = JSON.parse(trimmed.slice(6))
 
-          // 后端错误
           if (data.error && !data.choices) {
             const errMsg = typeof data.error === 'string'
               ? data.error
@@ -202,7 +207,6 @@ async function sendMessage() {
             return
           }
 
-          // 流式内容
           const delta = data.choices?.[0]?.delta?.content
           if (delta) {
             assistantMsg.content += delta
@@ -222,26 +226,31 @@ async function sendMessage() {
   }
 }
 
-onMounted(() => {
+function onOpened() {
   loadPipelines()
+}
+
+watch(visible, (val) => {
+  if (val) {
+    messages.value = []
+    inputText.value = ''
+    loadPipelines()
+  }
 })
 </script>
 
 <style scoped>
-.minimal-chat {
+.minimal-chat-body {
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 120px);
-  max-width: 900px;
-  margin: 0 auto;
-  padding: 16px;
+  height: 520px;
 }
 
 .pipeline-bar {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 12px 16px;
+  padding: 10px 14px;
   background: var(--el-bg-color);
   border: 1px solid var(--el-border-color-lighter);
   border-radius: 8px;
@@ -283,7 +292,7 @@ onMounted(() => {
 .chat-messages {
   flex: 1;
   overflow-y: auto;
-  padding: 16px;
+  padding: 14px;
 }
 
 .empty-state {
@@ -293,13 +302,13 @@ onMounted(() => {
   justify-content: center;
   height: 100%;
   color: var(--el-text-color-secondary);
-  gap: 12px;
+  gap: 10px;
 }
 
 .message {
   display: flex;
-  gap: 10px;
-  margin-bottom: 16px;
+  gap: 8px;
+  margin-bottom: 12px;
 }
 
 .message.user {
@@ -307,8 +316,8 @@ onMounted(() => {
 }
 
 .message-avatar {
-  width: 32px;
-  height: 32px;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -328,10 +337,10 @@ onMounted(() => {
 
 .message-content {
   max-width: 75%;
-  padding: 10px 14px;
-  border-radius: 12px;
-  line-height: 1.6;
-  font-size: 14px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  line-height: 1.5;
+  font-size: 13px;
 }
 
 .message.user .message-content {
@@ -347,7 +356,7 @@ onMounted(() => {
 }
 
 .message-error {
-  margin-top: 6px;
+  margin-top: 4px;
   color: var(--el-color-danger);
   font-size: 12px;
   display: flex;
@@ -381,7 +390,7 @@ onMounted(() => {
   display: flex;
   align-items: flex-end;
   gap: 8px;
-  padding: 12px 16px;
+  padding: 10px 14px;
   border-top: 1px solid var(--el-border-color-lighter);
   background: var(--el-bg-color);
 }

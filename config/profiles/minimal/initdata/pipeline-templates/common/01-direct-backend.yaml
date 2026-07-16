@@ -9,10 +9,15 @@ nodes:
   kind: llm.generate
   implementation: builtin.generator
   name: 直连生成
-  backend: openai
-  model: gpt-4o-mini
+  backend: "{{system.default_backend}}"
+  model: "{{system.default_model}}"
   config:
+    backend: "{{system.default_backend}}"
+    model: "{{system.default_model}}"
     prompt_template: '{{input}}'
+    template_vars:
+      backend: "system.default_backend"
+      model: "system.default_model"
     system_prompt: |
       你是一个可靠助手，请直接、准确地回答用户的问题。
 

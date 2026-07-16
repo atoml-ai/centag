@@ -415,11 +415,25 @@ const save = async () => {
     }
 
     const payload = toApiBackendPayload(form, { isCreate: isCreate.value })
-    // 双重保险：创建时绝不用 preset id（如 bigmodel），避免与种子数据冲突
     if (isCreate.value) {
+      // 双重保险：创建时绝不用 preset id（如 bigmodel），避免与种子数据冲突
       delete (payload as { id?: string }).id
-      await api.post('/api/v1/backends', payload)
+      const created: any = await api.post('/api/v1/backends', payload)
       ElMessage.success('Provider 已添加')
+      // 检查是否已有默认后端，没有则自动设为默认
+      try {
+        const proxyData: any = await api.get('/api/v1/config/proxy')
+        // 拦截器可能返回 {success,data} 或直接返回 data
+        const currentDefault = (proxyData?.default_backend_id ?? proxyData?.data?.default_backend_id) || ''
+        if (!currentDefault && created?.id) {
+          const defaultModel = created.default_model || created.probe_model || form.default_model || form.probe_model || ''
+          await api.put('/api/v1/config/proxy', {
+            default_backend_id: created.id,
+            default_model: defaultModel
+          })
+          ElMessage.success(`已自动将「${created.name || created.id}」设为默认后端，模型「${defaultModel || '未设置'}」`)
+        }
+      } catch { /* ignore */ }
     } else {
       await api.put(`/api/v1/backends/${form.id}`, payload)
       ElMessage.success('Provider 已更新')
