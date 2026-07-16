@@ -95,7 +95,7 @@ func TestDetectProxyModeModelPrefixPipelineOnly(t *testing.T) {
 
 func TestDetectProxyModeResolvedHeader(t *testing.T) {
 	req := newChatRequest(`{"model":"gpt-4","messages":[{"role":"user","content":"hi"}]}`)
-	req.Header.Set(HeaderProxyClawResolvedMode, "#d")
+	req.Header.Set(HeaderCentagResolvedMode, "#d")
 
 	mode, source := detectProxyModeWithConfig(req, nil)
 	if mode != ModeDirectBackend {
@@ -201,7 +201,7 @@ func newChatRequest(body string) *http.Request {
 	}
 }
 
-func TestExtractProxyClawSceneBytes(t *testing.T) {
+func TestExtractCentagSceneBytes(t *testing.T) {
 	tests := []struct {
 		name     string
 		body     string
@@ -252,9 +252,9 @@ func TestExtractProxyClawSceneBytes(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			bodyBytes := []byte(tt.body)
-			result := extractProxyClawSceneBytes(bodyBytes)
+			result := extractCentagSceneBytes(bodyBytes)
 			if result != tt.expected {
-				t.Fatalf("extractProxyClawSceneBytes(%q) = %q, want %q", tt.body, result, tt.expected)
+				t.Fatalf("extractCentagSceneBytes(%q) = %q, want %q", tt.body, result, tt.expected)
 			}
 		})
 	}

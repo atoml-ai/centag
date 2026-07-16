@@ -1,5 +1,5 @@
 #!/bin/bash
-# Proxy Claw Debug 容器入口脚本
+# Centag Debug 容器入口脚本
 # 与 entrypoint.sh 相同，但优先使用 /app/bin/centag（本地编译）
 
 set -euo pipefail
@@ -103,7 +103,7 @@ wait_for_service() {
 
 main() {
     print_info "======================================"
-    print_info "   Proxy Claw Debug 容器启动"
+    print_info "   Centag Debug 容器启动"
     print_info "======================================"
 
     print_info "配置信息:"

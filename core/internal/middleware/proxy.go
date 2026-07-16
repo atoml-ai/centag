@@ -469,7 +469,7 @@ func (h *LLMProxyHandler) HandleOpenAIRequest(c *gin.Context) {
 		return
 	}
 
-	logger.Infof("Proxy Claw request to backend: %s (%s), type: %s, model: %s",
+	logger.Infof("Centag request to backend: %s (%s), type: %s, model: %s",
 		backendCfg.ID, backendCfg.Name, backendCfg.Type, selectedModel)
 
 	// 如果使用了默认模型，需要修改请求中的model字段
@@ -862,7 +862,7 @@ func isStreamRequest(r *http.Request) bool {
 
 // forwardGetRequest 转发GET请求
 func (h *LLMProxyHandler) forwardGetRequest(c *gin.Context, backendCfg *backend.BackendConfig) {
-	logger.Infof("Proxy Claw GET request to backend: %s (%s)", backendCfg.ID, backendCfg.Name)
+	logger.Infof("Centag GET request to backend: %s (%s)", backendCfg.ID, backendCfg.Name)
 
 	// 构建目标URL
 	targetURL := strings.TrimSuffix(backendCfg.BaseURL, "/") + c.Request.URL.Path

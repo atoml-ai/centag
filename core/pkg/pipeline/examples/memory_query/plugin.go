@@ -154,7 +154,7 @@ func (p *MemoryQueryPlugin) queryMemories(query, scope, userID, sessionID string
 			"session_id": "session789",
 		},
 		{
-			"content":   "当前会话讨论的是 ProxyClaw 项目",
+			"content":   "当前会话讨论的是 Centag 项目",
 			"score":     0.92,
 			"time":      "2026-05-05T09:00:00Z",
 			"scope":     "session",
@@ -162,7 +162,7 @@ func (p *MemoryQueryPlugin) queryMemories(query, scope, userID, sessionID string
 			"session_id": "session456",
 		},
 		{
-			"content":   "全局知识：ProxyClaw 是一个 LLM 反向代理",
+			"content":   "全局知识：Centag 是一个 LLM 反向代理",
 			"score":     0.85,
 			"time":      "2026-04-01T00:00:00Z",
 			"scope":     "global",

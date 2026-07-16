@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-// proxyURL 构建 ProxyClaw 访问地址
+// proxyURL 构建 Centag 访问地址
 func proxyURL(host string, port int) string {
 	if host == "" {
 		host = "localhost"

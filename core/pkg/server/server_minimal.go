@@ -291,9 +291,6 @@ func resolveDataDir() string {
 	if envDir := os.Getenv("CENTAG_DATA_DIR"); envDir != "" {
 		return envDir
 	}
-	if envDir := os.Getenv("PROXYCLAW_DATA_DIR"); envDir != "" {
-		return envDir
-	}
 
 	// Try relative to executable
 	execPath, err := os.Executable()

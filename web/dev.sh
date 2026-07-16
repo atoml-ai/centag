@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-echo "Starting Proxy Claw Web UI development server..."
+echo "Starting Centag Web UI development server..."
 
 cd "$(dirname "$0")"
 

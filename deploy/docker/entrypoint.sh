@@ -1,5 +1,5 @@
 #!/bin/bash
-# Proxy Claw 容器入口脚本
+# Centag 容器入口脚本
 
 set -euo pipefail
 
@@ -172,7 +172,7 @@ main() {
     apply_profile_db_mode
 
     print_info "======================================"
-    print_info "   Proxy Claw 容器启动"
+    print_info "   Centag 容器启动"
     print_info "======================================"
     
     # 显示配置
@@ -245,7 +245,7 @@ main() {
         fi
     else
         # 直接启动模式（向后兼容）
-        print_info "启动 Proxy Claw 服务..."
+        print_info "启动 Centag 服务..."
         print_info "======================================"
 
         if [ "$(id -u)" -eq 0 ]; then

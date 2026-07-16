@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Proxy Claw 证书安装脚本
+# Centag 证书安装脚本
 # 用于安装MITM代理的CA证书到系统
 
 set -e
@@ -21,7 +21,7 @@ CA_CERT="$CERT_DIR/ca.crt"
 CA_KEY="$CERT_DIR/ca.key"
 
 echo -e "${BLUE}========================================${NC}"
-echo -e "${BLUE}  Proxy Claw 证书安装向导${NC}"
+echo -e "${BLUE}  Centag 证书安装向导${NC}"
 echo -e "${BLUE}========================================${NC}"
 echo ""
 
@@ -94,7 +94,7 @@ case "$OS_TYPE" in
             echo "================================"
             echo "请按以下步骤操作:"
             echo "1. 双击文件: $CA_CERT"
-            echo "2. 在'钥匙串访问'中找到'Proxy Claw CA'"
+            echo "2. 在'钥匙串访问'中找到'Centag CA'"
             echo "3. 双击证书,打开详情"
             echo "4. 展开'信任'选项"
             echo "5. 将'使用此证书时'设置为'始终信任'"

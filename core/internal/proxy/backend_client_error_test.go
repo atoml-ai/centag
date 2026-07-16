@@ -25,7 +25,7 @@ func TestWriteClassifiedBackendError(t *testing.T) {
 		if w.Code != http.StatusServiceUnavailable {
 			t.Fatalf("status = %d, want 503", w.Code)
 		}
-		if got := w.Header().Get("X-ProxyClaw-Error-Code"); got != backend.ErrorCodeNoBackendConfigured {
+		if got := w.Header().Get("X-Centag-Error-Code"); got != backend.ErrorCodeNoBackendConfigured {
 			t.Fatalf("header code = %q", got)
 		}
 		var body map[string]interface{}
@@ -52,8 +52,8 @@ func TestWriteClassifiedBackendError(t *testing.T) {
 		if !ok {
 			t.Fatal("expected classified")
 		}
-		if w.Header().Get("X-ProxyClaw-Error-Code") != backend.ErrorCodeNoBackendAPIKey {
-			t.Fatalf("header = %q", w.Header().Get("X-ProxyClaw-Error-Code"))
+		if w.Header().Get("X-Centag-Error-Code") != backend.ErrorCodeNoBackendAPIKey {
+			t.Fatalf("header = %q", w.Header().Get("X-Centag-Error-Code"))
 		}
 	})
 

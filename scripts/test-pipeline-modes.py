@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Proxyclaw 流水线模式自动化测试 v2 - 向导式配置 + 详细报告"""
+"""Centag 流水线模式自动化测试 v2 - 向导式配置 + 详细报告"""
 
 import subprocess
 import time
@@ -175,7 +175,7 @@ REPORT_DIR = os.path.join(os.path.dirname(__file__), "..", "docs", "test-reports
 def print_header():
     """打印欢迎头"""
     print("\n" + "=" * 60)
-    print("🚀 Proxyclaw 流水线模式自动化测试 v2.0")
+    print("🚀 Centag 流水线模式自动化测试 v2.0")
     print("=" * 60)
     print()
 
@@ -563,7 +563,7 @@ def generate_html_report(results, config):
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Proxyclaw 流水线测试报告</title>
+    <title>Centag 流水线测试报告</title>
     <style>
         * {{ margin: 0; padding: 0; box-sizing: border-box; }}
         body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background: #f0f2f5; padding: 20px; min-height: 100vh; color: #333; }}
@@ -622,7 +622,7 @@ def generate_html_report(results, config):
 </head>
 <body>
     <div class="container">
-        <h1>📊 Proxyclaw 流水线模式测试报告</h1>
+        <h1>📊 Centag 流水线模式测试报告</h1>
         <div class="meta">
             🕐 测试时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | 
             🖥️ 服务器: {config['base_url']} | 
@@ -669,7 +669,7 @@ def generate_html_report(results, config):
         {issues}
         
         <div class="footer">
-            <p>🤖 报告由自动化测试脚本生成 | Proxyclaw Pipeline Test Suite v2.0</p>
+            <p>🤖 报告由自动化测试脚本生成 | Centag Pipeline Test Suite v2.0</p>
         </div>
     </div>
     
@@ -786,7 +786,7 @@ def generate_html_report(results, config):
 def main():
     """主流程"""
     # 解析命令行参数
-    parser = argparse.ArgumentParser(description='Proxyclaw 流水线模式测试')
+    parser = argparse.ArgumentParser(description='Centag 流水线模式测试')
     parser.add_argument('--auto', action='store_true', help='使用自动模式(默认配置)')
     parser.add_argument('--modes', nargs='+', help='指定要测试的模式,如: --modes #d #s #f')
     parser.add_argument('--method', choices=['header', 'model', 'content'], default='model',

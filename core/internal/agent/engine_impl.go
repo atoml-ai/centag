@@ -16,7 +16,7 @@ type DefaultAgentEngine struct {
 	// httpClient HTTP客户端
 	httpClient *http.Client
 
-	// proxyURL ProxyClaw服务地址
+	// proxyURL Centag服务地址
 	proxyURL string
 
 	// tools 可用工具列表

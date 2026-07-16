@@ -23,7 +23,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// Run starts the ProxyClaw minimal server with the given version info.
+// Run starts the Centag minimal server with the given version info.
 // This edition uses file-based configuration only — no database required.
 func Run(version, buildTime string) {
 	Version = version
@@ -63,7 +63,7 @@ func Run(version, buildTime string) {
 	internal.SetBuildInfo(Version, BuildTime)
 	metrics.Init()
 
-	logger.Info("Starting Proxyclaw Minimal Service (file-based, no database)")
+	logger.Info("Starting Centag Minimal Service (file-based, no database)")
 	logger.Infof("Version: %s, Build: %s", Version, BuildTime)
 	logger.Infof("Product edition: minimal")
 
@@ -250,9 +250,6 @@ func ensureMinimalBackendPersistFile() string {
 func resolveDataDir() string {
 	// Check environment variable first
 	if envDir := os.Getenv("CENTAG_DATA_DIR"); envDir != "" {
-		return envDir
-	}
-	if envDir := os.Getenv("PROXYCLAW_DATA_DIR"); envDir != "" {
 		return envDir
 	}
 

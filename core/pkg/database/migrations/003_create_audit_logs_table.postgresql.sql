@@ -2,7 +2,7 @@
 -- Migration: 003_create_audit_logs_table
 -- Description: 创建审计日志表，记录所有管理操作
 -- Created: 2026-03-22
--- Author: proxyclaw team
+-- Author: centag team
 -- ============================================
 
 -- +migrate Up

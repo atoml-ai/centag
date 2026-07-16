@@ -61,7 +61,7 @@ func NewRemoteNodePlugin(baseURL string) NodePlugin {
 			SupportsStream:      false,
 			Concurrent:          true,
 			APIVersion:          PipelinePluginSchemaVersion,
-			MinProxyclawVersion: PipelinePluginSchemaVersion,
+			MinCentagVersion: PipelinePluginSchemaVersion,
 			Remote: &RemoteNodePluginSpec{
 				BaseURL:     normalized,
 				ManifestURL: normalized + "/.well-known/centag-node-plugin.json",

@@ -2,12 +2,12 @@
 chcp 65001 >nul
 setlocal enabledelayedexpansion
 
-REM Proxy Claw 代理诊断工具
+REM Centag 代理诊断工具
 REM 此脚本会检查代理配置和证书状态
 
 echo.
 echo ========================================
-echo   Proxy Claw 代理诊断工具
+echo   Centag 代理诊断工具
 echo ========================================
 echo.
 
@@ -17,7 +17,7 @@ set PROXY_PORT=8081
 set API_PORT=8060
 set TEST_DOMAIN=api.openai.com
 
-echo [步骤 1/6] 检查 Proxy Claw 主服务...
+echo [步骤 1/6] 检查 Centag 主服务...
 echo.
 
 REM 检查主服务
@@ -26,7 +26,7 @@ if %errorlevel% eq 0 (
     echo [✓] 主服务运行正常 (端口 %API_PORT%)
 ) else (
     echo [✗] 主服务未运行或无法访问
-    echo     请启动 Proxy Claw 服务
+    echo     请启动 Centag 服务
     goto :end
 )
 
@@ -49,12 +49,12 @@ echo [步骤 3/6] 检查 CA 证书...
 echo.
 
 REM 检查证书是否安装
-certutil -store Root "Proxy Claw CA" >nul 2>&1
+certutil -store Root "Centag CA" >nul 2>&1
 if %errorlevel% eq 0 (
     echo [✓] CA 证书已安装
     echo.
     echo 证书详情:
-    certutil -store Root "Proxy Claw CA" | findstr /C:"Subject" /C:"NotBefore" /C:"NotAfter"
+    certutil -store Root "Centag CA" | findstr /C:"Subject" /C:"NotBefore" /C:"NotAfter"
 ) else (
     echo [✗] CA 证书未安装
     echo     请运行 windows-cert-install.bat 安装证书
@@ -129,8 +129,8 @@ echo    - 例如: api.openai.com, api.anthropic.com
 echo.
 echo 3. 重启 Cherry Studio
 echo.
-echo 4. 检查 Proxy Claw 日志:
-echo    - 位置: ./bin/logs/proxyclaw.log
+echo 4. 检查 Centag 日志:
+echo    - 位置: ./bin/logs/centag.log
 echo    - 查找: TLS handshake failed
 echo.
 echo 5. 如果看到 "unknown certificate" 错误:

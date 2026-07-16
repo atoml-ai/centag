@@ -119,9 +119,6 @@ func TestMatchesFilters_ExcludeStartupAndCacheInit(t *testing.T) {
 func TestMatchesFilters_RealDesktopLogFile_NoPollution(t *testing.T) {
 	logPath := os.Getenv("CENTAG_LOG_FILE")
 	if logPath == "" {
-		logPath = os.Getenv("PROXYCLAW_LOG_FILE")
-	}
-	if logPath == "" {
 		logPath = os.ExpandEnv("$HOME/Library/Application Support/Centag/logs/centag.log")
 	}
 	f, err := os.Open(logPath)
@@ -184,7 +181,7 @@ func TestRecentLogLines_LLMFilterSimulation(t *testing.T) {
 }
 
 func TestReadAndFilterLogs_DesktopLogPath_LLMScope(t *testing.T) {
-	logDir := os.ExpandEnv("$HOME/Library/Application Support/ProxyClaw/logs")
+	logDir := os.ExpandEnv("$HOME/Library/Application Support/Centag/logs")
 	if _, err := os.Stat(logDir); err != nil {
 		t.Skip("desktop log dir not available:", err)
 	}

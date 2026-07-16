@@ -1,5 +1,5 @@
 #!/bin/bash
-# Author: Proxy Claw
+# Author: Centag
 # 守护进程脚本
 # 用法: ./daemon.sh [work_dir]
 # 示例: ./daemon.sh

@@ -1092,6 +1092,6 @@ func writeBackendClientError(c *gin.Context, ce *backend.ClientError) {
 	if status == 0 {
 		status = http.StatusServiceUnavailable
 	}
-	c.Header("X-ProxyClaw-Error-Code", ce.Code)
+	c.Header("X-Centag-Error-Code", ce.Code)
 	c.JSON(status, backend.OpenAIErrorBody(ce.Code, ce.Message))
 }

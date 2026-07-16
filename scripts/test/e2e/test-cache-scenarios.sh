@@ -6,7 +6,7 @@
 BASE_URL="http://localhost:20060/v1/chat/completions"
 
 echo "=========================================="
-echo "Proxy Claw 缓存行为测试"
+echo "Centag 缓存行为测试"
 echo "=========================================="
 echo ""
 

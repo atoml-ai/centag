@@ -1,13 +1,13 @@
 #!/bin/bash
 
 # Chatbox 直接访问测试脚本
-# 测试 Proxy Claw 的标准 OpenAI API 接口
+# 测试 Centag 的标准 OpenAI API 接口
 
 BASE_URL="http://localhost:20060/v1"
 API_KEY="<YOUR_API_KEY_HERE>test"
 
 echo "=========================================="
-echo "Proxy Claw 标准 OpenAI API 测试"
+echo "Centag 标准 OpenAI API 测试"
 echo "=========================================="
 echo ""
 echo "Base URL: $BASE_URL"
@@ -18,9 +18,9 @@ echo "----------------------------------------"
 echo "测试 1/5: 检查服务状态"
 echo "----------------------------------------"
 if curl -s --connect-timeout 3 http://localhost:20060/health > /dev/null 2>&1; then
-    echo "✅ Proxy Claw 服务正常运行"
+    echo "✅ Centag 服务正常运行"
 else
-    echo "❌ Proxy Claw 服务未运行或无法连接"
+    echo "❌ Centag 服务未运行或无法连接"
     echo "   请运行: ./start.sh start"
     exit 1
 fi

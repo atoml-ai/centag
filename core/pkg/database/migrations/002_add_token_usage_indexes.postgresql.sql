@@ -2,7 +2,7 @@
 -- Migration: 002_add_token_usage_indexes
 -- Description: 添加 Token 计量相关索引
 -- Created: 2026-03-22
--- Author: proxyclaw team
+-- Author: centag team
 -- ============================================
 
 -- +migrate Up

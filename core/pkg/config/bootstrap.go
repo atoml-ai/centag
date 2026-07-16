@@ -57,7 +57,7 @@ type DBBootstrapConfig struct {
 //	LLM_PROXY_LOG_COMPRESS     default true
 //	LLM_PROXY_DB_DRIVER        default "auto" (auto-detect: postgresql or sqlite)
 //	LLM_PROXY_DB_DSN           default "" (built from PG_* or SQLITE_PATH env vars)
-//	CENTAG_EDITION (fallback PROXYCLAW_EDITION) default "team" ("personal" for desktop / single-user)
+//	CENTAG_EDITION default "team" ("personal" for desktop / single-user)
 //
 // 相对路径（如 ./data/centag.db、./logs）会按可执行文件所在目录解析，
 // 这样无论从项目根还是 bin/ 启动，data/logs 都会落在可执行文件同目录下（如 bin/data、bin/logs）。
@@ -86,7 +86,7 @@ func LoadBootstrap() *BootstrapConfig {
 			Host:        envStr("LLM_PROXY_SERVER_HOST", "0.0.0.0"),
 			Mode:        envStr("LLM_PROXY_SERVER_MODE", "release"),
 			ExternalURL: envStr("LLM_PROXY_EXTERNAL_URL", ""),
-			Edition:     envStr("CENTAG_EDITION", envStr("PROXYCLAW_EDITION", "team")),
+			Edition:     envStr("CENTAG_EDITION", "team"),
 		},
 		Log: LogConfig{
 			Level:  envStr("LLM_PROXY_LOG_LEVEL", "info"),

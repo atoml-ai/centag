@@ -2,12 +2,12 @@
 chcp 65001 >nul
 setlocal enabledelayedexpansion
 
-REM Proxy Claw CA证书一键安装脚本
+REM Centag CA证书一键安装脚本
 REM 此脚本会自动下载并安装CA证书到Windows系统
 
 echo.
 echo ========================================
-echo   Proxy Claw CA证书安装工具
+echo   Centag CA证书安装工具
 echo ========================================
 echo.
 
@@ -25,7 +25,7 @@ if %errorlevel% neq 0 (
 REM 配置
 set PROXY_URL=http://127.0.0.1:20060
 set CERT_URL=%PROXY_URL%/api/v1/proxy/ca.crt
-set TEMP_CERT=%TEMP%\proxyclaw-ca.crt
+set TEMP_CERT=%TEMP%\centag-ca.crt
 
 echo [信息] 正在从 %CERT_URL% 下载证书...
 echo.
@@ -38,7 +38,7 @@ if %errorlevel% neq 0 (
     echo [错误] 下载证书失败
     echo.
     echo 可能的原因:
-    echo   1. Proxy Claw 服务未运行
+    echo   1. Centag 服务未运行
     echo   2. 服务地址不正确
     echo   3. 系统代理功能未启用
     echo.
@@ -81,12 +81,12 @@ echo.
 
 REM 验证证书
 echo [信息] 正在验证证书...
-certutil -store Root "Proxy Claw CA" >nul 2>&1
+certutil -store Root "Centag CA" >nul 2>&1
 
 if %errorlevel% eq 0 (
     echo [成功] 证书验证通过
     echo.
-    certutil -store Root "Proxy Claw CA" | findstr /C:"Subject" /C:"Issuer" /C:"NotBefore" /C:"NotAfter"
+    certutil -store Root "Centag CA" | findstr /C:"Subject" /C:"Issuer" /C:"NotBefore" /C:"NotAfter"
 ) else (
     echo [警告] 无法验证证书,但可能已成功安装
 )

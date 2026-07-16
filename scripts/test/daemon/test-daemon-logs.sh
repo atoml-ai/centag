@@ -58,7 +58,7 @@ sleep 5
 
 # 检查控制台输出
 echo -e "${BLUE}检查控制台输出...${NC}"
-if grep -q "Starting Proxyclaw Service" /tmp/daemon-console.log 2>/dev/null; then
+if grep -q "Starting Centag Service" /tmp/daemon-console.log 2>/dev/null; then
     echo -e "${GREEN}✅ 控制台有日志输出${NC}"
 else
     echo -e "${RED}❌ 控制台没有日志输出${NC}"
@@ -67,7 +67,7 @@ fi
 # 检查文件输出
 echo -e "${BLUE}检查文件输出...${NC}"
 if [ -f "$LOG_FILE" ]; then
-    if grep -q "Starting Proxyclaw Service" "$LOG_FILE" 2>/dev/null; then
+    if grep -q "Starting Centag Service" "$LOG_FILE" 2>/dev/null; then
         echo -e "${GREEN}✅ 日志文件有记录${NC}"
     else
         echo -e "${RED}❌ 日志文件没有记录${NC}"

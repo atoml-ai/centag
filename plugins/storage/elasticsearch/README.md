@@ -1,6 +1,6 @@
 # Elasticsearch 存储插件
 
-Proxy Claw 的 Elasticsearch 统一存储插件，同时支持 KV 存储和向量存储。
+Centag 的 Elasticsearch 统一存储插件，同时支持 KV 存储和向量存储。
 
 ## 特性
 
@@ -159,4 +159,4 @@ curl -X PUT http://localhost:29200/cache_semantic_index
 
 ## 许可证
 
-与 Proxy Claw 主项目保持一致。
+与 Centag 主项目保持一致。

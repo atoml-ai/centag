@@ -2,7 +2,7 @@
  * YAML Writer - 轻量级 YAML 序列化器
  * 共享模块：WebUI (ES import） 均可使用
  *
- * 用于生成 ProxyClaw 配置文件
+ * 用于生成 Centag 配置文件
  */
 class YamlWriter {
   /**

@@ -1,5 +1,5 @@
 /**
- * Provider Registry - ProxyClaw 预设 Provider 数据
+ * Provider Registry - Centag 预设 Provider 数据
  * 共享模块：WebUI (ES import） 均可使用
  *
  * @typedef {Object} ProviderModel

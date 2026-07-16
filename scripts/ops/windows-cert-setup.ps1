@@ -1,4 +1,4 @@
-# Proxy Claw CA证书安装脚本 for Windows
+# Centag CA证书安装脚本 for Windows
 # 此脚本自动下载并安装LLM Proxy的CA证书到Windows系统受信任的根证书颁发机构
 
 param(
@@ -12,7 +12,7 @@ param(
 # 显示帮助信息
 if ($Help) {
     Write-Host @"
-Proxy Claw CA证书安装脚本
+Centag CA证书安装脚本
 
 用法:
     .\windows-cert-setup.ps1 [选项]
@@ -85,7 +85,7 @@ function Write-Info-Message {
 function Find-LLMProxyCert {
     try {
         $certs = Get-ChildItem -Path Cert:\LocalMachine\Root | Where-Object {
-            $_.Subject -like "*Proxy Claw CA*" -or $_.Issuer -like "*Proxy Claw CA*"
+            $_.Subject -like "*Centag CA*" -or $_.Issuer -like "*Centag CA*"
         }
         return $certs
     } catch {
@@ -101,13 +101,13 @@ function Verify-Certificate {
     $certs = Find-LLMProxyCert
     
     if ($null -eq $certs -or $certs.Count -eq 0) {
-        Write-Warning-Message "未找到 Proxy Claw CA 证书"
+        Write-Warning-Message "未找到 Centag CA 证书"
         Write-Host "证书状态: " -NoNewline
         Write-ColorOutput "未安装" "Red"
         return $false
     }
     
-    Write-Success-Message "找到 Proxy Claw CA 证书:"
+    Write-Success-Message "找到 Centag CA 证书:"
     foreach ($cert in $certs) {
         Write-Host ""
         Write-Host "  证书主题: $($cert.Subject)"
@@ -135,7 +135,7 @@ function Verify-Certificate {
 
 # 移除证书
 function Remove-Certificate {
-    Write-Info-Message "正在移除 Proxy Claw CA 证书..."
+    Write-Info-Message "正在移除 Centag CA 证书..."
     
     $certs = Find-LLMProxyCert
     
@@ -171,7 +171,7 @@ function Install-Certificate {
     
     # 构建证书下载URL
     $certUrl = "$ProxyUrl/api/v1/proxy/ca.crt"
-    $tempCertPath = Join-Path $env:TEMP "proxyclaw-ca.crt"
+    $tempCertPath = Join-Path $env:TEMP "centag-ca.crt"
     
     Write-Info-Message "正在从 $certUrl 下载证书..."
     
@@ -183,7 +183,7 @@ function Install-Certificate {
         Write-Error-Message "下载证书失败: $_"
         Write-Host ""
         Write-Host "请确保:"
-        Write-Host "  1. Proxy Claw 服务正在运行"
+        Write-Host "  1. Centag 服务正在运行"
         Write-Host "  2. 服务地址正确: $ProxyUrl"
         Write-Host "  3. 系统代理功能已启用"
         exit 1
@@ -221,7 +221,7 @@ function Install-Certificate {
         Write-ColorOutput "重要提示:" "Yellow"
         Write-Host "  1. 请重启浏览器或应用程序(如 Cherry Studio)使证书生效"
         Write-Host "  2. 如果仍然无法连接,请检查应用程序的代理设置"
-        Write-Host "  3. 确保在 Proxy Claw WebUI 中添加了目标域名到 PAC 规则"
+        Write-Host "  3. 确保在 Centag WebUI 中添加了目标域名到 PAC 规则"
         
     } catch {
         Write-Error-Message "安装证书失败: $_"
@@ -237,7 +237,7 @@ function Install-Certificate {
 # 主程序
 Write-Host ""
 Write-ColorOutput "========================================" "Cyan"
-Write-ColorOutput "  Proxy Claw CA证书管理工具" "Cyan"
+Write-ColorOutput "  Centag CA证书管理工具" "Cyan"
 Write-ColorOutput "========================================" "Cyan"
 Write-Host ""
 

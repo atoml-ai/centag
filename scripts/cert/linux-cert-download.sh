@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Proxy Claw CA证书安装脚本 for Linux/WSL
+# Centag CA证书安装脚本 for Linux/WSL
 # 此脚本会下载CA证书并提供在Windows中安装的说明
 
 set -e
@@ -19,13 +19,13 @@ CERT_FILE="centag-ca.crt"
 
 echo ""
 echo -e "${BLUE}========================================${NC}"
-echo -e "${BLUE}  Proxy Claw CA证书管理工具 (Linux/WSL)${NC}"
+echo -e "${BLUE}  Centag CA证书管理工具 (Linux/WSL)${NC}"
 echo -e "${BLUE}========================================${NC}"
 echo ""
 
 # 检查服务是否运行
 check_service() {
-    echo -e "${BLUE}[1/4] 检查 Proxy Claw 服务...${NC}"
+    echo -e "${BLUE}[1/4] 检查 Centag 服务...${NC}"
     if curl -s -m 5 "$PROXY_URL/health" > /dev/null 2>&1; then
         echo -e "${GREEN}✓ 服务运行正常${NC}"
         return 0
@@ -33,7 +33,7 @@ check_service() {
         echo -e "${RED}✗ 无法连接到服务: $PROXY_URL${NC}"
         echo ""
         echo "请确保:"
-        echo "  1. Proxy Claw 服务正在运行"
+        echo "  1. Centag 服务正在运行"
         echo "  2. 服务地址正确"
         echo ""
         return 1

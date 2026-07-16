@@ -1,4 +1,4 @@
-# Proxy Claw - 纯后端 Docker 镜像（不含前端静态文件）
+# Centag - 纯后端 Docker 镜像（不含前端静态文件）
 # 2 阶段构建：backend-builder → runtime
 # 适用场景：前端通过 CDN 或独立服务器分发，后端仅提供 API
 

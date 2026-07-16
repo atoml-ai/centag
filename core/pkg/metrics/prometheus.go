@@ -1,4 +1,4 @@
-// Package metrics provides Prometheus metrics collection for ProxyClaw.
+// Package metrics provides Prometheus metrics collection for Centag.
 //
 // Design goals:
 //   - Standard Prometheus metrics for monitoring and alerting
@@ -19,7 +19,7 @@ var (
 	// TotalRequestsCounter counts all requests by user, team, backend, model, status
 	TotalRequestsCounter = promauto.NewCounterVec(
 		prometheus.CounterOpts{
-			Name: "proxyclaw_requests_total",
+			Name: "centag_requests_total",
 			Help: "Total number of requests processed",
 		},
 		[]string{"user_id", "team_id", "backend", "model", "status"},
@@ -28,7 +28,7 @@ var (
 	// RequestDurationHistogram measures request duration in seconds
 	RequestDurationHistogram = promauto.NewHistogramVec(
 		prometheus.HistogramOpts{
-			Name:    "proxyclaw_request_duration_seconds",
+			Name:    "centag_request_duration_seconds",
 			Help:    "Request duration in seconds",
 			Buckets: []float64{0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10},
 		},
@@ -40,7 +40,7 @@ var (
 	// TokensUsedCounter counts tokens used by user, team, backend, model
 	TokensUsedCounter = promauto.NewCounterVec(
 		prometheus.CounterOpts{
-			Name: "proxyclaw_tokens_used_total",
+			Name: "centag_tokens_used_total",
 			Help: "Total tokens used",
 		},
 		[]string{"user_id", "team_id", "backend", "model", "type"},
@@ -51,7 +51,7 @@ var (
 	// QuotaExceededCounter counts quota exceeded events
 	QuotaExceededCounter = promauto.NewCounterVec(
 		prometheus.CounterOpts{
-			Name: "proxyclaw_quota_exceeded_total",
+			Name: "centag_quota_exceeded_total",
 			Help: "Total number of quota exceeded events",
 		},
 		[]string{"user_id", "team_id", "quota_type"},
@@ -60,7 +60,7 @@ var (
 	// QuotaUsageGauge tracks current quota usage
 	QuotaUsageGauge = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
-			Name: "proxyclaw_quota_usage",
+			Name: "centag_quota_usage",
 			Help: "Current quota usage",
 		},
 		[]string{"user_id", "team_id", "quota_type"},
@@ -71,7 +71,7 @@ var (
 	// BackendHealthGauge tracks backend health status (1=healthy, 0=unhealthy)
 	BackendHealthGauge = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
-			Name: "proxyclaw_backend_health",
+			Name: "centag_backend_health",
 			Help: "Backend health status",
 		},
 		[]string{"backend"},
@@ -80,7 +80,7 @@ var (
 	// BackendLatencyHistogram measures backend response latency
 	BackendLatencyHistogram = promauto.NewHistogramVec(
 		prometheus.HistogramOpts{
-			Name:    "proxyclaw_backend_latency_seconds",
+			Name:    "centag_backend_latency_seconds",
 			Help:    "Backend response latency in seconds",
 			Buckets: []float64{0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10},
 		},
@@ -92,7 +92,7 @@ var (
 	// SchedulerDecisionCounter counts scheduler decisions
 	SchedulerDecisionCounter = promauto.NewCounterVec(
 		prometheus.CounterOpts{
-			Name: "proxyclaw_scheduler_decisions_total",
+			Name: "centag_scheduler_decisions_total",
 			Help: "Total scheduler decisions",
 		},
 		[]string{"strategy", "reason"},
@@ -103,7 +103,7 @@ var (
 	// ActiveConnectionsGauge tracks active connections
 	ActiveConnectionsGauge = promauto.NewGauge(
 		prometheus.GaugeOpts{
-			Name: "proxyclaw_active_connections",
+			Name: "centag_active_connections",
 			Help: "Number of active connections",
 		},
 	)
@@ -111,7 +111,7 @@ var (
 	// UptimeGauge tracks server uptime in seconds
 	UptimeGauge = promauto.NewGauge(
 		prometheus.GaugeOpts{
-			Name: "proxyclaw_uptime_seconds",
+			Name: "centag_uptime_seconds",
 			Help: "Server uptime in seconds",
 		},
 	)

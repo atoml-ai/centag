@@ -1,8 +1,8 @@
-# ProxyClaw 发行版组装指南
+# Centag 发行版组装指南
 
 ## 概述
 
-ProxyClaw 支持通过发行版（distribution）自定义包含的插件组合。每个发行版是一个独立的 Go module，通过 `_ import` 触发插件注册。
+Centag 支持通过发行版（distribution）自定义包含的插件组合。每个发行版是一个独立的 Go module，通过 `_ import` 触发插件注册。
 
 ## 现有发行版
 

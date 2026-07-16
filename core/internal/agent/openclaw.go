@@ -60,7 +60,7 @@ func (t *OpenClawTemplate) VerifyCommand(info *BackendInfo) string {
 func (t *OpenClawTemplate) Steps(info *BackendInfo) []ConfigStep {
 	url := proxyURL(info.Host, info.Port)
 	return []ConfigStep{
-		{Title: "配置 OpenClaw", Description: fmt.Sprintf("在 openclaw.json 中添加 ProxyClaw: %s", url)},
+		{Title: "配置 OpenClaw", Description: fmt.Sprintf("在 openclaw.json 中添加 Centag: %s", url)},
 		{Title: "启动 OpenClaw", Code: "openclaw"},
 	}
 }

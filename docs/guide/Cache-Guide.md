@@ -1,4 +1,4 @@
-# Proxy Claw 缓存指南
+# Centag 缓存指南
 
 本文档详细介绍LLM Proxy的缓存机制、配置和使用方法。
 

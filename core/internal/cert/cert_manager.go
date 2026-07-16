@@ -112,8 +112,8 @@ func (m *CertManager) generateCA() error {
 	template := x509.Certificate{
 		SerialNumber: serialNumber,
 		Subject: pkix.Name{
-			Organization: []string{"Proxy Claw"},
-			CommonName:   "Proxy Claw CA",
+			Organization: []string{"Centag"},
+			CommonName:   "Centag CA",
 		},
 		NotBefore:             time.Now(),
 		NotAfter:              time.Now().AddDate(10, 0, 0),
@@ -183,7 +183,7 @@ func (m *CertManager) GenerateCertForDomain(domain string) ([]byte, *rsa.Private
 	template := x509.Certificate{
 		SerialNumber: serialNumber,
 		Subject: pkix.Name{
-			Organization: []string{"Proxy Claw"},
+			Organization: []string{"Centag"},
 			CommonName:   domain,
 		},
 		DNSNames:              []string{domain},

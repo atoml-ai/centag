@@ -23,17 +23,17 @@ func NewMetadataEnhancer(enabled bool) *MetadataEnhancer {
 
 // StrategyMetadata 策略元数据
 type StrategyMetadata struct {
-	RequestID       string            `json:"proxyclaw_request_id,omitempty"`       // 请求ID
-	CacheStatus     string            `json:"proxyclaw_cache,omitempty"`            // 缓存状态: hit, miss
-	SelectedBackend string            `json:"proxyclaw_backend,omitempty"`         // 使用的后端
-	BackendModel    string            `json:"proxyclaw_model,omitempty"`           // 使用的模型
-	SelectionReason string            `json:"proxyclaw_reason,omitempty"`          // 选择原因
-	LatencyMs       int               `json:"proxyclaw_latency,omitempty"`         // 总延迟(毫秒)
-	FromCache       bool              `json:"proxyclaw_from_cache,omitempty"`      // 是否来自缓存
-	CacheSimilarity float64           `json:"proxyclaw_cache_similarity,omitempty"` // 缓存相似度
-	TokensUsed      int               `json:"proxyclaw_tokens,omitempty"`          // 使用token数
-	DecisionPath    []DecisionStep    `json:"proxyclaw_path,omitempty"`           // 决策路径
-	Metrics         map[string]interface{} `json:"proxyclaw_metrics,omitempty"`     // 额外指标
+	RequestID       string            `json:"centag_request_id,omitempty"`       // 请求ID
+	CacheStatus     string            `json:"centag_cache,omitempty"`            // 缓存状态: hit, miss
+	SelectedBackend string            `json:"centag_backend,omitempty"`         // 使用的后端
+	BackendModel    string            `json:"centag_model,omitempty"`           // 使用的模型
+	SelectionReason string            `json:"centag_reason,omitempty"`          // 选择原因
+	LatencyMs       int               `json:"centag_latency,omitempty"`         // 总延迟(毫秒)
+	FromCache       bool              `json:"centag_from_cache,omitempty"`      // 是否来自缓存
+	CacheSimilarity float64           `json:"centag_cache_similarity,omitempty"` // 缓存相似度
+	TokensUsed      int               `json:"centag_tokens,omitempty"`          // 使用token数
+	DecisionPath    []DecisionStep    `json:"centag_path,omitempty"`           // 决策路径
+	Metrics         map[string]interface{} `json:"centag_metrics,omitempty"`     // 额外指标
 }
 
 // DecisionStep 决策步骤
@@ -105,7 +105,7 @@ func (me *MetadataEnhancer) EnhanceStreamChunk(
 	// 构造元数据事件
 	metadataEvent := map[string]interface{}{
 		"id":      metadata.RequestID + "_metadata",
-		"event":   "proxyclaw_metadata",
+		"event":   "centag_metadata",
 		"data":    metadata,
 	}
 
@@ -134,48 +134,48 @@ func (me *MetadataEnhancer) ExtractMetadata(responseBody []byte) (*StrategyMetad
 	metadata := &StrategyMetadata{}
 	found := false
 
-	// 检查并提取所有以"proxyclaw_"开头的字段
+	// 检查并提取所有以"centag_"开头的字段
 	for key, value := range response {
-		if strings.HasPrefix(key, "proxyclaw_") {
+		if strings.HasPrefix(key, "centag_") {
 			found = true
 			switch key {
-			case "proxyclaw_request_id":
+			case "centag_request_id":
 				if s, ok := value.(string); ok {
 					metadata.RequestID = s
 				}
-			case "proxyclaw_cache":
+			case "centag_cache":
 				if s, ok := value.(string); ok {
 					metadata.CacheStatus = s
 				}
-			case "proxyclaw_backend":
+			case "centag_backend":
 				if s, ok := value.(string); ok {
 					metadata.SelectedBackend = s
 				}
-			case "proxyclaw_model":
+			case "centag_model":
 				if s, ok := value.(string); ok {
 					metadata.BackendModel = s
 				}
-			case "proxyclaw_reason":
+			case "centag_reason":
 				if s, ok := value.(string); ok {
 					metadata.SelectionReason = s
 				}
-			case "proxyclaw_latency":
+			case "centag_latency":
 				if f, ok := value.(float64); ok {
 					metadata.LatencyMs = int(f)
 				}
-			case "proxyclaw_from_cache":
+			case "centag_from_cache":
 				if b, ok := value.(bool); ok {
 					metadata.FromCache = b
 				}
-			case "proxyclaw_cache_similarity":
+			case "centag_cache_similarity":
 				if f, ok := value.(float64); ok {
 					metadata.CacheSimilarity = f
 				}
-			case "proxyclaw_tokens":
+			case "centag_tokens":
 				if f, ok := value.(float64); ok {
 					metadata.TokensUsed = int(f)
 				}
-			case "proxyclaw_path":
+			case "centag_path":
 				// 解析决策路径
 				if data, err := json.Marshal(value); err == nil {
 					var steps []DecisionStep
@@ -183,7 +183,7 @@ func (me *MetadataEnhancer) ExtractMetadata(responseBody []byte) (*StrategyMetad
 						metadata.DecisionPath = steps
 					}
 				}
-			case "proxyclaw_metrics":
+			case "centag_metrics":
 				if m, ok := value.(map[string]interface{}); ok {
 					metadata.Metrics = m
 				}
@@ -223,35 +223,35 @@ func (me *MetadataEnhancer) metadataToMap(metadata *StrategyMetadata) (map[strin
 
 	// 基本字段
 	if metadata.RequestID != "" {
-		result["proxyclaw_request_id"] = metadata.RequestID
+		result["centag_request_id"] = metadata.RequestID
 	}
 	if metadata.CacheStatus != "" {
-		result["proxyclaw_cache"] = metadata.CacheStatus
+		result["centag_cache"] = metadata.CacheStatus
 	}
 	if metadata.SelectedBackend != "" {
-		result["proxyclaw_backend"] = metadata.SelectedBackend
+		result["centag_backend"] = metadata.SelectedBackend
 	}
 	if metadata.BackendModel != "" {
-		result["proxyclaw_model"] = metadata.BackendModel
+		result["centag_model"] = metadata.BackendModel
 	}
 	if metadata.SelectionReason != "" {
-		result["proxyclaw_reason"] = metadata.SelectionReason
+		result["centag_reason"] = metadata.SelectionReason
 	}
 	if metadata.LatencyMs > 0 {
-		result["proxyclaw_latency"] = metadata.LatencyMs
+		result["centag_latency"] = metadata.LatencyMs
 	}
-	result["proxyclaw_from_cache"] = metadata.FromCache
+	result["centag_from_cache"] = metadata.FromCache
 	if metadata.CacheSimilarity > 0 {
-		result["proxyclaw_cache_similarity"] = metadata.CacheSimilarity
+		result["centag_cache_similarity"] = metadata.CacheSimilarity
 	}
 	if metadata.TokensUsed > 0 {
-		result["proxyclaw_tokens"] = metadata.TokensUsed
+		result["centag_tokens"] = metadata.TokensUsed
 	}
 	if len(metadata.DecisionPath) > 0 {
-		result["proxyclaw_path"] = metadata.DecisionPath
+		result["centag_path"] = metadata.DecisionPath
 	}
 	if len(metadata.Metrics) > 0 {
-		result["proxyclaw_metrics"] = metadata.Metrics
+		result["centag_metrics"] = metadata.Metrics
 	}
 
 	return result, nil

@@ -1,4 +1,4 @@
-// Package billing provides the billing hook interface for ProxyClaw.
+// Package billing provides the billing hook interface for Centag.
 //
 // Design goals:
 //   - Pluggable billing backends (Stripe, internal, mock)

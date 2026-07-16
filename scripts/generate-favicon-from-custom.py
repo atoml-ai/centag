@@ -11,7 +11,7 @@ except ImportError:
 
 src_path = Path(sys.argv[1])
 webui_public = Path(sys.argv[2]) if len(sys.argv) > 2 else Path("web/public")
-svg_path = Path(sys.argv[3]) if len(sys.argv) > 3 else Path("web/src/components/icons/proxyclaw-mark.svg")
+svg_path = Path(sys.argv[3]) if len(sys.argv) > 3 else Path("web/src/components/icons/centag-mark.svg")
 
 src = Image.open(src_path)
 

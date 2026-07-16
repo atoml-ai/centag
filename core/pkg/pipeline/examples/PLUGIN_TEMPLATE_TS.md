@@ -1,6 +1,6 @@
 # TypeScript/Node.js 插件开发模板
 
-本模板演示如何为 ProxyClaw 流水线开发一个标准的 TypeScript/Node.js 节点插件。
+本模板演示如何为 Centag 流水线开发一个标准的 TypeScript/Node.js 节点插件。
 
 ## 目录结构
 
@@ -155,7 +155,7 @@ app.listen(PORT, () => {
 1. 安装依赖：`npm install`
 2. 编译 TypeScript：`npm run build`
 3. 启动插件服务：`npm start`
-4. 在 ProxyClaw 中配置为远程插件：将 `implementation` 设置为 `http://localhost:3000`
+4. 在 Centag 中配置为远程插件：将 `implementation` 设置为 `http://localhost:3000`
 
 ## 权限说明
 
@@ -169,7 +169,7 @@ app.listen(PORT, () => {
 
 ## 配置 Schema
 
-使用 [JSON Schema](https://json-schema.org/) 定义 `config_schema`，ProxyClaw WebUI 会根据该 Schema 自动生成配置表单。
+使用 [JSON Schema](https://json-schema.org/) 定义 `config_schema`，Centag WebUI 会根据该 Schema 自动生成配置表单。
 
 ## 输入/输出 Schema
 

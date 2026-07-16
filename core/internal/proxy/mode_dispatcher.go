@@ -833,12 +833,12 @@ func (d *ModeDispatcher) writeStreamResponse(
 		fmt.Fprint(c.Writer, doneLine)
 	}
 
-	// 注入 ProxyClaw 流水线执行元数据事件（TUI 等客户端可解析此事件获取完整执行信息）
+	// 注入 Centag 流水线执行元数据事件（TUI 等客户端可解析此事件获取完整执行信息）
 	// 必须在 [DONE] 之前注入，因为 TUI SSE scanner 在遇到 [DONE] 时会 break
 	if finalOutput != nil {
-		meta := buildStreamProxyClawMeta(finalOutput, c.GetHeader("X-Pipeline-ID"), mode)
+		meta := buildStreamCentagMeta(finalOutput, c.GetHeader("X-Pipeline-ID"), mode)
 		if d.logger != nil {
-			d.logger.Debug("writeStreamResponse: injecting SSE proxy_claw_meta event",
+			d.logger.Debug("writeStreamResponse: injecting SSE centag_meta event",
 				"pipeline_id", meta["pipeline_id"],
 				"has_node_results", meta["node_results"] != nil,
 				"duration_ms", meta["duration_ms"],
@@ -932,11 +932,11 @@ func buildNodeResultsSummary(output *pipeline.PipelineOutput) []nodeResultSummar
 	return nil
 }
 
-// buildStreamProxyClawMeta 从流水线输出构建 SSE 代理元数据事件体。
-// 客户端通过识别 {"_proxy_claw_meta":true} 字段区分此事件与普通 OpenAI chunk。
-func buildStreamProxyClawMeta(output *pipeline.PipelineOutput, pipelineID string, mode ProxyMode) map[string]interface{} {
+// buildStreamCentagMeta 从流水线输出构建 SSE 代理元数据事件体。
+// 客户端通过识别 {"_centag_meta":true} 字段区分此事件与普通 OpenAI chunk。
+func buildStreamCentagMeta(output *pipeline.PipelineOutput, pipelineID string, mode ProxyMode) map[string]interface{} {
 	meta := map[string]interface{}{
-		"_proxy_claw_meta": true,
+		"_centag_meta": true,
 		"mode":            string(mode),
 		"pipeline_id":     pipelineID,
 	}

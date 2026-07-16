@@ -8,7 +8,7 @@ import (
 
 const (
 	headerAgentType      = "X-Agent-Type"
-	headerDetectedBy     = "X-ProxyClaw-Agent-Detected-By"
+	headerDetectedBy     = "X-Centag-Agent-Detected-By"
 	contextKeyAgentType  = "agent_type"
 	detectByExplicit     = "explicit-header"
 	detectByPathFallback = "path-fallback"
