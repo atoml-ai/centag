@@ -96,7 +96,7 @@ for pu in pipeline_updates:
 
 # --- 环境变量 ---
 BASE_URL = env("TEST_BASE_URL", "http://localhost:20060")
-DEPLOY = env("CENTAG_DEPLOY_TYPE", "desktop")
+DEPLOY = env("CENTAG_DEPLOY_TYPE", "gateway")
 BID = env("TEST_BACKEND_ID", "?")
 BMODEL = env("TEST_BACKEND_MODEL", "?")
 BTYPE = env("TEST_BACKEND_TYPE", "?")

@@ -11,22 +11,44 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// editionDirMap 定义每个版本需要加载的子目录。
+// common 目录始终包含在所有版本中。
+var editionDirMap = map[string][]string{
+	"minimal": {"common"},
+	"gateway": {"common", "gateway"},
+	"team":    {"common", "gateway"},
+}
+
 // LoadInitialPipelineTemplatesFromFiles 从全局和 Profile 的 config/initdata/pipeline-templates
 // 目录加载 YAML 模板描述文件。Profile 模板覆盖全局同名模板。
 // 仅支持 .yaml/.yml 格式。
 func LoadInitialPipelineTemplatesFromFiles() []InitialPipelineTemplate {
+	return LoadInitialPipelineTemplatesWithEdition("")
+}
+
+// LoadInitialPipelineTemplatesWithEdition 根据版本加载流水线模板。
+// 目录结构：
+//
+//	pipeline-templates/
+//	  common/    — 所有版本都加载
+//	  gateway/   — gateway/team 版加载
+// edition 为空时加载所有子目录（向后兼容）。
+func LoadInitialPipelineTemplatesWithEdition(edition string) []InitialPipelineTemplate {
 	globalRoot, profileRoot := InitdataRoots()
 	if globalRoot == "" && profileRoot == "" {
 		logger.Info("bootstrap: INITDATA_PATH / ProjectRoot 未确定，跳过流水线模板加载")
 		return nil
 	}
 
+	// 确定要扫描的子目录
+	dirsToLoad := resolveEditionSubdirs(edition)
+
 	// 1. Load global templates (base)
 	tmplMap := make(map[string]InitialPipelineTemplate)
 	if globalRoot != "" {
 		globalDir := filepath.Join(globalRoot, "pipeline-templates")
-		globalLoaded := loadPipelineTemplatesFromDir(globalDir, tmplMap)
-		if globalLoaded {
+		loaded := loadEditionTemplates(globalDir, dirsToLoad, tmplMap)
+		if loaded {
 			logger.Infof("bootstrap: 从全局配置加载流水线模板: %s (%d 个)", globalDir, len(tmplMap))
 		}
 	}
@@ -34,8 +56,8 @@ func LoadInitialPipelineTemplatesFromFiles() []InitialPipelineTemplate {
 	// 2. Load profile templates (overlay)
 	if profileRoot != "" && profileRoot != globalRoot {
 		profileDir := filepath.Join(profileRoot, "pipeline-templates")
-		profileLoaded := loadPipelineTemplatesFromDir(profileDir, tmplMap)
-		if profileLoaded {
+		loaded := loadEditionTemplates(profileDir, dirsToLoad, tmplMap)
+		if loaded {
 			logger.Infof("bootstrap: 从 Profile 配置加载流水线模板: %s (%d 个覆盖)", profileDir, len(tmplMap))
 		}
 	}
@@ -57,14 +79,39 @@ func LoadInitialPipelineTemplatesFromFiles() []InitialPipelineTemplate {
 		templates = append(templates, tmplMap[id])
 	}
 
-	logger.Infof("bootstrap: 合并后流水线模板共 %d 个", len(templates))
+	logger.Infof("bootstrap: 合并后流水线模板共 %d 个 (edition=%q, dirs=%v)", len(templates), edition, dirsToLoad)
 	return templates
 }
 
-// loadPipelineTemplatesFromDir loads YAML templates from a directory into the provided map.
-// Templates with the same ID will be overwritten (allowing profile to override global).
-// Returns true if the directory exists and was processed.
-func loadPipelineTemplatesFromDir(dirPath string, tmplMap map[string]InitialPipelineTemplate) bool {
+// resolveEditionSubdirs 根据版本返回需要加载的子目录列表。
+func resolveEditionSubdirs(edition string) []string {
+	if edition == "" {
+		// 向后兼容：加载所有子目录
+		return []string{"common", "gateway", "minimal"}
+	}
+	if dirs, ok := editionDirMap[edition]; ok {
+		return dirs
+	}
+	// 未知版本：只加载 common
+	logger.Warnf("bootstrap: 未知版本 %q，仅加载 common 目录", edition)
+	return []string{"common"}
+}
+
+// loadEditionTemplates 从 baseDir 下的指定子目录加载模板。
+func loadEditionTemplates(baseDir string, subdirs []string, tmplMap map[string]InitialPipelineTemplate) bool {
+	anyLoaded := false
+	for _, sub := range subdirs {
+		dir := filepath.Join(baseDir, sub)
+		if loadYAMLFilesFromDir(dir, tmplMap) {
+			anyLoaded = true
+		}
+	}
+	return anyLoaded
+}
+
+// loadYAMLFilesFromDir 从目录加载所有 YAML 文件到 tmplMap。
+// 同 ID 模板会被覆盖（profile 覆盖 global）。
+func loadYAMLFilesFromDir(dirPath string, tmplMap map[string]InitialPipelineTemplate) bool {
 	if st, err := os.Stat(dirPath); err != nil || !st.IsDir() {
 		return false
 	}
@@ -104,4 +151,9 @@ func loadPipelineTemplatesFromDir(dirPath string, tmplMap map[string]InitialPipe
 		tmplMap[tmpl.ID] = tmpl
 	}
 	return true
+}
+
+// loadPipelineTemplatesFromDir loads YAML templates from a directory (backward compat).
+func loadPipelineTemplatesFromDir(dirPath string, tmplMap map[string]InitialPipelineTemplate) bool {
+	return loadYAMLFilesFromDir(dirPath, tmplMap)
 }

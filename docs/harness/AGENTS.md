@@ -2,6 +2,8 @@
 
 本文件面向 **AI 编码智能体与人类协作者**：用仓库内可验证事实描述背景、常见任务、当前优先级与约束。细节以代码与 `docs/` 为准；执行中的任务状态见 `docs/versions/`（按版本归档），需求版本索引见 `docs/versions/README.md`。
 
+> **Skill 分层总指引**在仓库根目录 **[AGENT.md](../../AGENT.md)**（业务正本 vs Agent 交互入口）。本文件是 Harness 详细总纲。
+
 ---
 
 ## 1. 项目是什么
@@ -310,22 +312,30 @@ CI 与脚本侧会做 **轻量卫生检查**（`scripts/check-harness-hygiene.sh
 2. 编码时：参考 CONVENTIONS.md
 3. 提交前：检查 ANTI-PATTERNS.md
 
-### 8.1 按需加载的规范
-### 9.1 Cursor 规则（`.cursor/rules/*.mdc`）
+### 8.1 Skill 分层（强制）
+
+> 根目录 **[AGENT.md](../../AGENT.md)** 为全仓库 Agent 入口指引；本节是 Harness 细节索引。
+
+| 层级 | 路径 | 职责 |
+|------|------|------|
+| 总指引 | `/AGENT.md` | 标明正本与入口关系、交接契约 |
+| **业务正本** | `docs/harness/skills/` | 唯一业务定义：步骤、判定、脚本、映射 |
+| **交互入口** | `.cursor/`、`.opencode/`、… | 仅触发词 + 该 Agent 控件收参 + 交接正本 |
+
+入口收参完成后，**必须**加载 `docs/harness/skills/` 正本执行；禁止在 Agent 目录复制业务步骤。明细见 [skills/README.md](skills/README.md)。
+
+### 9.1 Cursor 规则（`.cursor/rules/*.mdc` — 仅交互）
 
 | 规则文件 | 类型 | 用途 |
 |---------|------|------|
-| `harness-baseline.mdc` | `alwaysApply: true` | 基础规范：行为准则、透明度协议、工作流总览 |
-| `harness-workflow.mdc` | `globs: []` | 研发工作流路由：step 别名 → 阶段执行指南 |
-| `centag-core.mdc` | `globs: []` | 核心操作规范：构建、运行、调试 |
-| `centag-deploy.mdc` | `globs: []` | 向导式部署规范 |
-| `centag-admin-e2e.mdc` | `globs: []` | 管理功能端到端测试向导 |
-| `centag-pipeline-test.mdc` | `globs: []` | 流水线模式测试 |
-| `centag-wizard-test.mdc` | `globs: []` | 向导式全面测试 |
+| `harness-ask-ui.mdc` | `alwaysApply: true` | 固定选项必须用 AskQuestion |
+| `centag-wizard-test.mdc` | 按需 | 向导测试收参 → `skills/centag-wizard-test.md` |
+| `centag-pipeline-test.mdc` | 按需 | 流水线测试收参 → `skills/centag-pipeline-test.md` |
+| `centag-admin-e2e.mdc` | 按需 | 管理 E2E 收参 → `skills/centag-admin-e2e.md` |
+| `harness-baseline.mdc` / `harness-workflow.mdc` | 待补 | 基础规范 / step 路由 |
+| `centag-core.mdc` / `centag-deploy.mdc` | 待补 | 核心操作 / 部署交互入口 |
 
-### 9.2 技能映射
-
-技能正本集中在 `docs/harness/skills/` 目录：
+### 9.2 技能正本映射（`docs/harness/skills/`）
 
 | 触发场景 | 技能正本 |
 |---------|---------|
@@ -335,8 +345,8 @@ CI 与脚本侧会做 **轻量卫生检查**（`scripts/check-harness-hygiene.sh
 | 单元测试补全 | `skills/step4-test/SKILL.md` |
 | CR 审查 | `skills/step5-review/SKILL.md` |
 | 门禁检查 | `skills/quality-gate/SKILL.md` |
-| 核心操作（构建/运行/调试） | `skills/centag-core.md` |
-| 向导式部署 | `skills/centag-deploy.md` |
+| 核心操作（构建/运行/调试） | `skills/centag-core.md`（待补） |
+| 向导式部署 | `skills/centag-deploy.md`（待补） |
 | 流水线模式测试 | `skills/centag-pipeline-test.md` |
 | 向导式全面测试 | `skills/centag-wizard-test.md` |
 | 管理功能端到端测试 | `skills/centag-admin-e2e.md` |
@@ -354,14 +364,13 @@ CI 与脚本侧会做 **轻量卫生检查**（`scripts/check-harness-hygiene.sh
 
 | 规范文件 | 说明 | 何时触发 |
 |---------|------|---------|
-| `.cursor/rules/harness-workflow.mdc` | 研发工作流路由（step 别名路由） | 用户使用 step 别名时 |
-| `.cursor/rules/centag-core.mdc` | 核心操作规范（构建、运行、调试、部署） | 涉及构建/部署操作时 |
-| `.cursor/rules/harness-baseline.mdc` | 基础规范（alwaysApply） | 始终生效 |
+| `/AGENT.md` | Skill 分层与交接契约 | 任意 Agent 进入项目 |
+| `.cursor/rules/harness-ask-ui.mdc` | AskQuestion 优先 | Cursor 会话始终 |
+| `.cursor/rules/centag-*-test.mdc` | 测试类交互入口 | 触发对应测试词 |
 | `docs/harness/workflow/` | 工作流各阶段执行指南 | 进入对应 Phase 时 |
 | `docs/harness/workflow/gate-checklist.md` | 门禁检查清单 | 跨 Phase 过渡时 |
-| `docs/harness/templates/` | 文档模板（技术方案、任务计划、自测记录、CR 报告等） | 需要创建标准化产物时 |
+| `docs/harness/templates/` | 文档模板 | 需要创建标准化产物时 |
 | `docs/versions/` | 版本索引与需求清单 | 版本规划或发布时 |
-| `docs/versions/` | 版本管理规范（需求归档、技术方案、任务计划） | 创建版本目录时 |
 
 ---
 

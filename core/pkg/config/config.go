@@ -203,6 +203,10 @@ type ProxyConfig struct {
 	AllowHeaderOverride bool   `json:"allow_header_override"`
 	DefaultBackendID    string `json:"default_backend_id"`
 	DefaultModel        string `json:"default_model"`
+	// FallbackBackendID 降级后端 ID：当 DefaultBackendID 不可用时自动使用
+	FallbackBackendID string `json:"fallback_backend_id,omitempty"`
+	// FallbackModel 降级模型：当 DefaultModel 不可用时自动使用
+	FallbackModel string `json:"fallback_model,omitempty"`
 	// 模式模板启用开关
 	ModeATemplateEnabled bool `json:"mode_a_template_enabled"` // #a 审核模式模板
 	ModeOTemplateEnabled bool `json:"mode_o_template_enabled"` // #o 优化模式模板

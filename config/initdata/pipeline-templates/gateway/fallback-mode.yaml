@@ -12,10 +12,15 @@ nodes:
   kind: llm.generate
   implementation: builtin.generator
   name: 主后端生成
-  backend: bigmodel
-  model: GLM-4.7-Flash
+  backend: "{{system.default_backend}}"
+  model: "{{system.default_model}}"
   config:
+    backend: "{{system.default_backend}}"
+    model: "{{system.default_model}}"
     prompt_template: '{{input}}'
+    template_vars:
+      backend: "system.default_backend"
+      model: "system.default_model"
   timeout: 90
   retry:
     max_attempts: 2
@@ -29,10 +34,15 @@ nodes:
   kind: llm.generate
   implementation: builtin.generator
   name: 降级后端生成
-  backend: bigmodel
-  model: GLM-4-flash
+  backend: "{{system.fallback_backend}}"
+  model: "{{system.fallback_model}}"
   config:
+    backend: "{{system.fallback_backend}}"
+    model: "{{system.fallback_model}}"
     prompt_template: '{{input}}'
+    template_vars:
+      backend: "system.fallback_backend"
+      model: "system.fallback_model"
     custom_config:
       is_fallback: true
   timeout: 60

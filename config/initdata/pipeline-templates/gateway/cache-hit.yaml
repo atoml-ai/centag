@@ -39,9 +39,14 @@ nodes:
   implementation: builtin.generator
   name: 内容生成
   description: 当缓存未命中时生成内容
-  backend: bigmodel
-  model: glm-4-flash
+  backend: "{{system.default_backend}}"
+  model: "{{system.default_model}}"
   config:
+    backend: "{{system.default_backend}}"
+    model: "{{system.default_model}}"
+    template_vars:
+      backend: "system.default_backend"
+      model: "system.default_model"
     system_prompt: 请根据用户输入生成合适的回复。
   timeout: 120
   condition: '{{.cache_read.metadata.cache_hit}} == false'

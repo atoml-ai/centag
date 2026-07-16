@@ -89,12 +89,18 @@ func mustProjectRoot(t *testing.T) string {
 		t.Fatal(err)
 	}
 	for i := 0; i < 8; i++ {
-		if _, err := os.Stat(filepath.Join(root, "config", "initdata", "pipeline-templates", "18-rag-mode.yaml")); err == nil {
+		dir := filepath.Join(root, "config", "initdata", "pipeline-templates")
+		if st, err := os.Stat(dir); err == nil && st.IsDir() {
+			// Found the templates dir; treat as project root.
+			return root
+		}
+		// 兼容测试 fixture 目录
+		if _, err := os.Stat(filepath.Join(root, "pipeline-templates", "README.md")); err == nil {
 			return root
 		}
 		root = filepath.Dir(root)
 	}
-	t.Fatal("project root not found")
+	t.Fatal("project root not found (config/initdata/pipeline-templates 或 ./pipeline-templates 均未找到)")
 	return ""
 }
 

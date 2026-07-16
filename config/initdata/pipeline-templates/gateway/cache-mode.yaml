@@ -9,11 +9,16 @@ nodes:
   kind: llm.generate
   implementation: builtin.generator
   name: 内容生成
-  backend: bigmodel
-  model: glm-4-flash
+  backend: "{{system.default_backend}}"
+  model: "{{system.default_model}}"
   config:
+    backend: "{{system.default_backend}}"
+    model: "{{system.default_model}}"
     prompt_template: '{{input}}'
     system_prompt: 请根据用户输入生成合适的回复。
+    template_vars:
+      backend: "system.default_backend"
+      model: "system.default_model"
   timeout: 120
   retry:
     max_attempts: 0

@@ -10,9 +10,11 @@ nodes:
   kind: llm.generate
   implementation: builtin.generator
   name: 候选 A
-  backend: bigmodel
-  model: glm-4-flash
+  backend: "{{system.default_backend}}"
+  model: "{{system.default_model}}"
   config:
+    backend: "{{system.default_backend}}"
+    model: "{{system.default_model}}"
     prompt_template: '{{input}}'
     system_prompt: |
       你是一个通用智能助手（候选 A），请直接、准确地回答用户问题。
@@ -27,6 +29,9 @@ nodes:
       ## 风格
       - 结构化表达，善用列表和分段
       - 回答精炼，避免冗余描述
+    template_vars:
+      backend: "system.default_backend"
+      model: "system.default_model"
   timeout: 90
   retry:
     max_attempts: 0
@@ -41,9 +46,11 @@ nodes:
   kind: llm.generate
   implementation: builtin.generator
   name: 候选 B
-  backend: bigmodel
-  model: glm-4-flash
+  backend: "{{system.default_backend}}"
+  model: "{{system.default_model}}"
   config:
+    backend: "{{system.default_backend}}"
+    model: "{{system.default_model}}"
     prompt_template: '{{input}}'
     system_prompt: |
       你是一个通用智能助手（候选 B），请直接、准确地回答用户问题。
@@ -58,6 +65,9 @@ nodes:
       ## 风格
       - 叙述流畅，善用段落展开
       - 适当举例和类比，让回答更易理解
+    template_vars:
+      backend: "system.default_backend"
+      model: "system.default_model"
   timeout: 90
   retry:
     max_attempts: 0
@@ -72,9 +82,14 @@ nodes:
   kind: aggregate.merge
   implementation: builtin.aggregator
   name: 评分择优
-  backend: bigmodel
-  model: glm-4-flash
+  backend: "{{system.default_backend}}"
+  model: "{{system.default_model}}"
   config:
+    backend: "{{system.default_backend}}"
+    model: "{{system.default_model}}"
+    template_vars:
+      backend: "system.default_backend"
+      model: "system.default_model"
     custom_config:
       strategy: score
   timeout: 90

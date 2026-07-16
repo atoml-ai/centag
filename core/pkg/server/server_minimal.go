@@ -62,9 +62,9 @@ func NewMinimal(cfg *config.Config) *Server {
 	// Create pipeline registry (in-memory for minimal)
 	pipelineRegistry := pipeline.NewPipelineRegistry()
 
-	// Load pipeline templates from files
-	templates := resolvePipelineTemplates()
-	logger.Infof("Pipeline templates loaded: %d builtin templates", len(templates))
+	// Load pipeline templates from files (minimal edition: only minimal- prefixed templates)
+	templates := resolvePipelineTemplatesWithEdition("minimal")
+	logger.Infof("Pipeline templates loaded: %d builtin templates (edition: minimal)", len(templates))
 
 	// Register all templates as pipelines
 	for _, tmpl := range templates {
@@ -228,7 +228,7 @@ func NewMinimal(cfg *config.Config) *Server {
 		}
 
 		// 2b. 从全局目录加载内置模板（dataDir 的同名模板会覆盖）
-		builtinTemplates := resolvePipelineTemplates()
+		builtinTemplates := resolvePipelineTemplatesWithEdition("minimal")
 		for _, t := range builtinTemplates {
 			if _, exists := tmplMap[t.ID]; !exists {
 				tmplMap[t.ID] = t

@@ -15,7 +15,8 @@
 #   export TEST_BACKEND_SOURCE="real"   # real|mock
 #   export TEST_MOCK_OPENAI_HOST="127.0.0.1"
 #   export TEST_MOCK_OPENAI_PORT="28081"
-#   export TEST_PIPELINES="smart-scheduling,direct-backend,fallback-mode,router-mode"
+#   export CENTAG_DEPLOY_TYPE="gateway"  # gateway|team|minimal|personal
+#   export TEST_PIPELINES="smart-scheduling,direct-backend,fallback-mode,transparent-fast"
 #   bash wizard-test.sh
 #
 # 输出：
@@ -27,6 +28,9 @@
 set -o pipefail
 
 BASE="${TEST_BASE_URL:-http://localhost:20060}"
+# Align deploy type for admin-e2e / report scripts
+export CENTAG_DEPLOY_TYPE="${CENTAG_DEPLOY_TYPE:-gateway}"
+export TEST_DEPLOY_TYPE="${TEST_DEPLOY_TYPE:-$CENTAG_DEPLOY_TYPE}"
 JWT="${TEST_JWT_TOKEN}"
 ENTRY_VARIANTS="${TEST_ENTRY_VARIANTS:-header-full}"
 REPEAT_PER_VARIANT="${TEST_REPEAT_PER_VARIANT:-1}"
@@ -237,6 +241,7 @@ shortcut_for_pipeline() {
     smart-scheduling) echo "#s" ;;
     direct-backend) echo "#d" ;;
     transparent-proxy) echo "#t" ;;
+    transparent-fast) echo "#tf" ;;
     fallback-mode) echo "#f" ;;
     optimize-mode) echo "#o" ;;
     audit-mode) echo "#a" ;;
@@ -244,8 +249,8 @@ shortcut_for_pipeline() {
     aggregator-mode) echo "#ag" ;;
     translate-mode) echo "#l" ;;
     router-mode) echo "#r" ;;
-    mem0-memory) echo "#mem0" ;;
-    rag-mode) echo "#rag" ;;
+    pipeline-mode) echo "#p" ;;
+    security-mode) echo "#sec" ;;
     *) echo "" ;;
   esac
 }
@@ -461,9 +466,9 @@ else
   fi
 fi
 
-case "${CENTAG_DEPLOY_TYPE:-desktop}" in
-  desktop)
-    echo "=== 桌面个人版 — 使用 Admin JWT 测试 ==="
+case "${CENTAG_DEPLOY_TYPE:-gateway}" in
+  desktop|personal|gateway|minimal)
+    echo "=== ${CENTAG_DEPLOY_TYPE} — 使用 Admin JWT 测试 ==="
     TEST_AUTH_KEY="${JWT}"
     ;;
   team)
@@ -475,6 +480,10 @@ case "${CENTAG_DEPLOY_TYPE:-desktop}" in
       echo "  ⚠️  TEST_USER_KEY 未设置，降级使用 Admin JWT"
       TEST_AUTH_KEY="${JWT}"
     fi
+    ;;
+  *)
+    echo "⚠️  未知 CENTAG_DEPLOY_TYPE=${CENTAG_DEPLOY_TYPE}，按 gateway 使用 Admin JWT"
+    TEST_AUTH_KEY="${JWT}"
     ;;
 esac
 export TEST_AUTH_KEY
@@ -675,7 +684,7 @@ echo ""
 # ========================================================================
 echo "=========================================="
 echo "  开始流水线测试"
-echo "  版本: ${CENTAG_DEPLOY_TYPE:-desktop}"
+echo "  版本: ${CENTAG_DEPLOY_TYPE:-gateway}"
 echo "  后端: ${TEST_BACKEND_ID} / ${TEST_BACKEND_MODEL}"
 echo "  流水线: ${TEST_PIPELINES}"
 echo "=========================================="

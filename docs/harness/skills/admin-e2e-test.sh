@@ -11,7 +11,7 @@ set -u
 set -o pipefail
 
 BASE_URL="${TEST_BASE_URL:-http://localhost:20060}"
-TEST_DEPLOY_TYPE="${TEST_DEPLOY_TYPE:-desktop}"
+TEST_DEPLOY_TYPE="${TEST_DEPLOY_TYPE:-${CENTAG_DEPLOY_TYPE:-gateway}}"
 ENV_FILE="${ADMIN_ENV_FILE:-config/secrets/.env}"
 RESULTS_NDJSON="/tmp/admin_e2e_results.ndjson"
 RESULTS_JSON="/tmp/admin_e2e_results.json"
@@ -215,6 +215,69 @@ TEST_USERNAME="e2e_test_user_$(date +%s)"
 TEST_PASSWORD="Test123456"
 TEST_DISPLAY_NAME="E2E Test User"
 TEST_APIKEY_NAME="e2e-test-key-$(date +%s)"
+TEST_SKIP_AGENT_PROVIDERS="${TEST_SKIP_AGENT_PROVIDERS:-true}"
+
+# ---------------------------------------------------------------------------
+# minimal：精简套件
+# ---------------------------------------------------------------------------
+if [ "${TEST_DEPLOY_TYPE}" = "minimal" ]; then
+  record_case "Auth" "bootstrap-status" "GET" "/api/v1/auth/bootstrap-status" "200" \
+    "返回 success 且含 edition/initialized" \
+    '.success == true' \
+    "" \
+    "无"
+
+  record_case "后端管理" "后端-列表" "GET" "/api/v1/backends" "200" \
+    "返回成功且 data 为数组" \
+    '.success == true and ((.data|type)=="array")' \
+    "" \
+    "无"
+
+  record_case "流水线管理" "流水线-列表" "GET" "/api/v1/pipelines" "200" \
+    "返回成功且 data 为数组" \
+    '.success == true and ((.data|type)=="array")' \
+    "" \
+    "无"
+
+  record_case "API Key" "settings-api-keys" "GET" "/api/v1/settings/api-keys" "200" \
+    "返回成功" \
+    '.success == true' \
+    "" \
+    "无"
+
+  record_case "API Key" "settings-api-keys-status" "GET" "/api/v1/settings/api-keys/status" "200" \
+    "返回 auth_required 字段" \
+    '.success == true' \
+    "" \
+    "无"
+
+  record_case "健康检查" "健康检查" "GET" "/health" "200" \
+    "健康检查返回 200" \
+    '((.status // "") | ascii_downcase) as $s | ($s == "ok" or $s == "healthy")' \
+    "" \
+    "无"
+
+  jq -s '
+    def pct(a;b): if b==0 then 0 else ((a*10000/b)|floor)/100 end;
+    . as $rows |
+    {
+      timestamp:(now|strftime("%Y-%m-%d %H:%M:%S")),
+      mode:"admin",
+      deploy_type:(env.TEST_DEPLOY_TYPE // "minimal"),
+      base_url:(env.TEST_BASE_URL // "http://localhost:20060"),
+      total:($rows|length),
+      passed:($rows|map(select(.ok))|length),
+      failed:($rows|map(select(.ok|not))|length),
+      pass_rate:(pct(($rows|map(select(.ok))|length);($rows|length))),
+      results:$rows
+    }' "$RESULTS_NDJSON" > "$RESULTS_JSON"
+
+  summary="$(jq -r '"SUMMARY passed=\(.passed)/\(.total) rate=\(.pass_rate)%"' "$RESULTS_JSON")"
+  echo "RESULT_FILE=${RESULTS_JSON}"
+  echo "${summary}"
+  rm -rf "$TMP_DIR"
+  exit 0
+fi
 
 record_case "用户管理" "用户管理-列表" "GET" "/api/v1/admin/users" "200" \
   "返回成功且 data 为数组" \
@@ -284,11 +347,15 @@ record_case "Token 用量" "Token用量-用户" "GET" "/api/v1/user/token-usage"
   "" \
   "无"
 
-record_case "Agent 供应商" "Agent供应商-列表" "GET" "/api/v1/agent-providers" "200" \
-  "返回成功且 agent_providers 为数组" \
-  '((.agent_providers|type)=="array")' \
-  "" \
-  "无"
+if [ "${TEST_SKIP_AGENT_PROVIDERS}" != "true" ]; then
+  record_case "Agent 供应商" "Agent供应商-列表" "GET" "/api/v1/agent-providers" "200" \
+    "返回成功且 agent_providers 为数组" \
+    '((.agent_providers|type)=="array")' \
+    "" \
+    "无"
+else
+  echo "⏭️  跳过 Agent 供应商（TEST_SKIP_AGENT_PROVIDERS=true）"
+fi
 
 record_case "后端管理" "后端-列表" "GET" "/api/v1/backends" "200" \
   "返回成功且 data 为数组" \
@@ -339,7 +406,7 @@ jq -s '
   {
     timestamp:(now|strftime("%Y-%m-%d %H:%M:%S")),
     mode:"admin",
-    deploy_type:(env.TEST_DEPLOY_TYPE // "desktop"),
+    deploy_type:(env.TEST_DEPLOY_TYPE // "gateway"),
     base_url:(env.TEST_BASE_URL // "http://localhost:20060"),
     total:($rows|length),
     passed:($rows|map(select(.ok))|length),
