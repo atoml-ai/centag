@@ -1,7 +1,7 @@
 import type { NavItem } from './types'
 import { dashboardNav } from './shared'
 
-/** Minimal 精简管理台导航 */
+/** Minimal 精简管理台导航（无设置页） */
 export const NAV_MENU_MINIMAL: NavItem[] = [
   dashboardNav('概览'),
   {
@@ -15,11 +15,5 @@ export const NAV_MENU_MINIMAL: NavItem[] = [
     label: '策略管理',
     icon: 'Share',
     path: '/pipelines'
-  },
-  {
-    id: 'settings',
-    label: '设置',
-    icon: 'Setting',
-    path: '/settings'
   }
 ]

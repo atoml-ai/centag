@@ -53,8 +53,8 @@
         <el-icon><Refresh /></el-icon>
       </el-button>
 
-      <!-- 用户下拉菜单 -->
-      <el-dropdown trigger="click" @command="handleUserCommand">
+      <!-- Minimal：无用户菜单；改密/退出在概览页 -->
+      <el-dropdown v-if="!isMinimal" trigger="click" @command="handleUserCommand">
         <div class="user-avatar">
           <el-avatar :size="32" :style="avatarStyle">
             {{ avatarText }}
@@ -90,6 +90,7 @@ import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useNavigation } from '@/composables/useNavigation'
+import { useEdition } from '@/composables/useEdition'
 import type { NavItem } from '@/utils/nav'
 import { Refresh, ArrowDown, User, SwitchButton } from '@element-plus/icons-vue'
 import CentagMark from '@/components/icons/CentagMark.vue'
@@ -97,6 +98,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 
 const router = useRouter()
 const authStore = useAuthStore()
+const { isMinimal } = useEdition()
 const {
   visibleNavItems,
   currentNav,

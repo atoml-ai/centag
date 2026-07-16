@@ -8,7 +8,7 @@ const EDITION_ATTR = 'data-edition'
  * Edition capability matrix:
  * - personal: single-user surfaces (legacy desktop-oriented)
  * - team: full server deployment
- * - minimal: lite WebUI (dashboard / backends / pipelines / settings + password auth)
+ * - minimal: lite WebUI (dashboard / backends / pipelines + password auth)
  */
 
 function readEditionFromDom(): Edition {
@@ -55,9 +55,7 @@ export const TEAM_ONLY_ROUTE_PREFIXES = [
 export const MINIMAL_ALLOWED_ROUTE_PREFIXES = [
   '/dashboard',
   '/backends',
-  '/pipelines',
-  '/settings',
-  '/profile'
+  '/pipelines'
 ] as const
 
 export function isTeamOnlyRoute(path: string): boolean {

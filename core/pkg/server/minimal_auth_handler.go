@@ -27,12 +27,14 @@ type MinimalAuthHandler struct {
 	mu      sync.Mutex
 	// refreshTokens maps refresh token -> expiry unix
 	refreshTokens map[string]int64
+	apiKeys       *minimalAPIKeyStore
 }
 
 func NewMinimalAuthHandler(dataDir string) *MinimalAuthHandler {
 	return &MinimalAuthHandler{
 		dataDir:       dataDir,
 		refreshTokens: make(map[string]int64),
+		apiKeys:       newMinimalAPIKeyStore(dataDir),
 	}
 }
 
@@ -111,6 +113,7 @@ func (h *MinimalAuthHandler) RegisterRoutes(r *gin.Engine) {
 	settings.Use(auth.JWTMiddleware())
 	{
 		settings.POST("/password", h.ChangePassword)
+		h.registerAPIKeyRoutes(settings)
 	}
 }
 
