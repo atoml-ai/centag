@@ -67,8 +67,31 @@ func Run(version, buildTime string) {
 	logger.Infof("Version: %s, Build: %s", Version, BuildTime)
 	logger.Infof("Product edition: minimal")
 
+	// Minimal edition: default INITDATA_PATH to the profile-specific initdata
+	// directory so that local/dev runs load the correct pipeline templates
+	// (e.g. transparent-proxy using generator/openai instead of the global
+	// transparent_forward template that requires a configured default backend).
+	if os.Getenv("INITDATA_PATH") == "" {
+		if root := bootstrap.ProjectRoot(); root != "" {
+			profileInitdata := filepath.Join(root, "config", "profiles", "minimal", "initdata")
+			if info, err := os.Stat(profileInitdata); err == nil && info.IsDir() {
+				os.Setenv("INITDATA_PATH", profileInitdata)
+				logger.Infof("Minimal edition default INITDATA_PATH set to: %s", profileInitdata)
+			}
+		}
+	}
+
 	// Step 4: Load config from files (no database)
 	cfg := loadMinimalConfig(boot)
+	dataDir := config.ResolveDataDir()
+	if dataDir != "" {
+		if loadedProxy, err := config.LoadProxyConfigFromFile(dataDir, cfg.Proxy); err == nil {
+			cfg.Proxy = loadedProxy
+			logger.Infof("Loaded proxy config from %s", filepath.Join(dataDir, "proxy-config.yaml"))
+		} else {
+			logger.Warnf("Failed to load proxy config: %v", err)
+		}
+	}
 	logger.Infof("Minimal config loaded – server will listen on %s:%d", cfg.Server.Host, cfg.Server.Port)
 
 	// Step 5: Load backends from YAML file

@@ -1158,6 +1158,7 @@ _debug_minimal() {
     detect_database_mode
     centag_export_debug_console_env
     export CENTAG_EDITION=minimal
+    export INITDATA_PATH="${PROJECT_ROOT}/config/profiles/minimal/initdata"
 
     cleanup_residual_processes
     rm -f "$BIN_DIR/storage/centag.pid" 2>/dev/null || true

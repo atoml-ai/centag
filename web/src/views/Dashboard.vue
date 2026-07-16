@@ -6,11 +6,11 @@
         <p class="page-description">{{ pageDescription }}</p>
       </div>
       <div class="page-header-actions">
+        <el-button v-if="isMinimal" type="success" @click="chatDialogVisible = true">
+          <el-icon><ChatDotRound /></el-icon>&nbsp;AI 对话
+        </el-button>
         <el-button v-if="isMinimal" @click="pwdDialogVisible = true">修改密码</el-button>
         <el-button v-if="isMinimal" @click="handleLogout">退出登录</el-button>
-        <el-button :loading="loading" @click="load" type="primary" plain>
-          <el-icon><Refresh /></el-icon>&nbsp;刷新数据
-        </el-button>
       </div>
     </div>
 
@@ -44,70 +44,25 @@
             />
           </el-card>
 
-          <div class="lite-proxy-col">
-            <el-card class="info-card config-card">
-              <template #header>
-                <div class="card-head">
+          <el-card class="info-card config-card">
+            <template #header>
+              <div class="card-head card-head--actions">
+                <div class="card-head-main">
                   <el-icon class="card-icon pipeline-color"><Share /></el-icon>
                   <span>流水线配置</span>
+                  <span class="card-badge">{{ pipelineCount }} 个</span>
                 </div>
-              </template>
-              <HomePipelineCard ref="pipelinePanelRef" />
-            </el-card>
-
-            <el-card class="info-card config-card">
-              <template #header>
-                <div class="card-head">
-                  <el-icon class="card-icon service-color"><Monitor /></el-icon>
-                  <span>默认模型</span>
-                </div>
-              </template>
-              <el-form label-width="100px" size="small" @submit.prevent="saveProxyConfig">
-                <el-form-item label="默认后端">
-                  <el-select
-                    v-model="proxyConfig.default_backend_id"
-                    placeholder="选择默认后端"
-                    clearable
-                    style="width: 100%"
-                    @change="onDefaultBackendChange"
-                  >
-                    <el-option
-                      v-for="b in backends.filter((b: any) => b.enabled)"
-                      :key="b.id"
-                      :label="b.name"
-                      :value="b.id"
-                    />
-                  </el-select>
-                </el-form-item>
-                <el-form-item label="默认模型">
-                  <el-select
-                    v-model="proxyConfig.default_model"
-                    placeholder="选择默认模型"
-                    clearable
-                    filterable
-                    allow-create
-                    :loading="loadingModels"
-                    style="width: 100%"
-                  >
-                    <el-option
-                      v-for="m in availableModels"
-                      :key="m"
-                      :label="m"
-                      :value="m"
-                    />
-                  </el-select>
-                </el-form-item>
-                <el-form-item>
-                  <el-button type="primary" :loading="proxyConfigSaving" @click="saveProxyConfig">
-                    保存
-                  </el-button>
-                </el-form-item>
-              </el-form>
-            </el-card>
-          </div>
+                <el-button type="primary" size="small" @click="pipelinePanelRef?.openCreate()">
+                  + 创建流水线
+                </el-button>
+              </div>
+            </template>
+            <HomePipelineCard ref="pipelinePanelRef" @update:count="pipelineCount = $event" />
+          </el-card>
         </div>
       </div>
       <ChangePasswordDialog v-model="pwdDialogVisible" />
+      <MinimalChat v-model="chatDialogVisible" />
     </template>
 
     <!-- Personal（gateway 个人版）：保持原布局 —— 状态 | 接入 → 后端 | 流水线 -->
@@ -660,9 +615,9 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
-  Document, CircleCheck, TrendCharts, Warning, Refresh,
+  Document, CircleCheck, TrendCharts, Warning,
   Timer, Stopwatch, Coin, Monitor, DataBoard, DataLine, DataAnalysis,
-  CopyDocument, Cpu, List, Share
+  CopyDocument, Cpu, List, Share, ChatDotRound
 } from '@element-plus/icons-vue'
 import VChart from 'vue-echarts'
 import { use } from 'echarts/core'
@@ -678,6 +633,7 @@ import MinimalApiKeysPanel from '@/components/dashboard/MinimalApiKeysPanel.vue'
 import ChangePasswordDialog from '@/components/dashboard/ChangePasswordDialog.vue'
 import HomePipelineCard from '@/components/dashboard/HomePipelineCard.vue'
 import DashboardBackendList from '@/components/dashboard/DashboardBackendList.vue'
+import MinimalChat from '@/views/MinimalChat.vue'
 import { mergeBackendUpdate } from '@/utils/backendTest'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
@@ -690,68 +646,11 @@ const pageDescription = computed(() => {
   if (isPersonal.value) return '你的本地大模型代理入口：配置默认流水线与后端，复制 API 地址即可在客户端中使用'
   return 'Centag 服务运行状态与基础配置总览'
 })
-const pipelinePanelRef = ref<{ reload: () => void } | null>(null)
-const backendListRef = ref<{ openCreate: () => void } | null>(null)
+const pipelinePanelRef = ref<{ reload: () => void; openCreate: () => void } | null>(null)
+const backendListRef = ref<{ openCreate: () => void; reloadDefault: () => void } | null>(null)
+const pipelineCount = ref(0)
 const pwdDialogVisible = ref(false)
-
-// Proxy config (default backend / model)
-const proxyConfigSaving = ref(false)
-const proxyConfig = ref<{ default_backend_id: string; default_model: string }>({
-  default_backend_id: '',
-  default_model: ''
-})
-const availableModels = ref<string[]>([])
-const loadingModels = ref(false)
-
-async function loadProxyConfig() {
-  try {
-    const res: any = await api.get('/api/v1/config/proxy')
-    if (res?.data) {
-      proxyConfig.value.default_backend_id = res.data.default_backend_id || ''
-      proxyConfig.value.default_model = res.data.default_model || ''
-      if (proxyConfig.value.default_backend_id) {
-        await fetchModelsForBackend(proxyConfig.value.default_backend_id)
-      }
-    }
-  } catch { /* ignore */ }
-}
-
-async function fetchModelsForBackend(backendId: string) {
-  if (!backendId) {
-    availableModels.value = []
-    return
-  }
-  loadingModels.value = true
-  try {
-    const res: any = await api.get(`/api/v1/backends/${backendId}/models`)
-    const models = Array.isArray(res) ? res : (res?.data || [])
-    availableModels.value = models.map((m: any) => m.id || m.name || m.model || '').filter(Boolean)
-  } catch {
-    availableModels.value = []
-  } finally {
-    loadingModels.value = false
-  }
-}
-
-async function onDefaultBackendChange() {
-  proxyConfig.value.default_model = ''
-  await fetchModelsForBackend(proxyConfig.value.default_backend_id)
-}
-
-async function saveProxyConfig() {
-  proxyConfigSaving.value = true
-  try {
-    await api.put('/api/v1/config/proxy', {
-      default_backend_id: proxyConfig.value.default_backend_id,
-      default_model: proxyConfig.value.default_model
-    })
-    ElMessage.success('默认模型配置已保存')
-  } catch (e: any) {
-    ElMessage.error('保存失败: ' + (e?.message || '未知错误'))
-  } finally {
-    proxyConfigSaving.value = false
-  }
-}
+const chatDialogVisible = ref(false)
 
 async function handleLogout() {
   try {
@@ -1034,6 +933,7 @@ async function loadBackendsOnly() {
     const backendsRes = await getBackends()
     if (gen !== backendsLoadGen) return
     backends.value = backendsRes || []
+    backendListRef.value?.reloadDefault()
   } catch (e: any) {
     if (gen !== backendsLoadGen) return
     ElMessage.error('加载后端数据失败: ' + (e.message || '未知错误'))
@@ -1057,12 +957,8 @@ async function load() {
         backends.value = backendsRes.value || []
       }
       pipelinePanelRef.value?.reload()
-      loadProxyConfig()
       return
     }
-
-    // Minimal also needs proxy config
-    loadProxyConfig()
 
     const [dashRes, statusRes, backendsRes, storagesRes, pluginsRes, proxyRes, hostProxyRes] = await Promise.allSettled([
       getDashboard(),
@@ -1201,17 +1097,6 @@ onUnmounted(() => { if (timer) clearInterval(timer) })
   align-items: stretch;
 }
 
-.lite-proxy-col {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.lite-proxy-col .config-card {
-  flex: 1;
-  min-height: 0;
-}
-
 .personal-top-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
@@ -1228,6 +1113,13 @@ onUnmounted(() => { if (timer) clearInterval(timer) })
 .card-head--actions {
   width: 100%;
   justify-content: space-between;
+}
+
+.card-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
 }
 
 .card-head-main {

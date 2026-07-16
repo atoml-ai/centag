@@ -225,7 +225,19 @@ const canRunRouteAutoBuild = computed(() => {
 
 function syncLocalPipelineFromProps() {
   if (!props.pipeline) {
-    localPipeline.value = null
+    if (isCreateMode.value) {
+      localPipeline.value = {
+        id: '',
+        name: '',
+        description: '',
+        version: '1.0',
+        nodes: [],
+        created_at: '',
+        updated_at: ''
+      }
+    } else {
+      localPipeline.value = null
+    }
     return
   }
   localPipeline.value = JSON.parse(JSON.stringify(props.pipeline))
@@ -290,16 +302,22 @@ async function onCanvasSave(pipeline: AgentPatternPipeline) {
 
 async function loadDeps() {
   try {
-    const [backendsRes, storagesRes] = await Promise.all([
+    const [backendsRes, storagesRes] = await Promise.allSettled([
       api.get('/api/v1/backends'),
       api.get('/api/v1/storage')
     ])
-    backends.value = Array.isArray(backendsRes) ? backendsRes : backendsRes?.data || []
-    let storageData = storagesRes?.data || storagesRes
-    if (storageData && typeof storageData === 'object' && 'storages' in storageData) {
-      storages.value = Array.isArray(storageData.storages) ? storageData.storages : []
-    } else {
-      storages.value = Array.isArray(storageData) ? storageData : []
+    if (backendsRes.status === 'fulfilled') {
+      const res = backendsRes.value
+      backends.value = Array.isArray(res) ? res : res?.data || []
+    }
+    if (storagesRes.status === 'fulfilled') {
+      const res = storagesRes.value
+      let storageData = res?.data || res
+      if (storageData && typeof storageData === 'object' && 'storages' in storageData) {
+        storages.value = Array.isArray(storageData.storages) ? storageData.storages : []
+      } else {
+        storages.value = Array.isArray(storageData) ? storageData : []
+      }
     }
     depsLoaded.value = true
   } catch {
