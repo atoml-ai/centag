@@ -22,7 +22,7 @@
 
 | 服务 | 默认端口 | 说明 |
 |------|-----------|------|
-| Proxy Claw | 20060 | 唯一由本仓库 compose 定义的服务 |
+| Centag | 20060 | 唯一由本仓库 compose 定义的服务 |
 
 Elasticsearch、Kibana、Redis、ChromaDB、Ollama、PostgreSQL、Mem0 等见 **deploy/stack**；下文「配置说明」中的变量仍用于 **让 Centag 连接** 这些外部依赖。
 
@@ -235,7 +235,7 @@ curl http://localhost:21434/api/tags
 curl http://localhost:21434/api/embeddings -d '{"model":"bge-m3","prompt":"Hello"}'
 ```
 
-### 6. 检查 Proxy Claw
+### 6. 检查 Centag
 
 ```bash
 curl http://localhost:20060/health
@@ -366,7 +366,7 @@ docker exec -it centag-redis redis-cli info
 
 1. **启动 Elasticsearch**（在 **deploy/stack** 中启动 ES 服务，命令以该仓库为准）
 
-2. **配置 Proxy Claw 启用 ES**
+2. **配置 Centag 启用 ES**
    ```bash
    ELASTICSEARCH_ENABLED=true
    ```

@@ -239,7 +239,7 @@ curl -k -x http://127.0.0.1:8081 https://api.openai.com/v1/models
 
 # 3. 查看日志，应该看到：
 #    - MITM CONNECT request: api.openai.com
-#    - Forwarding to Proxy Claw backend
+#    - Forwarding to Centag backend
 tail -20 /tmp/centag-test.log
 ```
 

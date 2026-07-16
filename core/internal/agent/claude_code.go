@@ -58,7 +58,7 @@ func (t *ClaudeCodeTemplate) VerifyCommand(info *BackendInfo) string {
 func (t *ClaudeCodeTemplate) Steps(info *BackendInfo) []ConfigStep {
 	url := proxyURL(info.Host, info.Port)
 	return []ConfigStep{
-		{Title: "配置环境变量", Description: fmt.Sprintf("设置 ANTHROPIC_BASE_URL 指向 ProxyClaw: %s", url)},
+		{Title: "配置环境变量", Description: fmt.Sprintf("设置 ANTHROPIC_BASE_URL 指向 Centag: %s", url)},
 		{Title: "启动 Claude Code", Description: "在终端中运行 claude 命令", Code: "claude"},
 	}
 }

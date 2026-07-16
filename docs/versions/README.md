@@ -13,4 +13,4 @@ docs/versions/
         └── …
 ```
 
-历史 ProxyClaw 版本文档已在 Centag 首提前清理；新需求从本目录重新归档即可。
+历史 Centag 版本文档已在 Centag 首提前清理；新需求从本目录重新归档即可。

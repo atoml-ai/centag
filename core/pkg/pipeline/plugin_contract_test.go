@@ -262,8 +262,8 @@ func TestBuiltinNodePluginDescriptorAPIVersion(t *testing.T) {
 		if desc.APIVersion != PipelinePluginSchemaVersion {
 			t.Errorf("plugin %q APIVersion = %q, want %q", impl, desc.APIVersion, PipelinePluginSchemaVersion)
 		}
-		if desc.MinProxyclawVersion != "" {
-			t.Errorf("builtin plugin %q should not have MinProxyclawVersion set by default", impl)
+		if desc.MinCentagVersion != "" {
+			t.Errorf("builtin plugin %q should not have MinCentagVersion set by default", impl)
 		}
 		if desc.Deprecated {
 			t.Errorf("builtin plugin %q should not be deprecated by default", impl)
@@ -298,7 +298,7 @@ func TestNodePluginDescriptorTagsAndDeprecation(t *testing.T) {
 		Kind:               "test.kind",
 		Version:            "1.0.0",
 		APIVersion:         PipelinePluginSchemaVersion,
-		MinProxyclawVersion: "1.0.0",
+		MinCentagVersion: "1.0.0",
 		Deprecated:         true,
 		Tags:               []string{"experimental", "llm"},
 	}
@@ -311,8 +311,8 @@ func TestNodePluginDescriptorTagsAndDeprecation(t *testing.T) {
 	if desc.Tags[0] != "experimental" {
 		t.Errorf("Tags[0] = %q, want experimental", desc.Tags[0])
 	}
-	if desc.MinProxyclawVersion != "1.0.0" {
-		t.Errorf("MinProxyclawVersion = %q, want 1.0.0", desc.MinProxyclawVersion)
+	if desc.MinCentagVersion != "1.0.0" {
+		t.Errorf("MinCentagVersion = %q, want 1.0.0", desc.MinCentagVersion)
 	}
 }
 
@@ -322,8 +322,8 @@ func TestRemoteNodePluginDescriptorHasAPIVersion(t *testing.T) {
 	if desc.APIVersion != PipelinePluginSchemaVersion {
 		t.Errorf("APIVersion = %q, want %q", desc.APIVersion, PipelinePluginSchemaVersion)
 	}
-	if desc.MinProxyclawVersion == "" {
-		t.Error("MinProxyclawVersion should be set for remote plugin")
+	if desc.MinCentagVersion == "" {
+		t.Error("MinCentagVersion should be set for remote plugin")
 	}
 	if desc.Kind != "remote.node" {
 		t.Errorf("Kind = %q, want remote.node", desc.Kind)

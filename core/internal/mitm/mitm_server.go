@@ -240,7 +240,7 @@ func (s *Server) handleCONNECT(w http.ResponseWriter, r *http.Request) {
 	// 判断是否需要转发到LLM Proxy后端
 	if s.shouldProxyToBackend(req) {
 		// 转发到LLM Proxy后端
-		logger.Debug("Forwarding to Proxy Claw backend",
+		logger.Debug("Forwarding to Centag backend",
 			zap.String("host", host),
 			zap.String("path", req.URL.Path))
 		if err := s.forwardToBackend(rw, req, "https"); err != nil {

@@ -1,5 +1,5 @@
 // Package auth provides JWT-based authentication and API key validation for
-// Proxy Claw.  The JWT secret is loaded from the system_config table on first
+// Centag.  The JWT secret is loaded from the system_config table on first
 // call to LoadSecret; if no secret exists yet, a random 64-byte secret is
 // generated and persisted.
 package auth

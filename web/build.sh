@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-echo "Building Proxy Claw Web UI..."
+echo "Building Centag Web UI..."
 echo "[DEPRECATED] 请优先使用: make frontend 或 ./start.sh build fe"
 
 cd "$(dirname "$0")"

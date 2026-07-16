@@ -1,5 +1,5 @@
 #!/bin/bash
-# Proxy Claw 数据库迁移管理工具
+# Centag 数据库迁移管理工具
 # 用法：./scripts/db-migrate.sh [command]
 
 set -e
@@ -26,7 +26,7 @@ if [ "$DB_MODE" = "postgresql" ] || [ -n "$PG_HOST" ]; then
 fi
 
 echo -e "${BLUE}=================================================${NC}"
-echo -e "${BLUE}Proxy Claw 数据库迁移工具${NC}"
+echo -e "${BLUE}Centag 数据库迁移工具${NC}"
 echo -e "${BLUE}数据库类型：${DB_TYPE}${NC}"
 echo -e "${BLUE}=================================================${NC}"
 echo ""

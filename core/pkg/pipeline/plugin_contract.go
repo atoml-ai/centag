@@ -36,7 +36,7 @@ type NodePluginDescriptor struct {
 	Concurrent         bool                  `json:"concurrent"`
 	Remote             *RemoteNodePluginSpec `json:"remote,omitempty"`
 	APIVersion         string                `json:"api_version,omitempty"`
-	MinProxyclawVersion string               `json:"min_proxyclaw_version,omitempty"`
+	MinCentagVersion string               `json:"min_centag_version,omitempty"`
 	Deprecated         bool                  `json:"deprecated,omitempty"`
 	Tags               []string             `json:"tags,omitempty"`
 	// 哈希锁定：期望的 manifest SHA-256 哈希值

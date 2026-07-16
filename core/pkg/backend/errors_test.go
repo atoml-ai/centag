@@ -93,7 +93,7 @@ func TestOpenAIErrorBody(t *testing.T) {
 	if !ok {
 		t.Fatalf("body = %#v", body)
 	}
-	if errObj["type"] != "proxyclaw_configuration_error" {
+	if errObj["type"] != "centag_configuration_error" {
 		t.Fatalf("type = %v", errObj["type"])
 	}
 	if errObj["code"] != ErrorCodeNoBackendConfigured {

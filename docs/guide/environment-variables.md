@@ -114,7 +114,7 @@ docker run -d \
 | Redis | 26379 | 6379 | `REDIS_ADDR` |
 | ChromaDB | 28000 | 8000 | `CHROMADB_ADDR` |
 | Ollama | 21434 | 21434 | `OLLAMA_HOST` |
-| Proxy Claw | 20060 | 20060 | `LLM_PROXY_SERVER_PORT` |
+| Centag | 20060 | 20060 | `LLM_PROXY_SERVER_PORT` |
 
 ## 流水线模板模式开关
 

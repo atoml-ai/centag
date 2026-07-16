@@ -1,5 +1,5 @@
 #!/bin/bash
-# Proxy Claw 管理脚本
+# Centag 管理脚本
 # 用法：llmproxy <command> [args...]
 
 set -euo pipefail
@@ -27,7 +27,7 @@ api_put() { curl -s -X PUT -H "Authorization: Bearer ${LLM_PROXY_ADMIN_KEY}" -H 
 api_post() { curl -s -X POST -H "Authorization: Bearer ${LLM_PROXY_ADMIN_KEY}" -H "Content-Type: application/json" "$1" -d "$2"; }
 
 cmd_status() {
-    print_info "检查 Proxy Claw 服务状态..."
+    print_info "检查 Centag 服务状态..."
     if $DOCKER_CMD ps --format '{{.Names}}' | grep -q "^${LLM_PROXY_CONTAINER}$"; then
         print_success "容器 ${LLM_PROXY_CONTAINER} 运行中"
     else
@@ -136,7 +136,7 @@ EOF
 }
 
 cmd_restart() {
-    print_info "重启 Proxy Claw 容器..."
+    print_info "重启 Centag 容器..."
     if $DOCKER_CMD restart ${LLM_PROXY_CONTAINER} >/dev/null 2>&1; then
         print_success "容器已重启"; sleep 3; cmd_status
     else
@@ -151,7 +151,7 @@ cmd_logs() {
 }
 
 cmd_help() {
-    echo "Proxy Claw 管理工具"
+    echo "Centag 管理工具"
     echo -e "\n用法：llmproxy <command> [args...]\n"
     echo "命令:"
     echo "  status              检查服务健康状态"

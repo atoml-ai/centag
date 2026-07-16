@@ -1,5 +1,5 @@
 #!/bin/bash
-# ProxyClaw clang wrapper — strips -no_warn_duplicate_libraries
+# Centag clang wrapper — strips -no_warn_duplicate_libraries
 # Required for Go 1.24+ with Apple CLT < 15 (macOS Ventura or older)
 set -euo pipefail
 

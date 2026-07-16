@@ -65,7 +65,7 @@ func (t *HermesTemplate) VerifyCommand(info *BackendInfo) string {
 func (t *HermesTemplate) Steps(info *BackendInfo) []ConfigStep {
 	url := proxyURL(info.Host, info.Port)
 	return []ConfigStep{
-		{Title: "编辑 config.yaml", Description: fmt.Sprintf("在 ~/.hermes/config.yaml 中添加 ProxyClaw: %s", url)},
+		{Title: "编辑 config.yaml", Description: fmt.Sprintf("在 ~/.hermes/config.yaml 中添加 Centag: %s", url)},
 		{Title: "启动 Hermes", Code: "hermes"},
 	}
 }

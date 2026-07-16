@@ -67,7 +67,7 @@ func (p *PACGenerator) Generate() string {
 
 	// 文件头注释
 	sb.WriteString("/*\n")
-	sb.WriteString(" * Proxy Claw PAC Configuration\n")
+	sb.WriteString(" * Centag PAC Configuration\n")
 	sb.WriteString(" * Auto-generated configuration\n")
 	sb.WriteString(" */\n\n")
 

@@ -1,5 +1,5 @@
 #!/bin/bash
-# Proxy Claw Secrets Loader
+# Centag Secrets Loader
 # 此脚本用于从 secrets 目录加载认证信息并设置环境变量
 
 set -euo pipefail
@@ -171,7 +171,7 @@ main() {
     fi
 
     print_info "========================================"
-    print_info "Proxy Claw - Secrets Loader"
+    print_info "Centag - Secrets Loader"
     print_info "========================================"
     echo ""
 

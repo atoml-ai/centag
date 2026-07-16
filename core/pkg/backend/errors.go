@@ -178,7 +178,7 @@ func OpenAIErrorBody(code, message string) map[string]interface{} {
 	return map[string]interface{}{
 		"error": map[string]interface{}{
 			"message": message,
-			"type":    "proxyclaw_configuration_error",
+			"type":    "centag_configuration_error",
 			"code":    code,
 		},
 	}

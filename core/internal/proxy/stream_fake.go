@@ -21,34 +21,25 @@ type StreamFakeConfig struct {
 
 // DefaultStreamFakeConfig 返回默认配置，受环境变量控制：
 //
-//	CENTAG_STREAM_FAKE（兼容 PROXYCLAW_STREAM_FAKE）— 设为 0/false/off 关闭（默认 true）
-//	CENTAG_STREAM_FAKE_MAX_BYTES（兼容 PROXYCLAW_*）— 最大聚合字节数（默认 32MB）
+//	CENTAG_STREAM_FAKE — 设为 0/false/off 关闭（默认 true）
+//	CENTAG_STREAM_FAKE_MAX_BYTES — 最大聚合字节数（默认 32MB）
 func DefaultStreamFakeConfig() StreamFakeConfig {
 	cfg := StreamFakeConfig{
 		Enabled:  true,
 		MaxBytes: 32 * 1024 * 1024, // 32MB
 	}
 
-	if v := firstEnv("CENTAG_STREAM_FAKE", "PROXYCLAW_STREAM_FAKE"); v != "" {
+	if v := os.Getenv("CENTAG_STREAM_FAKE"); v != "" {
 		cfg.Enabled = !isEnvFalse(v)
 	}
 
-	if v := firstEnv("CENTAG_STREAM_FAKE_MAX_BYTES", "PROXYCLAW_STREAM_FAKE_MAX_BYTES"); v != "" {
+	if v := os.Getenv("CENTAG_STREAM_FAKE_MAX_BYTES"); v != "" {
 		if n, err := strconv.ParseInt(v, 10, 64); err == nil && n > 0 {
 			cfg.MaxBytes = n
 		}
 	}
 
 	return cfg
-}
-
-func firstEnv(keys ...string) string {
-	for _, k := range keys {
-		if v := os.Getenv(k); v != "" {
-			return v
-		}
-	}
-	return ""
 }
 
 func isEnvFalse(v string) bool {

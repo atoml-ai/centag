@@ -50,17 +50,17 @@ func TestMetadataEnhancer_EnhanceResponse(t *testing.T) {
 				}
 
 				// 检查元数据字段
-				if resp["proxyclaw_request_id"] != "test-123" {
-					t.Errorf("proxyclaw_request_id = %v, want test-123", resp["proxyclaw_request_id"])
+				if resp["centag_request_id"] != "test-123" {
+					t.Errorf("centag_request_id = %v, want test-123", resp["centag_request_id"])
 				}
-				if resp["proxyclaw_cache"] != "hit" {
-					t.Errorf("proxyclaw_cache = %v, want hit", resp["proxyclaw_cache"])
+				if resp["centag_cache"] != "hit" {
+					t.Errorf("centag_cache = %v, want hit", resp["centag_cache"])
 				}
-				if resp["proxyclaw_backend"] != "local-model" {
-					t.Errorf("proxyclaw_backend = %v, want local-model", resp["proxyclaw_backend"])
+				if resp["centag_backend"] != "local-model" {
+					t.Errorf("centag_backend = %v, want local-model", resp["centag_backend"])
 				}
-				if resp["proxyclaw_from_cache"] != true {
-					t.Errorf("proxyclaw_from_cache = %v, want true", resp["proxyclaw_from_cache"])
+				if resp["centag_from_cache"] != true {
+					t.Errorf("centag_from_cache = %v, want true", resp["centag_from_cache"])
 				}
 
 				// 检查原始字段仍然存在
@@ -87,8 +87,8 @@ func TestMetadataEnhancer_EnhanceResponse(t *testing.T) {
 				}
 
 				// 检查没有元数据字段
-				if _, exists := resp["proxyclaw_request_id"]; exists {
-					t.Errorf("proxyclaw_request_id should not exist when disabled")
+				if _, exists := resp["centag_request_id"]; exists {
+					t.Errorf("centag_request_id should not exist when disabled")
 				}
 
 				// 检查原始字段仍然存在
@@ -162,15 +162,15 @@ func TestMetadataEnhancer_ExtractMetadata(t *testing.T) {
 			name: "提取完整元数据",
 			response: `{
 				"content": "test",
-				"proxyclaw_request_id": "test-123",
-				"proxyclaw_cache": "hit",
-				"proxyclaw_backend": "local-model",
-				"proxyclaw_model": "llama3.2:3b",
-				"proxyclaw_reason": "缓存命中",
-				"proxyclaw_latency": 50,
-				"proxyclaw_from_cache": true,
-				"proxyclaw_cache_similarity": 0.95,
-				"proxyclaw_tokens": 10
+				"centag_request_id": "test-123",
+				"centag_cache": "hit",
+				"centag_backend": "local-model",
+				"centag_model": "llama3.2:3b",
+				"centag_reason": "缓存命中",
+				"centag_latency": 50,
+				"centag_from_cache": true,
+				"centag_cache_similarity": 0.95,
+				"centag_tokens": 10
 			}`,
 			want: &StrategyMetadata{
 				RequestID:       "test-123",
@@ -197,8 +197,8 @@ func TestMetadataEnhancer_ExtractMetadata(t *testing.T) {
 			name: "部分元数据字段",
 			response: `{
 				"content": "test",
-				"proxyclaw_request_id": "test-123",
-				"proxyclaw_cache": "miss"
+				"centag_request_id": "test-123",
+				"centag_cache": "miss"
 			}`,
 			want: &StrategyMetadata{
 				RequestID:   "test-123",
@@ -284,8 +284,8 @@ func TestMetadataEnhancer_EnhanceStreamChunk(t *testing.T) {
 				if !contains(resultStr, "data: {") {
 					t.Errorf("result should contain SSE data prefix")
 				}
-				if !contains(resultStr, "proxyclaw_request_id") {
-					t.Errorf("result should contain proxyclaw_request_id")
+				if !contains(resultStr, "centag_request_id") {
+					t.Errorf("result should contain centag_request_id")
 				}
 				if !contains(resultStr, "test-123") {
 					t.Errorf("result should contain request_id")
@@ -468,15 +468,15 @@ func TestMetadataEnhancer_MetadataToMap(t *testing.T) {
 				TokensUsed:      10,
 			},
 			wantKeys: []string{
-				"proxyclaw_request_id",
-				"proxyclaw_cache",
-				"proxyclaw_backend",
-				"proxyclaw_model",
-				"proxyclaw_reason",
-				"proxyclaw_latency",
-				"proxyclaw_from_cache",
-				"proxyclaw_cache_similarity",
-				"proxyclaw_tokens",
+				"centag_request_id",
+				"centag_cache",
+				"centag_backend",
+				"centag_model",
+				"centag_reason",
+				"centag_latency",
+				"centag_from_cache",
+				"centag_cache_similarity",
+				"centag_tokens",
 			},
 		},
 		{

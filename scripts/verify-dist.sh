@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# ProxyClaw dist verification script — probes a running instance via curl.
+# Centag dist verification script — probes a running instance via curl.
 # Usage:
 #   bash scripts/verify-dist.sh [url] [username] [password] [model] [edition]
 #   bash scripts/verify-dist.sh http://localhost:20060 admin JEAofRz0WteQOsWI

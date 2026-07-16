@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-ProxyClaw 日志分析脚本
+Centag 日志分析脚本
 分析指定日期的日志文件，生成 Markdown 报告和 JSON 摘要
 """
 
@@ -209,7 +209,7 @@ def generate_markdown_report(stats: dict, output_path: str) -> None:
     # 后端服务统计
     backends = sorted(stats["by_backend"].items(), key=lambda x: x[1], reverse=True)
 
-    md_content = f"""# ProxyClaw 日志分析报告
+    md_content = f"""# Centag 日志分析报告
 
 {warning_header}**日期：** {date}
 **生成时间：** {generated_at}
@@ -290,7 +290,7 @@ def generate_json_summary(stats: dict, output_path: str) -> None:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="ProxyClaw 日志分析工具")
+    parser = argparse.ArgumentParser(description="Centag 日志分析工具")
     parser.add_argument(
         "--yesterday",
         action="store_true",
@@ -304,13 +304,13 @@ def main():
     parser.add_argument(
         "--log-path",
         type=str,
-        default=os.path.expanduser("~/aispaces/proxyclaw/bin/logs/proxyclaw.log"),
+        default=os.path.expanduser("~/aispaces/centag/bin/logs/centag.log"),
         help="日志文件路径",
     )
     parser.add_argument(
         "--output-dir",
         type=str,
-        default=os.path.expanduser("~/aispaces/proxyclaw/bin/logs/analysis"),
+        default=os.path.expanduser("~/aispaces/centag/bin/logs/analysis"),
         help="报告输出目录",
     )
 

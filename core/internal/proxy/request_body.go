@@ -8,7 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-const contextKeyRawRequestBody = "proxyclaw_raw_request_body"
+const contextKeyRawRequestBody = "centag_raw_request_body"
 
 // cacheRawRequestBody reads and caches the HTTP body before protocol parsing consumes it.
 // Transparent (#t) forwarding and tool_calls passthrough rely on the original bytes.

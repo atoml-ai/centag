@@ -1,13 +1,13 @@
 # 更新配置模板
 version: "v1.0.0"
-description: "Proxy Claw 更新包"
+description: "Centag 更新包"
 files:
   - source: "centag"
     target: "centag"
     permission: "0755"
     backup: true
     recursive: false
-    description: "Proxy Claw 主程序"
+    description: "Centag 主程序"
   - source: "static/"
     target: "static/"
     permission: "0644"

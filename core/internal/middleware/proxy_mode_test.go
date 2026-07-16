@@ -25,7 +25,7 @@ func TestParseProxyModeFromHeader(t *testing.T) {
 		{
 			name: "valid mode header",
 			headers: map[string]string{
-				"X-ProxyClaw-Mode": "#d",
+				"X-Centag-Mode": "#d",
 			},
 			wantMode:  "#d",
 			wantFound: true,
@@ -33,8 +33,8 @@ func TestParseProxyModeFromHeader(t *testing.T) {
 		{
 			name: "mode with backend",
 			headers: map[string]string{
-				"X-ProxyClaw-Mode":    "#d",
-				"X-ProxyClaw-Backend": "ollama-local",
+				"X-Centag-Mode":    "#d",
+				"X-Centag-Backend": "ollama-local",
 			},
 			wantMode:    "#d",
 			wantBackend: "ollama-local",
@@ -43,9 +43,9 @@ func TestParseProxyModeFromHeader(t *testing.T) {
 		{
 			name: "mode with backend and model",
 			headers: map[string]string{
-				"X-ProxyClaw-Mode":    "#m",
-				"X-ProxyClaw-Backend": "openai-api",
-				"X-ProxyClaw-Model":   "gpt-4",
+				"X-Centag-Mode":    "#m",
+				"X-Centag-Backend": "openai-api",
+				"X-Centag-Model":   "gpt-4",
 			},
 			wantMode:    "#m",
 			wantBackend: "openai-api",
@@ -60,7 +60,7 @@ func TestParseProxyModeFromHeader(t *testing.T) {
 		{
 			name: "only backend header",
 			headers: map[string]string{
-				"X-ProxyClaw-Backend": "ollama-local",
+				"X-Centag-Backend": "ollama-local",
 			},
 			wantFound: false,
 		},
@@ -430,7 +430,7 @@ func TestProxyModeMiddleware(t *testing.T) {
 			name: "header ignored without allow_header_override",
 			body: `{"model": "gpt-4", "messages": [{"role": "user", "content": "hello"}]}`,
 			headers: map[string]string{
-				"X-ProxyClaw-Mode": "#d",
+				"X-Centag-Mode": "#d",
 			},
 			wantStatus: http.StatusOK,
 			wantMode:   "",
@@ -466,7 +466,7 @@ func TestProxyModeMiddleware(t *testing.T) {
 
 			var capturedMode string
 			h := ProxyModeMiddleware(modeMgr, sessionStore)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				capturedMode = r.Header.Get(proxy.HeaderProxyClawResolvedMode)
+				capturedMode = r.Header.Get(proxy.HeaderCentagResolvedMode)
 				w.WriteHeader(http.StatusOK)
 			}))
 

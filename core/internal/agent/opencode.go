@@ -17,7 +17,7 @@ func (t *OpenCodeTemplate) ConfigFiles(info *BackendInfo) ([]ConfigFile, error) 
   "provider": {
     "centag": {
       "npm": "@ai-sdk/openai-compatible",
-      "name": "ProxyClaw",
+      "name": "Centag",
       "options": {
         "baseURL": "%s",
         "apiKey": "%s"
@@ -65,7 +65,7 @@ func (t *OpenCodeTemplate) Steps(info *BackendInfo) []ConfigStep {
 	url := proxyURL(info.Host, info.Port)
 	model := defaultModel(info)
 	return []ConfigStep{
-		{Title: "配置 provider", Description: fmt.Sprintf("在 opencode.json 中添加 ProxyClaw（model=centag/%s，baseURL=%s）", model, url)},
+		{Title: "配置 provider", Description: fmt.Sprintf("在 opencode.json 中添加 Centag（model=centag/%s，baseURL=%s）", model, url)},
 		{Title: "启动 OpenCode", Code: "opencode"},
 	}
 }

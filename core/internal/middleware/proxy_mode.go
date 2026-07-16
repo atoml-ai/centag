@@ -79,7 +79,7 @@ func resolveAndRewriteProxyMode(r *http.Request, modeMgr *proxymode.ModeManager,
 
 	// 3. centag 扩展字段（非标准 OpenAI，但保留兼容）
 	if hasBody {
-		if mode, backend, model, found := extractProxyClawField(body); found {
+		if mode, backend, model, found := extractCentagField(body); found {
 			if err := applyResolvedShortcut(r, modeMgr, mode, backend, "", model, ""); err != nil {
 				return err
 			}
@@ -122,7 +122,7 @@ func allowHeaderOverride() bool {
 }
 
 func shouldApplySessionMode(r *http.Request) bool {
-	v := strings.ToLower(strings.TrimSpace(r.Header.Get("X-ProxyClaw-Use-Session")))
+	v := strings.ToLower(strings.TrimSpace(r.Header.Get("X-Centag-Use-Session")))
 	return v == "1" || v == "true" || v == "yes"
 }
 
@@ -142,7 +142,7 @@ func applyResolvedShortcut(
 			pipelineID = modeMgr.PipelineIDForShortcut(mode)
 		}
 	}
-	r.Header.Set(proxy.HeaderProxyClawResolvedMode, mode)
+	r.Header.Set(proxy.HeaderCentagResolvedMode, mode)
 	if backend != "" {
 		r.Header.Set("X-Backend-ID", backend)
 	}
@@ -164,7 +164,7 @@ type proxyModeError struct{ msg string }
 
 func (e *proxyModeError) Error() string { return e.msg }
 
-func extractProxyClawField(body map[string]interface{}) (mode, backend, model string, found bool) {
+func extractCentagField(body map[string]interface{}) (mode, backend, model string, found bool) {
 	centag, ok := body["centag"].(map[string]interface{})
 	if !ok {
 		return "", "", "", false
@@ -183,7 +183,7 @@ func extractProxyClawField(body map[string]interface{}) (mode, backend, model st
 func ParseProxyModeFromHeader(r *http.Request) (mode, backend, model string, found bool) {
 	mode = r.Header.Get("X-Proxy-Mode")
 	if mode == "" {
-		mode = r.Header.Get("X-ProxyClaw-Mode")
+		mode = r.Header.Get("X-Centag-Mode")
 	}
 	if mode == "" {
 		return "", "", "", false
@@ -191,11 +191,11 @@ func ParseProxyModeFromHeader(r *http.Request) (mode, backend, model string, fou
 
 	backend = r.Header.Get("X-Backend-ID")
 	if backend == "" {
-		backend = r.Header.Get("X-ProxyClaw-Backend")
+		backend = r.Header.Get("X-Centag-Backend")
 	}
 	model = r.Header.Get("X-Model")
 	if model == "" {
-		model = r.Header.Get("X-ProxyClaw-Model")
+		model = r.Header.Get("X-Centag-Model")
 	}
 	return mode, backend, model, true
 }
@@ -215,7 +215,7 @@ func ParseProxyModeFromBody(r *http.Request) (mode, backend, model string, found
 		return "", "", "", false
 	}
 
-	mode, backend, model, found = extractProxyClawField(body)
+	mode, backend, model, found = extractCentagField(body)
 	if !found {
 		return "", "", "", false
 	}

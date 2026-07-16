@@ -23,7 +23,7 @@ func TestRegistryHandlerMinimalLoop(t *testing.T) {
 		Name:        "hello-world",
 		Version:     "1.0.0",
 		Description: "Example plugin",
-		Author:      "Proxyclaw",
+		Author:      "Centag",
 		Category:    "example",
 		Tags:        []string{"example"},
 		Permissions: []string{"llm.call"},

@@ -205,17 +205,17 @@ func compareSemVer(a, b string) int {
 	return 0
 }
 
-// MinProxyclawVersionCheck 检查插件所需的最小 Proxyclaw 版本
-func MinProxyclawVersionCheck(descriptor NodePluginDescriptor, proxyclawVersion string) error {
-	minVer := descriptor.MinProxyclawVersion
+// MinCentagVersionCheck 检查插件所需的最小 Centag 版本
+func MinCentagVersionCheck(descriptor NodePluginDescriptor, centagVersion string) error {
+	minVer := descriptor.MinCentagVersion
 	if minVer == "" {
 		return nil
 	}
-	if proxyclawVersion == "" {
+	if centagVersion == "" {
 		return fmt.Errorf("plugin %q requires centag version >= %s, but current version is unknown",
 			descriptor.Implementation, minVer)
 	}
-	return CheckPluginVersion(">="+minVer, proxyclawVersion)
+	return CheckPluginVersion(">="+minVer, centagVersion)
 }
 
 // CleanJSONContent 从 LLM 响应中提取 JSON 内容（导出给外部插件使用）

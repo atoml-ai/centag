@@ -387,7 +387,7 @@ func (s *Storage) createCollection(ctx context.Context) error {
 
 	req := map[string]any{
 		"name":     s.config.Collection,
-		"metadata": map[string]string{"description": "Proxy Claw Vector Storage"},
+		"metadata": map[string]string{"description": "Centag Vector Storage"},
 	}
 
 	resp, err := s.doRequest(ctx, "POST", url, req)

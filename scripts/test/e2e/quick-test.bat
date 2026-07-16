@@ -5,7 +5,7 @@ REM 快速测试脚本 - 验证代理是否工作
 
 echo.
 echo ========================================
-echo   Proxy Claw 快速测试
+echo   Centag 快速测试
 echo ========================================
 echo.
 
@@ -39,7 +39,7 @@ if %errorlevel% eq 0 (
     echo [✗] 代理连接失败
     echo.
     echo 请检查:
-    echo   1. Proxy Claw 服务是否运行
+    echo   1. Centag 服务是否运行
     echo   2. 系统代理功能是否启用
     echo   3. CA 证书是否已安装
     echo   4. 域名是否添加到 PAC 规则

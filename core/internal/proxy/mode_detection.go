@@ -11,9 +11,9 @@ import (
 	"centag/core/pkg/proxymode"
 )
 
-// HeaderProxyClawResolvedMode 由中间件在解析快捷码后设置，供 Handler 识别。
+// HeaderCentagResolvedMode 由中间件在解析快捷码后设置，供 Handler 识别。
 // 与用户显式传入的 X-Proxy-Mode 区分：后者仅在 AllowHeaderOverride 时生效。
-const HeaderProxyClawResolvedMode = "X-ProxyClaw-Resolved-Mode"
+const HeaderCentagResolvedMode = "X-Centag-Resolved-Mode"
 
 // DetectProxyMode 从请求中检测代理模式。
 //
@@ -26,7 +26,7 @@ func DetectProxyMode(r *http.Request) (ProxyMode, string) {
 }
 
 func detectProxyModeWithConfig(r *http.Request, cfg *config.Config) (ProxyMode, string) {
-	if resolved := strings.TrimSpace(r.Header.Get(HeaderProxyClawResolvedMode)); resolved != "" {
+	if resolved := strings.TrimSpace(r.Header.Get(HeaderCentagResolvedMode)); resolved != "" {
 		return normalizeProxyMode(resolved), "shortcut"
 	}
 
@@ -40,7 +40,7 @@ func detectProxyModeWithConfig(r *http.Request, cfg *config.Config) (ProxyMode, 
 		return normalizeProxyMode(mode), "model-prefix"
 	}
 
-	if mode := extractProxyClawModeBytes(bodyBytes); mode != "" {
+	if mode := extractCentagModeBytes(bodyBytes); mode != "" {
 		return normalizeProxyMode(mode), "centag-field"
 	}
 
@@ -215,7 +215,7 @@ func parseModelPipelinePrefixBytes(bodyBytes []byte) (pipelineID, actualModel st
 	return parseModelPipelinePrefix(model)
 }
 
-func extractProxyClawModeBytes(bodyBytes []byte) string {
+func extractCentagModeBytes(bodyBytes []byte) string {
 	if len(bodyBytes) == 0 {
 		return ""
 	}
@@ -234,8 +234,8 @@ func extractProxyClawModeBytes(bodyBytes []byte) string {
 	return mode
 }
 
-// extractProxyClawSceneBytes 从请求体 centag 扩展字段提取 scene（教育等场景路由参数）。
-func extractProxyClawSceneBytes(bodyBytes []byte) string {
+// extractCentagSceneBytes 从请求体 centag 扩展字段提取 scene（教育等场景路由参数）。
+func extractCentagSceneBytes(bodyBytes []byte) string {
 	if len(bodyBytes) == 0 {
 		return ""
 	}

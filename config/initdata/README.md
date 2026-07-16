@@ -107,7 +107,7 @@ config/initdata/configs/ (源)
     ↓ make build / ./start.sh build
 bin/configs/ (运行时)
     ↓ 程序读取
-Proxy Claw 服务
+Centag 服务
     ↓ Web 界面修改
 bin/configs/ (保存)
 ```
@@ -234,4 +234,4 @@ A: 可以,但 `config/initdata/configs/` 中的文件会覆盖 `archive/deprecat
 
 ## 🎉 完成!
 
-现在你的 Proxy Claw 已经配置好了,每次执行 `./start.sh setup` 和 `./start.sh build` 后,配置会自动应用,无需重复配置!
+现在你的 Centag 已经配置好了,每次执行 `./start.sh setup` 和 `./start.sh build` 后,配置会自动应用,无需重复配置!

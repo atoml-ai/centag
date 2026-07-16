@@ -40,7 +40,7 @@ func ResolveTransparentTargetURL(meta map[string]interface{}, backendID, request
 		}
 		if ep != nil && strings.TrimSpace(ep.BaseURL) != "" {
 			base := strings.TrimRight(strings.TrimSpace(ep.BaseURL), "/")
-			// 客户端 requestPath 是到 ProxyClaw 的路径（如 /v1/chat/completions），
+			// 客户端 requestPath 是到 Centag 的路径（如 /v1/chat/completions），
 			// 不能直接拼到后端 BaseURL 上（会导致 /v4/v1/chat/completions 这类错误）。
 			// OpenAI 兼容 API 的聊天补全端点统一为 /chat/completions，由后端 BaseURL 提供版本前缀。
 			return base + "/chat/completions", nil

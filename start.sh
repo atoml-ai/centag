@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Proxy Claw - Build, Run, Debug Script (Linux/macOS)
+# Centag - Build, Run, Debug Script (Linux/macOS)
 
 set -euo pipefail
 
@@ -238,7 +238,7 @@ print_error()   { print_message "$RED" "[ERROR] $1"; }
 print_warn()    { print_message "$YELLOW" "[WARN] $1"; }
 print_title() {
     echo -e "${BLUE}================================${NC}"
-    echo -e "${BLUE}    Proxy Claw Manager${NC}"
+    echo -e "${BLUE}    Centag Manager${NC}"
     echo -e "${BLUE}================================${NC}"
 }
 
@@ -2293,7 +2293,7 @@ docker_up() {
     print_success "服务已启动"
     echo ""
     print_info "服务信息:"
-    echo "  - Proxy Claw: http://localhost:${LLM_PROXY_SERVER_PORT:-20060}"
+    echo "  - Centag: http://localhost:${LLM_PROXY_SERVER_PORT:-20060}"
     echo ""
     print_info "查看日志: ./start.sh docker logs"
     print_info "查看状态: ./start.sh docker status"
@@ -2457,7 +2457,7 @@ echo "  本地二进制: $BIN_DIR/centag"
     print_success "Debug 模式服务已启动"
     echo ""
     print_info "服务信息:"
-    echo "  - Proxy Claw: http://localhost:20060"
+    echo "  - Centag: http://localhost:20060"
     echo ""
     print_info "工作流程:"
     echo "  1. 本地修改代码（Go 后端或 Vue 前端）"
@@ -2715,7 +2715,7 @@ LOADEOF
 
     # 创建 README
     cat > "${package_dir}/README.md" << 'READMEEOF'
-# Proxy Claw Docker 部署包
+# Centag Docker 部署包
 
 ## 目录结构
 

@@ -59,7 +59,7 @@ write_artifact_metadata() {
 
   {
     echo "{"
-    echo "  \"name\": \"ProxyClaw\","
+    echo "  \"name\": \"Centag\","
     echo "  \"version\": \"${version}\","
     echo "  \"target\": \"${target}\","
     echo "  \"format\": \"${format}\","
@@ -134,7 +134,7 @@ package_service() {
 
   {
     echo "version: \"v${version}\""
-    echo "description: \"Proxy Claw System Update - v${version}\""
+    echo "description: \"Centag System Update - v${version}\""
     echo ""
     echo "files:"
     echo "  - source: \"centag\""
@@ -142,7 +142,7 @@ package_service() {
     echo "    permission: \"0755\""
     echo "    backup: true"
     echo "    recursive: false"
-    echo "    description: \"Proxy Claw 主程序\""
+    echo "    description: \"Centag 主程序\""
     if [[ "$has_static" == "true" ]]; then
       echo "  - source: \"static/\""
       echo "    target: \"static/\""

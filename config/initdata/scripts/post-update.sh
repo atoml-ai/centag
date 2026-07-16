@@ -1,7 +1,7 @@
 #!/bin/bash
 # 更新后执行的脚本
 
-echo "Proxy Claw 更新完成"
+echo "Centag 更新完成"
 echo "执行后续操作..."
 
 # 检查是否需要额外的操作

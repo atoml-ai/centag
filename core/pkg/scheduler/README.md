@@ -1,4 +1,4 @@
-# ProxyClaw 智能调度系统 - Phase 1 实现文档
+# Centag 智能调度系统 - Phase 1 实现文档
 
 ## 📋 概述
 

@@ -1,5 +1,5 @@
 #!/bin/bash
-# Proxy Claw 容器启动脚本
+# Centag 容器启动脚本
 # 使用 docker run 命令启动容器
 
 set -euo pipefail
@@ -48,8 +48,8 @@ ES_ADDR=${ES_ADDR:-}
 
 # 创建命名卷（如果不存在）
 print_info "创建数据卷..."
-docker volume create proxyclaw_storage 2>/dev/null || true
-docker volume create proxyclaw_logs 2>/dev/null || true
+docker volume create centag_storage 2>/dev/null || true
+docker volume create centag_logs 2>/dev/null || true
 
 # 停止并删除已存在的容器
 print_info "清理旧容器..."
@@ -91,8 +91,8 @@ docker run -d \
   --restart unless-stopped \
   -p ${SERVER_PORT}:20060 \
   --add-host "host.docker.internal:host-gateway" \
-  -v proxyclaw_storage:/app/storage \
-  -v proxyclaw_logs:/app/logs \
+  -v centag_storage:/app/storage \
+  -v centag_logs:/app/logs \
   -v /etc/localtime:/etc/localtime:ro \
   -v /etc/timezone:/etc/timezone:ro \
   $ENV_ARGS \

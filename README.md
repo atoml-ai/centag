@@ -1,6 +1,6 @@
 # Centag
 
-LLM 统一网关：协议适配、后端路由、流水线/钩子/插件、token 计量与计费。由 ProxyClaw 精简迁移而来（无桌面壳、无内置 business 插件树）。
+LLM 统一网关：协议适配、后端路由、流水线/钩子/插件、token 计量与计费。由 Centag 精简迁移而来（无桌面壳、无内置 business 插件树）。
 
 ## 目录结构
 
@@ -55,4 +55,4 @@ make run            # 或 ./start.sh run be
 
 业务插件外置：见 [docs/guide/external-business-plugins.md](docs/guide/external-business-plugins.md)。
 
-环境变量优先 `CENTAG_*`（仍兼容读取旧 `PROXYCLAW_*`）。
+环境变量使用 `CENTAG_*`（以及运行时 `LLM_PROXY_*`）。

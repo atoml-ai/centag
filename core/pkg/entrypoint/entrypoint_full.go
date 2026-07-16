@@ -22,7 +22,7 @@ import (
 	"centag/core/pkg/server"
 )
 
-// Run starts the ProxyClaw server with the given version info.
+// Run starts the Centag server with the given version info.
 // This is the full version with database support (team/personal editions).
 func Run(version, buildTime string) {
 	Version = version
@@ -62,7 +62,7 @@ func Run(version, buildTime string) {
 	internal.SetBuildInfo(Version, BuildTime)
 	metrics.Init()
 
-	logger.Info("Starting Proxyclaw Service")
+	logger.Info("Starting Centag Service")
 	logger.Infof("Version: %s, Build: %s", Version, BuildTime)
 	logger.Infof("DB driver: %s, path: %s", boot.DB.Driver, boot.DB.Path)
 	logger.Infof("Product edition: %s", boot.Server.Edition)

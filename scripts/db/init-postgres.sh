@@ -1,5 +1,5 @@
 #!/bin/bash
-# Proxy Claw PostgreSQL 数据库初始化脚本
+# Centag PostgreSQL 数据库初始化脚本
 # 用法：./scripts/init-postgres.sh
 
 set -e
@@ -21,7 +21,7 @@ PG_APP_USER="${PG_APP_USER:-llmproxy}"
 PG_APP_PASSWORD="${PG_APP_PASSWORD:-$(openssl rand -base64 32)}"
 
 echo -e "${BLUE}=================================================${NC}"
-echo -e "${BLUE}Proxy Claw PostgreSQL 数据库初始化${NC}"
+echo -e "${BLUE}Centag PostgreSQL 数据库初始化${NC}"
 echo -e "${BLUE}=================================================${NC}"
 echo ""
 
