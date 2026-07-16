@@ -1,0 +1,13 @@
+#!/bin/bash
+
+### This script is called before upgrading the application.
+### 可在此处备份数据
+
+DATA_DIR="${TRIM_DATA_SHARE_PATHS%%:*}"
+
+# 备份 SQLite 数据库
+if [ -f "${DATA_DIR}/centag.db" ]; then
+    cp "${DATA_DIR}/centag.db" "${DATA_DIR}/centag.db.upgrade.bak"
+fi
+
+exit 0

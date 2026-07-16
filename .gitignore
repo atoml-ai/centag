@@ -1,0 +1,179 @@
+# Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+/centag
+/centag-server
+/centag-test
+/centag-minimal
+/minimal
+/gateway
+/team
+/main
+# Temporary test files
+check_admin_key.go
+check_api_key.go
+test_regex.go
+
+# Root npm lockfile only（web/package-lock.json 需提交供 Docker npm ci）
+/package-lock.json
+
+# Test binary
+*.test
+
+# Output — runtime & build artifacts (sources live under web/, config/, cmd/)
+var/
+!var/.gitkeep
+# Keep dist/*/main.go and go.mod; ignore locally built binaries only
+/dist/minimal/minimal
+/dist/gateway/gateway
+/dist/team/team
+/dist/minimal/centag*
+/dist/gateway/centag*
+/dist/team/centag*
+*.tar.gz
+
+# Wails desktop build outputs (if reintroduced locally)
+web/build/
+
+# Misplaced build output when scripts run with wrong ROOT
+scripts/desktop/
+scripts/webui/
+
+# Logs
+*.log
+logs/
+
+# System Proxy - Runtime generated files
+*.old
+/tmp/centag-*.log
+/tmp/centag-original-settings.txt
+
+# IDE
+.vscode/
+.idea/
+.VSCodeCounter/
+.codegraph/
+.wps-comate/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Cloud CLI configs
+.aliyun/
+
+# Python
+__pycache__/
+
+# Config files - all configs are in config/initdata, the root configs/ is for development only
+configs/
+!configs/*.example
+
+# Environment files
+.env.local
+.env.*.local
+.env
+**/.env.middleware
+
+# Secrets directory (contains authentication credentials)
+config/secrets/.env
+config/secrets/.env.middleware
+config/secrets/*.key
+config/secrets/*.pem
+config/secrets/*.crt
+config/secrets/.env.backup.*
+
+# Initdata secrets (local API keys; do not commit)
+config/initdata/secrets/*.key
+config/initdata/*.key
+config/initdata/PPIO.md
+
+# Scripts with sensitive data
+scripts/update-api-keys.sh
+scripts/update-backends.sh
+
+# 遗留：若本地仍放置 deploy/docker/.env 则勿提交（真源为 config/secrets/.env）
+deploy/docker/.env
+
+# Docker override files (auto-generated)
+docker-compose.override.yaml
+
+# Web
+web/node_modules/
+web/dist/
+web/.vite/
+web/.cache/
+web/.env*
+web/.env.development
+
+# Docker static files (built from web/)
+deploy/docker/static/assets/
+deploy/docker/static/index.html
+deploy/docker/static/*.js
+deploy/docker/static/*.css
+
+# Documentation files (auto-generated)
+WEBUI_*.md
+CACHE_UI_UPDATE.md
+LAYOUT_OPTIMIZATION.md
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+.cache/
+# Test outputs
+test-results/
+coverage/
+
+# Pipeline test reports (auto-generated)
+docs/test-reports/
+
+# Database files (runtime generated)
+*.db
+!internal/database/migrations/*.sql
+
+# Developer tools (utility scripts, not part of project)
+cmd/tools/
+
+# Debian packages
+*.deb
+centag-bin
+*.pyc
+
+config/profiles/*/.env
+
+# Legacy runtime paths (pre directory-restructure)
+/storage/
+/bin/
+/static/
+/certs/
+/data/
+/packages/
+/tmp/
+secrets/.env
+
+# Runtime secrets generated under bin/server (also covered by /bin/)
+**/jwt.secret
+**/admin.password.hash
+**/*.password.hash
+**/ca.key
+
+# Build artifacts
+node.tar.xz
+
+# AI Assistant build artifacts (if reintroduced locally)
+web/ai-assistant/bin/
+web/ai-assistant/tui
+
+# node_modules (root level)
+node_modules/
+
+# Broken / nested git metadata (deploy/stack is a normal directory, not a submodule)
+deploy/stack/.git

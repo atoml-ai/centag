@@ -1,0 +1,182 @@
+# Centag Distribution Dockerfile — 参数化构建
+# 用法: docker build --build-arg DIST_NAME=minimal|gateway|team -f deploy/docker/Dockerfile.dist .
+#
+# 三个发行版共用此文件，仅通过 DIST_NAME 切换构建入口：
+#   minimal → 轻量（无 DB；后端+协议；约 16MB）
+#   gateway → 个人全功能（与 team 插件对齐；部署默认 SQLite；约 30MB）
+#   team    → 团队版（二进制与 gateway 对齐；部署默认外置 PG/向量等；约 30MB）
+#
+# BUILD_TAGS 由 start.sh _get_dist_tags() 注入；gateway/team 共用全功能 tags。
+# ============================================================
+# 阶段 1：前端构建（minimal 版本跳过，直接使用 config-generator）
+# ============================================================
+FROM docker.m.daocloud.io/library/node:20-alpine AS frontend-builder
+
+ARG INCLUDE_FRONTEND=true
+ARG DIST_NAME=minimal
+
+WORKDIR /apps
+
+RUN npm config set registry https://registry.npmmirror.com
+
+# minimal 版本跳过前端构建，直接创建标记文件
+RUN if [ "$DIST_NAME" = "minimal" ]; then \
+        mkdir -p /bin/server/static && \
+        echo "config-generator" > /tmp/frontend-flag; \
+    fi
+
+# 只有需要前端时才复制源码并构建
+COPY web/package*.json ./
+RUN --mount=type=cache,target=/root/.npm \
+    if [ "$INCLUDE_FRONTEND" = "true" ]; then \
+        npm ci; \
+    fi
+
+COPY web/ ./
+# @shared → ./shared（已包含在 web/ 中）；outDir ../bin/server/static → /bin/server/static
+RUN if [ "$INCLUDE_FRONTEND" = "true" ]; then \
+        npm run build && \
+        echo "frontend-enabled" > /tmp/frontend-flag; \
+    elif [ "$DIST_NAME" != "minimal" ]; then \
+        echo "frontend-disabled" > /tmp/frontend-flag && \
+        mkdir -p /bin/server/static; \
+    fi
+
+# ============================================================
+# 阶段 2：Go 构建（优化缓存策略）
+# ============================================================
+FROM docker.m.daocloud.io/library/golang:1.25-alpine AS builder
+
+ARG DIST_NAME=minimal
+ARG VERSION=dev
+ARG BUILD_TIME=unknown
+ARG BUILD_TAGS=
+
+ENV CGO_ENABLED=0 \
+    GOPROXY=https://goproxy.cn,direct \
+    GOTOOLCHAIN=local \
+    LANG=C.UTF-8
+
+WORKDIR /app
+
+# 先复制 go.mod 和 go.sum（利用缓存，只有依赖变化时才重新下载）
+COPY core/go.mod core/go.sum* ./core/
+COPY plugins/*/go.mod plugins/*/go.sum* ./plugins/
+COPY dist/${DIST_NAME}/go.mod dist/${DIST_NAME}/go.sum* ./dist/${DIST_NAME}/
+
+# 使用 BuildKit cache mount 缓存 go mod download
+# 第一次尝试预热缓存（可能失败，因为源码尚未复制，忽略错误）
+RUN --mount=type=cache,target=/go/pkg/mod \
+    cd dist/${DIST_NAME} && \
+    go mod download 2>/dev/null || true
+
+# 复制全部源码（保持目录结构，让 go.mod 的 replace 指令正确解析）
+COPY core/ ./core/
+COPY plugins/ ./plugins/
+COPY dist/${DIST_NAME}/ ./dist/${DIST_NAME}/
+
+# 配置生成器与 shared（均在 web/ 下）
+COPY web/public/config-generator/ ./config-generator/
+COPY web/shared/ ./shared/
+
+# 在 dist 目录内下载依赖（使用 cache mount 加速）
+RUN --mount=type=cache,target=/go/pkg/mod \
+    cd dist/${DIST_NAME} && \
+    go mod download
+
+# 编译（使用 cache mount 加速构建缓存）
+# BUILD_TAGS 由 start.sh 通过 _get_dist_tags() 动态生成，不再硬编码
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    cd dist/${DIST_NAME} && \
+    if [ -n "${BUILD_TAGS}" ]; then \
+        go build -tags "${BUILD_TAGS}" \
+            -ldflags "-s -w -X 'main.Version=${VERSION}' -X 'main.BuildTime=${BUILD_TIME}'" \
+            -o /app/bin/centag \
+            main.go; \
+    else \
+        go build \
+            -ldflags "-s -w -X 'main.Version=${VERSION}' -X 'main.BuildTime=${BUILD_TIME}'" \
+            -o /app/bin/centag \
+            main.go; \
+    fi
+
+# ============================================================
+# 阶段 3：运行时
+# ============================================================
+FROM docker.m.daocloud.io/library/debian:bookworm-slim
+
+ARG DIST_NAME=minimal
+ARG INCLUDE_FRONTEND=true
+ARG INITDATA_ARCHIVE=false
+
+ENV CENTAG_EDITION=${DIST_NAME}
+
+RUN apt-get update && \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+        ca-certificates tzdata curl bash gosu && \
+    if [ "$INITDATA_ARCHIVE" = "true" ]; then \
+        apt-get install -y --no-install-recommends unzip; \
+    fi && \
+    rm -rf /var/lib/apt/lists/* && \
+    ln -snf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime && \
+    echo Asia/Shanghai > /etc/timezone
+
+ENV LANG=C.UTF-8 \
+    LC_ALL=C.UTF-8 \
+    TZ=Asia/Shanghai \
+    LLM_PROXY_LOG_PATH=/app/logs \
+    LLM_PROXY_LOG_OUTPUT=both
+
+RUN groupadd -g 1001 llmproxy && \
+    useradd -m -u 1001 -g llmproxy -s /bin/bash llmproxy
+
+WORKDIR /app
+
+# 从构建阶段复制产物
+COPY --from=builder /app/bin/centag ./bin/centag
+
+# 复制前端静态文件（完整前端）
+COPY --from=frontend-builder /bin/server/static ./static
+
+# minimal 版：用 config-generator 替换完整前端
+COPY --from=builder /app/config-generator ./config-generator-dist
+COPY --from=builder /app/shared ./config-generator-dist/shared
+RUN if [ "$INCLUDE_FRONTEND" = "false" ] && [ "$DIST_NAME" = "minimal" ]; then \
+        rm -rf ./static && \
+        mv ./config-generator-dist ./static; \
+    else \
+        rm -rf ./config-generator-dist; \
+    fi
+
+# 如果不需要前端，删除静态文件
+RUN if [ "$INCLUDE_FRONTEND" = "false" ] && [ "$DIST_NAME" != "minimal" ]; then rm -rf ./static; fi
+
+# 复制运行时脚本和初始数据
+COPY deploy/docker/entrypoint.sh ./entrypoint.sh
+COPY config/initdata/ ./config/initdata/
+
+# 注入用户自定义 initdata archive（由 start.sh --initdata 提供）
+# 当 INITDATA_ARCHIVE=true 时，zip 作为唯一来源替换所有默认初始化数据
+# 使用 BuildKit named build-context 从 temp 目录复制 initdata.zip
+COPY --from=initdata initdata.zip ./initdata.zip
+RUN if [ "$INITDATA_ARCHIVE" = "true" ] && [ -f ./initdata.zip ]; then \
+        rm -rf ./config/initdata && \
+        mkdir -p ./config/initdata && \
+        unzip -o initdata.zip -d ./config/initdata && \
+        rm initdata.zip; \
+    fi
+
+RUN chmod +x ./entrypoint.sh ./bin/centag && \
+    mkdir -p ./storage ./logs ./plugins ./bin && \
+    chown -R llmproxy:llmproxy /app && \
+    chmod -R 755 ./storage ./logs ./plugins ./bin
+
+USER root
+
+EXPOSE 20060
+
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+    CMD curl -fsS http://localhost:20060/health || exit 1
+
+CMD ["./entrypoint.sh"]

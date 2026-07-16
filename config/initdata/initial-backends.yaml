@@ -1,0 +1,599 @@
+version: "2.0"
+description: Centag 初始后端配置 - 主流 LLM 算力提供商
+backends:
+  - id: openai
+    name: OpenAI
+    type: openai
+    base_url: https://api.openai.com/v1
+    api_key: "${OPENAI_API_KEY}"
+    enabled: false
+    timeout: 120
+    max_retries: 3
+    auto_fetch_models: true
+    description: OpenAI GPT-4/GPT-3.5 官方 API - https://platform.openai.com
+    supported_models:
+      - requested_model: gpt-4
+        actual_model: gpt-4
+        is_exact: true
+        compatibility_score: 1.0
+      - requested_model: gpt-4-turbo
+        actual_model: gpt-4-turbo-preview
+        is_exact: true
+        compatibility_score: 1.0
+      - requested_model: gpt-4o
+        actual_model: gpt-4o
+        is_exact: true
+        compatibility_score: 1.0
+      - requested_model: gpt-4o-mini
+        actual_model: gpt-4o-mini
+        is_exact: true
+        compatibility_score: 1.0
+      - requested_model: gpt-3.5-turbo
+        actual_model: gpt-3.5-turbo
+        is_exact: true
+        compatibility_score: 1.0
+    capabilities:
+      max_context_tokens: 128000
+      features:
+        - chat
+        - completion
+        - embeddings
+      supports_tools: true
+    weight: 100
+    priority: 10
+
+  - id: anthropic
+    name: Anthropic Claude
+    type: anthropic
+    base_url: https://api.anthropic.com/v1
+    api_key: "${ANTHROPIC_API_KEY}"
+    enabled: false
+    timeout: 120
+    max_retries: 3
+    auto_fetch_models: true
+    description: Anthropic Claude 官方 API - https://console.anthropic.com
+    supported_models:
+      - requested_model: claude-3-opus
+        actual_model: claude-3-opus-20240229
+        is_exact: true
+        compatibility_score: 1.0
+      - requested_model: claude-3-sonnet
+        actual_model: claude-3-sonnet-20240229
+        is_exact: true
+        compatibility_score: 1.0
+      - requested_model: claude-3-haiku
+        actual_model: claude-3-haiku-20240307
+        is_exact: true
+        compatibility_score: 1.0
+      - requested_model: claude-3-5-sonnet
+        actual_model: claude-3-5-sonnet-20241022
+        is_exact: true
+        compatibility_score: 1.0
+    capabilities:
+      max_context_tokens: 8000
+      features:
+        - chat
+        - completion
+      supports_tools: true
+    weight: 100
+    priority: 10
+
+  - id: ollama-local
+    name: Ollama (本地)
+    type: ollama
+    base_url: http://localhost:21434
+    api_key: "${OLLAMA_LOCAL_API_KEY}"
+    enabled: true
+    timeout: 300
+    max_retries: 2
+    auto_fetch_models: true
+    description: 本地 Ollama 服务 - 无需 API Key，自动拉取模型列表
+    supported_models:
+      - requested_model: llama3
+        actual_model: llama3
+        is_exact: true
+        compatibility_score: 1.0
+      - requested_model: llama3.1
+        actual_model: llama3.1
+        is_exact: true
+        compatibility_score: 1.0
+      - requested_model: qwen2.5
+        actual_model: qwen2.5
+        is_exact: true
+        compatibility_score: 1.0
+      - requested_model: bge-m3:latest
+        actual_model: bge-m3:latest
+        is_exact: true
+        compatibility_score: 1.0
+    capabilities:
+      max_context_tokens: 128000
+      features:
+        - chat
+        - completion
+      supports_tools: false
+    weight: 50
+    priority: 5
+
+  - id: alibaba-dashscope
+    name: 阿里云百炼 (DashScope)
+    type: openai
+    base_url: https://coding.dashscope.aliyuncs.com/v1
+    api_key: "${ALIBABA_DASHSCOPE_API_KEY}"
+    enabled: false
+    timeout: 120
+    max_retries: 3
+    auto_fetch_models: true
+    description: 阿里云百炼大模型平台 - https://dashscope.aliyun.com
+    supported_models:
+      - requested_model: qwen3.5-plus
+        actual_model: qwen3.5-plus
+        is_exact: true
+        compatibility_score: 1.0
+      - requested_model: qwen3-max
+        actual_model: qwen3-max-2026-01-23
+        is_exact: false
+        compatibility_score: 1.0
+      - requested_model: qwen3-coder-next
+        actual_model: qwen3-coder-next
+        is_exact: true
+        compatibility_score: 1.0
+      - requested_model: qwen3-coder-plus
+        actual_model: qwen3-coder-plus
+        is_exact: true
+        compatibility_score: 1.0
+      - requested_model: glm-5
+        actual_model: glm-5
+        is_exact: true
+        compatibility_score: 1.0
+      - requested_model: glm-4.7
+        actual_model: glm-4.7
+        is_exact: true
+        compatibility_score: 1.0
+      - requested_model: kimi-k2.5
+        actual_model: kimi-k2.5
+        is_exact: true
+        compatibility_score: 1.0
+      - requested_model: MiniMax-M2.5
+        actual_model: MiniMax-M2.5
+        is_exact: true
+        compatibility_score: 1.0
+    capabilities:
+      max_context_tokens: 128000
+      features:
+        - chat
+        - completion
+        - vision
+      supports_tools: true
+    weight: 100
+    priority: 10
+
+  - id: bigmodel
+    name: 智谱 AI (BigModel)
+    type: openai
+    base_url: https://open.bigmodel.cn/api/paas/v4
+    api_key: "{{LLM_PROXY_BIGMODEL_API_KEY|}}"
+    enabled: false
+    timeout: 120
+    max_retries: 3
+    auto_fetch_models: true
+    description: 智谱 AI GLM 系列模型 - https://bigmodel.cn
+    supported_models:
+      - requested_model: GLM-4.7-Flash
+        actual_model: GLM-4.7-Flash
+        is_exact: true
+        compatibility_score: 1.0
+      - requested_model: GLM-4.5-Flash
+        actual_model: GLM-4.5-Flash
+        is_exact: true
+        compatibility_score: 1.0
+      - requested_model: GLM-4-Flash-250414
+        actual_model: GLM-4-flash
+        is_exact: true
+        compatibility_score: 1.0
+    capabilities:
+      max_context_tokens: 128000
+      features:
+        - chat
+        - completion
+      supports_tools: true
+    weight: 100
+    priority: 10
+
+  - id: deepseek
+    name: (深度求索) DeepSeek
+    type: openai
+    base_url: https://api.deepseek.com
+    api_key: "${DEEPSEEK_API_KEY}"
+    enabled: false
+    timeout: 120
+    max_retries: 3
+    auto_fetch_models: true
+    description: DeepSeek 大模型 API - https://platform.deepseek.com
+    supported_models:
+      - requested_model: deepseek-v4-flash
+        actual_model: deepseek-v4-flash
+        is_exact: true
+        compatibility_score: 1.0
+      - requested_model: deepseek-v4-pro
+        actual_model: deepseek-v4-pro
+        is_exact: true
+        compatibility_score: 1.0
+    capabilities:
+      max_context_tokens: 8000
+      features:
+        - chat
+        - completion
+      supports_tools: true
+    weight: 100
+    priority: 10
+
+  - id: baidu-qianfan
+    name: 百度千帆 (QianFan)
+    type: openai
+    base_url: https://qianfan.baidubce.com/v2
+    api_key: "${BAIDU_QIANFAN_API_KEY}"
+    enabled: false
+    timeout: 120
+    max_retries: 3
+    auto_fetch_models: true
+    description: 百度千帆大模型平台 - https://qianfan.baidu.com
+    supported_models:
+      - requested_model: ernie-4.0
+        actual_model: ernie-4.0
+        is_exact: true
+        compatibility_score: 1.0
+      - requested_model: ernie-3.5
+        actual_model: ernie-3.5
+        is_exact: true
+        compatibility_score: 1.0
+    capabilities:
+      max_context_tokens: 8000
+      features:
+        - chat
+        - completion
+      supports_tools: true
+    weight: 100
+    priority: 10
+
+  - id: ppio
+    name: PPIO (派欧云)
+    type: openai
+    base_url: https://api.ppio.com/openai/v1
+    api_key: "${PPIO_API_KEY}"
+    enabled: false
+    timeout: 120
+    max_retries: 3
+    auto_fetch_models: true
+    description: PPIO 派欧云 GPU 算力平台 - https://ppinfra.com
+    supported_models:
+      - requested_model: deepseek/deepseek-v4-flash
+        actual_model: deepseek/deepseek-v4-flash
+        is_exact: true
+        compatibility_score: 1.0
+      - requested_model: zai-org/glm-5
+        actual_model: zai-org/glm-5
+        is_exact: true
+        compatibility_score: 1.0
+      - requested_model: qwen/qwen3.5-plus
+        actual_model: qwen/qwen3.5-plus
+        is_exact: true
+        compatibility_score: 1.0
+      - requested_model: moonshotai/kimi-k2.5
+        actual_model: moonshotai/kimi-k2.5
+        is_exact: true
+        compatibility_score: 1.0
+      - requested_model: minimax/minimax-m2.7-highspeed
+        actual_model: minimax/minimax-m2.7-highspeed
+        is_exact: true
+        compatibility_score: 1.0
+    capabilities:
+      max_context_tokens: 128000
+      features:
+        - chat
+        - completion
+      supports_tools: true
+    weight: 100
+    priority: 10
+
+  - id: minimax
+    name: MiniMax
+    type: openai
+    base_url: https://api.minimax.chat/v1
+    api_key: "${MINIMAX_API_KEY}"
+    enabled: false
+    timeout: 120
+    max_retries: 3
+    auto_fetch_models: true
+    description: MiniMax 大模型 API - https://www.minimaxi.com
+    supported_models:
+      - requested_model: abab6.5s-chat
+        actual_model: abab6.5s-chat
+        is_exact: true
+        compatibility_score: 1.0
+      - requested_model: abab6.5-chat
+        actual_model: abab6.5-chat
+        is_exact: true
+        compatibility_score: 1.0
+    capabilities:
+      max_context_tokens: 8000
+      features:
+        - chat
+        - completion
+      supports_tools: true
+    weight: 100
+    priority: 10
+
+  - id: moonshot
+    name: Moonshot (月之暗面)
+    type: openai
+    base_url: https://api.moonshot.cn/v1
+    api_key: "${MOONSHOT_API_KEY}"
+    enabled: false
+    timeout: 120
+    max_retries: 3
+    auto_fetch_models: true
+    description: Moonshot 月之暗面大模型 API - https://www.moonshot.cn
+    supported_models:
+      - requested_model: moonshot-v1-8k
+        actual_model: moonshot-v1-8k
+        is_exact: true
+        compatibility_score: 1.0
+      - requested_model: moonshot-v1-32k
+        actual_model: moonshot-v1-32k
+        is_exact: true
+        compatibility_score: 1.0
+      - requested_model: moonshot-v1-128k
+        actual_model: moonshot-v1-128k
+        is_exact: true
+        compatibility_score: 1.0
+    capabilities:
+      max_context_tokens: 128000
+      features:
+        - chat
+        - completion
+      supports_tools: true
+    weight: 100
+    priority: 10
+
+  - id: kimi-for-coding
+    name: Kimi for Coding
+    type: openai
+    base_url: https://api.kimi.com/coding/v1
+    api_key: "{{LLM_PROXY_KIMI_API_KEY|}}"
+    enabled: false
+    timeout: 120
+    max_retries: 3
+    auto_fetch_models: true
+    description: Kimi for Coding 编程专用 API - https://kimi.moonshot.cn
+    supported_models:
+      - requested_model: kimi-for-coding
+        actual_model: kimi-for-coding
+        is_exact: true
+        compatibility_score: 1.0
+      - requested_model: text-embedding
+        actual_model: text-embedding
+        is_exact: true
+        compatibility_score: 1.0
+    capabilities:
+      max_context_tokens: 128000
+      features:
+        - chat
+        - completion
+        - coding
+        - embeddings
+      supports_tools: true
+    weight: 100
+    priority: 10
+
+  - id: baichuan
+    name: Baichuan (百川智能)
+    type: openai
+    base_url: https://api.baichuan-ai.com/v1
+    api_key: "${BAICHUAN_API_KEY}"
+    enabled: false
+    timeout: 120
+    max_retries: 3
+    auto_fetch_models: true
+    description: 百川智能大模型 API - https://www.baichuan-ai.com
+    supported_models:
+      - requested_model: Baichuan4
+        actual_model: Baichuan4
+        is_exact: true
+        compatibility_score: 1.0
+      - requested_model: Baichuan3-Turbo
+        actual_model: Baichuan3-Turbo
+        is_exact: true
+        compatibility_score: 1.0
+    capabilities:
+      max_context_tokens: 32000
+      features:
+        - chat
+        - completion
+      supports_tools: true
+    weight: 100
+    priority: 10
+
+  - id: nvidia-free-key
+    name: NVIDIA Free Key (BuildPlan)
+    type: openai
+    base_url: https://integrate.api.nvidia.com
+    api_key: "${NVIDIA_FREE_KEY_API_KEY}"
+    enabled: false
+    timeout: 120
+    max_retries: 3
+    auto_fetch_models: true
+    description: NVIDIA BuildPlan 免费 API Key - https://build.nvidia.com
+    supported_models:
+      - requested_model: kimi-k2.5
+        actual_model: moonshotai/kimi-k2.5
+        is_exact: true
+        compatibility_score: 1.0
+    capabilities:
+      max_context_tokens: 128000
+      features:
+        - chat
+        - completion
+        - vision
+      supports_tools: true
+    weight: 100
+    priority: 10
+
+  - id: siliconflow
+    name: SiliconFlow (硅基流动)
+    type: openai
+    base_url: https://api.siliconflow.cn/v1
+    api_key: "${SILICONFLOW_API_KEY}"
+    enabled: false
+    timeout: 120
+    max_retries: 3
+    auto_fetch_models: true
+    description: SiliconFlow 中国大模型 API 平台 - https://siliconflow.cn
+    supported_models:
+      - requested_model: Qwen2.5-72B
+        actual_model: Qwen/Qwen2.5-72B-Instruct
+        is_exact: true
+        compatibility_score: 1.0
+      - requested_model: Qwen2.5-7B
+        actual_model: Qwen/Qwen2.5-7B-Instruct
+        is_exact: true
+        compatibility_score: 1.0
+      - requested_model: DeepSeek-V2.5
+        actual_model: deepseek-ai/DeepSeek-V2.5
+        is_exact: true
+        compatibility_score: 1.0
+      - requested_model: Llama-3.1-70B
+        actual_model: meta-llama/Llama-3.1-70B-Instruct
+        is_exact: true
+        compatibility_score: 1.0
+    capabilities:
+      max_context_tokens: 128000
+      features:
+        - chat
+        - completion
+      supports_tools: true
+    weight: 100
+    priority: 10
+
+  - id: stepfun
+    name: StepFun (阶跃星辰)
+    type: openai
+    base_url: https://api.stepfun.com/v1
+    api_key: "${STEPFUN_API_KEY}"
+    enabled: false
+    timeout: 120
+    max_retries: 3
+    auto_fetch_models: true
+    description: 阶跃星辰大模型 API - https://www.stepfun.com
+    supported_models:
+      - requested_model: step-1-8k
+        actual_model: step-1-8k
+        is_exact: true
+        compatibility_score: 1.0
+      - requested_model: step-1-32k
+        actual_model: step-1-32k
+        is_exact: true
+        compatibility_score: 1.0
+      - requested_model: step-1-128k
+        actual_model: step-1-128k
+        is_exact: true
+        compatibility_score: 1.0
+    capabilities:
+      max_context_tokens: 128000
+      features:
+        - chat
+        - completion
+      supports_tools: true
+    weight: 100
+    priority: 10
+
+  - id: hunyuan
+    name: Hunyuan (腾讯混元)
+    type: openai
+    base_url: https://hunyuan.tencentcloudapi.com/v1
+    api_key: "${HUNYUAN_API_KEY}"
+    enabled: false
+    timeout: 120
+    max_retries: 3
+    auto_fetch_models: true
+    description: 腾讯混元大模型 API - https://hunyuan.tencent.com
+    supported_models:
+      - requested_model: hunyuan-pro
+        actual_model: hunyuan-pro
+        is_exact: true
+        compatibility_score: 1.0
+      - requested_model: hunyuan-standard
+        actual_model: hunyuan-standard
+        is_exact: true
+        compatibility_score: 1.0
+      - requested_model: hunyuan-lite
+        actual_model: hunyuan-lite
+        is_exact: true
+        compatibility_score: 1.0
+    capabilities:
+      max_context_tokens: 32000
+      features:
+        - chat
+        - completion
+      supports_tools: true
+    weight: 100
+    priority: 10
+
+  - id: spark
+    name: Spark (讯飞星火)
+    type: openai
+    base_url: https://spark-api.xf-yun.com/v1
+    api_key: "${SPARK_API_KEY}"
+    enabled: false
+    timeout: 120
+    max_retries: 3
+    auto_fetch_models: true
+    description: 讯飞星火大模型 API - https://xinghuo.xfyun.cn
+    supported_models:
+      - requested_model: generalv3.5
+        actual_model: generalv3.5
+        is_exact: true
+        compatibility_score: 1.0
+      - requested_model: generalv3
+        actual_model: generalv3
+        is_exact: true
+        compatibility_score: 1.0
+      - requested_model: generalv2
+        actual_model: generalv2
+        is_exact: true
+        compatibility_score: 1.0
+    capabilities:
+      max_context_tokens: 8000
+      features:
+        - chat
+        - completion
+      supports_tools: true
+    weight: 100
+    priority: 10
+
+  - id: opencode
+    name: OpenCode
+    type: openai
+    base_url: https://opencode.ai/zen/v1
+    api_key: "${OPENCODE_API_KEY}"
+    enabled: false
+    timeout: 120
+    max_retries: 3
+    auto_fetch_models: true
+    description: OpenCode Zen API - https://opencode.ai
+    supported_models:
+      - requested_model: mimo-v2.5-free
+        actual_model: mimo-v2.5-free
+        is_exact: true
+        compatibility_score: 1.0
+      - requested_model: deepseek-v4-flash-free
+        actual_model: deepseek-v4-flash-free
+        is_exact: true
+        compatibility_score: 1.0
+    capabilities:
+      max_context_tokens: 128000
+      features:
+        - chat
+        - completion
+      supports_tools: true
+    weight: 100
+    priority: 10

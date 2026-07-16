@@ -1,0 +1,11 @@
+# 共享 Kibana 服务定义（依赖 Elasticsearch）
+services:
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.11.0
+    restart: unless-stopped
+    environment:
+      ELASTICSEARCH_HOSTS: http://centag-elasticsearch:9200
+      SERVER_NAME: kibana
+    depends_on:
+      elasticsearch:
+        condition: service_healthy

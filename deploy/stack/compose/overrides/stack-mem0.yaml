@@ -1,0 +1,23 @@
+# stack Mem0 部署对 mem0 fragment 的覆盖
+services:
+  mem0:
+    container_name: centag-mem0
+    ports:
+      - "${MEM0_PORT:-20061}:8000"
+    volumes:
+      - mem0_history_data:/app/history
+    environment:
+      POSTGRES_HOST: ${MEM0_POSTGRES_HOST:-centag-postgresql}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?error POSTGRES_PASSWORD must be set}
+      APP_DB_NAME: ${MEM0_APP_DB_NAME:-centag}
+      QDRANT_HOST: ${MEM0_QDRANT_HOST:-centag-qdrant}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://centag-ollama:11434}
+      OPENAI_BASE_URL: ${MEM0_OPENAI_BASE_URL:-https://open.bigmodel.cn/api/paas/v4}
+      MEM0_DEFAULT_LLM_MODEL: ${MEM0_OPENAI_MODEL:-glm-4-flash}
+      MEM0_DEFAULT_EMBEDDER_MODEL: ${MEM0_OPENAI_EMBEDDING_MODEL:-bge-m3:latest}
+    networks:
+      - centag-stack-network
+
+networks:
+  centag-stack-network:
+    external: true

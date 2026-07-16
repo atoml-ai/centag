@@ -1,0 +1,95 @@
+id: cache-mode
+name: 缓存模式
+description: 生成内容并保存到缓存。用于测试缓存写入功能。
+version: '1.0'
+shortcut_code: '#cm'
+nodes:
+- id: generator
+  type: generator
+  kind: llm.generate
+  implementation: builtin.generator
+  name: 内容生成
+  backend: bigmodel
+  model: glm-4-flash
+  config:
+    prompt_template: '{{input}}'
+    system_prompt: 请根据用户输入生成合适的回复。
+  timeout: 120
+  retry:
+    max_attempts: 0
+    backoff_strategy: exponential
+    initial_delay: 1000
+    max_delay: 30000
+  next_nodes:
+  - cache_write
+- id: cache_write
+  type: cache
+  kind: cache.access
+  implementation: builtin.cache
+  name: 缓存写入
+  config:
+    custom_config:
+      embedding_backend_id: alibaba-dashscope
+      embedding_model: text-embedding-3-small
+      key_template: '{{model}}:{{hash}}'
+      operation: write
+      read_storage_name: pg
+      semantic_threshold: 0.85
+      semantic_top_k: 5
+      storage_type: pg
+      strategy: exact
+      ttl: 3600
+      vector_storage_name: pg
+      write_storage_name: pg
+  timeout: 5
+  retry:
+    max_attempts: 0
+    backoff_strategy: exponential
+    initial_delay: 1000
+    max_delay: 30000
+  next_nodes:
+  - token_usage_record
+  depends_on:
+  - generator
+  metadata:
+    position:
+      x: 388
+      y: 114
+- id: token_usage_record
+  type: token_usage
+  kind: metrics.token_usage
+  implementation: builtin.token_usage
+  name: Token 计量
+  config:
+    custom_config:
+      operation: record
+      record_fields:
+      - prompt_tokens
+      - completion_tokens
+      - total_tokens
+      - model
+      - backend_id
+      storage_type: pg
+  timeout: 5
+  depends_on:
+  - generator
+  - cache_write
+  metadata:
+    position:
+      x: 592
+      y: 114
+global_config:
+  timeout: 120
+  max_retries: 1
+  bypass_on_error: false
+  parallel_limit: 1
+  log_level: info
+metadata:
+  aligned_proxy_mode: cache-mode
+  features:
+  - cache
+  - cache_write
+  lastUpdated: '2026-05-20T06:35:39.720Z'
+  layoutVersion: '1.1'
+  phase: '5'
+  template_scope: mode-id-alignment

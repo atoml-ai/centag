@@ -1,0 +1,105 @@
+:root {
+  /* 主色调 - 紫蓝色系 */
+  --color-primary: #667eea;
+  --color-primary-light: #818cf8;
+  --color-primary-dark: #5b68d6;
+  --color-secondary: #764ba2;
+  --color-secondary-light: #9d6cc0;
+  --color-secondary-dark: #633b8a;
+
+  /* 中性色 */
+  --color-white: #ffffff;
+  --color-gray-50: #f8fafc;
+  --color-gray-100: #f1f5f9;
+  --color-gray-200: #e2e8f0;
+  --color-gray-300: #cbd5e1;
+  --color-gray-400: #94a3b8;
+  --color-gray-500: #64748b;
+  --color-gray-600: #475569;
+  --color-gray-700: #334155;
+  --color-gray-800: #1e293b;
+  --color-gray-900: #0f172a;
+
+  /* 深色主题色 */
+  --color-dark-bg: #1a1a1a;
+  --color-dark-bg-light: #262626;
+  --color-dark-bg-lighter: #2e2e2e;
+  --color-dark-border: #2a2a2a;
+  --color-dark-border-light: #3a3a3a;
+  --color-dark-text: #e0e0e0;
+  --color-dark-text-muted: #b0b0b0;
+
+  /* 功能色 */
+  --color-success: #10b981;
+  --color-success-light: #34d399;
+  --color-success-dark: #059669;
+  --color-warning: #f59e0b;
+  --color-warning-light: #fbbf24;
+  --color-warning-dark: #d97706;
+  --color-error: #ef4444;
+  --color-error-light: #f87171;
+  --color-error-dark: #dc2626;
+  --color-info: #3b82f6;
+  --color-danger: #ef4444;
+  --color-danger-light: #f87171;
+  --color-danger-dark: #dc2626;
+
+  /* 渐变色 */
+  --gradient-primary: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  --gradient-primary-hover: linear-gradient(135deg, #5b68d6 0%, #633b8a 100%);
+  --gradient-secondary: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  --gradient-success: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+  --gradient-purple: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);
+
+  /* 间距 */
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 16px;
+  --spacing-lg: 24px;
+  --spacing-xl: 32px;
+  --spacing-2xl: 48px;
+  --spacing-3xl: 64px;
+
+  /* 圆角 */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-2xl: 24px;
+
+  /* 阴影 */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.07);
+  --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.1);
+  --shadow-xl: 0 20px 25px rgba(0, 0, 0, 0.15);
+
+  /* 字体 */
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
+    sans-serif;
+  --font-mono: 'SF Mono', Monaco, 'Courier New', monospace;
+
+  /* 导航高度 */
+  --header-height: 56px;
+  --nav-height: 48px;
+
+  /* Shell — shared Web + Desktop */
+  --shell-bg: #ffffff;
+  --shell-sidebar-bg: #f5f5f7;
+  --shell-sidebar-border: #e5e5ea;
+  --shell-sidebar-text: #1d1d1f;
+  --shell-sidebar-muted: #86868b;
+  --shell-sidebar-hover: rgba(0, 0, 0, 0.04);
+  --shell-sidebar-active-bg: rgba(102, 126, 234, 0.12);
+  --shell-sidebar-active-text: var(--color-primary);
+  --shell-header-bg: var(--shell-sidebar-bg);
+  --shell-header-border: var(--shell-sidebar-border);
+  --shell-header-text: var(--shell-sidebar-text);
+  --shell-content-bg: #ffffff;
+  --shell-accent: var(--color-primary);
+  --shell-nav-radius: 6px;
+
+  /* 过渡 */
+  --transition-fast: 150ms;
+  --transition-normal: 300ms;
+  --transition-slow: 500ms;
+}

@@ -1,0 +1,12 @@
+#!/bin/bash
+
+### This script is called after the user installs the application.
+### 可在此处设置初始权限、创建数据库等
+
+DATA_DIR="${TRIM_DATA_SHARE_PATHS%%:*}"
+
+# 确保数据目录存在
+mkdir -p "${DATA_DIR}"
+mkdir -p "${TRIM_PKGVAR}/logs"
+
+exit 0

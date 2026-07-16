@@ -1,0 +1,45 @@
+id: direct-backend
+name: 直连后端
+shortcut_code: '#d'
+description: 直连已配置后端，并注入网关 system prompt（覆盖客户端 system）
+version: '2.0'
+nodes:
+- id: generate
+  type: generator
+  kind: llm.generate
+  implementation: builtin.generator
+  name: 直连生成
+  backend: openai
+  model: gpt-4o-mini
+  config:
+    prompt_template: '{{input}}'
+    system_prompt: |
+      你是一个可靠助手，请直接、准确地回答用户的问题。
+
+      ## 行为准则
+      - 回答简洁，直击问题核心
+      - 问题有歧义时先确认意图
+      - 不确定时诚实说明，不编造
+
+      ## 风格
+      - 优先结构化表达（分段、列表）
+      - 技术问题给出可执行示例
+  timeout: 120
+  retry:
+    max_attempts: 0
+    backoff_strategy: exponential
+    initial_delay: 1000
+    max_delay: 30000
+global_config:
+  timeout: 120
+  max_retries: 3
+  bypass_on_error: true
+  parallel_limit: 4
+  log_level: info
+metadata:
+  aligned_proxy_mode: direct-backend
+  profile: gateway
+  features:
+    - system_prompt_inject
+  lastUpdated: '2026-07-14T00:00:00.000Z'
+  layoutVersion: '1.1'

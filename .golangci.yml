@@ -1,0 +1,18 @@
+# golangci-lint 配置（与 CI 中版本 pin 对齐；见 .github/workflows/ci.yml）
+# 版本: v2.0.2（支持 Go 1.25）
+run:
+  timeout: 7m
+  skip-dirs:
+    - web/node_modules
+    - deploy/stack
+  tests: true
+
+linters:
+  disable-all: true
+  enable:
+    - govet
+    - ineffassign
+    - misspell
+
+issues:
+  max-same-issues: 50

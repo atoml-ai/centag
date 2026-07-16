@@ -1,0 +1,10 @@
+# modular：接入 deploy/stack-network，访问 stack 中的 PostgreSQL
+services:
+  centag:
+    networks:
+      - centag-team
+      - deploy/stack-network
+
+networks:
+  deploy/stack-network:
+    external: true

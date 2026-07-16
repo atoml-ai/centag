@@ -1,0 +1,11 @@
+version: "3.8"
+services:
+  centag:
+    image: centag:latest
+    ports:
+      - "20060:20060"
+    environment:
+      - LLM_PROXY_DB_DRIVER=sqlite
+      - LLM_PROXY_ADMIN_PASSWORD=admin123
+      - SERVER_HOST=0.0.0.0
+      - SERVER_PORT=20060

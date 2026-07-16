@@ -1,0 +1,16 @@
+# ============================================================
+# Centag - 前端依赖基础镜像
+# 仅包含 npm 依赖安装，只在 package*.json 变化时重建
+# ============================================================
+FROM node:20-alpine
+
+WORKDIR /apps
+
+# 配置 npm 镜像加速
+RUN npm config set registry https://registry.npmmirror.com
+
+# 只复制依赖声明文件，源码不放进来
+COPY web/package*.json ./
+
+# 预安装所有依赖，结果缓存在镜像层中
+RUN npm ci

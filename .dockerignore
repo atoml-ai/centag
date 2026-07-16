@@ -1,0 +1,33 @@
+# 构建产物
+bin/
+static/
+
+# 前端依赖和构建产物（由基础镜像提供，不需要从本地复制）
+web/node_modules/
+web/dist/
+
+# 敏感文件
+config/secrets/
+
+# Git
+.git/
+
+# CI/CD 配置
+.drone.yml
+
+# 测试和示例
+test/
+examples/
+
+# 日志
+*.log
+logs/
+
+# 编辑器和工具
+.cursor/
+.vscode/
+*.swp
+*.swo
+
+# 临时文件
+*.tmp

@@ -1,0 +1,14 @@
+appname=centag
+version=1.0.0
+display_name=Centag
+desc=强大的API请求转发与代理管理工具，支持多种AI服务代理和密钥管理
+arch=x86_64
+source=thirdparty
+maintainer=admin
+maintainer_url=https://github.com/centag
+os_min_version=0.8.0
+desktop_uidir=ui
+desktop_applaunchname=centag.Application
+service_port=20060
+checkport=true
+checksum=

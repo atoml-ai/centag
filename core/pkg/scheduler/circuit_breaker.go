@@ -1,0 +1,298 @@
+package scheduler
+
+import (
+	"sync"
+	"time"
+
+	"centag/core/pkg/logger"
+)
+
+// CircuitState 熔断器状态
+type CircuitState string
+
+const (
+	StateClosed   CircuitState = "closed"   // 正常状态
+	StateOpen     CircuitState = "open"     // 熔断打开（拒绝请求）
+	StateHalfOpen CircuitState = "half-open" // 半开状态（试探性恢复）
+)
+
+// CircuitBreakerConfig 熔断器配置
+type CircuitBreakerConfig struct {
+	FailureThreshold int           `json:"failure_threshold"` // 失败阈值
+	SuccessThreshold int           `json:"success_threshold"` // 成功阈值（半开状态）
+	Timeout          time.Duration `json:"timeout"`           // 熔断超时
+	WindowDuration   time.Duration `json:"window_duration"`   // 统计窗口
+}
+
+// DefaultCircuitBreakerConfig 默认熔断器配置
+func DefaultCircuitBreakerConfig() CircuitBreakerConfig {
+	return CircuitBreakerConfig{
+		FailureThreshold: 5,
+		SuccessThreshold: 3,
+		Timeout:          30 * time.Second,
+		WindowDuration:   1 * time.Minute,
+	}
+}
+
+// CircuitBreaker 熔断器
+type CircuitBreaker struct {
+	mu               sync.RWMutex
+	backendID        string
+	state            CircuitState
+	failures         []time.Time
+	successes        []time.Time
+	lastFailureTime  time.Time
+	lastStateChange  time.Time
+	config           CircuitBreakerConfig
+	stateChangeCallbacks []func(CircuitState)
+}
+
+// NewCircuitBreaker 创建熔断器
+func NewCircuitBreaker(backendID string, config CircuitBreakerConfig) *CircuitBreaker {
+	return &CircuitBreaker{
+		backendID: backendID,
+		state:     StateClosed,
+		failures:  make([]time.Time, 0),
+		successes: make([]time.Time, 0),
+		config:    config,
+		lastStateChange: time.Now(),
+	}
+}
+
+// Allow 检查是否允许请求
+func (cb *CircuitBreaker) Allow() bool {
+	cb.mu.Lock()
+	defer cb.mu.Unlock()
+
+	now := time.Now()
+
+	// 清理过期记录
+	cb.cleanupOldRecords(now)
+
+	switch cb.state {
+	case StateClosed:
+		return true
+	case StateOpen:
+		// 检查是否超时
+		if now.Sub(cb.lastStateChange) > cb.config.Timeout {
+			cb.changeState(StateHalfOpen)
+			return true
+		}
+		return false
+	case StateHalfOpen:
+		// 半开状态允许有限请求
+		return true
+	}
+
+	return false
+}
+
+// RecordSuccess 记录成功
+func (cb *CircuitBreaker) RecordSuccess() {
+	cb.mu.Lock()
+	defer cb.mu.Unlock()
+
+	now := time.Now()
+	cb.successes = append(cb.successes, now)
+
+	if cb.state == StateHalfOpen {
+		// 半开状态：达到成功阈值则关闭
+		if len(cb.successes) >= cb.config.SuccessThreshold {
+			cb.changeState(StateClosed)
+			cb.failures = make([]time.Time, 0)
+			cb.successes = make([]time.Time, 0)
+		}
+	}
+}
+
+// RecordFailure 记录失败
+func (cb *CircuitBreaker) RecordFailure() {
+	cb.mu.Lock()
+	defer cb.mu.Unlock()
+
+	now := time.Now()
+	cb.failures = append(cb.failures, now)
+	cb.lastFailureTime = now
+
+	if cb.state == StateHalfOpen {
+		// 半开状态：任何失败都重新打开
+		cb.changeState(StateOpen)
+		cb.successes = make([]time.Time, 0)
+	} else if cb.state == StateClosed {
+		// 正常状态：达到失败阈值则打开
+		if len(cb.failures) >= cb.config.FailureThreshold {
+			cb.changeState(StateOpen)
+		}
+	}
+}
+
+// GetState 获取状态
+func (cb *CircuitBreaker) GetState() CircuitState {
+	cb.mu.RLock()
+	defer cb.mu.RUnlock()
+	return cb.state
+}
+
+// GetFailureCount 获取失败次数
+func (cb *CircuitBreaker) GetFailureCount() int {
+	cb.mu.RLock()
+	defer cb.mu.RUnlock()
+	return len(cb.failures)
+}
+
+// GetSuccessCount 获取成功次数
+func (cb *CircuitBreaker) GetSuccessCount() int {
+	cb.mu.RLock()
+	defer cb.mu.RUnlock()
+	return len(cb.successes)
+}
+
+// IsHealthy 检查是否健康
+func (cb *CircuitBreaker) IsHealthy() bool {
+	state := cb.GetState()
+	return state == StateClosed || state == StateHalfOpen
+}
+
+// IsOpen reports whether the breaker is fully open (rejecting requests).
+func (cb *CircuitBreaker) IsOpen() bool {
+	return cb.GetState() == StateOpen
+}
+
+// changeState 改变状态
+func (cb *CircuitBreaker) changeState(newState CircuitState) {
+	cb.state = newState
+	cb.lastStateChange = time.Now()
+
+	// 触发回调
+	for _, callback := range cb.stateChangeCallbacks {
+		callback(newState)
+	}
+
+	if logger.Sugar != nil {
+		logger.Warnf("[CircuitBreaker] %s state -> %s", cb.backendID, newState)
+	}
+}
+
+// cleanupOldRecords 清理过期记录
+func (cb *CircuitBreaker) cleanupOldRecords(now time.Time) {
+	cutoff := now.Add(-cb.config.WindowDuration)
+
+	// 清理过期失败记录
+	newFailures := make([]time.Time, 0)
+	for _, t := range cb.failures {
+		if t.After(cutoff) {
+			newFailures = append(newFailures, t)
+		}
+	}
+	cb.failures = newFailures
+
+	// 清理过期成功记录
+	newSuccesses := make([]time.Time, 0)
+	for _, t := range cb.successes {
+		if t.After(cutoff) {
+			newSuccesses = append(newSuccesses, t)
+		}
+	}
+	cb.successes = newSuccesses
+}
+
+// OnStateChange 注册状态变化回调
+func (cb *CircuitBreaker) OnStateChange(callback func(CircuitState)) {
+	cb.mu.Lock()
+	defer cb.mu.Unlock()
+	cb.stateChangeCallbacks = append(cb.stateChangeCallbacks, callback)
+}
+
+// Reset 重置熔断器
+func (cb *CircuitBreaker) Reset() {
+	cb.mu.Lock()
+	defer cb.mu.Unlock()
+	cb.state = StateClosed
+	cb.failures = make([]time.Time, 0)
+	cb.successes = make([]time.Time, 0)
+	cb.lastStateChange = time.Now()
+}
+
+// CircuitBreakerManager 熔断器管理器
+type CircuitBreakerManager struct {
+	mu           sync.RWMutex
+	breakers     map[string]*CircuitBreaker
+	config       CircuitBreakerConfig
+}
+
+// NewCircuitBreakerManager 创建熔断器管理器
+func NewCircuitBreakerManager(config CircuitBreakerConfig) *CircuitBreakerManager {
+	if config.FailureThreshold == 0 {
+		config = DefaultCircuitBreakerConfig()
+	}
+	return &CircuitBreakerManager{
+		breakers: make(map[string]*CircuitBreaker),
+		config:   config,
+	}
+}
+
+// Get 获取后端熔断器
+func (m *CircuitBreakerManager) Get(backendID string) *CircuitBreaker {
+	m.mu.RLock()
+	cb, ok := m.breakers[backendID]
+	m.mu.RUnlock()
+
+	if !ok {
+		m.mu.Lock()
+		cb = NewCircuitBreaker(backendID, m.config)
+		m.breakers[backendID] = cb
+		m.mu.Unlock()
+	}
+
+	return cb
+}
+
+// IsOpen reports whether the backend circuit breaker is open.
+func (m *CircuitBreakerManager) IsOpen(backendID string) bool {
+	if backendID == "" {
+		return false
+	}
+	return m.Get(backendID).IsOpen()
+}
+
+// Allow 检查是否允许请求
+func (m *CircuitBreakerManager) Allow(backendID string) bool {
+	cb := m.Get(backendID)
+	return cb.Allow()
+}
+
+// RecordSuccess 记录成功
+func (m *CircuitBreakerManager) RecordSuccess(backendID string) {
+	cb := m.Get(backendID)
+	cb.RecordSuccess()
+}
+
+// RecordFailure 记录失败
+func (m *CircuitBreakerManager) RecordFailure(backendID string) {
+	cb := m.Get(backendID)
+	cb.RecordFailure()
+}
+
+// GetHealthyBackends 获取健康后端列表
+func (m *CircuitBreakerManager) GetHealthyBackends(backendIDs []string) []string {
+	healthy := make([]string, 0)
+	for _, id := range backendIDs {
+		cb := m.Get(id)
+		if cb.IsHealthy() {
+			healthy = append(healthy, id)
+		}
+	}
+	return healthy
+}
+
+// GetAllStates 获取所有熔断器状态
+func (m *CircuitBreakerManager) GetAllStates() map[string]CircuitState {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	states := make(map[string]CircuitState)
+	for id, cb := range m.breakers {
+		states[id] = cb.GetState()
+	}
+	return states
+}

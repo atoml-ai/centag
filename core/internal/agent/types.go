@@ -1,0 +1,270 @@
+package agent
+
+// AgentType 支持的 Agent 工具类型
+type AgentType string
+
+const (
+	AgentClaudeCode    AgentType = "claude-code"
+	AgentClaudeDesktop AgentType = "claude-desktop"
+	AgentCodex         AgentType = "codex"
+	AgentGeminiCLI     AgentType = "gemini-cli"
+	AgentOpenCode      AgentType = "opencode"
+	AgentOpenClaw      AgentType = "openclaw"
+	AgentHermes        AgentType = "hermes"
+
+	// TUI Agent 类型（终端用户界面）
+	AgentCodingTUI     AgentType = "coding-tui"
+	AgentEducationTUI  AgentType = "education-tui"
+
+	// Web Agent 类型（浏览器自动化）
+	AgentCodingWeb     AgentType = "coding-web"
+	AgentEducationWeb  AgentType = "education-web"
+)
+
+// AgentCategory Agent 交互界面类别
+type AgentCategory string
+
+const (
+	AgentCategoryCLI     AgentCategory = "cli"
+	AgentCategoryTUI     AgentCategory = "tui"
+	AgentCategoryWeb     AgentCategory = "web"
+	AgentCategoryDesktop AgentCategory = "desktop"
+)
+
+// NotificationLevel 通知级别
+type NotificationLevel int
+
+const (
+	NotificationInfo    NotificationLevel = iota
+	NotificationSuccess
+	NotificationWarning
+	NotificationError
+)
+
+// String 返回通知级别的字符串表示
+func (l NotificationLevel) String() string {
+	switch l {
+	case NotificationInfo:
+		return "info"
+	case NotificationSuccess:
+		return "success"
+	case NotificationWarning:
+		return "warning"
+	case NotificationError:
+		return "error"
+	default:
+		return "unknown"
+	}
+}
+
+// ConfigFile 需写入的配置文件
+type ConfigFile struct {
+	Path    string `json:"path"`
+	Content string `json:"content"`
+	Append  bool   `json:"append,omitempty"`
+}
+
+// ConfigStep 手动配置步骤
+type ConfigStep struct {
+	Title       string `json:"title"`
+	Description string `json:"description,omitempty"`
+	Code        string `json:"code,omitempty"`
+}
+
+// GenerateConfigRequest 生成配置的请求
+type GenerateConfigRequest struct {
+	BackendID  string `json:"backend_id,omitempty"`
+	AgentType  string `json:"agent_type" binding:"required"`
+	Model      string `json:"model,omitempty"`
+	PipelineID string `json:"pipeline_id,omitempty"`
+	Host       string `json:"host,omitempty"`
+	Port       int    `json:"port,omitempty"`
+}
+
+// PlatformCommands 按操作系统分类的写入命令
+type PlatformCommands struct {
+	MacOS   string `json:"macos,omitempty"`
+	Linux   string `json:"linux,omitempty"`
+	Windows string `json:"windows,omitempty"`
+}
+
+// WriteConfigRequest 写入配置请求（桌面版调用）
+type WriteConfigRequest struct {
+	BackendID  string `json:"backend_id,omitempty"`
+	AgentType  string `json:"agent_type" binding:"required"`
+	Model      string `json:"model,omitempty"`
+	PipelineID string `json:"pipeline_id,omitempty"`
+	Host       string `json:"host,omitempty"`
+	Port       int    `json:"port,omitempty"`
+}
+
+// WriteConfigResponse 写入结果
+type WriteConfigResponse struct {
+	AgentType string       `json:"agent_type"`
+	Success   bool         `json:"success"`
+	Written   []ConfigFile `json:"written,omitempty"`
+	Message   string       `json:"message,omitempty"`
+}
+
+// GenerateConfigResponse 生成的配置响应
+type GenerateConfigResponse struct {
+	AgentType   string           `json:"agent_type"`
+	BackendName string           `json:"backend_name"`
+	Description string           `json:"description"`
+	Commands    PlatformCommands `json:"commands"`
+	Files       []ConfigFile     `json:"files,omitempty"`
+	Steps       []ConfigStep     `json:"steps,omitempty"`
+	VerifyCmd   string           `json:"verify_cmd,omitempty"`
+}
+
+// BackendInfo 后端信息摘要（模板渲染所需字段）
+type BackendInfo struct {
+	ID      string
+	Name    string
+	BaseURL string
+	APIKey  string
+	Type    string
+	Model   string
+	Host    string
+	Port    int
+}
+
+// AgentTemplate 各 Agent 工具的配置模板接口
+type AgentTemplate interface {
+	AgentType() AgentType
+	DisplayName() string
+	Description() string
+	ConfigFiles(info *BackendInfo) ([]ConfigFile, error)
+	SetupCommand(info *BackendInfo) string
+	PlatformCommands(info *BackendInfo) PlatformCommands
+	VerifyCommand(info *BackendInfo) string
+	Steps(info *BackendInfo) []ConfigStep
+	WriteConfig(info *BackendInfo) error
+}
+
+// TemplateRegistry 模板注册表
+type TemplateRegistry struct {
+	templates map[AgentType]AgentTemplate
+}
+
+// NewTemplateRegistry 创建注册表
+func NewTemplateRegistry() *TemplateRegistry {
+	r := &TemplateRegistry{
+		templates: make(map[AgentType]AgentTemplate),
+	}
+	r.registerDefaults()
+	return r
+}
+
+func (r *TemplateRegistry) registerDefaults() {
+	// CLI Agents
+	r.Register(&ClaudeCodeTemplate{})
+	r.Register(&ClaudeDesktopTemplate{})
+	r.Register(&CodexTemplate{})
+	r.Register(&GeminiTemplate{})
+	r.Register(&OpenCodeTemplate{})
+	r.Register(&OpenClawTemplate{})
+	r.Register(&HermesTemplate{})
+
+	// TUI Agents
+	r.Register(newTUIConfigTemplate(AgentCodingTUI, "Coding TUI Agent", "编程场景终端交互 Agent"))
+	r.Register(newTUIConfigTemplate(AgentEducationTUI, "Education TUI Agent", "教育场景终端交互 Agent"))
+
+	// Web Agents
+	r.Register(newWebConfigTemplate(AgentCodingWeb, "Coding Web Agent", "编程场景 Web 自动化 Agent"))
+	r.Register(newWebConfigTemplate(AgentEducationWeb, "Education Web Agent", "教育场景 Web 自动化 Agent"))
+}
+
+// Register 注册模板
+func (r *TemplateRegistry) Register(t AgentTemplate) {
+	r.templates[t.AgentType()] = t
+}
+
+// Get 获取模板
+func (r *TemplateRegistry) Get(at AgentType) (AgentTemplate, bool) {
+	t, ok := r.templates[at]
+	return t, ok
+}
+
+// List 列出所有 Agent 类型
+func (r *TemplateRegistry) List() []AgentType {
+	var types []AgentType
+	for at := range r.templates {
+		types = append(types, at)
+	}
+	return types
+}
+
+// ============================================================================
+// TUI Agent 支持类型
+// ============================================================================
+
+// StatusBarInfo 状态栏渲染所需的上下文信息
+type StatusBarInfo struct {
+	Mode     string // 当前模式（NORMAL / INSERT / COMMAND）
+	FilePath string // 当前文件路径
+	Modified bool   // 是否有未保存修改
+	Position int    // 光标行号
+	Encoding string
+	Language string
+}
+
+// ProgressInfo 进度条渲染信息
+type ProgressInfo struct {
+	Current    int
+	Total      int
+	Message    string
+	Percentage float64
+}
+
+// CodeHighlightOptions 代码高亮配置
+type CodeHighlightOptions struct {
+	Language        string
+	ShowLineNumbers bool
+	Theme           string // dark / light
+}
+
+// DiffViewOptions Diff 视图配置
+type DiffViewOptions struct {
+	ShowLineNumbers bool
+	ContextLines    int
+	SideBySide      bool // true=并排显示, false=统一视图
+}
+
+// UserChoice 交互式用户选项
+type UserChoice struct {
+	Key         string
+	Label       string
+	Description string
+	Selected    bool // 默认选中
+}
+
+// Notification 通知信息
+type Notification struct {
+	Level    NotificationLevel
+	Message  string
+	Duration int // ms, 0 表示粘性通知（需手动关闭）
+}
+
+// ============================================================================
+// Web Agent 支持类型
+// ============================================================================
+
+// BrowserConfig 浏览器引擎配置
+type BrowserConfig struct {
+	Headless       bool
+	ViewportWidth  int
+	ViewportHeight int
+	Timeout        int    // 页面加载超时（秒）
+	UserAgent      string // 自定义 User-Agent
+}
+
+// DefaultBrowserConfig 返回默认浏览器配置
+func DefaultBrowserConfig() *BrowserConfig {
+	return &BrowserConfig{
+		Headless:       true,
+		ViewportWidth:  1280,
+		ViewportHeight: 720,
+		Timeout:        30,
+	}
+}

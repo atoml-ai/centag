@@ -1,0 +1,2 @@
+#!/bin/sh
+echo {state:{status:running,descr:Centag is running}}

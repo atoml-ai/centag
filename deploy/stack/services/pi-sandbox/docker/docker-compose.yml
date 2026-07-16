@@ -1,0 +1,76 @@
+# 开发模式：双容器（pi-agent + go-client HTTP 网关）
+# 用法：cd services/pi-sandbox && ./scripts/manage.sh start
+# 独立于 middleware / mem0，使用自有 pi-network
+
+services:
+  pi-agent:
+    build:
+      context: .
+      dockerfile: Dockerfile.pi
+      args:
+        PI_PACKAGE: ${PI_PACKAGE:-@earendil-works/pi-coding-agent}
+        PI_VERSION: ${PI_VERSION:-0.78.1}
+    container_name: ${PI_CONTAINER_NAME:-pi-sandbox}
+    restart: unless-stopped
+    environment:
+      - PI_CODING_AGENT_SESSION_DIR=${PI_SESSION_DIR:-/data/sessions}
+      - PI_SKIP_VERSION_CHECK=${PI_SKIP_VERSION_CHECK:-1}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - KIMI_API_KEY=${KIMI_API_KEY:-}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:-}
+    volumes:
+      - ${HOST_WORKSPACE_DIR:-./workspace}:${PI_WORK_DIR:-/workspace}
+      - pi-sessions:${PI_SESSION_DIR:-/data/sessions}
+      - ./extensions:/extensions:ro
+      - ./skills:/skills:ro
+      - ../pi-config/models.json:/root/.pi/agent/models.json:ro
+      - ../pi-config/settings.json:/root/.pi/agent/settings.json:ro
+    deploy:
+      resources:
+        limits:
+          memory: ${PI_MAX_MEMORY:-512m}
+          cpus: '${PI_MAX_CPU:-1.0}'
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "pi", "--version"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    networks:
+      - pi-network
+
+  go-client:
+    build:
+      context: ../go-client
+      dockerfile: Dockerfile
+      args:
+        PI_PACKAGE: ${PI_PACKAGE:-@earendil-works/pi-coding-agent}
+        PI_VERSION: ${PI_VERSION:-0.78.1}
+    container_name: pi-go-client
+    restart: unless-stopped
+    environment:
+      - PI_AGENT_HOST=pi-agent
+      - PI_AGENT_PORT=80
+      - SERVER_PORT=${GO_CLIENT_PORT:-8080}
+      - GOPROXY=https://goproxy.cn,direct
+      - PI_SKIP_VERSION_CHECK=${PI_SKIP_VERSION_CHECK:-1}
+    ports:
+      - "${GO_CLIENT_PORT:-8080}:8080"
+    volumes:
+      - ${HOST_WORKSPACE_DIR:-./workspace}:/workspace
+    depends_on:
+      pi-agent:
+        condition: service_healthy
+    networks:
+      - pi-network
+
+volumes:
+  pi-sessions:
+
+networks:
+  pi-network:
+    driver: bridge

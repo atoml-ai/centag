@@ -1,0 +1,26 @@
+# Debug 模式：Linux 宿主机使用 host 网络模式
+# 使用方式: ./start.sh docker debug (Linux 自动使用此配置)
+# 继承自: docker-compose.debug.yaml
+
+services:
+  centag:
+    # 使用宿主机网络，直接访问宿主机上的服务
+    network_mode: "host"
+    # 取消 Docker 网络（host 模式不兼容 networks）
+    networks: {}
+    # 移除 extra_hosts（host 模式不需要）
+    extra_hosts: []
+    # Host 模式下也需要挂载本地 bin 目录和 debug entrypoint
+    volumes:
+      - ../bin/server:/app/bin
+      - ./entrypoint.debug.sh:/app/entrypoint.debug.sh
+    entrypoint: ["/bin/bash", "/app/entrypoint.debug.sh"]
+    environment:
+      # Debug 模式使用 debug 日志级别和 console 格式
+      - LOG_LEVEL=debug
+      - LLM_PROXY_LOG_LEVEL=debug
+      - LLM_PROXY_LOG_FORMAT=console
+      # Host 模式下使用宿主机地址（pg.atoml.net 已通过 /etc/hosts 解析）
+      - PG_HOST=pg.atoml.net
+      - PG_PORT=5432
+      - DEBUG_HOST_MODE=1

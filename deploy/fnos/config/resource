@@ -1,0 +1,14 @@
+{
+  "docker-project": {
+    "projects": [
+      {"name": "centag", "path": "docker"}
+    ]
+  },
+  "data-share": {
+    "shares": [
+      {"name": "centag", "permission": {"rw": ["docker-centag"]}},
+      {"name": "centag/data", "permission": {"rw": ["docker-centag"]}},
+      {"name": "centag/logs", "permission": {"rw": ["docker-centag"]}}
+    ]
+  }
+}

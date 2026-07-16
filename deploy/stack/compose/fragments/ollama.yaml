@@ -1,0 +1,23 @@
+# 共享 Ollama 服务定义（entrypoint 相对本文件：compose/fragments/ → middleware/）
+services:
+  ollama:
+    image: ollama/ollama:latest
+    restart: unless-stopped
+    environment:
+      OLLAMA_MODELS: /models
+      OLLAMA_HOST: 0.0.0.0
+      OLLAMA_DEFAULT_MODEL: ${OLLAMA_DEFAULT_MODEL:-bge-m3}
+      OLLAMA_AUTOLOAD_MODEL: ${OLLAMA_AUTOLOAD_MODEL:-true}
+    volumes:
+      - ollama_data:/models
+      - ../../middleware/ollama-entrypoint.sh:/ollama-entrypoint.sh:ro
+    entrypoint: ["/bin/bash", "/ollama-entrypoint.sh"]
+    healthcheck:
+      test: ["CMD-SHELL", "ollama list || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+
+volumes:
+  ollama_data:

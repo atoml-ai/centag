@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Pi Sandbox — 验证台</title>
+  <style>
+    :root {
+      --bg: #0f1419;
+      --panel: #1a222c;
+      --text: #e6edf3;
+      --muted: #8b9cb3;
+      --accent: #3d8bfd;
+      --ok: #3fb950;
+      --err: #f85149;
+      --border: #30363d;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: ui-sans-serif, system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      margin: 0;
+      line-height: 1.5;
+      min-height: 100vh;
+    }
+    header {
+      padding: 1rem 1.25rem;
+      border-bottom: 1px solid var(--border);
+      background: var(--panel);
+    }
+    header h1 { font-size: 1.1rem; margin: 0 0 0.25rem; font-weight: 600; }
+    header p { margin: 0; color: var(--muted); font-size: 0.85rem; }
+    main { max-width: 960px; margin: 0 auto; padding: 1.25rem; }
+    section {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem;
+      margin-bottom: 1rem;
+    }
+    section h2 { font-size: 0.95rem; margin: 0 0 0.75rem; color: var(--muted); font-weight: 600; }
+    .row { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin-bottom: 0.5rem; }
+    label { color: var(--muted); font-size: 0.8rem; min-width: 5rem; }
+    input, textarea, button {
+      font: inherit;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--text);
+      padding: 0.45rem 0.65rem;
+    }
+    input, textarea { flex: 1; min-width: 12rem; }
+    textarea { width: 100%; min-height: 5rem; resize: vertical; }
+    button {
+      cursor: pointer;
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+      font-weight: 500;
+    }
+    button.secondary { background: transparent; color: var(--text); border-color: var(--border); }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    .pill { font-size: 0.75rem; padding: 0.2rem 0.5rem; border-radius: 999px; border: 1px solid var(--border); }
+    .pill.ok { border-color: var(--ok); color: var(--ok); }
+    .pill.err { border-color: var(--err); color: var(--err); }
+    #events {
+      font-family: ui-monospace, monospace;
+      font-size: 0.78rem;
+      max-height: 420px;
+      overflow: auto;
+      white-space: pre-wrap;
+      word-break: break-word;
+      background: var(--bg);
+      border-radius: 6px;
+      padding: 0.75rem;
+      border: 1px solid var(--border);
+    }
+    .line { margin-bottom: 0.35rem; border-left: 2px solid var(--border); padding-left: 0.5rem; }
+    .line .t { color: var(--muted); }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Pi Sandbox 验证台</h1>
+    <p>独立 HTTP 网关：健康检查、建会话、发 Prompt、轮询事件（仅用于联调与冒烟）。</p>
+  </header>
+  <main>
+    <section>
+      <h2>服务状态</h2>
+      <div class="row">
+        <span id="healthPill" class="pill">health: …</span>
+        <span id="statusPill" class="pill">status: …</span>
+        <button type="button" class="secondary" id="btnRefresh">刷新</button>
+      </div>
+    </section>
+    <section>
+      <h2>会话</h2>
+      <div class="row">
+        <label for="sid">Session ID</label>
+        <input id="sid" placeholder="留空则由服务端生成" autocomplete="off" />
+        <button type="button" id="btnCreate">创建会话</button>
+      </div>
+      <p id="sessionHint" style="color:var(--muted);font-size:0.8rem;margin:0.5rem 0 0;">创建后可在此 ID 上发 Prompt 并查看下方事件流。</p>
+    </section>
+    <section>
+      <h2>Prompt</h2>
+      <div class="row" style="align-items:flex-start;">
+        <label for="msg">消息</label>
+        <textarea id="msg" placeholder="例如：用一句话介绍你自己"></textarea>
+      </div>
+      <div class="row">
+        <button type="button" id="btnSend" disabled>发送 Prompt</button>
+        <span id="sendHint" style="color:var(--muted);font-size:0.8rem;"></span>
+      </div>
+    </section>
+    <section>
+      <h2>事件流（轮询 <code>/api/sessions/…/events</code>）</h2>
+      <div class="row">
+        <button type="button" class="secondary" id="btnClear">清空显示</button>
+        <span class="pill" id="pollPill">since=0</span>
+      </div>
+      <div id="events"></div>
+    </section>
+  </main>
+  <script>
+    const api = (path, opts) => fetch(path, Object.assign({ headers: { 'Accept': 'application/json' } }, opts));
+    let eventSince = 0;
+    let pollTimer = null;
+
+    const el = (id) => document.getElementById(id);
+
+    function setPill(node, ok, text) {
+      node.textContent = text;
+      node.classList.remove('ok', 'err');
+      node.classList.add(ok ? 'ok' : 'err');
+    }
+
+    async function refreshHealth() {
+      const h = el('healthPill');
+      try {
+        const r = await api('/api/health');
+        const j = await r.json();
+        setPill(h, r.ok && j.status === 'healthy', 'health: ' + (j.status || r.status));
+      } catch (e) {
+        setPill(h, false, 'health: 网络错误');
+      }
+    }
+
+    async function refreshStatus() {
+      const s = el('statusPill');
+      try {
+        const r = await api('/api/status');
+        const j = await r.json();
+        setPill(s, r.ok, 'sessions: ' + (j.sessions ?? '?') + ' · uptime: ' + (j.uptime ?? ''));
+      } catch (e) {
+        setPill(s, false, 'status: 错误');
+      }
+    }
+
+    function currentSessionId() {
+      return el('sid').value.trim();
+    }
+
+    function appendEventLine(seq, type, preview) {
+      const div = document.createElement('div');
+      div.className = 'line';
+      div.innerHTML = '<span class="t">#' + seq + ' · ' + type + '</span><br/>' + preview;
+      el('events').appendChild(div);
+      el('events').scrollTop = el('events').scrollHeight;
+    }
+
+    async function pollEvents() {
+      const sid = currentSessionId();
+      if (!sid) return;
+      try {
+        const r = await api('/api/sessions/' + encodeURIComponent(sid) + '/events?since=' + eventSince + '&limit=100');
+        const j = await r.json();
+        if (!r.ok) {
+          el('pollPill').textContent = 'poll: ' + (j.error || r.status);
+          return;
+        }
+        el('pollPill').textContent = 'since=' + eventSince + ' → next ' + (j.next_since ?? eventSince);
+        const list = j.events || [];
+        for (const e of list) {
+          let preview = '';
+          try {
+            const p = typeof e.payload === 'object' ? e.payload : JSON.parse(e.payload || '{}');
+            preview = JSON.stringify(p).slice(0, 2000);
+            if (JSON.stringify(p).length > 2000) preview += '…';
+          } catch (_) {
+            preview = String(e.payload);
+          }
+          appendEventLine(e.seq, e.type || '?', preview);
+        }
+        if (typeof j.next_since === 'number' && j.next_since > eventSince) {
+          eventSince = j.next_since;
+        }
+      } catch (e) {
+        el('pollPill').textContent = 'poll: 网络错误';
+      }
+    }
+
+    function startPoll() {
+      stopPoll();
+      pollTimer = setInterval(pollEvents, 1200);
+      pollEvents();
+    }
+
+    function stopPoll() {
+      if (pollTimer) clearInterval(pollTimer);
+      pollTimer = null;
+    }
+
+    el('btnRefresh').onclick = () => { refreshHealth(); refreshStatus(); };
+
+    el('btnCreate').onclick = async () => {
+      el('sendHint').textContent = '';
+      const body = { id: currentSessionId() || undefined, args: [] };
+      try {
+        const r = await api('/api/sessions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        const j = await r.json();
+        if (!r.ok) throw new Error(j.error || r.status);
+        el('sid').value = j.id;
+        eventSince = 0;
+        el('events').innerHTML = '';
+        el('btnSend').disabled = false;
+        el('sendHint').textContent = '已创建，轮询已启动。';
+        startPoll();
+        refreshStatus();
+      } catch (e) {
+        el('sendHint').textContent = '创建失败: ' + e.message;
+      }
+    };
+
+    el('btnSend').onclick = async () => {
+      const sid = currentSessionId();
+      const message = el('msg').value.trim();
+      if (!sid || !message) return;
+      el('sendHint').textContent = '发送中…';
+      try {
+        const r = await api('/api/prompt', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ session_id: sid, message }),
+        });
+        const j = await r.json();
+        if (!r.ok) throw new Error(j.error || r.status);
+        el('sendHint').textContent = j.message || '已发送';
+      } catch (e) {
+        el('sendHint').textContent = '失败: ' + e.message;
+      }
+    };
+
+    el('btnClear').onclick = () => { el('events').innerHTML = ''; };
+
+    el('sid').addEventListener('change', () => {
+      const sid = currentSessionId();
+      el('btnSend').disabled = !sid;
+      eventSince = 0;
+      if (sid) startPoll();
+      else stopPoll();
+    });
+
+    refreshHealth();
+    refreshStatus();
+    if (currentSessionId()) {
+      el('btnSend').disabled = false;
+      startPoll();
+    }
+  </script>
+</body>
+</html>

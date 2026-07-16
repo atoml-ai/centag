@@ -1,0 +1,311 @@
+<template>
+  <header class="app-header">
+    <div class="header-left">
+      <div class="logo" @click="$router.push('/')">
+        <CentagMark :size="24" color="var(--shell-accent)" />
+        <span class="logo-text">Centag</span>
+      </div>
+
+      <!-- 导航菜单 -->
+      <nav class="header-nav">
+        <template v-for="item in visibleNavItems" :key="item.id">
+          <!-- 有子菜单的下拉菜单 -->
+          <el-dropdown v-if="item.children" trigger="hover" @command="(cmd) => handleDropdownCommand(cmd, item)">
+            <div class="nav-item" :class="{ active: currentNav === item.id || isChildActive(item) }" @click="handleDropdownClick(item)">
+              <el-icon :size="16">
+                <component :is="item.icon" />
+              </el-icon>
+              <span>{{ item.label }}</span>
+              <el-icon :size="12" class="dropdown-arrow"><ArrowDown /></el-icon>
+            </div>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item
+                  v-for="child in visibleChildren(item)"
+                  :key="child.id"
+                  :command="child.id"
+                  :class="{ 'is-active': currentNav === child.id }"
+                >
+                  <el-icon><component :is="child.icon" /></el-icon>
+                  <span>{{ child.label }}</span>
+                </el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
+          <!-- 普通菜单项 -->
+          <div
+            v-else
+            class="nav-item"
+            :class="{ active: currentNav === item.id }"
+            @click="handleNavClick(item)"
+          >
+            <el-icon :size="16">
+              <component :is="item.icon" />
+            </el-icon>
+            <span>{{ item.label }}</span>
+          </div>
+        </template>
+      </nav>
+    </div>
+
+    <div class="header-right">
+      <el-button :loading="refreshing" @click="handleRefresh" circle>
+        <el-icon><Refresh /></el-icon>
+      </el-button>
+
+      <!-- 用户下拉菜单 -->
+      <el-dropdown trigger="click" @command="handleUserCommand">
+        <div class="user-avatar">
+          <el-avatar :size="32" :style="avatarStyle">
+            {{ avatarText }}
+          </el-avatar>
+          <span class="username">{{ authStore.displayName }}</span>
+          <el-icon :size="12" class="dropdown-arrow"><ArrowDown /></el-icon>
+        </div>
+        <template #dropdown>
+          <el-dropdown-menu>
+            <el-dropdown-item disabled>
+              <div class="user-info">
+                <div class="user-name">{{ authStore.displayName }}</div>
+                <el-tag :type="authStore.isAdmin ? 'danger' : 'info'" size="small">
+                  {{ authStore.isAdmin ? '管理员' : '普通用户' }}
+                </el-tag>
+              </div>
+            </el-dropdown-item>
+            <el-dropdown-item command="profile">
+              <el-icon><User /></el-icon>个人中心
+            </el-dropdown-item>
+            <el-dropdown-item divided command="logout">
+              <el-icon><SwitchButton /></el-icon>退出登录
+            </el-dropdown-item>
+          </el-dropdown-menu>
+        </template>
+      </el-dropdown>
+    </div>
+  </header>
+</template>
+
+<script setup lang="ts">
+import { ref, computed } from 'vue'
+import { useRouter } from 'vue-router'
+import { useAuthStore } from '@/stores/auth'
+import { useNavigation } from '@/composables/useNavigation'
+import type { NavItem } from '@/utils/nav'
+import { Refresh, ArrowDown, User, SwitchButton } from '@element-plus/icons-vue'
+import CentagMark from '@/components/icons/CentagMark.vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+
+const router = useRouter()
+const authStore = useAuthStore()
+const {
+  visibleNavItems,
+  currentNav,
+  isChildActive,
+  navigateTo,
+  navigateToChild,
+  bindRouteSync
+} = useNavigation()
+
+const refreshing = ref(false)
+
+bindRouteSync()
+
+function visibleChildren(item: NavItem) {
+  return item.children ?? []
+}
+
+function handleNavClick(item: NavItem) {
+  navigateTo(item)
+}
+
+function handleDropdownClick(item: NavItem) {
+  if (item.children && item.children.length > 0) {
+    const first = visibleChildren(item)[0]
+    if (first) navigateTo(first)
+  }
+}
+
+function handleDropdownCommand(command: string, parentItem: NavItem) {
+  navigateToChild(command, parentItem)
+}
+
+// ── Refresh ──────────────────────────────────────────────────────────────────
+
+const handleRefresh = () => {
+  refreshing.value = true
+  setTimeout(() => {
+    refreshing.value = false
+    ElMessage.success('已刷新')
+  }, 500)
+}
+
+// ── User menu ────────────────────────────────────────────────────────────────
+
+async function handleUserCommand(cmd: string) {
+  if (cmd === 'profile') {
+    router.push('/profile')
+  } else if (cmd === 'logout') {
+    try {
+      await ElMessageBox.confirm('确定要退出登录吗？', '退出登录', {
+        confirmButtonText: '退出',
+        cancelButtonText: '取消',
+        type: 'warning'
+      })
+      await authStore.logout()
+      router.push('/login')
+    } catch {
+      // user cancelled
+    }
+  }
+}
+
+// ── Avatar ───────────────────────────────────────────────────────────────────
+
+const avatarText = computed(() => {
+  const name = authStore.displayName
+  return name ? name.charAt(0).toUpperCase() : 'U'
+})
+
+const avatarStyle = computed(() => ({
+  background: authStore.isAdmin
+    ? 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)'
+    : 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
+  color: '#fff',
+  fontWeight: '600',
+  fontSize: '14px',
+  cursor: 'pointer'
+}))
+
+</script>
+
+<style scoped>
+.app-header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: var(--header-height);
+  background: var(--shell-header-bg);
+  border-bottom: 1px solid var(--shell-header-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 var(--spacing-xl);
+  z-index: 1000;
+  box-shadow: var(--shadow-sm);
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xl);
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  cursor: pointer;
+  padding: var(--spacing-sm) 0;
+}
+
+.logo-text {
+  font-size: 1.0625rem;
+  font-weight: 600;
+  color: var(--shell-header-text);
+  letter-spacing: -0.2px;
+  white-space: nowrap;
+}
+
+.header-nav {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  font-size: 0.8125rem;
+  color: var(--shell-sidebar-text);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+  white-space: nowrap;
+  font-weight: 400;
+  border-radius: var(--shell-nav-radius);
+  letter-spacing: 0.1px;
+}
+
+.nav-item:hover {
+  background: var(--shell-sidebar-hover);
+  color: var(--shell-sidebar-text);
+}
+
+.nav-item.active {
+  background: var(--shell-sidebar-active-bg);
+  color: var(--shell-sidebar-active-text);
+  font-weight: 500;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+}
+
+/* User avatar area */
+.user-avatar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+  transition: background 0.2s;
+}
+
+.user-avatar:hover {
+  background: var(--shell-sidebar-hover);
+}
+
+.username {
+  font-size: 0.8125rem;
+  color: var(--shell-sidebar-text);
+  max-width: 100px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dropdown-arrow {
+  color: var(--shell-sidebar-muted);
+}
+
+.user-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 4px 0;
+}
+
+.user-name {
+  font-weight: 500;
+  color: var(--el-text-color-primary);
+}
+
+@media (max-width: 1200px) {
+  .header-left { gap: var(--spacing-md); }
+  .nav-item { padding: 8px 12px; font-size: 0.8125rem; }
+}
+
+@media (max-width: 768px) {
+  .app-header { padding: 0 var(--spacing-md); }
+  .logo-text { display: none; }
+  .header-nav { gap: 2px; }
+  .nav-item span { display: none; }
+  .nav-item { padding: 8px; }
+  .username { display: none; }
+}
+</style>

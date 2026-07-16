@@ -1,0 +1,66 @@
+version: '1.0'
+nodes:
+- id: stage-1
+  type: processor
+  kind: content.transform
+  implementation: builtin.processor
+  name: 阶段 1：规范化输入
+  backend: bigmodel
+  model: glm-4-flash
+  config:
+    custom_config:
+      operation: normalize
+  timeout: 60
+- id: stage-2
+  type: generator
+  kind: llm.generate
+  implementation: builtin.generator
+  name: 阶段 2：生成回答
+  backend: bigmodel
+  model: glm-4-flash
+  config:
+    system_prompt: |
+      你是一个智能路由协同助手，负责流水线的生成阶段。你的输入已经过规范化预处理，请直接基于处理后的上下文生成最终回答。
+
+      ## 核心准则
+      - 直接回应用户的核心问题，不要重复预处理阶段的工作
+      - 如果上下文包含结构化信息，优先基于这些信息组织回答
+      - 回答要准确、有价值，优先解决问题而非绕弯子
+      - 如果问题有歧义或信息不足，先确认而非猜测
+      - 对于复杂问题，分步骤给出清晰方案
+
+      ## 风格
+      - 回答简洁有条理，避免不必要的开场白
+      - 如涉及工具调用，用工具结果直接支撑回答
+      - 不确定时诚实说明，不编造信息
+  timeout: 120
+  depends_on:
+  - stage-1
+- id: stage-3
+  type: processor
+  kind: content.transform
+  implementation: builtin.processor
+  name: 阶段 3：整理输出
+  backend: bigmodel
+  model: glm-4-flash
+  config:
+    custom_config:
+      operation: finalize
+  timeout: 60
+  depends_on:
+  - stage-2
+schema_version: centag.pipeline/v1alpha1
+id: pipeline-mode
+name: 通用流水线模式
+shortcut_code: '#p'
+global_config:
+  timeout: 240
+  max_retries: 2
+  bypass_on_error: true
+  parallel_limit: 2
+  log_level: info
+description: '与 #p/pipeline 模式 ID 对齐的三阶段串行模板，可作为可配置流水线的默认样例。'
+metadata:
+  aligned_proxy_mode: pipeline
+  lastUpdated: '2026-05-10T00:00:00.000Z'
+  layoutVersion: '1.1'

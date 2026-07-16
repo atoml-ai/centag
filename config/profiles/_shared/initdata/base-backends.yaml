@@ -1,0 +1,80 @@
+version: "2.0"
+description: Profile 共用后端模板 — 所有供应商预置但默认 disabled，各 Profile 按需覆盖启用
+backends:
+  # 此文件为模板，各 Profile 的 config/initdata/backends.yaml 应基于此覆盖所需后端
+  # 完整供应商列表请参见 config/initdata/initial-backends.yaml
+  - id: ollama-local
+    name: Ollama (本地)
+    type: ollama
+    base_url: http://localhost:21434
+    api_key: "${SHARED_API_KEY}"
+    enabled: false
+    timeout: 300
+    max_retries: 2
+    auto_fetch_models: true
+    description: 本地 Ollama 服务
+    supported_models:
+      - requested_model: llama3.1
+        actual_model: llama3.1
+        is_exact: true
+        compatibility_score: 1.0
+    capabilities:
+      max_context_tokens: 128000
+      features:
+        - chat
+        - completion
+      supports_tools: false
+    weight: 50
+    priority: 5
+
+  - id: openai
+    name: OpenAI
+    type: openai
+    base_url: https://api.openai.com/v1
+    api_key: "${OPENAI_API_KEY}"
+    enabled: false
+    timeout: 120
+    max_retries: 3
+    auto_fetch_models: true
+    description: OpenAI 官方 API
+    supported_models:
+      - requested_model: gpt-4o
+        actual_model: gpt-4o
+        is_exact: true
+        compatibility_score: 1.0
+      - requested_model: gpt-4o-mini
+        actual_model: gpt-4o-mini
+        is_exact: true
+        compatibility_score: 1.0
+    capabilities:
+      max_context_tokens: 128000
+      features:
+        - chat
+        - completion
+      supports_tools: true
+    weight: 100
+    priority: 10
+
+  - id: deepseek
+    name: DeepSeek
+    type: openai
+    base_url: https://api.deepseek.com
+    api_key: "${DEEPSEEK_API_KEY}"
+    enabled: false
+    timeout: 120
+    max_retries: 3
+    auto_fetch_models: true
+    description: DeepSeek 大模型 API
+    supported_models:
+      - requested_model: deepseek-v4-flash
+        actual_model: deepseek-v4-flash
+        is_exact: true
+        compatibility_score: 1.0
+    capabilities:
+      max_context_tokens: 64000
+      features:
+        - chat
+        - completion
+      supports_tools: true
+    weight: 90
+    priority: 10

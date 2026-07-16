@@ -1,0 +1,51 @@
+# Profile: cached — 应用层（modular：PG/Ollama 由 ./start.sh stack ensure 提供）
+
+name: centag-cached
+
+services:
+  centag:
+    build:
+      context: ../../../
+      dockerfile: deploy/docker/Dockerfile.dist
+      args:
+        DIST_NAME: gateway
+        INCLUDE_FRONTEND: "true"
+    image: centag:latest
+    container_name: centag-cached-app
+    restart: unless-stopped
+    env_file:
+      - ../../deploy/stack/.env
+      - ./.env
+      - ../../secrets/.env
+    environment:
+      INITDATA_PATH: /app/initdata-profile
+      LLM_PROXY_DB_DRIVER: postgresql
+      POSTGRES_ENABLED: "true"
+      POSTGRES_HOST: centag-postgresql
+      PG_HOST: centag-postgresql
+      REDIS_ENABLED: "false"
+      VECTOR_ENABLED: "false"
+      OLLAMA_HOST: ${OLLAMA_HOST:-http://centag-ollama:11434}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://centag-ollama:11434}
+    ports:
+      - "${LLM_PROXY_SERVER_PORT:-20060}:20060"
+    volumes:
+      - centag_cached_storage:/app/storage
+      - centag_cached_logs:/app/logs
+      - ./initdata:/app/initdata-profile:ro
+    networks:
+      - centag-cached
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:20060/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+volumes:
+  centag_cached_storage:
+  centag_cached_logs:
+
+networks:
+  centag-cached:
+    driver: bridge

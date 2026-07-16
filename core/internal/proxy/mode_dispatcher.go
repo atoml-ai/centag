@@ -1,0 +1,1588 @@
+package proxy
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"strings"
+	"time"
+
+	"centag/core/internal/auth"
+	"centag/core/pkg/metrics"
+	"centag/core/pkg/pipeline"
+	"centag/core/pkg/plugin"
+	"centag/core/pkg/protocol/thinksplit"
+	"centag/core/pkg/proxymode"
+
+	"github.com/gin-gonic/gin"
+)
+
+// ModeDispatcher 统一模式分发器
+// 将所有代理模式请求按用户配置的流水线动态路由到流水线引擎（无内置流水线特例）。
+type ModeDispatcher struct {
+	pipelineEngine    PipelineEngineInterface
+	registry          *pipeline.PipelineRegistry
+	store             pipeline.PipelineStore
+	resolver          *PipelineResolver
+	pluginManager     ProtocolPluginGetter
+	streamFakeHandler *StreamFakeHandler
+	logger            Logger
+}
+
+// ProtocolPluginGetter 协议插件获取接口（避免循环依赖）
+type ProtocolPluginGetter interface {
+	GetProtocol(name string) (plugin.ProtocolPlugin, error)
+}
+
+// Logger 日志接口
+type Logger interface {
+	Info(msg string, fields ...interface{})
+	Warn(msg string, fields ...interface{})
+	Error(msg string, fields ...interface{})
+	Debug(msg string, fields ...interface{})
+}
+
+// NewModeDispatcher 创建模式分发器
+func NewModeDispatcher(
+	engine PipelineEngineInterface,
+	registry *pipeline.PipelineRegistry,
+	logger Logger,
+) *ModeDispatcher {
+	if logger == nil {
+		logger = &defaultLogger{}
+	}
+	d := &ModeDispatcher{
+		pipelineEngine: engine,
+		registry:       registry,
+		logger:         logger,
+	}
+	d.refreshResolver()
+	return d
+}
+
+// SetPluginManager 注入协议插件管理器（用于流式响应格式化）
+func (d *ModeDispatcher) SetPluginManager(mgr ProtocolPluginGetter) {
+	d.pluginManager = mgr
+}
+
+func (d *ModeDispatcher) SetStreamFakeConfig(cfg StreamFakeConfig) {
+	d.streamFakeHandler = NewStreamFakeHandler(cfg)
+}
+
+func (d *ModeDispatcher) refreshResolver() {
+	if d == nil {
+		return
+	}
+	d.resolver = NewPipelineResolver(d.pipelineEngine, d.registry, d.store)
+}
+
+// SetRegistry 注入流水线注册表（策略管理列表同源）。
+func (d *ModeDispatcher) SetRegistry(registry *pipeline.PipelineRegistry) {
+	d.registry = registry
+	d.refreshResolver()
+}
+
+// defaultLogger 默认日志实现
+type defaultLogger struct{}
+
+func (l *defaultLogger) Info(msg string, fields ...interface{})  {}
+func (l *defaultLogger) Warn(msg string, fields ...interface{})  {}
+func (l *defaultLogger) Error(msg string, fields ...interface{}) {}
+func (l *defaultLogger) Debug(msg string, fields ...interface{}) {}
+
+// Dispatch 分发请求到对应的流水线
+func (d *ModeDispatcher) Dispatch(
+	c *gin.Context,
+	mode ProxyMode,
+	req *plugin.ProxyRequest,
+) error {
+	pipelineID := d.resolvePipelineID(c, mode)
+	if pipelineID == "" {
+		return fmt.Errorf("no pipeline configured for mode: %s", mode)
+	}
+	c.Header("X-Pipeline-ID", pipelineID)
+
+	d.logger.Info("dispatching request to pipeline",
+		"mode", mode,
+		"pipeline_id", pipelineID,
+	)
+
+	// 2. 检查流水线是否存在，如果不存在则尝试从内置模板创建
+	if !d.pipelineEngine.HasPipeline(pipelineID) {
+		// 尝试从内置模板注册
+		if err := d.registerBuiltinPipeline(pipelineID); err != nil {
+			return fmt.Errorf("pipeline not found: %s (%w)", pipelineID, err)
+		}
+		d.logger.Info("auto-registered builtin pipeline",
+			"pipeline_id", pipelineID,
+		)
+	}
+
+	// 3. 构建流水线输入
+	input := d.buildPipelineInput(c, req, mode)
+
+	// 4. 执行流水线 (stream_fake: 非流式请求走流式管道再聚合)
+	var err error
+	var output *pipeline.PipelineOutput
+	if h := d.streamFakeHandler; h != nil && h.IsEnabled() && !input.Stream {
+		d.logger.Info("stream fake enabled, executing as stream pipeline",
+			"mode", mode,
+			"pipeline_id", pipelineID,
+		)
+		output, err = d.executeStreamToOutput(c.Request.Context(), pipelineID, input, h.config.MaxBytes)
+	} else {
+		output, err = d.pipelineEngine.Execute(c.Request.Context(), pipelineID, input)
+	}
+	if err != nil {
+		d.logger.Error("pipeline execution failed",
+			"mode", mode,
+			"pipeline_id", pipelineID,
+			"error", err,
+		)
+		return fmt.Errorf("pipeline execution failed: %w", err)
+	}
+
+	// 应用 ThinkSplit: 从 content 中分离 <think>...</think> 推理内容
+	if output != nil {
+		visible, reasoning := thinksplit.Split(output.Content)
+		output.Content = visible
+		if reasoning != "" {
+			output.ReasoningContent = reasoning
+		}
+	}
+
+	maybeRecordTokenUsage(c, output, req.Model)
+	maybeRecordRouteBackendMetrics(output)
+	maybeRecordCacheSaving(c, output, req.Model)
+
+	// 5. 构建并返回响应
+	return d.writeResponse(c, output, mode, pipelineID)
+}
+
+// executeStreamToOutput 执行流式管道并聚合为 PipelineOutput (stream_fake)
+func (d *ModeDispatcher) executeStreamToOutput(
+	ctx context.Context,
+	pipelineID string,
+	input *pipeline.PipelineInput,
+	maxBytes int64,
+) (*pipeline.PipelineOutput, error) {
+	input.Stream = true
+	resultCh, err := d.pipelineEngine.ExecuteStream(ctx, pipelineID, input)
+	if err != nil {
+		return nil, err
+	}
+
+	aggregator := NewStreamFakeAggregator(maxBytes)
+	var finalOutput *pipeline.PipelineOutput
+
+	for result := range resultCh {
+		if result.Chunk != nil {
+			if result.Chunk.Error != nil {
+				return nil, fmt.Errorf("stream fake chunk error: %w", result.Chunk.Error)
+			}
+			if err := aggregator.Feed(*result.Chunk); err != nil {
+				return nil, err
+			}
+		}
+		if result.Output != nil {
+			finalOutput = result.Output
+		}
+	}
+
+	aggResult := aggregator.Result()
+	if finalOutput == nil {
+		finalOutput = &pipeline.PipelineOutput{}
+	}
+	finalOutput.Content = aggResult.Content
+	finalOutput.ReasoningContent = aggResult.ReasoningContent
+	finalOutput.FinishReason = aggResult.FinishReason
+	if len(aggResult.ToolCalls) > 0 {
+		finalOutput.ToolCalls = pluginToolCallsToPipeline(aggResult.ToolCalls)
+	}
+
+	return finalOutput, nil
+}
+
+// pluginToolCallsToPipeline 将 plugin.ToolCall 切片转为 pipeline.ToolCall 切片
+func pluginToolCallsToPipeline(tcs []plugin.ToolCall) []pipeline.ToolCall {
+	if len(tcs) == 0 {
+		return nil
+	}
+	result := make([]pipeline.ToolCall, len(tcs))
+	for i, tc := range tcs {
+		result[i] = pipeline.ToolCall{
+			ID:   tc.ID,
+			Type: tc.Type,
+			Function: pipeline.FunctionCall{
+				Name:      tc.Function.Name,
+				Arguments: tc.Function.Arguments,
+			},
+		}
+	}
+	return result
+}
+
+// SetStore 注入 PipelineStore 以支持动态快捷码解析
+func (d *ModeDispatcher) SetStore(store pipeline.PipelineStore) {
+	d.store = store
+	d.refreshResolver()
+}
+
+func (d *ModeDispatcher) resolvePipelineID(c *gin.Context, mode ProxyMode) string {
+	if d.resolver == nil {
+		d.refreshResolver()
+	}
+	headerPID := ""
+	if c != nil {
+		headerPID = c.GetHeader("X-Pipeline-ID")
+	}
+	return d.resolver.Resolve(mode, headerPID)
+}
+
+// registerBuiltinPipeline 从内置模板注册流水线
+func (d *ModeDispatcher) registerBuiltinPipeline(pipelineID string) error {
+	return fmt.Errorf("pipeline %s not found in registry; create it via API or initdata before use", pipelineID)
+}
+
+// IsPipelineMode 检查模式是否可解析到已注册的流水线。
+func (d *ModeDispatcher) IsPipelineMode(mode ProxyMode) bool {
+	return d.resolvePipelineID(nil, mode) != ""
+}
+
+// buildPipelineInput 构建流水线输入
+func (d *ModeDispatcher) buildPipelineInput(
+	c *gin.Context,
+	req *plugin.ProxyRequest,
+	mode ProxyMode,
+) *pipeline.PipelineInput {
+	// 提取请求头中的动态配置
+	headers := extractHeaders(c)
+
+	// 提取查询参数
+	queryParams := extractQueryParams(c)
+
+	// 构建元数据
+	metadata := d.buildMetadata(c, mode, headers, queryParams)
+	attachTransparentRequestMetadata(c, metadata, req.RawBody)
+
+	// 转换消息格式（透传 tool_calls 和 tool_call_id，避免后端报错）
+	messages := make([]pipeline.Message, len(req.Messages))
+	for i, msg := range req.Messages {
+		m := pipeline.Message{
+			Role:             msg.Role,
+			Content:          msg.Content,
+			ToolCallID:       msg.ToolCallID,
+			ReasoningContent: msg.ReasoningContent,
+		}
+		if len(msg.ToolCalls) > 0 {
+			m.ToolCalls = make([]pipeline.ToolCall, len(msg.ToolCalls))
+			for j, tc := range msg.ToolCalls {
+				m.ToolCalls[j] = pipeline.ToolCall{
+					ID:   tc.ID,
+					Type: tc.Type,
+					Function: pipeline.FunctionCall{
+						Name:      tc.Function.Name,
+						Arguments: tc.Function.Arguments,
+					},
+				}
+			}
+		}
+		messages[i] = m
+	}
+
+	// 使用最后一条用户消息作为当前问题（多轮对话时不能用首条）
+	content := extractQuestionFromMessages(req.Messages)
+
+	input := &pipeline.PipelineInput{
+		Content:   content,
+		Messages:  messages,
+		Stream:    req.Stream,
+		Metadata:  metadata,
+		UserID:    extractUserID(c),
+		SessionID: c.GetHeader("X-Request-ID"),
+	}
+
+	// 透传 tools 和 tool_choice（支持 function calling）
+	if rawBody, ok := req.RawBody.(map[string]interface{}); ok && rawBody != nil {
+		if tools, ok := rawBody["tools"]; ok {
+			input.Tools = tools
+		}
+		if tc, ok := rawBody["tool_choice"]; ok {
+			input.ToolChoice = tc
+		}
+		// 从 centag 扩展字段提取 scene（body > header 优先级覆盖）
+		if centag, ok := rawBody["centag"].(map[string]interface{}); ok {
+			if scene, ok := centag["scene"].(string); ok && strings.TrimSpace(scene) != "" {
+				input.Metadata["scene"] = scene
+			}
+		}
+	}
+
+	return input
+}
+
+// buildMetadata 构建元数据
+func (d *ModeDispatcher) buildMetadata(
+	c *gin.Context,
+	mode ProxyMode,
+	headers map[string]string,
+	queryParams map[string]string,
+) map[string]interface{} {
+	// 获取虚拟模型名（用于区分流水线模式和直接请求）
+	virtualModel := proxymode.GetPipelineModel(proxymode.ExecutionMode(mode))
+
+	metadata := map[string]interface{}{
+		"mode":          mode,
+		"request_id":    c.GetHeader("X-Request-ID"),
+		"client_ip":     c.ClientIP(),
+		"user_agent":    c.Request.UserAgent(),
+		"timestamp":     time.Now().Format(time.RFC3339),
+		"virtual_model": virtualModel, // 虚拟模型名，用于日志和追踪
+	}
+
+	// 从请求头提取配置
+	if backendID := headers["X-Backend-ID"]; backendID != "" {
+		metadata["backend_id"] = backendID
+	}
+	if executorBackend := headers["X-Executor-Backend-ID"]; executorBackend != "" {
+		metadata["executor_backend"] = executorBackend
+	}
+	if executorModel := headers["X-Executor-Model"]; executorModel != "" {
+		metadata["executor_model"] = executorModel
+	}
+	if auditorBackend := headers["X-Auditor-Backend-ID"]; auditorBackend != "" {
+		metadata["auditor_backend"] = auditorBackend
+	}
+	if auditorModel := headers["X-Auditor-Model"]; auditorModel != "" {
+		metadata["auditor_model"] = auditorModel
+	}
+	if optimizerBackend := headers["X-Optimizer-Backend-ID"]; optimizerBackend != "" {
+		metadata["optimizer_backend"] = optimizerBackend
+	}
+	if optimizerModel := headers["X-Optimizer-Model"]; optimizerModel != "" {
+		metadata["optimizer_model"] = optimizerModel
+	}
+	if targetURL := requestHeaderValue(c, headers, "X-Target-URL"); targetURL != "" {
+		metadata["target_url"] = targetURL
+	}
+	if geoRegion := requestHeaderValue(c, headers, "X-Geo-Region"); geoRegion != "" {
+		metadata["geo_region"] = geoRegion
+	}
+	if originalHost := requestHeaderValue(c, headers, "X-Original-Host"); originalHost != "" {
+		metadata["original_host"] = originalHost
+	}
+	if originalPath := requestHeaderValue(c, headers, "X-Original-Path"); originalPath != "" {
+		metadata["original_path"] = originalPath
+	}
+	if proxyType := headers["X-Proxy-Type"]; proxyType != "" {
+		metadata["proxy_type"] = proxyType
+	}
+	if pipelineID := headers["X-Pipeline-ID"]; pipelineID != "" {
+		metadata["pipeline_id"] = pipelineID
+	}
+
+	// Per-request cache switches (X-Cache-Read/Write); consumed by CacheNode via ExecutionContext.
+	if c != nil && c.Request != nil {
+		cc := DetectCacheControl(c.Request)
+		metadata["cache_read"] = cc.Read
+		metadata["cache_write"] = cc.Write
+		metadata["cache_qa_split"] = cc.QASplit
+	}
+
+	if uid := extractUserID(c); uid != "" {
+		metadata["user_id"] = uid
+	}
+	if dept := strings.TrimSpace(headers["X-Dept-Tag"]); dept != "" {
+		metadata["dept_tag"] = dept
+	}
+	if tenantID, ok := c.Get("tenant_id"); ok {
+		if tid := fmt.Sprintf("%v", tenantID); strings.TrimSpace(tid) != "" {
+			metadata["tenant_id"] = tid
+		}
+	}
+	if at, ok := c.Get("agent_type"); ok {
+		if agentType := fmt.Sprintf("%v", at); strings.TrimSpace(agentType) != "" {
+			metadata["agent_type"] = agentType
+		}
+	}
+
+	// 从请求头提取 scene（教育等场景路由参数）
+	if scene := requestHeaderValue(c, headers, "X-Scene"); scene != "" {
+		metadata["scene"] = scene
+	}
+
+	// 从查询参数提取配置
+	for k, v := range queryParams {
+		if strings.EqualFold(strings.TrimSpace(k), "scene") && strings.TrimSpace(v) != "" && metadata["scene"] == nil {
+			metadata["scene"] = v
+		}
+		metadata["param_"+k] = v
+	}
+
+	return metadata
+}
+
+// writeResponse 写入响应
+func (d *ModeDispatcher) writeResponse(
+	c *gin.Context,
+	output *pipeline.PipelineOutput,
+	mode ProxyMode,
+	pipelineID string,
+) error {
+	// 设置响应头
+	c.Header("X-Proxy-Mode", string(mode))
+	c.Header("X-Pipeline-Executed", "true")
+
+	if output.ExecutionLog != nil {
+		c.Header("X-Pipeline-Duration-Ms", fmt.Sprintf("%d", output.ExecutionLog.Duration))
+		c.Header("X-Pipeline-Success", fmt.Sprintf("%v", output.ExecutionLog.Success))
+	}
+
+	setPipelineExecutionHeaders(c, output, pipelineID)
+	setPipelineOutputHeaders(c, output)
+
+	if shouldPassthroughTransparentResponse(mode, output) {
+		statusCode := http.StatusOK
+		contentType := "application/json"
+		if output.Metadata != nil {
+			if sc, ok := output.Metadata["status_code"].(int); ok && sc > 0 {
+				statusCode = sc
+			} else if scf, ok := output.Metadata["status_code"].(float64); ok && scf > 0 {
+				statusCode = int(scf)
+			}
+			if ct, ok := output.Metadata["content_type"].(string); ok && ct != "" {
+				contentType = ct
+			}
+		}
+		c.Data(statusCode, contentType, []byte(output.Content))
+		return nil
+	}
+
+	// 构建响应
+	resp := &plugin.ProxyResponse{
+		Content:    output.Content,
+		TokensUsed: 0,
+	}
+
+	if output.ExecutionLog != nil {
+		resp.TokensUsed = output.ExecutionLog.TotalTokens
+	}
+
+	requestID := c.GetHeader("X-Request-ID")
+	backendID := extractBackendFromPipelineOutput(output)
+	logRequestResponse(requestID, "", backendID, http.StatusOK, resp.Content)
+
+	// 构建 message：有 tool_calls 时输出 tool_calls（function calling），否则输出 content
+	message := gin.H{
+		"role": "assistant",
+	}
+	// 透传 reasoning_content（DeepSeek thinking 模式要求多轮回传）
+	if output.ReasoningContent != "" {
+		message["reasoning_content"] = output.ReasoningContent
+	}
+	if len(output.ToolCalls) > 0 {
+		toolCalls := make([]gin.H, 0, len(output.ToolCalls))
+		for _, tc := range output.ToolCalls {
+			toolCalls = append(toolCalls, gin.H{
+				"id":   tc.ID,
+				"type": tc.Type,
+				"function": gin.H{
+					"name":      tc.Function.Name,
+					"arguments": tc.Function.Arguments,
+				},
+			})
+		}
+		message["tool_calls"] = toolCalls
+		// tool_calls 场景下 content 可能为空，OpenAI 规范允许 content 为 null
+		if resp.Content != "" {
+			message["content"] = resp.Content
+		} else {
+			message["content"] = nil
+		}
+	} else {
+		message["content"] = resp.Content
+	}
+
+	// finish_reason：优先使用 LLM 返回的实际原因，回退到 stop
+	finishReason := output.FinishReason
+	if finishReason == "" {
+		finishReason = "stop"
+	}
+
+	// 返回 JSON 响应
+	c.JSON(http.StatusOK, gin.H{
+		"id":      fmt.Sprintf("chatcmpl-%d", time.Now().Unix()),
+		"object":  "chat.completion",
+		"created": time.Now().Unix(),
+		"model":   "pipeline-mode",
+		"choices": []gin.H{
+			{
+				"index":         0,
+				"message":       message,
+				"finish_reason": finishReason,
+			},
+		},
+		"usage": gin.H{
+			"prompt_tokens":     output.ExecutionLog.TotalTokens / 2,
+			"completion_tokens": output.ExecutionLog.TotalTokens / 2,
+			"total_tokens":      output.ExecutionLog.TotalTokens,
+		},
+	})
+
+	return nil
+}
+
+// Helper functions
+
+// requestHeaderValue reads a request header case-insensitively (Go canonicalizes MIME keys).
+func requestHeaderValue(c *gin.Context, headers map[string]string, name string) string {
+	if c != nil {
+		if v := strings.TrimSpace(c.GetHeader(name)); v != "" {
+			return v
+		}
+	}
+	for k, v := range headers {
+		if strings.EqualFold(k, name) && strings.TrimSpace(v) != "" {
+			return strings.TrimSpace(v)
+		}
+	}
+	return ""
+}
+
+func extractHeaders(c *gin.Context) map[string]string {
+	headers := make(map[string]string)
+	for k, v := range c.Request.Header {
+		if len(v) > 0 {
+			headers[k] = v[0]
+		}
+	}
+	return headers
+}
+
+func attachTransparentRequestMetadata(c *gin.Context, metadata map[string]interface{}, rawBody any) {
+	if c == nil || c.Request == nil || metadata == nil {
+		return
+	}
+	metadata["request_path"] = c.Request.URL.Path
+	metadata["request_method"] = c.Request.Method
+	if auth := strings.TrimSpace(c.GetHeader("Authorization")); auth != "" {
+		metadata["forward_authorization"] = auth
+	}
+
+	bodyBytes := rawRequestBodyFromContext(c)
+	if len(bodyBytes) == 0 && c.Request.Body != nil {
+		var err error
+		bodyBytes, err = io.ReadAll(c.Request.Body)
+		if err == nil && len(bodyBytes) > 0 {
+			c.Request.Body = io.NopCloser(strings.NewReader(string(bodyBytes)))
+			c.Set(contextKeyRawRequestBody, bodyBytes)
+		}
+	}
+	if len(bodyBytes) == 0 {
+		if serialized := rawBodyJSONFromProxyRequest(rawBody); serialized != "" {
+			metadata["raw_request_body"] = serialized
+		}
+		return
+	}
+	metadata["raw_request_body"] = string(bodyBytes)
+}
+
+func shouldPassthroughTransparentResponse(mode ProxyMode, output *pipeline.PipelineOutput) bool {
+	if output == nil || strings.TrimSpace(output.Content) == "" {
+		return false
+	}
+	if mode == ModeTransparentProxy {
+		return true
+	}
+	if output.Metadata != nil {
+		if v, ok := output.Metadata["raw_passthrough"].(bool); ok && v {
+			return true
+		}
+	}
+	return false
+}
+
+func extractQueryParams(c *gin.Context) map[string]string {
+	params := make(map[string]string)
+	for k, v := range c.Request.URL.Query() {
+		if len(v) > 0 {
+			params[k] = v[0]
+		}
+	}
+	return params
+}
+
+func extractUserID(c *gin.Context) string {
+	if id, err := auth.GetUserID(c); err == nil && id != 0 {
+		return fmt.Sprintf("%d", id)
+	}
+	return ""
+}
+
+// GetModeMappings 获取所有模式映射
+func GetModeMappings() []ModeToPipelineMapping {
+	return defaultModeMappings
+}
+
+// GetModeMapping 获取指定模式的映射
+func GetModeMapping(mode ProxyMode) *ModeToPipelineMapping {
+	for _, mapping := range defaultModeMappings {
+		if mapping.Mode == mode {
+			return &mapping
+		}
+	}
+	return nil
+}
+
+// EnableMode 启用指定模式
+func EnableMode(mode ProxyMode) {
+	for i := range defaultModeMappings {
+		if defaultModeMappings[i].Mode == mode {
+			defaultModeMappings[i].Enabled = true
+			break
+		}
+	}
+}
+
+// DisableMode 禁用指定模式
+func DisableMode(mode ProxyMode) {
+	for i := range defaultModeMappings {
+		if defaultModeMappings[i].Mode == mode {
+			defaultModeMappings[i].Enabled = false
+			break
+		}
+	}
+}
+
+// SetModePipeline 设置模式的流水线ID
+func SetModePipeline(mode ProxyMode, pipelineID string) {
+	for i := range defaultModeMappings {
+		if defaultModeMappings[i].Mode == mode {
+			defaultModeMappings[i].PipelineID = pipelineID
+			break
+		}
+	}
+}
+
+// DispatchStream 流式分发请求到流水线，返回 SSE 流式响应
+func (d *ModeDispatcher) DispatchStream(
+	c *gin.Context,
+	mode ProxyMode,
+	req *plugin.ProxyRequest,
+) error {
+	pipelineID := d.resolvePipelineID(c, mode)
+	if pipelineID == "" {
+		return fmt.Errorf("no pipeline configured for mode: %s", mode)
+	}
+	c.Header("X-Pipeline-ID", pipelineID)
+
+	d.logger.Info("dispatching stream request to pipeline",
+		"mode", mode,
+		"pipeline_id", pipelineID,
+	)
+
+	if !d.pipelineEngine.HasPipeline(pipelineID) {
+		return fmt.Errorf("pipeline not found: %s", pipelineID)
+	}
+
+	input := d.buildPipelineInput(c, req, mode)
+
+	// 执行流式流水线
+	resultCh, err := d.pipelineEngine.ExecuteStream(c.Request.Context(), pipelineID, input)
+	if err != nil {
+		return fmt.Errorf("pipeline stream execution failed: %w", err)
+	}
+
+	// 写入 SSE 流式响应
+	return d.writeStreamResponse(c, resultCh, mode, req.Model)
+}
+
+// shouldSkipPipelineStreamChunk 判断是否跳过流水线流式 chunk。
+// 仅跳过无正文且无 tool_calls 的 done 标记；带内容或 tool_calls 的 done chunk 仍需下发给客户端。
+func shouldSkipPipelineStreamChunk(chunk *plugin.StreamChunk) bool {
+	if chunk == nil {
+		return true
+	}
+	return chunk.Done && strings.TrimSpace(chunk.Content) == "" && len(chunk.ToolCalls) == 0
+}
+
+// writeStreamResponse 写入 SSE 流式响应
+func (d *ModeDispatcher) writeStreamResponse(
+	c *gin.Context,
+	resultCh <-chan pipeline.PipelineStreamResult,
+	mode ProxyMode,
+	model string,
+) error {
+	// 设置 SSE 响应头
+	c.Header("Content-Type", "text/event-stream")
+	c.Header("Cache-Control", "no-cache")
+	c.Header("Connection", "keep-alive")
+	c.Header("X-Accel-Buffering", "no")
+	c.Header("X-Proxy-Mode", string(mode))
+	c.Header("X-Pipeline-Executed", "true")
+	if pipelineID := c.GetHeader("X-Pipeline-ID"); pipelineID != "" {
+		c.Header("X-Pipeline-ID", pipelineID)
+	}
+
+	// 确保写入 flush 接口
+	flusher, ok := c.Writer.(http.Flusher)
+	if !ok {
+		return fmt.Errorf("streaming not supported: response writer does not support flushing")
+	}
+
+	// 获取协议格式化器（从上下文检测协议类型）
+	formatter := d.getStreamFormatter(c)
+
+	responseID := fmt.Sprintf("chatcmpl-%d", time.Now().UnixNano())
+	created := time.Now().Unix()
+	chunkIndex := 0
+	var finalOutput *pipeline.PipelineOutput
+	var responseContent strings.Builder
+
+	splitter := thinksplit.NewStreamSplitter()
+
+	// 逐块消费流式结果
+	for result := range resultCh {
+		if result.Chunk != nil {
+			if result.Chunk.Error != nil {
+				// 错误返回
+				errorJSON := fmt.Sprintf(`data: {"error":{"message":"%s","type":"pipeline_error"}}`+"\n\n", result.Chunk.Error.Error())
+				fmt.Fprint(c.Writer, errorJSON)
+				flusher.Flush()
+				return result.Chunk.Error
+			}
+
+			// 应用 ThinkSplit 流式分离
+			if result.Chunk.Content != "" {
+				visibleDelta, reasoningDelta := splitter.Feed(result.Chunk.Content)
+				result.Chunk.Content = visibleDelta
+				if reasoningDelta != "" {
+					if result.Chunk.ReasoningContent != "" {
+						result.Chunk.ReasoningContent += reasoningDelta
+					} else {
+						result.Chunk.ReasoningContent = reasoningDelta
+					}
+				}
+			}
+
+			// 跳过无内容的 done 标记；保留带正文的 done chunk（单块响应或 StreamAdapter 末块）
+			if shouldSkipPipelineStreamChunk(result.Chunk) {
+				continue
+			}
+
+			if result.Chunk.Content != "" {
+				responseContent.WriteString(result.Chunk.Content)
+			}
+
+			// 使用协议格式化器生成 SSE 数据
+			dataLine := formatter.FormatChunk(model, result.Chunk, chunkIndex, responseID, created)
+			if dataLine != "" {
+				fmt.Fprint(c.Writer, dataLine)
+				flusher.Flush()
+				chunkIndex++
+			}
+		}
+
+		if result.Output != nil {
+			finalOutput = result.Output
+		}
+	}
+
+	// 刷新 StreamSplitter 剩余内容
+	if flushVisible, flushReasoning := splitter.Flush(); flushVisible != "" || flushReasoning != "" {
+		flushChunk := &plugin.StreamChunk{
+			Content:          flushVisible,
+			ReasoningContent: flushReasoning,
+		}
+		dataLine := formatter.FormatChunk(model, flushChunk, chunkIndex, responseID, created)
+		if dataLine != "" {
+			fmt.Fprint(c.Writer, dataLine)
+			flusher.Flush()
+			chunkIndex++
+		}
+		if flushVisible != "" {
+			responseContent.WriteString(flushVisible)
+		}
+	}
+
+	// 兜底：流式 chunk 全部被跳过但流水线有完整输出时，补发一条正文
+	if responseContent.Len() == 0 && finalOutput != nil && strings.TrimSpace(finalOutput.Content) != "" {
+		fallbackChunk := &plugin.StreamChunk{
+			Content: finalOutput.Content,
+			Done:    true,
+		}
+		dataLine := formatter.FormatChunk(model, fallbackChunk, 0, responseID, created)
+		if dataLine != "" {
+			fmt.Fprint(c.Writer, dataLine)
+			flusher.Flush()
+		}
+		responseContent.WriteString(finalOutput.Content)
+	}
+
+	// 发送 usage 信息和结束标记
+	usage := formatter.BuildUsage(finalOutput)
+	// 从 finalOutput 提取实际 finish_reason，避免 FormatDone 硬编码 stop
+	actualFinishReason := ""
+	if finalOutput != nil {
+		actualFinishReason = finalOutput.FinishReason
+	}
+	doneLine := formatter.FormatDone(model, usage, actualFinishReason)
+	if doneLine != "" {
+		fmt.Fprint(c.Writer, doneLine)
+	}
+
+	// 注入 ProxyClaw 流水线执行元数据事件（TUI 等客户端可解析此事件获取完整执行信息）
+	// 必须在 [DONE] 之前注入，因为 TUI SSE scanner 在遇到 [DONE] 时会 break
+	if finalOutput != nil {
+		meta := buildStreamProxyClawMeta(finalOutput, c.GetHeader("X-Pipeline-ID"), mode)
+		if d.logger != nil {
+			d.logger.Debug("writeStreamResponse: injecting SSE proxy_claw_meta event",
+				"pipeline_id", meta["pipeline_id"],
+				"has_node_results", meta["node_results"] != nil,
+				"duration_ms", meta["duration_ms"],
+				"executor_model", meta["executor_model"],
+				"last_node", meta["last_node"],
+			)
+		}
+		if metaJSON, err := json.Marshal(meta); err == nil {
+			fmt.Fprintf(c.Writer, "data: %s\n\n", metaJSON)
+			flusher.Flush()
+		}
+	}
+
+	// [DONE] 必须是最后一个 SSE 事件，客户端遇到此标记后停止读取
+	if shouldEmitOpenAIDone(c) {
+		fmt.Fprint(c.Writer, "data: [DONE]\n\n")
+	}
+	flusher.Flush()
+
+	// 流结束后补设输出级响应头（WebUI 等在 fetch 完成后读 header 可见）
+	if finalOutput != nil {
+		setPipelineExecutionHeaders(c, finalOutput, c.GetHeader("X-Pipeline-ID"))
+		setPipelineOutputHeaders(c, finalOutput)
+	}
+
+	requestID := c.GetHeader("X-Request-ID")
+	responseText := responseContent.String()
+	if finalOutput != nil && responseText == "" {
+		responseText = finalOutput.Content
+	}
+	backendID := extractBackendFromPipelineOutput(finalOutput)
+	logRequestResponse(requestID, model, backendID, http.StatusOK, responseText)
+
+	maybeRecordTokenUsage(c, finalOutput, model)
+	maybeRecordRouteBackendMetrics(finalOutput)
+	maybeRecordCacheSaving(c, finalOutput, model)
+
+	return nil
+}
+
+// nodeResultSummary 单个流水线节点的执行摘要。
+type nodeResultSummary struct {
+	NodeID    string `json:"node_id"`
+	NodeType  string `json:"type"`
+	Model     string `json:"model,omitempty"`
+	Success   bool   `json:"success"`
+	DurationMs int64 `json:"duration_ms"`
+	Tokens    int   `json:"tokens,omitempty"`
+}
+
+// buildNodeResultsSummary 从 PipelineOutput 构建节点执行摘要列表。
+// 优先使用 ExecutionLog.NodeLogs（含精确的节点级耗时/token），
+// 回退到 NodeOutputs（仅含输出数据元信息）。
+func buildNodeResultsSummary(output *pipeline.PipelineOutput) []nodeResultSummary {
+	if output == nil {
+		return nil
+	}
+
+	// 用 NodeLogs 做索引（包含准确耗时/模型/token 信息）
+	if output.ExecutionLog != nil && len(output.ExecutionLog.NodeLogs) > 0 {
+		summaries := make([]nodeResultSummary, 0, len(output.ExecutionLog.NodeLogs))
+		for _, nl := range output.ExecutionLog.NodeLogs {
+			summaries = append(summaries, nodeResultSummary{
+				NodeID:     nl.NodeID,
+				NodeType:   string(nl.NodeType),
+				Model:      nl.Model,
+				Success:    nl.Success,
+				DurationMs: nl.Duration,
+				Tokens:     nl.InputTokens + nl.OutputTokens,
+			})
+		}
+		return summaries
+	}
+
+	// 回退：仅从 NodeOutputs 推断（无精确耗时）
+	if len(output.NodeOutputs) > 0 {
+		summaries := make([]nodeResultSummary, 0, len(output.NodeOutputs))
+		for nodeID, no := range output.NodeOutputs {
+			success := true
+			if no.Passed != nil {
+				success = *no.Passed
+			}
+			summaries = append(summaries, nodeResultSummary{
+				NodeID:  nodeID,
+				Success: success,
+			})
+		}
+		return summaries
+	}
+
+	return nil
+}
+
+// buildStreamProxyClawMeta 从流水线输出构建 SSE 代理元数据事件体。
+// 客户端通过识别 {"_proxy_claw_meta":true} 字段区分此事件与普通 OpenAI chunk。
+func buildStreamProxyClawMeta(output *pipeline.PipelineOutput, pipelineID string, mode ProxyMode) map[string]interface{} {
+	meta := map[string]interface{}{
+		"_proxy_claw_meta": true,
+		"mode":            string(mode),
+		"pipeline_id":     pipelineID,
+	}
+
+	if output.ExecutionLog != nil {
+		meta["duration_ms"] = output.ExecutionLog.Duration
+		meta["total_tokens"] = output.ExecutionLog.TotalTokens
+		meta["success"] = output.ExecutionLog.Success
+	}
+
+	// 注入每个流水线节点的执行摘要（TUI 可展示各阶段进度）
+	if len(output.NodeOutputs) > 0 || (output.ExecutionLog != nil && len(output.ExecutionLog.NodeLogs) > 0) {
+		meta["node_results"] = buildNodeResultsSummary(output)
+	}
+	// 最后执行的节点 ID
+	if output.LastNode != "" {
+		meta["last_node"] = output.LastNode
+	}
+
+	// executor_model / executor_backend 优先从 Metadata 读取，回退到 NodeLogs 中最后节点的模型信息
+	hasExecutorModel := false
+	if output.Metadata != nil {
+		for key, headerKey := range map[string]string{
+			"executor_backend":  "executor_backend",
+			"executor_model":    "executor_model",
+			"auditor_backend":   "auditor_backend",
+			"auditor_model":     "auditor_model",
+			"optimizer_backend": "optimizer_backend",
+			"optimizer_model":   "optimizer_model",
+			"cache_hit":         "cache_hit",
+			"selected_route":    "selected_route",
+			"routing_strategy":  "routing_strategy",
+			"bypass":            "bypass",
+			"bypass_node":       "bypass_node",
+			"bypass_reason":     "bypass_reason",
+		} {
+			if v, ok := output.Metadata[key]; ok {
+				meta[headerKey] = v
+				if key == "executor_model" {
+					hasExecutorModel = true
+				}
+			}
+		}
+	}
+
+	// 回退：如果 Metadata 中没有 executor_model，从 ExecutionLog.NodeLogs 中最后一个 LLM 节点的模型信息提取
+	if !hasExecutorModel && output.ExecutionLog != nil && len(output.ExecutionLog.NodeLogs) > 0 {
+		for i := len(output.ExecutionLog.NodeLogs) - 1; i >= 0; i-- {
+			nl := output.ExecutionLog.NodeLogs[i]
+			if nl.Model != "" {
+				meta["executor_model"] = nl.Model
+				hasExecutorModel = true
+				break
+			}
+		}
+	}
+
+	// 审核结果
+	if output.Passed != nil {
+		meta["audit_passed"] = *output.Passed
+	}
+	if output.Score != nil {
+		meta["audit_score"] = *output.Score
+	}
+	if output.Feedback != "" {
+		meta["audit_feedback"] = output.Feedback
+	}
+
+	return meta
+}
+
+// StreamFormatter 流式响应格式化器接口
+type StreamFormatter interface {
+	// FormatChunk 格式化一个流式 chunk 为 SSE 数据行（含 "data: " 前缀和尾部 \n\n）
+	FormatChunk(model string, chunk *plugin.StreamChunk, chunkIndex int, responseID string, created int64) string
+	// FormatDone 格式化 usage chunk + 结束标记
+	// finishReason 为实际完成原因（如 tool_calls/stop/length），空字符串时回退到 stop
+	FormatDone(model string, usage map[string]interface{}, finishReason string) string
+	// BuildUsage 从 finalOutput 构建 usage map
+	BuildUsage(finalOutput *pipeline.PipelineOutput) map[string]interface{}
+}
+
+// openaiStreamFormatter OpenAI SSE 格式化器
+type openaiStreamFormatter struct{}
+
+func (f *openaiStreamFormatter) FormatChunk(model string, chunk *plugin.StreamChunk, chunkIndex int, responseID string, created int64) string {
+	delta := map[string]interface{}{
+		"content": chunk.Content,
+	}
+	if chunkIndex == 0 {
+		delta["role"] = "assistant"
+	}
+	// 透传 reasoning_content（DeepSeek thinking 模式要求多轮回传）
+	if chunk.ReasoningContent != "" {
+		delta["reasoning_content"] = chunk.ReasoningContent
+	}
+	// 透传 tool_calls（function calling）
+	if len(chunk.ToolCalls) > 0 {
+		toolCalls := make([]interface{}, len(chunk.ToolCalls))
+		for i, tc := range chunk.ToolCalls {
+			toolCalls[i] = map[string]interface{}{
+				"index": i,
+				"id":    tc.ID,
+				"type":  "function",
+				"function": map[string]interface{}{
+					"name":      tc.Function.Name,
+					"arguments": tc.Function.Arguments,
+				},
+			}
+		}
+		delta["tool_calls"] = toolCalls
+	}
+
+	choice := map[string]interface{}{
+		"index": 0,
+		"delta": delta,
+	}
+	// 最后一块携带 finish_reason
+	if chunk.Done && chunk.FinishReason != "" {
+		choice["finish_reason"] = chunk.FinishReason
+	}
+
+	chunkData := map[string]interface{}{
+		"id":      responseID,
+		"object":  "chat.completion.chunk",
+		"created": created,
+		"model":   model,
+		"choices": []interface{}{choice},
+	}
+
+	dataBytes, _ := json.Marshal(chunkData)
+	return fmt.Sprintf("data: %s\n\n", string(dataBytes))
+}
+
+func (f *openaiStreamFormatter) FormatDone(model string, usage map[string]interface{}, finishReason string) string {
+	// finishReason 空时回退到 stop，保持向后兼容
+	fr := finishReason
+	if fr == "" {
+		fr = "stop"
+	}
+	finalChunk := map[string]interface{}{
+		"id":      "chatcmpl-done",
+		"object":  "chat.completion.chunk",
+		"created": 0,
+		"model":   model,
+		"choices": []interface{}{
+			map[string]interface{}{
+				"index":         0,
+				"delta":         map[string]interface{}{},
+				"finish_reason": fr,
+			},
+		},
+	}
+	if usage != nil {
+		finalChunk["usage"] = usage
+	}
+	dataBytes, _ := json.Marshal(finalChunk)
+	return fmt.Sprintf("data: %s\n\n", string(dataBytes))
+}
+
+func (f *openaiStreamFormatter) BuildUsage(finalOutput *pipeline.PipelineOutput) map[string]interface{} {
+	usage := map[string]interface{}{
+		"prompt_tokens":     0,
+		"completion_tokens": 0,
+		"total_tokens":      0,
+	}
+	if finalOutput != nil && finalOutput.ExecutionLog != nil {
+		usage["prompt_tokens"] = finalOutput.ExecutionLog.TotalTokens / 2
+		usage["completion_tokens"] = finalOutput.ExecutionLog.TotalTokens / 2
+		usage["total_tokens"] = finalOutput.ExecutionLog.TotalTokens
+	}
+	return usage
+}
+
+// anthropicStreamFormatter Anthropic SSE 格式化器
+type anthropicStreamFormatter struct{}
+
+func (f *anthropicStreamFormatter) FormatChunk(model string, chunk *plugin.StreamChunk, chunkIndex int, responseID string, created int64) string {
+	if chunk == nil {
+		return ""
+	}
+	// 无内容、无 tool_calls、且非 done 标记的空 chunk 跳过
+	if chunk.Done && chunk.Content == "" && len(chunk.ToolCalls) == 0 {
+		return ""
+	}
+
+	var sb strings.Builder
+
+	// 第一个 chunk: 发送 message_start
+	if chunkIndex == 0 {
+		msgStart := map[string]interface{}{
+			"type": "message_start",
+			"message": map[string]interface{}{
+				"id":          "msg-" + responseID,
+				"type":        "message",
+				"role":        "assistant",
+				"content":     []interface{}{},
+				"model":       model,
+				"stop_reason": nil,
+				"usage": map[string]interface{}{
+					"input_tokens":  0,
+					"output_tokens": 0,
+				},
+			},
+		}
+		dataBytes, _ := json.Marshal(msgStart)
+		sb.WriteString(fmt.Sprintf("event: message_start\ndata: %s\n\n", string(dataBytes)))
+	}
+
+	// 文本内容：用 text content block（index=0）
+	// tool_calls：每个工具调用用独立的 tool_use content block（index 从 1 开始递增）
+	// Anthropic 规范：text block 在前，tool_use block 在后
+
+	// 文本内容 delta
+	if chunk.Content != "" {
+		// 首次出现文本时先发 content_block_start(type=text)
+		if chunkIndex == 0 {
+			cbStart := map[string]interface{}{
+				"type":  "content_block_start",
+				"index": 0,
+				"content_block": map[string]interface{}{
+					"type": "text",
+					"text": "",
+				},
+			}
+			dataBytes, _ := json.Marshal(cbStart)
+			sb.WriteString(fmt.Sprintf("event: content_block_start\ndata: %s\n\n", string(dataBytes)))
+		}
+		delta := map[string]interface{}{
+			"type":  "content_block_delta",
+			"index": 0,
+			"delta": map[string]interface{}{
+				"type": "text_delta",
+				"text": chunk.Content,
+			},
+		}
+		dataBytes, _ := json.Marshal(delta)
+		sb.WriteString(fmt.Sprintf("event: content_block_delta\ndata: %s\n\n", string(dataBytes)))
+	}
+
+	// tool_calls：每个工具调用输出 content_block_start(tool_use) + content_block_delta(input_json_delta) + content_block_stop
+	// index 规则：若有文本则从 1 开始，否则从 0 开始
+	toolBlockStartIndex := 0
+	if chunk.Content != "" {
+		toolBlockStartIndex = 1
+	}
+	for i, tc := range chunk.ToolCalls {
+		blockIndex := toolBlockStartIndex + i
+		// content_block_start: tool_use
+		cbStart := map[string]interface{}{
+			"type":  "content_block_start",
+			"index": blockIndex,
+			"content_block": map[string]interface{}{
+				"type": "tool_use",
+				"id":   tc.ID,
+				"name": tc.Function.Name,
+				"input": map[string]interface{}{},
+			},
+		}
+		dataBytes, _ := json.Marshal(cbStart)
+		sb.WriteString(fmt.Sprintf("event: content_block_start\ndata: %s\n\n", string(dataBytes)))
+
+		// content_block_delta: input_json_delta（arguments 作为 partial JSON）
+		delta := map[string]interface{}{
+			"type":  "content_block_delta",
+			"index": blockIndex,
+			"delta": map[string]interface{}{
+				"type":         "input_json_delta",
+				"partial_json": tc.Function.Arguments,
+			},
+		}
+		dataBytes, _ = json.Marshal(delta)
+		sb.WriteString(fmt.Sprintf("event: content_block_delta\ndata: %s\n\n", string(dataBytes)))
+
+		// content_block_stop
+		cbStop := map[string]interface{}{
+			"type":  "content_block_stop",
+			"index": blockIndex,
+		}
+		dataBytes, _ = json.Marshal(cbStop)
+		sb.WriteString(fmt.Sprintf("event: content_block_stop\ndata: %s\n\n", string(dataBytes)))
+	}
+
+	// done: 关闭文本 block（若有）+ message_delta + message_stop
+	if chunk.Done {
+		// 若有文本内容，关闭 text content block（index=0）
+		if chunk.Content != "" {
+			cbStop := map[string]interface{}{
+				"type":  "content_block_stop",
+				"index": 0,
+			}
+			dataBytes, _ := json.Marshal(cbStop)
+			sb.WriteString(fmt.Sprintf("event: content_block_stop\ndata: %s\n\n", string(dataBytes)))
+		}
+
+		stopReason := "end_turn"
+		if chunk.FinishReason == "tool_calls" {
+			stopReason = "tool_use"
+		} else if chunk.FinishReason == "length" {
+			stopReason = "max_tokens"
+		}
+		msgDelta := map[string]interface{}{
+			"type": "message_delta",
+			"delta": map[string]interface{}{
+				"stop_reason":   stopReason,
+				"stop_sequence": nil,
+			},
+			"usage": map[string]interface{}{
+				"output_tokens": chunk.TokensUsed,
+			},
+		}
+		dataBytes, _ := json.Marshal(msgDelta)
+		sb.WriteString(fmt.Sprintf("event: message_delta\ndata: %s\n\n", string(dataBytes)))
+
+		msgStop := map[string]interface{}{
+			"type": "message_stop",
+		}
+		dataBytes, _ = json.Marshal(msgStop)
+		sb.WriteString(fmt.Sprintf("event: message_stop\ndata: %s\n\n", string(dataBytes)))
+	}
+
+	return sb.String()
+}
+
+func (f *anthropicStreamFormatter) FormatDone(model string, usage map[string]interface{}, finishReason string) string {
+	// Anthropic 不使用 [DONE] 标记，结束由 message_stop 事件处理
+	return ""
+}
+
+func (f *anthropicStreamFormatter) BuildUsage(finalOutput *pipeline.PipelineOutput) map[string]interface{} {
+	usage := map[string]interface{}{
+		"output_tokens": 0,
+	}
+	if finalOutput != nil && finalOutput.ExecutionLog != nil {
+		usage["output_tokens"] = finalOutput.ExecutionLog.TotalTokens / 2
+	}
+	return usage
+}
+
+// geminiStreamFormatter Gemini SSE 格式化器
+type geminiStreamFormatter struct{}
+
+func (f *geminiStreamFormatter) FormatChunk(model string, chunk *plugin.StreamChunk, chunkIndex int, responseID string, created int64) string {
+	if chunk == nil {
+		return ""
+	}
+	if chunk.Done && chunk.Content == "" && chunk.ReasoningContent == "" {
+		return ""
+	}
+	candidate := map[string]interface{}{
+		"content": map[string]interface{}{
+			"role": "model",
+			"parts": []map[string]interface{}{
+				{"text": chunk.Content},
+			},
+		},
+	}
+	if chunk.FinishReason != "" {
+		candidate["finishReason"] = chunk.FinishReason
+	}
+	chunkData := map[string]interface{}{
+		"candidates": []interface{}{candidate},
+	}
+	dataBytes, _ := json.Marshal(chunkData)
+	return fmt.Sprintf("data: %s\n\n", string(dataBytes))
+}
+
+func (f *geminiStreamFormatter) FormatDone(model string, usage map[string]interface{}, finishReason string) string {
+	return ""
+}
+
+func (f *geminiStreamFormatter) BuildUsage(finalOutput *pipeline.PipelineOutput) map[string]interface{} {
+	if finalOutput != nil && finalOutput.ExecutionLog != nil {
+		return map[string]interface{}{
+			"promptTokenCount":     finalOutput.ExecutionLog.TotalTokens / 2,
+			"candidatesTokenCount": finalOutput.ExecutionLog.TotalTokens / 2,
+			"totalTokenCount":      finalOutput.ExecutionLog.TotalTokens,
+		}
+	}
+	return nil
+}
+
+// responsesStreamFormatter OpenAI Responses SSE 格式化器
+type responsesStreamFormatter struct{}
+
+func (f *responsesStreamFormatter) FormatChunk(model string, chunk *plugin.StreamChunk, chunkIndex int, responseID string, created int64) string {
+	if chunk == nil {
+		return ""
+	}
+	if chunkIndex == 0 {
+		evt := map[string]interface{}{
+			"type": "response.created",
+			"response": map[string]interface{}{
+				"id":     responseID,
+				"object": "response",
+				"status": "in_progress",
+				"model":  model,
+			},
+		}
+		dataBytes, _ := json.Marshal(evt)
+		return fmt.Sprintf("event: response.created\ndata: %s\n\n", string(dataBytes))
+	}
+	if chunk.Content != "" || chunk.ReasoningContent != "" {
+		deltaText := chunk.Content
+		if deltaText == "" {
+			deltaText = chunk.ReasoningContent
+		}
+		evt := map[string]interface{}{
+			"type":  "response.output_text.delta",
+			"delta": deltaText,
+		}
+		dataBytes, _ := json.Marshal(evt)
+		return fmt.Sprintf("event: response.output_text.delta\ndata: %s\n\n", string(dataBytes))
+	}
+	if chunk.Done {
+		evt := map[string]interface{}{
+			"type": "response.completed",
+			"response": map[string]interface{}{
+				"id":     responseID,
+				"status": "completed",
+			},
+		}
+		dataBytes, _ := json.Marshal(evt)
+		return fmt.Sprintf("event: response.completed\ndata: %s\n\n", string(dataBytes))
+	}
+	return ""
+}
+
+func (f *responsesStreamFormatter) FormatDone(model string, usage map[string]interface{}, finishReason string) string {
+	return ""
+}
+
+func (f *responsesStreamFormatter) BuildUsage(finalOutput *pipeline.PipelineOutput) map[string]interface{} {
+	if finalOutput != nil && finalOutput.ExecutionLog != nil {
+		return map[string]interface{}{
+			"input_tokens":  finalOutput.ExecutionLog.TotalTokens / 2,
+			"output_tokens": finalOutput.ExecutionLog.TotalTokens / 2,
+			"total_tokens":  finalOutput.ExecutionLog.TotalTokens,
+		}
+	}
+	return nil
+}
+
+// getStreamFormatter 根据请求上下文获取对应的流式格式化器
+func (d *ModeDispatcher) getStreamFormatter(c *gin.Context) StreamFormatter {
+	protocolName, _ := c.Get("protocol_plugin")
+	if name, ok := protocolName.(string); ok {
+		switch name {
+		case "anthropic-protocol":
+			if d.pluginManager != nil {
+				if _, err := d.pluginManager.GetProtocol(name); err != nil {
+					d.logger.Warn("anthropic protocol plugin not found, using anthropic stream formatter from context",
+						"protocol", name,
+						"error", err,
+					)
+				}
+			}
+			return &anthropicStreamFormatter{}
+		case "gemini-protocol":
+			return &geminiStreamFormatter{}
+		case "responses-protocol":
+			return &responsesStreamFormatter{}
+		}
+	}
+	return &openaiStreamFormatter{}
+}
+
+func shouldEmitOpenAIDone(c *gin.Context) bool {
+	if c == nil {
+		return true
+	}
+	protocolName, _ := c.Get("protocol_plugin")
+	if name, ok := protocolName.(string); ok {
+		switch name {
+		case "anthropic-protocol", "gemini-protocol", "responses-protocol":
+			return false
+		}
+	}
+	return true
+}
+
+func extractBackendFromPipelineOutput(output *pipeline.PipelineOutput) string {
+	if output == nil || output.Metadata == nil {
+		return ""
+	}
+	for _, key := range []string{"backend_id", "executor_backend", "backend"} {
+		if v, ok := output.Metadata[key].(string); ok && v != "" {
+			return v
+		}
+	}
+	if output.NodeOutputs != nil {
+		for _, nodeOutput := range output.NodeOutputs {
+			if nodeOutput == nil || nodeOutput.Metadata == nil {
+				continue
+			}
+			if v, ok := nodeOutput.Metadata["backend_id"].(string); ok && v != "" {
+				return v
+			}
+		}
+	}
+	return ""
+}
+
+func extractSelectedRouteFromPipelineOutput(output *pipeline.PipelineOutput) string {
+	if output == nil {
+		return ""
+	}
+	if output.Metadata != nil {
+		if v, ok := output.Metadata["selected_route"].(string); ok && strings.TrimSpace(v) != "" {
+			return strings.TrimSpace(v)
+		}
+	}
+	if output.NodeOutputs != nil {
+		for _, nodeOutput := range output.NodeOutputs {
+			if nodeOutput == nil || nodeOutput.Metadata == nil {
+				continue
+			}
+			if v, ok := nodeOutput.Metadata["selected_route"].(string); ok && strings.TrimSpace(v) != "" {
+				return strings.TrimSpace(v)
+			}
+		}
+	}
+	return ""
+}
+
+func maybeRecordRouteBackendMetrics(output *pipeline.PipelineOutput) {
+	if output == nil || metrics.GlobalRouteBackendMetrics == nil {
+		return
+	}
+	backendID := extractBackendFromPipelineOutput(output)
+	selectedRoute := extractSelectedRouteFromPipelineOutput(output)
+	if backendID == "" && selectedRoute == "" {
+		return
+	}
+	success := true
+	latencyMs := int64(0)
+	if output.ExecutionLog != nil {
+		success = output.ExecutionLog.Success
+		latencyMs = output.ExecutionLog.Duration
+	}
+	metrics.GlobalRouteBackendMetrics.Record(selectedRoute, backendID, success, latencyMs)
+}
+
+func extractModelFromPipelineOutput(output *pipeline.PipelineOutput) string {
+	if output == nil {
+		return ""
+	}
+	if output.ExecutionLog != nil {
+		for i := len(output.ExecutionLog.NodeLogs) - 1; i >= 0; i-- {
+			log := output.ExecutionLog.NodeLogs[i]
+			if log.Success && strings.TrimSpace(log.Model) != "" {
+				return strings.TrimSpace(log.Model)
+			}
+		}
+	}
+	if output.Metadata != nil {
+		for _, key := range []string{"model", "executor_model"} {
+			if v, ok := output.Metadata[key].(string); ok && strings.TrimSpace(v) != "" {
+				return strings.TrimSpace(v)
+			}
+		}
+	}
+	return ""
+}
+
+func buildPipelineExecutionMeta(output *pipeline.PipelineOutput, fallbackPipelineID string) map[string]interface{} {
+	if output == nil {
+		return nil
+	}
+	model := extractModelFromPipelineOutput(output)
+	backendID := extractBackendFromPipelineOutput(output)
+	pipelineID := fallbackPipelineID
+	if output.ExecutionLog != nil && strings.TrimSpace(output.ExecutionLog.PipelineID) != "" {
+		pipelineID = strings.TrimSpace(output.ExecutionLog.PipelineID)
+	}
+	if model == "" && backendID == "" && pipelineID == "" {
+		return nil
+	}
+	meta := map[string]interface{}{}
+	if model != "" {
+		meta["model"] = model
+	}
+	if backendID != "" {
+		meta["backend_id"] = backendID
+	}
+	if pipelineID != "" {
+		meta["pipeline_id"] = pipelineID
+	}
+	if output.ExecutionLog != nil && output.ExecutionLog.Duration > 0 {
+		meta["pipeline_duration_ms"] = output.ExecutionLog.Duration
+	}
+	return meta
+}
+
+func setPipelineExecutionHeaders(c *gin.Context, output *pipeline.PipelineOutput, fallbackPipelineID string) {
+	meta := buildPipelineExecutionMeta(output, fallbackPipelineID)
+	if meta == nil {
+		return
+	}
+	if v, ok := meta["model"].(string); ok && v != "" {
+		c.Header("X-Model", v)
+	}
+	if v, ok := meta["backend_id"].(string); ok && v != "" {
+		c.Header("X-Backend-ID", v)
+	}
+	if v, ok := meta["pipeline_id"].(string); ok && v != "" {
+		c.Header("X-Pipeline-ID", v)
+	}
+	if output.ExecutionLog != nil && output.ExecutionLog.Duration > 0 {
+		c.Header("X-Pipeline-Duration-Ms", fmt.Sprintf("%d", output.ExecutionLog.Duration))
+	}
+}
+
+// setPipelineOutputHeaders 根据流水线输出动态设置响应头（不绑定特定内置流水线）。
+func setPipelineOutputHeaders(c *gin.Context, output *pipeline.PipelineOutput) {
+	if output == nil {
+		return
+	}
+	if output.Passed != nil {
+		c.Header("X-Audit-Passed", fmt.Sprintf("%v", *output.Passed))
+	}
+	if output.Score != nil {
+		c.Header("X-Audit-Score", fmt.Sprintf("%.2f", *output.Score))
+	}
+	if output.Feedback != "" {
+		c.Header("X-Audit-Feedback", output.Feedback)
+	}
+	if output.Metadata == nil {
+		return
+	}
+	for metaKey, headerKey := range map[string]string{
+		"executor_backend":  "X-Executor-Backend",
+		"executor_model":    "X-Executor-Model",
+		"auditor_backend":   "X-Auditor-Backend",
+		"auditor_model":     "X-Auditor-Model",
+		"optimizer_backend": "X-Optimizer-Backend",
+		"optimizer_model":   "X-Optimizer-Model",
+		"cache_hit":         "X-Cache-Hit",
+		"cache_saved":       "X-Cache-Saved",
+		"target_base_url":   "X-Target-BaseURL",
+		"bypass":            "X-Pipeline-Bypass",
+		"bypass_node":       "X-Pipeline-Bypass-Node",
+		"bypass_reason":     "X-Pipeline-Bypass-Reason",
+	} {
+		if v, ok := output.Metadata[metaKey]; ok && fmt.Sprintf("%v", v) != "" {
+			c.Header(headerKey, fmt.Sprintf("%v", v))
+		}
+	}
+}

@@ -1,0 +1,10 @@
+# modular + OLLAMA_ENABLED：接入 deploy/stack-network，访问 stack 中的 Ollama
+services:
+  centag:
+    networks:
+      - centag-gateway
+      - deploy/stack-network
+
+networks:
+  deploy/stack-network:
+    external: true

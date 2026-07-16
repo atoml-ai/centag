@@ -1,0 +1,9 @@
+#!/bin/bash
+
+### This script is called after saving the configuration.
+### $1 为 JSON 格式的配置参数
+
+# 写入配置（占位示例）
+# echo "$1" > "${DATA_DIR}/centag.conf"
+
+exit 0

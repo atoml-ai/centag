@@ -1,0 +1,12 @@
+#!/bin/bash
+
+### This script is called after uninstalling the application.
+### 清理数据库和运行时数据
+
+DATA_DIR="${TRIM_DATA_SHARE_PATHS%%:*}"
+if [ -n "${DATA_DIR}" ] && [ -d "${DATA_DIR}" ]; then
+  echo "Cleaning up Centag data: ${DATA_DIR}"
+  rm -rf "${DATA_DIR}"
+fi
+
+exit 0

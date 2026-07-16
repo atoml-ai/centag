@@ -1,0 +1,83 @@
+# stack middleware 对共享 fragments 的部署覆盖（container_name、ports、profiles、env_file）
+# 路径相对本文件：compose/overrides/ → stack 根目录 .env、middleware/ollama-entrypoint.sh
+services:
+  postgresql:
+    container_name: centag-postgresql
+    env_file:
+      - ../../.env
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgresql_data:/var/lib/postgresql/data
+    profiles:
+      - postgresql
+      - base
+
+  redis:
+    container_name: centag-redis
+    env_file:
+      - ../../.env
+    ports:
+      - "${REDIS_PORT:-26379}:6379"
+    volumes:
+      - redis_data:/data
+    profiles:
+      - redis
+      - base
+
+  elasticsearch:
+    container_name: centag-elasticsearch
+    env_file:
+      - ../../.env
+    ports:
+      - "${ELASTICSEARCH_PORT:-29200}:9200"
+      - "${ELASTICSEARCH_TRANSPORT_PORT:-29300}:9300"
+    volumes:
+      - es_data:/usr/share/elasticsearch/data
+    profiles:
+      - elasticsearch
+      - base
+
+  kibana:
+    container_name: centag-kibana
+    ports:
+      - "${KIBANA_PORT:-25601}:5601"
+    profiles:
+      - kibana
+      - base
+
+  qdrant:
+    container_name: centag-qdrant
+    env_file:
+      - ../../.env
+    ports:
+      - "${QDRANT_PORT:-6333}:6333"
+      - "${QDRANT_GRPC_PORT:-6334}:6334"
+    volumes:
+      - qdrant_data:/qdrant/storage
+    profiles:
+      - qdrant
+      - base
+
+  neo4j:
+    container_name: centag-neo4j
+    ports:
+      - "${NEO4J_HTTP_PORT:-7474}:7474"
+      - "${NEO4J_BOLT_PORT:-7687}:7687"
+    volumes:
+      - neo4j_data:/data
+    profiles:
+      - neo4j
+      - base
+
+  ollama:
+    container_name: centag-ollama
+    env_file:
+      - ../../.env
+    ports:
+      - "${OLLAMA_PORT:-21434}:11434"
+    volumes:
+      - ollama_data:/models
+      - ../../middleware/ollama-entrypoint.sh:/ollama-entrypoint.sh
+    profiles:
+      - ollama

@@ -1,0 +1,14 @@
+# 共享 Qdrant 服务定义
+services:
+  qdrant:
+    image: qdrant/qdrant:latest
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'echo >/dev/tcp/localhost/6333'"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+volumes:
+  qdrant_data:

@@ -1,0 +1,33 @@
+# 共享 Mem0 服务定义（build context 相对本文件：compose/fragments/ → services/mem0/）
+services:
+  mem0:
+    image: centag-mem0:latest
+    build:
+      context: ../../services/mem0
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      JWT_SECRET: ${MEM0_JWT_SECRET:?error MEM0_JWT_SECRET must be set}
+      ADMIN_API_KEY: ${MEM0_ADMIN_API_KEY:?error MEM0_ADMIN_API_KEY must be set}
+      AUTH_DISABLED: ${MEM0_AUTH_DISABLED:-false}
+      POSTGRES_HOST: ${MEM0_POSTGRES_HOST:-postgresql}
+      POSTGRES_PORT: ${MEM0_POSTGRES_PORT:-5432}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      APP_DB_NAME: ${MEM0_APP_DB_NAME:-mem0_app}
+      POSTGRES_COLLECTION_NAME: ${MEM0_POSTGRES_COLLECTION_NAME:-memories}
+      QDRANT_HOST: ${MEM0_QDRANT_HOST:-qdrant}
+      QDRANT_PORT: ${MEM0_QDRANT_PORT:-6333}
+      NEO4J_URI: ${MEM0_NEO4J_URI:-bolt://neo4j:7687}
+      LLM_PROVIDER: ${LLM_PROVIDER:-ollama}
+      EMBEDDER_PROVIDER: ${EMBEDDER_PROVIDER:-ollama}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
+      OPENAI_API_KEY: ${MEM0_OPENAI_API_KEY:-}
+      OPENAI_BASE_URL: ${MEM0_OPENAI_BASE_URL:-https://api.openai.com/v1}
+      MEM0_DEFAULT_LLM_MODEL: ${MEM0_DEFAULT_LLM_MODEL:-llama3.1}
+      MEM0_DEFAULT_EMBEDDER_MODEL: ${MEM0_DEFAULT_EMBEDDER_MODEL:-bge-m3}
+      EMBEDDING_MODEL_DIMS: ${MEM0_EMBEDDING_DIMS:-1024}
+      MEM0_TELEMETRY: "false"
+
+volumes:
+  mem0_history_data:

@@ -1,0 +1,7 @@
+{
+  "defaultProvider": "bigmodel",
+  "defaultModel": "glm-4-flash",
+  "compaction": {
+    "enabled": true
+  }
+}

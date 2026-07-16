@@ -1,0 +1,39 @@
+# 更新配置模板
+version: "v1.0.0"
+description: "Proxy Claw 更新包"
+files:
+  - source: "centag"
+    target: "centag"
+    permission: "0755"
+    backup: true
+    recursive: false
+    description: "Proxy Claw 主程序"
+  - source: "static/"
+    target: "static/"
+    permission: "0644"
+    backup: false
+    recursive: true
+    description: "Web前端静态文件"
+  - source: "configs/"
+    target: "configs/"
+    permission: "0644"
+    backup: true
+    recursive: true
+    description: "配置文件"
+init_scripts:
+  - script: "scripts/post-update.sh"
+    description: "更新后执行脚本"
+    timeout: 30
+    required: false
+pre_checks:
+  - check: "disk_space"
+    min_space: "100MB"
+    paths: [".", "./storage"]
+rollback:
+  enabled: true
+  keep_backups: 5
+  backup_dir: "storage/backups"
+behavior:
+  auto_restart: true
+  restart_delay: 3
+  health_check_timeout: 30
