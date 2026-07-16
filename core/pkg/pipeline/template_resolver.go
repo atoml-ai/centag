@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"centag/core/pkg/config"
 )
 
 // TemplateVarResolver 解析 NodeConfig.TemplateVars 中的路径表达式为实际值。
@@ -21,6 +23,10 @@ import (
 //	context.user_id                → 执行上下文中的用户 ID
 //	context.session_id             → 执行上下文中的会话 ID
 //	context.pipeline_id            → 当前流水线 ID
+//	system.default_backend         → 系统默认后端 ID
+//	system.default_model           → 系统默认模型
+//	system.fallback_backend        → 系统降级后端 ID
+//	system.fallback_model          → 系统降级模型
 //	literal:<任意字符串>            → 字面量值（冒号后原样返回）
 type TemplateVarResolver struct {
 	input   *NodeInput
@@ -46,8 +52,10 @@ func (r *TemplateVarResolver) Resolve(path string) (interface{}, error) {
 		return r.resolveNode(parts[1:])
 	case "context":
 		return r.resolveContext(parts[1:])
+	case "system":
+		return r.resolveSystem(parts[1:])
 	default:
-		return nil, fmt.Errorf("unknown path prefix %q (支持: input / node / context / literal:)", parts[0])
+		return nil, fmt.Errorf("unknown path prefix %q (支持: input / node / context / system / literal:)", parts[0])
 	}
 }
 
@@ -142,6 +150,31 @@ func (r *TemplateVarResolver) resolveContext(parts []string) (interface{}, error
 			}
 		}
 		return nil, fmt.Errorf("unknown context field: %s", parts[0])
+	}
+}
+
+// resolveSystem 解析系统级配置路径
+func (r *TemplateVarResolver) resolveSystem(parts []string) (interface{}, error) {
+	if len(parts) == 0 {
+		return nil, fmt.Errorf("system path 需要字段名")
+	}
+
+	cfg := config.Get()
+	if cfg == nil {
+		return nil, fmt.Errorf("system config not initialized")
+	}
+
+	switch parts[0] {
+	case "default_backend":
+		return cfg.Proxy.DefaultBackendID, nil
+	case "default_model":
+		return cfg.Proxy.DefaultModel, nil
+	case "fallback_backend":
+		return cfg.Proxy.FallbackBackendID, nil
+	case "fallback_model":
+		return cfg.Proxy.FallbackModel, nil
+	default:
+		return nil, fmt.Errorf("unknown system field: %s (支持: default_backend / default_model / fallback_backend / fallback_model)", parts[0])
 	}
 }
 

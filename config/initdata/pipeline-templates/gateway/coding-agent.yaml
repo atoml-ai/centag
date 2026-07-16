@@ -10,11 +10,11 @@ nodes:
       kind: llm.generate
       implementation: builtin.generator
       name: 编程生成
-      backend: bigmodel
-      model: GLM-4-flash
+      backend: "{{system.default_backend}}"
+      model: "{{system.default_model}}"
       config:
-        backend: bigmodel
-        model: GLM-4-flash
+        backend: "{{system.default_backend}}"
+        model: "{{system.default_model}}"
         prompt_template: '{{input}}'
         system_prompt: |
           你是编程助手，通过调用工具（function calling）完成编程任务。
@@ -45,6 +45,9 @@ nodes:
           - 添加必要的错误处理和日志
 
           完成后简要说明所做的工作。不要提前结束任务，直到所有步骤完成。
+        template_vars:
+          backend: "system.default_backend"
+          model: "system.default_model"
       timeout: 300
       retry:
         max_attempts: 2

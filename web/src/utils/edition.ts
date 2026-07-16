@@ -54,8 +54,7 @@ export const TEAM_ONLY_ROUTE_PREFIXES = [
 /** Routes allowed in minimal lite WebUI (plus /login). */
 export const MINIMAL_ALLOWED_ROUTE_PREFIXES = [
   '/dashboard',
-  '/backends',
-  '/pipelines'
+  '/chat'
 ] as const
 
 export function isTeamOnlyRoute(path: string): boolean {

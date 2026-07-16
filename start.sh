@@ -1867,62 +1867,188 @@ check_docker() {
 }
 
 # Docker 构建镜像
+# ── 统一发行版 Docker 构建 ──────────────────────────────────────────
+# 参数: dist_name tag initdata_path
+#   dist_name   — minimal|gateway|team
+#   tag         — 镜像标签（可选，默认 centag-<dist_name>:latest）
+#   initdata_path — 自定义 initdata.zip 路径（可选）
+_dist_docker_build() {
+    local dist_name="${1:-minimal}"
+    local tag="${2:-}"
+    local initdata_path="${3:-}"
+
+    if [[ ! "$dist_name" =~ ^(minimal|gateway|team)$ ]]; then
+        print_error "无效的发行版名称: $dist_name (支持: minimal, gateway, team)"
+        exit 1
+    fi
+
+    if [ -z "$tag" ]; then
+        tag="centag-${dist_name}:latest"
+    fi
+
+    # 所有版本都构建前端（前端通过 CENTAG_EDITION 自动适配 UI）
+    local include_frontend="true"
+
+    # 准备 initdata archive（存放到 temp 目录）
+    local initdata_archive_flag=false
+    local initdata_temp_dir="/tmp/centag-initdata-$$"
+    mkdir -p "$initdata_temp_dir"
+
+    if [ -n "$initdata_path" ]; then
+        if [ ! -f "$initdata_path" ]; then
+            print_error "initdata 文件不存在: $initdata_path"
+            rm -rf "$initdata_temp_dir"
+            exit 1
+        fi
+        cp "$initdata_path" "$initdata_temp_dir/initdata.zip"
+        initdata_archive_flag=true
+        print_info "使用自定义 initdata: $initdata_path"
+    else
+        # 创建默认 initdata.zip
+        print_info "生成默认 initdata.zip..."
+        (
+            cd "$initdata_temp_dir"
+            mkdir -p pipeline-templates/common pipeline-templates/gateway
+
+            # 复制流水线模板（按目录结构）
+            for f in "$PROJECT_ROOT"/config/initdata/pipeline-templates/common/*.yaml; do
+                [ -f "$f" ] && cp "$f" pipeline-templates/common/
+            done
+            for f in "$PROJECT_ROOT"/config/initdata/pipeline-templates/gateway/*.yaml; do
+                [ -f "$f" ] && cp "$f" pipeline-templates/gateway/
+            done
+
+            # 生成精简版 initial-backends.yaml（仅 OpenAI，无 key）
+            cat > initial-backends.yaml << 'INITDATA_EOF'
+version: "2.0"
+description: Default initdata - OpenAI backend (configure API key in .env)
+backends:
+  - id: openai
+    name: OpenAI
+    type: openai
+    base_url: https://api.openai.com/v1
+    api_key: "${OPENAI_API_KEY}"
+    enabled: true
+    timeout: 120
+    max_retries: 3
+    auto_fetch_models: true
+    description: OpenAI GPT-4/GPT-3.5 API
+    supported_models:
+      - requested_model: gpt-4o
+        actual_model: gpt-4o
+        is_exact: true
+        compatibility_score: 1.0
+      - requested_model: gpt-4o-mini
+        actual_model: gpt-4o-mini
+        is_exact: true
+        compatibility_score: 1.0
+    capabilities:
+      max_context_tokens: 128000
+      features:
+        - chat
+        - completion
+      supports_tools: true
+    weight: 100
+    priority: 10
+INITDATA_EOF
+
+            zip -r initdata.zip .
+        )
+        initdata_archive_flag=true
+        print_info "默认 initdata 已生成"
+    fi
+
+    # 构建
+    local build_tags=$(_get_dist_tags "$dist_name")
+    print_info "构建 Docker 镜像: ${tag} (dist=${dist_name}, frontend=${include_frontend})..."
+    docker build \
+        --build-arg DIST_NAME="$dist_name" \
+        --build-arg INCLUDE_FRONTEND="$include_frontend" \
+        --build-arg INITDATA_ARCHIVE="$initdata_archive_flag" \
+        --build-arg BUILD_TAGS="$build_tags" \
+        --build-context initdata="$initdata_temp_dir" \
+        -t "$tag" \
+        -f deploy/docker/Dockerfile.dist \
+        .
+    local rc=$?
+    rm -rf "$initdata_temp_dir"
+
+    if [ $rc -eq 0 ]; then
+        print_success "镜像构建完成: ${tag}"
+    else
+        print_error "镜像构建失败"
+        exit 1
+    fi
+}
+
+# ── Docker 运行容器（按版本）─────────────────────────────────────────
+# 参数: dist_name port initdata_path
+_dist_docker_run() {
+    local dist_name="${1:-minimal}"
+    local port="${2:-20060}"
+    local initdata_path="${3:-}"
+
+    if [[ ! "$dist_name" =~ ^(minimal|gateway|team)$ ]]; then
+        print_error "无效的发行版名称: $dist_name (支持: minimal, gateway, team)"
+        exit 1
+    fi
+
+    local tag="centag-${dist_name}:latest"
+    # 检查镜像是否存在，不存在则先构建
+    if ! docker image inspect "$tag" >/dev/null 2>&1; then
+        print_info "镜像 ${tag} 不存在，先执行构建..."
+        _dist_docker_build "$dist_name" "" "$initdata_path"
+    fi
+
+    load_env
+
+    # team 版本使用 docker-compose 启动所有服务
+    if [ "$dist_name" = "team" ]; then
+        print_info "启动 team 服务（含 PostgreSQL + Redis + Qdrant）..."
+        cd "${PROJECT_ROOT}/config/profiles/team"
+        docker compose up -d
+        print_success "team 服务已启动"
+        print_info "  - Centag: http://localhost:${port}"
+        print_info "  - PostgreSQL: localhost:5432"
+        print_info "  - Redis: localhost:6379"
+        print_info "  - Qdrant: http://localhost:6333"
+        cd "${PROJECT_ROOT}"
+    else
+        print_info "启动容器: ${tag} (端口 ${port})..."
+        exec docker run --rm -it \
+            --env-file "${PROJECT_ROOT}/config/secrets/.env" \
+            -e CENTAG_EDITION="${dist_name}" \
+            -p "${port}:20060" \
+            -v "${PROJECT_ROOT}/storage:/app/storage" \
+            -v "${PROJECT_ROOT}/logs:/app/logs" \
+            "$tag"
+    fi
+}
+
+# ── Docker 构建（已弃用，代理到 docker build）──────────────────────
 # 用法: docker_build [be|fe|all]
-#   be/backend  - 纯后端镜像（仅 API，使用 Dockerfile.backend）
-#   fe/frontend - 纯前端镜像（nginx 服务，使用 Dockerfile.frontend）
-#   all         - 全栈镜像（前端 + 后端一体，默认，使用 Dockerfile）
+#   be/backend  - 代理到 dist docker-build minimal
+#   fe/frontend - 已弃用
+#   all         - 代理到 dist docker-build gateway（默认）
 docker_build() {
     check_docker
     local target="${1:-all}"
     target=$(normalize_type "$target")
 
-    local timestamp=$(date +"%Y%m%d-%H%M")
-    local version="v$(date '+%Y%m%d-%H%M%S')"
-    local build_time=$(date '+%Y-%m-%d %H:%M:%S')
-    local dockerfile image_name image_latest
-
     case "$target" in
         backend)
-            dockerfile="deploy/docker/Dockerfile.backend"
-            image_name="centag-backend:${timestamp}"
-            image_latest="centag-backend:latest"
-            print_info "构建纯后端 Docker 镜像（仅 API 服务，不含前端）..."
+            print_warn "'./start.sh docker build backend' 已弃用，请使用: ./start.sh docker build minimal"
+            _dist_docker_build "minimal" "" ""
             ;;
         frontend)
-            dockerfile="deploy/docker/Dockerfile.frontend"
-            image_name="centag-frontend:${timestamp}"
-            image_latest="centag-frontend:latest"
-            print_info "构建纯前端 Docker 镜像（nginx 静态文件服务）..."
+            print_error "前端独立镜像已弃用，请使用全栈镜像: ./start.sh docker build gateway"
+            exit 1
             ;;
         all|*)
-            dockerfile="deploy/docker/Dockerfile"
-            image_name="centag:${timestamp}"
-            image_latest="centag:latest"
-            print_info "构建全栈 Docker 镜像（前端 + 后端一体）..."
+            print_info "代理到: ./start.sh docker build gateway"
+            _dist_docker_build "gateway" "" ""
             ;;
     esac
-
-    if [ ! -f "$dockerfile" ]; then
-        print_error "Dockerfile 不存在: $dockerfile"
-        exit 1
-    fi
-
-    print_info "Dockerfile: ${dockerfile}"
-    print_info "镜像标签: ${image_name}"
-
-    if docker build \
-        --build-arg "VERSION=${version}" \
-        --build-arg "BUILD_TIME=${build_time}" \
-        -f "$dockerfile" \
-        -t "${image_name}" \
-        -t "${image_latest}" \
-        .; then
-        print_success "镜像构建成功: ${image_name}"
-        print_success "最新标签: ${image_latest}"
-    else
-        print_error "镜像构建失败"
-        exit 1
-    fi
 }
 
 # Docker 运行容器 (单容器模式)
@@ -2804,11 +2930,10 @@ show_short_help() {
 
     # ── 构建 ──
     echo -e "  ${CYAN}── 构建 ──────────────────────────────────────────────${NC}"
-    echo -e "  ${GREEN}build${NC}    <all|be|fe>             构建项目"
-    echo -e "  ${GREEN}dist${NC}  build      <minimal|gateway|team>  构建发行版"
-    echo -e "  ${GREEN}dist${NC}  run        <minimal|gateway|team>  运行发行版（自动加载 .env）"
-    echo -e "  ${GREEN}dist${NC}  docker-build <minimal|gateway|team> [--initdata <zip>]  构建 Docker 镜像"
-    echo -e "  ${GREEN}dist${NC}  docker-run   <minimal|gateway|team> [--initdata <zip>]  运行 Docker 容器"
+    echo -e "  ${GREEN}build${NC}    <all|be|fe>             构建项目（开发用）"
+    echo -e "  ${GREEN}build${NC}    <minimal|gateway|team>  构建发行版"
+    echo -e "  ${GREEN}docker${NC}   build <minimal|gateway|team>   构建 Docker 镜像"
+    echo -e "  ${GREEN}docker${NC}   run   <minimal|gateway|team>   运行 Docker 容器"
     echo -e "  ${GREEN}clean${NC}                            清理构建产物"
     echo -e "  ${GREEN}pack${NC}     [--upload]              打包服务端更新包"
     echo -e "  ${GREEN}test${NC}                             运行单元测试"
@@ -2913,66 +3038,38 @@ _help_init() {
 
 _help_build() {
     echo -e "${GREEN}命令: build${NC}"
-    echo -e "       ${YELLOW}构建项目组件${NC}"
+    echo -e "       ${YELLOW}构建项目 / 发行版${NC}"
     echo ""
     echo -e "${CYAN}用法:${NC}"
     echo -e "  ./start.sh build <目标>"
     echo ""
-    echo -e "${CYAN}目标:${NC}"
+    echo -e "${CYAN}开发构建:${NC}"
     echo -e "  ${GREEN}all${NC}             构建全部（后端 + 生产版前端） 【默认】"
     echo -e "  ${GREEN}be${NC} | backend     仅构建后端服务"
     echo -e "  ${GREEN}fe${NC} | frontend   构建 Vue 前端"
     echo ""
+    echo -e "${CYAN}发行版构建:${NC}"
+    echo -e "  ${GREEN}minimal${NC}   轻量单机（文件配置，无 DB；无前端）"
+    echo -e "  ${GREEN}gateway${NC}   个人全功能（默认 SQLite，可外接中间件）"
+    echo -e "  ${GREEN}team${NC}      团队版（中间件外置：PG/向量等）"
+    echo ""
     echo -e "${CYAN}示例:${NC}"
     echo -e "  ./start.sh build             # 构建全部（等同于 build all）"
     echo -e "  ./start.sh build be          # 仅构建后端"
-    echo -e "  ./start.sh build fe          # 仅构建前端"
+    echo -e "  ./start.sh build minimal     # 构建 minimal 发行版"
     echo ""
-    echo -e "${YELLOW}提示:${NC} 构建发行版请使用: ./start.sh dist build <minimal|gateway|team>"
+    echo -e "${YELLOW}提示:${NC} Docker 镜像请使用: ./start.sh docker build <minimal|gateway|team>"
 }
 
 _help_dist() {
-    echo -e "${GREEN}命令: dist${NC}"
-    echo -e "       ${YELLOW}构建、运行发行版（本地或容器）${NC}"
+    echo -e "${GREEN}命令: dist${NC} ${YELLOW}(已弃用)${NC}"
+    echo -e "       ${YELLOW}请迁移到 build / docker 命令${NC}"
     echo ""
-    echo -e "${CYAN}用法:${NC}"
-    echo -e "  ./start.sh dist build        <name>   构建二进制"
-    echo -e "  ./start.sh dist run          <name>   运行二进制（自动加载 .env）"
-    echo -e "  ./start.sh dist docker-build <name> [--initdata <zip>]  构建 Docker 镜像"
-    echo -e "  ./start.sh dist docker-run   <name> [--initdata <zip>]  运行 Docker 容器（含中间件）"
-    echo -e "  ./start.sh dist <name>                默认构建（向后兼容）"
-    echo ""
-    echo -e "${CYAN}发行版:${NC}"
-    echo -e "  ${GREEN}minimal${NC}   轻量单机（文件配置，无 DB；后端+协议+router；无前端）"
-    echo -e "  ${GREEN}gateway${NC}   个人全功能（二进制与 team 对齐；部署默认 SQLite，可外接中间件）"
-    echo -e "  ${GREEN}team${NC}      团队版（二进制与 gateway 对齐；中间件单独部署：PG/向量等）"
-    echo ""
-    echo -e "${CYAN}特性对比:${NC}"
-    echo -e "  ┌─────────────┬─────────┬─────────┬─────────┐"
-    echo -e "  │ 功能         │ minimal │ gateway │ team    │"
-    echo -e "  ├─────────────┼─────────┼─────────┼─────────┤"
-    echo -e "  │ LLM 后端     │ ✅      │ ✅      │ ✅      │"
-    echo -e "  │ 业务插件     │ router  │ 全量    │ 全量    │"
-    echo -e "  │ 存储驱动     │ ❌      │ ✅      │ ✅      │"
-    echo -e "  │ 前端管理     │ ❌      │ ✅      │ ✅      │"
-    echo -e "  │ 默认数据库   │ 无(文件) │ SQLite  │ 外部 PG │"
-    echo -e "  │ 中间件部署   │ 无       │ 可选外接 │ 默认外置 │"
-    echo -e "  └─────────────┴─────────┴─────────┴─────────┘"
-    echo -e "  ${YELLOW}说明:${NC} gateway/team 插件集合相同；差别在部署默认依赖（docs/guide/dist-profiles.md）"
-    echo ""
-    echo -e "${CYAN}可选参数:${NC}"
-echo -e "  ${GREEN}--initdata <zip>${NC}   注入自定义 initdata 压缩包（由 config-generator 生成）"
-echo ""
-
-echo -e "${CYAN}一键部署（含中间件）:${NC}"
-    echo -e "  ./start.sh dist docker-run minimal    # 文件配置，无中间件"
-    echo -e "  ./start.sh dist docker-run gateway    # 默认 SQLite"
-    echo -e "  ./start.sh dist docker-run team       # 外部 PostgreSQL + 向量等"
-    echo ""
-    echo -e "${CYAN}示例:${NC}"
-    echo -e "  ./start.sh dist build minimal           # 构建二进制"
-    echo -e "  ./start.sh dist docker-build minimal    # 构建 Docker 镜像"
-    echo -e "  ./start.sh dist docker-run minimal      # 运行容器"
+    echo -e "${CYAN}迁移映射:${NC}"
+    echo -e "  ./start.sh dist build <ed>         →  ${GREEN}./start.sh build <ed>${NC}"
+    echo -e "  ./start.sh dist run <ed>           →  ${GREEN}./start.sh docker run <ed>${NC}"
+    echo -e "  ./start.sh dist docker-build <ed>  →  ${GREEN}./start.sh docker build <ed>${NC}"
+    echo -e "  ./start.sh dist docker-run <ed>    →  ${GREEN}./start.sh docker run <ed>${NC}"
 }
 
 _help_run() {
@@ -3131,13 +3228,16 @@ _help_stack() {
 
 _help_docker() {
     echo -e "${GREEN}命令: docker${NC}"
-    echo -e "       ${YELLOW}Docker Compose 管理${NC}"
+    echo -e "       ${YELLOW}Docker 镜像构建 / Compose 管理${NC}"
     echo ""
     echo -e "${CYAN}用法:${NC}"
     echo -e "  ./start.sh docker <子命令> [参数]"
     echo ""
-    echo -e "${CYAN}子命令:${NC}"
-    echo -e "  ${GREEN}build${NC} [be|fe|all]    构建 Docker 镜像"
+    echo -e "${CYAN}发行版操作:${NC}"
+    echo -e "  ${GREEN}build${NC} <minimal|gateway|team>              构建 Docker 镜像"
+    echo -e "  ${GREEN}run${NC}   <minimal|gateway|team> [port]       运行 Docker 容器"
+    echo ""
+    echo -e "${CYAN}Compose 操作:${NC}"
     echo -e "  ${GREEN}up${NC}                   启动 Centag 容器"
     echo -e "  ${GREEN}down${NC}                 停止并清理容器"
     echo -e "  ${GREEN}logs${NC} [service]       查看容器日志"
@@ -3150,9 +3250,10 @@ _help_docker() {
     echo -e "${YELLOW}注意:${NC} docker compose 仅编排 centag 容器；中间件请用 stack 命令"
     echo ""
     echo -e "${CYAN}示例:${NC}"
-    echo -e "  ./start.sh docker up"
-    echo -e "  ./start.sh docker logs"
-    echo -e "  ./start.sh docker debug"
+    echo -e "  ./start.sh docker build minimal   # 构建 minimal 镜像"
+    echo -e "  ./start.sh docker run gateway     # 运行 gateway 容器"
+    echo -e "  ./start.sh docker up              # Compose 启动"
+    echo -e "  ./start.sh docker logs            # 查看日志"
 }
 
 _help_webui() {
@@ -3823,34 +3924,34 @@ main() {
                 all)
                     build all
                     ;;
+                minimal|gateway|team)
+                    build dist "$target"
+                    ;;
                 *)
                     print_error "未知构建目标: '$target'"
-                    echo "支持的构建目标: all, be, fe"
+                    echo "支持的构建目标: all, be, fe, minimal, gateway, team"
                     exit 1
                     ;;
             esac
             ;;
 
-        # ── 发行版（构建 / 运行 / 容器）───────────────────────────────────
+        # ── 发行版（已弃用，代理到 build / docker）───────────────────────
         dist)
             local subcmd="${1:-}"
             if [ -n "$subcmd" ]; then shift; fi
             case "$subcmd" in
                 build)
-                    local dist_name="${1:-}"
-                    if [ -z "$dist_name" ]; then
-                        print_error "请指定发行版名称: minimal, gateway, team"
-                        print_info "用法: $0 dist build <minimal|gateway|team>"
-                        exit 1
-                    fi
+                    local dist_name="${1:-minimal}"
+                    print_warn "已弃用: './start.sh dist build' → 请用 './start.sh build $dist_name'"
                     build dist "$dist_name"
                     ;;
                 run)
                     local dist_name="${1:-minimal}"
+                    print_warn "已弃用: './start.sh dist run' → 请用 './start.sh docker run $dist_name'"
                     local bin_path="$PROJECT_ROOT/bin/server/centag-${dist_name}"
                     if [ ! -f "$bin_path" ]; then
                         print_error "未找到发行版二进制: $bin_path"
-                        print_info "请先执行: $0 dist build $dist_name"
+                        print_info "请先执行: $0 build $dist_name"
                         exit 1
                     fi
                     load_env
@@ -3858,202 +3959,23 @@ main() {
                     exec "$bin_path"
                     ;;
                 docker-build)
-                    local dist_name=""
-                    local tag=""
-                    local initdata_path=""
-                    local pos=0
-                    while [ $# -gt 0 ]; do
-                        case "$1" in
-                            --initdata)
-                                initdata_path="$2"
-                                shift 2
-                                ;;
-                            --*)
-                                print_error "未知参数: $1"
-                                exit 1
-                                ;;
-                            *)
-                                pos=$((pos + 1))
-                                case $pos in
-                                    1) dist_name="$1" ;;
-                                    2) tag="$1" ;;
-                                esac
-                                shift
-                                ;;
-                        esac
-                    done
-                    if [ -z "$dist_name" ]; then
-                        dist_name="minimal"
-                    fi
-                    if [[ ! "$dist_name" =~ ^(minimal|gateway|team)$ ]]; then
-                        print_error "无效的发行版名称: $dist_name"
-                        print_info "可用: minimal, gateway, team"
-                        exit 1
-                    fi
-                    if [ -z "$tag" ]; then
-                        tag="centag-${dist_name}:latest"
-                    fi
-                    # minimal 不包含前端，gateway 和 team 包含前端
-                    local include_frontend="true"
-                    if [ "$dist_name" = "minimal" ]; then
-                        include_frontend="false"
-                    fi
-                    # 准备 initdata archive（存放到 temp 目录）
-                    local initdata_archive_flag=false
-                    local initdata_temp_dir="/tmp/centag-initdata-$$"
-                    mkdir -p "$initdata_temp_dir"
-                    
-                    if [ -n "$initdata_path" ]; then
-                        if [ ! -f "$initdata_path" ]; then
-                            print_error "initdata 文件不存在: $initdata_path"
-                            exit 1
-                        fi
-                        cp "$initdata_path" "$initdata_temp_dir/initdata.zip"
-                        initdata_archive_flag=true
-                        print_info "使用自定义 initdata: $initdata_path"
-                    else
-                        # 创建默认 initdata.zip（直连+路由流水线 + OpenAI 后端配置）
-                        print_info "生成默认 initdata.zip..."
-                        (
-                            cd "$initdata_temp_dir"
-                            mkdir -p pipeline-templates
-                            
-                            # 复制直连和路由流水线模板
-                            cp "$PROJECT_ROOT/config/initdata/pipeline-templates/03-direct-backend.yaml" pipeline-templates/
-                            cp "$PROJECT_ROOT/config/initdata/pipeline-templates/11-router-mode.yaml" pipeline-templates/
-                            
-                            # 生成精简版 initial-backends.yaml（仅 OpenAI，无 key）
-                            cat > initial-backends.yaml << 'INITDATA_EOF'
-version: "2.0"
-description: Default initdata - OpenAI backend (configure API key in .env)
-backends:
-  - id: openai
-    name: OpenAI
-    type: openai
-    base_url: https://api.openai.com/v1
-    api_key: "${OPENAI_API_KEY}"
-    enabled: true
-    timeout: 120
-    max_retries: 3
-    auto_fetch_models: true
-    description: OpenAI GPT-4/GPT-3.5 API
-    supported_models:
-      - requested_model: gpt-4o
-        actual_model: gpt-4o
-        is_exact: true
-        compatibility_score: 1.0
-      - requested_model: gpt-4o-mini
-        actual_model: gpt-4o-mini
-        is_exact: true
-        compatibility_score: 1.0
-    capabilities:
-      max_context_tokens: 128000
-      features:
-        - chat
-        - completion
-      supports_tools: true
-    weight: 100
-    priority: 10
-INITDATA_EOF
-                            
-                            # 创建 zip
-                            zip -r initdata.zip .
-                        )
-                        initdata_archive_flag=true
-                        print_info "默认 initdata 已生成"
-                    fi
-                    # 使用 BuildKit build-context 传递 initdata（不污染项目根目录）
-                    local build_tags=$(_get_dist_tags "$dist_name")
-                    print_info "构建 Docker 镜像: ${tag} (dist=${dist_name}, frontend=${include_frontend})..."
-                    docker build \
-                        --build-arg DIST_NAME="$dist_name" \
-                        --build-arg INCLUDE_FRONTEND="$include_frontend" \
-                        --build-arg INITDATA_ARCHIVE="$initdata_archive_flag" \
-                        --build-arg BUILD_TAGS="$build_tags" \
-                        --build-context initdata="$initdata_temp_dir" \
-                        -t "$tag" \
-                        -f deploy/docker/Dockerfile.dist \
-                        .
-                    print_success "镜像构建完成: ${tag}"
-                    # 清理 temp 目录
-                    rm -rf "$initdata_temp_dir"
+                    local dist_name="${1:-minimal}"
+                    print_warn "已弃用: './start.sh dist docker-build' → 请用 './start.sh docker build $dist_name'"
+                    _dist_docker_build "$dist_name" "" ""
                     ;;
                 docker-run)
-                    local dist_name=""
-                    local port=""
-                    local initdata_path=""
-                    local pos=0
-                    while [ $# -gt 0 ]; do
-                        case "$1" in
-                            --initdata)
-                                initdata_path="$2"
-                                shift 2
-                                ;;
-                            --*)
-                                print_error "未知参数: $1"
-                                exit 1
-                                ;;
-                            *)
-                                pos=$((pos + 1))
-                                case $pos in
-                                    1) dist_name="$1" ;;
-                                    2) port="$1" ;;
-                                esac
-                                shift
-                                ;;
-                        esac
-                    done
-                    if [ -z "$dist_name" ]; then
-                        dist_name="minimal"
-                    fi
-                    if [ -z "$port" ]; then
-                        port="20060"
-                    fi
-                    if [[ ! "$dist_name" =~ ^(minimal|gateway|team)$ ]]; then
-                        print_error "无效的发行版名称: $dist_name"
-                        print_info "可用: minimal, gateway, team"
-                        exit 1
-                    fi
-                    local tag="centag-${dist_name}:latest"
-                    # 检查镜像是否存在，不存在则先构建
-                    if ! docker image inspect "$tag" >/dev/null 2>&1; then
-                        print_info "镜像 ${tag} 不存在，先执行构建..."
-                        if [ -n "$initdata_path" ]; then
-                            $0 dist docker-build --initdata "$initdata_path" "$dist_name"
-                        else
-                            $0 dist docker-build "$dist_name"
-                        fi
-                    fi
-                    load_env
-                    # team 版本使用 docker-compose 启动所有服务
-                    if [ "$dist_name" = "team" ]; then
-                        print_info "启动 team 服务（含 PostgreSQL + Redis + Qdrant）..."
-                        cd "${PROJECT_ROOT}/config/profiles/team"
-                        docker compose up -d
-                        print_success "team 服务已启动"
-                        print_info "  - Centag: http://localhost:${port}"
-                        print_info "  - PostgreSQL: localhost:5432"
-                        print_info "  - Redis: localhost:6379"
-                        print_info "  - Qdrant: http://localhost:6333"
-                        cd "${PROJECT_ROOT}"
-                    else
-                        print_info "启动容器: ${tag} (端口 ${port})..."
-                        exec docker run --rm -it \
-                            --env-file "${PROJECT_ROOT}/config/secrets/.env" \
-                            -e CENTAG_EDITION="${dist_name}" \
-                            -p "${port}:20060" \
-                            -v "${PROJECT_ROOT}/storage:/app/storage" \
-                            -v "${PROJECT_ROOT}/logs:/app/logs" \
-                            "$tag"
-                    fi
+                    local dist_name="${1:-minimal}"
+                    print_warn "已弃用: './start.sh dist docker-run' → 请用 './start.sh docker run $dist_name'"
+                    _dist_docker_run "$dist_name" "" ""
                     ;;
                 *)
-                    # 向后兼容：./start.sh dist minimal → 默认 build
                     if [ -n "$subcmd" ]; then
+                        print_warn "已弃用: './start.sh dist $subcmd' → 请用 './start.sh build $subcmd'"
                         build dist "$subcmd"
                     else
                         print_error "请指定子命令或发行版名称"
                         print_info "用法: $0 dist <build|run|docker-build|docker-run> <minimal|gateway|team>"
+                        print_info "推荐: $0 build <minimal|gateway|team>  或  $0 docker <build|run> <minimal|gateway|team>"
                         exit 1
                     fi
                     ;;
@@ -4263,13 +4185,38 @@ INITDATA_EOF
             ;;
 
         # ── Docker ─────────────────────────────────────────────────────
-        docker)
+         docker)
             local docker_cmd="${1:-}"
             shift || true
             case "$docker_cmd" in
+                # ── 发行版 Docker 操作（新）──
                 build)
-                    docker_build "${1:-all}"
+                    local edition="${1:-}"
+                    case "$edition" in
+                        minimal|gateway|team)
+                            _dist_docker_build "$edition" "" ""
+                            ;;
+                        *)
+                            # 向后兼容: docker build all/be/fe
+                            docker_build "$edition"
+                            ;;
+                    esac
                     ;;
+                run)
+                    local edition="${1:-minimal}"
+                    local port="${2:-20060}"
+                    local initdata_path=""
+                    # 检查 --initdata 参数
+                    shift 2 || true
+                    while [ $# -gt 0 ]; do
+                        case "$1" in
+                            --initdata) initdata_path="$2"; shift 2 ;;
+                            *) shift ;;
+                        esac
+                    done
+                    _dist_docker_run "$edition" "$port" "$initdata_path"
+                    ;;
+                # ── Docker Compose 操作（保留）──
                 up)
                     docker_up "${1:-}"
                     ;;
@@ -4296,11 +4243,14 @@ INITDATA_EOF
                     ;;
                 *)
                     print_error "未知 docker 子命令: '$docker_cmd'"
-                    echo "用法: $0 docker <build|up|down|logs|status|clean|pack|debug|restart> [...]"
+                    echo "用法: $0 docker <子命令> [参数]"
                     echo ""
-                    echo "Debug 模式命令:"
-                    echo "  ./start.sh docker debug          - 启动 debug 模式（挂载本地 bin/server/centag）"
-                    echo "  ./start.sh docker restart        - 重启主服务容器"
+                    echo "发行版操作:"
+                    echo "  $0 docker build <minimal|gateway|team>              构建 Docker 镜像"
+                    echo "  $0 docker run   <minimal|gateway|team> [port]       运行 Docker 容器"
+                    echo ""
+                    echo "Compose 操作:"
+                    echo "  $0 docker up|down|logs|status|clean|pack|debug|restart"
                     exit 1
                     ;;
             esac

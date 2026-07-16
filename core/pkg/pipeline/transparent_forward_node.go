@@ -56,8 +56,13 @@ func (n *TransparentForwardNode) Execute(ctx context.Context, input *NodeInput) 
 		method = http.MethodPost
 	}
 
-	// 后端解析：config.backend（模板配置）→ X-Backend-ID header（运行时覆盖）
+	// 后端解析：config.backend（模板配置，支持 {{system.default_backend}} 虚拟变量）
+	// → X-Backend-ID header（运行时覆盖）
 	backendID := strings.TrimSpace(n.config.Backend)
+	if backendID == "" || backendID == "{{system.default_backend}}" {
+		resolvedBackend, _ := ResolveVirtualVars(backendID, n.config.Model)
+		backendID = strings.TrimSpace(resolvedBackend)
+	}
 	if backendID == "" && meta != nil {
 		backendID = strings.TrimSpace(stringMeta(meta, "backend_id"))
 	}

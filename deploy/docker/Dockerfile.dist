@@ -8,24 +8,17 @@
 #
 # BUILD_TAGS 由 start.sh _get_dist_tags() 注入；gateway/team 共用全功能 tags。
 # ============================================================
-# 阶段 1：前端构建（minimal 版本跳过，直接使用 config-generator）
+# 阶段 1：前端构建（所有版本共用同一套 Vue 前端）
+# 前端通过 CENTAG_EDITION 环境变量自动适配 minimal/gateway/team UI
 # ============================================================
 FROM docker.m.daocloud.io/library/node:20-alpine AS frontend-builder
 
 ARG INCLUDE_FRONTEND=true
-ARG DIST_NAME=minimal
 
 WORKDIR /apps
 
 RUN npm config set registry https://registry.npmmirror.com
 
-# minimal 版本跳过前端构建，直接创建标记文件
-RUN if [ "$DIST_NAME" = "minimal" ]; then \
-        mkdir -p /bin/server/static && \
-        echo "config-generator" > /tmp/frontend-flag; \
-    fi
-
-# 只有需要前端时才复制源码并构建
 COPY web/package*.json ./
 RUN --mount=type=cache,target=/root/.npm \
     if [ "$INCLUDE_FRONTEND" = "true" ]; then \
@@ -33,12 +26,9 @@ RUN --mount=type=cache,target=/root/.npm \
     fi
 
 COPY web/ ./
-# @shared → ./shared（已包含在 web/ 中）；outDir ../bin/server/static → /bin/server/static
 RUN if [ "$INCLUDE_FRONTEND" = "true" ]; then \
-        npm run build && \
-        echo "frontend-enabled" > /tmp/frontend-flag; \
-    elif [ "$DIST_NAME" != "minimal" ]; then \
-        echo "frontend-disabled" > /tmp/frontend-flag && \
+        npm run build; \
+    else \
         mkdir -p /bin/server/static; \
     fi
 
@@ -74,10 +64,6 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 COPY core/ ./core/
 COPY plugins/ ./plugins/
 COPY dist/${DIST_NAME}/ ./dist/${DIST_NAME}/
-
-# 配置生成器与 shared（均在 web/ 下）
-COPY web/public/config-generator/ ./config-generator/
-COPY web/shared/ ./shared/
 
 # 在 dist 目录内下载依赖（使用 cache mount 加速）
 RUN --mount=type=cache,target=/go/pkg/mod \
@@ -136,21 +122,8 @@ WORKDIR /app
 # 从构建阶段复制产物
 COPY --from=builder /app/bin/centag ./bin/centag
 
-# 复制前端静态文件（完整前端）
+# 复制前端静态文件（所有版本共用，前端通过 CENTAG_EDITION 自动适配 UI）
 COPY --from=frontend-builder /bin/server/static ./static
-
-# minimal 版：用 config-generator 替换完整前端
-COPY --from=builder /app/config-generator ./config-generator-dist
-COPY --from=builder /app/shared ./config-generator-dist/shared
-RUN if [ "$INCLUDE_FRONTEND" = "false" ] && [ "$DIST_NAME" = "minimal" ]; then \
-        rm -rf ./static && \
-        mv ./config-generator-dist ./static; \
-    else \
-        rm -rf ./config-generator-dist; \
-    fi
-
-# 如果不需要前端，删除静态文件
-RUN if [ "$INCLUDE_FRONTEND" = "false" ] && [ "$DIST_NAME" != "minimal" ]; then rm -rf ./static; fi
 
 # 复制运行时脚本和初始数据
 COPY deploy/docker/entrypoint.sh ./entrypoint.sh

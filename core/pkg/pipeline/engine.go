@@ -11,6 +11,8 @@ import (
 
 	"centag/core/pkg/backend"
 	"centag/core/internal/cache"
+	"centag/core/pkg/config"
+	"centag/core/pkg/logger"
 	"centag/core/pkg/plugin"
 	"centag/core/pkg/storage"
 	"centag/core/pkg/utils"
@@ -2151,32 +2153,158 @@ func NewDefaultLLMProvider(backendManager *backend.Manager, pluginManager *plugi
 	}
 }
 
-// CreateClient 创建 LLM 客户端
+// ConfigIncompleteError 配置未完成错误
+type ConfigIncompleteError struct {
+	Code    string
+	Message string
+	Hint    string
+}
+
+func (e *ConfigIncompleteError) Error() string {
+	return fmt.Sprintf("[%s] %s (Hint: %s)", e.Code, e.Message, e.Hint)
+}
+
+// CreateClient 创建 LLM 客户端（支持虚拟变量解析和降级策略）
 func (p *DefaultLLMProvider) CreateClient(backendID, model string) (LLMClient, error) {
 	if p.backendManager == nil {
 		return nil, backend.NewNoUsableBackendError(fmt.Errorf("backend manager not available"))
 	}
 
-	// 获取后端配置
-	backendConfig, err := p.backendManager.Get(backendID)
+	// 1. 解析虚拟变量
+	resolvedBackend, resolvedModel := p.resolveVirtualVars(backendID, model)
+
+	// 2. 检查是否配置了默认后端
+	if resolvedBackend == "" {
+		return nil, &ConfigIncompleteError{
+			Code:    "DEFAULT_BACKEND_NOT_CONFIGURED",
+			Message: "系统未配置默认后端，无法执行流水线",
+			Hint:    "请在系统设置中配置 Default Backend ID 和 Default Model，或设置环境变量 LLM_PROXY_DEFAULT_BACKEND_ID 和 LLM_PROXY_DEFAULT_MODEL",
+		}
+	}
+
+	// 3. 尝试使用解析后的后端
+	backendConfig, err := p.backendManager.Get(resolvedBackend)
 	if err != nil {
-		// 模板引用缺失或尚未配置后端：统一引导用户配置后端与 Key
-		return nil, backend.NewNoUsableBackendError(fmt.Errorf("backend %q not found: %w", backendID, err))
+		// 4. 尝试使用降级后端
+		fallbackBackend, fallbackModel := p.resolveFallback(resolvedBackend, resolvedModel)
+		if fallbackBackend != nil {
+			logger.Info("Using fallback backend",
+				logger.GetField("requested_backend", resolvedBackend),
+				logger.GetField("fallback_backend", fallbackBackend.ID),
+				logger.GetField("requested_model", resolvedModel),
+				logger.GetField("fallback_model", fallbackModel))
+			return p.createClientFromConfig(fallbackBackend, fallbackModel)
+		}
+		return nil, backend.NewNoUsableBackendError(fmt.Errorf("backend %q not found and no fallback available: %w", resolvedBackend, err))
 	}
 
 	if !backendConfig.Enabled {
-		return nil, backend.NewNoUsableBackendError(fmt.Errorf("backend %q is disabled", backendID))
+		// 尝试使用降级后端
+		fallbackBackend, fallbackModel := p.resolveFallback(resolvedBackend, resolvedModel)
+		if fallbackBackend != nil {
+			logger.Info("Using fallback backend (requested is disabled)",
+				logger.GetField("requested_backend", resolvedBackend),
+				logger.GetField("fallback_backend", fallbackBackend.ID))
+			return p.createClientFromConfig(fallbackBackend, fallbackModel)
+		}
+		return nil, backend.NewNoUsableBackendError(fmt.Errorf("backend %q is disabled", resolvedBackend))
 	}
 
 	if !backend.IsUsableLLMBackend(backendConfig) {
-		if strings.EqualFold(strings.TrimSpace(backendConfig.Type), "ollama") {
-			return nil, backend.NewNoUsableBackendError(fmt.Errorf("backend %q missing base_url", backendID))
+		// 尝试使用降级后端
+		fallbackBackend, fallbackModel := p.resolveFallback(resolvedBackend, resolvedModel)
+		if fallbackBackend != nil {
+			logger.Info("Using fallback backend (requested is not usable)",
+				logger.GetField("requested_backend", resolvedBackend),
+				logger.GetField("fallback_backend", fallbackBackend.ID))
+			return p.createClientFromConfig(fallbackBackend, fallbackModel)
 		}
-		return nil, backend.NewNoBackendAPIKeyError(backendID)
+		if strings.EqualFold(strings.TrimSpace(backendConfig.Type), "ollama") {
+			return nil, backend.NewNoUsableBackendError(fmt.Errorf("backend %q missing base_url", resolvedBackend))
+		}
+		return nil, backend.NewNoBackendAPIKeyError(resolvedBackend)
 	}
 
-	// 获取后端插件
-	pluginName := getPluginNameForBackend(backendConfig)
+	return p.createClientFromConfig(backendConfig, resolvedModel)
+}
+
+// resolveVirtualVars 解析虚拟变量
+func (p *DefaultLLMProvider) resolveVirtualVars(backendID, model string) (string, string) {
+	return ResolveVirtualVars(backendID, model)
+}
+
+// ResolveVirtualVars 解析 {{system.default_backend}} 和 {{system.default_model}} 虚拟变量。
+// 空字符串也触发解析（等价于虚拟变量占位符）。
+func ResolveVirtualVars(backendID, model string) (string, string) {
+	cfg := config.Get()
+	if cfg == nil {
+		return backendID, model
+	}
+
+	resolvedBackend := backendID
+	resolvedModel := model
+
+	if backendID == "{{system.default_backend}}" || backendID == "" {
+		resolvedBackend = cfg.Proxy.DefaultBackendID
+	}
+
+	if model == "{{system.default_model}}" || model == "" {
+		resolvedModel = cfg.Proxy.DefaultModel
+	}
+
+	return resolvedBackend, resolvedModel
+}
+
+// resolveFallback 解析降级配置
+func (p *DefaultLLMProvider) resolveFallback(requestedBackend, requestedModel string) (*backend.BackendConfig, string) {
+	cfg := config.Get()
+	if cfg == nil {
+		return nil, ""
+	}
+
+	// 优先使用配置的降级后端
+	if cfg.Proxy.FallbackBackendID != "" {
+		fallbackConfig, err := p.backendManager.Get(cfg.Proxy.FallbackBackendID)
+		if err == nil && fallbackConfig.Enabled && backend.IsUsableLLMBackend(fallbackConfig) {
+			fallbackModel := cfg.Proxy.FallbackModel
+			if fallbackModel == "" {
+				fallbackModel = requestedModel
+			}
+			return fallbackConfig, fallbackModel
+		}
+	}
+
+	// 如果降级后端也不可用，尝试使用默认后端（如果与请求的后端不同）
+	if cfg.Proxy.DefaultBackendID != "" && cfg.Proxy.DefaultBackendID != requestedBackend {
+		defaultConfig, err := p.backendManager.Get(cfg.Proxy.DefaultBackendID)
+		if err == nil && defaultConfig.Enabled && backend.IsUsableLLMBackend(defaultConfig) {
+			return defaultConfig, requestedModel
+		}
+	}
+
+	// 最后尝试使用任意可用后端
+	enabled := p.backendManager.GetEnabled()
+	if len(enabled) > 0 {
+		for _, b := range enabled {
+			if backend.IsUsableLLMBackend(b) {
+				return b, requestedModel
+			}
+		}
+	}
+
+	return nil, ""
+}
+
+// createClientFromConfig 从配置创建客户端
+func (p *DefaultLLMProvider) createClientFromConfig(cfg *backend.BackendConfig, model string) (LLMClient, error) {
+	if !backend.IsUsableLLMBackend(cfg) {
+		if strings.EqualFold(strings.TrimSpace(cfg.Type), "ollama") {
+			return nil, backend.NewNoUsableBackendError(fmt.Errorf("backend %q missing base_url", cfg.ID))
+		}
+		return nil, backend.NewNoBackendAPIKeyError(cfg.ID)
+	}
+
+	pluginName := getPluginNameForBackend(cfg)
 	backendPlugin, err := p.pluginManager.GetBackend(pluginName)
 	if err != nil {
 		return nil, fmt.Errorf("backend plugin %q not found: %w", pluginName, err)
@@ -2184,7 +2312,7 @@ func (p *DefaultLLMProvider) CreateClient(backendID, model string) (LLMClient, e
 
 	return &llmClient{
 		backendPlugin: backendPlugin,
-		backendConfig: backendConfig,
+		backendConfig: cfg,
 		model:         model,
 	}, nil
 }

@@ -38,9 +38,14 @@ nodes:
   kind: llm.generate
   implementation: builtin.generator
   name: 透明代理生成
-  backend: alibaba-dashscope
-  model: glm-4-flash
+  backend: "{{system.default_backend}}"
+  model: "{{system.default_model}}"
   config:
+    backend: "{{system.default_backend}}"
+    model: "{{system.default_model}}"
+    template_vars:
+      backend: "system.default_backend"
+      model: "system.default_model"
     system_prompt: Redis 缓存后端示例
   timeout: 120
   condition: '{{cache_read.metadata.cache_hit}} != true'

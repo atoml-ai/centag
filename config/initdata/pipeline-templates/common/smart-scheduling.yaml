@@ -14,8 +14,14 @@ nodes:
   kind: llm.generate
   implementation: builtin.generator
   name: 调度生成
-  backend: bigmodel
-  model: glm-4-flash
+  backend: "{{system.default_backend}}"
+  model: "{{system.default_model}}"
+  config:
+    backend: "{{system.default_backend}}"
+    model: "{{system.default_model}}"
+    template_vars:
+      backend: "system.default_backend"
+      model: "system.default_model"
   timeout: 120
   depends_on:
   - scheduler

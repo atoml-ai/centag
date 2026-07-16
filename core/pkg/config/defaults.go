@@ -29,8 +29,10 @@ func DefaultProxyConfig() ProxyConfig {
 		Enabled:             true,
 		DefaultMode:         defaultMode,
 		AllowHeaderOverride: envBool("LLM_PROXY_ALLOW_HEADER_OVERRIDE", true),
-		DefaultBackendID:    envStr("LLM_PROXY_DEFAULT_BACKEND_ID", "ollama-local"),
-		DefaultModel:        envStr("LLM_PROXY_DEFAULT_MODEL", "qwen2.5:1.5b"),
+		DefaultBackendID:    envStr("LLM_PROXY_DEFAULT_BACKEND_ID", ""),
+		DefaultModel:        envStr("LLM_PROXY_DEFAULT_MODEL", ""),
+		FallbackBackendID:   envStr("LLM_PROXY_FALLBACK_BACKEND_ID", ""),
+		FallbackModel:       envStr("LLM_PROXY_FALLBACK_MODEL", ""),
 		PipelineConfig: &PipelineConfig{
 			DefaultPipeline:   defaultMode,
 			AllowUserOverride: true,

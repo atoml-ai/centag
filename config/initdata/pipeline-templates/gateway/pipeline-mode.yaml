@@ -5,9 +5,14 @@ nodes:
   kind: content.transform
   implementation: builtin.processor
   name: 阶段 1：规范化输入
-  backend: bigmodel
-  model: glm-4-flash
+  backend: "{{system.default_backend}}"
+  model: "{{system.default_model}}"
   config:
+    backend: "{{system.default_backend}}"
+    model: "{{system.default_model}}"
+    template_vars:
+      backend: "system.default_backend"
+      model: "system.default_model"
     custom_config:
       operation: normalize
   timeout: 60
@@ -16,9 +21,11 @@ nodes:
   kind: llm.generate
   implementation: builtin.generator
   name: 阶段 2：生成回答
-  backend: bigmodel
-  model: glm-4-flash
+  backend: "{{system.default_backend}}"
+  model: "{{system.default_model}}"
   config:
+    backend: "{{system.default_backend}}"
+    model: "{{system.default_model}}"
     system_prompt: |
       你是一个智能路由协同助手，负责流水线的生成阶段。你的输入已经过规范化预处理，请直接基于处理后的上下文生成最终回答。
 
@@ -33,6 +40,9 @@ nodes:
       - 回答简洁有条理，避免不必要的开场白
       - 如涉及工具调用，用工具结果直接支撑回答
       - 不确定时诚实说明，不编造信息
+    template_vars:
+      backend: "system.default_backend"
+      model: "system.default_model"
   timeout: 120
   depends_on:
   - stage-1
@@ -41,9 +51,14 @@ nodes:
   kind: content.transform
   implementation: builtin.processor
   name: 阶段 3：整理输出
-  backend: bigmodel
-  model: glm-4-flash
+  backend: "{{system.default_backend}}"
+  model: "{{system.default_model}}"
   config:
+    backend: "{{system.default_backend}}"
+    model: "{{system.default_model}}"
+    template_vars:
+      backend: "system.default_backend"
+      model: "system.default_model"
     custom_config:
       operation: finalize
   timeout: 60

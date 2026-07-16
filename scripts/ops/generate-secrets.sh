@@ -129,8 +129,8 @@ LLM_PROXY_API_KEY_STORAGE_SECRET=${api_key_storage_secret}
 # 代理默认（空库 seed；可按需修改）
 # -----------------------------------------------------------------------------
 LLM_PROXY_DEFAULT_MODE=transparent-proxy
-LLM_PROXY_DEFAULT_BACKEND_ID=ollama-local
-LLM_PROXY_DEFAULT_MODEL=qwen2.5:1.5b
+LLM_PROXY_DEFAULT_BACKEND_ID=
+LLM_PROXY_DEFAULT_MODEL=
 LLM_PROXY_DEFAULT_EMBEDDING_MODEL=bge-m3:latest
 
 # -----------------------------------------------------------------------------

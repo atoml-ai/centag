@@ -17,6 +17,7 @@ const Config = () => import('@/views/Config.vue')
 const Cache = () => import('@/views/Cache.vue')
 const Evaluation = () => import('@/views/Evaluation.vue')
 const Chat = () => import('@/views/Chat.vue')
+const MinimalChat = () => import('@/views/MinimalChat.vue')
 const Storage = () => import('@/views/Storage.vue')
 const DataStores = () => import('@/views/DataStores.vue')
 const HostProxy = () => import('@/views/HostProxy.vue')
@@ -59,7 +60,7 @@ const routes = [
   { path: '/settings', name: 'Settings', component: Settings, meta: { title: '设置' } },
   { path: '/cache', name: 'Cache', component: Cache, meta: { title: '缓存管理' } },
   { path: '/evaluation', name: 'Evaluation', component: Evaluation, meta: { title: '缓存评估管理' } },
-  { path: '/chat', name: 'Chat', component: Chat, meta: { title: '接入演示' } },
+  { path: '/chat', name: 'Chat', component: isMinimalEdition() ? MinimalChat : Chat, meta: { title: 'AI 对话' } },
   { path: '/agent-setup', name: 'AgentSetup', component: AgentSetup, meta: { title: 'Agent 快速接入' } },
   { path: '/agent-providers', name: 'AgentProviders', component: AgentProviders, meta: { title: 'Agent 供应商管理' } },
   {
