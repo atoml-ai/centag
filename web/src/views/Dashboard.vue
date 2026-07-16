@@ -44,15 +44,67 @@
             />
           </el-card>
 
-          <el-card class="info-card config-card">
-            <template #header>
-              <div class="card-head">
-                <el-icon class="card-icon pipeline-color"><Share /></el-icon>
-                <span>流水线配置</span>
-              </div>
-            </template>
-            <HomePipelineCard ref="pipelinePanelRef" />
-          </el-card>
+          <div class="lite-proxy-col">
+            <el-card class="info-card config-card">
+              <template #header>
+                <div class="card-head">
+                  <el-icon class="card-icon pipeline-color"><Share /></el-icon>
+                  <span>流水线配置</span>
+                </div>
+              </template>
+              <HomePipelineCard ref="pipelinePanelRef" />
+            </el-card>
+
+            <el-card class="info-card config-card">
+              <template #header>
+                <div class="card-head">
+                  <el-icon class="card-icon service-color"><Monitor /></el-icon>
+                  <span>默认模型</span>
+                </div>
+              </template>
+              <el-form label-width="100px" size="small" @submit.prevent="saveProxyConfig">
+                <el-form-item label="默认后端">
+                  <el-select
+                    v-model="proxyConfig.default_backend_id"
+                    placeholder="选择默认后端"
+                    clearable
+                    style="width: 100%"
+                    @change="onDefaultBackendChange"
+                  >
+                    <el-option
+                      v-for="b in backends.filter((b: any) => b.enabled)"
+                      :key="b.id"
+                      :label="b.name"
+                      :value="b.id"
+                    />
+                  </el-select>
+                </el-form-item>
+                <el-form-item label="默认模型">
+                  <el-select
+                    v-model="proxyConfig.default_model"
+                    placeholder="选择默认模型"
+                    clearable
+                    filterable
+                    allow-create
+                    :loading="loadingModels"
+                    style="width: 100%"
+                  >
+                    <el-option
+                      v-for="m in availableModels"
+                      :key="m"
+                      :label="m"
+                      :value="m"
+                    />
+                  </el-select>
+                </el-form-item>
+                <el-form-item>
+                  <el-button type="primary" :loading="proxyConfigSaving" @click="saveProxyConfig">
+                    保存
+                  </el-button>
+                </el-form-item>
+              </el-form>
+            </el-card>
+          </div>
         </div>
       </div>
       <ChangePasswordDialog v-model="pwdDialogVisible" />
@@ -642,6 +694,65 @@ const pipelinePanelRef = ref<{ reload: () => void } | null>(null)
 const backendListRef = ref<{ openCreate: () => void } | null>(null)
 const pwdDialogVisible = ref(false)
 
+// Proxy config (default backend / model)
+const proxyConfigSaving = ref(false)
+const proxyConfig = ref<{ default_backend_id: string; default_model: string }>({
+  default_backend_id: '',
+  default_model: ''
+})
+const availableModels = ref<string[]>([])
+const loadingModels = ref(false)
+
+async function loadProxyConfig() {
+  try {
+    const res: any = await api.get('/api/v1/config/proxy')
+    if (res?.data) {
+      proxyConfig.value.default_backend_id = res.data.default_backend_id || ''
+      proxyConfig.value.default_model = res.data.default_model || ''
+      if (proxyConfig.value.default_backend_id) {
+        await fetchModelsForBackend(proxyConfig.value.default_backend_id)
+      }
+    }
+  } catch { /* ignore */ }
+}
+
+async function fetchModelsForBackend(backendId: string) {
+  if (!backendId) {
+    availableModels.value = []
+    return
+  }
+  loadingModels.value = true
+  try {
+    const res: any = await api.get(`/api/v1/backends/${backendId}/models`)
+    const models = Array.isArray(res) ? res : (res?.data || [])
+    availableModels.value = models.map((m: any) => m.id || m.name || m.model || '').filter(Boolean)
+  } catch {
+    availableModels.value = []
+  } finally {
+    loadingModels.value = false
+  }
+}
+
+async function onDefaultBackendChange() {
+  proxyConfig.value.default_model = ''
+  await fetchModelsForBackend(proxyConfig.value.default_backend_id)
+}
+
+async function saveProxyConfig() {
+  proxyConfigSaving.value = true
+  try {
+    await api.put('/api/v1/config/proxy', {
+      default_backend_id: proxyConfig.value.default_backend_id,
+      default_model: proxyConfig.value.default_model
+    })
+    ElMessage.success('默认模型配置已保存')
+  } catch (e: any) {
+    ElMessage.error('保存失败: ' + (e?.message || '未知错误'))
+  } finally {
+    proxyConfigSaving.value = false
+  }
+}
+
 async function handleLogout() {
   try {
     await ElMessageBox.confirm('确定要退出登录吗？', '退出登录', {
@@ -946,8 +1057,12 @@ async function load() {
         backends.value = backendsRes.value || []
       }
       pipelinePanelRef.value?.reload()
+      loadProxyConfig()
       return
     }
+
+    // Minimal also needs proxy config
+    loadProxyConfig()
 
     const [dashRes, statusRes, backendsRes, storagesRes, pluginsRes, proxyRes, hostProxyRes] = await Promise.allSettled([
       getDashboard(),
@@ -1081,9 +1196,20 @@ onUnmounted(() => { if (timer) clearInterval(timer) })
 
 .lite-row--config {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: 1fr 1fr;
   gap: 16px;
   align-items: stretch;
+}
+
+.lite-proxy-col {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.lite-proxy-col .config-card {
+  flex: 1;
+  min-height: 0;
 }
 
 .personal-top-layout {
