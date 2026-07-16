@@ -1,0 +1,26 @@
+---
+description: "Centag 流水线测试 — Cursor 交互入口。仅 AskQuestion；正本 docs/harness/skills/centag-pipeline-test.md。分层见 AGENT.md。"
+globs: []
+alwaysApply: false
+---
+
+# Centag Pipeline Test — Cursor 交互入口
+
+> **本文件只做交互。** 正本：`docs/harness/skills/centag-pipeline-test.md`  
+> 分层：根目录 `AGENT.md`
+
+## 硬性规则
+
+1. 固定选项必须 **`AskQuestion`**。
+2. 服务就绪并确认后，加载正本执行。
+
+## 触发词
+
+`流水线测试` / `pipeline test` / `模式测试`
+
+## 流程
+
+1. 探测 `/api/v1/status`（静默）。
+2. 未运行 → AskQuestion：手动启动 / agent 自动 / 退出。
+3. AskQuestion：edition（gateway/team/minimal/personal）、测试范围（快速/标准/自定义）。
+4. 交接 **`docs/harness/skills/centag-pipeline-test.md`**。

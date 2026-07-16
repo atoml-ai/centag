@@ -1,0 +1,15 @@
+---
+description: "Harness 交互：固定选项必须 AskQuestion。业务正本只在 docs/harness/skills/。见根目录 AGENT.md。"
+globs: []
+alwaysApply: true
+---
+
+# Harness UI：AskQuestion + 正本交接
+
+分层原则见仓库根目录 **`AGENT.md`**：
+
+1. **业务正本**只在 `docs/harness/skills/`。
+2. **本目录规则**只负责 Cursor 交互收参。
+3. 固定选项必须调用工具 **`AskQuestion`**；禁止正文列 A/B/C 让用户打字。
+4. 收参完成后加载对应正本执行（如 `centag-wizard-test.md`）。
+5. 仅当 AskQuestion 明确不可用时，才退化为极短文字提问。

@@ -1,0 +1,38 @@
+---
+description: "Centag 管理 E2E — Cursor 交互入口。仅 AskQuestion 收参；正本 docs/harness/skills/centag-admin-e2e.md。分层见 AGENT.md。"
+globs: []
+alwaysApply: false
+---
+
+# Centag Admin E2E — Cursor 交互入口
+
+> **本文件只做交互。** 正本：`docs/harness/skills/centag-admin-e2e.md`  
+> 分层：根目录 `AGENT.md`
+
+## 硬性规则
+
+1. 固定选项必须 **`AskQuestion`**。
+2. 确认后加载正本；推荐执行 `bash docs/harness/skills/admin-e2e-test.sh`。
+
+## 触发词
+
+`管理功能测试` / `admin e2e` / `管理测试` / `用户管理测试` / `API Key 测试` / `多租户测试`
+
+## AskQuestion — 一屏
+
+| id | prompt | options |
+|----|--------|---------|
+| `deploy_type` | 部署类型 | gateway / team / minimal / personal |
+| `base_url` | 服务地址 | `http://localhost:20060`；其他 |
+| `admin_creds` | Admin 凭据 | 从 .env 读取；其他 |
+| `confirm` | 开始？ | start / cancel |
+
+## 交接
+
+```bash
+export TEST_DEPLOY_TYPE=...
+export CENTAG_DEPLOY_TYPE="$TEST_DEPLOY_TYPE"
+export TEST_SKIP_AGENT_PROVIDERS=true
+```
+
+然后执行 **`docs/harness/skills/centag-admin-e2e.md`**。
