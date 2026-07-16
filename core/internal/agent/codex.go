@@ -1,0 +1,81 @@
+package agent
+
+import "fmt"
+
+// CodexTemplate Codex CLI 配置模板
+type CodexTemplate struct{}
+
+func (t *CodexTemplate) AgentType() AgentType { return AgentCodex }
+func (t *CodexTemplate) DisplayName() string  { return "Codex CLI" }
+func (t *CodexTemplate) Description() string  { return "OpenAI 官方的 AI 编程助手 CLI (ChatGPT Codex)" }
+
+func (t *CodexTemplate) ConfigFiles(info *BackendInfo) ([]ConfigFile, error) {
+	url := proxyURL(info.Host, info.Port)
+	model := defaultModel(info)
+
+	authJSON := fmt.Sprintf(`{"OPENAI_API_KEY": "%s"}`, info.APIKey)
+	configTOML := fmt.Sprintf(`model_provider = "custom"
+model = "%s"
+model_reasoning_effort = "high"
+disable_response_storage = true
+
+[model_providers.custom]
+name = "centag"
+base_url = "%s"
+wire_api = "responses"
+requires_openai_auth = true
+`, model, url)
+
+	return []ConfigFile{
+		{Path: "~/.codex/auth.json", Content: authJSON},
+		{Path: "~/.codex/config.toml", Content: configTOML},
+	}, nil
+}
+
+func (t *CodexTemplate) SetupCommand(info *BackendInfo) string {
+	url := proxyURL(info.Host, info.Port)
+	model := defaultModel(info)
+	return fmt.Sprintf(`# Codex CLI 一键配置
+mkdir -p ~/.codex
+echo '{"OPENAI_API_KEY": "%s"}' > ~/.codex/auth.json
+cat > ~/.codex/config.toml << 'EOF'
+model_provider = "custom"
+model = "%s"
+[model_providers.custom]
+name = "centag"
+base_url = "%s"
+wire_api = "responses"
+requires_openai_auth = true
+EOF
+`, info.APIKey, model, url)
+}
+
+func (t *CodexTemplate) PlatformCommands(info *BackendInfo) PlatformCommands {
+	files, _ := t.ConfigFiles(info)
+	return PlatformCommands{
+		MacOS:   "#!/bin/bash\n" + generateShellCommands(files),
+		Linux:   "#!/bin/bash\n" + generateShellCommands(files),
+		Windows: generatePowerShellCommands(files),
+	}
+}
+
+func (t *CodexTemplate) VerifyCommand(info *BackendInfo) string {
+	return `codex -m "Hello, can you hear me?" --no-interactive`
+}
+
+func (t *CodexTemplate) Steps(info *BackendInfo) []ConfigStep {
+	url := proxyURL(info.Host, info.Port)
+	return []ConfigStep{
+		{Title: "配置 auth.json", Code: fmt.Sprintf(`echo '{"OPENAI_API_KEY": "%s"}' > ~/.codex/auth.json`, info.APIKey)},
+		{Title: "配置 config.toml", Description: fmt.Sprintf("设置 base_url 指向 ProxyClaw: %s", url)},
+		{Title: "启动 Codex", Code: "codex"},
+	}
+}
+
+func (t *CodexTemplate) WriteConfig(info *BackendInfo) error {
+	files, err := t.ConfigFiles(info)
+	if err != nil {
+		return err
+	}
+	return writeFiles(files)
+}

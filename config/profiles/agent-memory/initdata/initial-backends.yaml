@@ -1,0 +1,65 @@
+version: "2.0"
+description: agent-memory Profile 后端配置 — Ollama 本地模型为主，Mem0 嵌入支持
+backends:
+  # --- Ollama 本地模型（默认启用，无需 API Key） ---
+  - id: ollama-local
+    name: Ollama (本地)
+    type: ollama
+    base_url: http://ollama:11434
+    api_key: "${AGENT_MEMORY_API_KEY}"
+    enabled: true
+    timeout: 300
+    max_retries: 2
+    auto_fetch_models: true
+    description: 本地 Ollama 服务 — 无需 API Key，支持 LLM 与 Embedding
+    supported_models:
+      - requested_model: llama3.1
+        actual_model: llama3.1
+        is_exact: true
+        compatibility_score: 1.0
+      - requested_model: qwen2.5
+        actual_model: qwen2.5
+        is_exact: true
+        compatibility_score: 1.0
+      - requested_model: bge-m3
+        actual_model: bge-m3
+        is_exact: true
+        compatibility_score: 1.0
+    capabilities:
+      max_context_tokens: 128000
+      features:
+        - chat
+        - completion
+        - embedding
+      supports_tools: false
+    weight: 100
+    priority: 10
+
+  # --- OpenAI（默认禁用，填 Key 后启用） ---
+  - id: openai
+    name: OpenAI
+    type: openai
+    base_url: https://api.openai.com/v1
+    api_key: "${OPENAI_API_KEY}"
+    enabled: false
+    timeout: 120
+    max_retries: 3
+    auto_fetch_models: true
+    description: OpenAI 官方 API
+    supported_models:
+      - requested_model: gpt-4o
+        actual_model: gpt-4o
+        is_exact: true
+        compatibility_score: 1.0
+      - requested_model: gpt-4o-mini
+        actual_model: gpt-4o-mini
+        is_exact: true
+        compatibility_score: 1.0
+    capabilities:
+      max_context_tokens: 128000
+      features:
+        - chat
+        - completion
+      supports_tools: true
+    weight: 100
+    priority: 10

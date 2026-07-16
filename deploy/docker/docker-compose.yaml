@@ -1,0 +1,44 @@
+name: centag
+# 仅编排 Centag 应用容器。运行时配置一律来自 ../config/secrets/.env（与 ./start.sh docker … 一致）。
+# 中间件由 deploy/stack：参见根目录 AGENTS.md。
+#
+#   docker compose --env-file ../config/secrets/.env -f docker-compose.yaml up -d --build
+
+services:
+  centag:
+    build:
+      context: ../
+      dockerfile: deploy/docker/Dockerfile
+    image: centag:latest
+    platform: linux/amd64
+    container_name: centag
+    restart: unless-stopped
+    env_file:
+      - ../config/secrets/.env
+    ports:
+      - "${LLM_PROXY_SERVER_PORT:-20060}:20060"
+    networks:
+      - centag-network
+    volumes:
+      - centag_storage:/app/storage
+      - centag_logs:/app/logs
+      - ../config/initdata:/app/config/initdata:ro
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:20060/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  centag_storage:
+    driver: local
+  centag_logs:
+    driver: local
+
+networks:
+  centag-network:
+    driver: bridge
+    name: centag-network

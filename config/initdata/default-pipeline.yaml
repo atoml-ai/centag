@@ -1,0 +1,4 @@
+# 各发行版统一：初始化默认流水线 = 透明模式（不注入 system prompt）
+# DB 发行版由 LLM_PROXY_DEFAULT_MODE / DefaultProxyConfig 首轮 seed；
+# minimal 可复制到 data/default-pipeline.yaml，或依赖内置默认。
+default_pipeline: transparent-proxy

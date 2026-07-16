@@ -1,0 +1,595 @@
+package tokenusage
+
+import (
+	"context"
+	"database/sql"
+	"fmt"
+	"strings"
+	"time"
+)
+
+// Service Token 使用计量服务
+type Service struct {
+	db     *sql.DB
+	driver string // database.Init 的插件名：postgresql
+}
+
+// UsageRecord Token 使用记录
+type UsageRecord struct {
+	UserID           int64   `json:"user_id"`
+	APIKeyID         int64   `json:"api_key_id"`
+	BackendID        string  `json:"backend_id"`
+	Model            string  `json:"model"`
+	PromptTokens     int     `json:"prompt_tokens"`
+	CompletionTokens int     `json:"completion_tokens"`
+	TotalTokens      int     `json:"total_tokens"`
+	CostUSD          float64 `json:"cost_usd"`
+	Success          bool    `json:"success"`
+	TenantID         string  `json:"tenant_id"`
+	DeptTag          string  `json:"dept_tag"`
+	RequestID        string  `json:"request_id"`
+	ClientIP         string  `json:"client_ip"`
+	AgentType        string  `json:"agent_type"`
+}
+
+// UsageStats 使用统计
+type UsageStats struct {
+	TotalPromptTokens     int `json:"total_prompt_tokens"`
+	TotalCompletionTokens int `json:"total_completion_tokens"`
+	TotalTokens           int `json:"total_tokens"`
+	RequestCount          int `json:"request_count"`
+}
+
+// DailyStats 每日统计
+type DailyStats struct {
+	Date         string `json:"date"`
+	TotalTokens  int    `json:"total_tokens"`
+	PromptTokens int    `json:"prompt_tokens"`
+	CompTokens   int    `json:"completion_tokens"`
+	RequestCount int    `json:"request_count"`
+	UniqueUsers  int    `json:"unique_users"`
+	UniqueModels int    `json:"unique_models"`
+}
+
+// ModelStats 模型使用统计
+type ModelStats struct {
+	Model        string  `json:"model"`
+	TotalTokens  int     `json:"total_tokens"`
+	RequestCount int     `json:"request_count"`
+	AvgTokens    float64 `json:"avg_tokens"`
+}
+
+// BackendStats 后端使用统计
+type BackendStats struct {
+	BackendID    string   `json:"backend_id"`
+	TotalTokens  int      `json:"total_tokens"`
+	RequestCount int      `json:"request_count"`
+	SuccessRate  *float64 `json:"success_rate,omitempty"`
+}
+
+// NewService 创建 Token 计量服务。driver 须为 "postgresql"。
+func NewService(db *sql.DB, driver string) *Service {
+	return &Service{db: db, driver: driver}
+}
+
+func (s *Service) isPostgres() bool { return s.driver == "postgresql" }
+
+// cutoffDaysAgo 返回「最近 N 个自然日」窗口起点（含当天则 N 天内从 N-1 天前 0 点算起，这里用「从当前时刻往前推 N 天」与原先 INTERVAL 语义接近）。
+func (s *Service) cutoffDaysAgo(days int) time.Time {
+	if days < 1 {
+		days = 30
+	}
+	return time.Now().AddDate(0, 0, -days)
+}
+
+// exprDay 将时间列截成日历日，便于 GROUP BY（SQLite / PostgreSQL 语法不同）。
+func (s *Service) exprDay(column string) string {
+	if s.isPostgres() {
+		return fmt.Sprintf("(%s::date)", column)
+	}
+	return fmt.Sprintf("date(%s)", column)
+}
+
+// RecordUsage 记录 Token 使用（异步调用）
+func (s *Service) RecordUsage(ctx context.Context, record *UsageRecord) error {
+	if record == nil {
+		return nil
+	}
+	// Token-bearing rows are successful completions; zero-token rows may record explicit failures.
+	success := true
+	if record.TotalTokens == 0 {
+		success = record.Success
+		if success {
+			return nil
+		}
+	}
+	if record.CostUSD == 0 && record.TotalTokens > 0 {
+		record.CostUSD = EstimateCost(
+			record.BackendID,
+			record.Model,
+			record.PromptTokens,
+			record.CompletionTokens,
+		)
+	}
+
+	normalizedAgentType := normalizeAgentType(record.AgentType)
+
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	// 1. 插入明细记录（client_ip 列尚未迁移，暂不写入）
+	insertQuery := s.q(`
+		INSERT INTO token_usage 
+		(user_id, api_key_id, backend_id, model, prompt_tokens, completion_tokens, total_tokens, cost_usd, success, tenant_id, dept_tag, request_id, agent_type)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+	`)
+	_, err = tx.ExecContext(ctx, insertQuery,
+		record.UserID, record.APIKeyID, record.BackendID, record.Model,
+		record.PromptTokens, record.CompletionTokens, record.TotalTokens,
+		record.CostUSD, success, nullIfEmpty(record.TenantID), nullIfEmpty(record.DeptTag),
+		record.RequestID, normalizedAgentType,
+	)
+	if err != nil {
+		return err
+	}
+
+	// 2. 更新统计表（按天聚合）
+	var dateStr string
+	if time.Now().Hour() < 8 {
+		// 如果当前时间小于 8 点，算作前一天
+		dateStr = time.Now().AddDate(0, 0, -1).Format("2006-01-02")
+	} else {
+		dateStr = time.Now().Format("2006-01-02")
+	}
+
+	upsertQuery := s.recordUsageDailyUpsertSQL()
+	_, err = tx.ExecContext(ctx, upsertQuery,
+		record.UserID, record.BackendID, record.Model, normalizedAgentType, dateStr,
+		record.PromptTokens, record.CompletionTokens, record.TotalTokens,
+		record.CostUSD,
+	)
+	if err != nil {
+		return err
+	}
+
+	// 3. 回写虚拟 Key 已用额度（仅 PostgreSQL Team 版）
+	if record.APIKeyID > 0 && s.isPostgres() && record.CostUSD > 0 {
+		updateQuery := s.q(`UPDATE api_keys SET used_usd = used_usd + $2 WHERE id = $1`)
+		_, err = tx.ExecContext(ctx, updateQuery, record.APIKeyID, record.CostUSD)
+		if err != nil {
+			return err
+		}
+	}
+
+	return tx.Commit()
+}
+
+func (s *Service) recordUsageDailyUpsertSQL() string {
+	if s.isPostgres() {
+		return `
+		INSERT INTO token_usage_daily 
+		(user_id, backend_id, model, agent_type, date, total_prompt_tokens, total_completion_tokens, total_tokens, total_cost_usd, request_count)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 1)
+		ON CONFLICT (user_id, backend_id, model, agent_type, date)
+		DO UPDATE SET
+			total_prompt_tokens = token_usage_daily.total_prompt_tokens + $6,
+			total_completion_tokens = token_usage_daily.total_completion_tokens + $7,
+			total_tokens = token_usage_daily.total_tokens + $8,
+			total_cost_usd = token_usage_daily.total_cost_usd + $9,
+			request_count = token_usage_daily.request_count + 1,
+			updated_at = CURRENT_TIMESTAMP
+	`
+	}
+	return `
+		INSERT INTO token_usage_daily 
+		(user_id, backend_id, model, agent_type, date, total_prompt_tokens, total_completion_tokens, total_tokens, total_cost_usd, request_count)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+		ON CONFLICT (user_id, backend_id, model, agent_type, date)
+		DO UPDATE SET
+			total_prompt_tokens = token_usage_daily.total_prompt_tokens + excluded.total_prompt_tokens,
+			total_completion_tokens = token_usage_daily.total_completion_tokens + excluded.total_completion_tokens,
+			total_tokens = token_usage_daily.total_tokens + excluded.total_tokens,
+			total_cost_usd = token_usage_daily.total_cost_usd + excluded.total_cost_usd,
+			request_count = token_usage_daily.request_count + 1,
+			updated_at = CURRENT_TIMESTAMP
+	`
+}
+
+// GetUserUsage 获取用户使用情况
+func (s *Service) GetUserUsage(ctx context.Context, userID int64, from, to time.Time) (*UsageStats, error) {
+	query := s.q(`
+		SELECT 
+			COALESCE(SUM(prompt_tokens), 0),
+			COALESCE(SUM(completion_tokens), 0),
+			COALESCE(SUM(total_tokens), 0),
+			COUNT(*)
+		FROM token_usage
+		WHERE user_id = $1 AND created_at BETWEEN $2 AND $3
+	`)
+
+	stats := &UsageStats{}
+	err := s.db.QueryRowContext(ctx, query, userID, from, to).Scan(
+		&stats.TotalPromptTokens, &stats.TotalCompletionTokens,
+		&stats.TotalTokens, &stats.RequestCount,
+	)
+
+	return stats, err
+}
+
+// GetDailyUsage 获取每日使用情况
+func (s *Service) GetDailyUsage(ctx context.Context, userID int64, days int) ([]DailyStats, error) {
+	cutoff := s.cutoffDaysAgo(days)
+	dayCol := s.exprDay("created_at")
+	query := s.q(fmt.Sprintf(`
+		SELECT 
+			%s AS stat_date,
+			SUM(total_tokens) as total_tokens,
+			SUM(prompt_tokens) as prompt_tokens,
+			SUM(completion_tokens) as comp_tokens,
+			COUNT(*) as request_count,
+			COUNT(DISTINCT user_id) as unique_users,
+			COUNT(DISTINCT model) as unique_models
+		FROM token_usage
+		WHERE user_id = $1 AND created_at >= $2
+		GROUP BY 1
+		ORDER BY 1 DESC
+	`, dayCol))
+
+	rows, err := s.db.QueryContext(ctx, query, userID, cutoff)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var stats []DailyStats
+	for rows.Next() {
+		stat := DailyStats{}
+		if err := rows.Scan(
+			&stat.Date, &stat.TotalTokens, &stat.PromptTokens,
+			&stat.CompTokens, &stat.RequestCount, &stat.UniqueUsers, &stat.UniqueModels,
+		); err != nil {
+			return nil, err
+		}
+		stats = append(stats, stat)
+	}
+
+	return stats, nil
+}
+
+// GetModelStats 获取模型使用统计
+func (s *Service) GetModelStats(ctx context.Context, userID int64, days int) ([]ModelStats, error) {
+	cutoff := s.cutoffDaysAgo(days)
+	query := s.q(`
+		SELECT 
+			model,
+			SUM(total_tokens) as total_tokens,
+			COUNT(*) as request_count,
+			AVG(total_tokens) as avg_tokens
+		FROM token_usage
+		WHERE user_id = $1 AND created_at >= $2
+		GROUP BY model
+		ORDER BY total_tokens DESC
+	`)
+
+	rows, err := s.db.QueryContext(ctx, query, userID, cutoff)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var stats []ModelStats
+	for rows.Next() {
+		stat := ModelStats{}
+		if err := rows.Scan(&stat.Model, &stat.TotalTokens, &stat.RequestCount, &stat.AvgTokens); err != nil {
+			return nil, err
+		}
+		stats = append(stats, stat)
+	}
+
+	return stats, nil
+}
+
+// GetBackendStats 获取后端使用统计
+func (s *Service) GetBackendStats(ctx context.Context, userID int64, days int) ([]BackendStats, error) {
+	cutoff := s.cutoffDaysAgo(days)
+	successExpr := "1"
+	if s.isPostgres() {
+		successExpr = "TRUE"
+	}
+	query := s.q(fmt.Sprintf(`
+		SELECT 
+			backend_id,
+			SUM(total_tokens) as total_tokens,
+			COUNT(*) as request_count,
+			CASE
+				WHEN COUNT(*) = 0 THEN NULL
+				ELSE CAST(SUM(CASE WHEN COALESCE(success, %s) THEN 1 ELSE 0 END) AS REAL) / COUNT(*)
+			END as success_rate
+		FROM token_usage
+		WHERE user_id = $1 AND created_at >= $2
+		GROUP BY backend_id
+		ORDER BY total_tokens DESC
+	`, successExpr))
+
+	rows, err := s.db.QueryContext(ctx, query, userID, cutoff)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var stats []BackendStats
+	for rows.Next() {
+		stat := BackendStats{}
+		var successRate sql.NullFloat64
+		if err := rows.Scan(&stat.BackendID, &stat.TotalTokens, &stat.RequestCount, &successRate); err != nil {
+			return nil, err
+		}
+		if successRate.Valid {
+			rate := successRate.Float64
+			stat.SuccessRate = &rate
+		}
+		stats = append(stats, stat)
+	}
+
+	return stats, nil
+}
+
+// GetAllUsersUsage 管理员获取所有用户使用情况
+func (s *Service) GetAllUsersUsage(ctx context.Context, from, to time.Time) (*UsageStats, error) {
+	query := s.q(`
+		SELECT 
+			COALESCE(SUM(prompt_tokens), 0),
+			COALESCE(SUM(completion_tokens), 0),
+			COALESCE(SUM(total_tokens), 0),
+			COUNT(*)
+		FROM token_usage
+		WHERE created_at BETWEEN $1 AND $2
+	`)
+
+	stats := &UsageStats{}
+	err := s.db.QueryRowContext(ctx, query, from, to).Scan(
+		&stats.TotalPromptTokens, &stats.TotalCompletionTokens,
+		&stats.TotalTokens, &stats.RequestCount,
+	)
+
+	return stats, err
+}
+
+// GetUserRanking 获取用户 Token 使用排行
+func (s *Service) GetUserRanking(ctx context.Context, limit int, days int) ([]struct {
+	UserID      int64  `json:"user_id"`
+	Username    string `json:"username"`
+	TotalTokens int    `json:"total_tokens"`
+}, error) {
+	if limit < 1 {
+		limit = 10
+	}
+	cutoff := s.cutoffDaysAgo(days)
+	query := s.q(`
+		SELECT 
+			tu.user_id,
+			u.username,
+			SUM(tu.total_tokens) as total_tokens
+		FROM token_usage tu
+		JOIN users u ON tu.user_id = u.id
+		WHERE tu.created_at >= $1
+		GROUP BY tu.user_id, u.username
+		ORDER BY total_tokens DESC
+		LIMIT $2
+	`)
+
+	rows, err := s.db.QueryContext(ctx, query, cutoff, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var rankings []struct {
+		UserID      int64  `json:"user_id"`
+		Username    string `json:"username"`
+		TotalTokens int    `json:"total_tokens"`
+	}
+
+	for rows.Next() {
+		ranking := struct {
+			UserID      int64  `json:"user_id"`
+			Username    string `json:"username"`
+			TotalTokens int    `json:"total_tokens"`
+		}{}
+		if err := rows.Scan(&ranking.UserID, &ranking.Username, &ranking.TotalTokens); err != nil {
+			return nil, err
+		}
+		rankings = append(rankings, ranking)
+	}
+
+	return rankings, nil
+}
+
+// CheckQuota 检查配额限制（用量从 token_usage 实时汇总，不依赖 token_quotas.used_* 是否与定时任务同步）
+func (s *Service) CheckQuota(ctx context.Context, userID int64) error {
+	q := s.q(`SELECT daily_limit, monthly_limit FROM token_quotas WHERE user_id = $1`)
+	var dailyLimit, monthlyLimit int
+	err := s.db.QueryRowContext(ctx, q, userID).Scan(&dailyLimit, &monthlyLimit)
+	if err == sql.ErrNoRows {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if dailyLimit <= 0 && monthlyLimit <= 0 {
+		return nil
+	}
+
+	now := time.Now()
+	startDay := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	nextDay := startDay.AddDate(0, 0, 1)
+	startMonth := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
+	nextMonth := startMonth.AddDate(0, 1, 0)
+
+	sumQ := s.q(`SELECT COALESCE(SUM(total_tokens), 0) FROM token_usage WHERE user_id = $1 AND created_at >= $2 AND created_at < $3`)
+
+	if dailyLimit > 0 {
+		var used int
+		if err := s.db.QueryRowContext(ctx, sumQ, userID, startDay, nextDay).Scan(&used); err != nil {
+			return err
+		}
+		if used >= dailyLimit {
+			return fmt.Errorf("daily quota exceeded: %d/%d", used, dailyLimit)
+		}
+	}
+
+	if monthlyLimit > 0 {
+		var used int
+		if err := s.db.QueryRowContext(ctx, sumQ, userID, startMonth, nextMonth).Scan(&used); err != nil {
+			return err
+		}
+		if used >= monthlyLimit {
+			return fmt.Errorf("monthly quota exceeded: %d/%d", used, monthlyLimit)
+		}
+	}
+
+	return nil
+}
+
+// UserQuota 用户配额与当前用量（token_quotas 行）
+type UserQuota struct {
+	DailyLimit    int  `json:"daily_limit"`
+	MonthlyLimit  int  `json:"monthly_limit"`
+	UsedToday     int  `json:"used_today"`
+	UsedThisMonth int  `json:"used_this_month"`
+	HasQuota      bool `json:"has_quota"`
+}
+
+// GetUserQuota 读取限额并在有配额行时返回当日/当月实际用量（来自 token_usage）。
+func (s *Service) GetUserQuota(ctx context.Context, userID int64) (*UserQuota, error) {
+	q := s.q(`SELECT daily_limit, monthly_limit FROM token_quotas WHERE user_id = $1`)
+	var row UserQuota
+	err := s.db.QueryRowContext(ctx, q, userID).Scan(&row.DailyLimit, &row.MonthlyLimit)
+	if err == sql.ErrNoRows {
+		return &UserQuota{HasQuota: false}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	row.HasQuota = true
+
+	now := time.Now()
+	startDay := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	nextDay := startDay.AddDate(0, 0, 1)
+	startMonth := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
+	nextMonth := startMonth.AddDate(0, 1, 0)
+	sumQ := s.q(`SELECT COALESCE(SUM(total_tokens), 0) FROM token_usage WHERE user_id = $1 AND created_at >= $2 AND created_at < $3`)
+	if err := s.db.QueryRowContext(ctx, sumQ, userID, startDay, nextDay).Scan(&row.UsedToday); err != nil {
+		return nil, err
+	}
+	if err := s.db.QueryRowContext(ctx, sumQ, userID, startMonth, nextMonth).Scan(&row.UsedThisMonth); err != nil {
+		return nil, err
+	}
+	return &row, nil
+}
+
+// SetQuota 设置用户配额
+func (s *Service) SetQuota(ctx context.Context, userID int64, dailyLimit, monthlyLimit int) error {
+	var query string
+	if s.isPostgres() {
+		query = `
+		INSERT INTO token_quotas (user_id, daily_limit, monthly_limit)
+		VALUES ($1, $2, $3)
+		ON CONFLICT (user_id) DO UPDATE SET
+			daily_limit = $2,
+			monthly_limit = $3,
+			updated_at = CURRENT_TIMESTAMP
+	`
+	} else {
+		query = `
+		INSERT INTO token_quotas (user_id, daily_limit, monthly_limit)
+		VALUES (?, ?, ?)
+		ON CONFLICT (user_id) DO UPDATE SET
+			daily_limit = excluded.daily_limit,
+			monthly_limit = excluded.monthly_limit,
+			updated_at = CURRENT_TIMESTAMP
+	`
+	}
+
+	_, err := s.db.ExecContext(ctx, query, userID, dailyLimit, monthlyLimit)
+	return err
+}
+
+// ResetQuota 重置用户配额
+func (s *Service) ResetQuota(ctx context.Context, userID int64) error {
+	query := s.q(`
+		UPDATE token_quotas
+		SET used_today = 0, used_this_month = 0, reset_date = CURRENT_DATE
+		WHERE user_id = $1
+	`)
+
+	_, err := s.db.ExecContext(ctx, query, userID)
+	return err
+}
+
+// UpdateQuotaUsage 更新配额使用量（定时任务调用）
+func (s *Service) UpdateQuotaUsage(ctx context.Context) error {
+	var queryToday, queryMonth string
+	if s.isPostgres() {
+		queryToday = `
+		UPDATE token_quotas tq
+		SET used_today = (
+			SELECT COALESCE(SUM(total_tokens), 0)
+			FROM token_usage tu
+			WHERE tu.user_id = tq.user_id
+			AND (tu.created_at::date) = CURRENT_DATE
+		)
+	`
+		queryMonth = `
+		UPDATE token_quotas tq
+		SET used_this_month = (
+			SELECT COALESCE(SUM(total_tokens), 0)
+			FROM token_usage tu
+			WHERE tu.user_id = tq.user_id
+			AND DATE_TRUNC('month', tu.created_at) = DATE_TRUNC('month', CURRENT_TIMESTAMP)
+		)
+	`
+	} else {
+		queryToday = `
+		UPDATE token_quotas tq
+		SET used_today = (
+			SELECT COALESCE(SUM(total_tokens), 0)
+			FROM token_usage tu
+			WHERE tu.user_id = tq.user_id
+			AND date(tu.created_at) = date('now')
+		)
+	`
+		queryMonth = `
+		UPDATE token_quotas tq
+		SET used_this_month = (
+			SELECT COALESCE(SUM(total_tokens), 0)
+			FROM token_usage tu
+			WHERE tu.user_id = tq.user_id
+			AND strftime('%Y-%m', tu.created_at) = strftime('%Y-%m', 'now')
+		)
+	`
+	}
+
+	if _, err := s.db.ExecContext(ctx, queryToday); err != nil {
+		return err
+	}
+	_, err := s.db.ExecContext(ctx, queryMonth)
+	return err
+}
+
+func nullIfEmpty(s string) interface{} {
+	if strings.TrimSpace(s) == "" {
+		return nil
+	}
+	return strings.TrimSpace(s)
+}
+
+func normalizeAgentType(agentType string) string {
+	if strings.TrimSpace(agentType) == "" {
+		return "direct"
+	}
+	return strings.TrimSpace(agentType)
+}

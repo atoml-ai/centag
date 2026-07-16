@@ -1,0 +1,25 @@
+go 1.25.0
+
+use (
+	.
+	./core
+	./dist/gateway
+	./dist/minimal
+	./dist/team
+	./plugins/backend/anthropic
+	./plugins/backend/azure
+	./plugins/backend/gemini
+	./plugins/backend/ollama
+	./plugins/backend/openai
+	./plugins/database/postgresql
+	./plugins/database/sqlite
+	./plugins/protocol/anthropic
+	./plugins/protocol/gemini
+	./plugins/protocol/openai
+	./plugins/protocol/openairesponses
+	./plugins/storage/chroma
+	./plugins/storage/elasticsearch
+	./plugins/storage/file
+	./plugins/storage/postgresql
+	./plugins/storage/redis
+)

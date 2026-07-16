@@ -1,0 +1,105 @@
+version: '1.1'
+schema_version: centag.pipeline/v1alpha1
+id: aggregator-mode
+name: 聚合模式
+shortcut_code: '#ag'
+description: "两路并行生成，reviewer 多维评分选优（支持 /model: 覆盖各候选模型）"
+nodes:
+- id: generator-a
+  type: generator
+  kind: llm.generate
+  implementation: builtin.generator
+  name: 候选 A
+  backend: bigmodel
+  model: glm-4-flash
+  config:
+    prompt_template: '{{input}}'
+    system_prompt: |
+      你是一个通用智能助手（候选 A），请直接、准确地回答用户问题。
+
+      ## 核心准则
+      - 优先给出简洁、直击核心的回答
+      - 对事实性问题，先给出结论再展开依据
+      - 如果问题有歧义，先确认用户的真实意图
+      - 对于需要步骤的复杂问题，分点列出解决方案
+      - 如有不确定的地方，诚实说明而非编造
+
+      ## 风格
+      - 结构化表达，善用列表和分段
+      - 回答精炼，避免冗余描述
+  timeout: 90
+  retry:
+    max_attempts: 0
+    backoff_strategy: exponential
+    initial_delay: 1000
+    max_delay: 30000
+  next_nodes:
+  - aggregator
+  depends_on: []
+- id: generator-b
+  type: generator
+  kind: llm.generate
+  implementation: builtin.generator
+  name: 候选 B
+  backend: bigmodel
+  model: glm-4-flash
+  config:
+    prompt_template: '{{input}}'
+    system_prompt: |
+      你是一个通用智能助手（候选 B），请直接、准确地回答用户问题。
+
+      ## 核心准则
+      - 从多角度分析问题，提供全面的观点和背景信息
+      - 回答时兼顾深度和广度，适当补充相关知识
+      - 如果问题有歧义，先确认用户的真实意图
+      - 对于需要步骤的复杂问题，分点列出解决方案
+      - 如有不确定的地方，诚实说明而非编造
+
+      ## 风格
+      - 叙述流畅，善用段落展开
+      - 适当举例和类比，让回答更易理解
+  timeout: 90
+  retry:
+    max_attempts: 0
+    backoff_strategy: exponential
+    initial_delay: 1000
+    max_delay: 30000
+  next_nodes:
+  - aggregator
+  depends_on: []
+- id: aggregator
+  type: aggregator
+  kind: aggregate.merge
+  implementation: builtin.aggregator
+  name: 评分择优
+  backend: bigmodel
+  model: glm-4-flash
+  config:
+    custom_config:
+      strategy: score
+  timeout: 90
+  depends_on:
+  - generator-a
+  - generator-b
+  metadata:
+    position:
+      x: 916
+      y: 189
+  retry:
+    max_attempts: 0
+    backoff_strategy: exponential
+    initial_delay: 1000
+    max_delay: 30000
+  next_nodes: []
+global_config:
+  timeout: 180
+  max_retries: 1
+  bypass_on_error: true
+  parallel_limit: 4
+  log_level: info
+metadata:
+  lastUpdated: '2026-06-12T00:00:00.000Z'
+  layoutVersion: '1.2'
+  features:
+    - ab_eval
+    - score

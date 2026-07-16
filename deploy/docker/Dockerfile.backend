@@ -1,0 +1,72 @@
+# Proxy Claw - 纯后端 Docker 镜像（不含前端静态文件）
+# 2 阶段构建：backend-builder → runtime
+# 适用场景：前端通过 CDN 或独立服务器分发，后端仅提供 API
+
+# ============================================================
+# 阶段 1：后端构建（Go）
+# 使用预构建的基础镜像（已包含所有 Go 依赖），跳过 go mod download
+# 基础镜像仅在 go.mod/go.sum 变化时重建，日常构建直接跳过依赖下载
+# ============================================================
+ARG BACKEND_BASE_IMAGE=centag-backend-base:latest
+FROM ${BACKEND_BASE_IMAGE} AS backend-builder
+
+# 构建参数（版本和构建时间）
+ARG VERSION=dev
+ARG BUILD_TIME=unknown
+
+# 只复制源码（依赖已在基础镜像中，无需重新下载）
+COPY cmd/ ./cmd/
+COPY internal/ ./internal/
+COPY plugins/ ./plugins/
+COPY config/initdata/ ./config/initdata/
+
+# 编译 Go 二进制（-s -w 去除调试信息，减小体积）
+RUN go build \
+    -ldflags "-s -w -X 'main.Version=${VERSION}' -X 'main.BuildTime=${BUILD_TIME}'" \
+    -o bin/centag \
+    cmd/centag/main.go
+
+# ============================================================
+# 阶段 2：运行时（最小镜像，只包含必要产物）
+# ============================================================
+FROM debian:bookworm-slim
+
+# 安装最小运行时依赖（使用 Debian 官方源）
+RUN apt-get update && \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+        ca-certificates tzdata curl bash && \
+    rm -rf /var/lib/apt/lists/* && \
+    ln -snf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime && \
+    echo Asia/Shanghai > /etc/timezone
+
+ENV LANG=C.UTF-8 \
+    LC_ALL=C.UTF-8 \
+    TZ=Asia/Shanghai
+
+# 创建非 root 用户
+RUN groupadd -g 1001 llmproxy && \
+    useradd -m -u 1001 -g llmproxy -s /bin/bash llmproxy
+
+WORKDIR /app
+
+# 从构建阶段复制产物（仅后端，无前端静态文件）
+COPY --from=backend-builder /app/bin/centag ./centag
+
+# 复制运行时脚本和初始数据
+COPY deploy/docker/entrypoint.sh ./entrypoint.sh
+COPY config/initdata/ ./config/initdata/
+
+# 初始化目录结构并设置权限
+RUN chmod +x ./entrypoint.sh ./centag && \
+    mkdir -p ./storage ./logs ./plugins && \
+    chown -R llmproxy:llmproxy /app && \
+    chmod -R 755 ./storage ./logs ./plugins
+
+USER llmproxy
+
+EXPOSE 20060
+
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+    CMD curl -fsS http://localhost:20060/health || exit 1
+
+CMD ["./entrypoint.sh"]

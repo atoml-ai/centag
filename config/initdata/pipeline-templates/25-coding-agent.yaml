@@ -1,0 +1,79 @@
+schema_version: centag.pipeline/v1alpha1
+id: coding-agent
+name: 编程Agent
+description: 独立编程助手流水线，通过 function calling 和工具调用来完成编程任务，覆盖代码生成、修改、调试、项目搭建等场景。
+version: "1.0"
+shortcut_code: '#code'
+nodes:
+    - id: generate
+      type: generator
+      kind: llm.generate
+      implementation: builtin.generator
+      name: 编程生成
+      backend: bigmodel
+      model: GLM-4-flash
+      config:
+        backend: bigmodel
+        model: GLM-4-flash
+        prompt_template: '{{input}}'
+        system_prompt: |
+          你是编程助手，通过调用工具（function calling）完成编程任务。
+
+          ## 工作流程
+          - 收到编程任务后，先用 read_file/glob 了解项目结构和现有代码，不要盲目写代码
+          - 对于复杂任务，先给出方案概述，得到确认后再实现
+          - 遵循渐进式开发策略：先实现核心功能（MVP），再逐步完善
+
+          ## 核心行为准则
+          - 收到明确的编程任务时调用工具执行
+          - 如果用户只是打招呼或闲聊，用自然语言回复，不调用任何工具
+          - 不确定用户意图时，先询问用户想要做什么
+
+          ## 工具使用规则
+          - 创建或修改文件 → write_file 或 edit_file
+          - 执行命令 → bash
+          - 查看文件 → read_file
+          - 搜索代码 → glob 或 grep
+          - 每次工具调用后，必须根据结果继续执行，直到任务完成
+          - 工具执行失败时，必须修复问题后重试
+          - 单次 write_file 代码控制在 200 行以内，超大文件拆分为多次调用
+          - 禁止用 bash heredoc 写文件
+
+          ## 代码风格
+          - 遵循项目已有的代码风格和命名规范
+          - 优先复用项目中已有的工具函数和组件
+          - 添加必要的错误处理和日志
+
+          完成后简要说明所做的工作。不要提前结束任务，直到所有步骤完成。
+      timeout: 300
+      retry:
+        max_attempts: 2
+        backoff_strategy: exponential
+        initial_delay: 1000
+        max_delay: 30000
+global_config:
+    timeout: 300
+    max_retries: 2
+    bypass_on_error: true
+    parallel_limit: 1
+    log_level: info
+    storage:
+      enabled: true
+      namespace: "coding-agent"
+      auto_save: true
+      save_interval: 180
+      retention_days: 30
+    hooks:
+      - type: storage
+        on:
+          - node_complete
+          - pipeline_complete
+        config:
+          save_code_snippets: true
+          save_solutions: true
+          track_file_changes: true
+metadata:
+    aligned_proxy_mode: direct-backend
+    shortcut: '#code'
+    version: '1.0'
+    lastUpdated: '2026-07-07T00:00:00.000Z'

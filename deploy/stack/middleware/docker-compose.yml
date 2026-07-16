@@ -1,0 +1,18 @@
+# stack 中间件编排 — 服务定义复用 compose/fragments/（方案 D Phase 5b）
+name: centag-stack
+
+include:
+  - path:
+      - ../compose/fragments/postgresql.yaml
+      - ../compose/fragments/redis.yaml
+      - ../compose/fragments/elasticsearch.yaml
+      - ../compose/fragments/kibana.yaml
+      - ../compose/fragments/qdrant.yaml
+      - ../compose/fragments/neo4j.yaml
+      - ../compose/fragments/ollama.yaml
+      - ../compose/overrides/stack-middleware.yaml
+
+networks:
+  default:
+    name: centag-stack-network
+    driver: bridge

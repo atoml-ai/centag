@@ -1,0 +1,3 @@
+# 各发行版统一：初始化默认流水线 = 透明模式（不注入 system prompt）
+# 可在 WebUI / API 中修改；环境变量 LLM_PROXY_DEFAULT_MODE 也可覆盖（DB 首轮 seed）
+default_pipeline: transparent-proxy

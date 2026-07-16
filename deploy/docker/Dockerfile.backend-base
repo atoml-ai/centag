@@ -1,0 +1,18 @@
+# ============================================================
+# Proxy Claw - 后端依赖基础镜像
+# 仅包含 Go 依赖下载，只在 go.mod/go.sum 变化时重建
+# ============================================================
+FROM golang:1.23.7-alpine
+
+WORKDIR /app
+
+ENV CGO_ENABLED=0 \
+    GOPROXY=https://goproxy.cn,direct \
+    GOTOOLCHAIN=local \
+    LANG=C.UTF-8
+
+# 只复制依赖文件，源码不放进来
+COPY go.mod go.sum ./
+
+# 预下载所有依赖，结果缓存在镜像层中
+RUN go mod download

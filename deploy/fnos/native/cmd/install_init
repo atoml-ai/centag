@@ -1,0 +1,13 @@
+#!/bin/bash
+
+### This script is called before the user installs the application.
+### 可在此处检查系统依赖，例如 Node.js 等
+
+# 检查是否为 x86_64 架构
+ARCH=$(uname -m)
+if [ "$ARCH" != "x86_64" ]; then
+    echo "错误: Centag 目前仅支持 x86_64 架构"
+    exit 1
+fi
+
+exit 0

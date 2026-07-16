@@ -1,0 +1,94 @@
+version: '1.0'
+schema_version: centag.pipeline/v1alpha1
+id: transparent-proxy-redis-cache
+name: 缓存 + 原始转发示例（Redis）
+description: 示例模板：cache + transparent_forward；用户侧透明模式已改为无 system prompt 的 generator，缓存请用 cache-mode，HTTP 透传请用 raw-forward
+metadata:
+  aligned_proxy_mode: raw-forward
+  lastUpdated: '2026-07-14T00:00:00.000Z'
+  layoutVersion: '1.2'
+  template_scope: example
+  phase: '4'
+  features:
+  - cache
+  - token_usage
+  storage: redis
+
+nodes:
+- id: cache_read
+  type: cache
+  kind: cache.access
+  implementation: builtin.cache
+  name: Redis 缓存读取
+  config:
+    custom_config:
+      operation: read
+      strategy: exact
+      storage_type: redis
+      key_template: centag:cache:{{model}}:{{hash}}
+      config:
+        host: localhost
+        port: 6379
+        db: 0
+        password: ''
+        key_prefix: 'centag:cache:'
+  timeout: 10
+- id: generator
+  type: generator
+  kind: llm.generate
+  implementation: builtin.generator
+  name: 透明代理生成
+  backend: alibaba-dashscope
+  model: glm-4-flash
+  config:
+    system_prompt: Redis 缓存后端示例
+  timeout: 120
+  condition: '{{cache_read.metadata.cache_hit}} != true'
+- id: cache_write
+  type: cache
+  kind: cache.access
+  implementation: builtin.cache
+  name: Redis 缓存写入
+  config:
+    custom_config:
+      operation: write
+      strategy: exact
+      storage_type: redis
+      ttl: 7200
+      key_template: centag:cache:{{model}}:{{hash}}
+      config:
+        host: localhost
+        port: 6379
+        db: 0
+        key_prefix: 'centag:cache:'
+  timeout: 10
+  depends_on:
+  - generator
+- id: token_usage_record
+  type: token_usage
+  kind: metrics.token_usage
+  implementation: builtin.token_usage
+  name: Token 计量（SQLite）
+  config:
+    custom_config:
+      operation: record
+      storage_type: sqlite
+      record_fields:
+      - prompt_tokens
+      - completion_tokens
+      - total_tokens
+      - model
+      - backend_id
+      - user_id
+      config:
+        table_name: token_usage
+        database_path: ./storage/token_usage.db
+  timeout: 5
+  depends_on:
+  - generator
+global_config:
+  timeout: 120
+  max_retries: 1
+  bypass_on_error: false
+  parallel_limit: 1
+  log_level: info

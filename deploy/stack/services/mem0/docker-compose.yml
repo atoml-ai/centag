@@ -1,0 +1,6 @@
+name: centag-mem0
+
+include:
+  - path:
+      - ../../compose/fragments/mem0.yaml
+      - ../../compose/overrides/stack-mem0.yaml

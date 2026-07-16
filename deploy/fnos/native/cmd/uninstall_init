@@ -1,0 +1,5 @@
+#!/bin/bash
+
+### This script is called before uninstalling the application.
+
+exit 0

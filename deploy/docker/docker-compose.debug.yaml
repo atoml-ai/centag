@@ -1,0 +1,32 @@
+# Debug 模式基础配置
+# 使用方式: ./start.sh docker debug (macOS)
+# 继承自: docker-compose.yaml
+
+services:
+  centag:
+    # 禁用健康检查，避免启动时误判重启
+    healthcheck:
+      disable: true
+    # 将 pg.atoml.net 解析到宿主机（通过 Docker port mapping 访问 PostgreSQL 容器）
+    extra_hosts:
+      - "pg.atoml.net:host-gateway"
+    # 挂载本地 bin 目录和 debug entrypoint
+    volumes:
+      - ../bin/server:/app/bin
+      - ./entrypoint.debug.sh:/app/entrypoint.debug.sh
+      - centag_storage:/app/storage
+      - centag_logs:/app/logs
+      - ../config/initdata:/app/config/initdata:ro
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+    # 使用 debug entrypoint 脚本（等待 PostgreSQL 就绪）
+    entrypoint: ["/bin/bash", "/app/entrypoint.debug.sh"]
+    environment:
+      # Debug 模式使用 debug 日志级别和 console 格式
+      - LOG_LEVEL=debug
+      - LLM_PROXY_LOG_LEVEL=debug
+      - LLM_PROXY_LOG_FORMAT=console
+      - LLM_PROXY_LOG_OUTPUT=console
+      # PostgreSQL：由宿主机或 deploy/stack 提供；extra_hosts 将 pg.atoml.net 指向 host-gateway
+      - PG_HOST=pg.atoml.net
+      - PG_PORT=5432

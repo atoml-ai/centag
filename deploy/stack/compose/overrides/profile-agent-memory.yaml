@@ -1,0 +1,59 @@
+# agent-memory Profile 对共享 fragments 的网络 / 端口 / 卷覆盖（与 fragments 分文件 include 避免冲突）
+services:
+  postgresql:
+    container_name: centag-agent-memory-postgres
+    ports:
+      - "${PG_PORT:-5432}:5432"
+    volumes:
+      - centag_agent_memory_pg:/var/lib/postgresql/data
+    networks:
+      - centag-agent-memory
+
+  qdrant:
+    container_name: centag-agent-memory-qdrant
+    ports:
+      - "${QDRANT_PORT:-6333}:6333"
+    volumes:
+      - centag_agent_memory_qdrant:/qdrant/storage
+    networks:
+      - centag-agent-memory
+
+  ollama:
+    container_name: centag-agent-memory-ollama
+    ports:
+      - "${OLLAMA_PORT:-21434}:11434"
+    volumes:
+      - centag_agent_memory_ollama:/models
+      - ../../middleware/ollama-entrypoint.sh:/ollama-entrypoint.sh:ro
+    networks:
+      - centag-agent-memory
+
+  mem0:
+    container_name: centag-agent-memory-mem0
+    ports:
+      - "${MEM0_PORT:-20061}:8000"
+    volumes:
+      - centag_agent_memory_mem0:/app/history
+    environment:
+      POSTGRES_HOST: postgresql
+      POSTGRES_USER: ${PG_USER:-postgres}
+      POSTGRES_PASSWORD: ${PG_PASSWORD:-postgres}
+      QDRANT_HOST: qdrant
+      OLLAMA_BASE_URL: http://ollama:11434
+    depends_on:
+      postgresql:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+    networks:
+      - centag-agent-memory
+
+volumes:
+  centag_agent_memory_pg:
+  centag_agent_memory_qdrant:
+  centag_agent_memory_ollama:
+  centag_agent_memory_mem0:
+
+networks:
+  centag-agent-memory:
+    driver: bridge

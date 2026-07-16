@@ -1,0 +1,41 @@
+name: centag-pi-sandbox
+
+services:
+  pi-sandbox:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        PI_PACKAGE: ${PI_PACKAGE:-@earendil-works/pi-coding-agent}
+        PI_VERSION: ${PI_VERSION:-0.78.1}
+    image: centag-pi-sandbox:latest
+    container_name: centag-pi-sandbox
+    restart: unless-stopped
+    environment:
+      - PORT=:8080
+      - WORK_DIR=/workspace
+      - PI_CODING_AGENT_SESSION_DIR=${PI_SESSION_DIR:-/data/sessions}
+      - PI_SKIP_VERSION_CHECK=${PI_SKIP_VERSION_CHECK:-1}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - ANTHROPIC_OAUTH_TOKEN=${ANTHROPIC_OAUTH_TOKEN:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:-}
+      - KIMI_API_KEY=${KIMI_API_KEY:-}
+      - GROQ_API_KEY=${GROQ_API_KEY:-}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
+      - MISTRAL_API_KEY=${MISTRAL_API_KEY:-}
+      - AZURE_OPENAI_API_KEY=${AZURE_OPENAI_API_KEY:-}
+      - AZURE_OPENAI_BASE_URL=${AZURE_OPENAI_BASE_URL:-}
+    ports:
+      - "${PI_SANDBOX_PORT:-20062}:8080"
+    volumes:
+      - pi-sandbox-sessions:/data/sessions
+      - pi-sandbox-workspace:/workspace
+      - ./pi-config/models.json:/root/.pi/agent/models.json:ro
+      - ./pi-config/settings.json:/root/.pi/agent/settings.json:ro
+
+volumes:
+  pi-sandbox-sessions:
+  pi-sandbox-workspace:

@@ -1,0 +1,30 @@
+{
+    "data-share": {
+        "shares": [
+            {
+                "name": "centag",
+                "permission": {
+                    "rw": [
+                        "centag"
+                    ]
+                }
+            },
+            {
+                "name": "centag/data",
+                "permission": {
+                    "rw": [
+                        "centag"
+                    ]
+                }
+            },
+            {
+                "name": "centag/logs",
+                "permission": {
+                    "rw": [
+                        "centag"
+                    ]
+                }
+            }
+        ]
+    }
+}
