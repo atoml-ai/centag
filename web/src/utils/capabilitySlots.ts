@@ -353,6 +353,9 @@ export function applyAddCategory(
   if (!cc.routes || typeof cc.routes !== 'object') cc.routes = {}
   const routes = cc.routes as Record<string, string>
   for (const kw of keywords) {
+    if (routes[kw] && routes[kw] !== nodeId) {
+      throw new Error(`关键词已存在：${kw}`)
+    }
     routes[kw] = nodeId
   }
 
