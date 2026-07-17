@@ -15,6 +15,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"centag/core/internal/auth"
 	"centag/core/pkg/database"
+	"centag/core/pkg/hooks"
 	"centag/core/pkg/logger"
 )
 
@@ -64,6 +65,10 @@ func (m *QuotaMiddleware) Middleware() gin.HandlerFunc {
 		allowed, reason := m.check(c, tenantID)
 		if !allowed {
 			logger.Warnf("Quota exceeded for tenant %s: %s", tenantID, reason)
+			if hm := hooks.Default(); hm != nil {
+				userID, _ := auth.GetUserID(c)
+				_ = hm.TriggerQuotaExceededHooks(c.Request.Context(), userID)
+			}
 			c.JSON(http.StatusTooManyRequests, gin.H{
 				"error": gin.H{
 					"message": reason,

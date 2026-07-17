@@ -116,24 +116,6 @@ type TeamQuota struct {
 	UpdatedAt        time.Time `json:"updated_at"`
 }
 
-// UserRequestLog represents a single user request log entry
-type UserRequestLog struct {
-	ID           int64     `json:"id"`
-	UserID       int64     `json:"user_id"`
-	TenantID     string    `json:"tenant_id"`      // 租户 ID，单用户模式为空
-	RequestID    string    `json:"request_id"`
-	Model        string    `json:"model"`
-	Backend      string    `json:"backend"`
-	Pipeline     string    `json:"pipeline"`
-	InputTokens  int64     `json:"input_tokens"`
-	OutputTokens int64     `json:"output_tokens"`
-	LatencyMs    int64     `json:"latency_ms"`
-	StatusCode   int       `json:"status_code"`
-	RequestBody  string    `json:"request_body"`  // 请求摘要（截断存储）
-	ResponseBody string    `json:"response_body"` // 响应摘要（截断存储）
-	CreatedAt    time.Time `json:"created_at"`
-}
-
 // SchedulerDecision represents a scheduler decision log entry
 type SchedulerDecision struct {
 	ID        int64     `json:"id"`

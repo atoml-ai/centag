@@ -172,12 +172,14 @@ func TestMigration_AllFourTables_Coexist(t *testing.T) {
 	`)
 	assert.NoError(t, err)
 
-	// Execute all 4 migrations in order
+	// Execute migrations including drop of legacy request logs + conversation tables
 	files := []string{
 		"migrations/025_user_quota_fields.sqlite.sql",
 		"migrations/026_team_quota.sqlite.sql",
 		"migrations/027_user_request_logs.sqlite.sql",
 		"migrations/028_scheduler_decisions.sqlite.sql",
+		"migrations/029_conversations.sqlite.sql",
+		"migrations/030_drop_user_request_logs.sqlite.sql",
 	}
 
 	for _, f := range files {
@@ -187,14 +189,18 @@ func TestMigration_AllFourTables_Coexist(t *testing.T) {
 		assert.NoError(t, err, "migration %s failed", f)
 	}
 
-	// Verify all tables exist
-	tables := []string{"team_quota", "user_request_logs", "scheduler_decisions"}
+	// Verify retained / replacement tables exist
+	tables := []string{"team_quota", "scheduler_decisions", "conversation_sessions", "conversation_messages"}
 	for _, table := range tables {
 		var name string
 		err := db.QueryRow(`SELECT name FROM sqlite_master WHERE type='table' AND name=?`, table).Scan(&name)
 		assert.NoError(t, err, "table %s should exist", table)
 		assert.Equal(t, table, name)
 	}
+	// Legacy table must be gone after 030
+	var legacy string
+	err = db.QueryRow(`SELECT name FROM sqlite_master WHERE type='table' AND name=?`, "user_request_logs").Scan(&legacy)
+	assert.Error(t, err, "user_request_logs should be dropped")
 }
 
 func TestMigration_025_Idempotent(t *testing.T) {
