@@ -20,6 +20,8 @@ services:
       - ./.env
       - ../../secrets/.env
     environment:
+      # 发行包 gateway → 运行时 personal（对话/计量走 SQLite；关闭 team 专属面）
+      CENTAG_EDITION: personal
       INITDATA_PATH: /app/initdata-profile
       LLM_PROXY_DB_DRIVER: sqlite
       SQLITE_PATH: /app/storage/centag.db
