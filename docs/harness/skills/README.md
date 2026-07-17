@@ -26,9 +26,9 @@
 
 | 文件 | 说明 |
 |------|------|
-| `step1-design/SKILL.md` | Step 1: 方案设计与确认 |
-| `step2-plan/SKILL.md` | Step 2: 任务规划 |
-| `step3-code/SKILL.md` | Step 3: SDD 编码实现 |
+| `step1-design/SKILL.md` | Step 1: 方案设计与确认（含强制「开发风险评估」；别名 `step1-risk`） |
+| `step2-plan/SKILL.md` | Step 2: 任务规划（含风险→任务映射） |
+| `step3-code/SKILL.md` | Step 3: SDD 编码实现（关闭关联风险） |
 | `step4-test/SKILL.md` | Step 4: 单元测试补全 |
 | `step5-review/SKILL.md` | Step 5: CR 审查 |
 | `quality-gate/SKILL.md` | 门禁检查 |

@@ -130,7 +130,7 @@ Centag 采用 **薄核心 + 厚管道 + 可插拔实现** 的三层架构：
 
 > 完整工作流文档见 `docs/harness/workflow/README.md`。
 
-本项目遵循 **4 阶段 5 步骤 4 门禁** 的统一研发工作流，覆盖从方案设计到质量交付的完整链路。
+本项目遵循 **4 阶段 5 步骤 4 门禁** 的统一研发工作流（Step 1 内含强制「开发风险评估」环节），覆盖从方案设计到质量交付的完整链路。
 
 ### 3.1 工作流全景
 
@@ -140,8 +140,8 @@ Phase 1              Phase 2             Phase 3              Phase 4
 ──────────           ──────────          ──────────           ──────────
 
 Step 1: 方案设计      Step 2: 任务规划     Step 3: SDD 编码      Step 5: CR 审查
-  与确认             (拆解+执行计划)         实现
-
+  与确认             (拆解+风险映射)         实现
+  + 开发风险评估
                                            Step 4: 单元测试
                                               补全
 
@@ -157,6 +157,7 @@ Step 1: 方案设计      Step 2: 任务规划     Step 3: SDD 编码      Step 
 | 别名 | 步骤 | 加载内容 | 前置门禁 |
 |------|------|---------|---------|
 | `step1-design` / 方案设计 | Step 1: 方案设计与确认 | 技术方案规范 | 无 |
+| `step1-risk` / 开发风险评估 | Step 1 强制环节（可单独补齐） | 开发风险评估模板 | 无 |
 | `step2-plan` / 任务规划 / 拆任务 | Step 2: 任务规划 | 任务拆解规范 | Gate 1 |
 | `step3-code` / 编码 / 开始写代码 | Step 3: SDD 编码实现 | 编码执行规范 | Gate 2 |
 | `step4-test` / 补测试 | Step 4: 单元测试补全 | 单元测试规范 | 无（同 Phase） |
@@ -166,10 +167,10 @@ Step 1: 方案设计      Step 2: 任务规划     Step 3: SDD 编码      Step 
 
 | 门禁 | 位置 | 核心条件 | 触发时机 |
 |------|------|---------|---------|
-| Gate 1 | Phase 1 → 2 | 技术方案落盘 + 内审 Critical = 0 | `step2-plan` |
-| Gate 2 | Phase 2 → 3 | 任务计划落盘 + 可执行验收标准 | `step3-code` |
+| Gate 1 | Phase 1 → 2 | 技术方案 + 开发风险评估落盘 + Critical=0 | `step2-plan` |
+| Gate 2 | Phase 2 → 3 | 任务计划落盘 + High 风险已映射任务 | `step3-code` |
 | Gate 3 | Phase 3 → 4 | 全量测试通过 + 覆盖率达标 | `step5-review` |
-| Gate 4 | 交付准出 | CR Critical = 0 + 产物齐全 | CR 完成时 |
+| Gate 4 | 交付准出 | CR Critical = 0 + 产物齐全（含风险评估） | CR 完成时 |
 
 ### 3.4 产物路径
 
@@ -177,6 +178,7 @@ Step 1: 方案设计      Step 2: 任务规划     Step 3: SDD 编码      Step 
 docs/versions/<版本>/<需求>/
 ├── workflow_state.md         ← 工作流状态追踪（各步骤/门禁进度）
 ├── 技术方案.md               ← Step 1
+├── 开发风险评估.md           ← Step 1（强制）
 ├── 任务计划.md               ← Step 2
 ├── 自测记录.md               ← Step 5
 └── CR_报告.md                ← Step 5
@@ -339,7 +341,7 @@ CI 与脚本侧会做 **轻量卫生检查**（`scripts/check-harness-hygiene.sh
 
 | 触发场景 | 技能正本 |
 |---------|---------|
-| 方案设计与确认 | `skills/step1-design/SKILL.md` |
+| 方案设计与确认（含开发风险评估） | `skills/step1-design/SKILL.md` |
 | 任务规划 | `skills/step2-plan/SKILL.md` |
 | 编码实现 | `skills/step3-code/SKILL.md` |
 | 单元测试补全 | `skills/step4-test/SKILL.md` |
@@ -356,6 +358,7 @@ CI 与脚本侧会做 **轻量卫生检查**（`scripts/check-harness-hygiene.sh
 | 用户说 | 加载 Skill | 执行指引 |
 |-------|-----------|---------|
 | `step1-design` / 方案设计 | `skills/step1-design/SKILL.md` | `workflow/phase-1-design.md` |
+| `step1-risk` / 开发风险评估 | `skills/step1-design/SKILL.md` | `templates/开发风险评估模板.md` |
 | `step2-plan` / 任务规划 | `skills/step2-plan/SKILL.md` | Gate 1 → `workflow/phase-2-plan.md` |
 | `step3-code` / 编码 | `skills/step3-code/SKILL.md` | Gate 2 → `workflow/phase-3-implement.md` |
 | `step4-test` / 补测试 | `skills/step4-test/SKILL.md` | `workflow/phase-3-implement.md` §Step 4 |

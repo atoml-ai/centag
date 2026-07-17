@@ -27,10 +27,11 @@
 ## 产物清单
 
 - [ ] **技术方案** → `docs/versions/<版本>/<需求>/技术方案.md`
+- [ ] **开发风险评估** → `docs/versions/<版本>/<需求>/开发风险评估.md`
 - [ ] **任务计划** → `docs/versions/<版本>/<需求>/任务计划.md`
 - [ ] **自测记录** → `docs/versions/<版本>/<需求>/自测记录.md`
 - [ ] **CR 报告** → `docs/versions/<版本>/<需求>/CR_报告.md`
-- [ ] **代码 + 测试** → 对应 `internal/` / `plugins/`
+- [ ] **代码 + 测试** → 对应 `core/` / `plugins/` / `web/`
 
 ## 决策日志
 
@@ -55,6 +56,7 @@
 docs/versions/<版本>/<需求>/
 ├── workflow_state.md        ← 本文件
 ├── 技术方案.md               ← Step 1 产出
+├── 开发风险评估.md           ← Step 1 强制产出
 ├── 任务计划.md               ← Step 2 产出
 ├── 自测记录.md               ← Step 5 产出
 └── CR_报告.md               ← Step 5 产出

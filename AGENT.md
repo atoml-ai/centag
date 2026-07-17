@@ -54,7 +54,7 @@ docs/harness/skills/      各 Agent 规范目录
 | 向导式全面测试 | `docs/harness/skills/centag-wizard-test.md` |
 | 流水线模式测试 | `docs/harness/skills/centag-pipeline-test.md` |
 | 管理功能 E2E | `docs/harness/skills/centag-admin-e2e.md` |
-| 工作流 Step 1–5 / 门禁 | `docs/harness/skills/step*/SKILL.md`、`quality-gate/SKILL.md` |
+| 工作流 Step 1–5 / 门禁 | `docs/harness/skills/step*/SKILL.md`、`quality-gate/SKILL.md`（Step 1 含强制开发风险评估） |
 | 核心操作 / 部署 | `centag-core.md` / `centag-deploy.md`（待补） |
 
 入口映射明细见 [docs/harness/skills/README.md](docs/harness/skills/README.md)。

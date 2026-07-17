@@ -22,11 +22,12 @@ description: "工作流 Step 5：CR 审查 — 自测验证 + 代码审查 + 人
 ### 第一步：自测验证
 
 1. 对照任务计划的验收标准，逐项验证
-2. 运行全量测试：`go test ./...`
-3. 运行 lint：`make lint`
-4. 运行卫生检查：`make harness-check`
-5. 验证 API 行为（若有接口变更）：`curl http://localhost:20060/api/...`
-6. 按 `docs/harness/templates/自测记录模板.md` 记录自测结果
+2. 对照 `开发风险评估.md`：Critical/High 应为「已关闭（实现验证）」或明确可接受残余
+3. 运行全量测试：`go test ./...`
+4. 运行 lint：`make lint`
+5. 运行卫生检查：`make harness-check`
+6. 验证 API 行为（若有接口变更）：`curl http://localhost:20060/api/...`
+7. 按 `docs/harness/templates/自测记录模板.md` 记录自测结果
 
 ### 第二步：代码审查
 
@@ -39,15 +40,17 @@ description: "工作流 Step 5：CR 审查 — 自测验证 + 代码审查 + 人
 | 命名规范 | 符合 `docs/harness/CONVENTIONS.md` |
 | 错误处理 | 所有 `err` 已处理，使用 `%w` 包装 |
 | 测试覆盖 | 新增代码有对应测试，覆盖边界场景 |
+| 风险闭环 | High/Critical 缓解措施已落地且有验证证据 |
 
 ### 第三步：产物检查
-_报告模板.md` 输出 CR 报告：
+
+按 `docs/harness/templates/CR_报告模板.md` 输出 CR 报告：
 
 - [ ] 技术方案已落盘
+- [ ] 开发风险评估已落盘且无开放 Critical
 - [ ] 任务计划已落盘
 - [ ] 自测记录已落盘
 - [ ] CR 报告已落盘（写入 `docs/versions/<版本>/<需求>/CR_报告.md`）
-- [ ] CR 报告已落盘
 - [ ] 代码 + 测试已就绪
 
 ### 第四步：人工复核
@@ -62,6 +65,7 @@ _报告模板.md` 输出 CR 报告：
 |------|------|
 | 自测记录 | `docs/versions/<版本>/<需求>/自测记录.md` |
 | CR 报告 | `docs/versions/<版本>/<需求>/CR_报告.md` |
+| 风险评估终态 | `docs/versions/<版本>/<需求>/开发风险评估.md`（状态已更新） |
 
 ## 完成后
 
