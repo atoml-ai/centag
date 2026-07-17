@@ -1060,15 +1060,29 @@ detect_database_mode() {
 # 前端文件变化后 Vite 自动重建，刷新浏览器 (localhost:20060) 即可看到最新内容
 #
 # 选项:
-#   --minimal    精简 WebUI（同一套 web/，edition=minimal）+ minimal 后端
+#   （默认）       CENTAG_EDITION=personal —— 对齐 gateway 个人全功能
+#   --minimal      精简 WebUI + centag-minimal（edition=minimal）
+#   --team         全功能二进制 + CENTAG_EDITION=team
 debug() {
     # ── 解析选项 ──────────────────────────────────────────────────
     local use_minimal=false
+    local use_team=false
     for arg in "$@"; do
         case "$arg" in
             --minimal) use_minimal=true ;;
+            --team) use_team=true ;;
+            *)
+                print_error "未知 debug 选项: $arg"
+                echo "用法: $0 debug [--minimal|--team]"
+                exit 1
+                ;;
         esac
     done
+
+    if $use_minimal && $use_team; then
+        print_error "--minimal 与 --team 不能同时使用"
+        exit 1
+    fi
 
     # ── minimal 分支：精简 WebUI + centag-minimal ─────────────────
     if $use_minimal; then
@@ -1076,15 +1090,23 @@ debug() {
         return
     fi
 
-    # ── 全功能分支：webui 前端（原有流程不变）─────────────────────
+    # ── 全功能分支：webui 前端；默认 personal，--team 为团队版 ─────
+    local edition="personal"
+    if $use_team; then
+        edition="team"
+    fi
+
     load_env
-    
+
     # 自动检测数据库模式
     detect_database_mode
 
     # 强制 debug 模式 + 控制台输出格式，便于开发时直接查看日志
     # 开发模式下同时写文件与 stdout，避免仅 file 时启动失败在终端无输出
     centag_export_debug_console_env
+
+    # 覆盖 secrets 中的 edition（与 gateway/team Profile 语义对齐）
+    export CENTAG_EDITION="${edition}"
 
     # ── 清理所有残留进程（保证前台独占）──────────────────────────
     cleanup_residual_processes
@@ -1094,7 +1116,7 @@ debug() {
     kill_backend_port_or_exit || return 1
 
     check_go
-    print_info "编译后端..."
+    print_info "编译后端 (edition=${edition})..."
     build backend
 
     # 检查前端依赖
@@ -1139,6 +1161,7 @@ debug() {
     echo ""
     print_info "════════════════════════════════════════"
     print_info "  开发模式已启动"
+    print_info "  产品版本:    ${edition}"
     print_info "  访问地址:    http://localhost:$BACKEND_PORT"
     print_info "  前端变化后:  刷新浏览器即可看到最新内容"
     print_info "  后端变化后:  下次执行 debug 会先自动编译；也可 ./start.sh build be 单独编译"
@@ -1148,7 +1171,7 @@ debug() {
 
     # 前台启动后端（日志直接输出到控制台）
     cd "$BIN_DIR"
-    ./centag
+    CENTAG_EDITION="${edition}" ./centag
     cd "$PROJECT_ROOT"
 }
 
@@ -2923,7 +2946,7 @@ show_short_help() {
     echo -e "  ${CYAN}── 服务管理 ──────────────────────────────────────────${NC}"
     echo -e "  ${GREEN}run${NC}      <be|fe>               运行指定服务"
     echo -e "  ${GREEN}daemon${NC}                           后台守护进程模式（自动重启）"
-    echo -e "  ${GREEN}debug${NC}                            开发模式：后端 debug + 前端热重载"
+    echo -e "  ${GREEN}debug${NC} [--minimal|--team]         开发模式（默认 personal）+ 前端热重载"
     echo -e "  ${GREEN}stop${NC}     <be|fe>               停止服务"
     echo -e "  ${GREEN}status${NC}                           查看服务状态"
     echo -e "  ${GREEN}logs${NC}                             查看服务日志"
@@ -3114,16 +3137,18 @@ _help_debug() {
     echo -e "       ${YELLOW}开发调试模式${NC}"
     echo ""
     echo -e "${CYAN}用法:${NC}"
-    echo -e "  ./start.sh debug [--minimal]"
+    echo -e "  ./start.sh debug              # 默认 personal（对齐 gateway）"
+    echo -e "  ./start.sh debug --minimal    # minimal 精简版"
+    echo -e "  ./start.sh debug --team       # team 团队版"
     echo ""
     echo -e "${CYAN}选项:${NC}"
-    echo -e "  ${GREEN}--minimal${NC}   精简 WebUI（概览/后端/策略/设置）+ 单密码登录"
-    echo "              适合 minimal 发行版开发调试"
+    echo -e "  ${GREEN}（默认）${NC}     CENTAG_EDITION=personal + 全功能二进制（SQLite 个人网关）"
+    echo -e "  ${GREEN}--minimal${NC}   精简 WebUI + centag-minimal（edition=minimal）"
+    echo -e "  ${GREEN}--team${NC}      全功能二进制 + CENTAG_EDITION=team（多租户/计费面）"
     echo ""
     echo -e "${CYAN}说明:${NC}"
-    echo -e "  默认启动完整 webui 前端（需 Node.js），适合 gateway/team 发行版调试。"
-    echo -e "  使用 --minimal 则启动精简管理台 + centag-minimal。"
-    echo -e "  两种模式均支持：后端 debug 日志 + 前端文件变更自动同步 + 一键 Ctrl+C 停止。"
+    echo -e "  默认与 gateway Profile 一致（personal）；--team / --minimal 互斥。"
+    echo -e "  均支持：后端 debug 日志 + 前端文件变更自动同步 + 一键 Ctrl+C 停止。"
 }
 
 _help_stop() {
@@ -3797,7 +3822,9 @@ wizard_finish() {
     echo "  ./start.sh stop all        # 停止全部"
     echo ""
     echo -e "${YELLOW}开发模式:${NC}"
-    echo "  ./start.sh debug           # 后端 debug 模式 + 前端热重载（一键启动）"
+    echo "  ./start.sh debug           # personal（默认，对齐 gateway）+ 前端热重载"
+    echo "  ./start.sh debug --minimal # minimal 精简版"
+    echo "  ./start.sh debug --team    # team 团队版"
     echo "  ./start.sh logs           # 查看日志"
     echo ""
     echo -e "${YELLOW}构建:${NC}"
