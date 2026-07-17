@@ -74,3 +74,64 @@ func TestFilePipelineStore_RoundTrip(t *testing.T) {
 		t.Fatal("registry missing after LoadFromStore")
 	}
 }
+
+// TestFilePipelineStore_ReloadFromDisk simulates minimal restart: Update → new store → Get.
+func TestFilePipelineStore_ReloadFromDisk(t *testing.T) {
+	dir := t.TempDir()
+	store, err := NewFilePipelineStore(dir)
+	if err != nil {
+		t.Fatalf("NewFilePipelineStore: %v", err)
+	}
+
+	p := &AgentPatternPipeline{
+		ID:      "education-agent",
+		Name:    "教育",
+		Version: "1.0",
+		Nodes: []PipelineNodeConfig{
+			{
+				ID:      "tutor",
+				Type:    NodeTypeGenerator,
+				Name:    "导师",
+				Backend: "{{system.default_backend}}",
+				Model:   "{{system.default_model}}",
+				Config: NodeConfig{
+					Backend: "{{system.default_backend}}",
+					Model:   "{{system.default_model}}",
+				},
+			},
+		},
+		GlobalConfig: DefaultGlobalConfig(),
+		Metadata: map[string]interface{}{
+			"capability_slots": []map[string]interface{}{
+				{"slot_id": "tutor", "node_id": "tutor", "label": "导师"},
+			},
+		},
+	}
+	if err := store.Create(p); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	p.Nodes[0].Backend = "openai"
+	p.Nodes[0].Model = "gpt-4o-mini"
+	p.Nodes[0].Config.Backend = "openai"
+	p.Nodes[0].Config.Model = "gpt-4o-mini"
+	if err := store.Update(p); err != nil {
+		t.Fatalf("Update: %v", err)
+	}
+
+	// New process: open same data dir
+	store2, err := NewFilePipelineStore(dir)
+	if err != nil {
+		t.Fatalf("reopen store: %v", err)
+	}
+	got, err := store2.Get("education-agent")
+	if err != nil {
+		t.Fatalf("Get after reopen: %v", err)
+	}
+	if got.Nodes[0].Backend != "openai" || got.Nodes[0].Model != "gpt-4o-mini" {
+		t.Fatalf("bindings lost after reload: backend=%q model=%q", got.Nodes[0].Backend, got.Nodes[0].Model)
+	}
+	if got.Metadata == nil {
+		t.Fatal("metadata missing after reload")
+	}
+}

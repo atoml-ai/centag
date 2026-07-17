@@ -234,6 +234,11 @@ function main() {
         supported_models: ['deepseek-coder', 'gpt-4o']
       },
       {
+        id: 'reason-be',
+        enabled: true,
+        supported_models: ['o1-preview', 'o3-mini']
+      },
+      {
         id: 'off',
         enabled: false,
         supported_models: ['should-ignore']
@@ -246,6 +251,26 @@ function main() {
     assert(rec.rows[1].followSystem === true, 'default tag → follow system')
     // Original rows not mutated
     assert(rows[0].followSystem === true, 'recommend must not mutate input rows')
+
+    const tagRows = [
+      row({ nodeId: 'cheap', label: 'Cheap', tags: ['cheap'], followSystem: false, backend: 'x', model: 'y' }),
+      row({ nodeId: 'reason', label: 'Reason', tags: ['reasoning'], followSystem: false, backend: 'x', model: 'y' })
+    ]
+    // Isolate fixtures so gpt-4o (also scores high on reasoning) does not mask o1
+    const tagBackends = [
+      { id: 'cheap-be', enabled: true, supported_models: ['flash-lite', 'mini-model'] },
+      { id: 'reason-be', enabled: true, supported_models: ['o1-preview', 'o3-mini'] },
+      { id: 'plain-be', enabled: true, supported_models: ['generic-chat'] }
+    ]
+    const tagRec = recommendCapabilitySlotRows(tagRows, tagBackends)
+    assert(
+      tagRec.rows[0].backend === 'cheap-be' || /lite|mini|flash/i.test(tagRec.rows[0].model),
+      'cheap tag preference'
+    )
+    assert(
+      tagRec.rows[1].backend === 'reason-be' || /o1|o3/i.test(tagRec.rows[1].model),
+      'reasoning tag preference'
+    )
   }
 
   // ── add category ───────────────────────────────────────────────────
@@ -274,12 +299,17 @@ function main() {
       '已存在'
     )
 
+    const beforeRoutes = { ...(p.nodes.find((n) => n.id === 'r1')!.config.custom_config!.routes as Record<string, string>) }
     const next = applyAddCategory(p, {
       label: '翻译专线',
       keywords: ['翻译', 'translate'],
       tags: ['multilingual'],
       isDefault: true
     })
+    // Pure function: source pipeline routes unchanged
+    const srcRoutes = p.nodes.find((n) => n.id === 'r1')!.config.custom_config!.routes as Record<string, string>
+    assert(!srcRoutes['翻译'] && srcRoutes['hello'] === beforeRoutes['hello'], 'addCategory must not mutate source')
+
     const gen = next.nodes.find((n) => n.name === '翻译专线')!
     assert(!!gen, 'generator')
     const router = next.nodes.find((n) => n.id === 'r1')!
@@ -295,6 +325,12 @@ function main() {
     assert(canConfigureCapabilitySlots(next), 'still configurable')
     const built = buildCapabilitySlotRows(next)
     assert(built.some((r) => r.nodeId === gen.id), 'rows include new category')
+
+    // Keyword collision on existing route key
+    assertThrows(
+      () => applyAddCategory(p, { label: 'Clash', keywords: ['hello'] }),
+      '已存在'
+    )
   }
 
   // ── slugify ────────────────────────────────────────────────────────
