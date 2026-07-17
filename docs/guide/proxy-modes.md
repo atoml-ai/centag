@@ -273,6 +273,29 @@ intent:
 
 `llm_classify` 模式下，`routes` 的 key 是**类别名**（如 `code`）而非常规关键词（如 `python`）；LLM 调用失败时自动 fallback 到 `default_route`。详见 `docs/guide/mode-behavior-matrix.md` 第 7 节。
 
+#### 路由模型分配（首装推荐）
+
+模板种子里各分支默认使用 `{{system.default_backend}}` / `{{system.default_model}}`。安装后若已配置多个后端，可用 Web **「分配模型」** 面板为代码 / 翻译 / 摘要 / 对话分支分别指定后端与模型，无需进画布逐节点编辑。
+
+**操作步骤**：
+
+1. 添加至少一个后端，并设置系统默认后端/模型。
+2. 将默认流水线设为 `router-mode`（或从模板创建路由模式）。
+3. 概览「流水线配置」或「策略管理」列表中，对路由模式点击 **分配模型**。
+4. 每行可勾选「跟随系统默认」，或指定后端 + 模型；点 **保存并生效**（`PUT` 流水线热加载，无需重启）。
+5. 用含关键词请求验证（如「写个 python 函数」应走代码分支绑定的模型）。
+
+模板声明见 `metadata.route_model_targets`（[`config/initdata/pipeline-templates/common/router-mode.yaml`](../../config/initdata/pipeline-templates/common/router-mode.yaml)）。改关键词 / system_prompt 仍使用完整流水线编辑器。
+
+**验收**：
+
+| 项 | 期望 |
+|----|------|
+| 首装 | 可不进画布完成四分支模型绑定 |
+| 热更新 | 保存后下一请求使用新 backend/model |
+| 跟随默认 | 勾选后该分支随系统默认变化 |
+| 高级编辑 | 画布编辑与分配面板不冲突 |
+
 **Request Example**:
 
 ```bash

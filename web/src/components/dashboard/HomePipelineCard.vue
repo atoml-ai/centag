@@ -77,6 +77,15 @@
             >
               {{ pipeline.id === selectedDefaultId ? '当前默认' : '设为默认' }}
             </el-button>
+            <el-button
+              v-if="canEdit && canAssignRouteModels(pipeline)"
+              size="small"
+              type="warning"
+              plain
+              @click="openRouteAssign(pipeline)"
+            >
+              分配模型
+            </el-button>
             <PipelineFeatureGuard
               feature="pipelineEdit"
               :pipeline="pipeline"
@@ -129,6 +138,12 @@
       :is-create="isCreating"
       @saved="handleEditorSaved"
     />
+
+    <RouterModelAssignDialog
+      v-model="routeAssignVisible"
+      :pipeline-id="routeAssignPipelineId"
+      @saved="handleRouteAssignSaved"
+    />
   </div>
 </template>
 
@@ -140,8 +155,10 @@ import PipelineCreateDialog from '@/components/pipeline/PipelineCreateDialog.vue
 import type { PipelineCreateInfo } from '@/components/pipeline/PipelineCreateDialog.vue'
 import PipelineEditorDialog from '@/components/pipeline/PipelineEditorDialog.vue'
 import PipelineFeatureGuard from '@/components/pipeline/PipelineFeatureGuard.vue'
+import RouterModelAssignDialog from '@/components/pipeline/RouterModelAssignDialog.vue'
 import { useEdition } from '@/composables/useEdition'
 import { useAuthStore } from '@/stores/auth'
+import { canAssignRouteModels } from '@/utils/routeModelAssign'
 import {
   getPipelines,
   getPipeline,
@@ -171,6 +188,8 @@ const isCreating = ref(false)
 const createInfoVisible = ref(false)
 const selectedIds = ref<string[]>([])
 const batchDeleting = ref(false)
+const routeAssignVisible = ref(false)
+const routeAssignPipelineId = ref('')
 
 const canEdit = computed(() => isPersonal.value || isMinimal.value || authStore.isAdmin)
 const selectable = computed(() => isMinimal.value)
@@ -337,6 +356,20 @@ async function openEditor(pipeline: AgentPatternPipeline) {
     editingPipeline.value = JSON.parse(JSON.stringify(pipeline))
     editorVisible.value = true
     ElMessage.warning('已使用列表数据打开编辑器')
+  }
+}
+
+function openRouteAssign(pipeline: AgentPatternPipeline) {
+  routeAssignPipelineId.value = pipeline.id
+  routeAssignVisible.value = true
+}
+
+function handleRouteAssignSaved(saved: AgentPatternPipeline) {
+  const idx = pipelines.value.findIndex((p) => p.id === saved.id)
+  if (idx >= 0) {
+    const next = [...pipelines.value]
+    next[idx] = { ...pipelines.value[idx], ...saved, nodes: saved.nodes }
+    pipelines.value = next
   }
 }
 

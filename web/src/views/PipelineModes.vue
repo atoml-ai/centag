@@ -124,9 +124,19 @@
           </template>
         </el-table-column>
         <el-table-column prop="version" label="版本" width="80" align="center" sortable />
-        <el-table-column label="操作" width="250" align="center" fixed="right">
+        <el-table-column label="操作" width="300" align="center" fixed="right">
           <template #default="{ row }">
             <div class="action-btns">
+              <el-tooltip v-if="canAssignRouteModels(row)" content="分配模型" placement="top">
+                <el-button
+                  circle
+                  size="small"
+                  type="warning"
+                  @click="openRouteAssign(row)"
+                >
+                  <el-icon><Connection /></el-icon>
+                </el-button>
+              </el-tooltip>
               <PipelineFeatureGuard
                 feature="pipelineEdit"
                 :pipeline="row"
@@ -221,6 +231,12 @@
       @closed="handleEditorClosed"
     />
 
+    <RouterModelAssignDialog
+      v-model="routeAssignVisible"
+      :pipeline-id="routeAssignPipelineId"
+      @saved="handleRouteAssignSaved"
+    />
+
     <!-- 执行历史对话框 -->
     <ExecutionHistory
       v-model="historyVisible"
@@ -231,7 +247,7 @@
     <!-- 从模板创建弹窗 -->
     <el-dialog v-model="templateDialogVisible" title="从模板创建流水线" width="600px">
       <el-alert type="info" :closable="false" style="margin-bottom: 16px">
-        选择以下预设模板快速创建流水线，创建后请在画布中配置具体的后端和模型。
+        选择以下预设模板快速创建流水线。路由模式可用「分配模型」快速绑定各分支后端/模型；其它模板请在画布中配置。
       </el-alert>
       <el-row :gutter="12">
         <el-col :span="12" v-for="tmpl in templateList" :key="tmpl.id" style="margin-bottom: 12px">
@@ -295,7 +311,7 @@
 import { ref, onMounted, computed, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Search, SetUp, Refresh, Plus, Edit, Delete, DocumentCopy, Upload, Timer, Check, Download, WarningFilled, CircleClose, Select } from '@element-plus/icons-vue'
+import { Search, SetUp, Refresh, Plus, Edit, Delete, DocumentCopy, Upload, Timer, Check, Download, WarningFilled, CircleClose, Select, Connection } from '@element-plus/icons-vue'
 import * as yaml from 'js-yaml'
 import {
   getPipelines,
@@ -305,15 +321,18 @@ import {
   exportPipeline,
   getPipelineTemplates,
   parsePipelinesResponse,
-  type Pipeline
+  type Pipeline,
+  type AgentPatternPipeline
 } from '@/api/pipeline'
 import PipelineEditorDialog from '@/components/pipeline/PipelineEditorDialog.vue'
 import PipelineCreateDialog from '@/components/pipeline/PipelineCreateDialog.vue'
 import PipelineFeatureGuard from '@/components/pipeline/PipelineFeatureGuard.vue'
+import RouterModelAssignDialog from '@/components/pipeline/RouterModelAssignDialog.vue'
 import type { PipelineCreateInfo } from '@/components/pipeline/PipelineCreateDialog.vue'
 import ExecutionHistory from '@/components/pipeline/ExecutionHistory.vue'
 import { useAuthStore } from '@/stores/auth'
 import { resolvePipelineFeatureSupport } from '@/utils/pipeline/features'
+import { canAssignRouteModels } from '@/utils/routeModelAssign'
 
 const route = useRoute()
 const router = useRouter()
@@ -331,6 +350,8 @@ const currentPipeline = ref<any>(null)
 const searchText = ref('')
 const selectedPipelines = ref<Pipeline[]>([])
 const importTemplateInputRef = ref<HTMLInputElement | null>(null)
+const routeAssignVisible = ref(false)
+const routeAssignPipelineId = ref('')
 
 // 导入冲突对话框状态
 const importConflictVisible = ref(false)
@@ -682,6 +703,20 @@ const openEdit = (row: Pipeline) => {
   isCreating.value = false
   currentPipeline.value = JSON.parse(JSON.stringify(row))
   canvasVisible.value = true
+}
+
+function openRouteAssign(row: Pipeline) {
+  routeAssignPipelineId.value = row.id
+  routeAssignVisible.value = true
+}
+
+function handleRouteAssignSaved(saved: AgentPatternPipeline) {
+  const idx = pipelines.value.findIndex((p) => p.id === saved.id)
+  if (idx >= 0) {
+    const next = [...pipelines.value]
+    next[idx] = { ...pipelines.value[idx], ...saved, nodes: saved.nodes }
+    pipelines.value = next
+  }
 }
 
 const openHistory = (row: Pipeline) => {
