@@ -2172,6 +2172,17 @@ func (p *DefaultLLMProvider) CreateClient(backendID, model string) (LLMClient, e
 
 	// 1. 解析虚拟变量
 	resolvedBackend, resolvedModel := p.resolveVirtualVars(backendID, model)
+	// 1b. 兜底：已有 default_backend，但 default_model 为空时，取该后端的首选模型
+	if strings.TrimSpace(resolvedModel) == "" && strings.TrimSpace(resolvedBackend) != "" && p.backendManager != nil {
+		if b, err := p.backendManager.Get(resolvedBackend); err == nil {
+			if preferred := backend.PreferredDefaultModel(b); preferred != "" {
+				resolvedModel = preferred
+				logger.Info("Using backend preferred model as default_model fallback",
+					logger.GetField("backend_id", resolvedBackend),
+					logger.GetField("model", resolvedModel))
+			}
+		}
+	}
 
 	// 2. 检查是否配置了默认后端
 	if resolvedBackend == "" {
@@ -2235,6 +2246,8 @@ func (p *DefaultLLMProvider) resolveVirtualVars(backendID, model string) (string
 
 // ResolveVirtualVars 解析 {{system.default_backend}} 和 {{system.default_model}} 虚拟变量。
 // 空字符串也触发解析（等价于虚拟变量占位符）。
+// 若已解析出 default_backend 但 default_model 仍为空，则兜底使用该后端的首选模型
+//（ProbeModel → SupportedModels[0]）。
 func ResolveVirtualVars(backendID, model string) (string, string) {
 	cfg := config.Get()
 	if cfg == nil {
@@ -2250,6 +2263,14 @@ func ResolveVirtualVars(backendID, model string) (string, string) {
 
 	if model == "{{system.default_model}}" || model == "" {
 		resolvedModel = cfg.Proxy.DefaultModel
+	}
+
+	if strings.TrimSpace(resolvedModel) == "" && strings.TrimSpace(resolvedBackend) != "" {
+		if mgr := backend.GetManager(); mgr != nil {
+			if b, err := mgr.Get(resolvedBackend); err == nil {
+				resolvedModel = backend.PreferredDefaultModel(b)
+			}
+		}
 	}
 
 	return resolvedBackend, resolvedModel
@@ -2336,7 +2357,10 @@ func (c *llmClient) Chat(ctx context.Context, req *LLMRequest) (*LLMResponse, er
 		BackendID:   c.backendConfig.ID,
 	}
 	// 透传 tools/tool_choice（通过 RawBody，让后端插件能完整构造 function calling 请求）
-	proxyReq.RawBody = buildRawBodyFromLLMRequest(req, false)
+	// Prefer resolved client model over req.Model (may still contain {{system.default_model}}).
+	rawBody := buildRawBodyFromLLMRequest(req, false)
+	applyResolvedModelToRawBody(rawBody, c.model)
+	proxyReq.RawBody = rawBody
 
 	// 调用后端插件
 	resp, err := c.backendPlugin.CallModel(ctx, proxyReq)
@@ -2403,9 +2427,23 @@ func (c *llmClient) ChatStream(ctx context.Context, req *LLMRequest) (<-chan plu
 		BackendID:   c.backendConfig.ID,
 	}
 	// 透传 tools/tool_choice
-	proxyReq.RawBody = buildRawBodyFromLLMRequest(req, true)
+	rawBody := buildRawBodyFromLLMRequest(req, true)
+	applyResolvedModelToRawBody(rawBody, c.model)
+	proxyReq.RawBody = rawBody
 
 	return c.backendPlugin.CallModelStream(ctx, proxyReq)
+}
+
+func applyResolvedModelToRawBody(rawBody map[string]interface{}, model string) {
+	if rawBody == nil {
+		return
+	}
+	model = strings.TrimSpace(model)
+	if model == "" || model == "{{system.default_model}}" {
+		delete(rawBody, "model")
+		return
+	}
+	rawBody["model"] = model
 }
 
 // buildRawBodyFromLLMRequest 构造 RawBody，包含 messages/tools/tool_choice 等完整字段，

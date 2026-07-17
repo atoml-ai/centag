@@ -798,13 +798,19 @@ type pipelineRouterRule struct {
 //   - ordered：按 route_rules 顺序匹配
 //   - regex_only：按 route_rules 正则匹配
 //   - llm_classify：通过 LLM 对用户输入做意图分类，类别名与 routes 的 key 精确匹配
+//   - keyword_then_intent：先关键字/规则，未命中再轻量意图分类（IntentResolver），可选小模型
 type RouterNode struct {
 	BaseNode
-	strategy       string // keyword_contains | keyword_prefix | ordered | regex_only | llm_classify
+	strategy       string // keyword_contains | keyword_prefix | ordered | regex_only | llm_classify | keyword_then_intent
 	defaultRoute   string
 	legacyRoutes   map[string]string // keyword -> next_node_id（兼容旧配置；llm_classify 下为 category -> target）
 	rules          []pipelineRouterRule
 	classifyPrompt string // llm_classify 自定义分类 Prompt（空则使用内置默认）
+
+	// keyword_then_intent options
+	enableLLMClassifier   bool
+	confidenceThreshold   float64
+	enableIntentResolver  bool
 }
 
 func NewRouterNode(config NodeConfig) (PipelineNode, error) {
@@ -841,11 +847,34 @@ func NewRouterNode(config NodeConfig) (PipelineNode, error) {
 		if p, ok := cc["classify_prompt"].(string); ok {
 			node.classifyPrompt = p
 		}
+		node.enableIntentResolver = true
+		node.confidenceThreshold = 0.55
+		if intentRaw, ok := cc["intent"].(map[string]interface{}); ok {
+			if v, ok := intentRaw["enable_fast_matcher"].(bool); ok {
+				node.enableIntentResolver = v
+			}
+			if v, ok := intentRaw["enable_llm_classifier"].(bool); ok {
+				node.enableLLMClassifier = v
+			}
+			switch v := intentRaw["confidence_threshold"].(type) {
+			case float64:
+				if v > 0 {
+					node.confidenceThreshold = v
+				}
+			case int:
+				if v > 0 {
+					node.confidenceThreshold = float64(v)
+				}
+			}
+		}
 	}
 
-	// llm_classify 策略下 legacyRoutes 承载的是 category -> target，不需要编译为规则
+	// llm_classify / keyword_then_intent 下 legacyRoutes 也作为 category -> target
 	if node.strategy == "llm_classify" {
 		return node, nil
+	}
+	if node.strategy == "keyword_then_intent" {
+		// still compile keyword rules from legacyRoutes for first-pass matching
 	}
 
 	if len(node.rules) == 0 && len(node.legacyRoutes) > 0 {
@@ -951,6 +980,17 @@ func (n *RouterNode) Validate() error {
 		}
 		return nil
 	}
+	if n.strategy == "keyword_then_intent" {
+		if len(n.legacyRoutes) == 0 && len(n.rules) == 0 && n.defaultRoute == "" {
+			return fmt.Errorf("router node with keyword_then_intent requires routes/route_rules or default_route")
+		}
+		if n.enableLLMClassifier {
+			if n.config.Backend == "" || n.config.Model == "" {
+				return fmt.Errorf("keyword_then_intent with enable_llm_classifier requires backend and model")
+			}
+		}
+		return nil
+	}
 	if len(n.rules) == 0 && n.defaultRoute == "" {
 		return fmt.Errorf("router node requires route_rules/routes or default_route")
 	}
@@ -963,6 +1003,8 @@ func (n *RouterNode) Execute(ctx context.Context, input *NodeInput) (*NodeOutput
 		"routing_strategy": n.strategy,
 		"selected_route":   selectedRoute,
 		"matched":          matched,
+		"category":         matched,
+		"route_category":   matched,
 	}
 	if len(n.legacyRoutes) > 0 {
 		meta["routes"] = n.legacyRoutes
@@ -995,6 +1037,47 @@ func (n *RouterNode) selectRoute(ctx context.Context, content string) (targetID,
 		}
 		if target, ok := n.legacyRoutes[category]; ok && target != "" {
 			return target, category, llmRaw
+		}
+		if n.defaultRoute != "" {
+			return n.defaultRoute, "__default__", llmRaw
+		}
+		return "", "__no_match__", llmRaw
+	}
+
+	// keyword_then_intent：关键字优先 → 轻量意图 → 可选 LLM → default
+	if n.strategy == "keyword_then_intent" {
+		contentLower := strings.ToLower(strings.TrimSpace(content))
+		for _, r := range n.rules {
+			if n.ruleMatches(r, content, contentLower) {
+				return r.target, r.pattern, ""
+			}
+		}
+		categories := n.legacyRouteKeys()
+		if n.enableIntentResolver {
+			resolver := GetIntentResolver()
+			if resolver != nil {
+				cat, conf, err := resolver.ResolveCategory(ctx, content, categories)
+				if err == nil && cat != "" && conf >= n.confidenceThreshold {
+					if target, ok := n.legacyRoutes[cat]; ok && target != "" {
+						return target, cat, ""
+					}
+					// case-insensitive key match
+					for k, target := range n.legacyRoutes {
+						if strings.EqualFold(k, cat) && target != "" {
+							return target, k, ""
+						}
+					}
+				}
+			}
+		}
+		if n.enableLLMClassifier {
+			category, raw, err := n.classifyWithLLM(ctx, content)
+			llmRaw = raw
+			if err == nil && category != "" {
+				if target, ok := n.legacyRoutes[category]; ok && target != "" {
+					return target, category, llmRaw
+				}
+			}
 		}
 		if n.defaultRoute != "" {
 			return n.defaultRoute, "__default__", llmRaw

@@ -404,11 +404,17 @@ func (h *LLMProxyHandler) HandleOpenAIRequest(c *gin.Context) {
 					backendCfg, err = h.backendManager.SelectDefaultBackend()
 				}
 			} else {
-				// 使用配置的默认模型（如果指定）
+				// 使用配置的默认模型；未配置时兜底取该后端的首选模型
 				if h.proxyConfig.DefaultModel != "" {
 					selectedModel = h.proxyConfig.DefaultModel
 					logger.Info("Using configured default model",
 						zap.String("model", selectedModel),
+						zap.String("requested_model", requestedModel))
+				} else if preferred := backend.PreferredDefaultModel(backendCfg); preferred != "" {
+					selectedModel = preferred
+					logger.Info("Using backend preferred model as default_model fallback",
+						zap.String("model", selectedModel),
+						zap.String("backend_id", backendCfg.ID),
 						zap.String("requested_model", requestedModel))
 				} else {
 					selectedModel = requestedModel

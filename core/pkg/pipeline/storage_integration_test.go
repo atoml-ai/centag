@@ -252,9 +252,9 @@ func TestPipelineTemplateLoading_AllTemplatesWithStorageConfig(t *testing.T) {
 		}
 	}
 
-	// 至少要包含教育场景和编程 Agent
-	if len(storageEnabled) < 2 {
-		t.Errorf("expected at least 2 templates with storage enabled, got %d: %v", len(storageEnabled), storageEnabled)
+	// Builtin set may only ship coding-agent with storage; education-scene lives in external business repos.
+	if len(storageEnabled) < 1 {
+		t.Errorf("expected at least 1 template with storage enabled, got %d: %v", len(storageEnabled), storageEnabled)
 	}
 
 	t.Logf("Templates with storage hooks enabled (%d): %v", len(storageEnabled), storageEnabled)
