@@ -6,7 +6,7 @@
         <p class="page-description">{{ pageDescription }}</p>
       </div>
       <div class="page-header-actions">
-        <el-button v-if="isMinimal" type="success" @click="chatDialogVisible = true">
+        <el-button v-if="isMinimal" type="success" @click="openPipelineChat()">
           <el-icon><ChatDotRound /></el-icon>&nbsp;AI 对话
         </el-button>
         <el-button v-if="isMinimal" @click="securityDialogVisible = true">安全设置</el-button>
@@ -56,7 +56,11 @@
                 </el-button>
               </div>
             </template>
-            <HomePipelineCard ref="pipelinePanelRef" @update:count="pipelineCount = $event" />
+            <HomePipelineCard
+              ref="pipelinePanelRef"
+              @update:count="pipelineCount = $event"
+              @test="openPipelineChat"
+            />
           </el-card>
         </div>
 
@@ -76,7 +80,7 @@
         </el-card>
       </div>
       <SecuritySettingsDialog v-model="securityDialogVisible" />
-      <MinimalChat v-model="chatDialogVisible" />
+      <MinimalChat v-model="chatDialogVisible" :initial-pipeline-id="chatPipelineId" />
     </template>
 
     <!-- Personal（gateway 个人版）：保持原布局 —— 状态 | 接入 → 后端 | 流水线 -->
@@ -665,11 +669,18 @@ const usagePanelRef = ref<{ reload: () => void } | null>(null)
 const pipelineCount = ref(0)
 const securityDialogVisible = ref(false)
 const chatDialogVisible = ref(false)
+const chatPipelineId = ref('')
 /** 用量与会话默认折叠 */
 const usageCollapse = ref<string[]>([])
 
+function openPipelineChat(pipelineId = '') {
+  chatPipelineId.value = pipelineId
+  chatDialogVisible.value = true
+}
+
 watch(chatDialogVisible, (open, wasOpen) => {
   if (wasOpen && !open) {
+    chatPipelineId.value = ''
     usagePanelRef.value?.reload()
   }
 })

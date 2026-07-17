@@ -5,13 +5,41 @@
         <span class="section-label">流水线列表</span>
         <span class="list-count">{{ pipelines.length }} 个</span>
       </div>
+
+      <div v-if="selectable" class="list-toolbar">
+        <el-checkbox
+          :model-value="allSelected"
+          :indeterminate="partialSelected"
+          @change="toggleSelectAll"
+        >
+          全选
+        </el-checkbox>
+        <template v-if="selectedIds.length > 0">
+          <span class="toolbar-count">已选 {{ selectedIds.length }} 项</span>
+          <el-button size="small" type="danger" :loading="batchDeleting" @click="handleBatchDelete">
+            批量删除
+          </el-button>
+          <el-button size="small" text @click="clearSelection">取消选择</el-button>
+        </template>
+      </div>
+
       <div class="pipeline-list">
         <div
           v-for="pipeline in pipelines"
           :key="pipeline.id"
           class="pipeline-row"
-          :class="{ 'is-default': pipeline.id === selectedDefaultId }"
+          :class="{
+            'is-default': pipeline.id === selectedDefaultId,
+            selected: selectedIds.includes(pipeline.id)
+          }"
         >
+          <el-checkbox
+            v-if="selectable"
+            :model-value="selectedIds.includes(pipeline.id)"
+            class="row-checkbox"
+            @change="(checked) => toggleSelect(pipeline.id, !!checked)"
+            @click.stop
+          />
           <div class="pipeline-main">
             <div class="pipeline-title-row">
               <span class="pipeline-name">{{ pipeline.name }}</span>
@@ -32,13 +60,22 @@
           </div>
           <div class="pipeline-actions">
             <el-button
-              v-if="canEdit && pipeline.id !== selectedDefaultId"
+              v-if="canTest"
               size="small"
-              text
+              @click="handleTest(pipeline)"
+            >
+              测试
+            </el-button>
+            <el-button
+              v-if="canEdit"
+              size="small"
+              :type="pipeline.id === selectedDefaultId ? 'success' : 'default'"
+              :plain="pipeline.id !== selectedDefaultId"
+              :disabled="pipeline.id === selectedDefaultId || (savingDefault && pendingDefaultId === pipeline.id)"
               :loading="savingDefault && pendingDefaultId === pipeline.id"
               @click="selectDefault(pipeline.id)"
             >
-              设为默认
+              {{ pipeline.id === selectedDefaultId ? '当前默认' : '设为默认' }}
             </el-button>
             <PipelineFeatureGuard
               feature="pipelineEdit"
@@ -115,10 +152,9 @@ import {
   type AgentPatternPipeline
 } from '@/api/pipeline'
 
-const DISALLOWED_DEFAULT_IDS = new Set(['raw-forward', 'cache-hit', 'cache-mode'])
-
 const emit = defineEmits<{
   'update:count': [count: number]
+  test: [pipelineId: string]
 }>()
 
 const { isPersonal, isMinimal } = useEdition()
@@ -133,12 +169,48 @@ const editorVisible = ref(false)
 const editingPipeline = ref<AgentPatternPipeline | null>(null)
 const isCreating = ref(false)
 const createInfoVisible = ref(false)
+const selectedIds = ref<string[]>([])
+const batchDeleting = ref(false)
 
 const canEdit = computed(() => isPersonal.value || isMinimal.value || authStore.isAdmin)
+const selectable = computed(() => isMinimal.value)
+const canTest = computed(() => isMinimal.value)
+
+const allSelected = computed(() =>
+  pipelines.value.length > 0 && selectedIds.value.length === pipelines.value.length
+)
+const partialSelected = computed(() =>
+  selectedIds.value.length > 0 && selectedIds.value.length < pipelines.value.length
+)
 
 watch(() => pipelines.value.length, (len) => {
   emit('update:count', len)
 }, { immediate: true })
+
+watch(pipelines, (list) => {
+  const valid = new Set(list.map(p => p.id))
+  selectedIds.value = selectedIds.value.filter(id => valid.has(id))
+})
+
+function toggleSelect(id: string, checked: boolean) {
+  if (checked) {
+    if (!selectedIds.value.includes(id)) selectedIds.value = [...selectedIds.value, id]
+  } else {
+    selectedIds.value = selectedIds.value.filter(x => x !== id)
+  }
+}
+
+function toggleSelectAll(checked: boolean | string | number) {
+  selectedIds.value = checked ? pipelines.value.map(p => p.id) : []
+}
+
+function clearSelection() {
+  selectedIds.value = []
+}
+
+function handleTest(pipeline: AgentPatternPipeline) {
+  emit('test', pipeline.id)
+}
 
 async function loadPipelines() {
   loading.value = true
@@ -192,6 +264,7 @@ async function persistDefault(pipelineId: string) {
 }
 
 function selectDefault(pipelineId: string) {
+  if (pipelineId === selectedDefaultId.value) return
   selectedDefaultId.value = pipelineId
   persistDefault(pipelineId)
 }
@@ -216,6 +289,41 @@ async function handleDelete(pipeline: AgentPatternPipeline) {
     loadPipelines()
   } catch (error: any) {
     ElMessage.error(error?.response?.data?.message || '删除流水线失败')
+  }
+}
+
+async function handleBatchDelete() {
+  if (!selectedIds.value.length) return
+  const ids = selectedIds.value.filter(id => id !== selectedDefaultId.value)
+  if (!ids.length) {
+    ElMessage.warning('不能删除当前默认流水线，请先设置其他流水线为默认')
+    return
+  }
+  const skippedDefault = ids.length < selectedIds.value.length
+  try {
+    await ElMessageBox.confirm(
+      skippedDefault
+        ? `将删除选中的 ${ids.length} 个流水线（已跳过当前默认），此操作不可恢复。`
+        : `确定删除选中的 ${ids.length} 个流水线吗？此操作不可恢复。`,
+      '批量删除',
+      { confirmButtonText: '删除', cancelButtonText: '取消', type: 'warning' }
+    )
+  } catch {
+    return
+  }
+  batchDeleting.value = true
+  try {
+    for (const id of ids) {
+      await deletePipeline(id)
+    }
+    ElMessage.success(`已删除 ${ids.length} 个流水线`)
+    selectedIds.value = []
+    await loadPipelines()
+  } catch (error: any) {
+    ElMessage.error(error?.response?.data?.message || '批量删除失败')
+    await loadPipelines()
+  } finally {
+    batchDeleting.value = false
   }
 }
 
@@ -319,6 +427,19 @@ defineExpose({ reload: loadPipelines, openCreate })
   color: #9ca3af;
 }
 
+.list-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 4px 0 2px;
+}
+
+.toolbar-count {
+  font-size: 0.75rem;
+  color: #6b7280;
+}
+
 .pipeline-list {
   display: flex;
   flex-direction: column;
@@ -345,6 +466,20 @@ defineExpose({ reload: loadPipelines, openCreate })
 .pipeline-row.is-default {
   background: #f0f9eb;
   border-color: #b3e19d;
+}
+
+.pipeline-row.selected {
+  border-color: #93c5fd;
+  background: #eff6ff;
+}
+
+.pipeline-row.is-default.selected {
+  background: #ecfdf5;
+  border-color: #86efac;
+}
+
+.row-checkbox {
+  flex-shrink: 0;
 }
 
 .pipeline-main {
@@ -379,6 +514,8 @@ defineExpose({ reload: loadPipelines, openCreate })
   align-items: center;
   gap: 4px;
   flex-shrink: 0;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .mono {
