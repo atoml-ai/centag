@@ -17,8 +17,10 @@
 8. [代理模式 API](#8-代理模式-api)
 9. [健康检查 API](#9-健康检查-api)
 10. [Clash 规则 API](#10-clash-规则-api)
+11. [对话记录 API](#12-对话记录-api-v022)
 
 ---
+
 
 ## 1. 认证 API
 
@@ -607,6 +609,27 @@ func listBusinessPlugins(c *gin.Context) {
   }
 }
 ```
+
+---
+
+## 12. 对话记录 API (v0.2.2)
+
+> 统一 Conversation/Session 抽象。存储：minimal=文件，personal/gateway=SQLite，team=PostgreSQL。  
+> 代理请求可通过 `X-Session-ID` 续写同一会话；响应回显该头。可选 `X-Conversation-Category`。
+
+### GET /api/v1/conversations/sessions
+列出会话（需 JWT）。Query：`category`、`limit`、`offset`、`since`、`until`（RFC3339）；team 下 admin 可用 `user_id`。
+
+### GET /api/v1/conversations/sessions/:id
+会话详情。team 非 admin 仅可访问自己的会话。
+
+### GET /api/v1/conversations/sessions/:id/messages
+会话消息分页。Query：`limit`、`offset`。
+
+### GET /api/v1/conversations/categories
+当前用户可见的 category 聚合列表。
+
+等价路径亦挂在 `/api/v1/user/conversations/*`（同上）。
 
 ---
 
