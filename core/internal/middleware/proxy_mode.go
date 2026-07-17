@@ -68,7 +68,11 @@ func resolveAndRewriteProxyMode(r *http.Request, modeMgr *proxymode.ModeManager,
 	// 2. model 字段流水线前缀（pipeline.direct-backend glm-4-flash）
 	if hasBody {
 		if pipelineID, applied := proxy.ApplyModelPipelinePrefixToBody(body); applied {
-			if err := applyResolvedShortcut(r, modeMgr, pipelineID, "", "", "", ""); err != nil {
+			modelHdr := ""
+			if m, ok := body["model"].(string); ok && !proxymode.IsPipelineModel(m) {
+				modelHdr = m
+			}
+			if err := applyResolvedShortcut(r, modeMgr, pipelineID, "", "", modelHdr, ""); err != nil {
 				return err
 			}
 			newBody, _ := json.Marshal(body)
@@ -101,7 +105,7 @@ func resolveAndRewriteProxyMode(r *http.Request, modeMgr *proxymode.ModeManager,
 	}
 
 	// 5. 会话粘性模式 — 仅当客户端显式要求（避免影响标准 Agent 的默认流水线）
-	if shouldApplySessionMode(r) {
+	if shouldApplySessionMode(r) && sessionStore != nil {
 		clientID := GetClientIP(r)
 		if sessionMode, exists := sessionStore.Get(clientID); exists {
 			if err := applyResolvedShortcut(r, modeMgr, sessionMode.ModeKey, sessionMode.BackendID, "", sessionMode.ModelName, ""); err != nil {

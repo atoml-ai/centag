@@ -91,12 +91,12 @@ func (n *TransparentForwardNode) Execute(ctx context.Context, input *NodeInput) 
 		return nil, fmt.Errorf("transparent_forward node %q: build request: %w", n.id, err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	if auth := strings.TrimSpace(stringMeta(meta, "forward_authorization")); auth != "" {
+	// 已解析到配置后端时，优先用后端 API Key 鉴权上游。
+	// 客户端 Authorization 是 Centag 网关鉴权（JWT / 网关 API Key），不能原样转发给上游，
+	// 否则会出现直连正常、透明模式 AuthError: Invalid API key。
+	// 无后端（如 raw-forward + X-Target-URL）时才透传 forward_authorization。
+	if auth := resolveTransparentUpstreamAuth(backendID, meta); auth != "" {
 		req.Header.Set("Authorization", auth)
-	} else if ResolveBackendEndpoint != nil && backendID != "" {
-		if ep, epErr := ResolveBackendEndpoint(backendID); epErr == nil && ep != nil && strings.TrimSpace(ep.APIKey) != "" {
-			req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(ep.APIKey))
-		}
 	}
 
 	client, err := n.getHTTPClient(ctx)
@@ -146,6 +146,18 @@ func (n *TransparentForwardNode) getHTTPClient(ctx context.Context) (HTTPClient,
 		return nil, fmt.Errorf("capability broker not configured")
 	}
 	return n.capabilityBroker.GetHTTPClient(ctx, n.permissions)
+}
+
+// resolveTransparentUpstreamAuth 选择打向上游的 Authorization。
+func resolveTransparentUpstreamAuth(backendID string, meta map[string]interface{}) string {
+	if ResolveBackendEndpoint != nil && strings.TrimSpace(backendID) != "" {
+		if ep, epErr := ResolveBackendEndpoint(backendID); epErr == nil && ep != nil {
+			if key := strings.TrimSpace(ep.APIKey); key != "" {
+				return "Bearer " + key
+			}
+		}
+	}
+	return strings.TrimSpace(stringMeta(meta, "forward_authorization"))
 }
 
 // buildMinimalChatBody 在无 raw_request_body（WebUI 测试场景）时，

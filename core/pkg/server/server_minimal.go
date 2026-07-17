@@ -11,6 +11,7 @@ import (
 	"centag/core/internal/edition"
 	"centag/core/internal/handler"
 	"centag/core/internal/proxy"
+	"centag/core/internal/session"
 	"centag/core/internal/tokenusage"
 	"centag/core/pkg/backend"
 	"centag/core/pkg/config"
@@ -189,11 +190,12 @@ func NewMinimal(cfg *config.Config) *Server {
 	pipelineHandler := NewPipelineHandler(pipelineEngine, nodeRegistry, pipelineRegistry, templates, nil)
 	pipelineDefaultsHandler := handler.NewPipelineDefaultsHandler(cfg, pipelineRegistry)
 
-	// Create proxy mode manager
+	// Create proxy mode manager + session store（供 ProxyModeMiddleware 解析 pipeline.<id>）
 	modeMgr := proxymode.NewManager()
 	if synced := modeMgr.SyncFromPipelines(pipelineRegistry.ListAll()); synced > 0 {
 		logger.Infof("Synced %d pipeline shortcuts into ModeManager", synced)
 	}
+	sessionStore := session.NewProxyModeStore()
 
 	// Config handler for minimal (file-based); dataDir already resolved above
 	// 确保 API Save 路径与 config-generator 写入路径一致
@@ -345,6 +347,7 @@ func NewMinimal(cfg *config.Config) *Server {
 		pipelineHandler:         pipelineHandler,
 		pipelineDefaultsHandler: pipelineDefaultsHandler,
 		modeManager:             modeMgr,
+		sessionStore:            sessionStore,
 		cacheManager:            cacheManager,
 		proxyCache:              proxyCache,
 		tokenUsageHandler:       tokenUsageHandler,

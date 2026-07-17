@@ -34,9 +34,11 @@ LLM_PROXY_SERVER_HOST=${LLM_PROXY_SERVER_HOST:-${SERVER_HOST:-0.0.0.0}}
 LOG_LEVEL=${LOG_LEVEL:-info}
 
 # 日志配置（支持 LLM_PROXY_LOG_LEVEL 和 LOG_LEVEL 两种变量名）
+# 容器默认 both+console：docker logs 能看到请求日志；生产可用环境变量改回 file。
 LLM_PROXY_LOG_LEVEL=${LLM_PROXY_LOG_LEVEL:-${LOG_LEVEL:-info}}
-LLM_PROXY_LOG_FORMAT=${LLM_PROXY_LOG_FORMAT:-json}
-LLM_PROXY_LOG_OUTPUT=${LLM_PROXY_LOG_OUTPUT:-file}
+LLM_PROXY_LOG_FORMAT=${LLM_PROXY_LOG_FORMAT:-console}
+LLM_PROXY_LOG_OUTPUT=${LLM_PROXY_LOG_OUTPUT:-both}
+LLM_PROXY_LOG_PATH=${LLM_PROXY_LOG_PATH:-/app/logs}
 
 # 导出给 centag 二进制使用
 export LLM_PROXY_SERVER_PORT
@@ -44,6 +46,7 @@ export LLM_PROXY_SERVER_HOST
 export LLM_PROXY_LOG_LEVEL
 export LLM_PROXY_LOG_FORMAT
 export LLM_PROXY_LOG_OUTPUT
+export LLM_PROXY_LOG_PATH
 
 # Redis 配置
 REDIS_ENABLED=${REDIS_ENABLED:-false}
@@ -180,7 +183,7 @@ main() {
     echo "  - 服务端口: ${LLM_PROXY_SERVER_PORT}"
     echo "  - 服务地址: ${LLM_PROXY_SERVER_HOST}"
     echo "  - 数据库驱动: ${LLM_PROXY_DB_DRIVER:-sqlite}"
-    echo "  - 日志级别: ${LLM_PROXY_LOG_LEVEL} (${LLM_PROXY_LOG_FORMAT}, ${LLM_PROXY_LOG_OUTPUT})"
+    echo "  - 日志级别: ${LLM_PROXY_LOG_LEVEL} (${LLM_PROXY_LOG_FORMAT}, ${LLM_PROXY_LOG_OUTPUT}, path=${LLM_PROXY_LOG_PATH})"
     echo "  - PostgreSQL 等待: ${POSTGRES_ENABLED} (${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB})"
     echo "  - Redis: ${REDIS_ENABLED} (${REDIS_ADDR})"
     echo "  - 向量数据库: ${VECTOR_ENABLED} (${VECTOR_TYPE} @ ${VECTOR_ADDR})"

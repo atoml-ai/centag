@@ -182,13 +182,32 @@ func TestApplyModelPipelinePrefixToBody(t *testing.T) {
 }
 
 func TestApplyModelPipelinePrefixToBodyPipelineOnly(t *testing.T) {
+	t.Cleanup(func() { config.Set(nil) })
+	config.Set(&config.Config{
+		Proxy: config.ProxyConfig{DefaultModel: "mimo-v2.5-free"},
+	})
+
+	body := map[string]interface{}{"model": "pipeline.transparent-proxy"}
+	pipelineID, applied := ApplyModelPipelinePrefixToBody(body)
+	if !applied || pipelineID != "transparent-proxy" {
+		t.Fatalf("pipelineID=%q applied=%v", pipelineID, applied)
+	}
+	if body["model"] != "mimo-v2.5-free" {
+		t.Fatalf("model=%v, want mimo-v2.5-free (default_model fallback)", body["model"])
+	}
+}
+
+func TestApplyModelPipelinePrefixToBodyPipelineOnlyNoDefaultKeepsVirtual(t *testing.T) {
+	t.Cleanup(func() { config.Set(nil) })
+	config.Set(&config.Config{Proxy: config.ProxyConfig{}})
+
 	body := map[string]interface{}{"model": "pipeline.direct-backend"}
 	pipelineID, applied := ApplyModelPipelinePrefixToBody(body)
 	if !applied || pipelineID != "direct-backend" {
 		t.Fatalf("pipelineID=%q applied=%v", pipelineID, applied)
 	}
 	if body["model"] != "pipeline.direct-backend" {
-		t.Fatalf("model=%v, want pipeline.direct-backend", body["model"])
+		t.Fatalf("model=%v, want pipeline.direct-backend when no default_model", body["model"])
 	}
 }
 

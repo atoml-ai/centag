@@ -2039,9 +2039,15 @@ _dist_docker_run() {
         cd "${PROJECT_ROOT}"
     else
         print_info "启动容器: ${tag} (端口 ${port})..."
+        # 覆盖 secrets 里常见的 LLM_PROXY_LOG_OUTPUT=file：否则 zap 只写
+        # /app/bin/logs，docker logs 只能看到 entrypoint/插件 std 初始化行。
+        # 与 config/profiles/*/docker-compose.yaml 对齐：both + console + /app/logs。
         exec docker run --rm -it \
             --env-file "${PROJECT_ROOT}/config/secrets/.env" \
             -e CENTAG_EDITION="${dist_name}" \
+            -e LLM_PROXY_LOG_OUTPUT=both \
+            -e LLM_PROXY_LOG_FORMAT=console \
+            -e LLM_PROXY_LOG_PATH=/app/logs \
             -p "${port}:20060" \
             -v "${PROJECT_ROOT}/storage:/app/storage" \
             -v "${PROJECT_ROOT}/logs:/app/logs" \
