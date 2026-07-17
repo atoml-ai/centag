@@ -1,6 +1,7 @@
 package conversation
 
 import (
+	"database/sql"
 	"os"
 	"path/filepath"
 	"testing"
@@ -12,6 +13,21 @@ func TestNewStore_PersonalRequiresDB(t *testing.T) {
 	_, err := NewStore(Options{Edition: edition.Personal})
 	if err == nil {
 		t.Fatal("expected error when personal store has no db")
+	}
+}
+
+func TestNewStore_PersonalUsesSQLiteDialect(t *testing.T) {
+	// personal always selects SQLStore with sqlite dialect (gateway profile).
+	store, err := NewStore(Options{Edition: edition.Personal, DB: &sql.DB{}, Driver: "postgresql"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	sqlStore, ok := store.(*SQLStore)
+	if !ok {
+		t.Fatalf("want *SQLStore, got %T", store)
+	}
+	if sqlStore.dialect != dialectSQLite {
+		t.Fatalf("personal store dialect=%v want sqlite (ignore driver hint)", sqlStore.dialect)
 	}
 }
 
