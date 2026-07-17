@@ -127,7 +127,7 @@
         <el-table-column label="操作" width="300" align="center" fixed="right">
           <template #default="{ row }">
             <div class="action-btns">
-              <el-tooltip v-if="canAssignRouteModels(row)" content="分配模型" placement="top">
+              <el-tooltip v-if="canConfigureCapabilitySlots(row)" content="配置模型" placement="top">
                 <el-button
                   circle
                   size="small"
@@ -231,7 +231,7 @@
       @closed="handleEditorClosed"
     />
 
-    <RouterModelAssignDialog
+    <CapabilitySlotsDialog
       v-model="routeAssignVisible"
       :pipeline-id="routeAssignPipelineId"
       @saved="handleRouteAssignSaved"
@@ -247,7 +247,7 @@
     <!-- 从模板创建弹窗 -->
     <el-dialog v-model="templateDialogVisible" title="从模板创建流水线" width="600px">
       <el-alert type="info" :closable="false" style="margin-bottom: 16px">
-        选择以下预设模板快速创建流水线。路由模式可用「分配模型」快速绑定各分支后端/模型；其它模板请在画布中配置。
+        选择以下预设模板快速创建流水线。带多分类的模板可用「配置模型」绑定各分支后端/模型；也可在画布「新增分类」后配置。
       </el-alert>
       <el-row :gutter="12">
         <el-col :span="12" v-for="tmpl in templateList" :key="tmpl.id" style="margin-bottom: 12px">
@@ -327,12 +327,12 @@ import {
 import PipelineEditorDialog from '@/components/pipeline/PipelineEditorDialog.vue'
 import PipelineCreateDialog from '@/components/pipeline/PipelineCreateDialog.vue'
 import PipelineFeatureGuard from '@/components/pipeline/PipelineFeatureGuard.vue'
-import RouterModelAssignDialog from '@/components/pipeline/RouterModelAssignDialog.vue'
+import CapabilitySlotsDialog from '@/components/pipeline/CapabilitySlotsDialog.vue'
 import type { PipelineCreateInfo } from '@/components/pipeline/PipelineCreateDialog.vue'
 import ExecutionHistory from '@/components/pipeline/ExecutionHistory.vue'
 import { useAuthStore } from '@/stores/auth'
 import { resolvePipelineFeatureSupport } from '@/utils/pipeline/features'
-import { canAssignRouteModels } from '@/utils/routeModelAssign'
+import { canConfigureCapabilitySlots } from '@/utils/capabilitySlots'
 
 const route = useRoute()
 const router = useRouter()

@@ -78,13 +78,13 @@
               {{ pipeline.id === selectedDefaultId ? '当前默认' : '设为默认' }}
             </el-button>
             <el-button
-              v-if="canEdit && canAssignRouteModels(pipeline)"
+              v-if="canEdit && canConfigureCapabilitySlots(pipeline)"
               size="small"
               type="warning"
               plain
               @click="openRouteAssign(pipeline)"
             >
-              分配模型
+              配置模型
             </el-button>
             <PipelineFeatureGuard
               feature="pipelineEdit"
@@ -139,7 +139,7 @@
       @saved="handleEditorSaved"
     />
 
-    <RouterModelAssignDialog
+    <CapabilitySlotsDialog
       v-model="routeAssignVisible"
       :pipeline-id="routeAssignPipelineId"
       @saved="handleRouteAssignSaved"
@@ -155,10 +155,10 @@ import PipelineCreateDialog from '@/components/pipeline/PipelineCreateDialog.vue
 import type { PipelineCreateInfo } from '@/components/pipeline/PipelineCreateDialog.vue'
 import PipelineEditorDialog from '@/components/pipeline/PipelineEditorDialog.vue'
 import PipelineFeatureGuard from '@/components/pipeline/PipelineFeatureGuard.vue'
-import RouterModelAssignDialog from '@/components/pipeline/RouterModelAssignDialog.vue'
+import CapabilitySlotsDialog from '@/components/pipeline/CapabilitySlotsDialog.vue'
 import { useEdition } from '@/composables/useEdition'
 import { useAuthStore } from '@/stores/auth'
-import { canAssignRouteModels } from '@/utils/routeModelAssign'
+import { canConfigureCapabilitySlots } from '@/utils/capabilitySlots'
 import {
   getPipelines,
   getPipeline,

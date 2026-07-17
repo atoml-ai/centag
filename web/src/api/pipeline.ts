@@ -54,6 +54,11 @@ export interface PipelineNodeConfig {
   condition?: string
   next_nodes?: string[]
   depends_on?: string[]
+  route_config?: {
+    router_node_id?: string
+    route_value?: string
+    is_default?: boolean
+  }
 }
 
 export type Pipeline = AgentPatternPipeline
