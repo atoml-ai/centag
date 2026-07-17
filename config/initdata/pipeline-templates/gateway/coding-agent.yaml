@@ -1,82 +1,256 @@
 schema_version: centag.pipeline/v1alpha1
 id: coding-agent
 name: 编程Agent
-description: 独立编程助手流水线，通过 function calling 和工具调用来完成编程任务，覆盖代码生成、修改、调试、项目搭建等场景。
+description: |
+  多阶段编程助手（验证样板）：按关键词将请求分发到架构 / 编码 / 审核 / 测试节点。
+  各阶段可在 Web「配置模型」中独立绑定后端与模型。旧版单节点定义请从本模板重建。
 version: "1.0"
 shortcut_code: '#code'
 nodes:
-    - id: generate
-      type: generator
-      kind: llm.generate
-      implementation: builtin.generator
-      name: 编程生成
-      backend: "{{system.default_backend}}"
-      model: "{{system.default_model}}"
-      config:
-        backend: "{{system.default_backend}}"
-        model: "{{system.default_model}}"
-        prompt_template: '{{input}}'
-        system_prompt: |
-          你是编程助手，通过调用工具（function calling）完成编程任务。
+- id: stage_router
+  type: router
+  kind: routing.decide
+  implementation: builtin.router
+  name: 编程阶段路由
+  timeout: 15
+  config:
+    custom_config:
+      routing_strategy: keyword_contains
+      default_route: implement-generator
+      routes:
+        # 架构 / 方案
+        架构: architect-generator
+        设计: architect-generator
+        方案: architect-generator
+        ADR: architect-generator
+        refactor: architect-generator
+        architecture: architect-generator
+        design: architect-generator
+        # 编码实现（默认）
+        实现: implement-generator
+        编写: implement-generator
+        写代码: implement-generator
+        fix: implement-generator
+        bug: implement-generator
+        实现功能: implement-generator
+        implement: implement-generator
+        code: implement-generator
+        # 审核
+        审查: review-generator
+        review: review-generator
+        可读性: review-generator
+        code review: review-generator
+        # 测试 / 调试
+        测试: test-generator
+        单测: test-generator
+        e2e: test-generator
+        调试: test-generator
+        debug: test-generator
 
-          ## 工作流程
-          - 收到编程任务后，先用 read_file/glob 了解项目结构和现有代码，不要盲目写代码
-          - 对于复杂任务，先给出方案概述，得到确认后再实现
-          - 遵循渐进式开发策略：先实现核心功能（MVP），再逐步完善
+- id: architect-generator
+  type: generator
+  kind: llm.generate
+  implementation: builtin.generator
+  name: 架构设计
+  backend: "{{system.default_backend}}"
+  model: "{{system.default_model}}"
+  timeout: 180
+  depends_on:
+  - stage_router
+  route_config:
+    router_node_id: stage_router
+    route_value: 架构
+    is_default: false
+  config:
+    backend: "{{system.default_backend}}"
+    model: "{{system.default_model}}"
+    prompt_template: '{{input}}'
+    system_prompt: |
+      你是资深软件架构师。聚焦方案设计、模块边界、权衡与风险，而不是立刻写大段实现代码。
 
-          ## 核心行为准则
-          - 收到明确的编程任务时调用工具执行
-          - 如果用户只是打招呼或闲聊，用自然语言回复，不调用任何工具
-          - 不确定用户意图时，先询问用户想要做什么
+      ## 输出要求
+      - 先澄清目标与约束，再给出 1～2 个可行方案并对比
+      - 明确模块边界、数据流、关键接口与失败模式
+      - 指出技术债与演进路径；需要决策时给出推荐与理由
+      - 仅在必要时给出简短伪代码或接口草图
+    template_vars:
+      backend: system.default_backend
+      model: system.default_model
 
-          ## 工具使用规则
-          - 创建或修改文件 → write_file 或 edit_file
-          - 执行命令 → bash
-          - 查看文件 → read_file
-          - 搜索代码 → glob 或 grep
-          - 每次工具调用后，必须根据结果继续执行，直到任务完成
-          - 工具执行失败时，必须修复问题后重试
-          - 单次 write_file 代码控制在 200 行以内，超大文件拆分为多次调用
-          - 禁止用 bash heredoc 写文件
+- id: implement-generator
+  type: generator
+  kind: llm.generate
+  implementation: builtin.generator
+  name: 编码实现
+  backend: "{{system.default_backend}}"
+  model: "{{system.default_model}}"
+  timeout: 300
+  depends_on:
+  - stage_router
+  route_config:
+    router_node_id: stage_router
+    route_value: 实现
+    is_default: true
+  config:
+    backend: "{{system.default_backend}}"
+    model: "{{system.default_model}}"
+    prompt_template: '{{input}}'
+    system_prompt: |
+      你是编程助手，通过调用工具（function calling）完成编程任务。
 
-          ## 代码风格
-          - 遵循项目已有的代码风格和命名规范
-          - 优先复用项目中已有的工具函数和组件
-          - 添加必要的错误处理和日志
+      ## 工作流程
+      - 收到编程任务后，先用 read_file/glob 了解项目结构和现有代码，不要盲目写代码
+      - 对于复杂任务，先给出方案概述，得到确认后再实现
+      - 遵循渐进式开发策略：先实现核心功能（MVP），再逐步完善
 
-          完成后简要说明所做的工作。不要提前结束任务，直到所有步骤完成。
-        template_vars:
-          backend: "system.default_backend"
-          model: "system.default_model"
-      timeout: 300
-      retry:
-        max_attempts: 2
-        backoff_strategy: exponential
-        initial_delay: 1000
-        max_delay: 30000
+      ## 核心行为准则
+      - 收到明确的编程任务时调用工具执行
+      - 如果用户只是打招呼或闲聊，用自然语言回复，不调用任何工具
+      - 不确定用户意图时，先询问用户想要做什么
+
+      ## 工具使用规则
+      - 创建或修改文件 → write_file 或 edit_file
+      - 执行命令 → bash
+      - 查看文件 → read_file
+      - 搜索代码 → glob 或 grep
+      - 每次工具调用后，必须根据结果继续执行，直到任务完成
+      - 工具执行失败时，必须修复问题后重试
+      - 单次 write_file 代码控制在 200 行以内，超大文件拆分为多次调用
+      - 禁止用 bash heredoc 写文件
+
+      ## 代码风格
+      - 遵循项目已有的代码风格和命名规范
+      - 优先复用项目中已有的工具函数和组件
+      - 添加必要的错误处理和日志
+
+      完成后简要说明所做的工作。不要提前结束任务，直到所有步骤完成。
+    template_vars:
+      backend: system.default_backend
+      model: system.default_model
+  retry:
+    max_attempts: 2
+    backoff_strategy: exponential
+    initial_delay: 1000
+    max_delay: 30000
+
+- id: review-generator
+  type: generator
+  kind: llm.generate
+  implementation: builtin.generator
+  name: 代码审核
+  backend: "{{system.default_backend}}"
+  model: "{{system.default_model}}"
+  timeout: 180
+  depends_on:
+  - stage_router
+  route_config:
+    router_node_id: stage_router
+    route_value: 审查
+    is_default: false
+  config:
+    backend: "{{system.default_backend}}"
+    model: "{{system.default_model}}"
+    prompt_template: '{{input}}'
+    system_prompt: |
+      你是严谨的代码审查者。关注正确性、可读性、安全与可维护性，而不是重写全部代码。
+
+      ## 审查清单
+      - 逻辑缺陷、边界条件、错误处理
+      - 安全：注入、密钥泄露、权限
+      - 可读性与命名；不必要的复杂度
+      - 测试缺口与回归风险
+
+      ## 输出格式
+      - 按严重程度（阻断 / 重要 / 建议）列出问题
+      - 每条给出位置（文件/函数若可知）、原因与修改建议
+      - 肯定做得好的地方（简短）
+    template_vars:
+      backend: system.default_backend
+      model: system.default_model
+
+- id: test-generator
+  type: generator
+  kind: llm.generate
+  implementation: builtin.generator
+  name: 测试调试
+  backend: "{{system.default_backend}}"
+  model: "{{system.default_model}}"
+  timeout: 180
+  depends_on:
+  - stage_router
+  route_config:
+    router_node_id: stage_router
+    route_value: 测试
+    is_default: false
+  config:
+    backend: "{{system.default_backend}}"
+    model: "{{system.default_model}}"
+    prompt_template: '{{input}}'
+    system_prompt: |
+      你是测试与调试专家。帮助设计用例、定位失败与回归策略。
+
+      ## 重点
+      - 给出可执行的测试用例（单测 / 集成 / e2e 按场景选择）
+      - 说明前置条件、步骤、期望结果
+      - 调试时先假设再验证：日志、复现路径、最小复现
+      - 优先小步验证，避免大规模无关改动
+    template_vars:
+      backend: system.default_backend
+      model: system.default_model
+
 global_config:
-    timeout: 300
-    max_retries: 2
-    bypass_on_error: true
-    parallel_limit: 1
-    log_level: info
-    storage:
-      enabled: true
-      namespace: "coding-agent"
-      auto_save: true
-      save_interval: 180
-      retention_days: 30
-    hooks:
-      - type: storage
-        on:
-          - node_complete
-          - pipeline_complete
-        config:
-          save_code_snippets: true
-          save_solutions: true
-          track_file_changes: true
+  timeout: 300
+  max_retries: 2
+  bypass_on_error: true
+  parallel_limit: 1
+  log_level: info
+  storage:
+    enabled: true
+    namespace: "coding-agent"
+    auto_save: true
+    save_interval: 180
+    retention_days: 30
+  hooks:
+    - type: storage
+      on:
+        - node_complete
+        - pipeline_complete
+      config:
+        save_code_snippets: true
+        save_solutions: true
+        track_file_changes: true
+
 metadata:
-    aligned_proxy_mode: direct-backend
-    shortcut: '#code'
-    version: '1.0'
-    lastUpdated: '2026-07-07T00:00:00.000Z'
+  aligned_proxy_mode: coding-agent
+  shortcut: '#code'
+  version: '1.0'
+  lastUpdated: '2026-07-17T00:00:00.000Z'
+  capability_slots:
+    - slot_id: code.architect
+      node_id: architect-generator
+      label: 架构设计
+      kind: stage
+      tags: [reasoning, code]
+      hint: 方案与边界，建议强推理模型
+      default_follow_system: true
+    - slot_id: code.implement
+      node_id: implement-generator
+      label: 编码实现
+      kind: stage
+      tags: [code]
+      hint: 写代码/改代码，建议代码能力强的模型（默认分支）
+      default_follow_system: true
+    - slot_id: code.review
+      node_id: review-generator
+      label: 代码审核
+      kind: stage
+      tags: [review, code]
+      hint: 审查缺陷与规范
+      default_follow_system: true
+    - slot_id: code.test
+      node_id: test-generator
+      label: 测试调试
+      kind: stage
+      tags: [code, cheap]
+      hint: 用例与调试，可用更便宜模型
+      default_follow_system: true
