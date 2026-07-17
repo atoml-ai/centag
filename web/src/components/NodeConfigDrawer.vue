@@ -474,11 +474,15 @@
             <el-option label="关键词前缀匹配 (keyword_prefix)" value="keyword_prefix" />
             <el-option label="有序规则 (ordered)" value="ordered" />
             <el-option label="正则匹配 (regex_only)" value="regex_only" />
+            <el-option label="关键字+轻量意图 (keyword_then_intent)" value="keyword_then_intent" />
             <el-option label="LLM 意图分类 (llm_classify)" value="llm_classify" />
           </el-select>
           <div class="help-text">
             <span v-if="routerConfig.strategy === 'llm_classify'">
               LLM 语义分类：会发起一次额外的 LLM 调用（约 500ms-2s 延迟），准确率高，能处理多样表达。
+            </span>
+            <span v-else-if="routerConfig.strategy === 'keyword_then_intent'">
+              先关键字/规则命中，未命中再轻量意图分类；小模型分类默认关闭。
             </span>
             <span v-else>
               关键词/规则匹配：零成本、低延迟。llm_classify 适合复杂意图场景。

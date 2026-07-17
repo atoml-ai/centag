@@ -91,6 +91,8 @@ import { ref, computed, nextTick, watch } from 'vue'
 import { Promotion, User, Monitor, ChatDotRound, WarningFilled } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { getPipelines, type AgentPatternPipeline } from '@/api/pipeline'
+import { useAuthStore } from '@/stores/auth'
+import api from '@/api'
 
 interface ChatMsg {
   role: 'user' | 'assistant'
@@ -99,6 +101,7 @@ interface ChatMsg {
 }
 
 const visible = defineModel<boolean>({ default: false })
+const authStore = useAuthStore()
 
 const pipelines = ref<AgentPatternPipeline[]>([])
 const pipelinesLoading = ref(false)
@@ -107,6 +110,8 @@ const messages = ref<ChatMsg[]>([])
 const inputText = ref('')
 const loading = ref(false)
 const messagesContainer = ref<HTMLElement>()
+/** Cached plaintext API key for test chat when JWT is unavailable. */
+const cachedTestAPIKey = ref('')
 
 const selectedPipeline = computed(() =>
   pipelines.value.find(p => p.id === selectedPipelineId.value)
@@ -144,6 +149,31 @@ async function loadPipelines() {
   }
 }
 
+/** Prefer admin JWT (accepted by proxy); else first configured API key. */
+async function resolveProxyAuthHeader(): Promise<Record<string, string>> {
+  if (authStore.accessToken) {
+    return { Authorization: `Bearer ${authStore.accessToken}` }
+  }
+  if (cachedTestAPIKey.value) {
+    return { Authorization: `Bearer ${cachedTestAPIKey.value}` }
+  }
+  try {
+    const status: any = await api.get('/api/v1/settings/api-keys/status')
+    const required = !!(status?.auth_required ?? status?.data?.auth_required)
+    if (!required) return {}
+    const res: any = await api.get('/api/v1/settings/api-keys')
+    const list = Array.isArray(res?.data) ? res.data : Array.isArray(res) ? res : []
+    const full = list.find((k: any) => k?.api_key)?.api_key
+    if (full) {
+      cachedTestAPIKey.value = full
+      return { Authorization: `Bearer ${full}` }
+    }
+  } catch {
+    /* ignore — let request fail with 401 */
+  }
+  return {}
+}
+
 async function sendMessage() {
   const text = inputText.value.trim()
   if (!text || !selectedPipelineId.value || loading.value) return
@@ -158,10 +188,14 @@ async function sendMessage() {
 
   try {
     const modelField = `pipeline.${selectedPipelineId.value}`
+    const authHeaders = await resolveProxyAuthHeader()
 
     const response = await fetch('/v1/chat/completions', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...authHeaders
+      },
       body: JSON.stringify({
         model: modelField,
         messages: messages.value.slice(0, -1).map(m => ({

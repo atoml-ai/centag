@@ -77,6 +77,7 @@ export function appGroup(options?: { tokenUsageLabel?: string }): NavItem {
     path: '/chat',
     children: [
       { id: 'chat', label: '对话', icon: 'ChatDotRound', path: '/chat' },
+      { id: 'conversations', label: '会话记录', icon: 'ChatLineSquare', path: '/conversations' },
       { id: 'token-usage', label: tokenUsageLabel, icon: 'TrendCharts', path: '/token-usage' },
       {
         id: 'cost-dashboard',
