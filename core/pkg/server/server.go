@@ -1409,6 +1409,7 @@ func (s *Server) setupRoutes() {
 			backends.GET("", s.backendHandler.ListBackends)
 			backends.GET("/types", s.backendHandler.ListBackendTypes)
 			backends.GET("/export", s.backendHandler.ExportBackends)
+			backends.POST("/import", s.backendHandler.ImportBackends)
 			backends.GET("/:id", s.backendHandler.GetBackend)
 			backends.GET("/:id/models", s.backendHandler.GetModels)
 			backends.POST("/fetch-models", s.backendHandler.FetchModels)

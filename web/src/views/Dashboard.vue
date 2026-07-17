@@ -24,15 +24,10 @@
         <div class="lite-row lite-row--config">
           <el-card class="info-card config-card">
             <template #header>
-              <div class="card-head card-head--actions">
-                <div class="card-head-main">
-                  <el-icon class="card-icon backend-color"><DataBoard /></el-icon>
-                  <span>后端配置</span>
-                  <span class="card-badge">{{ backends.length }} 个</span>
-                </div>
-                <el-button type="primary" size="small" @click="backendListRef?.openCreate()">
-                  + 添加 Provider
-                </el-button>
+              <div class="card-head">
+                <el-icon class="card-icon backend-color"><DataBoard /></el-icon>
+                <span>后端配置</span>
+                <span class="card-badge">{{ backends.length }} 个</span>
               </div>
             </template>
             <DashboardBackendList
@@ -189,6 +184,7 @@
             </div>
           </template>
           <DashboardBackendList
+            ref="backendListRef"
             :backends="backends"
             @backend-updated="patchBackend"
             @refresh="loadBackendsOnly"
@@ -424,6 +420,7 @@
           </div>
         </template>
         <DashboardBackendList
+          ref="backendListRef"
           :backends="backends"
           @backend-updated="patchBackend"
           @refresh="loadBackendsOnly"
