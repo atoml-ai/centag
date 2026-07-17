@@ -44,6 +44,27 @@ func TestScheduleWithStrategy_UsesScoringByDefault(t *testing.T) {
 	}
 }
 
+func TestFindBestModel_PrefersProbeModelWhenNoRequest(t *testing.T) {
+	cfg := DefaultSchedulerConfig()
+	cfg.IntentClassifier.Enabled = false
+	cfg.EnableLogging = false
+	sched := NewScheduler(cfg, backend.NewManager())
+
+	b := &backend.BackendConfig{
+		ID:         "openai-bigmodel-ai",
+		Type:       "openai",
+		ProbeModel: "glm-4-flash",
+		SupportedModels: []backend.ModelMapping{
+			{RequestedModel: "glm-4-plus", ActualModel: "glm-4-plus"},
+			{RequestedModel: "glm-4-flash", ActualModel: "glm-4-flash"},
+		},
+	}
+	got := sched.findBestModel(b, "", TaskSimpleChat)
+	if got != "glm-4-flash" {
+		t.Fatalf("got %q, want glm-4-flash from probe_model (not first supported model)", got)
+	}
+}
+
 func TestScheduleWithStrategy_LegacyUsesSelector(t *testing.T) {
 	mgr := backend.NewManager()
 	mgr.Add(&backend.BackendConfig{
