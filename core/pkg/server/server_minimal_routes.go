@@ -131,6 +131,8 @@ func (s *Server) setupMinimalRoutes(configHandler *MinimalConfigHandler, pluginR
 			backends.DELETE("/:id", s.backendHandler.DeleteBackend)
 			backends.POST("/test", s.backendHandler.TestConnection)
 			backends.POST("/:id/probe", s.backendHandler.ProbeBackend)
+			backends.POST("/probe-all", s.backendHandler.ProbeAllBackends)
+			backends.POST("/probe-all-sse", s.backendHandler.ProbeAllBackendsSSE)
 			backends.POST("/import", s.backendHandler.ImportBackends)
 		}
 
