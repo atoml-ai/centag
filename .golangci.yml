@@ -1,18 +1,31 @@
-# golangci-lint 配置（与 CI 中版本 pin 对齐；见 .github/workflows/ci.yml）
-# 版本: v2.0.2（支持 Go 1.25）
+# golangci-lint 配置（与本地/CI v2 对齐）
+version: "2"
+
 run:
   timeout: 7m
-  skip-dirs:
-    - web/node_modules
-    - deploy/stack
   tests: true
+  # Align with Makefile BUILD_TAGS so plugin blank-imports typecheck.
+  build-tags:
+    - protocol_openai
+    - protocol_anthropic
+    - protocol_gemini
+    - protocol_openairesponses
+    - backend_openai
+    - backend_ollama
+    - backend_anthropic
+    - backend_gemini
+    - backend_azure
 
 linters:
-  disable-all: true
+  default: none
   enable:
     - govet
     - ineffassign
     - misspell
+  exclusions:
+    paths:
+      - web/node_modules
+      - deploy/stack
 
 issues:
   max-same-issues: 50
