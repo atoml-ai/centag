@@ -2,11 +2,27 @@
 
 **目标**：个人侧的**全功能** Centag（二进制与 team 插件集对齐）。默认内置 SQLite、单容器即可跑通；需要时再通过配置连接外部 PG / 向量 / Redis 等中间件。
 
-> 与 **team** 的差别主要在**部署默认依赖**（本 Profile 默认 SQLite、不强制拉起 stack），不在二进制裁剪。详见 [`docs/guide/dist-profiles.md`](../../../docs/guide/dist-profiles.md)。
+> 与 **team** 的差别主要在**部署默认依赖与产品版本**（本 Profile 默认 SQLite + `CENTAG_EDITION=personal`），不在二进制裁剪。详见 [`docs/guide/dist-profiles.md`](../../../docs/guide/dist-profiles.md)。
+
+## 发行包 ↔ 运行时
+
+| 层 | 值 | 说明 |
+|----|-----|------|
+| Dist / Profile | `gateway` | 发行包名、compose 项目名 |
+| `CENTAG_EDITION` | **`personal`** | Web/API/钩子语义；对话与计量落 SQLite |
+| 勿用 | `team` | 会打开多租户/计费等团队面，且对话工厂偏 PG |
+
+验证：
+
+```bash
+curl -s http://localhost:20060/api/v1/status | jq .edition
+# 期望: "personal"
+```
 
 ## 特点
 
 - **全功能二进制**：含全部业务插件（路由、优化、审核、RAG、Mem0 等）与 sqlite/postgresql 驱动
+- **产品版本 personal**：单用户语义；无 BillingHook / 租户管理面
 - **默认零中间件**：`LLM_PROXY_DB_DRIVER=sqlite`，默认不启动 PostgreSQL / 向量等 stack 服务
 - **可接外部中间件**：改配置即可连外部 PG / Redis / 向量，而无需换发行版
 - **默认线上 API**：填入 API Key 即可跑通
@@ -90,9 +106,11 @@ curl http://localhost:20060/v1/chat/completions \
 
 ## 默认行为
 
+- **产品版本**：`CENTAG_EDITION=personal`（compose 与 `.env.example` 已固定）
 - **默认模式**：`transparent-proxy`（透明模式，不注入 system prompt；全发行版统一）
 - **默认后端**：OpenAI `gpt-4o-mini`（需在 `.env` 配置 `OPENAI_API_KEY`）
 - **数据库**：SQLite（`./storage/centag.db`）
+- **对话 / Token 计量**：持久化到同一 SQLite（重启不丢；对比 minimal 进程内/文件临时）
 - **stack 依赖**：无（`OLLAMA_ENABLED=false` 时）
 
 ## 与其他 Profile 的关系
