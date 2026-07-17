@@ -62,21 +62,55 @@ func NewMinimal(cfg *config.Config) *Server {
 	bizRegistry := pipeline.NewBusinessPluginRegistry()
 	nodeRegistry.SetBusinessRegistry(bizRegistry)
 
-	// Create pipeline registry (in-memory for minimal)
-	pipelineRegistry := pipeline.NewPipelineRegistry()
+	// Data dir for file persistence (backends / pipelines / proxy-config)
+	dataDir := resolveDataDir()
+	if dataDir == "" {
+		dataDir = "./data"
+	}
+	if err := os.MkdirAll(dataDir, 0o755); err != nil {
+		logger.Warnf("Failed to create data dir %s: %v", dataDir, err)
+	}
+	if absDir, err := filepath.Abs(dataDir); err == nil {
+		dataDir = absDir
+	}
 
-	// Load pipeline templates from files (minimal edition: only minimal- prefixed templates)
+	// Pipeline registry backed by YAML files under data/pipeline-templates
+	// (PUT /pipelines/:id must survive restart — not memory-only).
+	pipelineTmplDir := filepath.Join(dataDir, "pipeline-templates")
+	fileStore, err := pipeline.NewFilePipelineStore(pipelineTmplDir)
+	if err != nil {
+		logger.Errorf("[Minimal] file pipeline store init failed: %v; falling back to memory-only", err)
+		fileStore = nil
+	}
+	var pipelineRegistry *pipeline.PipelineRegistry
+	if fileStore != nil {
+		pipelineRegistry = pipeline.NewPipelineRegistryWithStore(fileStore)
+		if loadErr := pipelineRegistry.LoadFromStore(); loadErr != nil {
+			logger.Warnf("[Minimal] load pipelines from %s: %v", pipelineTmplDir, loadErr)
+		} else {
+			logger.Infof("[Minimal] Loaded %d pipelines from %s", len(pipelineRegistry.List()), pipelineTmplDir)
+		}
+	} else {
+		pipelineRegistry = pipeline.NewPipelineRegistry()
+	}
+
+	// Builtin templates: seed only missing IDs (never overwrite user-saved YAML)
 	templates := resolvePipelineTemplatesWithEdition("minimal")
 	logger.Infof("Pipeline templates loaded: %d builtin templates (edition: minimal)", len(templates))
-
-	// Register all templates as pipelines
+	seeded := 0
 	for _, tmpl := range templates {
+		if pipelineRegistry.Exists(tmpl.ID) {
+			continue
+		}
 		p := pipeline.CreatePipelineFromTemplate(tmpl, nil)
 		if err := pipelineRegistry.Register(p); err != nil {
 			logger.Warnf("Failed to register builtin pipeline %s: %v", p.ID, err)
+		} else {
+			seeded++
 		}
 	}
-	logger.Infof("Registered %d pipelines from templates", len(pipelineRegistry.List()))
+	logger.Infof("[Minimal] Pipeline registry ready: total=%d seeded_from_builtin=%d dir=%s",
+		len(pipelineRegistry.List()), seeded, pipelineTmplDir)
 
 	// Create pipeline engine
 	pipelineEngine := pipeline.NewPipelineEngine(
@@ -161,17 +195,7 @@ func NewMinimal(cfg *config.Config) *Server {
 		logger.Infof("Synced %d pipeline shortcuts into ModeManager", synced)
 	}
 
-	// Config handler for minimal (file-based)
-	dataDir := resolveDataDir()
-	if dataDir == "" {
-		dataDir = "./data"
-	}
-	if err := os.MkdirAll(dataDir, 0o755); err != nil {
-		logger.Warnf("Failed to create data dir %s: %v", dataDir, err)
-	}
-	if absDir, err := filepath.Abs(dataDir); err == nil {
-		dataDir = absDir
-	}
+	// Config handler for minimal (file-based); dataDir already resolved above
 	// 确保 API Save 路径与 config-generator 写入路径一致
 	backendFile := filepath.Join(dataDir, "initial-backends.yaml")
 	backendManager.SetStore(backend.NewFileBackendStore(backendFile))
