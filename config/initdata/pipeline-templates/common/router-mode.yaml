@@ -149,3 +149,18 @@ metadata:
   aligned_proxy_mode: router-mode
   lastUpdated: '2026-07-17T00:00:00.000Z'
   layoutVersion: '1.2'
+  # 供 Web「路由模型分配」面板识别的目标节点（避免前端硬编码散落）
+  route_model_targets:
+    - node_id: code-generator
+      label: 代码生成
+      hint: 建议绑定强代码能力模型
+    - node_id: translate-gen
+      label: 翻译
+      hint: 建议绑定通用/多语言模型
+    - node_id: summary-gen
+      label: 摘要
+      hint: 可用更便宜或长上下文模型
+    - node_id: chat-generator
+      label: 通用对话
+      hint: 日常对话；默认可跟随系统默认
+      default_follow_system: true
