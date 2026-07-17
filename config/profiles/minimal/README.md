@@ -73,11 +73,21 @@ backends:
 
 ### 流水线配置
 
-编辑 `initdata/pipeline-templates/common/` 目录下的文件：
+运行时会合并加载：
+
+1. 全局 `config/initdata/pipeline-templates/common/`（含智能调度、路由模式等）
+2. Profile 覆盖 `initdata/pipeline-templates/common/`
+
+Profile 内置：
 
 - `01-direct-backend.yaml` - 直连模式
-- `03-transparent-fast.yaml` / `14-transparent-proxy.yaml` - 透明模式（系统默认）
+- `14-transparent-proxy.yaml` - 透明模式（系统默认）
 - `15-raw-forward.yaml` - 原始 HTTP 转发（需 Target-URL / hostproxy）
+
+全局 common 额外提供（minimal 可用）：
+
+- `smart-scheduling.yaml` - 智能调度（`#s`，依赖 ScheduleBackend hook）
+- `router-mode.yaml` - 路由模式（`#r` / `X-Pipeline-ID: router-mode`）
 
 ### 环境变量
 

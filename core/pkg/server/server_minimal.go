@@ -105,6 +105,18 @@ func NewMinimal(cfg *config.Config) *Server {
 	pipelineEngine.SetCapabilityBroker(capabilityBroker)
 	logger.Info("[Minimal] CapabilityBroker injected into PipelineEngine")
 
+	// 智能调度 / 透明转发 hook：与完整版 server.go 对齐，供 scheduler / transparent_forward 节点使用
+	appScheduler := buildScheduler(cfg, backendManager)
+	wireSchedulerBackend(appScheduler)
+	wireSchedulerMetricsFeedback(appScheduler)
+	wireTransparentBackend(backendManager)
+	if appScheduler != nil {
+		logger.Infof("[Minimal] Scheduler initialized and wired to pipeline (intent_recognition=%v, task_strategies=%d)",
+			cfg.Scheduler.EnableIntentRecognition, len(cfg.Scheduler.TaskStrategies))
+	} else {
+		logger.Warn("[Minimal] Scheduler not available (backend manager nil); smart-scheduling pipeline will fail until backends load")
+	}
+
 	// Create proxy handler
 	proxyService := proxy.New(pluginManager)
 	// Use nil for proxyCache — not used by the handler directly
