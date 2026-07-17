@@ -80,7 +80,7 @@ deploy/stack/.env  →  config/profiles/<name>/.env  →  config/secrets/.env
 
 ### gateway
 
-- SQLite 内置，无 PG 依赖
+- SQLite 内置，无 PG 依赖；**`CENTAG_EDITION=personal`**（发行包 gateway → 运行时 personal）
 - **默认** `OLLAMA_ENABLED=false`：仅启动应用容器，使用线上 API Key
 - `OLLAMA_ENABLED=true` 时自动 `stack ensure ollama`，应用通过 `deploy/stack-network` 访问 `centag-ollama`
 

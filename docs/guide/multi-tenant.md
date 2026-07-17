@@ -27,10 +27,19 @@
 
 | Edition | 多租户 | 典型场景 |
 |---------|--------|----------|
-| `team` | 启用 | 团队/企业部署（默认） |
-| `personal` | 关闭 | Desktop 单用户 |
+| `team` | 启用 | 团队/企业部署（bootstrap 默认值；Profile `team` 固定） |
+| `personal` | 关闭 | 个人全功能 / Desktop；**发行包 `gateway` 固定为此值** |
+| `minimal` | 关闭 | 精简文件配置版（无 DB） |
 
-**团队版（推荐）**：
+**个人网关（gateway → personal）**：
+
+```bash
+# config/profiles/gateway 已内置
+CENTAG_EDITION=personal
+LLM_PROXY_DB_DRIVER=sqlite
+```
+
+**团队版**：
 
 ```bash
 export CENTAG_EDITION=team

@@ -15,11 +15,12 @@ Dist Profile 是 Centag 的**编译时插件子集**。能否真正注册，取�
 | 发行版 | 定位 | 二进制插件 | 部署默认依赖 |
 |--------|------|------------|--------------|
 | **minimal** | 轻量单机 / CLI | 精简（无 DB、仅 router） | 文件配置，无中间件 |
-| **gateway** | **个人全功能** | 与 team **对齐** | **默认内置 SQLite**；可通过配置连接外部 PG / 向量 / Redis 等 |
-| **team** | **团队版** | 与 gateway **对齐** | **中间件单独部署**（PG、向量化等），应用连外部服务；可多租户 / HA |
+| **gateway** | **个人全功能** | 与 team **对齐** | **默认内置 SQLite** + **`CENTAG_EDITION=personal`**；可按需接外部中间件 |
+| **team** | **团队版** | 与 gateway **对齐** | **中间件单独部署**（PG、向量化等）+ **`CENTAG_EDITION=team`**；可多租户 / HA |
 
-> gateway 与 team 的差别**主要不在二进制裁剪**，而在 **Config Profile / 部署默认依赖**（见 `config/profiles/`）。  
-> 两者都编入完整业务插件与 sqlite+postgresql 驱动；gateway 默认用 sqlite，team 默认连外部 PG。
+> gateway 与 team 的差别**主要不在二进制裁剪**，而在 **Config Profile / 部署默认依赖 / 产品版本**（见 `config/profiles/`）。
+> 两者都编入完整业务插件与 sqlite+postgresql 驱动；gateway 默认 sqlite + `personal`，team 默认外部 PG + `team`。
+> **命名**：发行包 `gateway` ≠ edition 枚举；运行时 edition 为 `personal`。
 
 与之对应的是 **Config Profile**（`config/profiles/<name>/`）：部署蓝图（compose + manifest），在运行时决定行为。
 
@@ -161,6 +162,7 @@ Dist Profile 是 Centag 的**编译时插件子集**。能否真正注册，取�
 - 入口：`dist/gateway/main.go`
 - tags：与 team 相同的 `_FULL_FEATURE_TAGS`
 - 插件：全后端 / 协议 / DB 驱动 / storage / **全部 13 个业务插件**
+- **产品版本**：`CENTAG_EDITION=personal`（对话/计量 SQLite；无团队计费面）
 - **部署默认**：`LLM_PROXY_DB_DRIVER=sqlite`，单容器即可；需要时改配置连接外部 PG / Redis / 向量等
 - 对应 Config Profile：`config/profiles/gateway/`
 
