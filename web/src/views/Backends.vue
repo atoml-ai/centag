@@ -188,7 +188,14 @@ async function loadDefaultBackend() {
 }
 
 function getBackendDefaultModel(p) {
-  return p.default_model || p.probe_model || ''
+  if (!p) return ''
+  if (p.default_model) return p.default_model
+  if (p.probe_model) return p.probe_model
+  const sm = Array.isArray(p.supported_models) ? p.supported_models : []
+  if (sm.length > 0) {
+    return sm[0].actual_model || sm[0].requested_model || ''
+  }
+  return ''
 }
 
 async function setDefaultBackend(p) {

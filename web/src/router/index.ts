@@ -28,6 +28,7 @@ const ClashRules = () => import('@/views/ClashRules.vue')
 const LogViewer = () => import('@/views/LogViewer.vue')
 const RequestTrace = () => import('@/views/RequestTrace.vue')
 const TokenUsage = () => import('@/views/TokenUsage.vue')
+const Conversations = () => import('@/views/Conversations.vue')
 const CostDashboard = () => import('@/views/CostDashboard.vue')
 const AbComparison = () => import('@/views/AbComparison.vue')
 const Memory = () => import('@/views/Memory.vue')
@@ -146,6 +147,13 @@ const routes = [
     meta: { title: '请求追踪' }
   },
   { path: '/token-usage', name: 'TokenUsage', component: TokenUsage, meta: { title: 'Token 统计' } },
+  {
+    path: '/conversations',
+    name: 'Conversations',
+    component: Conversations,
+    meta: { title: '会话记录' }
+  },
+
   {
     path: '/cost',
     name: 'CostDashboard',

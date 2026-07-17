@@ -1,25 +1,24 @@
 <template>
   <div class="dashboard" :class="{ 'dashboard--personal': isPersonal || isMinimal }">
-    <div class="page-header">
-      <div>
-        <h1 class="page-title">{{ isPersonal || isMinimal ? '首页' : '概览' }}</h1>
+    <div class="page-header" :class="{ 'page-header--actions-only': isMinimal }">
+      <div v-if="!isMinimal">
+        <h1 class="page-title">{{ isPersonal ? '首页' : '概览' }}</h1>
         <p class="page-description">{{ pageDescription }}</p>
       </div>
       <div class="page-header-actions">
         <el-button v-if="isMinimal" type="success" @click="chatDialogVisible = true">
           <el-icon><ChatDotRound /></el-icon>&nbsp;AI 对话
         </el-button>
-        <el-button v-if="isMinimal" @click="pwdDialogVisible = true">修改密码</el-button>
+        <el-button v-if="isMinimal" @click="securityDialogVisible = true">安全设置</el-button>
         <el-button v-if="isMinimal" @click="handleLogout">退出登录</el-button>
       </div>
     </div>
 
-    <!-- Minimal：接入（含密钥）→ 后端 | 流水线 -->
+    <!-- Minimal：接入 → 后端 | 流水线 → 用量/会话（折叠） -->
     <template v-if="isMinimal">
       <div class="lite-home">
-        <el-card class="info-card access-card">
-          <ApiAccessPanel :base-url="baseUrl" />
-          <MinimalApiKeysPanel class="access-keys" />
+        <el-card class="info-card access-card access-card--compact" shadow="never">
+          <ApiAccessPanel :base-url="baseUrl" compact />
         </el-card>
 
         <div class="lite-row lite-row--config">
@@ -60,8 +59,23 @@
             <HomePipelineCard ref="pipelinePanelRef" @update:count="pipelineCount = $event" />
           </el-card>
         </div>
+
+        <el-card class="info-card usage-card">
+          <el-collapse v-model="usageCollapse" class="usage-collapse">
+            <el-collapse-item name="usage">
+              <template #title>
+                <div class="card-head usage-collapse-title">
+                  <el-icon class="card-icon service-color"><TrendCharts /></el-icon>
+                  <span>用量与会话</span>
+                  <span class="card-badge">进程内 · 重启清零</span>
+                </div>
+              </template>
+              <MinimalUsagePanel ref="usagePanelRef" />
+            </el-collapse-item>
+          </el-collapse>
+        </el-card>
       </div>
-      <ChangePasswordDialog v-model="pwdDialogVisible" />
+      <SecuritySettingsDialog v-model="securityDialogVisible" />
       <MinimalChat v-model="chatDialogVisible" />
     </template>
 
@@ -612,13 +626,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   Document, CircleCheck, TrendCharts, Warning,
   Timer, Stopwatch, Coin, Monitor, DataBoard, DataLine, DataAnalysis,
-  CopyDocument, Cpu, List, Share, ChatDotRound
-} from '@element-plus/icons-vue'
+    CopyDocument, Cpu, List, Share, ChatDotRound
+  } from '@element-plus/icons-vue'
 import VChart from 'vue-echarts'
 import { use } from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
@@ -629,11 +643,11 @@ import { useEdition } from '@/composables/useEdition'
 import { syncEditionFromStatus } from '@/utils/edition'
 import { API_ENDPOINTS, resolveApiBaseUrl } from '@/utils/apiBaseUrl'
 import ApiAccessPanel from '@/components/dashboard/ApiAccessPanel.vue'
-import MinimalApiKeysPanel from '@/components/dashboard/MinimalApiKeysPanel.vue'
-import ChangePasswordDialog from '@/components/dashboard/ChangePasswordDialog.vue'
+import SecuritySettingsDialog from '@/components/dashboard/SecuritySettingsDialog.vue'
 import HomePipelineCard from '@/components/dashboard/HomePipelineCard.vue'
 import DashboardBackendList from '@/components/dashboard/DashboardBackendList.vue'
 import MinimalChat from '@/views/MinimalChat.vue'
+import MinimalUsagePanel from '@/components/dashboard/MinimalUsagePanel.vue'
 import { mergeBackendUpdate } from '@/utils/backendTest'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
@@ -642,15 +656,29 @@ const router = useRouter()
 const authStore = useAuthStore()
 const { isPersonal, isMinimal, isTeam } = useEdition()
 const pageDescription = computed(() => {
-  if (isMinimal.value) return '精简管理台：配置后端、流水线与客户端接入'
   if (isPersonal.value) return '你的本地大模型代理入口：配置默认流水线与后端，复制 API 地址即可在客户端中使用'
   return 'Centag 服务运行状态与基础配置总览'
 })
 const pipelinePanelRef = ref<{ reload: () => void; openCreate: () => void } | null>(null)
 const backendListRef = ref<{ openCreate: () => void; reloadDefault: () => void } | null>(null)
+const usagePanelRef = ref<{ reload: () => void } | null>(null)
 const pipelineCount = ref(0)
-const pwdDialogVisible = ref(false)
+const securityDialogVisible = ref(false)
 const chatDialogVisible = ref(false)
+/** 用量与会话默认折叠 */
+const usageCollapse = ref<string[]>([])
+
+watch(chatDialogVisible, (open, wasOpen) => {
+  if (wasOpen && !open) {
+    usagePanelRef.value?.reload()
+  }
+})
+
+watch(usageCollapse, (names) => {
+  if (names.includes('usage')) {
+    usagePanelRef.value?.reload()
+  }
+})
 
 async function handleLogout() {
   try {
@@ -1042,6 +1070,12 @@ onUnmounted(() => { if (timer) clearInterval(timer) })
   margin-bottom: 20px;
 }
 
+.page-header--actions-only {
+  justify-content: flex-end;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
 /* 图标色 */
 .request-bg  { background: rgba(102,126,234,0.12); color: #667eea; }
 .hit-bg      { background: rgba(16,185,129,0.12);  color: #10b981; }
@@ -1132,6 +1166,38 @@ onUnmounted(() => { if (timer) clearInterval(timer) })
 .access-card {
   display: flex;
   flex-direction: column;
+}
+
+.access-card--compact :deep(.el-card__body) {
+  padding: 10px 14px;
+}
+
+.usage-card {
+  padding-bottom: 4px;
+}
+
+.usage-collapse {
+  border: none;
+}
+
+.usage-collapse :deep(.el-collapse-item__header) {
+  height: auto;
+  min-height: 48px;
+  line-height: 1.4;
+  border: none;
+  padding: 0 4px;
+}
+
+.usage-collapse :deep(.el-collapse-item__wrap) {
+  border: none;
+}
+
+.usage-collapse :deep(.el-collapse-item__content) {
+  padding: 8px 4px 12px;
+}
+
+.usage-collapse-title {
+  gap: 8px;
 }
 
 .access-keys {

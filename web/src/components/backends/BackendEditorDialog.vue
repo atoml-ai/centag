@@ -426,7 +426,9 @@ const save = async () => {
         // 拦截器可能返回 {success,data} 或直接返回 data
         const currentDefault = (proxyData?.default_backend_id ?? proxyData?.data?.default_backend_id) || ''
         if (!currentDefault && created?.id) {
-          const defaultModel = created.default_model || created.probe_model || form.default_model || form.probe_model || ''
+          const sm = Array.isArray(created.supported_models) ? created.supported_models : (form.models || [])
+          const firstSupported = sm[0] && (sm[0].actual_model || sm[0].requested_model || sm[0].name)
+          const defaultModel = created.default_model || created.probe_model || form.default_model || form.probe_model || firstSupported || ''
           await api.put('/api/v1/config/proxy', {
             default_backend_id: created.id,
             default_model: defaultModel

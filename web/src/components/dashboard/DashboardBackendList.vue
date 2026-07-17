@@ -111,7 +111,9 @@ async function handleSetDefault(backend: any) {
   if (defaultBackendId.value === backend.id) return
   settingDefaultMap[backend.id] = true
   try {
-    const defaultModel = backend.default_model || backend.probe_model || ''
+    const sm = Array.isArray(backend.supported_models) ? backend.supported_models : []
+    const defaultModel = backend.default_model || backend.probe_model
+      || (sm[0] && (sm[0].actual_model || sm[0].requested_model)) || ''
     await api.put('/api/v1/config/proxy', {
       default_backend_id: backend.id,
       default_model: defaultModel

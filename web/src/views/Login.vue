@@ -6,7 +6,7 @@
           <CentagMark :size="36" color="#667eea" />
           <h1 class="title">Centag</h1>
         </div>
-        <p class="subtitle">{{ subtitle }}</p>
+        <p class="subtitle" :class="{ 'subtitle--tip': isMinimalEdition() && !isSetup }">{{ subtitle }}</p>
       </div>
 
       <el-form
@@ -31,7 +31,7 @@
           <el-input
             v-model="form.password"
             type="password"
-            :placeholder="isSetup ? '设置管理密码（至少 6 位）' : '密码'"
+            :placeholder="passwordPlaceholder"
             size="large"
             :prefix-icon="Lock"
             show-password
@@ -90,9 +90,17 @@ const isSetup = ref(false)
 const form = reactive({ username: 'admin', password: '', confirm: '' })
 
 const hideUsername = computed(() => isMinimalEdition() || isSetup.value)
+const passwordPlaceholder = computed(() => {
+  if (isSetup.value) {
+    return isMinimalEdition() ? '设置登录令牌（至少 6 位）' : '设置管理密码（至少 6 位）'
+  }
+  return isMinimalEdition() ? '登录令牌' : '密码'
+})
 const subtitle = computed(() => {
-  if (isSetup.value) return '首次使用：请设置管理密码'
-  if (isMinimalEdition()) return 'Minimal 精简管理台'
+  if (isSetup.value) return isMinimalEdition() ? '首次使用：请设置登录令牌' : '首次使用：请设置管理密码'
+  if (isMinimalEdition()) {
+    return '忘记令牌可删除 data/admin.password.hash 后重启重设'
+  }
   return '大模型代理服务管理平台'
 })
 
@@ -196,6 +204,16 @@ async function handleSubmit() {
   font-size: 0.875rem;
   color: #888;
   margin: 0;
+}
+
+.subtitle--tip {
+  margin-top: 10px;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  color: #999;
+  max-width: 320px;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 .login-form {
