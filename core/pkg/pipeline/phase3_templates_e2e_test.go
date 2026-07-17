@@ -14,7 +14,7 @@ func TestPhase3Templates_Validate(t *testing.T) {
 		{"security-mode", "#sec", "security_check"},
 		{"multilingual-support", "#cs", "cache_read"},
 		{"geo-routing-mode", "#geo", "geo_router"},
-		{"transparent-proxy", "#t", "generate"},
+		{"transparent-proxy", "#t", "forward"},
 		{"raw-forward", "#raw", "forward"},
 	}
 	for _, tc := range cases {

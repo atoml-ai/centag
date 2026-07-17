@@ -82,6 +82,7 @@ type BackendConfigResponse struct {
 	SupportedModels []ModelMapping    `json:"supported_models,omitempty"`
 	AutoFetchModels bool              `json:"auto_fetch_models,omitempty"`
 	ProbeModel      string            `json:"probe_model,omitempty"`
+	DefaultModel    string            `json:"default_model,omitempty"` // 首选对话模型（ProbeModel 或 SupportedModels[0]）
 	Capabilities    ModelCapabilities `json:"capabilities,omitempty"`
 
 	// 健康状态
@@ -112,6 +113,7 @@ func (c *BackendConfig) ToResponse() *BackendConfigResponse {
 		SupportedModels: c.SupportedModels,
 		AutoFetchModels: c.AutoFetchModels,
 		ProbeModel:      c.ProbeModel,
+		DefaultModel:    PreferredDefaultModel(c),
 		Capabilities:    c.Capabilities,
 		HealthStatus:    c.HealthStatus,
 		CreatedAt:       c.CreatedAt,
@@ -155,6 +157,14 @@ func GetManager() *Manager {
 		}
 	})
 	return globalManager
+}
+
+// SetManagerForTest replaces the process-wide manager (tests only).
+func SetManagerForTest(m *Manager) {
+	once.Do(func() {
+		globalManager = m
+	})
+	globalManager = m
 }
 
 // Load 从持久化存储加载后端配置。
