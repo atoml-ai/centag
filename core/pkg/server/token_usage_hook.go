@@ -2,35 +2,41 @@ package server
 
 import (
 	"context"
-	"log"
 
-	"centag/core/pkg/pipeline"
 	"centag/core/internal/tokenusage"
+	"centag/core/pkg/hooks"
+	"centag/core/pkg/logger"
+	"centag/core/pkg/pipeline"
 )
 
-func wireTokenUsagePersistence(svc *tokenusage.Service) {
+func wireTokenUsagePersistence(svc *tokenusage.Service, hm hooks.HookManager) {
 	if svc == nil {
 		return
 	}
 	existingMetrics := pipeline.RecordSchedulerMetrics
 	pipeline.PersistTokenUsage = func(ctx context.Context, req pipeline.TokenUsagePersistRequest) {
-		rec := &tokenusage.UsageRecord{
-			UserID:           req.UserID,
-			BackendID:        req.BackendID,
-			Model:            req.Model,
-			PromptTokens:     req.PromptTokens,
-			CompletionTokens: req.CompletionTokens,
-			TotalTokens:      req.TotalTokens,
-			TenantID:         req.TenantID,
-			DeptTag:          req.DeptTag,
-			RequestID:        req.RequestID,
-			AgentType:        req.AgentType,
-			Success:          true,
+		usage := &hooks.TokenUsage{
+			UserID:       req.UserID,
+			TenantID:     req.TenantID,
+			RequestID:    req.RequestID,
+			Model:        req.Model,
+			Backend:      req.BackendID,
+			InputTokens:  req.PromptTokens,
+			OutputTokens: req.CompletionTokens,
+			TotalTokens:  req.TotalTokens,
+			Success:      true,
+			DeptTag:      req.DeptTag,
+			AgentType:    req.AgentType,
 		}
-		if err := svc.RecordUsage(ctx, rec); err != nil {
-			log.Printf("[TokenUsage] persist failed: user_id=%d model=%s tokens=%d err=%v",
-				req.UserID, req.Model, req.TotalTokens, err)
-			return
+		if hm != nil {
+			_ = hm.TriggerTokenUsedHooks(ctx, usage)
+		} else {
+			adapter := newTokenUsageHookAdapter(svc)
+			if err := adapter.OnTokenUsed(ctx, usage); err != nil {
+				logger.Warnf("[TokenUsage] persist failed: user_id=%d model=%s tokens=%d err=%v",
+					req.UserID, req.Model, req.TotalTokens, err)
+				return
+			}
 		}
 		if existingMetrics != nil && req.BackendID != "" {
 			existingMetrics(req.BackendID, req.Model, 0, true)

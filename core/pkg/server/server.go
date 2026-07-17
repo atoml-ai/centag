@@ -16,6 +16,8 @@ import (
 	agentpkg "centag/core/internal/agent"
 	"centag/core/pkg/agentmemory"
 	"centag/core/internal/auth"
+	"centag/core/internal/billing"
+	"centag/core/internal/conversation"
 	"centag/core/pkg/backend"
 	"centag/core/internal/cache"
 	evalmanager "centag/core/internal/cache/evaluation/manager"
@@ -28,6 +30,7 @@ import (
 	"centag/core/internal/handler"
 	"centag/core/internal/hostproxy"
 	"centag/core/internal/llm"
+	"centag/core/pkg/hooks"
 	"centag/core/pkg/logger"
 	"centag/core/internal/middleware"
 	"centag/core/internal/mitm"
@@ -97,6 +100,10 @@ type Server struct {
 	agentHandler         *AgentHandler
 	agentProviderHandler *agentpkg.AgentProviderHandler
 	mcpProxyHandler      *MCPProxyHandler
+	hookManager             *hooks.DefaultHookManager
+	billingService          *billing.Service
+	conversationHandler     *ConversationHandler
+	conversationStore       conversation.Store
 
 	// 流水线默认模式相关 handler
 	pipelineDefaultsHandler *handler.PipelineDefaultsHandler
@@ -602,6 +609,11 @@ func New(cfg *config.Config) *Server {
 	userHandler := NewUserHandler(tenantProvisioner)
 	apiKeyHandler := NewAPIKeyHandler()
 
+	// 钩子管理器（增值能力统一入口：计量 / 计费 / 对话等）
+	hookManager := hooks.NewManager()
+	hooks.SetDefault(hookManager)
+	logger.Infof("[hooks] HookManager registered (fail-open)")
+
 	// 创建 Token 计量处理器
 	var tokenUsageHandler *TokenUsageHandler
 	var costHandler *CostHandler
@@ -614,8 +626,39 @@ func New(cfg *config.Config) *Server {
 		abEvalHandler = NewABEvalHandler(abEvalSvc)
 		wireABEvalPersistence(abEvalSvc)
 		tokenusage.SetDefaultService(tokenUsageService)
-		wireTokenUsagePersistence(tokenUsageService)
+		hookManager.RegisterTokenHook(newTokenUsageHookAdapter(tokenUsageService))
+		wireTokenUsagePersistence(tokenUsageService, hookManager)
 		proxyHandler.SetTokenUsageService(tokenUsageService)
+		logger.Infof("[hooks] TokenHook adapter registered")
+	}
+
+	ed := edition.Parse(cfg.Server.Edition)
+
+	var billingService *billing.Service
+	if ed.IsTeam() {
+		billingService = billing.NewService()
+		billingService.RegisterHandler(&billing.LogHandler{})
+		hookManager.RegisterBillingHook(newBillingHookAdapter(billingService))
+		logger.Infof("[hooks] BillingHook adapter registered (team edition)")
+	}
+
+	var conversationStore conversation.Store
+	var conversationHandler *ConversationHandler
+	{
+		opts := conversation.Options{Edition: ed, FileRoot: filepath.Join("var", "conversations")}
+		if db := database.Get().GetDB(); db != nil {
+			opts.DB = db
+			opts.Driver = database.Get().DriverName()
+		}
+		if store, err := conversation.NewStore(opts); err != nil {
+			logger.Warnf("[conversation] store init failed: %v", err)
+		} else {
+			conversationStore = store
+			conversation.SetDefault(store)
+			hookManager.RegisterStorageHook(conversation.NewLoggingHook(store))
+			conversationHandler = NewConversationHandler(store, ed)
+			logger.Infof("[hooks] Conversation LoggingHook registered (edition=%s)", ed)
+		}
 	}
 
 	// 创建记忆服务处理器
@@ -907,6 +950,10 @@ func New(cfg *config.Config) *Server {
 		agentHandler:         agentHandler,
 		agentProviderHandler:  agentProviderHandler,
 		mcpProxyHandler:       mcpProxyHandler,
+		hookManager:           hookManager,
+		billingService:        billingService,
+		conversationStore:     conversationStore,
+		conversationHandler:   conversationHandler,
 		// 流水线默认模式相关 handler
 		pipelineDefaultsHandler: pipelineDefaultsHandler,
 		startTime:               time.Now(),
@@ -1210,10 +1257,33 @@ func (s *Server) setupRoutes() {
 			userAPI.GET("/token-usage/backends", s.tokenUsageHandler.GetBackendStats)
 		}
 
+		// 对话记录浏览
+		if s.conversationHandler != nil {
+			convs := userAPI.Group("/conversations")
+			{
+				convs.GET("/sessions", s.conversationHandler.ListSessions)
+				convs.GET("/sessions/:id", s.conversationHandler.GetSession)
+				convs.GET("/sessions/:id/messages", s.conversationHandler.ListMessages)
+				convs.GET("/categories", s.conversationHandler.ListCategories)
+			}
+		}
+
 		// 租户信息（仅 team 版）
 		if s.tenantHandler != nil && s.edition.IsTeam() {
 			userAPI.GET("/tenant", s.tenantHandler.GetMyTenant)
 			userAPI.GET("/tenant/quota", s.tenantHandler.GetMyQuota)
+		}
+	}
+
+	// 管理面对话浏览（与 user 路径一致，便于非 JWT user 组的代理鉴权客户端）
+	if s.conversationHandler != nil {
+		// also under /api/v1/conversations with JWT
+		convsJWT := s.router.Group("/api/v1/conversations", auth.JWTMiddleware())
+		{
+			convsJWT.GET("/sessions", s.conversationHandler.ListSessions)
+			convsJWT.GET("/sessions/:id", s.conversationHandler.GetSession)
+			convsJWT.GET("/sessions/:id/messages", s.conversationHandler.ListMessages)
+			convsJWT.GET("/categories", s.conversationHandler.ListCategories)
 		}
 	}
 
@@ -1657,6 +1727,10 @@ func (s *Server) Start() error {
 // Stop 停止服务器
 func (s *Server) Stop(ctx context.Context) error {
 	logger.Info("Stopping server...")
+
+	if s.billingService != nil {
+		s.billingService.Close()
+	}
 
 	// 停止远程插件健康检查协程，避免后台 goroutine 泄漏。
 	if s.pipelineHandler != nil {

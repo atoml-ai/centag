@@ -6,6 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"centag/core/internal/auth"
+	"centag/core/pkg/hooks"
 	"centag/core/pkg/pipeline"
 	"centag/core/internal/tokenusage"
 )
@@ -13,17 +14,15 @@ import (
 // maybeRecordTokenUsage persists usage for proxy requests when the pipeline has no
 // token_usage node (e.g. direct-backend). Pipelines that already run TokenUsageNode
 // are left to the pipeline hook to avoid double counting.
+// Persistence goes through HookManager.TriggerTokenUsedHooks when available.
 func maybeRecordTokenUsage(c *gin.Context, output *pipeline.PipelineOutput, fallbackModel string) {
 	if c == nil || output == nil || pipelineDelegatedTokenUsage(output) {
 		return
 	}
-	svc := tokenusage.DefaultService()
-	if svc == nil {
-		return
-	}
+
 	userID, err := auth.GetUserID(c)
-	if err != nil || userID == 0 {
-		return
+	if err != nil {
+		userID = 0
 	}
 
 	prompt, completion, total := tokenCountsFromOutput(output)
@@ -48,21 +47,41 @@ func maybeRecordTokenUsage(c *gin.Context, output *pipeline.PipelineOutput, fall
 		}
 	}
 
-	record := &tokenusage.UsageRecord{
-		UserID:           userID,
-		BackendID:        extractBackendFromPipelineOutput(output),
-		Model:            model,
-		PromptTokens:     prompt,
-		CompletionTokens: completion,
-		TotalTokens:      total,
-		TenantID:         auth.GetTenantID(c),
-		DeptTag:          deptTag,
-		RequestID:        c.GetHeader("X-Request-ID"),
-		ClientIP:         c.ClientIP(),
-		Success:          output.ExecutionLog == nil || output.ExecutionLog.Success,
+	clientIP := c.ClientIP()
+	usage := &hooks.TokenUsage{
+		UserID:       userID,
+		TenantID:     auth.GetTenantID(c),
+		RequestID:    c.GetHeader("X-Request-ID"),
+		SessionID:    strings.TrimSpace(c.GetHeader("X-Session-ID")),
+		Model:        model,
+		Backend:      extractBackendFromPipelineOutput(output),
+		InputTokens:  prompt,
+		OutputTokens: completion,
+		TotalTokens:  total,
+		Success:      output.ExecutionLog == nil || output.ExecutionLog.Success,
+		DeptTag:      deptTag,
 	}
+
 	go func() {
-		_ = svc.RecordUsage(context.Background(), record)
+		ctx := context.Background()
+		if hm := hooks.Default(); hm != nil {
+			_ = hm.TriggerTokenUsedHooks(ctx, usage)
+		} else if svc := tokenusage.DefaultService(); svc != nil {
+			// Fallback when HookManager not wired (tests / minimal harness).
+			_ = svc.RecordUsage(ctx, &tokenusage.UsageRecord{
+				UserID:           usage.UserID,
+				BackendID:        usage.Backend,
+				Model:            usage.Model,
+				PromptTokens:     usage.InputTokens,
+				CompletionTokens: usage.OutputTokens,
+				TotalTokens:      usage.TotalTokens,
+				TenantID:         usage.TenantID,
+				DeptTag:          usage.DeptTag,
+				RequestID:        usage.RequestID,
+				ClientIP:         clientIP,
+				Success:          usage.Success,
+			})
+		}
 		pipeline.RecordSchedulerMetricsFromOutput(output)
 	}()
 }

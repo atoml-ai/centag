@@ -122,6 +122,10 @@ func (d *ModeDispatcher) Dispatch(
 
 	// 3. 构建流水线输入
 	input := d.buildPipelineInput(c, req, mode)
+	sessionID := triggerConversationRequestHooks(c, req, mode, pipelineID)
+	if sessionID != "" && input != nil {
+		input.SessionID = sessionID
+	}
 
 	// 4. 执行流水线 (stream_fake: 非流式请求走流式管道再聚合)
 	var err error
@@ -156,6 +160,7 @@ func (d *ModeDispatcher) Dispatch(
 	maybeRecordTokenUsage(c, output, req.Model)
 	maybeRecordRouteBackendMetrics(output)
 	maybeRecordCacheSaving(c, output, req.Model)
+	triggerConversationResponseHooks(c, output, req.Model, sessionID)
 
 	// 5. 构建并返回响应
 	return d.writeResponse(c, output, mode, pipelineID)
@@ -295,13 +300,17 @@ func (d *ModeDispatcher) buildPipelineInput(
 	// 使用最后一条用户消息作为当前问题（多轮对话时不能用首条）
 	content := extractQuestionFromMessages(req.Messages)
 
+	sessionID := strings.TrimSpace(c.GetHeader("X-Session-ID"))
+	if sessionID == "" {
+		sessionID = strings.TrimSpace(c.GetHeader("X-Request-ID"))
+	}
 	input := &pipeline.PipelineInput{
 		Content:   content,
 		Messages:  messages,
 		Stream:    req.Stream,
 		Metadata:  metadata,
 		UserID:    extractUserID(c),
-		SessionID: c.GetHeader("X-Request-ID"),
+		SessionID: sessionID,
 	}
 
 	// 透传 tools 和 tool_choice（支持 function calling）
@@ -688,6 +697,10 @@ func (d *ModeDispatcher) DispatchStream(
 	}
 
 	input := d.buildPipelineInput(c, req, mode)
+	sessionID := triggerConversationRequestHooks(c, req, mode, pipelineID)
+	if sessionID != "" && input != nil {
+		input.SessionID = sessionID
+	}
 
 	// 执行流式流水线
 	resultCh, err := d.pipelineEngine.ExecuteStream(c.Request.Context(), pipelineID, input)
@@ -875,6 +888,7 @@ func (d *ModeDispatcher) writeStreamResponse(
 	maybeRecordTokenUsage(c, finalOutput, model)
 	maybeRecordRouteBackendMetrics(finalOutput)
 	maybeRecordCacheSaving(c, finalOutput, model)
+	triggerConversationResponseHooks(c, finalOutput, model, "")
 
 	return nil
 }

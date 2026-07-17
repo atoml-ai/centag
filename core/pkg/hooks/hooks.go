@@ -87,6 +87,15 @@ type TokenUsage struct {
 	// UserID 用户 ID
 	UserID int64 `json:"user_id"`
 
+	// TenantID 租户 ID（team；单用户可为空）
+	TenantID string `json:"tenant_id,omitempty"`
+
+	// RequestID 请求 ID
+	RequestID string `json:"request_id,omitempty"`
+
+	// SessionID 会话 ID（对话记录关联）
+	SessionID string `json:"session_id,omitempty"`
+
 	// Model 模型名称
 	Model string `json:"model"`
 
@@ -101,6 +110,18 @@ type TokenUsage struct {
 
 	// TotalTokens 总 token 数
 	TotalTokens int `json:"total_tokens"`
+
+	// CostUSD 估算成本（可选）
+	CostUSD float64 `json:"cost_usd,omitempty"`
+
+	// Success 是否成功完成
+	Success bool `json:"success"`
+
+	// DeptTag 部门标签（可选）
+	DeptTag string `json:"dept_tag,omitempty"`
+
+	// AgentType Agent 类型（可选）
+	AgentType string `json:"agent_type,omitempty"`
 }
 
 // RequestLog 请求日志。
