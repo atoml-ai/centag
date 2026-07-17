@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"centag/core/internal/auth"
+	"centag/core/internal/middleware"
 	"centag/core/pkg/backend"
 	"centag/core/pkg/config"
 	"centag/core/pkg/logger"
@@ -105,6 +106,10 @@ func (s *Server) setupMinimalRoutes(configHandler *MinimalConfigHandler, pluginR
 	v1 := s.router.Group("/v1")
 	if authHandler != nil {
 		v1.Use(authHandler.ProxyAuthOptionalMiddleware())
+	}
+	// 与完整版对齐：解析 pipeline.<id> / 快捷码，并在仅流水线 ID 时回写 default_model
+	if s.modeManager != nil {
+		v1.Use(middleware.ProxyModeMiddlewareGin(s.modeManager, s.sessionStore))
 	}
 	{
 		v1.POST("/chat/completions", s.proxyHandler.HandleChatCompletions)

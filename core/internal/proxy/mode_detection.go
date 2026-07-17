@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strings"
 
+	"centag/core/pkg/backend"
 	"centag/core/pkg/config"
 	"centag/core/pkg/proxymode"
 )
@@ -255,6 +256,8 @@ func extractCentagSceneBytes(bodyBytes []byte) string {
 }
 
 // ApplyModelPipelinePrefixToBody 若 model 含 pipeline 前缀，则剥离前缀并写回请求体。
+// 仅有流水线 ID、无真实模型时，回退为系统 default_model（必要时取默认后端首选模型），
+// 避免 transparent_forward 把虚拟 model 名原样打到上游。
 func ApplyModelPipelinePrefixToBody(body map[string]interface{}) (pipelineID string, applied bool) {
 	model, ok := body["model"].(string)
 	if !ok || model == "" {
@@ -266,6 +269,29 @@ func ApplyModelPipelinePrefixToBody(body map[string]interface{}) (pipelineID str
 	}
 	if actualModel != "" {
 		body["model"] = actualModel
+	} else if fallback := resolvePipelineOnlyDefaultModel(); fallback != "" {
+		body["model"] = fallback
 	}
 	return pipelineID, true
+}
+
+// resolvePipelineOnlyDefaultModel 解析「仅 pipeline.<id>」时的默认上游模型。
+func resolvePipelineOnlyDefaultModel() string {
+	cfg := config.Get()
+	if cfg == nil {
+		return ""
+	}
+	if m := strings.TrimSpace(cfg.Proxy.DefaultModel); m != "" {
+		return m
+	}
+	backendID := strings.TrimSpace(cfg.Proxy.DefaultBackendID)
+	if backendID == "" {
+		return ""
+	}
+	if mgr := backend.GetManager(); mgr != nil {
+		if b, err := mgr.Get(backendID); err == nil {
+			return strings.TrimSpace(backend.PreferredDefaultModel(b))
+		}
+	}
+	return ""
 }
