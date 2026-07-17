@@ -7,11 +7,14 @@ import (
 
 	"centag/core/internal/auth"
 	"centag/core/internal/cache"
+	"centag/core/internal/conversation"
 	"centag/core/internal/edition"
 	"centag/core/internal/handler"
 	"centag/core/internal/proxy"
+	"centag/core/internal/tokenusage"
 	"centag/core/pkg/backend"
 	"centag/core/pkg/config"
+	"centag/core/pkg/hooks"
 	"centag/core/pkg/logger"
 	"centag/core/pkg/pipeline"
 	"centag/core/pkg/plugin"
@@ -262,21 +265,56 @@ func NewMinimal(cfg *config.Config) *Server {
 	pluginMarketStore := pluginregistry.NewMemoryStore()
 	pluginRegistryAPI := pluginregistry.NewHandler(pluginMarketStore)
 
+	// --- Ephemeral hooks: file conversations + in-memory token metering (cleared on restart) ---
+	hookManager := hooks.NewManager()
+	hooks.SetDefault(hookManager)
+	logger.Infof("[hooks] HookManager registered (minimal, fail-open)")
+
+	var tokenUsageHandler *TokenUsageHandler
+	if tokenSvc, err := tokenusage.NewEphemeralService(); err != nil {
+		logger.Warnf("[hooks] ephemeral token meter init failed: %v", err)
+	} else {
+		tokenusage.SetDefaultService(tokenSvc)
+		hookManager.RegisterTokenHook(newTokenUsageHookAdapter(tokenSvc))
+		wireTokenUsagePersistence(tokenSvc, hookManager)
+		proxyHandler.SetTokenUsageService(tokenSvc)
+		tokenUsageHandler = NewTokenUsageHandler(tokenSvc)
+		logger.Infof("[hooks] TokenHook registered (ephemeral in-memory; cleared on restart)")
+	}
+
+	var conversationHandler *ConversationHandler
+	convRoot := filepath.Join(dataDir, "runtime", "conversations")
+	if err := conversation.PrepareEphemeralFileRoot(convRoot); err != nil {
+		logger.Warnf("[conversation] prepare ephemeral root failed: %v", err)
+	} else if store, err := conversation.NewStore(conversation.Options{
+		Edition:  edition.Minimal,
+		FileRoot: convRoot,
+	}); err != nil {
+		logger.Warnf("[conversation] store init failed: %v", err)
+	} else {
+		conversation.SetDefault(store)
+		hookManager.RegisterStorageHook(conversation.NewLoggingHook(store))
+		conversationHandler = NewConversationHandler(store, edition.Minimal)
+		logger.Infof("[hooks] Conversation LoggingHook registered (file=%s; wiped on restart)", convRoot)
+	}
+
 	// Create the server
 	srv := &Server{
-		router:                   router,
-		cfg:                      cfg,
-		pluginManager:            pluginManager,
-		backendManager:           backendManager,
-		proxyHandler:             proxyHandler,
-		backendHandler:           backendHandler,
-		pipelineHandler:          pipelineHandler,
-		pipelineDefaultsHandler:  pipelineDefaultsHandler,
-		modeManager:              modeMgr,
-		cacheManager:             cacheManager,
-		proxyCache:               proxyCache,
-		edition:                  edition.Minimal,
-		startTime:                time.Now(),
+		router:                  router,
+		cfg:                     cfg,
+		pluginManager:           pluginManager,
+		backendManager:          backendManager,
+		proxyHandler:            proxyHandler,
+		backendHandler:          backendHandler,
+		pipelineHandler:         pipelineHandler,
+		pipelineDefaultsHandler: pipelineDefaultsHandler,
+		modeManager:             modeMgr,
+		cacheManager:            cacheManager,
+		proxyCache:              proxyCache,
+		tokenUsageHandler:       tokenUsageHandler,
+		conversationHandler:     conversationHandler,
+		edition:                 edition.Minimal,
+		startTime:               time.Now(),
 	}
 
 	// Register minimal routes

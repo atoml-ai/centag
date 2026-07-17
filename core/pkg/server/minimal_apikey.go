@@ -203,9 +203,13 @@ func subtleConstantTimeEqual(a, b string) bool {
 }
 
 // ProxyAuthOptionalMiddleware: open when no keys; otherwise require llmproxy_* or JWT.
+// Always tags the single-user minimal admin id so token/conversation hooks share one scope.
 func (h *MinimalAuthHandler) ProxyAuthOptionalMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if h.apiKeys == nil || !h.apiKeys.authRequired() {
+			c.Set(auth.CtxKeyUserID, minimalAdminUserID)
+			c.Set(auth.CtxKeyUsername, minimalAdminUsername)
+			c.Set(auth.CtxKeyRole, "admin")
 			c.Next()
 			return
 		}
