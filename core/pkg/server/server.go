@@ -1356,6 +1356,8 @@ func (s *Server) setupRoutes() {
 		{
 			config.GET("", s.configHandler.GetAllConfig)
 			config.PUT("", s.configHandler.SaveAllConfig)
+			config.GET("/proxy", s.handleGetProxyConfig)
+			config.PUT("/proxy", s.teamAdminWriteOnly(), s.handleSaveProxyConfig)
 		}
 
 		// 监控统计
@@ -1403,25 +1405,26 @@ func (s *Server) setupRoutes() {
 			s.pluginRegistryAPI.RegisterRoutes(v1Protected)
 		}
 
-		// 后端配置管理
+		// 后端配置管理（team：写操作与含密钥导出仅 admin）
 		backends := v1Protected.Group("/backends")
 		{
+			bw := s.teamAdminWriteOnly()
 			backends.GET("", s.backendHandler.ListBackends)
 			backends.GET("/types", s.backendHandler.ListBackendTypes)
-			backends.GET("/export", s.backendHandler.ExportBackends)
-			backends.POST("/import", s.backendHandler.ImportBackends)
+			backends.GET("/export", bw, s.backendHandler.ExportBackends)
+			backends.POST("/import", bw, s.backendHandler.ImportBackends)
+			backends.POST("/fetch-models", bw, s.backendHandler.FetchModels)
+			backends.POST("", bw, s.backendHandler.CreateBackend)
+			backends.POST("/test", bw, s.backendHandler.TestConnection)
+			backends.POST("/probe-all", bw, s.backendHandler.ProbeAllBackends)
+			backends.POST("/probe-all-sse", bw, s.backendHandler.ProbeAllBackendsSSE)
+			backends.GET("/circuit-breaker", s.backendHandler.GetCircuitBreakerStatus)
+			backends.POST("/circuit-breaker/:id/reset", bw, s.backendHandler.ResetCircuitBreaker)
 			backends.GET("/:id", s.backendHandler.GetBackend)
 			backends.GET("/:id/models", s.backendHandler.GetModels)
-			backends.POST("/fetch-models", s.backendHandler.FetchModels)
-			backends.POST("", s.backendHandler.CreateBackend)
-			backends.PUT("/:id", s.backendHandler.UpdateBackend)
-			backends.DELETE("/:id", s.backendHandler.DeleteBackend)
-			backends.POST("/test", s.backendHandler.TestConnection)
-			backends.POST("/:id/probe", s.backendHandler.ProbeBackend)
-			backends.POST("/probe-all", s.backendHandler.ProbeAllBackends)
-			backends.POST("/probe-all-sse", s.backendHandler.ProbeAllBackendsSSE)
-			backends.GET("/circuit-breaker", s.backendHandler.GetCircuitBreakerStatus)
-			backends.POST("/circuit-breaker/:id/reset", s.backendHandler.ResetCircuitBreaker)
+			backends.PUT("/:id", bw, s.backendHandler.UpdateBackend)
+			backends.DELETE("/:id", bw, s.backendHandler.DeleteBackend)
+			backends.POST("/:id/probe", bw, s.backendHandler.ProbeBackend)
 		}
 
 		// 存储配置管理

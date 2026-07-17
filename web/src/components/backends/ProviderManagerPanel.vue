@@ -1,6 +1,9 @@
 <template>
   <div class="provider-manager" v-loading="busy">
-    <div class="mgr-toolbar">
+    <div v-if="!canWrite" class="readonly-tip">
+      当前为只读：团队版仅管理员可添加、修改或探测后端
+    </div>
+    <div v-if="canWrite" class="mgr-toolbar">
       <div class="mgr-toolbar-left">
         <el-checkbox
           v-if="backends.length > 0"
@@ -54,6 +57,7 @@
       >
         <div class="backend-left">
           <el-checkbox
+            v-if="canWrite"
             :model-value="selectedIds.includes(b.id)"
             class="row-checkbox"
             @change="(checked) => toggleSelect(b.id, !!checked)"
@@ -67,6 +71,7 @@
           <el-switch
             :model-value="b.enabled"
             :loading="togglingMap[b.id]"
+            :disabled="!canWrite"
             active-color="#10b981"
             size="small"
             class="backend-enabled-switch"
@@ -90,7 +95,7 @@
           <span class="backend-models" v-if="b.supported_models?.length">
             {{ b.supported_models.length }} 模型
           </span>
-          <div class="backend-actions">
+          <div v-if="canWrite" class="backend-actions">
             <el-button size="small" :loading="!!probingMap[b.id]" @click="probeOne(b.id)">
               探测
             </el-button>
@@ -123,7 +128,7 @@
         </div>
       </div>
       <div v-if="!backends.length" class="empty-tip">
-        暂无后端配置，点击「+ 添加 Provider」开始
+        {{ canWrite ? '暂无后端配置，点击「+ 添加 Provider」开始' : '暂无后端配置' }}
       </div>
     </div>
 
@@ -156,6 +161,8 @@ import {
   toBackendEntry
 } from '@/utils/shared-modules'
 import api from '@/api'
+import { useAuthStore } from '@/stores/auth'
+import { useEdition } from '@/composables/useEdition'
 
 const props = defineProps<{
   backends: any[]
@@ -165,6 +172,11 @@ const emit = defineEmits<{
   refresh: []
   'backend-updated': [backend: any]
 }>()
+
+const authStore = useAuthStore()
+const { isPersonal, isMinimal } = useEdition()
+/** team 仅 admin 可写；personal / minimal 保持原有写权限 */
+const canWrite = computed(() => isPersonal.value || isMinimal.value || authStore.isAdmin)
 
 const editorRef = ref<InstanceType<typeof BackendEditorDialog> | null>(null)
 const editorVisible = ref(false)
@@ -358,6 +370,7 @@ async function handleSetDefault(backend: any) {
 }
 
 async function handleToggle(backend: any, enabled: boolean) {
+  if (!canWrite.value) return
   togglingMap[backend.id] = true
   try {
     const updated = await updateBackend(backend.id, { ...backend, enabled })
@@ -424,6 +437,10 @@ async function handleDelete(backend: any) {
 }
 
 function openCreate() {
+  if (!canWrite.value) {
+    ElMessage.warning('团队版仅管理员可添加后端')
+    return
+  }
   editorRef.value?.openCreate()
 }
 
@@ -586,6 +603,15 @@ defineExpose({ openCreate, reloadDefault })
   gap: 12px;
   width: 100%;
   min-height: 0;
+}
+
+.readonly-tip {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  line-height: 1.5;
+  padding: 8px 10px;
+  background: var(--el-fill-color-light);
+  border-radius: 6px;
 }
 
 .mgr-toolbar {
