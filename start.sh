@@ -520,6 +520,88 @@ build() {
     esac
 }
 
+# Map product edition → dist binary name (personal uses gateway dist).
+edition_to_dist() {
+    case "$1" in
+        personal|gateway) echo "gateway" ;;
+        minimal) echo "minimal" ;;
+        team) echo "team" ;;
+        *) echo "$1" ;;
+    esac
+}
+
+edition_to_sidecar() {
+    case "$1" in
+        personal|gateway) echo "centag-gateway" ;;
+        minimal) echo "centag-minimal" ;;
+        team) echo "centag-team" ;;
+        *) echo "centag-$1" ;;
+    esac
+}
+
+# Resolve current-host launcher binary (auto-detect GOOS/GOARCH).
+resolve_launcher_bin() {
+    local goos goarch ext plat
+    goos="$(go env GOOS 2>/dev/null || echo "")"
+    goarch="$(go env GOARCH 2>/dev/null || echo "")"
+    ext=""
+    if [ "$goos" = "windows" ]; then
+        ext=".exe"
+    fi
+    plat="${PROJECT_ROOT}/bin/launcher/${goos}-${goarch}/centag-launcher${ext}"
+    if [ -x "$plat" ] || [ -f "$plat" ]; then
+        echo "$plat"
+        return 0
+    fi
+    local latest="${PROJECT_ROOT}/bin/launcher/centag-launcher${ext}"
+    if [ -x "$latest" ] || [ -f "$latest" ]; then
+        echo "$latest"
+        return 0
+    fi
+    return 1
+}
+
+# Optional L1 launcher (apps/launcher). Used via --launcher on build/run.
+# Native build for current OS only (darwin|linux|windows); CGO required.
+build_launcher_shell() {
+    local script="${PROJECT_ROOT}/scripts/build-launcher.sh"
+    if [ ! -x "$script" ]; then
+        print_error "未找到构建脚本: $script"
+        exit 1
+    fi
+    print_info "Building desktop launcher for current host ($(go env GOOS)/$(go env GOARCH))..."
+    bash "$script"
+}
+
+# ./start.sh build <personal|minimal> --launcher
+build_with_launcher() {
+    local edition="$1"
+    case "$edition" in
+        personal|gateway|minimal) ;;
+        team)
+            print_error "--launcher 不支持 team（团队版请用 Web/Docker）"
+            exit 1
+            ;;
+        *)
+            print_error "--launcher 仅支持 personal / minimal（gateway 为 personal 别名）"
+            exit 1
+            ;;
+    esac
+
+    local dist_name
+    dist_name="$(edition_to_dist "$edition")"
+    local label="$edition"
+    if [ "$edition" = "gateway" ]; then
+        label="personal"
+    fi
+
+    print_info "Building ${label} service + launcher..."
+    build_distribution "$dist_name"
+    build_frontend_prod
+    build_launcher_shell
+    print_success "Ready: $(edition_to_sidecar "$edition") + launcher ($(go env GOOS)/$(go env GOARCH))"
+}
+
 # Build Distribution (minimal/gateway/team)
 build_distribution() {
     local dist_name="${1:-minimal}"
@@ -1173,6 +1255,92 @@ debug() {
     cd "$BIN_DIR"
     CENTAG_EDITION="${edition}" ./centag
     cd "$PROJECT_ROOT"
+}
+
+# ./start.sh run <personal|minimal> [--launcher]
+# Without --launcher: foreground sidecar. With --launcher: menu/tray + browser shell.
+run_edition() {
+    local edition="$1"
+    shift || true
+    local with_launcher=false
+    local extra_args=()
+    for arg in "$@"; do
+        case "$arg" in
+            --launcher) with_launcher=true ;;
+            --) ;;
+            *)
+                extra_args+=("$arg")
+                ;;
+        esac
+    done
+
+    case "$edition" in
+        personal|gateway|minimal) ;;
+        team)
+            if $with_launcher; then
+                print_error "--launcher 不支持 team"
+                exit 1
+            fi
+            ;;
+        *)
+            print_error "未知发行版: $edition"
+            exit 1
+            ;;
+    esac
+
+    local dist_name sidecar_name run_edition
+    dist_name="$(edition_to_dist "$edition")"
+    sidecar_name="$(edition_to_sidecar "$edition")"
+    run_edition="$edition"
+    if [ "$edition" = "gateway" ]; then
+        run_edition="personal"
+    fi
+
+    local sidecar="${BIN_DIR}/${sidecar_name}"
+    if [ ! -x "$sidecar" ] && [ ! -f "$sidecar" ]; then
+        print_info "未找到 ${sidecar_name}，先构建 ${dist_name}..."
+        build_distribution "$dist_name"
+    fi
+
+    load_env
+
+    if ! $with_launcher; then
+        print_info "启动 ${run_edition} 服务: ${sidecar}"
+        cd "$BIN_DIR"
+        CENTAG_EDITION="${run_edition}" exec "./${sidecar_name}"
+    fi
+
+    if [ ! -d "${BIN_DIR}/static" ] || [ ! -f "${BIN_DIR}/static/index.html" ]; then
+        print_info "构建前端静态资源 → ${BIN_DIR}/static ..."
+        build_frontend_prod
+    fi
+
+    local launcher_bin
+    if ! launcher_bin="$(resolve_launcher_bin)"; then
+        print_info "未找到当前系统启动器二进制，先构建..."
+        build_launcher_shell
+        launcher_bin="$(resolve_launcher_bin)" || {
+            print_error "启动器二进制构建后仍未找到"
+            exit 1
+        }
+    fi
+
+    if [ -z "${LLM_PROXY_ADMIN_PASSWORD:-}" ]; then
+        print_warn "未检测到 LLM_PROXY_ADMIN_PASSWORD；首轮 seed 将使用内置默认口令"
+    else
+        print_info "已加载管理员口令环境变量（来自 config/secrets/.env）"
+    fi
+
+    print_info "启动桌面启动器 edition=${run_edition} platform=$(go env GOOS)/$(go env GOARCH)"
+    print_info "  launcher: ${launcher_bin}"
+    print_info "  sidecar: ${sidecar}"
+    print_info "  data: 用户数据目录（与 bin/server 开发库分离；见 apps/launcher/README）"
+    # macOS bash 3.2 + set -u: empty "${arr[@]}" is "unbound variable"
+    if [ ${#extra_args[@]} -gt 0 ]; then
+        exec "$launcher_bin" -edition="$run_edition" -bin="$sidecar" "${extra_args[@]}"
+    else
+        exec "$launcher_bin" -edition="$run_edition" -bin="$sidecar"
+    fi
 }
 
 # ── Minimal 调试：精简 WebUI（vite build）+ centag-minimal 后端 ─────────────
@@ -2944,7 +3112,7 @@ show_short_help() {
 
     # ── 服务管理 ──
     echo -e "  ${CYAN}── 服务管理 ──────────────────────────────────────────${NC}"
-    echo -e "  ${GREEN}run${NC}      <be|fe>               运行指定服务"
+    echo -e "  ${GREEN}run${NC}      <be|fe|personal|minimal> [--launcher]  运行服务"
     echo -e "  ${GREEN}daemon${NC}                           后台守护进程模式（自动重启）"
     echo -e "  ${GREEN}debug${NC} [--minimal|--team]         开发模式（默认 personal）+ 前端热重载"
     echo -e "  ${GREEN}stop${NC}     <be|fe>               停止服务"
@@ -2955,7 +3123,7 @@ show_short_help() {
     # ── 构建 ──
     echo -e "  ${CYAN}── 构建 ──────────────────────────────────────────────${NC}"
     echo -e "  ${GREEN}build${NC}    <all|be|fe>             构建项目（开发用）"
-    echo -e "  ${GREEN}build${NC}    <minimal|gateway|team>  构建发行版"
+    echo -e "  ${GREEN}build${NC}    <personal|minimal|team> [--launcher]  构建发行版"
     echo -e "  ${GREEN}docker${NC}   build <minimal|gateway|team>   构建 Docker 镜像"
     echo -e "  ${GREEN}docker${NC}   run   <minimal|gateway|team>   运行 Docker 容器"
     echo -e "  ${GREEN}clean${NC}                            清理构建产物"
@@ -3065,7 +3233,7 @@ _help_build() {
     echo -e "       ${YELLOW}构建项目 / 发行版${NC}"
     echo ""
     echo -e "${CYAN}用法:${NC}"
-    echo -e "  ./start.sh build <目标>"
+    echo -e "  ./start.sh build <目标> [--launcher]"
     echo ""
     echo -e "${CYAN}开发构建:${NC}"
     echo -e "  ${GREEN}all${NC}             构建全部（后端 + 生产版前端） 【默认】"
@@ -3073,14 +3241,21 @@ _help_build() {
     echo -e "  ${GREEN}fe${NC} | frontend   构建 Vue 前端"
     echo ""
     echo -e "${CYAN}发行版构建:${NC}"
-    echo -e "  ${GREEN}minimal${NC}   轻量单机（文件配置，无 DB；无前端）"
-    echo -e "  ${GREEN}gateway${NC}   个人全功能（默认 SQLite，可外接中间件）"
+    echo -e "  ${GREEN}personal${NC}  个人全功能（= gateway 发行包，默认 SQLite）"
+    echo -e "  ${GREEN}minimal${NC}   轻量单机（文件配置，无 DB）"
     echo -e "  ${GREEN}team${NC}      团队版（中间件外置：PG/向量等）"
+    echo -e "  ${GREEN}gateway${NC}   personal 的别名（兼容旧命令）"
+    echo ""
+    echo -e "${CYAN}辅助选项:${NC}"
+    echo -e "  ${GREEN}--launcher${NC}    额外构建当前系统的桌面启动器（仅 personal/minimal）"
+    echo -e "             自动识别 darwin / linux / windows（GOOS/GOARCH）"
+    echo -e "             ${YELLOW}team 不支持 --launcher${NC}"
     echo ""
     echo -e "${CYAN}示例:${NC}"
-    echo -e "  ./start.sh build             # 构建全部（等同于 build all）"
-    echo -e "  ./start.sh build be          # 仅构建后端"
-    echo -e "  ./start.sh build minimal     # 构建 minimal 发行版"
+    echo -e "  ./start.sh build personal           # 普通个人版服务"
+    echo -e "  ./start.sh build personal --launcher    # 个人版 + 桌面启动器"
+    echo -e "  ./start.sh build minimal --launcher"
+    echo -e "  ./start.sh build be"
     echo ""
     echo -e "${YELLOW}提示:${NC} Docker 镜像请使用: ./start.sh docker build <minimal|gateway|team>"
 }
@@ -3101,16 +3276,23 @@ _help_run() {
     echo -e "       ${YELLOW}启动服务（前台运行）${NC}"
     echo ""
     echo -e "${CYAN}用法:${NC}"
-    echo -e "  ./start.sh run <服务>"
+    echo -e "  ./start.sh run <服务> [--launcher]"
     echo ""
     echo -e "${CYAN}服务:${NC}"
-    echo -e "  ${GREEN}be${NC} | backend     启动后端服务 (端口 20060)"
-    echo -e "  ${GREEN}fe${NC} | frontend   启动 Vue 开发服务器 (端口 5173)"
-    echo -e "  ${GREEN}all${NC}             全部（需两个终端分别启动 be/fe）"
+    echo -e "  ${GREEN}be${NC} | backend        启动后端服务 (端口 20060)"
+    echo -e "  ${GREEN}fe${NC} | frontend      启动 Vue 开发服务器 (端口 5173)"
+    echo -e "  ${GREEN}personal${NC} | gateway  个人版发行包（前台）"
+    echo -e "  ${GREEN}minimal${NC}             minimal 发行包（前台）"
+    echo -e "  ${GREEN}all${NC}                全部（需两个终端分别启动 be/fe）"
+    echo ""
+    echo -e "${CYAN}辅助选项:${NC}"
+    echo -e "  ${GREEN}--launcher${NC}    以桌面启动器启动（菜单/托盘 + 浏览器；仅 personal/minimal）"
     echo ""
     echo -e "${CYAN}示例:${NC}"
-    echo -e "  ./start.sh run be            # 启动后端"
-    echo -e "  ./start.sh run fe            # 启动前端开发服务器"
+    echo -e "  ./start.sh run be"
+    echo -e "  ./start.sh run personal            # 普通个人版服务"
+    echo -e "  ./start.sh run personal --launcher     # 启动器方式"
+    echo -e "  ./start.sh run minimal --launcher"
     echo ""
     echo -e "${YELLOW}注意:${NC} 开发模式需两个终端: 终端1 run be, 终端2 run fe"
 }
@@ -3360,6 +3542,9 @@ normalize_type() {
             ;;
         all|全部)
             echo "all"
+            ;;
+        personal|个人版)
+            echo "personal"
             ;;
         *)
             echo "$type"
@@ -3941,23 +4126,56 @@ main() {
         # ── 构建 ────────────────────────────────────────────────────────
         build)
             local target="${1:-all}"
+            shift || true
+            local with_launcher=false
+            local unknown_args=()
+            for arg in "$@"; do
+                case "$arg" in
+                    --launcher) with_launcher=true ;;
+                    *)
+                        unknown_args+=("$arg")
+                        ;;
+                esac
+            done
+            if [ ${#unknown_args[@]} -gt 0 ]; then
+                print_error "未知 build 参数: ${unknown_args[*]}"
+                echo "用法: $0 build <目标> [--launcher]"
+                exit 1
+            fi
             target=$(normalize_type "$target")
             case "$target" in
                 backend|be)
+                    if $with_launcher; then
+                        print_error "--launcher 不能用于 build be"
+                        exit 1
+                    fi
                     build backend
                     ;;
                 frontend|fe|vue)
+                    if $with_launcher; then
+                        print_error "--launcher 不能用于 build fe"
+                        exit 1
+                    fi
                     build webui
                     ;;
                 all)
+                    if $with_launcher; then
+                        print_error "--launcher 不能用于 build all；请用: build personal --launcher"
+                        exit 1
+                    fi
                     build all
                     ;;
-                minimal|gateway|team)
-                    build dist "$target"
+                personal|gateway|minimal|team)
+                    if $with_launcher; then
+                        build_with_launcher "$target"
+                    else
+                        build dist "$(edition_to_dist "$target")"
+                    fi
                     ;;
                 *)
                     print_error "未知构建目标: '$target'"
-                    echo "支持的构建目标: all, be, fe, minimal, gateway, team"
+                    echo "支持的构建目标: all, be, fe, personal, minimal, team, gateway"
+                    echo "启动器: ./start.sh build personal --launcher  或  ./start.sh build minimal --launcher"
                     exit 1
                     ;;
             esac
@@ -4030,6 +4248,7 @@ main() {
         # ── 运行（后台）────────────────────────────────────────────────
         run)
             local svc="${1:-backend}"
+            shift || true
             svc=$(normalize_type "$svc")
             case "$svc" in
                 backend|be)
@@ -4038,6 +4257,14 @@ main() {
                 frontend|fe|vue)
                     start_frontend_dev
                     ;;
+                personal|gateway|minimal)
+                    run_edition "$svc" "$@"
+                    ;;
+                team)
+                    print_error "team 请用 Docker/Profile 运行；托盘不支持 team"
+                    echo "示例: ./start.sh docker run team  或  ./start.sh profile team up"
+                    exit 1
+                    ;;
                 all)
                     print_warn "⚠️  'all' 模式说明："
                     echo ""
@@ -4045,7 +4272,8 @@ main() {
                     ;;
                 *)
                     print_error "未知运行目标: $svc"
-                    echo "支持的运行目标: be, fe"
+                    echo "支持的运行目标: be, fe, personal, minimal"
+                    echo "启动器: ./start.sh run personal --launcher  或  ./start.sh run minimal --launcher"
                     echo ""
                     show_all_mode_info
                     exit 1

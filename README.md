@@ -1,6 +1,6 @@
 # Centag
 
-LLM 统一网关：协议适配、后端路由、流水线/钩子/插件、token 计量与计费。由 Centag 精简迁移而来（无桌面壳、无内置 business 插件树）。
+LLM 统一网关：协议适配、后端路由、流水线/钩子/插件、token 计量与计费。核心无内置 business 插件树；可选桌面启动器见 `apps/launcher/`（菜单/托盘 + 浏览器，非 Wails）。
 
 ## 目录结构
 
@@ -11,6 +11,7 @@ centag/
 ├── plugins/             # protocol / backend / database / storage
 ├── dist/                # minimal | gateway | team 发行版入口（仅源码）
 ├── web/                 # Vue 管理端
+├── apps/launcher/       # 可选：桌面启动器（与核心解耦）
 ├── config/              # profiles / initdata / secrets
 ├── deploy/              # Docker / stack / fnos
 ├── scripts/             # 运维与校验脚本
@@ -54,5 +55,16 @@ make run            # 或 ./start.sh run be
 ```
 
 业务插件外置：见 [docs/guide/external-business-plugins.md](docs/guide/external-business-plugins.md)。
+
+可选桌面启动器（菜单/托盘 + 默认浏览器，非 Wails；`--launcher` 辅助开关）：
+
+```bash
+./start.sh build personal              # 普通个人版服务
+./start.sh build personal --launcher   # 个人版 + 当前系统启动器
+./start.sh run personal --launcher
+./start.sh build minimal --launcher    # team 不支持 --launcher
+```
+
+详见 [apps/launcher/README.md](apps/launcher/README.md)。
 
 环境变量使用 `CENTAG_*`（以及运行时 `LLM_PROXY_*`）。

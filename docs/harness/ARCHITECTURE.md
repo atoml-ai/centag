@@ -134,15 +134,14 @@ cmd → server → 领域层 → config/database
 | 应用 | 技术栈 | 用途 |
 |------|--------|------|
 | `web/` | Vue 3 + Element Plus | Web 管理界面 |
-| `web/` | Wails + Go | 桌面客户端 |
-| `web/ai-assistant/` | Go + Gin | AI 助手验证工具 |
+| `apps/launcher/` | Go + systray | 可选桌面启动器：菜单/托盘 + 系统浏览器（L1） |
 
 **约束**：
-- 仅通过 HTTP API 与主项目交互，不能直接引用 `internal/` 的包
-- 构建产物：webui 输出到 `var/static/`，desktop 独立分发
-- 各应用有独立的构建和测试流程
+- 仅通过 HTTP API / 子进程与主项目交互，不能直接引用 `core/internal` 业务包
+- 构建产物：web 输出到 `bin/server/static/`；launcher 输出到 `bin/launcher/`（可选）
+- launcher 独立 `go.mod`，不加入根 `go.work`，删除不影响发行版
 
-**详细说明**：见 `web/README.md`
+**详细说明**：见 `web/README.md`、`apps/launcher/README.md`
 
 ### 3.6 `deploy/stack/` — 基础设施层（子模块）
 
@@ -171,13 +170,12 @@ cmd → server → 领域层 → config/database
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │  Apps (应用层)           ← 用户界面、交互入口               │
-│    ├── webui/           │   Vue3 Web 管理界面              │
-│    ├── desktop/         │   Wails 桌面客户端               │
-│    └── ai-assistant/    │   AI 助手验证工具                │
+│    ├── web/             │   Vue3 Web 管理界面              │
+│    └── apps/launcher/   │   可选桌面启动器（浏览器 UI）     │
 ├─────────────────────────────────────────────────────────────┤
 │  Centag (核心)       ← LLM 反向代理/网关                │
-│    ├── cmd/             │   入口层                         │
-│    ├── internal/        │   领域层                         │
+│    ├── cmd/ / dist/     │   入口层                         │
+│    ├── core/            │   领域层                         │
 │    └── plugins/         │   插件层                         │
 ├─────────────────────────────────────────────────────────────┤
 │  Stack (基础设施)       ← 中间件、可选服务                  │
@@ -196,7 +194,7 @@ cmd → server → 领域层 → config/database
 | **依赖方向** | 依赖主项目 API | 被主项目依赖 |
 | **部署方式** | 可独立运行 | 按需启动 |
 | **技术栈** | Vue/Go (客户端) | Docker/Compose (服务端) |
-| **示例** | webui、desktop | PG、Redis、Mem0 |
+| **示例** | web、apps/launcher | PG、Redis、Mem0 |
 
 ### 4.3 依赖规则
 
