@@ -343,9 +343,8 @@ function onRemoveModel(index: number) {
 
 function setDefaultModel(name: string) {
   form.default_model = name
-  if (!form.probe_model) {
-    form.probe_model = name
-  }
+  // 与 default_model 同步：后端以 probe_model 作为 PreferredDefaultModel 持久化
+  form.probe_model = name
 }
 
 function populateFromApi(row: any) {
@@ -402,8 +401,8 @@ const save = async () => {
     return
   }
 
-  // 默认模型同步到探测模型（若用户未单独设置）
-  if (!form.probe_model && form.default_model) {
+  // 默认模型是真源：始终同步到 probe_model（高级项「探测模型」未单独设计为独立持久化字段）
+  if (form.default_model) {
     form.probe_model = form.default_model
   }
 
@@ -437,8 +436,17 @@ const save = async () => {
         }
       } catch { /* ignore */ }
     } else {
-      await api.put(`/api/v1/backends/${form.id}`, payload)
+      const updated: any = await api.put(`/api/v1/backends/${form.id}`, payload)
       ElMessage.success('Provider 已更新')
+      // 若正在编辑的是系统默认后端，同步 proxy 配置中的 default_model
+      // 优先用保存回包的 probe/default_model，避免表单态与落盘不一致
+      const savedModel =
+        updated?.default_model ||
+        updated?.probe_model ||
+        form.default_model ||
+        form.probe_model ||
+        ''
+      await syncProxyDefaultIfNeeded(form.id, savedModel)
     }
     dialogVisible.value = false
     emit('saved')
@@ -449,13 +457,35 @@ const save = async () => {
   }
 }
 
+/** 编辑默认后端时，把用户新选的默认模型写回 /api/v1/config/proxy */
+async function syncProxyDefaultIfNeeded(backendId: string, defaultModel: string) {
+  if (!backendId) return
+  try {
+    const proxyData: any = await api.get('/api/v1/config/proxy')
+    const data = proxyData?.data ?? proxyData
+    const currentDefaultId = (data?.default_backend_id || '').trim()
+    if (currentDefaultId !== backendId) return
+
+    const nextModel = (defaultModel || '').trim()
+    const currentModel = (data?.default_model || '').trim()
+    if (!nextModel || nextModel === currentModel) return
+
+    await api.put('/api/v1/config/proxy', {
+      default_backend_id: backendId,
+      default_model: nextModel
+    })
+  } catch {
+    /* 后端已保存成功；proxy 同步失败不阻断主流程 */
+  }
+}
+
 const ensureEnabledBackendCanBeSaved = async (): Promise<boolean> => {
   const payload: any = {
     type: form.type,
     base_url: form.base_url,
     api_key: form.api_key || '',
     timeout: form.timeout || 30,
-    probe_model: (form.probe_model || form.default_model || '').trim(),
+    probe_model: (form.default_model || form.probe_model || '').trim(),
   }
   if (form.id) payload.id = form.id
 

@@ -117,12 +117,14 @@ function applyProviderPreset(form, providerId) {
   form.type = provider.type
   form.base_url = provider.base_url
   form.api_key = ''
-  form.default_model = ''
   form.models = (provider.default_models || []).map(function (m) { return Object.assign({}, m) })
   form.isPreset = true
   form.description = provider.description || ''
-  // Gateway 探测模型默认跟第一个模型；用户仍可改 default_model / probe_model
-  form.probe_model = form.models.length > 0 ? form.models[0].name : ''
+  // 默认模型 / 探测模型同源：后端只持久化 probe_model（PreferredDefaultModel）
+  // 二者必须一起初始化，避免用户改了 default_model 后仍保存预设首项
+  var firstModel = form.models.length > 0 ? form.models[0].name : ''
+  form.default_model = firstModel
+  form.probe_model = firstModel
   return true
 }
 
@@ -274,7 +276,9 @@ function toApiBackendPayload(form, options) {
   // Gateway：尊重表单启用状态（Minimal YAML 里用「有 key 才 enabled」）
   payload.enabled = form.enabled !== false
   payload.auto_fetch_models = !!form.auto_fetch_models
-  payload.probe_model = (form.probe_model || form.default_model || '').trim()
+  // 表单「默认模型」是用户可见真源；探测模型留空时回退到它。
+  // 注意：不要用「预设首项 probe_model」覆盖用户已选的 default_model。
+  payload.probe_model = (form.default_model || form.probe_model || '').trim()
   if (form.description) {
     payload.description = form.description
   }

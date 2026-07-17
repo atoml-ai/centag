@@ -23,6 +23,7 @@ type fileBackendEntry struct {
 	MaxRetries      int                   `yaml:"max_retries" json:"max_retries"`
 	AutoFetchModels bool                  `yaml:"auto_fetch_models" json:"auto_fetch_models"`
 	Description     string                `yaml:"description" json:"description"`
+	ProbeModel      string                `yaml:"probe_model,omitempty" json:"probe_model,omitempty"`
 	SupportedModels []fileModelMapping    `yaml:"supported_models" json:"supported_models"`
 	Capabilities    fileModelCapabilities `yaml:"capabilities" json:"capabilities"`
 	Weight          int                   `yaml:"weight" json:"weight"`
@@ -87,6 +88,7 @@ func fileEntryToBackendConfig(fe *fileBackendEntry) *BackendConfig {
 		MaxRetries:      maxRetries,
 		AutoFetchModels: fe.AutoFetchModels,
 		Description:     fe.Description,
+		ProbeModel:      fe.ProbeModel,
 		SupportedModels: supportedModels,
 		Capabilities:    capabilities,
 		Weight:          weight,
@@ -118,6 +120,7 @@ func backendConfigToFileEntry(b *BackendConfig) fileBackendEntry {
 		MaxRetries:      b.MaxRetries,
 		AutoFetchModels: b.AutoFetchModels,
 		Description:     b.Description,
+		ProbeModel:      b.ProbeModel,
 		SupportedModels: supportedModels,
 		Capabilities: fileModelCapabilities{
 			MaxContextTokens: b.Capabilities.MaxContextTokens,
