@@ -101,6 +101,12 @@ interface ChatMsg {
 }
 
 const visible = defineModel<boolean>({ default: false })
+const props = withDefaults(defineProps<{
+  /** 打开对话框时预选的流水线 ID */
+  initialPipelineId?: string
+}>(), {
+  initialPipelineId: ''
+})
 const authStore = useAuthStore()
 
 const pipelines = ref<AgentPatternPipeline[]>([])
@@ -116,6 +122,17 @@ const cachedTestAPIKey = ref('')
 const selectedPipeline = computed(() =>
   pipelines.value.find(p => p.id === selectedPipelineId.value)
 )
+
+function applyPreferredPipeline() {
+  const preferred = props.initialPipelineId
+  if (preferred && pipelines.value.some(p => p.id === preferred)) {
+    selectedPipelineId.value = preferred
+    return
+  }
+  if (pipelines.value.length > 0 && !selectedPipelineId.value) {
+    selectedPipelineId.value = pipelines.value[0].id
+  }
+}
 
 function renderMarkdown(content: string): string {
   return content
@@ -139,9 +156,7 @@ async function loadPipelines() {
     const resp = await getPipelines()
     const data = resp?.data ?? resp
     pipelines.value = Array.isArray(data) ? data : []
-    if (pipelines.value.length > 0 && !selectedPipelineId.value) {
-      selectedPipelineId.value = pipelines.value[0].id
-    }
+    applyPreferredPipeline()
   } catch (e: any) {
     console.error('Failed to load pipelines:', e)
   } finally {
@@ -268,7 +283,19 @@ watch(visible, (val) => {
   if (val) {
     messages.value = []
     inputText.value = ''
+    if (props.initialPipelineId) {
+      selectedPipelineId.value = props.initialPipelineId
+    }
     loadPipelines()
+  } else {
+    selectedPipelineId.value = ''
+  }
+})
+
+watch(() => props.initialPipelineId, (id) => {
+  if (visible.value && id) {
+    selectedPipelineId.value = id
+    applyPreferredPipeline()
   }
 })
 </script>

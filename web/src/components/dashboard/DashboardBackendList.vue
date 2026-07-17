@@ -1,7 +1,36 @@
 <template>
   <div class="backend-list">
-    <div v-for="b in backends" :key="b.id" class="backend-item" :class="{ 'is-default': defaultBackendId === b.id }">
+    <div v-if="selectable && backends.length > 0" class="list-toolbar">
+      <el-checkbox
+        :model-value="allSelected"
+        :indeterminate="partialSelected"
+        @change="toggleSelectAll"
+      >
+        全选
+      </el-checkbox>
+      <template v-if="selectedIds.length > 0">
+        <span class="toolbar-count">已选 {{ selectedIds.length }} 项</span>
+        <el-button size="small" type="danger" :loading="batchDeleting" @click="handleBatchDelete">
+          批量删除
+        </el-button>
+        <el-button size="small" text @click="clearSelection">取消选择</el-button>
+      </template>
+    </div>
+
+    <div
+      v-for="b in backends"
+      :key="b.id"
+      class="backend-item"
+      :class="{ 'is-default': defaultBackendId === b.id, selected: selectedIds.includes(b.id) }"
+    >
       <div class="backend-left">
+        <el-checkbox
+          v-if="selectable"
+          :model-value="selectedIds.includes(b.id)"
+          class="row-checkbox"
+          @change="(checked) => toggleSelect(b.id, !!checked)"
+          @click.stop
+        />
         <el-switch
           :model-value="b.enabled"
           :loading="togglingMap[b.id]"
@@ -72,14 +101,15 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import BackendEditorDialog from '@/components/backends/BackendEditorDialog.vue'
 import { updateBackend, deleteBackend } from '@/api'
 import { getBackendTestMessage, testBackendConnection } from '@/utils/backendTest'
+import { useEdition } from '@/composables/useEdition'
 import api from '@/api'
 
-defineProps<{
+const props = defineProps<{
   backends: any[]
 }>()
 
@@ -88,12 +118,78 @@ const emit = defineEmits<{
   'backend-updated': [backend: any]
 }>()
 
+const { isMinimal } = useEdition()
+const selectable = computed(() => isMinimal.value)
+
 const editorRef = ref<InstanceType<typeof BackendEditorDialog> | null>(null)
 const editorVisible = ref(false)
 const testingMap = reactive<Record<string, boolean>>({})
 const togglingMap = reactive<Record<string, boolean>>({})
 const settingDefaultMap = reactive<Record<string, boolean>>({})
 const defaultBackendId = ref('')
+const selectedIds = ref<string[]>([])
+const batchDeleting = ref(false)
+
+const allSelected = computed(() =>
+  props.backends.length > 0 && selectedIds.value.length === props.backends.length
+)
+const partialSelected = computed(() =>
+  selectedIds.value.length > 0 && selectedIds.value.length < props.backends.length
+)
+
+watch(() => props.backends, (list) => {
+  const valid = new Set(list.map((b: any) => b.id))
+  selectedIds.value = selectedIds.value.filter(id => valid.has(id))
+}, { deep: true })
+
+function toggleSelect(id: string, checked: boolean) {
+  if (checked) {
+    if (!selectedIds.value.includes(id)) selectedIds.value = [...selectedIds.value, id]
+  } else {
+    selectedIds.value = selectedIds.value.filter(x => x !== id)
+  }
+}
+
+function toggleSelectAll(checked: boolean | string | number) {
+  selectedIds.value = checked ? props.backends.map((b: any) => b.id) : []
+}
+
+function clearSelection() {
+  selectedIds.value = []
+}
+
+async function handleBatchDelete() {
+  if (!selectedIds.value.length) return
+  const ids = selectedIds.value.filter(id => id !== defaultBackendId.value)
+  if (!ids.length) {
+    ElMessage.warning('不能删除当前默认后端，请先设置其他后端为默认')
+    return
+  }
+  const skippedDefault = ids.length < selectedIds.value.length
+  try {
+    await ElMessageBox.confirm(
+      skippedDefault
+        ? `将删除选中的 ${ids.length} 个后端（已跳过当前默认），此操作不可恢复。`
+        : `确定删除选中的 ${ids.length} 个后端吗？此操作不可恢复。`,
+      '批量删除',
+      { confirmButtonText: '删除', cancelButtonText: '取消', type: 'warning' }
+    )
+  } catch {
+    return
+  }
+  batchDeleting.value = true
+  try {
+    await Promise.all(ids.map(id => deleteBackend(id)))
+    ElMessage.success(`已删除 ${ids.length} 个后端`)
+    selectedIds.value = []
+    emit('refresh')
+  } catch (error: any) {
+    ElMessage.error(error?.response?.data?.message || '批量删除失败')
+    emit('refresh')
+  } finally {
+    batchDeleting.value = false
+  }
+}
 
 onMounted(() => {
   loadDefaultBackend()
@@ -219,6 +315,19 @@ defineExpose({ openCreate, reloadDefault })
   padding-right: 4px;
 }
 
+.list-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 0 2px 2px;
+}
+
+.toolbar-count {
+  font-size: 0.75rem;
+  color: #6b7280;
+}
+
 .backend-item {
   display: flex;
   align-items: center;
@@ -235,6 +344,21 @@ defineExpose({ openCreate, reloadDefault })
 .backend-item.is-default {
   background: #f0f9eb;
   border-color: #b3e19d;
+}
+
+.backend-item.selected {
+  border-color: #93c5fd;
+  background: #eff6ff;
+}
+
+.backend-item.is-default.selected {
+  background: #ecfdf5;
+  border-color: #86efac;
+}
+
+.row-checkbox {
+  flex-shrink: 0;
+  margin-right: 2px;
 }
 
 .default-tag {
