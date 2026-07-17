@@ -254,7 +254,22 @@ curl -X POST http://localhost:20060/v1/chat/completions \
 | `keyword_prefix` | 关键词前缀 | 前缀匹配 | 零 | 命令式输入（如 `/help`） |
 | `ordered` | 有序规则 | 按 `route_rules` 顺序 | 零 | 优先级明确的复杂规则 |
 | `regex_only` | 正则匹配 | 按 `route_rules` 正则 | 零 | 复杂模式（电话、URL） |
+| `keyword_then_intent` | 关键字 + 轻量意图 | 先规则，未命中再 IntentResolver；可选小模型 | 通常零；开启 LLM 时 +1 | 推荐：关键字优先且需类别回落 |
 | `llm_classify` | LLM 意图分类 | LLM 语义分类 | +1 次 LLM 调用 | 表达多样、关键词维护成本高 |
+
+`keyword_then_intent` 示例配置：
+
+```yaml
+routing_strategy: keyword_then_intent
+default_route: generator_default
+routes:
+  code: generator_code
+  chat: generator_chat
+intent:
+  enable_fast_matcher: true
+  enable_llm_classifier: false   # 默认关闭重型 LLM 分类
+  confidence_threshold: 0.55
+```
 
 `llm_classify` 模式下，`routes` 的 key 是**类别名**（如 `code`）而非常规关键词（如 `python`）；LLM 调用失败时自动 fallback 到 `default_route`。详见 `docs/guide/mode-behavior-matrix.md` 第 7 节。
 
