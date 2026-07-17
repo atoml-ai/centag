@@ -45,7 +45,14 @@ func wireSchedulerBackend(sched *scheduler.Scheduler) {
 		return
 	}
 	pipeline.ScheduleBackend = func(req pipeline.ScheduleRequest) (*pipeline.ScheduleResult, error) {
-		decision, err := sched.ScheduleWithStrategy(req.Question, req.RequestedModel, req.Strategy)
+		requestedModel := req.RequestedModel
+		// 节点未指定模型时，用系统默认模型作为调度偏好（与 proxy-config.yaml 对齐）
+		if requestedModel == "" {
+			if cfg := config.Get(); cfg != nil {
+				requestedModel = cfg.Proxy.DefaultModel
+			}
+		}
+		decision, err := sched.ScheduleWithStrategy(req.Question, requestedModel, req.Strategy)
 		if err != nil {
 			return nil, err
 		}

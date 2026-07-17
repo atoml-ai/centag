@@ -430,8 +430,28 @@ func (s *Scheduler) selectByModelMatching(backends []*backend.BackendConfig, req
 
 // findBestModel 在给定后端中查找最佳模型。
 // 会过滤掉 embedding 模型，确保为 LLM 生成任务选择正确的模型。
+//
+// 选择策略（与 FastMatcher 对齐）：
+//  1. 有 requestedModel → 精确/兼容匹配
+//  2. 无 requestedModel → 优先 ProbeModel（用户在 UI 设的默认模型）
+//  3. 再回退到第一个非 embedding 的 SupportedModels
 func (s *Scheduler) findBestModel(cfg *backend.BackendConfig, requestedModel string, taskType TaskType) string {
 	if requestedModel == "" {
+		// 可用性优先：显式 probe_model 即后端默认对话模型
+		if cfg != nil && taskType != TaskEmbedding {
+			if probe := strings.TrimSpace(cfg.ProbeModel); probe != "" && !isEmbeddingModel(probe) {
+				for _, mapping := range cfg.SupportedModels {
+					if strings.EqualFold(mapping.ActualModel, probe) || strings.EqualFold(mapping.RequestedModel, probe) {
+						return mapping.ActualModel
+					}
+				}
+				if cfg.Type == "ollama" {
+					return probe
+				}
+				// 列表里没有同名项时仍信任 probe_model（用户显式配置）
+				return probe
+			}
+		}
 		// 返回第一个非 embedding 的 LLM 模型
 		for _, mapping := range cfg.SupportedModels {
 			if !isEmbeddingModel(mapping.ActualModel) {
