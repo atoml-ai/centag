@@ -126,6 +126,7 @@ metadata:
   static buildSingleBackend(backend) {
     const { provider, apiKey, models, settings } = backend
     const enabled = !!apiKey || provider.id === 'ollama'
+    const defaultModel = (backend.defaultModel || models?.[0]?.name || '').trim()
 
     return {
       id: provider.id,
@@ -138,6 +139,8 @@ metadata:
       max_retries: settings.maxRetries || 3,
       auto_fetch_models: false,
       description: provider.description,
+      // 与 Gateway PreferredDefaultModel 对齐：写入用户选择的默认模型
+      probe_model: defaultModel,
       supported_models: models.map(m => ({
         requested_model: m.name,
         actual_model: m.actual_model || m.name,

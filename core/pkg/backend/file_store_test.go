@@ -13,17 +13,19 @@ func TestFileBackendStoreRoundTrip(t *testing.T) {
 
 	in := []*BackendConfig{
 		{
-			ID:       "openai-main",
-			Name:     "OpenAI",
-			Type:     "openai",
-			BaseURL:  "https://api.openai.com/v1",
-			APIKey:   "sk-test",
-			Enabled:  true,
-			Timeout:  60,
-			Weight:   2,
-			Priority: 1,
+			ID:         "openai-main",
+			Name:       "OpenAI",
+			Type:       "openai",
+			BaseURL:    "https://api.openai.com/v1",
+			APIKey:     "sk-test",
+			Enabled:    true,
+			Timeout:    60,
+			Weight:     2,
+			Priority:   1,
+			ProbeModel: "gpt-4o-mini",
 			SupportedModels: []ModelMapping{
 				{RequestedModel: "gpt-4o", ActualModel: "gpt-4o", IsExact: true, CompatibilityScore: 1},
+				{RequestedModel: "gpt-4o-mini", ActualModel: "gpt-4o-mini", IsExact: true, CompatibilityScore: 1},
 			},
 		},
 	}
@@ -49,8 +51,11 @@ func TestFileBackendStoreRoundTrip(t *testing.T) {
 	if got.Weight != 2 || got.Priority != 1 {
 		t.Fatalf("weight/priority not preserved: weight=%d priority=%d", got.Weight, got.Priority)
 	}
-	if len(got.SupportedModels) != 1 || got.SupportedModels[0].RequestedModel != "gpt-4o" {
+	if len(got.SupportedModels) != 2 || got.SupportedModels[0].RequestedModel != "gpt-4o" {
 		t.Fatalf("supported models not preserved: %+v", got.SupportedModels)
+	}
+	if got.ProbeModel != "gpt-4o-mini" {
+		t.Fatalf("probe_model not preserved: %q", got.ProbeModel)
 	}
 }
 

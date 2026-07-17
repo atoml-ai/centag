@@ -213,6 +213,9 @@ func (h *BackendHandler) UpdateBackend(c *gin.Context) {
 		return
 	}
 
+	// 若该后端是系统默认，同步 proxy 默认模型（minimal: proxy-config.yaml）
+	syncProxyDefaultModelFromBackend(id)
+
 	RespondSuccess(c, cfg)
 }
 
