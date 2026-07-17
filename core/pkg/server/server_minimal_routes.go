@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"centag/core/internal/auth"
+	"centag/core/pkg/backend"
 	"centag/core/pkg/config"
 	"centag/core/pkg/logger"
 	pluginregistry "centag/core/pkg/plugin/registry"
@@ -149,16 +150,31 @@ func (s *Server) setupMinimalRoutes(configHandler *MinimalConfigHandler, pluginR
 		protected.GET("/config/proxy", s.handleGetProxyConfig)
 		protected.PUT("/config/proxy", s.handleSaveProxyConfig)
 
-		// Lightweight usage stub for overview (P3 can enrich)
+		userAPI := protected.Group("/user")
 		if s.tokenUsageHandler != nil {
-			userAPI := protected.Group("/user")
 			userAPI.GET("/token-usage", s.tokenUsageHandler.GetUserUsage)
 			userAPI.GET("/token-usage/daily", s.tokenUsageHandler.GetDailyUsage)
 			userAPI.GET("/token-usage/models", s.tokenUsageHandler.GetModelStats)
 			userAPI.GET("/token-usage/backends", s.tokenUsageHandler.GetBackendStats)
 		} else {
-			protected.GET("/user/token-usage", s.handleMinimalTokenUsage)
-			protected.GET("/user/token-usage/daily", s.handleMinimalTokenUsageDaily)
+			userAPI.GET("/token-usage", s.handleMinimalTokenUsage)
+			userAPI.GET("/token-usage/daily", s.handleMinimalTokenUsageDaily)
+		}
+		if s.conversationHandler != nil {
+			convs := userAPI.Group("/conversations")
+			{
+				convs.GET("/sessions", s.conversationHandler.ListSessions)
+				convs.GET("/sessions/:id", s.conversationHandler.GetSession)
+				convs.GET("/sessions/:id/messages", s.conversationHandler.ListMessages)
+				convs.GET("/categories", s.conversationHandler.ListCategories)
+			}
+			convsTop := protected.Group("/conversations")
+			{
+				convsTop.GET("/sessions", s.conversationHandler.ListSessions)
+				convsTop.GET("/sessions/:id", s.conversationHandler.GetSession)
+				convsTop.GET("/sessions/:id/messages", s.conversationHandler.ListMessages)
+				convsTop.GET("/categories", s.conversationHandler.ListCategories)
+			}
 		}
 	}
 
@@ -215,10 +231,17 @@ func (s *Server) handleSaveProxyConfig(c *gin.Context) {
 	}
 
 	if req.DefaultBackendID != nil {
-		cfg.Proxy.DefaultBackendID = *req.DefaultBackendID
+		cfg.Proxy.DefaultBackendID = strings.TrimSpace(*req.DefaultBackendID)
 	}
 	if req.DefaultModel != nil {
-		cfg.Proxy.DefaultModel = *req.DefaultModel
+		cfg.Proxy.DefaultModel = strings.TrimSpace(*req.DefaultModel)
+	}
+	// When default_model is empty but a default backend is set, auto-fill from that backend's preferred model.
+	if strings.TrimSpace(cfg.Proxy.DefaultModel) == "" && strings.TrimSpace(cfg.Proxy.DefaultBackendID) != "" {
+		if filled := s.preferredModelForBackend(cfg.Proxy.DefaultBackendID); filled != "" {
+			cfg.Proxy.DefaultModel = filled
+			logger.Infof("[ProxyConfig] Auto-filled default_model=%q from backend %q", filled, cfg.Proxy.DefaultBackendID)
+		}
 	}
 
 	// Minimal edition: persist proxy config to data/proxy-config.yaml so it survives restarts.
@@ -240,4 +263,16 @@ func (s *Server) handleSaveProxyConfig(c *gin.Context) {
 			"default_model":      cfg.Proxy.DefaultModel,
 		},
 	})
+}
+
+// preferredModelForBackend resolves ProbeModel / first supported model for a backend id.
+func (s *Server) preferredModelForBackend(backendID string) string {
+	if s == nil || s.backendManager == nil || strings.TrimSpace(backendID) == "" {
+		return ""
+	}
+	b, err := s.backendManager.Get(backendID)
+	if err != nil || b == nil {
+		return ""
+	}
+	return backend.PreferredDefaultModel(b)
 }
