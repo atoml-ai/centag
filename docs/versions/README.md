@@ -20,4 +20,5 @@ docs/versions/
 | 版本 | 需求 | 分支 | 状态 |
 |------|------|------|------|
 | v0.2.3 | [能力槽模型配置](v0.2.3/能力槽模型配置/) | `feature/v0.2.3` | Gate 1 通过；可 step2-plan |
+| v0.2.3 | 补充：可选桌面启动器 `apps/launcher`（`build/run <edition> --launcher`） | `feature/v0.2.3` | 见 [apps/launcher/README.md](../../apps/launcher/README.md) |
 | v0.2.2 | [钩子增值能力](v0.2.2/钩子增值能力/) | `feature/v0.2.2` | Step 1–5 完成；Gate 4 待确认 |

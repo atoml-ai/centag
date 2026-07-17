@@ -278,7 +278,8 @@ docs/versions/<版本>/<需求>/
 | 目录 | 用途 |
 |------|------|
 | `cmd/` `core/` `plugins/` `sdk/` | Go 模块核心 |
-| `web/` | Vue 管理端（无 desktop / ai-assistant） |
+| `web/` | Vue 管理端 |
+| `apps/launcher/` | 可选桌面启动器（L1：菜单/托盘+浏览器；独立 go.mod，不入 go.work） |
 | `config/initdata/` `config/profiles/` `config/secrets/` | 种子数据、场景 Profile、本地密钥 |
 | `deploy/docker/` `deploy/stack/` `deploy/fnos/` | 容器编排与 NAS 打包 |
 | `scripts/` | 开发/运维脚本与集成测试 |

@@ -20,12 +20,29 @@ require_file ".golangci.yml"
 require_file "docs/versions/README.md"
 
 # Forbidden legacy / non-product trees at repo root
-for d in apps tooling var webui desktop; do
+for d in tooling var webui desktop; do
   if [[ -e "$d" ]]; then
     echo "UNEXPECTED PATH: $d (Centag uses web/, scripts/, bin/ for build output)"
     fail=1
   fi
 done
+
+# apps/ is reserved for optional client shells (must stay decoupled from core).
+# Currently only apps/launcher (L1 menu + browser) is allowed.
+if [[ -d apps ]]; then
+  shopt -s nullglob
+  for child in apps/*; do
+    base="$(basename "$child")"
+    case "$base" in
+      launcher) ;;
+      *)
+        echo "UNEXPECTED PATH: $child (only apps/launcher is allowed under apps/)"
+        fail=1
+        ;;
+    esac
+  done
+  shopt -u nullglob
+fi
 
 # go list must not include packages under node_modules / web/dist
 # Prefer the filtered list used by CI when available.
