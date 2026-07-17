@@ -650,6 +650,9 @@ func New(cfg *config.Config) *Server {
 			opts.DB = db
 			opts.Driver = database.Get().DriverName()
 		}
+		if ed.IsTeam() && opts.Driver != "" && !isPostgresDriverName(opts.Driver) {
+			logger.Warnf("[edition] CENTAG_EDITION=team with DB driver %q — gateway profile should use CENTAG_EDITION=personal (SQLite conversations without team billing)", opts.Driver)
+		}
 		if store, err := conversation.NewStore(opts); err != nil {
 			logger.Warnf("[conversation] store init failed: %v", err)
 		} else {
@@ -657,7 +660,7 @@ func New(cfg *config.Config) *Server {
 			conversation.SetDefault(store)
 			hookManager.RegisterStorageHook(conversation.NewLoggingHook(store))
 			conversationHandler = NewConversationHandler(store, ed)
-			logger.Infof("[hooks] Conversation LoggingHook registered (edition=%s)", ed)
+			logger.Infof("[hooks] Conversation LoggingHook registered (edition=%s store=%s)", ed, conversationStoreKind(ed, opts.Driver))
 		}
 	}
 
@@ -959,9 +962,12 @@ func New(cfg *config.Config) *Server {
 		startTime:               time.Now(),
 	}
 
-	if srv.edition.IsPersonal() {
-		logger.Infof("Product edition: personal (multi-user admin and tenant APIs disabled)")
-	} else {
+	switch {
+	case srv.edition.IsPersonal():
+		logger.Infof("Product edition: personal (gateway/single-user; multi-tenant admin APIs disabled; no BillingHook)")
+	case srv.edition.IsMinimal():
+		logger.Infof("Product edition: minimal")
+	default:
 		logger.Infof("Product edition: team")
 	}
 
@@ -1117,12 +1123,9 @@ func (s *Server) setupRoutes() {
 	// Vite构建的base是/static/，所以所有资源都是/static/assets/开头
 	s.router.Static("/static", staticDir)
 
-	// index.html 从根路径也提供（兼容旧链接）
+	// index.html 从根路径也提供（兼容旧链接）；注入 data-edition 供 WebUI 首屏识别
 	s.router.GET("/", func(c *gin.Context) {
-		c.Header("Cache-Control", "no-cache, no-store, must-revalidate")
-		c.Header("Pragma", "no-cache")
-		c.Header("Expires", "0")
-		c.File(staticDir + "/index.html")
+		s.serveSPAIndex(c, staticDir)
 	})
 
 	// SPA路由支持 - 将所有非API和非静态文件的请求重定向到index.html
@@ -1140,11 +1143,7 @@ func (s *Server) setupRoutes() {
 			// 尝试检查静态文件是否存在
 			staticFile := path[len("/static/"):] // 去掉 /static/ 前缀
 			if staticFile == "" {
-				// /static/ 本身返回 index.html
-				c.Header("Cache-Control", "no-cache, no-store, must-revalidate")
-				c.Header("Pragma", "no-cache")
-				c.Header("Expires", "0")
-				c.File(staticDir + "/index.html")
+				s.serveSPAIndex(c, staticDir)
 				return
 			}
 
@@ -1156,10 +1155,7 @@ func (s *Server) setupRoutes() {
 			}
 
 			// 静态文件不存在，返回 SPA 的 index.html
-			c.Header("Cache-Control", "no-cache, no-store, must-revalidate")
-			c.Header("Pragma", "no-cache")
-			c.Header("Expires", "0")
-			c.File(staticDir + "/index.html")
+			s.serveSPAIndex(c, staticDir)
 			return
 		}
 
@@ -1202,10 +1198,7 @@ func (s *Server) setupRoutes() {
 		}
 
 		// 其他路径返回 SPA 的 index.html
-		c.Header("Cache-Control", "no-cache, no-store, must-revalidate")
-		c.Header("Pragma", "no-cache")
-		c.Header("Expires", "0")
-		c.File(staticDir + "/index.html")
+		s.serveSPAIndex(c, staticDir)
 	})
 
 	// 健康检查
