@@ -13,7 +13,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "lint": "eslint \"src/**/*.{vue,ts}\" --fix",
-    "lint:ci": "eslint \"src/**/*.{vue,ts}\" --max-warnings 0"
+    "lint:ci": "eslint \"src/**/*.{vue,ts}\" --max-warnings 0",
+    "test:capability-slots": "npx --yes tsx src/utils/capabilitySlots.selftest.ts"
   },
   "dependencies": {
     "@element-plus/icons-vue": "^2.3.1",

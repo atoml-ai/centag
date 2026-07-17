@@ -12,6 +12,33 @@
     @update:model-value="emit('update:modelValue', $event)"
   >
     <div v-if="modelValue && localPipeline" class="pipeline-editor-actions">
+      <el-tooltip
+        :disabled="hasRouterNode"
+        content="请先添加路由节点，再新增分类"
+        placement="bottom"
+      >
+        <span>
+          <el-button
+            size="small"
+            type="primary"
+            plain
+            :disabled="!hasRouterNode"
+            @click="addCategoryVisible = true"
+          >
+            新增分类
+          </el-button>
+        </span>
+      </el-tooltip>
+      <el-button
+        v-if="canConfigureCapabilitySlots(localPipeline)"
+        size="small"
+        type="warning"
+        plain
+        :disabled="!localPipeline.id || isCreateMode"
+        @click="slotsDialogVisible = true"
+      >
+        配置模型
+      </el-button>
       <PipelineFeatureGuard
         feature="routeAutoBuild"
         :pipeline="localPipeline"
@@ -150,6 +177,19 @@
         <el-button type="danger" plain :loading="routeAutoBuildSubmitting" @click="rollbackRouteAutoBuild">一键回滚</el-button>
       </template>
     </el-dialog>
+
+    <AddCategoryDialog
+      v-model="addCategoryVisible"
+      :pipeline="localPipeline"
+      @applied="onCategoryApplied"
+    />
+
+    <CapabilitySlotsDialog
+      v-if="localPipeline?.id"
+      v-model="slotsDialogVisible"
+      :pipeline-id="localPipeline.id"
+      @saved="onSlotsSaved"
+    />
   </el-dialog>
 </template>
 
@@ -158,6 +198,8 @@ import { ref, computed, watch, nextTick } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import PipelineCanvas from '@/components/PipelineCanvas.vue'
 import PipelineFeatureGuard from '@/components/pipeline/PipelineFeatureGuard.vue'
+import AddCategoryDialog from '@/components/pipeline/AddCategoryDialog.vue'
+import CapabilitySlotsDialog from '@/components/pipeline/CapabilitySlotsDialog.vue'
 import { useAuthStore } from '@/stores/auth'
 import {
   createPipeline,
@@ -169,6 +211,7 @@ import {
   type AgentPatternPipeline
 } from '@/api/pipeline'
 import api from '@/api'
+import { canConfigureCapabilitySlots, listRouterNodes } from '@/utils/capabilitySlots'
 
 const authStore = useAuthStore()
 
@@ -207,6 +250,25 @@ const routeAutoBuildForm = ref({
   canary: false,
   max_updates: 10
 })
+const addCategoryVisible = ref(false)
+const slotsDialogVisible = ref(false)
+
+const hasRouterNode = computed(() =>
+  !!localPipeline.value && listRouterNodes(localPipeline.value).length > 0
+)
+
+function onCategoryApplied(pipeline: AgentPatternPipeline) {
+  localPipeline.value = pipeline
+  canvasDirty.value = true
+  emit('update:pipeline', pipeline)
+}
+
+function onSlotsSaved(pipeline: AgentPatternPipeline) {
+  localPipeline.value = pipeline
+  canvasDirty.value = false
+  emit('update:pipeline', pipeline)
+  emit('saved', pipeline)
+}
 
 const dialogTitle = computed(() => {
   const p = localPipeline.value
