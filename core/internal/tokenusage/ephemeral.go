@@ -4,9 +4,12 @@ import (
 	"database/sql"
 	"fmt"
 	"os"
+	"sync/atomic"
 
 	_ "modernc.org/sqlite"
 )
+
+var ephemeralSeq atomic.Uint64
 
 // ephemeralSchema is a minimal SQLite schema for in-process metering (restart clears).
 const ephemeralSchema = `
@@ -23,6 +26,9 @@ CREATE TABLE IF NOT EXISTS token_usage (
 	created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 	tenant_id TEXT,
 	cost_usd REAL DEFAULT 0,
+	input_cost REAL DEFAULT 0,
+	output_cost REAL DEFAULT 0,
+	pricing_rule_id INTEGER,
 	success INTEGER NOT NULL DEFAULT 1,
 	dept_tag TEXT,
 	agent_type TEXT
@@ -46,8 +52,10 @@ CREATE TABLE IF NOT EXISTS token_usage_daily (
 
 // NewEphemeralService creates an in-memory SQLite-backed Service.
 // Data lives only for the process lifetime (cleared on restart).
+// Each call uses a unique shared-memory DSN so concurrent tests do not collide.
 func NewEphemeralService() (*Service, error) {
-	dsn := fmt.Sprintf("file:centag_ephemeral_token_%d?mode=memory&cache=shared", os.Getpid())
+	n := ephemeralSeq.Add(1)
+	dsn := fmt.Sprintf("file:centag_ephemeral_token_%d_%d?mode=memory&cache=shared", os.Getpid(), n)
 	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("open ephemeral sqlite: %w", err)

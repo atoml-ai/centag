@@ -85,6 +85,8 @@ type Server struct {
 	systemUpdate         *internal.SystemUpdateHandler
 	tokenUsageHandler    *TokenUsageHandler
 	costHandler          *CostHandler
+	billingRulesHandler  *BillingRulesHandler
+	pricingService       billing.PricingService
 	abEvalHandler        *ABEvalHandler
 	memoryHandler        *MemoryHandler
 	modeManager          *proxymode.ModeManager
@@ -614,9 +616,11 @@ func New(cfg *config.Config) *Server {
 	hooks.SetDefault(hookManager)
 	logger.Infof("[hooks] HookManager registered (fail-open)")
 
-	// 创建 Token 计量处理器
+	// 创建 Token 计量处理器 + 定价子系统
 	var tokenUsageHandler *TokenUsageHandler
 	var costHandler *CostHandler
+	var billingRulesHandler *BillingRulesHandler
+	var pricingService billing.PricingService
 	var abEvalHandler *ABEvalHandler
 	if db := database.Get().GetDB(); db != nil {
 		tokenUsageService := tokenusage.NewService(db, database.Get().DriverName())
@@ -630,6 +634,18 @@ func New(cfg *config.Config) *Server {
 		wireTokenUsagePersistence(tokenUsageService, hookManager)
 		proxyHandler.SetTokenUsageService(tokenUsageService)
 		logger.Infof("[hooks] TokenHook adapter registered")
+
+		ruleStore := billing.NewSQLRuleStore(db, database.Get().DriverName())
+		if path, err := billing.ResolveDefaultPricingPath(); err != nil {
+			logger.Warnf("[billing] default pricing YAML not found: %v", err)
+		} else if err := billing.EnsureSeededFromYAML(context.Background(), ruleStore, path); err != nil {
+			logger.Warnf("[billing] seed pricing rules failed: %v", err)
+		} else {
+			logger.Infof("[billing] pricing rules ready (seeded from %s if empty)", path)
+		}
+		pricingService = billing.NewPricingService(ruleStore)
+		tokenusage.SetPricingService(pricingService)
+		billingRulesHandler = NewBillingRulesHandler(ruleStore, pricingService)
 	}
 
 	ed := edition.Parse(cfg.Server.Edition)
@@ -928,6 +944,8 @@ func New(cfg *config.Config) *Server {
 		apiKeyHandler:        apiKeyHandler,
 		tokenUsageHandler:    tokenUsageHandler,
 		costHandler:          costHandler,
+		billingRulesHandler:  billingRulesHandler,
+		pricingService:       pricingService,
 		abEvalHandler:        abEvalHandler,
 		memoryHandler:        memoryHandler,
 		strategyHandler:      strategyHandler,
@@ -1314,6 +1332,17 @@ func (s *Server) setupRoutes() {
 		}
 		if s.costHandler != nil {
 			teamAdmin.GET("/cost/summary", s.costHandler.GetSummary)
+		}
+		if s.billingRulesHandler != nil {
+			billingRules := adminAPI.Group("/billing/rules")
+			{
+				billingRules.GET("", s.billingRulesHandler.ListRules)
+				billingRules.POST("", s.billingRulesHandler.CreateRule)
+				billingRules.PUT("/:id", s.billingRulesHandler.UpdateRule)
+				billingRules.DELETE("/:id", s.billingRulesHandler.DeleteRule)
+				billingRules.POST("/import", s.billingRulesHandler.ImportRules)
+				billingRules.GET("/export", s.billingRulesHandler.ExportRules)
+			}
 		}
 		if s.abEvalHandler != nil {
 			teamAdmin.GET("/ab-eval/results", s.abEvalHandler.ListResults)

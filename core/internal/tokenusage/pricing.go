@@ -1,15 +1,72 @@
 package tokenusage
 
-import "centag/core/pkg/scheduler"
+import (
+	"context"
 
-// priceTable provides model pricing for cost attribution.
-// Values follow the currency configured per model in the price table (often CNY).
+	"centag/core/internal/billing"
+	"centag/core/pkg/scheduler"
+)
+
+// priceTable is the deprecated hardcoded fallback (often CNY despite cost_usd column name).
 var priceTable = scheduler.NewModelPriceTable()
 
-// EstimateCost computes prompt + completion cost using the shared model price table.
+var pricingSvc billing.PricingService
+
+// SetPricingService injects the billing PricingService used for cost attribution.
+// Safe to call with nil to clear (tests / teardown).
+func SetPricingService(s billing.PricingService) {
+	pricingSvc = s
+}
+
+// PricingBreakdown is the detailed estimate used when writing usage rows.
+type PricingBreakdown struct {
+	TotalCost     float64
+	InputCost     float64
+	OutputCost    float64
+	Currency      string
+	PricingRuleID int64
+	Source        string
+}
+
+// EstimateCost computes prompt + completion cost.
+// Prefer PricingService when injected; otherwise fall back to the legacy price table.
+// Failures in PricingService fall back silently (do not block the proxy path).
 func EstimateCost(backendID, model string, promptTokens, completionTokens int) float64 {
+	bd := EstimateCostDetailed(backendID, model, promptTokens, completionTokens)
+	return bd.TotalCost
+}
+
+// EstimateCostDetailed returns a full cost breakdown for RecordUsage.
+func EstimateCostDetailed(backendID, model string, promptTokens, completionTokens int) PricingBreakdown {
 	if promptTokens <= 0 && completionTokens <= 0 {
-		return 0
+		return PricingBreakdown{Currency: billing.DefaultPricingCurrency, Source: "zero"}
 	}
-	return priceTable.EstimateCost(backendID, model, promptTokens, completionTokens)
+	if pricingSvc != nil {
+		bd, err := pricingSvc.EstimateCost(context.Background(), backendID, model, promptTokens, completionTokens)
+		if err == nil && bd != nil {
+			return PricingBreakdown{
+				TotalCost:     bd.TotalCost,
+				InputCost:     bd.InputCost,
+				OutputCost:    bd.OutputCost,
+				Currency:      bd.Currency,
+				PricingRuleID: bd.PricingRuleID,
+				Source:        bd.Source,
+			}
+		}
+	}
+	total := priceTable.EstimateCost(backendID, model, promptTokens, completionTokens)
+	price := priceTable.GetPrice(backendID, model)
+	in := float64(promptTokens) / 1_000_000 * price.InputPrice
+	out := float64(completionTokens) / 1_000_000 * price.OutputPrice
+	currency := price.Currency
+	if currency == "" {
+		currency = billing.DefaultPricingCurrency
+	}
+	return PricingBreakdown{
+		TotalCost:  total,
+		InputCost:  in,
+		OutputCost: out,
+		Currency:   currency,
+		Source:     billing.PriceSourceLegacyTable,
+	}
 }

@@ -154,13 +154,29 @@ func (s *Server) setupMinimalRoutes(configHandler *MinimalConfigHandler, pluginR
 
 		userAPI := protected.Group("/user")
 		if s.tokenUsageHandler != nil {
-			userAPI.GET("/token-usage", s.tokenUsageHandler.GetUserUsage)
+			// Process-wide totals so proxy traffic (often user_id=0) still appears in WebUI.
+			userAPI.GET("/token-usage", s.tokenUsageHandler.GetAggregateUsage)
 			userAPI.GET("/token-usage/daily", s.tokenUsageHandler.GetDailyUsage)
 			userAPI.GET("/token-usage/models", s.tokenUsageHandler.GetModelStats)
 			userAPI.GET("/token-usage/backends", s.tokenUsageHandler.GetBackendStats)
 		} else {
 			userAPI.GET("/token-usage", s.handleMinimalTokenUsage)
 			userAPI.GET("/token-usage/daily", s.handleMinimalTokenUsageDaily)
+		}
+
+		if s.billingRulesHandler != nil {
+			billingRules := protected.Group("/admin/billing/rules")
+			{
+				billingRules.GET("", s.billingRulesHandler.ListRules)
+				billingRules.POST("", s.billingRulesHandler.CreateRule)
+				billingRules.PUT("/:id", s.billingRulesHandler.UpdateRule)
+				billingRules.DELETE("/:id", s.billingRulesHandler.DeleteRule)
+				billingRules.POST("/import", s.billingRulesHandler.ImportRules)
+				billingRules.GET("/export", s.billingRulesHandler.ExportRules)
+			}
+		}
+		if s.costHandler != nil {
+			protected.GET("/admin/cost/summary", s.costHandler.GetSummary)
 		}
 		if s.conversationHandler != nil {
 			convs := userAPI.Group("/conversations")

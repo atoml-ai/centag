@@ -23,7 +23,10 @@ type UsageRecord struct {
 	PromptTokens     int     `json:"prompt_tokens"`
 	CompletionTokens int     `json:"completion_tokens"`
 	TotalTokens      int     `json:"total_tokens"`
-	CostUSD          float64 `json:"cost_usd"`
+	CostUSD          float64 `json:"cost_usd"` // USD amount (column name historical)
+	InputCost        float64 `json:"input_cost"`
+	OutputCost       float64 `json:"output_cost"`
+	PricingRuleID    int64   `json:"pricing_rule_id"`
 	Success          bool    `json:"success"`
 	TenantID         string  `json:"tenant_id"`
 	DeptTag          string  `json:"dept_tag"`
@@ -34,10 +37,12 @@ type UsageRecord struct {
 
 // UsageStats 使用统计
 type UsageStats struct {
-	TotalPromptTokens     int `json:"total_prompt_tokens"`
-	TotalCompletionTokens int `json:"total_completion_tokens"`
-	TotalTokens           int `json:"total_tokens"`
-	RequestCount          int `json:"request_count"`
+	TotalPromptTokens     int     `json:"total_prompt_tokens"`
+	TotalCompletionTokens int     `json:"total_completion_tokens"`
+	TotalTokens           int     `json:"total_tokens"`
+	RequestCount          int     `json:"request_count"`
+	TotalCostUSD          float64 `json:"total_cost_usd"` // historical name; amount in Currency
+	Currency              string  `json:"currency"`
 }
 
 // DailyStats 每日统计
@@ -104,12 +109,22 @@ func (s *Service) RecordUsage(ctx context.Context, record *UsageRecord) error {
 		}
 	}
 	if record.CostUSD == 0 && record.TotalTokens > 0 {
-		record.CostUSD = EstimateCost(
+		bd := EstimateCostDetailed(
 			record.BackendID,
 			record.Model,
 			record.PromptTokens,
 			record.CompletionTokens,
 		)
+		record.CostUSD = bd.TotalCost
+		if record.InputCost == 0 {
+			record.InputCost = bd.InputCost
+		}
+		if record.OutputCost == 0 {
+			record.OutputCost = bd.OutputCost
+		}
+		if record.PricingRuleID == 0 {
+			record.PricingRuleID = bd.PricingRuleID
+		}
 	}
 
 	normalizedAgentType := normalizeAgentType(record.AgentType)
@@ -121,15 +136,21 @@ func (s *Service) RecordUsage(ctx context.Context, record *UsageRecord) error {
 	defer tx.Rollback()
 
 	// 1. 插入明细记录（client_ip 列尚未迁移，暂不写入）
+	// pricing_rule_id: use NULL when 0 (no rule / legacy fallback)
+	var ruleID interface{}
+	if record.PricingRuleID > 0 {
+		ruleID = record.PricingRuleID
+	}
 	insertQuery := s.q(`
 		INSERT INTO token_usage 
-		(user_id, api_key_id, backend_id, model, prompt_tokens, completion_tokens, total_tokens, cost_usd, success, tenant_id, dept_tag, request_id, agent_type)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+		(user_id, api_key_id, backend_id, model, prompt_tokens, completion_tokens, total_tokens, cost_usd, input_cost, output_cost, pricing_rule_id, success, tenant_id, dept_tag, request_id, agent_type)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
 	`)
 	_, err = tx.ExecContext(ctx, insertQuery,
 		record.UserID, record.APIKeyID, record.BackendID, record.Model,
 		record.PromptTokens, record.CompletionTokens, record.TotalTokens,
-		record.CostUSD, success, nullIfEmpty(record.TenantID), nullIfEmpty(record.DeptTag),
+		record.CostUSD, record.InputCost, record.OutputCost, ruleID,
+		success, nullIfEmpty(record.TenantID), nullIfEmpty(record.DeptTag),
 		record.RequestID, normalizedAgentType,
 	)
 	if err != nil {
@@ -205,17 +226,38 @@ func (s *Service) GetUserUsage(ctx context.Context, userID int64, from, to time.
 			COALESCE(SUM(prompt_tokens), 0),
 			COALESCE(SUM(completion_tokens), 0),
 			COALESCE(SUM(total_tokens), 0),
-			COUNT(*)
+			COUNT(*),
+			COALESCE(SUM(cost_usd), 0)
 		FROM token_usage
 		WHERE user_id = $1 AND created_at BETWEEN $2 AND $3
 	`)
 
-	stats := &UsageStats{}
+	stats := &UsageStats{Currency: "USD"}
 	err := s.db.QueryRowContext(ctx, query, userID, from, to).Scan(
 		&stats.TotalPromptTokens, &stats.TotalCompletionTokens,
-		&stats.TotalTokens, &stats.RequestCount,
+		&stats.TotalTokens, &stats.RequestCount, &stats.TotalCostUSD,
 	)
 
+	return stats, err
+}
+
+// GetAggregateUsage sums usage across all users (minimal/personal process-wide view).
+func (s *Service) GetAggregateUsage(ctx context.Context, from, to time.Time) (*UsageStats, error) {
+	query := s.q(`
+		SELECT 
+			COALESCE(SUM(prompt_tokens), 0),
+			COALESCE(SUM(completion_tokens), 0),
+			COALESCE(SUM(total_tokens), 0),
+			COUNT(*),
+			COALESCE(SUM(cost_usd), 0)
+		FROM token_usage
+		WHERE created_at BETWEEN $1 AND $2
+	`)
+	stats := &UsageStats{Currency: "USD"}
+	err := s.db.QueryRowContext(ctx, query, from, to).Scan(
+		&stats.TotalPromptTokens, &stats.TotalCompletionTokens,
+		&stats.TotalTokens, &stats.RequestCount, &stats.TotalCostUSD,
+	)
 	return stats, err
 }
 

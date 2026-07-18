@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"centag/core/internal/billing"
 )
 
 // CostSummaryQuery 成本聚合查询参数。
@@ -28,6 +30,8 @@ type CostSummary struct {
 	TotalCostUSD  float64     `json:"total_cost_usd"`
 	TotalTokens   int64       `json:"total_tokens"`
 	CacheSavedUSD float64     `json:"cache_saved_usd"`
+	Currency      string      `json:"currency"`    // storage unit: always USD
+	USDToCNY      float64     `json:"usd_to_cny"`  // display FX; UI may convert to CNY
 	Groups        []CostGroup `json:"groups"`
 	From          string      `json:"from"`
 	To            string      `json:"to"`
@@ -103,10 +107,12 @@ func (s *Service) GetCostSummary(ctx context.Context, q CostSummaryQuery) (*Cost
 	`, whereSQL))
 
 	summary := &CostSummary{
-		From:    from.Format("2006-01-02"),
-		To:      to.Format("2006-01-02"),
-		GroupBy: groupBy,
-		Groups:  []CostGroup{},
+		From:     from.Format("2006-01-02"),
+		To:       to.Format("2006-01-02"),
+		GroupBy:  groupBy,
+		Currency: billing.DefaultPricingCurrency,
+		USDToCNY: billing.USDToCNY(),
+		Groups:   []CostGroup{},
 	}
 	if err := s.db.QueryRowContext(ctx, totalQuery, args...).Scan(&summary.TotalCostUSD, &summary.TotalTokens); err != nil {
 		return nil, err
