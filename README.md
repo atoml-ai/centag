@@ -38,7 +38,7 @@ make run            # 或 ./start.sh run be
 精简模式（无 DB、单密码管理台）：
 
 ```bash
-./start.sh debug --minimal
+./start.sh debug minimal
 ```
 
 ## 发行版

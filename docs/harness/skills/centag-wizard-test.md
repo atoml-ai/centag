@@ -145,7 +145,7 @@ security-mode     → security-mode
 | | gateway / personal | team | minimal |
 |---|---|---|---|
 | 默认端口 | 20060 | 可变 | 20060 |
-| 启动方式 | `./start.sh run be` 或 profile | `./start.sh profile team up` | `./start.sh debug --minimal` |
+| 启动方式 | `./start.sh run be` 或 profile | `./start.sh profile team up` | `./start.sh debug minimal` |
 | 创建用户 | 跳过（Admin JWT） | 必须 | 无多用户；单密码 |
 | 测试凭据 | JWT (`TEST_JWT_TOKEN`) | 用户 Key (`TEST_USER_KEY`) | JWT；`/v1` 可选 API Key |
 | Admin E2E | 后端/流水线/健康等 | 含用户/租户/成本 | 精简：auth + backends + pipelines + settings/api-keys |
@@ -330,7 +330,7 @@ open /tmp/wizard_test_report_*.html
 
 | 症状 | 原因 | 解决 |
 |------|------|------|
-| `/health` 不通 | 服务未启动 | gateway: `./start.sh run be`；team: `./start.sh profile team up`；minimal: `./start.sh debug --minimal` |
+| `/health` 不通 | 服务未启动 | gateway: `./start.sh run be`；team: `./start.sh profile team up`；minimal: `./start.sh debug minimal` |
 | JWT 登录失败 | 用户名或密码错误 | 报告错误消息，用 ask_followup_question 让用户重试 |
 | JWT 401 "invalid token" | token 过期或字段错误 | 用 `/api/auth/login` 重新获取 `access_token` |
 | API 返回 401 | JWT 过期 | wizard-test.sh Step B 会自动重新登录 |

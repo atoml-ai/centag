@@ -24,4 +24,4 @@ make frontend   # → bin/server/static
 ## 相关
 
 - 根目录 [README.md](../README.md)
-- 发行版 / minimal：`./start.sh debug --minimal`
+- 发行版 / minimal：`./start.sh debug minimal`
