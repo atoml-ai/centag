@@ -11,7 +11,7 @@ import (
 	"github.com/energye/systray"
 )
 
-// Icons copied from ProxyClaw apps/desktop (trayicon.* asset names kept).
+// Tray icons (trayicon.* asset names kept for compatibility).
 //
 //go:embed assets/trayicon.ico
 var menuIconWindowsICO []byte
