@@ -1141,42 +1141,49 @@ detect_database_mode() {
 # WSL2 环境下 5173 端口不可达，改用 vite build --watch 直接输出到 bin/static/
 # 前端文件变化后 Vite 自动重建，刷新浏览器 (localhost:20060) 即可看到最新内容
 #
-# 选项:
-#   （默认）       CENTAG_EDITION=personal —— 对齐 gateway 个人全功能
-#   --minimal      精简 WebUI + centag-minimal（edition=minimal）
-#   --team         全功能二进制 + CENTAG_EDITION=team
+# 用法（与 build/run 风格一致）:
+#   ./start.sh debug                 # 默认 personal（对齐 gateway）
+#   ./start.sh debug minimal         # 精简 WebUI + centag-minimal
+#   ./start.sh debug team            # 全功能二进制 + CENTAG_EDITION=team
+#   ./start.sh debug personal        # 显式 personal（同默认）
+#   ./start.sh debug gateway         # personal 别名
 debug() {
-    # ── 解析选项 ──────────────────────────────────────────────────
-    local use_minimal=false
-    local use_team=false
-    for arg in "$@"; do
-        case "$arg" in
-            --minimal) use_minimal=true ;;
-            --team) use_team=true ;;
+    # ── 解析发行版（位置参数，与 build/run 一致）──────────────────
+    local edition="personal"
+    if [ "$#" -gt 1 ]; then
+        print_error "debug 只接受一个发行版参数"
+        echo "用法: $0 debug [personal|minimal|team|gateway]"
+        exit 1
+    fi
+    if [ "$#" -eq 1 ]; then
+        case "$1" in
+            minimal|personal|team|gateway)
+                edition="$1"
+                ;;
+            --minimal|--team|--personal|--gateway)
+                print_error "请使用位置参数，不要加 --：./start.sh debug ${1#--}"
+                echo "用法: $0 debug [personal|minimal|team|gateway]"
+                exit 1
+                ;;
             *)
-                print_error "未知 debug 选项: $arg"
-                echo "用法: $0 debug [--minimal|--team]"
+                print_error "未知 debug 发行版: $1"
+                echo "用法: $0 debug [personal|minimal|team|gateway]"
                 exit 1
                 ;;
         esac
-    done
+    fi
 
-    if $use_minimal && $use_team; then
-        print_error "--minimal 与 --team 不能同时使用"
-        exit 1
+    if [ "$edition" = "gateway" ]; then
+        edition="personal"
     fi
 
     # ── minimal 分支：精简 WebUI + centag-minimal ─────────────────
-    if $use_minimal; then
+    if [ "$edition" = "minimal" ]; then
         _debug_minimal
         return
     fi
 
-    # ── 全功能分支：webui 前端；默认 personal，--team 为团队版 ─────
-    local edition="personal"
-    if $use_team; then
-        edition="team"
-    fi
+    # ── 全功能分支：webui 前端；personal（默认）或 team ─────────────
 
     load_env
 
@@ -3326,16 +3333,17 @@ _help_debug() {
     echo ""
     echo -e "${CYAN}用法:${NC}"
     echo -e "  ./start.sh debug              # 默认 personal（对齐 gateway）"
-    echo -e "  ./start.sh debug --minimal    # minimal 精简版"
-    echo -e "  ./start.sh debug --team       # team 团队版"
+    echo -e "  ./start.sh debug minimal      # minimal 精简版"
+    echo -e "  ./start.sh debug team         # team 团队版"
+    echo -e "  ./start.sh debug personal     # 显式 personal"
     echo ""
-    echo -e "${CYAN}选项:${NC}"
-    echo -e "  ${GREEN}（默认）${NC}     CENTAG_EDITION=personal + 全功能二进制（SQLite 个人网关）"
-    echo -e "  ${GREEN}--minimal${NC}   精简 WebUI + centag-minimal（edition=minimal）"
-    echo -e "  ${GREEN}--team${NC}      全功能二进制 + CENTAG_EDITION=team（多租户/计费面）"
+    echo -e "${CYAN}发行版:${NC}"
+    echo -e "  ${GREEN}personal${NC} | gateway   CENTAG_EDITION=personal + 全功能二进制（默认）"
+    echo -e "  ${GREEN}minimal${NC}             精简 WebUI + centag-minimal"
+    echo -e "  ${GREEN}team${NC}                全功能二进制 + CENTAG_EDITION=team"
     echo ""
     echo -e "${CYAN}说明:${NC}"
-    echo -e "  默认与 gateway Profile 一致（personal）；--team / --minimal 互斥。"
+    echo -e "  风格与 build / run 一致：./start.sh debug <minimal|personal|team>"
     echo -e "  均支持：后端 debug 日志 + 前端文件变更自动同步 + 一键 Ctrl+C 停止。"
 }
 
@@ -4014,8 +4022,8 @@ wizard_finish() {
     echo ""
     echo -e "${YELLOW}开发模式:${NC}"
     echo "  ./start.sh debug           # personal（默认，对齐 gateway）+ 前端热重载"
-    echo "  ./start.sh debug --minimal # minimal 精简版"
-    echo "  ./start.sh debug --team    # team 团队版"
+    echo "  ./start.sh debug minimal   # minimal 精简版"
+    echo "  ./start.sh debug team      # team 团队版"
     echo "  ./start.sh logs           # 查看日志"
     echo ""
     echo -e "${YELLOW}构建:${NC}"

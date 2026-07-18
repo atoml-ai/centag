@@ -1,11 +1,12 @@
 <template>
-  <el-dialog
+  <el-drawer
     v-model="visible"
     title="AI 对话测试"
-    width="760px"
-    :close-on-click-modal="false"
+    direction="rtl"
+    size="50%"
+    :close-on-click-modal="true"
     destroy-on-close
-    class="minimal-chat-dialog"
+    class="minimal-chat-drawer"
     @opened="onOpened"
   >
     <div class="minimal-chat-body">
@@ -83,14 +84,14 @@
         </div>
       </div>
     </div>
-  </el-dialog>
+  </el-drawer>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, nextTick, watch } from 'vue'
 import { Promotion, User, Monitor, ChatDotRound, WarningFilled } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
-import { getPipelines, type AgentPatternPipeline } from '@/api/pipeline'
+import { getPipelines, getPipelineDefaults, type AgentPatternPipeline } from '@/api/pipeline'
 import { useAuthStore } from '@/stores/auth'
 import api from '@/api'
 
@@ -123,8 +124,17 @@ const selectedPipeline = computed(() =>
   pipelines.value.find(p => p.id === selectedPipelineId.value)
 )
 
-function applyPreferredPipeline() {
-  const preferred = props.initialPipelineId
+async function applyPreferredPipeline() {
+  let preferred = (props.initialPipelineId || '').trim()
+  if (!preferred) {
+    try {
+      const res: any = await getPipelineDefaults()
+      const data = res?.data ?? res
+      preferred = String(data?.default_pipeline_id || '').trim()
+    } catch {
+      /* ignore */
+    }
+  }
   if (preferred && pipelines.value.some(p => p.id === preferred)) {
     selectedPipelineId.value = preferred
     return
@@ -156,7 +166,7 @@ async function loadPipelines() {
     const resp = await getPipelines()
     const data = resp?.data ?? resp
     pipelines.value = Array.isArray(data) ? data : []
-    applyPreferredPipeline()
+    await applyPreferredPipeline()
   } catch (e: any) {
     console.error('Failed to load pipelines:', e)
   } finally {
@@ -304,7 +314,8 @@ watch(() => props.initialPipelineId, (id) => {
 .minimal-chat-body {
   display: flex;
   flex-direction: column;
-  height: 520px;
+  height: 100%;
+  min-height: 0;
 }
 
 .pipeline-bar {
@@ -460,5 +471,19 @@ watch(() => props.initialPipelineId, (id) => {
   box-shadow: none;
   resize: none;
   border-radius: 8px;
+}
+</style>
+
+<style>
+/* Drawer body fills remaining viewport height so chat can stretch */
+.minimal-chat-drawer.el-drawer.rtl {
+  --el-drawer-padding-primary: 16px;
+}
+.minimal-chat-drawer .el-drawer__body {
+  display: flex;
+  flex-direction: column;
+  height: calc(100% - 55px);
+  padding-top: 0;
+  overflow: hidden;
 }
 </style>

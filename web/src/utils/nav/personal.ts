@@ -1,21 +1,21 @@
 import type { NavItem } from './types'
 import {
-  accessGroup,
-  appGroup,
-  cacheMemoryGroup,
+  chatNav,
   dashboardNav,
-  proxyStrategyGroup,
-  systemAdminGroup
+  personalAppGroup,
+  personalConfigGroup,
+  personalMoreGroup
 } from './shared'
 
 /**
- * 个人版 — 顶栏主菜单（含原桌面侧栏收纳的进阶分组）
+ * 个人桌面版导航：
+ * 一级 = 首页 / 配置 / 对话 / 应用 / 更多
+ * 更多下再分：接入 / 缓存与记忆 / Agent / 系统
  */
 export const NAV_MENU_PERSONAL: NavItem[] = [
   dashboardNav('首页'),
-  proxyStrategyGroup({ includeNodePlugins: true }),
-  appGroup({ tokenUsageLabel: '用量' }),
-  cacheMemoryGroup(),
-  accessGroup(),
-  systemAdminGroup({ relaxedAccess: true })
+  personalConfigGroup(),
+  chatNav(),
+  personalAppGroup(),
+  personalMoreGroup()
 ]

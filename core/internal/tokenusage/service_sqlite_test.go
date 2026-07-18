@@ -31,6 +31,9 @@ func setupSQLiteTokenUsageDB(t *testing.T) *sql.DB {
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		tenant_id TEXT,
 		cost_usd REAL DEFAULT 0,
+		input_cost REAL DEFAULT 0,
+		output_cost REAL DEFAULT 0,
+		pricing_rule_id INTEGER,
 		success INTEGER NOT NULL DEFAULT 1,
 		dept_tag TEXT,
 		agent_type TEXT

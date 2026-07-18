@@ -6,9 +6,9 @@ const EDITION_ATTR = 'data-edition'
 
 /**
  * Edition capability matrix:
- * - personal: single-user surfaces (legacy desktop-oriented)
+ * - personal: desktop-oriented single-user (lite home + short nav + advanced under「更多」)
  * - team: full server deployment
- * - minimal: lite WebUI (dashboard / backends / pipelines + password auth)
+ * - minimal: lite WebUI (dashboard only in nav; backends/pipelines on home)
  */
 
 function readEditionFromDom(): Edition {

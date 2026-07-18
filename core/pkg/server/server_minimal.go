@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"centag/core/internal/auth"
+	"centag/core/internal/billing"
 	"centag/core/internal/cache"
 	"centag/core/internal/conversation"
 	"centag/core/internal/edition"
@@ -309,6 +310,9 @@ func NewMinimal(cfg *config.Config) *Server {
 	logger.Infof("[hooks] HookManager registered (minimal, fail-open)")
 
 	var tokenUsageHandler *TokenUsageHandler
+	var costHandler *CostHandler
+	var billingRulesHandler *BillingRulesHandler
+	var pricingService billing.PricingService
 	if tokenSvc, err := tokenusage.NewEphemeralService(); err != nil {
 		logger.Warnf("[hooks] ephemeral token meter init failed: %v", err)
 	} else {
@@ -317,7 +321,24 @@ func NewMinimal(cfg *config.Config) *Server {
 		wireTokenUsagePersistence(tokenSvc, hookManager)
 		proxyHandler.SetTokenUsageService(tokenSvc)
 		tokenUsageHandler = NewTokenUsageHandler(tokenSvc)
+		costHandler = NewCostHandler(tokenSvc)
 		logger.Infof("[hooks] TokenHook registered (ephemeral in-memory; cleared on restart)")
+	}
+	{
+		var memStore *billing.MemoryRuleStore
+		if path, err := billing.ResolveDefaultPricingPath(); err != nil {
+			logger.Warnf("[billing] default pricing YAML not found: %v", err)
+			memStore = billing.NewMemoryRuleStore()
+		} else if s, err := billing.NewMemoryRuleStoreFromFile(path); err != nil {
+			logger.Warnf("[billing] load pricing YAML failed: %v", err)
+			memStore = billing.NewMemoryRuleStore()
+		} else {
+			memStore = s
+			logger.Infof("[billing] memory pricing rules loaded from %s", path)
+		}
+		pricingService = billing.NewPricingService(memStore)
+		tokenusage.SetPricingService(pricingService)
+		billingRulesHandler = NewBillingRulesHandler(memStore, pricingService)
 	}
 
 	var conversationHandler *ConversationHandler
@@ -351,6 +372,9 @@ func NewMinimal(cfg *config.Config) *Server {
 		cacheManager:            cacheManager,
 		proxyCache:              proxyCache,
 		tokenUsageHandler:       tokenUsageHandler,
+		costHandler:             costHandler,
+		billingRulesHandler:     billingRulesHandler,
+		pricingService:          pricingService,
 		conversationHandler:     conversationHandler,
 		edition:                 edition.Minimal,
 		startTime:               time.Now(),

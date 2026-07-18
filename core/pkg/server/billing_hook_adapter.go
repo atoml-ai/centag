@@ -22,6 +22,7 @@ func (a *billingHookAdapter) OnUsage(ctx context.Context, usage *hooks.TokenUsag
 		return nil
 	}
 	ev := billing.NewRequestEvent(usage.UserID, usage.TenantID, usage.Backend, usage.Model, int64(usage.TotalTokens))
+	ev.Currency = billing.DefaultPricingCurrency
 	if usage.CostUSD > 0 {
 		ev.Amount = usage.CostUSD
 		ev.Type = "token_usage"
