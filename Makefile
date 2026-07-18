@@ -1,4 +1,4 @@
-.PHONY: all build run clean test install help gen-init-sqlite frontend build-all copy-files harness-check
+.PHONY: all build run clean test install help gen-init-sqlite frontend build-all copy-files harness-check package package-list
 
 # Variables
 BINARY_NAME=centag
@@ -12,6 +12,15 @@ LDFLAGS=-ldflags "-s -w -X 'main.Version=$(VERSION)' -X 'main.BuildTime=$(BUILD_
 # 与 start.sh gateway/team 全功能 tags 对齐；否则 backend_*/protocol_*/business_* 的 init 不会编译进来
 # Core tags only; business_* plugins are optional via external go.mod.
 BUILD_TAGS ?= protocol_openai,protocol_anthropic,protocol_gemini,protocol_openairesponses,backend_openai,backend_ollama,backend_anthropic,backend_gemini,backend_azure
+
+# 第三方/渠道打包默认参数（根目录 packaging.env；可被命令行覆盖）
+-include packaging.env
+PACKAGE_ARCH ?= amd64
+PACKAGE_MODE ?= native
+PACKAGE_EDITION ?= minimal
+PACKAGE_OUTPUT ?= bin/packages
+TARGET ?= fnos
+PACKAGE_ARGS ?=
 
 # Copy files to bin directory
 copy-files:
@@ -135,6 +144,23 @@ harness-check:
 gen-init-sqlite:
 	go run ./cmd/migrate
 
+# 第三方系统 / 渠道打包（fnOS 等）；默认参数见 packaging.env
+package-list:
+	@bash scripts/packaging/package.sh list
+
+# TARGET=fnos|docker-offline；fnos 可用 PACKAGE_EDITION/MODE/ARCH/OUTPUT 或 PACKAGE_ARGS
+package:
+	@if [ "$(TARGET)" = "fnos" ]; then \
+		bash scripts/packaging/package.sh fnos \
+			--mode $(PACKAGE_MODE) \
+			--arch $(PACKAGE_ARCH) \
+			--edition $(PACKAGE_EDITION) \
+			--output $(PACKAGE_OUTPUT) \
+			$(PACKAGE_ARGS); \
+	else \
+		bash scripts/packaging/package.sh $(TARGET) $(PACKAGE_ARGS); \
+	fi
+
 # Help
 help:
 	@echo "Available targets:"
@@ -153,7 +179,12 @@ help:
 	@echo "  make fmt          - Format code"
 	@echo "  make lint         - Run linter"
 	@echo "  make harness-check - Harness doc / go list hygiene (scripts/check-harness-hygiene.sh)"
+	@echo "  make package-list - List third-party packaging targets"
+	@echo "  make package      - Package for TARGET (default fnos); see packaging.env"
+	@echo "                      e.g. make package TARGET=fnos PACKAGE_EDITION=minimal PACKAGE_ARCH=amd64"
+	@echo "                           make package TARGET=fnos PACKAGE_EDITION=personal"
 	@echo ""
 	@echo "Development:"
 	@echo "  (cmd 入口: cmd/README.md；示例: archive/deprecated/examples/README.md)"
 	@echo "  (文档索引: docs/README.md)"
+	@echo "  (渠道打包: scripts/packaging/README.md / packaging.env)"

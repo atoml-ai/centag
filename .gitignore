@@ -26,7 +26,8 @@ test_regex.go
 # Output — runtime & build artifacts (sources live under web/, config/, cmd/)
 var/
 !var/.gitkeep
-# Keep dist/*/main.go and go.mod; ignore locally built binaries only
+# dist/ 仅提交发行版源码（minimal/gateway/team）；渠道构建物在 bin/packages/
+/dist/*.fpk
 /dist/minimal/minimal
 /dist/gateway/gateway
 /dist/team/team
@@ -34,6 +35,7 @@ var/
 /dist/gateway/centag*
 /dist/team/centag*
 *.tar.gz
+*.fpk
 
 # Wails desktop build outputs (if reintroduced locally)
 web/build/
@@ -177,3 +179,4 @@ node_modules/
 
 # Broken / nested git metadata (deploy/stack is a normal directory, not a submodule)
 deploy/stack/.git
+
