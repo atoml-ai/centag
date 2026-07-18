@@ -3141,6 +3141,7 @@ show_short_help() {
     echo -e "  ${GREEN}docker${NC}   run   <minimal|gateway|team>   运行 Docker 容器"
     echo -e "  ${GREEN}clean${NC}                            清理构建产物"
     echo -e "  ${GREEN}pack${NC}     [--upload]              打包服务端更新包"
+    echo -e "  ${GREEN}package${NC}  <fnos|...> [选项]       第三方系统/渠道打包（见 packaging.env）"
     echo -e "  ${GREEN}test${NC}                             运行单元测试"
     echo ""
 
@@ -3194,6 +3195,7 @@ show_command_help() {
         docker)        _help_docker ;;
         webui)         _help_webui ;;
         pack)          _help_pack ;;
+        package)       _help_package ;;
         test)          _help_test ;;
         env)           _help_env ;;
         *)
@@ -3513,6 +3515,28 @@ _help_pack() {
     echo -e "${CYAN}示例:${NC}"
     echo -e "  ./start.sh pack"
     echo -e "  CENTAG_UPDATE_TOKEN=xxx ./start.sh pack --upload"
+}
+
+_help_package() {
+    echo -e "${GREEN}命令: package${NC}"
+    echo -e "       ${YELLOW}第三方系统 / 渠道打包（fnOS 等）${NC}"
+    echo ""
+    echo -e "${CYAN}用法:${NC}"
+    echo -e "  ./start.sh package list"
+    echo -e "  ./start.sh package <target> [选项...]"
+    echo ""
+    echo -e "${CYAN}说明:${NC}"
+    echo -e "  委托 scripts/packaging/package.sh；默认参数见根目录 packaging.env。"
+    echo -e "  与 ${GREEN}pack${NC}（服务端热更新包）不同：本命令面向 NAS / 离线镜像等渠道产物。"
+    echo -e "  fnOS 默认发行版 ${GREEN}minimal${NC}；可用 --edition personal|team。"
+    echo -e "  管理员密码：--admin-password > PACKAGE_ADMIN_PASSWORD > config/secrets/.env"
+    echo ""
+    echo -e "${CYAN}示例:${NC}"
+    echo -e "  ./start.sh package list"
+    echo -e "  ./start.sh package fnos --mode native --arch amd64"
+    echo -e "  ./start.sh package fnos --edition personal --arch amd64"
+    echo -e "  ./start.sh package fnos --edition minimal --admin-password 'your-password'"
+    echo -e "  ./start.sh package docker-offline"
 }
 
 _help_test() {
@@ -4529,6 +4553,16 @@ main() {
         # ── 打包 ─────────────────────────────────────────────────────
         pack)
             pack "$@"
+            ;;
+
+        # ── 第三方系统 / 渠道打包（fnOS 等）────────────────────────────
+        package)
+            local package_script="${PROJECT_ROOT}/scripts/packaging/package.sh"
+            if [ ! -f "$package_script" ]; then
+                print_error "渠道打包入口不存在: $package_script"
+                exit 1
+            fi
+            bash "$package_script" "$@"
             ;;
 
         # ── 测试 ─────────────────────────────────────────────────────
