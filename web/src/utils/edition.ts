@@ -45,6 +45,7 @@ export function syncEditionFromStatus(status: { edition?: string } | null | unde
 
 export const TEAM_ONLY_ROUTE_PREFIXES = [
   '/cost',
+  '/billing',
   '/ab-comparison',
   '/tenants',
   '/system/users',
