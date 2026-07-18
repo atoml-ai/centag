@@ -3,7 +3,7 @@
 轻量桌面启动器：**拉起 sidecar + 系统菜单/托盘 + 系统浏览器**。  
 不依赖 Wails / WebView，**不 import Centag core**——与 `minimal` / `personal` 发行版解耦，仅作补充入口。
 
-菜单图标资源来自 ProxyClaw `apps/desktop` 的 `trayicon.png` / `trayicon.ico`。
+菜单图标资源使用 `apps/launcher/assets/` 下的 `trayicon.png` / `trayicon.ico`。
 
 ## 用法（`--launcher` 辅助开关）
 

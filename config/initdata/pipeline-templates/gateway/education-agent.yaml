@@ -1,4 +1,4 @@
-schema_version: proxyclaw.pipeline/v1alpha1
+schema_version: centag.pipeline/v1alpha1
 id: education-scene
 name: 教育Agent
 shortcut_code: '#edu'
@@ -7,7 +7,7 @@ description: |
   教育场景统一 Pipeline：根据 context.scene 路由到不同教育子场景。
 
   传参方式（三选一）：
-    - body: { "proxyclaw": { "mode": "education-scene", "scene": "problem_solving" } }
+    - body: { "centag": { "mode": "education-scene", "scene": "problem_solving" } }
     - header: X-Scene: problem_solving
     - query: ?scene=problem_solving
 
