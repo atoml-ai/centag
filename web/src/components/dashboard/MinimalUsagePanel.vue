@@ -63,7 +63,7 @@
       </el-table>
     </div>
 
-    <p class="hint">本次进程内计量与成本估算（重启后清零）。</p>
+    <p class="hint">{{ hint }}</p>
 
     <!-- 最近对话 -->
     <div class="session-block">
@@ -145,6 +145,16 @@ import {
   setDisplayCurrency,
   type DisplayCurrency
 } from '@/utils/billing-currency'
+
+withDefaults(
+  defineProps<{
+    /** 用量提示文案 */
+    hint?: string
+  }>(),
+  {
+    hint: '计量与成本估算（按当前服务存储策略保留）。'
+  }
+)
 
 const metricsLoading = ref(false)
 const sessionsLoading = ref(false)

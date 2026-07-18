@@ -192,8 +192,10 @@ const routeAssignVisible = ref(false)
 const routeAssignPipelineId = ref('')
 
 const canEdit = computed(() => isPersonal.value || isMinimal.value || authStore.isAdmin)
+/** 批量选择仅 minimal（精简台高频清理）；personal/team 走单条操作 */
 const selectable = computed(() => isMinimal.value)
-const canTest = computed(() => isMinimal.value)
+/** personal / minimal 共用精简测试对话抽屉 */
+const canTest = computed(() => isPersonal.value || isMinimal.value)
 
 const allSelected = computed(() =>
   pipelines.value.length > 0 && selectedIds.value.length === pipelines.value.length
