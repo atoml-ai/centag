@@ -19,16 +19,50 @@
               <el-icon :size="12" class="dropdown-arrow"><ArrowDown /></el-icon>
             </div>
             <template #dropdown>
-              <el-dropdown-menu>
-                <el-dropdown-item
-                  v-for="child in visibleChildren(item)"
-                  :key="child.id"
-                  :command="child.id"
-                  :class="{ 'is-active': currentNav === child.id }"
-                >
-                  <el-icon><component :is="child.icon" /></el-icon>
-                  <span>{{ child.label }}</span>
-                </el-dropdown-item>
+              <el-dropdown-menu class="nav-dropdown-menu">
+                <template v-for="child in visibleChildren(item)" :key="child.id">
+                  <!-- 嵌套分组：更多 → 接入 / 缓存 … -->
+                  <el-dropdown-item
+                    v-if="child.children?.length"
+                    :class="{ 'is-active': currentNav === child.id || isChildActive(child) }"
+                    @click.stop
+                  >
+                    <el-dropdown
+                      trigger="hover"
+                      placement="right-start"
+                      teleported
+                      popper-class="nav-submenu-popper"
+                      @command="(cmd) => handleDropdownCommand(String(cmd), child)"
+                    >
+                      <div class="nav-submenu-trigger" @click.stop="handleDropdownClick(child)">
+                        <el-icon><component :is="child.icon" /></el-icon>
+                        <span>{{ child.label }}</span>
+                        <el-icon class="submenu-arrow"><ArrowRight /></el-icon>
+                      </div>
+                      <template #dropdown>
+                        <el-dropdown-menu>
+                          <el-dropdown-item
+                            v-for="leaf in visibleChildren(child)"
+                            :key="leaf.id"
+                            :command="leaf.id"
+                            :class="{ 'is-active': currentNav === leaf.id }"
+                          >
+                            <el-icon><component :is="leaf.icon" /></el-icon>
+                            <span>{{ leaf.label }}</span>
+                          </el-dropdown-item>
+                        </el-dropdown-menu>
+                      </template>
+                    </el-dropdown>
+                  </el-dropdown-item>
+                  <el-dropdown-item
+                    v-else
+                    :command="child.id"
+                    :class="{ 'is-active': currentNav === child.id }"
+                  >
+                    <el-icon><component :is="child.icon" /></el-icon>
+                    <span>{{ child.label }}</span>
+                  </el-dropdown-item>
+                </template>
               </el-dropdown-menu>
             </template>
           </el-dropdown>
@@ -92,7 +126,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useNavigation } from '@/composables/useNavigation'
 import { useEdition } from '@/composables/useEdition'
 import type { NavItem } from '@/utils/nav'
-import { Refresh, ArrowDown, User, SwitchButton } from '@element-plus/icons-vue'
+import { Refresh, ArrowDown, ArrowRight, User, SwitchButton } from '@element-plus/icons-vue'
 import CentagMark from '@/components/icons/CentagMark.vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
@@ -283,6 +317,20 @@ const avatarStyle = computed(() => ({
 
 .dropdown-arrow {
   color: var(--shell-sidebar-muted);
+}
+
+.nav-submenu-trigger {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-width: 120px;
+}
+
+.submenu-arrow {
+  margin-left: auto;
+  color: var(--shell-sidebar-muted);
+  font-size: 12px;
 }
 
 .user-info {

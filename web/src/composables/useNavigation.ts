@@ -3,7 +3,7 @@ import { useRouter, useRoute } from 'vue-router'
 import { useAppStore } from '@/stores/app'
 import { useAuthStore } from '@/stores/auth'
 import { useEdition } from '@/composables/useEdition'
-import { flattenNavMenu, getNavMenu, type NavItem } from '@/utils/nav'
+import { findNavItemById, flattenNavMenu, getNavMenu, type NavItem } from '@/utils/nav'
 import { filterNavMenu } from '@/utils/nav/visibility'
 
 export function useNavigation() {
@@ -24,20 +24,46 @@ export function useNavigation() {
 
   const currentNav = computed(() => appStore.currentNav)
 
-  function isChildActive(item: NavItem) {
-    if (!item.children) return false
-    return item.children.some((child) => child.id === currentNav.value)
+  function isChildActive(item: NavItem): boolean {
+    if (!item.children?.length) return false
+    return item.children.some(
+      (child) => child.id === currentNav.value || isChildActive(child)
+    )
   }
 
   function navigateTo(item: NavItem) {
+    // 分组节点：跳到第一个可导航叶子
+    if (item.children?.length && !isLeafNavigable(item)) {
+      const leaf = firstNavigableLeaf(item)
+      if (leaf) {
+        appStore.setCurrentNav(leaf.id)
+        if (leaf.path) router.push(leaf.path)
+        return
+      }
+    }
     appStore.setCurrentNav(item.id)
     if (item.path) router.push(item.path)
   }
 
   function navigateToChild(childId: string, parentItem: NavItem) {
-    appStore.setCurrentNav(childId)
-    const child = parentItem.children?.find((c) => c.id === childId)
-    if (child?.path) router.push(child.path)
+    const child =
+      findNavItemById(parentItem.children ?? [], childId) ||
+      findNavItemById([parentItem], childId)
+    if (!child) return
+    navigateTo(child)
+  }
+
+  function isLeafNavigable(item: NavItem) {
+    return !!item.path && !item.children?.length
+  }
+
+  function firstNavigableLeaf(item: NavItem): NavItem | undefined {
+    if (isLeafNavigable(item)) return item
+    for (const child of item.children ?? []) {
+      const leaf = firstNavigableLeaf(child)
+      if (leaf) return leaf
+    }
+    return undefined
   }
 
   function syncNavFromRoute(path: string) {
