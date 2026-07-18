@@ -15,17 +15,17 @@ import (
 
 // Event represents a billing event to be recorded.
 type Event struct {
-	ID        string    `json:"id"`
-	Type      string    `json:"type"`       // "request", "token_usage", "subscription"
-	UserID    int64     `json:"user_id"`
-	TeamID    string    `json:"team_id"`
-	Backend   string    `json:"backend"`
-	Model     string    `json:"model"`
-	Tokens    int64     `json:"tokens"`
-	Amount    float64   `json:"amount"`     // in cents
-	Currency  string    `json:"currency"`   // default: "usd"
+	ID        string            `json:"id"`
+	Type      string            `json:"type"` // "request", "token_usage", "subscription"
+	UserID    int64             `json:"user_id"`
+	TeamID    string            `json:"team_id"`
+	Backend   string            `json:"backend"`
+	Model     string            `json:"model"`
+	Tokens    int64             `json:"tokens"`
+	Amount    float64           `json:"amount"`   // in cents
+	Currency  string            `json:"currency"` // default: "usd"
 	Metadata  map[string]string `json:"metadata,omitempty"`
-	Timestamp time.Time `json:"timestamp"`
+	Timestamp time.Time         `json:"timestamp"`
 }
 
 // EventHandler processes billing events.
