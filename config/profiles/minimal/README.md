@@ -78,16 +78,15 @@ backends:
 1. 全局 `config/initdata/pipeline-templates/common/`（含智能调度、路由模式等）
 2. Profile 覆盖 `initdata/pipeline-templates/common/`
 
-Profile 内置：
+Profile 内置（`initdata/pipeline-templates/common/`，渠道打包自包含）：
 
 - `01-direct-backend.yaml` - 直连模式
 - `14-transparent-proxy.yaml` - 透明模式（系统默认）
 - `15-raw-forward.yaml` - 原始 HTTP 转发（需 Target-URL / hostproxy）
-
-全局 common 额外提供（minimal 可用）：
-
-- `smart-scheduling.yaml` - 智能调度（`#s`，依赖 ScheduleBackend hook）
 - `router-mode.yaml` - 路由模式（`#r` / `X-Pipeline-ID: router-mode`）
+- `smart-scheduling.yaml` - 智能调度（`#s`，依赖 ScheduleBackend hook）
+
+开发运行时仍会与全局 `config/initdata/pipeline-templates/common/` 合并；上述两份已同步进 profile，保证 fnOS 等只带包内 initdata 时也可用。
 
 ### 环境变量
 

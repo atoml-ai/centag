@@ -38,6 +38,28 @@ func NewMinimalAuthHandler(dataDir string) *MinimalAuthHandler {
 	}
 }
 
+// EnsurePasswordFromEnv seeds admin.password.hash from LLM_PROXY_ADMIN_PASSWORD
+// when no password file exists yet (first run / channel packages like fnOS).
+func (h *MinimalAuthHandler) EnsurePasswordFromEnv() {
+	if h.hasPassword() {
+		return
+	}
+	pw := strings.TrimSpace(os.Getenv("LLM_PROXY_ADMIN_PASSWORD"))
+	if pw == "" {
+		return
+	}
+	hash, err := auth.HashPassword(pw)
+	if err != nil {
+		logger.Errorf("[MinimalAuth] hash LLM_PROXY_ADMIN_PASSWORD: %v", err)
+		return
+	}
+	if err := h.writeHash(hash); err != nil {
+		logger.Errorf("[MinimalAuth] write password from env: %v", err)
+		return
+	}
+	logger.Info("[MinimalAuth] seeded admin password from LLM_PROXY_ADMIN_PASSWORD")
+}
+
 func (h *MinimalAuthHandler) passwordPath() string {
 	return filepath.Join(h.dataDir, "admin.password.hash")
 }

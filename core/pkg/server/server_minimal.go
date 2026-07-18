@@ -208,6 +208,7 @@ func NewMinimal(cfg *config.Config) *Server {
 		logger.Errorf("[Minimal] failed to init JWT secret: %v", err)
 	}
 	minimalAuth := NewMinimalAuthHandler(dataDir)
+	minimalAuth.EnsurePasswordFromEnv()
 
 	minimalConfigHandler := NewMinimalConfigHandler(dataDir, nil, pipelineRegistry)
 	pipelineDefaultsHandler.SetPersistFn(func(defaultPipelineID string) error {
