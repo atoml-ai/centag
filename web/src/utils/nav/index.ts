@@ -19,13 +19,26 @@ export function getNavMenu(edition: Edition): NavItem[] {
 export { canSeeNavItem, filterNavMenu } from './visibility'
 export type { NavVisibilityContext } from './visibility'
 
+/** Flatten nested nav（含「更多 → 分类 → 叶子」三级） */
 export function flattenNavMenu(menu: NavItem[]): NavItem[] {
   const items: NavItem[] = []
   for (const item of menu) {
     items.push(item)
-    if (item.children) {
-      items.push(...item.children)
+    if (item.children?.length) {
+      items.push(...flattenNavMenu(item.children))
     }
   }
   return items
+}
+
+/** Deep-find a nav node by id. */
+export function findNavItemById(menu: NavItem[], id: string): NavItem | undefined {
+  for (const item of menu) {
+    if (item.id === id) return item
+    if (item.children?.length) {
+      const hit = findNavItemById(item.children, id)
+      if (hit) return hit
+    }
+  }
+  return undefined
 }
