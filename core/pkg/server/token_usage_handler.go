@@ -68,6 +68,38 @@ func (h *TokenUsageHandler) GetUserUsage(c *gin.Context) {
 	})
 }
 
+// GetAggregateUsage GET process-wide usage (minimal / single-user editions).
+func (h *TokenUsageHandler) GetAggregateUsage(c *gin.Context) {
+	if _, ok := requireUserID(c); !ok {
+		return
+	}
+	fromStr := c.Query("from")
+	toStr := c.Query("to")
+	from := time.Now().AddDate(0, 0, -30)
+	to := time.Now()
+	if fromStr != "" {
+		if t, err := time.Parse("2006-01-02", fromStr); err == nil {
+			from = t
+		}
+	}
+	if toStr != "" {
+		if t, err := time.Parse("2006-01-02", toStr); err == nil {
+			to = t
+		}
+	}
+	stats, err := h.service.GetAggregateUsage(c.Request.Context(), from, to)
+	if err != nil {
+		RespondError(c, http.StatusInternalServerError, err.Error())
+		return
+	}
+	RespondSuccess(c, gin.H{
+		"stats": stats,
+		"from":  from.Format("2006-01-02"),
+		"to":    to.Format("2006-01-02"),
+		"scope": "all",
+	})
+}
+
 // GetDailyUsage 获取每日使用情况
 func (h *TokenUsageHandler) GetDailyUsage(c *gin.Context) {
 	userID, ok := requireUserID(c)
