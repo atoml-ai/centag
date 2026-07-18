@@ -4,7 +4,7 @@
     title="AI 对话测试"
     direction="rtl"
     size="50%"
-    :close-on-click-modal="false"
+    :close-on-click-modal="true"
     destroy-on-close
     class="minimal-chat-drawer"
     @opened="onOpened"

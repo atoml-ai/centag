@@ -1,212 +1,23 @@
 <template>
-  <div class="dashboard" :class="{ 'dashboard--personal': isPersonal || isMinimal }">
-    <div class="page-header" :class="{ 'page-header--actions-only': isMinimal }">
-      <div v-if="!isMinimal">
+  <div class="dashboard" :class="rootClass">
+    <div class="page-header" :class="{ 'page-header--actions-only': !sections.pageTitle && sections.headerActions }">
+      <div v-if="sections.pageTitle">
         <h1 class="page-title">{{ isPersonal ? '首页' : '概览' }}</h1>
         <p class="page-description">{{ pageDescription }}</p>
       </div>
-      <div class="page-header-actions">
-        <el-button v-if="isMinimal" type="success" @click="openPipelineChat()">
+      <div v-if="sections.headerActions" class="page-header-actions">
+        <el-button type="success" @click="openPipelineChat()">
           <el-icon><ChatDotRound /></el-icon>&nbsp;AI 对话
         </el-button>
-        <el-button v-if="isMinimal" @click="securityDialogVisible = true">安全设置</el-button>
-        <el-button v-if="isMinimal" @click="handleLogout">退出登录</el-button>
+        <el-button @click="securityDialogVisible = true">安全设置</el-button>
+        <el-button @click="handleLogout">退出登录</el-button>
       </div>
     </div>
 
-    <!-- Minimal：接入 → 后端 | 流水线 → 用量/会话（折叠） -->
-    <template v-if="isMinimal">
-      <div class="lite-home">
-        <el-card class="info-card access-card access-card--compact" shadow="never">
-          <ApiAccessPanel :base-url="baseUrl" compact />
-        </el-card>
-
-        <div class="lite-row lite-row--config">
-          <el-card class="info-card config-card">
-            <template #header>
-              <div class="card-head">
-                <el-icon class="card-icon backend-color"><DataBoard /></el-icon>
-                <span>后端配置</span>
-                <span class="card-badge">{{ backends.length }} 个</span>
-              </div>
-            </template>
-            <DashboardBackendList
-              ref="backendListRef"
-              :backends="backends"
-              @backend-updated="patchBackend"
-              @refresh="loadBackendsOnly"
-            />
-          </el-card>
-
-          <el-card class="info-card config-card">
-            <template #header>
-              <div class="card-head card-head--actions">
-                <div class="card-head-main">
-                  <el-icon class="card-icon pipeline-color"><Share /></el-icon>
-                  <span>流水线配置</span>
-                  <span class="card-badge">{{ pipelineCount }} 个</span>
-                </div>
-                <el-button type="primary" size="small" @click="pipelinePanelRef?.openCreate()">
-                  + 创建流水线
-                </el-button>
-              </div>
-            </template>
-            <HomePipelineCard
-              ref="pipelinePanelRef"
-              @update:count="pipelineCount = $event"
-              @test="openPipelineChat"
-            />
-          </el-card>
-        </div>
-
-        <el-card class="info-card usage-card">
-          <el-collapse v-model="usageCollapse" class="usage-collapse">
-            <el-collapse-item name="usage">
-              <template #title>
-                <div class="card-head usage-collapse-title">
-                  <el-icon class="card-icon service-color"><TrendCharts /></el-icon>
-                  <span>用量与会话</span>
-                  <span class="card-badge">进程内 · 重启清零</span>
-                </div>
-              </template>
-              <MinimalUsagePanel ref="usagePanelRef" />
-            </el-collapse-item>
-          </el-collapse>
-        </el-card>
-      </div>
-      <SecuritySettingsDialog v-model="securityDialogVisible" />
-      <MinimalChat v-model="chatDialogVisible" :initial-pipeline-id="chatPipelineId" />
-    </template>
-
-    <!-- Personal（gateway 个人版）：保持原布局 —— 状态 | 接入 → 后端 | 流水线 -->
-    <template v-else-if="isPersonal">
-      <div class="personal-top-layout">
-        <el-card class="info-card service-card">
-          <template #header>
-            <div class="card-head">
-              <el-icon class="card-icon service-color"><Monitor /></el-icon>
-              <span>服务状态</span>
-            </div>
-          </template>
-          <div class="info-rows">
-            <div class="personal-status-grid">
-              <div class="personal-status-item">
-                <span class="info-label">运行状态</span>
-                <el-tag :type="status.status === 'healthy' ? 'success' : 'danger'" size="small" effect="light">
-                  {{ status.status === 'healthy' ? '运行中' : '异常' }}
-                </el-tag>
-              </div>
-              <div class="personal-status-item">
-                <span class="info-label">默认后端</span>
-                <div class="personal-backend-val">
-                  <span class="info-val">{{ defaultBackendSummary?.name || '未配置' }}</span>
-                  <el-tag v-if="defaultBackendSummary" size="small" effect="plain" type="info">
-                    {{ defaultBackendSummary.type }}
-                  </el-tag>
-                </div>
-              </div>
-              <div class="personal-status-item">
-                <span class="info-label">版本</span>
-                <span class="info-val mono">{{ status.version || '--' }}</span>
-              </div>
-              <div class="personal-status-item">
-                <span class="info-label">运行时长</span>
-                <span class="info-val">{{ status.uptime || '--' }}</span>
-              </div>
-            </div>
-
-            <el-divider style="margin: 8px 0" />
-
-            <div class="info-row section-title-row">
-              <span class="section-label">系统代理</span>
-              <el-switch
-                v-model="proxyStatus.enabled"
-                :loading="proxyToggling"
-                @change="toggleSystemProxy"
-                size="small"
-              />
-            </div>
-            <div class="info-row" v-if="proxyStatus.enabled">
-              <span class="info-label">PAC 代理</span>
-              <el-tag :type="proxyStatus.pac_enabled ? 'success' : 'info'" size="small" effect="plain">
-                {{ proxyStatus.pac_enabled ? '已启用' : '未启用' }}
-              </el-tag>
-            </div>
-            <div class="info-row" v-if="proxyStatus.pac_domains?.length">
-              <span class="info-label">代理域名</span>
-              <span class="info-val">{{ proxyStatus.pac_domains.length }} 个</span>
-            </div>
-
-            <el-divider style="margin: 8px 0" />
-
-            <div class="info-row section-title-row">
-              <span class="section-label">Host 代理</span>
-              <el-switch
-                v-model="hostProxy.enabled"
-                :loading="hostProxyToggling"
-                @change="toggleHostProxy"
-                size="small"
-              />
-            </div>
-            <template v-if="hostProxy.enabled">
-              <div class="info-row">
-                <span class="info-label">HTTP 端口</span>
-                <span class="info-val mono">{{ hostProxy.http_port }}</span>
-              </div>
-              <div class="info-row">
-                <span class="info-label">HTTPS 端口</span>
-                <span class="info-val mono">{{ hostProxy.https_port }}</span>
-              </div>
-            </template>
-            <div class="info-row" v-if="hostProxy.domains">
-              <span class="info-label">代理域名</span>
-              <span class="info-val">{{ Object.keys(hostProxy.domains || {}).length }} 个</span>
-            </div>
-          </div>
-        </el-card>
-
-        <el-card class="info-card access-card">
-          <ApiAccessPanel :base-url="baseUrl" />
-          <div class="hero-actions">
-            <el-button @click="$router.push('/backends')">配置模型</el-button>
-            <el-button type="primary" plain @click="$router.push('/chat')">开始对话</el-button>
-          </div>
-        </el-card>
-      </div>
-
-      <div class="personal-config-layout">
-        <el-card class="info-card config-card">
-          <template #header>
-            <div class="card-head">
-              <el-icon class="card-icon backend-color"><DataBoard /></el-icon>
-              <span>后端配置</span>
-              <span class="card-badge">{{ backends.length }} 个</span>
-            </div>
-          </template>
-          <DashboardBackendList
-            ref="backendListRef"
-            :backends="backends"
-            @backend-updated="patchBackend"
-            @refresh="loadBackendsOnly"
-          />
-        </el-card>
-
-        <el-card class="info-card config-card">
-          <template #header>
-            <div class="card-head">
-              <el-icon class="card-icon pipeline-color"><Share /></el-icon>
-              <span>流水线配置</span>
-            </div>
-          </template>
-          <HomePipelineCard ref="pipelinePanelRef" />
-        </el-card>
-      </div>
-    </template>
-
-    <!-- 团队版四栏布局 -->
-    <div v-if="isTeam" class="grid-layout">
+    <!-- 主区：后端 / 流水线 / 状态 / 接入 —— 由 layout + sections 控制 -->
+    <div class="dash-main" :class="'dash-main--' + sections.layout">
       <!-- 服务状态 -->
-      <el-card class="info-card">
+      <el-card v-if="sections.serviceStatus" class="info-card dash-card dash-card--status">
         <template #header>
           <div class="card-head">
             <el-icon class="card-icon service-color"><Monitor /></el-icon>
@@ -214,8 +25,7 @@
           </div>
         </template>
         <div class="info-rows">
-          <!-- 个人版：运行状态 + 默认后端 + 版本信息（合并原底部状态栏） -->
-          <template v-if="isPersonal">
+          <template v-if="sections.serviceStatusCompact">
             <div class="personal-status-grid">
               <div class="personal-status-item">
                 <span class="info-label">运行状态</span>
@@ -242,7 +52,6 @@
               </div>
             </div>
           </template>
-
           <template v-else>
             <div class="info-row">
               <span class="info-label">运行状态</span>
@@ -252,9 +61,8 @@
             </div>
           </template>
 
-          <!-- 团队版：外部地址与多协议接入 -->
-          <template v-if="isTeam && (status.external_url || status.status === 'healthy')">
-            <div class="info-row" v-if="status.external_url">
+          <template v-if="sections.teamAccessInStatus && (status.external_url || status.status === 'healthy')">
+            <div v-if="status.external_url" class="info-row">
               <span class="info-label">外部地址</span>
               <div class="external-url-row">
                 <span class="info-val mono external-url-text">{{ status.external_url }}</span>
@@ -265,11 +73,7 @@
             </div>
             <el-divider style="margin: 8px 0" />
             <div class="section-label" style="margin-bottom: 6px;">客户端接入地址</div>
-            <div
-              v-for="ep in apiEndpoints"
-              :key="ep.path"
-              class="endpoint-row"
-            >
+            <div v-for="ep in apiEndpoints" :key="ep.path" class="endpoint-row">
               <el-tag size="small" :type="ep.tagType || undefined" class="endpoint-tag">{{ ep.label }}</el-tag>
               <span class="endpoint-url mono">{{ baseUrl }}{{ ep.path }}</span>
               <el-tooltip :content="'复制 ' + ep.label + ' 地址'" placement="top">
@@ -278,8 +82,7 @@
             </div>
           </template>
 
-          <!-- 团队版：插件与存储信息移动到服务状态列（客户端接入地址下方） -->
-          <template v-if="isTeam">
+          <template v-if="sections.pluginsStorage">
             <el-divider style="margin: 8px 0" />
             <div class="info-row section-title-row">
               <span class="section-label">插件详情列表</span>
@@ -312,11 +115,7 @@
               <div class="section-label info-section-head">数据库</div>
               <div class="info-row info-section-row">
                 <span class="info-label">驱动类型</span>
-                <el-tag
-                  :type="getDbDriverType(dashboard.database?.driver)"
-                  size="small"
-                  effect="light"
-                >
+                <el-tag :type="getDbDriverType(dashboard.database?.driver)" size="small" effect="light">
                   {{ formatDbDriver(dashboard.database?.driver) }}
                 </el-tag>
               </div>
@@ -360,58 +159,72 @@
             </div>
           </template>
 
-          <el-divider style="margin: 8px 0" />
-
-          <div class="info-row section-title-row">
-            <span class="section-label">系统代理</span>
-            <el-switch
-              v-model="proxyStatus.enabled"
-              :loading="proxyToggling"
-              @change="toggleSystemProxy"
-              size="small"
-            />
-          </div>
-          <div class="info-row" v-if="proxyStatus.enabled">
-            <span class="info-label">PAC 代理</span>
-            <el-tag :type="proxyStatus.pac_enabled ? 'success' : 'info'" size="small" effect="plain">
-              {{ proxyStatus.pac_enabled ? '已启用' : '未启用' }}
-            </el-tag>
-          </div>
-          <div class="info-row" v-if="proxyStatus.pac_domains?.length">
-            <span class="info-label">代理域名</span>
-            <span class="info-val">{{ proxyStatus.pac_domains.length }} 个</span>
-          </div>
-
-          <el-divider style="margin: 8px 0" />
-
-          <div class="info-row section-title-row">
-            <span class="section-label">Host 代理</span>
-            <el-switch
-              v-model="hostProxy.enabled"
-              :loading="hostProxyToggling"
-              @change="toggleHostProxy"
-              size="small"
-            />
-          </div>
-          <template v-if="hostProxy.enabled">
-            <div class="info-row">
-              <span class="info-label">HTTP 端口</span>
-              <span class="info-val mono">{{ hostProxy.http_port }}</span>
+          <template v-if="sections.proxyControls">
+            <el-divider style="margin: 8px 0" />
+            <div class="info-row section-title-row">
+              <span class="section-label">系统代理</span>
+              <el-switch
+                v-model="proxyStatus.enabled"
+                :loading="proxyToggling"
+                size="small"
+                @change="toggleSystemProxy"
+              />
             </div>
-            <div class="info-row">
-              <span class="info-label">HTTPS 端口</span>
-              <span class="info-val mono">{{ hostProxy.https_port }}</span>
+            <div v-if="proxyStatus.enabled" class="info-row">
+              <span class="info-label">PAC 代理</span>
+              <el-tag :type="proxyStatus.pac_enabled ? 'success' : 'info'" size="small" effect="plain">
+                {{ proxyStatus.pac_enabled ? '已启用' : '未启用' }}
+              </el-tag>
+            </div>
+            <div v-if="proxyStatus.pac_domains?.length" class="info-row">
+              <span class="info-label">代理域名</span>
+              <span class="info-val">{{ proxyStatus.pac_domains.length }} 个</span>
+            </div>
+
+            <el-divider style="margin: 8px 0" />
+            <div class="info-row section-title-row">
+              <span class="section-label">Host 代理</span>
+              <el-switch
+                v-model="hostProxy.enabled"
+                :loading="hostProxyToggling"
+                size="small"
+                @change="toggleHostProxy"
+              />
+            </div>
+            <template v-if="hostProxy.enabled">
+              <div class="info-row">
+                <span class="info-label">HTTP 端口</span>
+                <span class="info-val mono">{{ hostProxy.http_port }}</span>
+              </div>
+              <div class="info-row">
+                <span class="info-label">HTTPS 端口</span>
+                <span class="info-val mono">{{ hostProxy.https_port }}</span>
+              </div>
+            </template>
+            <div v-if="hostProxy.domains" class="info-row">
+              <span class="info-label">代理域名</span>
+              <span class="info-val">{{ Object.keys(hostProxy.domains || {}).length }} 个</span>
             </div>
           </template>
-          <div class="info-row" v-if="hostProxy.domains">
-            <span class="info-label">代理域名</span>
-            <span class="info-val">{{ Object.keys(hostProxy.domains || {}).length }} 个</span>
-          </div>
         </div>
       </el-card>
 
-      <!-- 后端配置 -->
-      <el-card class="info-card config-card">
+      <!-- API 接入 -->
+      <el-card
+        v-if="sections.accessPanel"
+        class="info-card access-card dash-card dash-card--access"
+        :class="{ 'access-card--compact': sections.accessCompact }"
+        :shadow="sections.accessCompact ? 'never' : undefined"
+      >
+        <ApiAccessPanel :base-url="baseUrl" :compact="sections.accessCompact" />
+        <div v-if="sections.accessQuickLinks" class="hero-actions">
+          <el-button @click="$router.push('/backends')">配置模型</el-button>
+          <el-button type="primary" plain @click="$router.push('/chat')">开始对话</el-button>
+        </div>
+      </el-card>
+
+      <!-- 后端 -->
+      <el-card v-if="sections.backends" class="info-card config-card dash-card dash-card--backends">
         <template #header>
           <div class="card-head">
             <el-icon class="card-icon backend-color"><DataBoard /></el-icon>
@@ -427,27 +240,60 @@
         />
       </el-card>
 
-      <!-- 流水线配置（与后端配置交换位置） -->
-      <el-card class="info-card config-card">
+      <!-- 流水线 -->
+      <el-card v-if="sections.pipelines" class="info-card config-card dash-card dash-card--pipelines">
         <template #header>
-          <div class="card-head">
-            <el-icon class="card-icon pipeline-color"><Share /></el-icon>
-            <span>流水线配置</span>
+          <div class="card-head" :class="{ 'card-head--actions': sections.pipelineCreateButton }">
+            <div class="card-head-main">
+              <el-icon class="card-icon pipeline-color"><Share /></el-icon>
+              <span>流水线配置</span>
+              <span v-if="sections.pipelineCreateButton" class="card-badge">{{ pipelineCount }} 个</span>
+            </div>
+            <el-button
+              v-if="sections.pipelineCreateButton"
+              type="primary"
+              size="small"
+              @click="pipelinePanelRef?.openCreate()"
+            >
+              + 创建流水线
+            </el-button>
           </div>
         </template>
-        <HomePipelineCard ref="pipelinePanelRef" />
+        <HomePipelineCard
+          ref="pipelinePanelRef"
+          @update:count="pipelineCount = $event"
+          @test="openPipelineChat"
+        />
       </el-card>
     </div>
 
-    <!-- 统计指标（两行） -->
-    <el-card v-if="isTeam" class="info-card mt-card stats-card">
+    <!-- 用量与会话 / 计费（三版可开） -->
+    <el-card v-if="sections.usageBilling" class="info-card usage-card mt-card">
+      <el-collapse v-model="usageCollapse" class="usage-collapse">
+        <el-collapse-item name="usage">
+          <template #title>
+            <div class="card-head usage-collapse-title">
+              <el-icon class="card-icon service-color"><TrendCharts /></el-icon>
+              <span>用量与会话</span>
+              <span v-if="sections.usageEphemeralHint" class="card-badge">进程内 · 重启清零</span>
+            </div>
+          </template>
+          <MinimalUsagePanel
+            ref="usagePanelRef"
+            :hint="usageHint"
+          />
+        </el-collapse-item>
+      </el-collapse>
+    </el-card>
+
+    <!-- 团队运维统计 -->
+    <el-card v-if="sections.opsStats" class="info-card mt-card stats-card">
       <template #header>
         <div class="card-head">
           <el-icon class="card-icon stats-color"><DataAnalysis /></el-icon>
           <span>运行统计</span>
         </div>
       </template>
-      <!-- 第一行：请求类指标 -->
       <div class="stats-grid">
         <div class="stat-cell">
           <div class="stat-icon-wrap request-bg"><el-icon :size="18"><Document /></el-icon></div>
@@ -481,7 +327,6 @@
         </div>
       </div>
       <el-divider style="margin: 10px 0" />
-      <!-- 第二行：缓存类指标 -->
       <div class="stats-grid">
         <div class="stat-cell">
           <div class="stat-icon-wrap hit-bg"><el-icon :size="18"><CircleCheck /></el-icon></div>
@@ -506,8 +351,7 @@
       </div>
     </el-card>
 
-    <!-- 模型统计 -->
-    <el-card class="info-card mt-card" v-if="isTeam && modelStatsList.length">
+    <el-card v-if="sections.opsStats && modelStatsList.length" class="info-card mt-card">
       <template #header>
         <div class="card-head">
           <el-icon class="card-icon stats-color"><Cpu /></el-icon>
@@ -532,21 +376,14 @@
             <span class="stat-num-sm">{{ row.avg_latency_ms }}ms</span>
           </template>
         </el-table-column>
-        <el-table-column prop="cache_hit_rate_percent" label="缓存命中率" align="center" width="110">
+        <el-table-column label="缓存命中" align="center" width="100">
           <template #default="{ row }">
-            <el-progress 
-              :percentage="row.cache_hit_rate_percent || 0" 
-              :color="row.cache_hit_rate_percent > 50 ? '#67c23a' : row.cache_hit_rate_percent > 20 ? '#e6a23c' : '#f56c6c'"
-              :stroke-width="6"
-              style="width: 80px"
-            />
+            <span class="stat-num-sm">{{ formatNumber(row.cache_hits) }}</span>
           </template>
         </el-table-column>
-        <el-table-column prop="error_requests" label="错误数" align="center" width="80">
+        <el-table-column label="命中率" align="center" width="80">
           <template #default="{ row }">
-            <span :class="row.error_requests > 0 ? 'text-danger' : 'text-success'">
-              {{ row.error_requests }}
-            </span>
+            {{ row.cache_hit_rate_percent?.toFixed(1) }}%
           </template>
         </el-table-column>
         <el-table-column label="错误率" align="center" width="80">
@@ -557,8 +394,7 @@
       </el-table>
     </el-card>
 
-    <!-- 趋势图表 -->
-    <el-card v-if="isTeam" class="info-card mt-card">
+    <el-card v-if="sections.opsStats" class="info-card mt-card">
       <template #header>
         <div class="card-head">
           <el-icon class="card-icon chart-color"><TrendCharts /></el-icon>
@@ -573,15 +409,12 @@
       <v-chart :option="chartOption" :autoresize="true" style="height: 280px" />
     </el-card>
 
-    <!-- 实时请求日志 -->
-    <el-card v-if="isTeam" class="info-card mt-card">
+    <el-card v-if="sections.opsStats" class="info-card mt-card">
       <template #header>
         <div class="card-head">
           <el-icon class="card-icon log-color"><List /></el-icon>
           <span>实时请求</span>
-          <el-button size="small" text @click="requestLogs = []" style="margin-left: auto;">
-            清空
-          </el-button>
+          <el-button size="small" text style="margin-left: auto;" @click="requestLogs = []">清空</el-button>
         </div>
       </template>
       <el-table :data="requestLogs" size="small" max-height="240" style="width: 100%">
@@ -597,9 +430,7 @@
         </el-table-column>
         <el-table-column prop="status" label="状态" width="70" align="center">
           <template #default="{ row }">
-            <el-tag :type="row.status === 200 ? 'success' : 'danger'" size="small">
-              {{ row.status }}
-            </el-tag>
+            <el-tag :type="row.status === 200 ? 'success' : 'danger'" size="small">{{ row.status }}</el-tag>
           </template>
         </el-table-column>
         <el-table-column prop="cacheStatus" label="缓存" width="90" align="center">
@@ -623,6 +454,12 @@
       </el-table>
     </el-card>
 
+    <SecuritySettingsDialog v-if="sections.headerActions" v-model="securityDialogVisible" />
+    <MinimalChat
+      v-if="sections.liteChatDrawer"
+      v-model="chatDialogVisible"
+      :initial-pipeline-id="chatPipelineId"
+    />
   </div>
 </template>
 
@@ -642,6 +479,7 @@ import { GridComponent, TooltipComponent, LegendComponent } from 'echarts/compon
 import { getDashboard, getStatus, getBackends, getStorages, getPlugins, api } from '@/api'
 import { useEdition } from '@/composables/useEdition'
 import { syncEditionFromStatus } from '@/utils/edition'
+import { getDashboardSections } from '@/utils/dashboard-sections'
 import { API_ENDPOINTS, resolveApiBaseUrl } from '@/utils/apiBaseUrl'
 import ApiAccessPanel from '@/components/dashboard/ApiAccessPanel.vue'
 import SecuritySettingsDialog from '@/components/dashboard/SecuritySettingsDialog.vue'
@@ -656,11 +494,22 @@ import { useAuthStore } from '@/stores/auth'
 
 const router = useRouter()
 const authStore = useAuthStore()
-const { isPersonal, isMinimal, isTeam } = useEdition()
+const { edition, isPersonal } = useEdition()
+const sections = computed(() => getDashboardSections(edition.value))
+const rootClass = computed(() => ({
+  'dashboard--personal': sections.value.layout === 'personal' || sections.value.layout === 'lite',
+  'dashboard--lite': sections.value.layout === 'lite',
+  'dashboard--team': sections.value.layout === 'team'
+}))
 const pageDescription = computed(() => {
-  if (isPersonal.value) return '你的本地大模型代理入口：配置默认流水线与后端，复制 API 地址即可在客户端中使用'
+  if (isPersonal.value) return '配置后端与默认流水线，复制 API 地址即可在客户端使用'
   return 'Centag 服务运行状态与基础配置总览'
 })
+const usageHint = computed(() =>
+  sections.value.usageEphemeralHint
+    ? '本次进程内计量与成本估算（重启后清零）。'
+    : '计量与成本估算（按当前服务存储策略保留）。'
+)
 const pipelinePanelRef = ref<{ reload: () => void; openCreate: () => void } | null>(null)
 const backendListRef = ref<{ openCreate: () => void; reloadDefault: () => void } | null>(null)
 const usagePanelRef = ref<{ reload: () => void } | null>(null)
@@ -991,7 +840,8 @@ async function load() {
   loading.value = true
   const gen = ++backendsLoadGen
   try {
-    if (isMinimal.value) {
+    const sec = sections.value
+    if (!sec.opsStats && !sec.serviceStatus && !sec.proxyControls) {
       const [statusRes, backendsRes] = await Promise.allSettled([
         getStatus(),
         getBackends()
@@ -1007,15 +857,16 @@ async function load() {
       return
     }
 
-    const [dashRes, statusRes, backendsRes, storagesRes, pluginsRes, proxyRes, hostProxyRes] = await Promise.allSettled([
-      getDashboard(),
+    const tasks: Promise<any>[] = [
+      sec.opsStats ? getDashboard() : Promise.resolve(null),
       getStatus(),
       getBackends(),
-      getStorages(),
-      getPlugins(),
-      api.get('/api/v1/proxy/status'),
-      api.get('/api/v1/host-proxy/status')
-    ])
+      sec.pluginsStorage ? getStorages() : Promise.resolve(null),
+      sec.pluginsStorage ? getPlugins() : Promise.resolve(null),
+      sec.proxyControls ? api.get('/api/v1/proxy/status') : Promise.resolve(null),
+      sec.proxyControls ? api.get('/api/v1/host-proxy/status') : Promise.resolve(null)
+    ]
+    const [dashRes, statusRes, backendsRes, storagesRes, pluginsRes, proxyRes, hostProxyRes] = await Promise.allSettled(tasks)
 
     if (dashRes.status === 'fulfilled' && dashRes.value) {
       dashboard.value = dashRes.value
@@ -1130,37 +981,47 @@ onUnmounted(() => { if (timer) clearInterval(timer) })
   margin-bottom: 6px;
 }
 
-/* 团队版四列；个人版两列铺满 */
-.grid-layout {
+/* 主区布局：由 sections.layout 决定 */
+.dash-main {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
   gap: 16px;
 }
 
-.lite-home {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.lite-row--config {
-  display: grid;
+.dash-main--lite {
   grid-template-columns: 1fr 1fr;
-  gap: 16px;
-  align-items: stretch;
+  grid-template-areas:
+    "access access"
+    "backends pipelines";
 }
 
-.personal-top-layout {
-  display: grid;
+.dash-main--personal {
   grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
-  gap: 16px;
-  margin-bottom: 16px;
+  grid-template-areas:
+    "status access"
+    "backends pipelines";
 }
 
-.personal-config-layout {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
+.dash-main--team {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-areas: "status backends pipelines";
+}
+
+.dash-card--status { grid-area: status; }
+.dash-card--access { grid-area: access; }
+.dash-card--backends { grid-area: backends; }
+.dash-card--pipelines { grid-area: pipelines; }
+
+@media (max-width: 960px) {
+  .dash-main--lite,
+  .dash-main--personal,
+  .dash-main--team {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "status"
+      "access"
+      "backends"
+      "pipelines";
+  }
 }
 
 .card-head--actions {

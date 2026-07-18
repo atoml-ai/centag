@@ -1,7 +1,10 @@
 <template>
   <div class="billing-rules-page">
-    <el-result icon="info" title="计费规则"
-      sub-title="minimal 版请在概览「用量与会话」中打开计费规则对话框。团队版可继续使用本页。">
+    <el-result
+      icon="info"
+      title="计费规则"
+      sub-title="也可在概览「用量与会话」面板中打开。导入导出 YAML 默认 USD。"
+    >
       <template #extra>
         <el-button type="primary" @click="open = true">打开计费规则</el-button>
       </template>
