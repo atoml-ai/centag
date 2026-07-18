@@ -1,0 +1,42 @@
+version: '1.0'
+nodes:
+- id: scheduler
+  type: scheduler
+  kind: scheduling.decide
+  implementation: builtin.scheduler
+  name: 智能调度
+  timeout: 15
+  config:
+    custom_config:
+      strategy: balance
+- id: generator
+  type: generator
+  kind: llm.generate
+  implementation: builtin.generator
+  name: 调度生成
+  backend: "{{system.default_backend}}"
+  model: "{{system.default_model}}"
+  config:
+    backend: "{{system.default_backend}}"
+    model: "{{system.default_model}}"
+    template_vars:
+      backend: "system.default_backend"
+      model: "system.default_model"
+  timeout: 120
+  depends_on:
+  - scheduler
+schema_version: centag.pipeline/v1alpha1
+id: smart-scheduling
+name: 智能调度
+shortcut_code: '#s'
+global_config:
+  timeout: 180
+  max_retries: 2
+  bypass_on_error: true
+  parallel_limit: 4
+  log_level: info
+description: 通过 builtin.scheduler 节点进行意图分类与多维评分，自动选择最优 backend/model 后生成回答
+metadata:
+  aligned_proxy_mode: smart-scheduling
+  lastUpdated: '2026-06-12T00:00:00.000Z'
+  layoutVersion: '1.2'
