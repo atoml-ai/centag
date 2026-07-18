@@ -13,13 +13,14 @@ export function canSeeNavItem(item: NavItem, ctx: NavVisibilityContext): boolean
   return true
 }
 
-/** Filter a nav tree by admin role and edition. */
+/** Filter a nav tree by admin role and edition（递归保留嵌套分组）. */
 export function filterNavMenu(menu: NavItem[], ctx: NavVisibilityContext): NavItem[] {
   return menu
     .filter((item) => canSeeNavItem(item, ctx))
-    .map((item) => ({
-      ...item,
-      children: item.children ? item.children.filter((child) => canSeeNavItem(child, ctx)) : undefined
-    }))
+    .map((item) => {
+      if (!item.children?.length) return { ...item }
+      const children = filterNavMenu(item.children, ctx)
+      return { ...item, children }
+    })
     .filter((item) => !item.children || item.children.length > 0)
 }
