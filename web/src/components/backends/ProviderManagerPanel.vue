@@ -48,83 +48,98 @@
       </div>
     </div>
 
-    <div class="backend-list">
+    <div class="backend-grid">
       <div
         v-for="b in backends"
         :key="b.id"
-        class="backend-item"
+        class="backend-card"
         :class="{ 'is-default': defaultBackendId === b.id, selected: selectedIds.includes(b.id) }"
       >
-        <div class="backend-left">
-          <el-checkbox
-            v-if="canWrite"
-            :model-value="selectedIds.includes(b.id)"
-            class="row-checkbox"
-            @change="(checked) => toggleSelect(b.id, !!checked)"
-            @click.stop
-          />
-          <span
-            class="health-dot"
-            :class="healthStatusClass(b.id)"
-            :title="healthStatusText(b.id)"
-          />
+        <div class="backend-card-head">
+          <div class="backend-card-title">
+            <el-checkbox
+              v-if="canWrite"
+              :model-value="selectedIds.includes(b.id)"
+              class="row-checkbox"
+              @change="(checked) => toggleSelect(b.id, !!checked)"
+              @click.stop
+            />
+            <span
+              class="health-dot"
+              :class="healthStatusClass(b.id)"
+              :title="healthStatusText(b.id)"
+            />
+            <div class="backend-info">
+              <div class="backend-name">
+                {{ b.name }}
+                <el-tag
+                  v-if="defaultBackendId === b.id"
+                  type="success"
+                  size="small"
+                  effect="light"
+                  class="default-tag"
+                >
+                  默认
+                </el-tag>
+              </div>
+              <div class="backend-meta">{{ b.type }} · {{ b.base_url || '默认端点' }}</div>
+            </div>
+          </div>
           <el-switch
             :model-value="b.enabled"
             :loading="togglingMap[b.id]"
             :disabled="!canWrite"
             active-color="#10b981"
             size="small"
-            class="backend-enabled-switch"
             @change="(enabled) => handleToggle(b, enabled)"
           />
-          <div class="backend-info">
-            <div class="backend-name">
-              {{ b.name }}
-              <el-tag v-if="defaultBackendId === b.id" type="success" size="small" effect="light" class="default-tag">
-                默认
-              </el-tag>
-            </div>
-            <div class="backend-meta">{{ b.type }} · {{ b.base_url || '默认端点' }}</div>
-            <div class="backend-default-model" v-if="b.probe_model || b.default_model">
-              默认模型：<span class="model-name">{{ b.default_model || b.probe_model }}</span>
-            </div>
+        </div>
+
+        <div class="backend-card-body">
+          <div v-if="b.probe_model || b.default_model" class="backend-default-model">
+            默认模型：<span class="model-name">{{ b.default_model || b.probe_model }}</span>
+          </div>
+          <div class="backend-stats">
+            <span>权重 {{ b.weight ?? 1 }}</span>
+            <span v-if="b.supported_models?.length">{{ b.supported_models.length }} 模型</span>
           </div>
         </div>
-        <div class="backend-right">
-          <span class="backend-weight">权重 {{ b.weight ?? 1 }}</span>
-          <span class="backend-models" v-if="b.supported_models?.length">
-            {{ b.supported_models.length }} 模型
-          </span>
-          <div v-if="canWrite" class="backend-actions">
-            <el-button size="small" :loading="!!probingMap[b.id]" @click="probeOne(b.id)">
-              探测
+
+        <div v-if="canWrite" class="backend-actions">
+          <el-button
+            size="small"
+            :type="defaultBackendId === b.id ? 'success' : 'default'"
+            :plain="defaultBackendId !== b.id"
+            :disabled="defaultBackendId === b.id || settingDefaultMap[b.id]"
+            :loading="settingDefaultMap[b.id]"
+            @click="handleSetDefault(b)"
+          >
+            {{ defaultBackendId === b.id ? '当前默认' : '设为默认' }}
+          </el-button>
+          <el-dropdown
+            trigger="click"
+            @command="(cmd: string) => handleCardAction(cmd, b)"
+          >
+            <el-button size="small">
+              操作
+              <el-icon class="el-icon--right"><ArrowDown /></el-icon>
             </el-button>
-            <el-button size="small" :loading="testingMap[b.id]" @click="handleTest(b)">
-              测试
-            </el-button>
-            <el-button
-              size="small"
-              :type="defaultBackendId === b.id ? 'success' : 'default'"
-              :plain="defaultBackendId !== b.id"
-              :disabled="defaultBackendId === b.id || settingDefaultMap[b.id]"
-              :loading="settingDefaultMap[b.id]"
-              @click="handleSetDefault(b)"
-            >
-              {{ defaultBackendId === b.id ? '当前默认' : '设为默认' }}
-            </el-button>
-            <el-button size="small" type="primary" plain @click="handleEdit(b)">
-              编辑
-            </el-button>
-            <el-button
-              size="small"
-              type="danger"
-              plain
-              :disabled="defaultBackendId === b.id"
-              @click="handleDelete(b)"
-            >
-              删除
-            </el-button>
-          </div>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item command="test" :disabled="!!testingMap[b.id]">
+                  测试
+                </el-dropdown-item>
+                <el-dropdown-item command="edit">编辑</el-dropdown-item>
+                <el-dropdown-item
+                  command="delete"
+                  divided
+                  :disabled="defaultBackendId === b.id"
+                >
+                  删除
+                </el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
         </div>
       </div>
       <div v-if="!backends.length" class="empty-tip">
@@ -150,6 +165,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, watch } from 'vue'
+import { ArrowDown } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import * as yaml from 'js-yaml'
 import BackendEditorDialog from '@/components/backends/BackendEditorDialog.vue'
@@ -409,6 +425,20 @@ async function handleTest(backend: any) {
   }
 }
 
+function handleCardAction(command: string, backend: any) {
+  switch (command) {
+    case 'test':
+      void handleTest(backend)
+      break
+    case 'edit':
+      handleEdit(backend)
+      break
+    case 'delete':
+      void handleDelete(backend)
+      break
+  }
+}
+
 function handleEdit(backend: any) {
   editorRef.value?.openEdit(backend)
 }
@@ -635,40 +665,58 @@ defineExpose({ openCreate, reloadDefault })
   color: #6b7280;
 }
 
-.backend-list {
+.backend-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+  width: 100%;
+}
+
+.backend-card {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  width: 100%;
-  max-height: none;
-  overflow-y: auto;
-}
-
-.backend-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  width: 100%;
-  padding: 10px 12px;
+  min-height: 160px;
+  padding: 14px;
   background: #f9fafb;
-  border-radius: 6px;
-  border: 1px solid #f3f4f6;
-  transition: all 0.2s;
+  border-radius: 10px;
+  border: 1px solid #eef0f3;
+  transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
 }
 
-.backend-item.is-default {
+.backend-card:hover {
+  border-color: #dbe3f0;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
+}
+
+.backend-card.is-default {
   background: #f0f9eb;
   border-color: #b3e19d;
 }
 
-.backend-item.selected {
+.backend-card.selected {
   border-color: #93c5fd;
   background: #eff6ff;
 }
 
+.backend-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.backend-card-title {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+
 .row-checkbox {
   flex-shrink: 0;
+  margin-top: 2px;
 }
 
 .health-dot {
@@ -676,6 +724,7 @@ defineExpose({ openCreate, reloadDefault })
   height: 8px;
   border-radius: 50%;
   flex-shrink: 0;
+  margin-top: 6px;
   background: #d1d5db;
 }
 .health-dot.healthy {
@@ -702,40 +751,39 @@ defineExpose({ openCreate, reloadDefault })
   margin-left: 6px;
 }
 
-.backend-left {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex: 1;
-  min-width: 0;
-}
-
 .backend-info {
-  flex: 1;
   min-width: 0;
+  flex: 1;
 }
 
 .backend-name {
-  font-size: 0.875rem;
-  font-weight: 500;
+  font-size: 0.9rem;
+  font-weight: 600;
   color: #111827;
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
+  gap: 2px;
+  line-height: 1.3;
 }
 
 .backend-meta {
   font-size: 0.75rem;
   color: #9ca3af;
-  margin-top: 2px;
+  margin-top: 4px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+.backend-card-body {
+  flex: 1;
+  min-height: 0;
+}
+
 .backend-default-model {
   font-size: 0.75rem;
   color: #6b7280;
-  margin-top: 4px;
 }
 
 .backend-default-model .model-name {
@@ -743,16 +791,11 @@ defineExpose({ openCreate, reloadDefault })
   font-weight: 500;
 }
 
-.backend-right {
+.backend-stats {
   display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 4px;
-  flex-shrink: 0;
-}
-
-.backend-weight,
-.backend-models {
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 8px;
   font-size: 0.75rem;
   color: #9ca3af;
 }
@@ -760,15 +803,18 @@ defineExpose({ openCreate, reloadDefault })
 .backend-actions {
   display: flex;
   flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 6px;
-  margin-top: 2px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(15, 23, 42, 0.06);
 }
 
 .empty-tip {
+  grid-column: 1 / -1;
   text-align: center;
   color: #9ca3af;
   font-size: 0.8rem;
-  padding: 16px 0;
+  padding: 24px 0;
 }
 </style>
