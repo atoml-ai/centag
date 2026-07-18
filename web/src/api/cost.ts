@@ -11,6 +11,8 @@ export interface CostSummary {
   total_cost_usd: number
   total_tokens: number
   cache_saved_usd: number
+  currency?: string
+  usd_to_cny?: number
   groups: CostGroup[]
   from: string
   to: string

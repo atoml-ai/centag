@@ -30,6 +30,7 @@ const RequestTrace = () => import('@/views/RequestTrace.vue')
 const TokenUsage = () => import('@/views/TokenUsage.vue')
 const Conversations = () => import('@/views/Conversations.vue')
 const CostDashboard = () => import('@/views/CostDashboard.vue')
+const BillingRules = () => import('@/views/BillingRules.vue')
 const AbComparison = () => import('@/views/AbComparison.vue')
 const Memory = () => import('@/views/Memory.vue')
 const ProxyModes = () => import('@/views/ProxyModes.vue')
@@ -155,10 +156,16 @@ const routes = [
   },
 
   {
+    path: '/billing',
+    name: 'BillingRules',
+    component: BillingRules,
+    meta: { title: '计费规则' }
+  },
+  {
     path: '/cost',
     name: 'CostDashboard',
     component: CostDashboard,
-    meta: { title: '成本看板', requiresAdmin: true }
+    meta: { title: '成本看板' }
   },
   {
     path: '/ab-comparison',

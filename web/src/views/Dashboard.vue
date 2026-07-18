@@ -650,6 +650,7 @@ import DashboardBackendList from '@/components/dashboard/DashboardBackendList.vu
 import MinimalChat from '@/views/MinimalChat.vue'
 import MinimalUsagePanel from '@/components/dashboard/MinimalUsagePanel.vue'
 import { mergeBackendUpdate } from '@/utils/backendTest'
+import { getPipelineDefaults } from '@/api/pipeline'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 
@@ -670,8 +671,18 @@ const chatPipelineId = ref('')
 /** 用量与会话默认折叠 */
 const usageCollapse = ref<string[]>([])
 
-function openPipelineChat(pipelineId = '') {
-  chatPipelineId.value = pipelineId
+async function openPipelineChat(pipelineId = '') {
+  let id = (pipelineId || '').trim()
+  if (!id) {
+    try {
+      const res: any = await getPipelineDefaults()
+      const data = res?.data ?? res
+      id = String(data?.default_pipeline_id || '').trim()
+    } catch {
+      id = ''
+    }
+  }
+  chatPipelineId.value = id
   chatDialogVisible.value = true
 }
 
