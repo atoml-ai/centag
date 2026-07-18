@@ -2,25 +2,32 @@
 # =============================================================
 # Centag fnOS (.fpk) 统一打包脚本
 #
-# 支持 Docker 和 Native 两种模式:
+# 发行版（默认 minimal；personal 对应 dist/gateway）:
+#   ./deploy/fnos/build-fpk.sh --mode native --edition minimal
+#   ./deploy/fnos/build-fpk.sh --mode native --edition personal --arch amd64
+#   ./deploy/fnos/build-fpk.sh --mode native --edition team --arch amd64
 #
-#   Docker 模式：
-#     ./deploy/fnos/build-fpk.sh --mode docker             # Docker 打包
-#     ./deploy/fnos/build-fpk.sh --mode docker --arch amd64              # Docker 打包 amd64
-#     ./deploy/fnos/build-fpk.sh --mode docker --arch arm64              # Docker 打包 arm64
-#     ./deploy/fnos/build-fpk.sh --mode docker --arch arm64 --image-prefix ghcr.io/marmotcai/  # 指定镜像前缀
-#     ./deploy/fnos/build-fpk.sh --mode docker --install   # 打包并安装
+# 管理员密码（优先顺序）:
+#   1) --admin-password
+#   2) 环境变量 PACKAGE_ADMIN_PASSWORD
+#   3) config/secrets/.env 的 LLM_PROXY_ADMIN_PASSWORD
+#   写入包内 config/runtime.env，由 native/cmd/main 启动时加载
 #
-#   Native 模式：
-#     ./deploy/fnos/build-fpk.sh --mode native                          # native 打包
-#     ./deploy/fnos/build-fpk.sh --mode native --arch amd64              # 交叉编译 amd64
-#     ./deploy/fnos/build-fpk.sh --mode native --arch arm64              # 交叉编译 arm64
-#     ./deploy/fnos/build-fpk.sh --mode native --skip-build              # 跳过构建，使用已有二进制
-#     ./deploy/fnos/build-fpk.sh --mode native --skip-build --install    # 跳过构建 + 安装
+# Docker 模式：
+#   ./deploy/fnos/build-fpk.sh --mode docker --arch amd64
+#   ./deploy/fnos/build-fpk.sh --mode docker --arch arm64 --image-prefix ghcr.io/marmotcai/
+#
+# Native 模式：
+#   ./deploy/fnos/build-fpk.sh --mode native --arch amd64
+#   ./deploy/fnos/build-fpk.sh --mode native --skip-build
+#   ./deploy/fnos/build-fpk.sh --mode native --install
 #
 # 通用参数:
-#     --output DIR       指定输出目录（默认 dist/）
-#     --image-prefix P   镜像名前缀（如 ghcr.io/marmotcai/，为空则不加前缀）
+#     --edition E        minimal | personal | team（默认 packaging.env / minimal）
+#     --admin-password P 管理员密码（写入 runtime.env）
+#     --admin-username U 管理员用户名（默认 admin）
+#     --output DIR       指定输出目录（默认 bin/packages/）
+#     --image-prefix P   镜像名前缀
 #     --install          打包后自动安装到 fnOS
 #     --help             显示帮助
 # =============================================================
@@ -28,15 +35,171 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
-BUILD_DIR=$(mktemp -d /tmp/centag-fpk-XXXXXX)
-OUTPUT_DIR="${REPO_ROOT}/dist"
-IMAGE_PREFIX="ghcr.io/marmotcai/"
 
-# 模式参数
-MODE="docker"           # docker | native
-ARCH="$(uname -m)"      # 当前架构（默认）
+# 加载根目录第三方打包默认参数（可由环境变量 / CLI 覆盖）
+if [ -f "${REPO_ROOT}/packaging.env" ]; then
+  # shellcheck disable=SC1091
+  set -a
+  # shellcheck source=/dev/null
+  . "${REPO_ROOT}/packaging.env"
+  set +a
+fi
+
+BUILD_DIR=$(mktemp -d /tmp/centag-fpk-XXXXXX)
+OUTPUT_DIR="${PACKAGE_OUTPUT:-${REPO_ROOT}/bin/packages}"
+case "${OUTPUT_DIR}" in
+  /*) ;;
+  *) OUTPUT_DIR="${REPO_ROOT}/${OUTPUT_DIR}" ;;
+esac
+IMAGE_PREFIX="${IMAGE_PREFIX:-ghcr.io/marmotcai/}"
+
+# 模式参数（packaging.env 的 PACKAGE_* 作为默认值）
+MODE="${PACKAGE_MODE:-native}"           # docker | native
+ARCH="${PACKAGE_ARCH:-$(uname -m)}"      # 当前架构（默认）
+EDITION="${PACKAGE_EDITION:-minimal}"    # minimal | personal | team
 SKIP_BUILD=false
 INSTALL_AFTER=false
+ADMIN_PASSWORD_CLI=""
+ADMIN_USERNAME_CLI=""
+
+# macOS 无 md5sum，需兼容 md5 / openssl
+file_md5() {
+  local f="$1"
+  if command -v md5sum >/dev/null 2>&1; then
+    md5sum "$f" | awk '{print $1}'
+  elif command -v md5 >/dev/null 2>&1; then
+    md5 -q "$f"
+  elif command -v openssl >/dev/null 2>&1; then
+    openssl md5 -r "$f" | awk '{print $1}'
+  else
+    echo "[ERROR] 需要 md5sum、md5 或 openssl 以计算 manifest checksum" >&2
+    exit 1
+  fi
+}
+
+# 从 KEY=VALUE 文件读取值（不 source，避免特殊字符副作用）
+read_env_key() {
+  local file="$1"
+  local key="$2"
+  [ -f "$file" ] || return 1
+  local line
+  line="$(grep -E "^[[:space:]]*(export[[:space:]]+)?${key}=" "$file" 2>/dev/null | tail -1 || true)"
+  [ -n "$line" ] || return 1
+  line="${line#*=}"
+  line="${line%\"}"
+  line="${line#\"}"
+  line="${line%\'}"
+  line="${line#\'}"
+  printf '%s' "$line"
+}
+
+# personal → gateway dist；runtime edition 仍为 personal
+edition_to_dist() {
+  case "$1" in
+    personal|gateway) echo "gateway" ;;
+    minimal) echo "minimal" ;;
+    team) echo "team" ;;
+    *) echo "$1" ;;
+  esac
+}
+
+edition_to_runtime() {
+  case "$1" in
+    gateway) echo "personal" ;;
+    *) echo "$1" ;;
+  esac
+}
+
+edition_build_tags() {
+  case "$1" in
+    minimal)
+      echo "minimal,protocol_openai,protocol_anthropic,backend_openai,backend_ollama,backend_anthropic"
+      ;;
+    personal|gateway|team)
+      echo "protocol_openai,protocol_anthropic,protocol_gemini,protocol_openairesponses,backend_openai,backend_ollama,backend_anthropic,backend_gemini,backend_azure"
+      ;;
+    *)
+      echo "[ERROR] 未知发行版: $1（支持 minimal|personal|team）" >&2
+      exit 1
+      ;;
+  esac
+}
+
+resolve_admin_credentials() {
+  local secrets="${REPO_ROOT}/config/secrets/.env"
+  if [ -n "${ADMIN_PASSWORD_CLI}" ]; then
+    ADMIN_PASSWORD="${ADMIN_PASSWORD_CLI}"
+  elif [ -n "${PACKAGE_ADMIN_PASSWORD:-}" ]; then
+    ADMIN_PASSWORD="${PACKAGE_ADMIN_PASSWORD}"
+  elif ADMIN_PASSWORD="$(read_env_key "$secrets" "LLM_PROXY_ADMIN_PASSWORD" 2>/dev/null)"; then
+    :
+  else
+    ADMIN_PASSWORD=""
+  fi
+
+  if [ -n "${ADMIN_USERNAME_CLI}" ]; then
+    ADMIN_USERNAME="${ADMIN_USERNAME_CLI}"
+  elif [ -n "${PACKAGE_ADMIN_USERNAME:-}" ]; then
+    ADMIN_USERNAME="${PACKAGE_ADMIN_USERNAME}"
+  elif ADMIN_USERNAME="$(read_env_key "$secrets" "LLM_PROXY_ADMIN_USERNAME" 2>/dev/null)"; then
+    :
+  else
+    ADMIN_USERNAME="admin"
+  fi
+
+  ADMIN_API_KEY=""
+  if [ -n "${PACKAGE_ADMIN_API_KEY:-}" ]; then
+    ADMIN_API_KEY="${PACKAGE_ADMIN_API_KEY}"
+  else
+    ADMIN_API_KEY="$(read_env_key "$secrets" "LLM_PROXY_ADMIN_API_KEY" 2>/dev/null || true)"
+    if [ -z "${ADMIN_API_KEY}" ]; then
+      ADMIN_API_KEY="$(read_env_key "$secrets" "LLM_PROXY_DEFAULT_ADMIN_API_KEY" 2>/dev/null || true)"
+    fi
+  fi
+
+  if [ -z "${ADMIN_PASSWORD}" ]; then
+    echo "[WARN] 未解析到管理员密码（--admin-password / PACKAGE_ADMIN_PASSWORD / config/secrets/.env）"
+    echo "       minimal 首次需 Web 设置密码；personal/team 首轮 seed 将使用内置默认口令"
+  else
+    echo "[OK] 管理员密码已解析（来源: CLI/packaging.env/secrets，不会回显）用户=${ADMIN_USERNAME}"
+  fi
+}
+
+shell_single_quote() {
+  # 安全写入可被 `set -a; . file` 加载的单引号字符串
+  local s="$1"
+  s="${s//\'/\'\\\'\'}"
+  printf "'%s'" "$s"
+}
+
+write_runtime_env() {
+  local dest_dir="$1"
+  local runtime_edition
+  runtime_edition="$(edition_to_runtime "$EDITION")"
+  mkdir -p "${dest_dir}"
+  {
+    echo "# Generated by deploy/fnos/build-fpk.sh — do not commit secrets from private builds"
+    echo "CENTAG_EDITION=$(shell_single_quote "${runtime_edition}")"
+    echo "LLM_PROXY_ADMIN_USERNAME=$(shell_single_quote "${ADMIN_USERNAME}")"
+    echo "LLM_PROXY_ADMIN_PASSWORD=$(shell_single_quote "${ADMIN_PASSWORD}")"
+    echo "LLM_PROXY_DB_DRIVER='sqlite'"
+    echo "SERVER_HOST='0.0.0.0'"
+    echo "SERVER_PORT='20060'"
+    echo "LLM_PROXY_SERVER_HOST='0.0.0.0'"
+    echo "LLM_PROXY_SERVER_PORT='20060'"
+    echo "LOG_LEVEL='info'"
+    echo "LLM_PROXY_LOG_OUTPUT='both'"
+    echo "TZ='Asia/Shanghai'"
+    # ResolveDataDir 读取 CENTAG_DATA_DIR；由 cmd/main 再落到数据共享卷
+    echo "# CENTAG_DATA_DIR is set at runtime by cmd/main to TRIM data share"
+    if [ -n "${ADMIN_API_KEY}" ]; then
+      echo "LLM_PROXY_ADMIN_API_KEY=$(shell_single_quote "${ADMIN_API_KEY}")"
+      echo "LLM_PROXY_DEFAULT_ADMIN_API_KEY=$(shell_single_quote "${ADMIN_API_KEY}")"
+    fi
+  } > "${dest_dir}/runtime.env"
+  chmod 600 "${dest_dir}/runtime.env"
+  echo "  运行时配置: config/runtime.env (edition=${runtime_edition})"
+}
 
 # 将 uname 架构映射为 Go 架构
 arch_to_go() {
@@ -105,7 +268,7 @@ with_image_prefix() {
 
 # 显示脚本头部帮助
 print_help() {
-  sed -n '2,26p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '2,34p' "$0" | sed 's/^# \{0,1\}//'
 }
 
 # 无参数时仅显示帮助，避免误触发默认打包
@@ -123,6 +286,18 @@ while [[ $# -gt 0 ]]; do
       ;;
     --arch)
       GOARCH="$(arch_to_go "$2")"
+      shift 2
+      ;;
+    --edition)
+      EDITION="$2"
+      shift 2
+      ;;
+    --admin-password)
+      ADMIN_PASSWORD_CLI="$2"
+      shift 2
+      ;;
+    --admin-username)
+      ADMIN_USERNAME_CLI="$2"
       shift 2
       ;;
     --skip-build)
@@ -153,16 +328,44 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+case "$EDITION" in
+  minimal|personal|team|gateway) ;;
+  *)
+    echo "[ERROR] 未知 --edition: ${EDITION}（支持 minimal|personal|team）"
+    exit 1
+    ;;
+esac
+# gateway 别名统一成 personal（产物命名）
+if [ "$EDITION" = "gateway" ]; then
+  EDITION="personal"
+fi
+
+DIST_NAME="$(edition_to_dist "$EDITION")"
+RUNTIME_EDITION="$(edition_to_runtime "$EDITION")"
+BUILD_TAGS="$(edition_build_tags "$EDITION")"
+
+# 相对路径按仓库根解析
+case "${OUTPUT_DIR}" in
+  /*) ;;
+  *) OUTPUT_DIR="${REPO_ROOT}/${OUTPUT_DIR}" ;;
+esac
+
 mkdir -p "$OUTPUT_DIR"
+
+resolve_admin_credentials
 
 echo "============================================"
 echo " Centag fnOS 打包工具"
 echo "============================================"
 echo "模式:      ${MODE}"
+echo "发行版:    ${EDITION} (dist=${DIST_NAME}, runtime=${RUNTIME_EDITION})"
 echo "架构:      ${GOARCH}"
 echo "源码目录:  ${REPO_ROOT}"
 echo "构建目录:  ${BUILD_DIR}"
 echo "输出目录:  ${OUTPUT_DIR}"
+if [ "$MODE" = "native" ]; then
+  echo "构建 tags: ${BUILD_TAGS}"
+fi
 echo ""
 
 # ============================================================
@@ -194,9 +397,36 @@ if [ "$MODE" = "docker" ]; then
   mkdir -p "${APP_DIR}/docker"
   mkdir -p "${APP_DIR}/ui/images"
 
-  # docker-compose.yaml（按架构注入镜像标签）
+  # docker-compose.yaml（按架构注入镜像标签 + 管理员密码）
   sed "s|^\([[:space:]]*image:[[:space:]]*\).*|\1${DOCKER_IMAGE_TAG}|" \
     "${SCRIPT_DIR}/docker-compose.yaml" > "${APP_DIR}/docker/docker-compose.yaml"
+  if [ -n "${ADMIN_PASSWORD}" ]; then
+    # 兼容 macOS / GNU sed
+    if [ "$(uname)" = "Darwin" ]; then
+      sed -i '' "s|LLM_PROXY_ADMIN_PASSWORD=.*|LLM_PROXY_ADMIN_PASSWORD=${ADMIN_PASSWORD}|" \
+        "${APP_DIR}/docker/docker-compose.yaml"
+    else
+      sed -i "s|LLM_PROXY_ADMIN_PASSWORD=.*|LLM_PROXY_ADMIN_PASSWORD=${ADMIN_PASSWORD}|" \
+        "${APP_DIR}/docker/docker-compose.yaml"
+    fi
+  fi
+  if ! grep -q "CENTAG_EDITION" "${APP_DIR}/docker/docker-compose.yaml"; then
+    # 在 environment 段追加 edition（简单追加一行）
+    if [ "$(uname)" = "Darwin" ]; then
+      sed -i '' "/LLM_PROXY_ADMIN_PASSWORD=/a\\
+      - CENTAG_EDITION=${RUNTIME_EDITION}
+" "${APP_DIR}/docker/docker-compose.yaml"
+    else
+      sed -i "/LLM_PROXY_ADMIN_PASSWORD=/a\\      - CENTAG_EDITION=${RUNTIME_EDITION}" \
+        "${APP_DIR}/docker/docker-compose.yaml"
+    fi
+  fi
+  if [ "$EDITION" = "minimal" ]; then
+    echo "[WARN] Docker 模式当前 Dockerfile 基于 dist/gateway；minimal 请优先使用 --mode native"
+  fi
+
+  mkdir -p "${APP_DIR}/config"
+  write_runtime_env "${APP_DIR}/config"
 
   # UI 图标
   if [ -f "${SCRIPT_DIR}/res/icon_64.png" ]; then
@@ -238,16 +468,23 @@ elif [ "$MODE" = "native" ]; then
   mkdir -p "${APP_DIR}/ui/images"
   mkdir -p "${APP_DIR}/config/initdata"
 
-  if [ "$SKIP_BUILD" = false ]; then
-    echo "[1/5] 构建 Go 后端 (${GOARCH})..."
+  DIST_DIR="${REPO_ROOT}/dist/${DIST_NAME}"
+  if [ ! -d "${DIST_DIR}" ]; then
+    echo "[ERROR] 发行版目录不存在: ${DIST_DIR}"
+    exit 1
+  fi
 
-    cd "$REPO_ROOT"
+  if [ "$SKIP_BUILD" = false ]; then
+    echo "[1/5] 构建 Go 后端 edition=${EDITION} dist=${DIST_NAME} (${GOARCH})..."
+
+    cd "${DIST_DIR}"
     GOOS=linux GOARCH="${GOARCH}" GOTOOLCHAIN=auto go build \
+      -tags "${BUILD_TAGS}" \
       -ldflags="-s -w -X 'main.Version=v$(date +%Y%m%d-%H%M%S)' -X 'main.BuildTime=$(date +%Y-%m-%d\ %H:%M:%S)'" \
-      -o bin/server/centag cmd/centag/main.go
+      -o "${REPO_ROOT}/bin/server/centag" .
 
     echo "[OK] 后端构建完成 (${GOARCH})"
-    echo "      大小: $(du -h bin/server/centag | cut -f1)"
+    echo "      大小: $(du -h "${REPO_ROOT}/bin/server/centag" | cut -f1)"
 
     echo ""
     echo "[2/5] 构建前端..."
@@ -258,7 +495,7 @@ elif [ "$MODE" = "native" ]; then
     [ -d "web/dist" ] && cp -r web/dist/* bin/server/static/ 2>/dev/null || true
     echo "[OK] 前端构建完成"
   else
-    echo "[SKIP] 跳过构建，使用已有的 bin/server/ 目录"
+    echo "[SKIP] 跳过构建，使用已有的 bin/server/centag"
   fi
 
   echo ""
@@ -271,8 +508,8 @@ elif [ "$MODE" = "native" ]; then
     echo "  二进制: $(file "${APP_DIR}/bin/centag" | cut -d: -f2)"
     echo "  大小: $(du -h "${APP_DIR}/bin/centag" | cut -f1)"
   else
-    echo "[ERROR] bin/server/centag 不存在，请先构建或使用 --skip-build"
-    echo "  构建: go build -o bin/server/centag cmd/centag/main.go"
+    echo "[ERROR] bin/server/centag 不存在，请先构建或去掉 --skip-build"
+    echo "  例如: ./deploy/fnos/build-fpk.sh --mode native --edition ${EDITION} --arch ${GOARCH}"
     exit 1
   fi
 
@@ -284,8 +521,19 @@ elif [ "$MODE" = "native" ]; then
     echo "[WARN] 未找到静态文件目录 bin/server/static"
   fi
 
-  # 初始数据（pipeline-templates, initial-backends.yaml, rule, secrets 等）
-  if [ -d "${REPO_ROOT}/config/initdata" ]; then
+  # 初始数据：minimal 用 profile，并合并全局 common 中 minimal 可用的流水线
+  # （开发时 start.sh 会合并全局+profile；fpk 只有包内 INITDATA_PATH，须自包含）
+  if [ "$EDITION" = "minimal" ] && [ -d "${REPO_ROOT}/config/profiles/minimal/initdata" ]; then
+    cp -r "${REPO_ROOT}/config/profiles/minimal/initdata/"* "${APP_DIR}/config/initdata/"
+    mkdir -p "${APP_DIR}/config/initdata/pipeline-templates/common"
+    for f in router-mode.yaml smart-scheduling.yaml; do
+      src="${REPO_ROOT}/config/initdata/pipeline-templates/common/${f}"
+      if [ -f "$src" ]; then
+        cp "$src" "${APP_DIR}/config/initdata/pipeline-templates/common/${f}"
+      fi
+    done
+    echo "  初始数据: profiles/minimal/initdata + common/{router-mode,smart-scheduling}"
+  elif [ -d "${REPO_ROOT}/config/initdata" ]; then
     for item in "${REPO_ROOT}/config/initdata/"*; do
       base=$(basename "$item")
       if [ "$base" != "data" ] && [ "$base" != "scripts" ] && [ "$base" != "update" ]; then
@@ -295,12 +543,7 @@ elif [ "$MODE" = "native" ]; then
     echo "  初始数据: $(find "${APP_DIR}/config/initdata" -type f | wc -l) 个文件"
   fi
 
-  # 初始数据库
-  if [ -f "${REPO_ROOT}/config/initdata/data/centag.db" ]; then
-    mkdir -p "${APP_DIR}/storage"
-    cp "${REPO_ROOT}/config/initdata/data/centag.db" "${APP_DIR}/storage/centag.db"
-    echo "  初始数据库: centag.db"
-  fi
+  # 不打包预置 centag.db，确保 personal/team 首轮 seed 使用 runtime.env 密码
 
   # 脚本
   if [ -d "${REPO_ROOT}/config/initdata/scripts" ]; then
@@ -311,6 +554,8 @@ elif [ "$MODE" = "native" ]; then
   if [ -f "${REPO_ROOT}/config/initdata/update/update_config.yml" ]; then
     cp "${REPO_ROOT}/config/initdata/update/update_config.yml" "${APP_DIR}/update_config.yml"
   fi
+
+  write_runtime_env "${APP_DIR}/config"
 
   # UI 配置 - Native 模式使用 native/ui-config
   if [ -f "${SCRIPT_DIR}/native/ui-config" ]; then
@@ -393,7 +638,7 @@ echo "[OK] app.tgz 创建完成 ($(du -h app.tgz | cut -f1))"
 # ============================================================
 # 4. 生成 checksum
 # ============================================================
-CHECKSUM=$(md5sum manifest | cut -d" " -f1)
+CHECKSUM="$(file_md5 manifest)"
 if grep -q "^checksum=" manifest 2>/dev/null; then
   # 兼容 GNU sed (Linux) 和 BSD sed (macOS)
   if [ "$(uname)" = "Darwin" ]; then
@@ -409,7 +654,7 @@ echo "[OK] 清单校验和: ${CHECKSUM}"
 # ============================================================
 # 5. 打包为 .fpk
 # ============================================================
-FPK_FILE="${OUTPUT_DIR}/centag-${MODE}-${GOARCH}.fpk"
+FPK_FILE="${OUTPUT_DIR}/centag-${EDITION}-${MODE}-${GOARCH}.fpk"
 rm -f "${FPK_FILE}"
 
 cd "${BUILD_DIR}"

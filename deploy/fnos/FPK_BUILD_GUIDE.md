@@ -2,6 +2,14 @@
 
 ## 一、构建命令
 
+推荐统一入口（默认参数：仓库根目录 `packaging.env`）：
+
+```bash
+./scripts/packaging/package.sh fnos --mode native --arch amd64
+make package TARGET=fnos PACKAGE_MODE=native PACKAGE_ARCH=amd64
+./start.sh package fnos --mode native --arch amd64
+```
+
 ### Native（二进制）模式
 ```bash
 # 构建当前架构 native 包
@@ -26,6 +34,8 @@
 # 指定自定义镜像前缀
 ./deploy/fnos/build-fpk.sh --mode docker --arch amd64 --image-prefix myregistry.com/
 ```
+
+> macOS 无 `md5sum` 时脚本会自动回退到 `md5` / `openssl`。
 
 ---
 
@@ -268,11 +278,11 @@ checksum=<manifest 文件的 MD5>
 
 ```bash
 # 分析已构建 fpk 的内部结构
-tar -tzf dist/centag-native-amd64.fpk
+tar -tzf bin/packages/centag-minimal-native-amd64.fpk
 
 # 单独提取 app.tgz 查看
 mkdir -p /tmp/fpk_debug && cd /tmp/fpk_debug
-tar -xzf dist/centag-native-amd64.fpk app.tgz
+tar -xzf "$OLDPWD/bin/packages/centag-minimal-native-amd64.fpk" app.tgz
 tar -xzf app.tgz
 ls -la
 
