@@ -32,19 +32,28 @@ deploy/fnos/
 
 ### 使用方式
 
+推荐经统一渠道入口（默认参数见仓库根目录 `packaging.env`）：
+
+```bash
+./scripts/packaging/package.sh fnos --mode docker --arch amd64
+# 或
+make package TARGET=fnos PACKAGE_MODE=docker PACKAGE_ARCH=amd64
+# 或
+./start.sh package fnos --mode docker --arch amd64
+```
+
+也可直接调用本目录脚本：
+
 ```bash
 # 构建 Docker 镜像
 docker build -t centag:latest -f deploy/docker/Dockerfile .
-
-# 打包 fpk（默认 docker 模式）
-./deploy/fnos/build-fpk.sh
 
 # 指定架构
 ./deploy/fnos/build-fpk.sh --mode docker --arch amd64
 ./deploy/fnos/build-fpk.sh --mode docker --arch arm64
 
 # 打包并安装
-./deploy/fnos/build-fpk.sh --install
+./deploy/fnos/build-fpk.sh --mode docker --install
 ```
 
 ---
@@ -119,8 +128,8 @@ Native 模式的 `cmd/main` 脚本参考 fnOS 官方 [Notepad 示例](https://de
 | `SQLITE_PATH` | `${TRIM_DATA_SHARE_PATHS}/centag.db` |
 | `SERVER_HOST` | `0.0.0.0` |
 | `SERVER_PORT` | `20060` |
-| `LLM_PROXY_ADMIN_PASSWORD` | `admin123` |
-| `STATIC_DIR` | `${TRIM_APPDEST}/webui` |
+| `LLM_PROXY_ADMIN_PASSWORD` | 来自包内 `config/runtime.env`（打包时注入） |
+| `STATIC_DIR` / `STATIC_PATH` | `${TRIM_APPDEST}/webui` |
 
 ---
 
@@ -145,4 +154,5 @@ Native 模式的 `cmd/main` 脚本参考 fnOS 官方 [Notepad 示例](https://de
 3. **数据目录**：
    - Docker: 由 fnOS 的 `data-share` 自动管理
    - Native: 由 fnOS 的 `TRIM_DATA_SHARE_PATHS` 环境变量指定
-4. **管理员密码**：默认密码 `admin123`，安装后请立即修改
+4. **管理员密码**：打包时写入 `config/runtime.env`（默认读 `config/secrets/.env` 的 `LLM_PROXY_ADMIN_PASSWORD`；也可用 `--admin-password` / `PACKAGE_ADMIN_PASSWORD`）。**已安装过的数据目录**若已有用户/密码哈希，不会被新密码覆盖——需清空数据卷后重装，或用当前有效密码登录后修改。
+5. **发行版**：默认 `minimal`；`--edition personal|team` 分别对应个人全功能 / 团队版。

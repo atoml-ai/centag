@@ -9,12 +9,25 @@ PID_FILE="${TRIM_PKGVAR}/app.pid"
 BINARY="${TRIM_APPDEST}/bin/centag"
 STATIC_DIR="${TRIM_APPDEST}/webui"
 INITDATA_DIR="${TRIM_APPDEST}/config/initdata"
+RUNTIME_ENV="${TRIM_APPDEST}/config/runtime.env"
 DATA_DIR="${TRIM_DATA_SHARE_PATHS%%:*}"
 LOGS_DIR="${TRIM_PKGVAR}/logs"
 PORT=20060
 
 log_msg() {
     echo "$(date +%Y-%m-%d %H:%M:%S) - $1" >> "${LOG_FILE}"
+}
+
+load_runtime_env() {
+    if [ -f "${RUNTIME_ENV}" ]; then
+        set -a
+        # shellcheck disable=SC1090
+        . "${RUNTIME_ENV}"
+        set +a
+        log_msg "已加载运行时配置: ${RUNTIME_ENV}"
+    else
+        log_msg "未找到 runtime.env，使用内置默认值"
+    fi
 }
 
 start_process() {
@@ -28,21 +41,26 @@ start_process() {
     mkdir -p "${DATA_DIR}"
     mkdir -p "${LOGS_DIR}"
 
-    export LLM_PROXY_DB_DRIVER=sqlite
-    export SQLITE_PATH="${DATA_DIR}/centag.db"
-    export SERVER_HOST=0.0.0.0
-    export SERVER_PORT=${PORT}
-    export LOG_LEVEL=info
-    export LLM_PROXY_LOG_OUTPUT=both
-    export LLM_PROXY_ADMIN_PASSWORD=admin123
-    export TZ=Asia/Shanghai
-    export LANG=C.UTF-8
+    load_runtime_env
 
-    # 静态文件路径
+    export LLM_PROXY_DB_DRIVER="${LLM_PROXY_DB_DRIVER:-sqlite}"
+    export SQLITE_PATH="${SQLITE_PATH:-${DATA_DIR}/centag.db}"
+    export LLM_PROXY_DB_PATH="${LLM_PROXY_DB_PATH:-${SQLITE_PATH}}"
+    export SERVER_HOST="${SERVER_HOST:-0.0.0.0}"
+    export SERVER_PORT="${SERVER_PORT:-${PORT}}"
+    export LLM_PROXY_SERVER_HOST="${LLM_PROXY_SERVER_HOST:-${SERVER_HOST}}"
+    export LLM_PROXY_SERVER_PORT="${LLM_PROXY_SERVER_PORT:-${SERVER_PORT}}"
+    export LOG_LEVEL="${LOG_LEVEL:-info}"
+    export LLM_PROXY_LOG_OUTPUT="${LLM_PROXY_LOG_OUTPUT:-both}"
+    export TZ="${TZ:-Asia/Shanghai}"
+    export LANG="${LANG:-C.UTF-8}"
+
+    # 静态文件 / 初始数据
     export STATIC_PATH="${STATIC_DIR}"
-    # 初始数据路径（后端配置、流水线模板、规则文件等）
     export PROJECT_ROOT="${TRIM_APPDEST}"
-    export INITDATA_PATH="${INITDATA_DIR}"
+    export INITDATA_PATH="${INITDATA_PATH:-${INITDATA_DIR}}"
+    # minimal 密码哈希 / 文件配置落盘目录
+    export CENTAG_DATA_DIR="${CENTAG_DATA_DIR:-${DATA_DIR}}"
 
     nohup "${BINARY}" >> "${LOGS_DIR}/centag.log" 2>&1 &
     local pid=$!
@@ -52,7 +70,7 @@ start_process() {
     while [ $count -lt 5 ]; do
         if kill -0 "${pid}" 2>/dev/null; then
             sleep 1
-            if grep -q "listening\|started\|ready" "${LOGS_DIR}/centag.log" 2>/dev/null; then
+            if grep -q "listening\|started\|ready\|Minimal\|Starting" "${LOGS_DIR}/centag.log" 2>/dev/null; then
                 break
             fi
         fi
