@@ -5,14 +5,15 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"strings"
 	"time"
 
-	"centag/core/pkg/backend"
 	"centag/core/internal/cache"
-	"centag/core/pkg/config"
-	"centag/core/pkg/embedding"
 	"centag/core/internal/hostproxy"
 	"centag/core/internal/llm"
+	"centag/core/pkg/backend"
+	"centag/core/pkg/config"
+	"centag/core/pkg/embedding"
 	"centag/core/pkg/logger"
 	"centag/core/pkg/processor"
 	"centag/core/pkg/storage"
@@ -31,6 +32,10 @@ type ConfigHandler struct {
 	mitmToggle func(enabled bool)
 	// mitmForceRestart 在 SystemProxy 端口变更时强制重启 MITM，由 Server 注册
 	mitmForceRestart func()
+	// mitmSyncEgress 将当前出口 API Key 热同步到运行中的 MITM
+	mitmSyncEgress func()
+	// proxyHandlerRefresh 刷新 PAC 生成器（advertise/listen 变更）
+	proxyHandlerRefresh func()
 }
 
 // NewConfigHandler 创建统一配置处理器
@@ -62,6 +67,16 @@ func (h *ConfigHandler) SetMitmForceRestart(fn func()) {
 	h.mitmForceRestart = fn
 }
 
+// SetMitmSyncEgress 注册 MITM 出口 Key 热同步回调
+func (h *ConfigHandler) SetMitmSyncEgress(fn func()) {
+	h.mitmSyncEgress = fn
+}
+
+// SetProxyHandlerRefresh 注册 PAC 刷新回调
+func (h *ConfigHandler) SetProxyHandlerRefresh(fn func()) {
+	h.proxyHandlerRefresh = fn
+}
+
 // GetAllConfig 获取所有配置（统一接口）
 func (h *ConfigHandler) GetAllConfig(c *gin.Context) {
 	cfg := config.Get()
@@ -70,7 +85,12 @@ func (h *ConfigHandler) GetAllConfig(c *gin.Context) {
 		return
 	}
 
-	// 构造统一响应
+	// 构造统一响应（出口 Key 不回传明文）
+	spView := cfg.SystemProxy
+	if strings.TrimSpace(spView.EgressAPIKey) != "" {
+		spView.EgressAPIKey = "***"
+	}
+
 	response := gin.H{
 		"server":          cfg.Server,
 		"log":             cfg.Log,
@@ -82,13 +102,13 @@ func (h *ConfigHandler) GetAllConfig(c *gin.Context) {
 		"qa_split":        cfg.QASplit,
 		"question_split":  cfg.QuestionSplit,
 		"plugins":         cfg.Plugins,
-		"system_proxy":    cfg.SystemProxy,
+		"system_proxy":    spView,
 		"host_proxy":      cfg.HostProxy,
 		"backends":        cfg.Backends,
 		"storages":        cfg.Storages,
 		"default_storage": cfg.DefaultStorage,
 		"model_matching":  cfg.ModelMatching, // 添加模型调度配置
-		"scheduler":        cfg.Scheduler,      // 智能调度配置
+		"scheduler":       cfg.Scheduler,     // 智能调度配置
 	}
 
 	RespondSuccess(c, response)
@@ -150,6 +170,9 @@ func (h *ConfigHandler) SaveAllConfig(c *gin.Context) {
 	oldSystemProxyEnabled := cfg.SystemProxy.Enabled
 	oldHostProxyEnabled := cfg.HostProxy.Enabled
 	oldSystemProxyPort := cfg.SystemProxy.ListenPort
+	oldSystemProxyListenAddr := cfg.SystemProxy.ListenAddr
+	oldSystemProxyAllowLAN := cfg.SystemProxy.AllowLANClients
+	oldSystemProxyAdvertise := cfg.SystemProxy.AdvertiseHost
 	oldHostProxyHTTPPort := cfg.HostProxy.HTTPPort
 	oldHostProxyHTTPSPort := cfg.HostProxy.HTTPSPort
 
@@ -377,6 +400,22 @@ func (h *ConfigHandler) SaveAllConfig(c *gin.Context) {
 		}
 		// PACEnabled 字段需要特殊处理,因为它的默认值可能与false不同
 		cfg.SystemProxy.PACEnabled = req.SystemProxy.PACEnabled
+		cfg.SystemProxy.AllowLANClients = req.SystemProxy.AllowLANClients
+		if req.SystemProxy.ListenAddr != "" {
+			cfg.SystemProxy.ListenAddr = req.SystemProxy.ListenAddr
+		}
+		// Allow clearing advertise only when LAN disabled; otherwise take provided value
+		if req.SystemProxy.AllowLANClients || req.SystemProxy.AdvertiseHost != "" {
+			cfg.SystemProxy.AdvertiseHost = req.SystemProxy.AdvertiseHost
+		}
+		// 出口 Key：非空且非掩码时更新（Agent 零改场景由 MITM 注入）
+		if k := strings.TrimSpace(req.SystemProxy.EgressAPIKey); k != "" && k != "***" {
+			cfg.SystemProxy.EgressAPIKey = k
+		}
+		if err := config.ValidateSystemProxyConfig(&cfg.SystemProxy); err != nil {
+			RespondBadRequest(c, "Invalid system_proxy config: "+err.Error())
+			return
+		}
 		// 不更新证书路径等敏感配置字段
 		// 不更新domains和path_patterns,这些应该通过单独的API管理
 	}
@@ -463,11 +502,25 @@ func (h *ConfigHandler) SaveAllConfig(c *gin.Context) {
 		logger.Infof("System proxy (MITM) enabled status hot-updated: %v", cfg.SystemProxy.Enabled)
 	}
 
-	// 3b. 系统代理端口变更且当前处于启用状态 → 强制重启 MITM，使新端口生效
-	if req.SystemProxy != nil && cfg.SystemProxy.Enabled &&
-		cfg.SystemProxy.ListenPort != oldSystemProxyPort && h.mitmForceRestart != nil {
+	// 3b. 系统代理监听/LAN 参数变更且当前启用 → 强制重启 MITM
+	if req.SystemProxy != nil && cfg.SystemProxy.Enabled && h.mitmForceRestart != nil &&
+		(cfg.SystemProxy.ListenPort != oldSystemProxyPort ||
+			cfg.SystemProxy.ListenAddr != oldSystemProxyListenAddr ||
+			cfg.SystemProxy.AllowLANClients != oldSystemProxyAllowLAN ||
+			cfg.SystemProxy.AdvertiseHost != oldSystemProxyAdvertise) {
 		h.mitmForceRestart()
-		logger.Infof("System proxy (MITM) force-restarted on new port %d", cfg.SystemProxy.ListenPort)
+		logger.Infof("System proxy (MITM) force-restarted on %s (lan=%v advertise=%s)",
+			cfg.SystemProxy.MITMListenAddr(), cfg.SystemProxy.AllowLANClients, cfg.SystemProxy.AdvertiseHost)
+	}
+
+	// 3b2. PAC advertise/host 变更时刷新 PAC 生成器（即使 MITM 未启）
+	if req.SystemProxy != nil && h.proxyHandlerRefresh != nil {
+		h.proxyHandlerRefresh()
+	}
+
+	// 3b3. 出口 API Key 热同步到 MITM（Agent 零改：MITM 注入 Centag Key）
+	if req.SystemProxy != nil && cfg.SystemProxy.Enabled && h.mitmSyncEgress != nil {
+		h.mitmSyncEgress()
 	}
 
 	// 3c. Host 代理端口变更 → 热重启 HTTP/HTTPS 监听器

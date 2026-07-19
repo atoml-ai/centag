@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"centag/core/internal/cert"
@@ -24,20 +25,23 @@ type Server struct {
 	backendAddr   string // 后端LLM Proxy地址
 	httpServer    *http.Server
 	tlsConfig     *tls.Config
-	targetDomains map[string]bool // 需要代理的目标域名
-	pathPatterns  []string        // 需要代理的路径模式
+	mu               sync.RWMutex
+	targetDomains    map[string]bool // 需要代理的目标域名（热更新）
+	pathPatterns     []string        // 需要代理的路径模式（热更新）
+	backendAuthToken string          // Centag llmproxy_*；注入到转发请求（热更新）
 }
 
 // Config MITM服务器配置
 type Config struct {
-	Addr          string // 监听地址,如 ":8081"
-	BackendAddr   string // 后端LLM Proxy地址,如 "127.0.0.1:20060"
-	CACertPath    string
-	CAKeyPath     string
-	CertDir       string
-	CertValidDays int
-	Domains       []string // 需要代理的域名列表
-	PathPatterns  []string // 需要代理的路径模式
+	Addr             string // 监听地址,如 ":8081"
+	BackendAddr      string // 后端LLM Proxy地址,如 "127.0.0.1:20060"
+	CACertPath       string
+	CAKeyPath        string
+	CertDir          string
+	CertValidDays    int
+	Domains          []string // 需要代理的域名列表
+	PathPatterns     []string // 需要代理的路径模式
+	BackendAuthToken string   // Centag API key injected when forwarding to BackendAddr
 }
 
 // NewServer 创建MITM服务器
@@ -90,20 +94,106 @@ func NewServer(config *Config) (*Server, error) {
 		NextProtos: []string{"http/1.1", "h2"},
 	}
 
-	// 构建域名映射
-	targetDomains := make(map[string]bool)
-	for _, domain := range config.Domains {
-		targetDomains[domain] = true
+	s := &Server{
+		addr:        config.Addr,
+		certManager: certManager,
+		backendAddr: config.BackendAddr,
+		tlsConfig:   tlsConfig,
+	}
+	s.SetRoutingRules(config.Domains, config.PathPatterns)
+	s.SetBackendAuthToken(config.BackendAuthToken)
+	return s, nil
+}
+
+// SetBackendAuthToken hot-updates the Centag key injected on backend forward.
+func (s *Server) SetBackendAuthToken(token string) {
+	if s == nil {
+		return
+	}
+	s.mu.Lock()
+	s.backendAuthToken = strings.TrimSpace(token)
+	s.mu.Unlock()
+}
+
+func (s *Server) backendAuthTokenLocked() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.backendAuthToken
+}
+
+// SetRoutingRules hot-updates domain/path whitelist used by shouldProxyToBackend.
+// Called when PAC 规则管理增减域名或路径模式，无需重启 MITM。
+func (s *Server) SetRoutingRules(domains, pathPatterns []string) {
+	if s == nil {
+		return
+	}
+	targetDomains := make(map[string]bool, len(domains))
+	for _, domain := range domains {
+		d := strings.ToLower(strings.TrimSpace(domain))
+		if d == "" {
+			continue
+		}
+		targetDomains[d] = true
+	}
+	pats := make([]string, 0, len(pathPatterns))
+	for _, p := range pathPatterns {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		pats = append(pats, p)
 	}
 
-	return &Server{
-		addr:          config.Addr,
-		certManager:   certManager,
-		backendAddr:   config.BackendAddr,
-		tlsConfig:     tlsConfig,
-		targetDomains: targetDomains,
-		pathPatterns:  config.PathPatterns,
-	}, nil
+	s.mu.Lock()
+	s.targetDomains = targetDomains
+	s.pathPatterns = pats
+	s.mu.Unlock()
+}
+
+func stripHostPort(host string) string {
+	h := strings.ToLower(strings.TrimSpace(host))
+	if h == "" {
+		return ""
+	}
+	// host:port（IPv6 带括号时少见，MITM 目标多为域名）
+	if i := strings.LastIndex(h, ":"); i >= 0 && !strings.Contains(h, "]") {
+		h = h[:i]
+	}
+	return h
+}
+
+// isWhitelistedHost reports whether CONNECT host is in the PAC/MITM domain allowlist.
+func (s *Server) isWhitelistedHost(host string) bool {
+	if s == nil {
+		return false
+	}
+	h := stripHostPort(host)
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.targetDomains[h]
+}
+
+// ShouldRouteToBackend reports whether host+path should be forwarded to Centag (:20060).
+// Domain must be whitelisted; path matches configured prefixes OR looks like a generic LLM API.
+func (s *Server) ShouldRouteToBackend(host, path string) bool {
+	if s == nil {
+		return false
+	}
+	hostWithoutPort := stripHostPort(host)
+
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if !s.targetDomains[hostWithoutPort] {
+		return false
+	}
+	for _, pattern := range s.pathPatterns {
+		if pattern != "" && strings.HasPrefix(path, pattern) {
+			return true
+		}
+	}
+	// Domain already classified as LLM provider → accept common API shapes without
+	// per-agent path entries (e.g. /zen/v1/responses on opencode.ai).
+	return looksLikeLLMAPIPath(path)
 }
 
 // Start 启动MITM服务器
@@ -158,30 +248,40 @@ func (s *Server) Stop(ctx context.Context) error {
 	return nil
 }
 
-// handleRequest 处理HTTP请求
+// handleRequest 处理明文 HTTP 代理请求（较少见；LLM 多为 HTTPS CONNECT）。
 func (s *Server) handleRequest(w http.ResponseWriter, r *http.Request) {
-	// 记录请求
 	logger.Info("MITM HTTP request",
 		zap.String("method", r.Method),
 		zap.String("host", r.Host),
 		zap.String("path", r.URL.Path))
 
-	// 转发到后端LLM Proxy
-	if err := s.forwardToBackend(w, r, "http"); err != nil {
-		logger.Error("Failed to forward HTTP request", zap.Error(err))
+	if s.shouldProxyToBackend(r) {
+		if err := s.forwardToBackend(w, r, "http"); err != nil {
+			logger.Error("Failed to forward HTTP request", zap.Error(err))
+			http.Error(w, "Bad Gateway", http.StatusBadGateway)
+		}
+		return
+	}
+	if err := s.forwardToOriginal(w, r); err != nil {
+		logger.Error("Failed to forward HTTP to original", zap.Error(err))
 		http.Error(w, "Bad Gateway", http.StatusBadGateway)
 	}
 }
 
-// handleCONNECT 处理HTTPS CONNECT方法
+// handleCONNECT 处理 HTTPS CONNECT。
+// 仅对白名单 LLM 域名做 MITM 解密；其它主机走 TCP 隧道，避免影响 Agent 非大模型上网。
 func (s *Server) handleCONNECT(w http.ResponseWriter, r *http.Request) {
-	// CONNECT请求的目标主机在r.Host中
 	host := r.Host
 	if host == "" {
 		host = r.URL.Host
 	}
 
 	logger.Info("MITM CONNECT request", zap.String("host", host))
+
+	if !s.isWhitelistedHost(host) {
+		s.handleCONNECTTunnel(w, r, host)
+		return
+	}
 
 	// 获取底层连接
 	hijacker, ok := w.(http.Hijacker)
@@ -257,37 +357,141 @@ func (s *Server) handleCONNECT(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// handleCONNECTTunnel 对非白名单主机建立纯 TCP 隧道（不签发证书、不解密）。
+// 使进程级 HTTPS_PROXY 指向本 MITM 时，Agent 的 WebFetch/git/npm 等非 LLM 流量仍可正常直达目标。
+func (s *Server) handleCONNECTTunnel(w http.ResponseWriter, r *http.Request, host string) {
+	dest := host
+	if !strings.Contains(dest, ":") {
+		dest = dest + ":443"
+	}
+
+	targetConn, err := net.DialTimeout("tcp", dest, 30*time.Second)
+	if err != nil {
+		logger.Error("CONNECT tunnel dial failed", zap.String("host", dest), zap.Error(err))
+		http.Error(w, "Bad Gateway", http.StatusBadGateway)
+		return
+	}
+
+	hijacker, ok := w.(http.Hijacker)
+	if !ok {
+		targetConn.Close()
+		logger.Error("Failed to hijack connection for tunnel")
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+	clientConn, _, err := hijacker.Hijack()
+	if err != nil {
+		targetConn.Close()
+		logger.Error("Failed to hijack connection for tunnel", zap.Error(err))
+		return
+	}
+	defer clientConn.Close()
+	defer targetConn.Close()
+
+	if _, err := clientConn.Write([]byte("HTTP/1.1 200 Connection Established\r\n\r\n")); err != nil {
+		logger.Error("Failed to send tunnel established", zap.Error(err))
+		return
+	}
+
+	logger.Info("CONNECT tunnel (no MITM)", zap.String("host", dest))
+
+	errCh := make(chan struct{}, 2)
+	go func() {
+		_, _ = io.Copy(targetConn, clientConn)
+		errCh <- struct{}{}
+	}()
+	go func() {
+		_, _ = io.Copy(clientConn, targetConn)
+		errCh <- struct{}{}
+	}()
+	<-errCh
+}
+
+// knownLLMPathMarkers are vendor-agnostic suffixes that identify LLM API calls.
+// Once MITM has decided to send traffic to Centag, paths are normalized via these.
+var knownLLMPathMarkers = []struct {
+	suffix string
+	centag string
+}{
+	{"/chat/completions", "/v1/chat/completions"},
+	{"/v1/messages", "/v1/messages"},
+	{"/messages", "/v1/messages"},
+	{"/responses", "/v1/responses"},
+	{"/embeddings", "/v1/embeddings"},
+	{"/completions", "/v1/completions"}, // after /chat/completions
+	{"/models", "/v1/models"},
+}
+
+// looksLikeLLMAPIPath reports whether path looks like an LLM provider API call.
+// Used together with domain whitelist — not for arbitrary internet traffic.
+func looksLikeLLMAPIPath(path string) bool {
+	if strings.Contains(path, "/v1/") || path == "/v1" {
+		return true
+	}
+	for _, m := range knownLLMPathMarkers {
+		if path == m.suffix || strings.HasSuffix(path, m.suffix) || strings.Contains(path, m.suffix+"/") {
+			return true
+		}
+		if strings.Contains(path, m.suffix+"?") { // unlikely in URL.Path but cheap
+			return true
+		}
+		if strings.Contains(path, m.suffix) {
+			return true
+		}
+	}
+	return false
+}
+
+// convertBackendPath maps any vendor LLM path onto Centag's canonical /v1/* surface.
+// Principle: once traffic is classified as LLM proxy, do NOT keep per-agent prefixes
+// (/zen, /openai, …); strip to Centag routes so every Agent hits the same gateway.
+func convertBackendPath(originalPath string) string {
+	if originalPath == "" {
+		return originalPath
+	}
+	// Already on Centag OpenAI-compatible surface.
+	if strings.HasPrefix(originalPath, "/v1/") || originalPath == "/v1" {
+		return originalPath
+	}
+	// Generic: …/v1/foo → /v1/foo (covers /zen/v1/…, /openai/v1/…, /gateway/v1/…)
+	if idx := strings.LastIndex(originalPath, "/v1/"); idx >= 0 {
+		return originalPath[idx:]
+	}
+	if originalPath == "/v1" || strings.HasSuffix(originalPath, "/v1") {
+		return "/v1"
+	}
+	// Suffix → canonical Centag route (no /v1/ in original path).
+	// Longer / more specific markers first (chat/completions before completions).
+	for _, m := range knownLLMPathMarkers {
+		if originalPath == m.suffix || strings.HasSuffix(originalPath, m.suffix) {
+			return m.centag
+		}
+		if i := strings.Index(originalPath, m.suffix+"/"); i >= 0 {
+			// e.g. /xxx/models/gpt-4 → /v1/models/gpt-4
+			return m.centag + originalPath[i+len(m.suffix):]
+		}
+	}
+	// Legacy PPInfra / vendor shapes without a /v1/ segment.
+	if strings.HasPrefix(originalPath, "/v3/openai/") {
+		return "/api/v1/openai/" + strings.TrimPrefix(originalPath, "/v3/openai/")
+	}
+	if strings.HasPrefix(originalPath, "/openai/") {
+		suffix := strings.TrimPrefix(originalPath, "/openai/")
+		if suffix == "models" || strings.HasPrefix(suffix, "models/") {
+			return "/v1/" + suffix
+		}
+		return "/api/v1/openai/" + suffix
+	}
+	// Domain+pattern already said "LLM"; default to chat completions as safest gateway entry.
+	// Callers that matched only on domain should still land on a real Centag handler (not SPA).
+	return "/v1/chat/completions"
+}
+
 // forwardToBackend 转发请求到后端
 func (s *Server) forwardToBackend(w http.ResponseWriter, r *http.Request, scheme string) error {
 	// 保存原始路径
 	originalPath := r.URL.Path
-
-	// 路径转换规则:
-	// 1. /openai/v1/* → /v1/* (PPInfra路径 → 标准OpenAI API路径)
-	// 2. /openai/chat/completions → /api/v1/openai/chat/completions
-	// 3. /openai/models → /v1/models
-	// 4. /v3/openai/chat/completions → /api/v1/openai/chat/completions
-	// 5. /v1/* → 保持不变 (标准 OpenAI API)
-	convertedPath := originalPath
-
-	if strings.HasPrefix(originalPath, "/openai/v1/") {
-		// /openai/v1/models → /v1/models
-		// /openai/v1/chat/completions → /v1/chat/completions
-		convertedPath = "/" + strings.TrimPrefix(originalPath, "/openai/")
-	} else if strings.HasPrefix(originalPath, "/v3/openai/") {
-		// /v3/openai/chat/completions → /api/v1/openai/chat/completions
-		convertedPath = "/api/v1/openai/" + strings.TrimPrefix(originalPath, "/v3/openai/")
-	} else if strings.HasPrefix(originalPath, "/openai/") {
-		// 其他 /openai/* 路径
-		suffix := strings.TrimPrefix(originalPath, "/openai/")
-		if suffix == "models" || strings.HasPrefix(suffix, "models/") {
-			convertedPath = "/v1/" + suffix
-		} else {
-			// /openai/chat/completions → /api/v1/openai/chat/completions
-			convertedPath = "/api/v1/openai/" + suffix
-		}
-	}
-	// 否则保持原路径不变 (例如 /v1/models, /v1/chat/completions)
+	convertedPath := convertBackendPath(originalPath)
 
 	if convertedPath != originalPath {
 		logger.Info("Path converted for backend",
@@ -334,6 +538,9 @@ func (s *Server) forwardToBackend(w http.ResponseWriter, r *http.Request, scheme
 	req.Header.Set("X-Proxy-Scheme", scheme)
 	req.Header.Set("X-Original-Host", r.Host)
 	req.Header.Set("X-Original-Path", originalPath) // 保存原始路径
+
+	// Agent 填的是上游厂商 Token，不知道被 MITM；转发到 Centag 时注入网关 Key。
+	applyBackendAuth(req, s.backendAuthTokenLocked())
 
 	// 发送请求，直连后端（不走系统代理，避免循环）
 	client := &http.Client{
@@ -416,26 +623,19 @@ func (w *responseWriter) WriteHeader(statusCode int) {
 
 // shouldProxyToBackend 判断请求是否应该转发到LLM Proxy后端
 func (s *Server) shouldProxyToBackend(r *http.Request) bool {
-	// 提取域名（去掉端口）
-	hostWithoutPort := r.Host
-	if idx := strings.Index(hostWithoutPort, ":"); idx != -1 {
-		hostWithoutPort = hostWithoutPort[:idx]
-	}
+	return s.ShouldRouteToBackend(r.Host, r.URL.Path)
+}
 
-	// 检查域名是否在目标列表中
-	if !s.targetDomains[hostWithoutPort] {
-		return false
+// applyBackendAuth replaces Agent Authorization with Centag egress key.
+// Original Bearer is kept in X-Original-Authorization for diagnostics only.
+func applyBackendAuth(req *http.Request, centagToken string) {
+	if req == nil || strings.TrimSpace(centagToken) == "" {
+		return
 	}
-
-	// 检查路径是否匹配
-	path := r.URL.Path
-	for _, pattern := range s.pathPatterns {
-		if strings.HasPrefix(path, pattern) {
-			return true
-		}
+	if orig := strings.TrimSpace(req.Header.Get("Authorization")); orig != "" {
+		req.Header.Set("X-Original-Authorization", orig)
 	}
-
-	return false
+	req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(centagToken))
 }
 
 // forwardToOriginal 直接转发到原始目标服务器

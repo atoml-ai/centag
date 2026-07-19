@@ -475,27 +475,37 @@ type PluginsConfig struct {
 
 // SystemProxyConfig configures the MITM proxy.
 type SystemProxyConfig struct {
-	Enabled       bool     `json:"enabled"`
-	ListenPort    int      `json:"listen_port"`
-	PACEnabled    bool     `json:"pac_enabled"`
-	CACertPath    string   `json:"ca_cert_path"`
-	CAKeyPath     string   `json:"ca_key_path"`
-	CertDir       string   `json:"cert_dir"`
-	CertValidDays int      `json:"cert_valid_days"`
-	Domains       []string `json:"domains"`
-	PathPatterns  []string `json:"path_patterns"`
+	Enabled         bool     `json:"enabled"`
+	ListenPort      int      `json:"listen_port"`
+	ListenAddr      string   `json:"listen_addr"`      // host part only; default 127.0.0.1
+	AdvertiseHost   string   `json:"advertise_host"`   // PAC PROXY host when LAN enabled
+	AllowLANClients bool     `json:"allow_lan_clients"`
+	PACEnabled      bool     `json:"pac_enabled"`
+	CACertPath      string   `json:"ca_cert_path"`
+	CAKeyPath       string   `json:"ca_key_path"`
+	CertDir         string   `json:"cert_dir"`
+	CertValidDays   int      `json:"cert_valid_days"`
+	Domains         []string `json:"domains"`
+	PathPatterns    []string `json:"path_patterns"`
+	// EgressAPIKey is the Centag llmproxy_* key MITM injects when forwarding to :20060.
+	// Agents keep their upstream tokens; they never need to know about this key.
+	// Empty → resolve from LLM_PROXY_SYSTEM_PROXY_EGRESS_API_KEY / LLM_PROXY_DEFAULT_ADMIN_API_KEY.
+	EgressAPIKey string `json:"egress_api_key,omitempty"`
 }
 
 // GetDefaultSystemProxyConfig returns the default MITM proxy config.
 func GetDefaultSystemProxyConfig() SystemProxyConfig {
 	return SystemProxyConfig{
-		Enabled:       false,
-		ListenPort:    8081,
-		PACEnabled:    true,
-		CACertPath:    "./certs/ca.crt",
-		CAKeyPath:     "./certs/ca.key",
-		CertDir:       "./certs/domains",
-		CertValidDays: 90,
+		Enabled:         false,
+		ListenPort:      8081,
+		ListenAddr:      "127.0.0.1",
+		AdvertiseHost:   "",
+		AllowLANClients: false,
+		PACEnabled:      true,
+		CACertPath:      "./certs/ca.crt",
+		CAKeyPath:       "./certs/ca.key",
+		CertDir:         "./certs/domains",
+		CertValidDays:   90,
 		Domains: []string{
 			"api.openai.com",
 			"api.anthropic.com",

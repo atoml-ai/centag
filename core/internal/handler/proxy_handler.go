@@ -1,13 +1,18 @@
 package handler
 
 import (
+	"crypto/sha256"
+	"crypto/x509"
+	"encoding/hex"
+	"encoding/pem"
 	"os"
+	"strconv"
 
 	"centag/core/internal/cert"
-	"centag/core/pkg/config"
-	"centag/core/pkg/logger"
 	"centag/core/internal/mitm"
 	"centag/core/internal/pac"
+	"centag/core/pkg/config"
+	"centag/core/pkg/logger"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
@@ -56,6 +61,34 @@ func NewProxyHandler(mitmServer *mitm.Server, pacConfig *pac.Config, cfg *config
 	}
 
 	return h
+}
+
+// SetMitmServer updates the MITM server reference without replacing the handler
+// (Gin routes bind the original handler instance at registration time).
+func (h *ProxyHandler) SetMitmServer(mitmServer *mitm.Server) {
+	if h == nil {
+		return
+	}
+	h.mitmServer = mitmServer
+	if mitmServer != nil {
+		h.certManager = mitmServer.GetCertManager()
+		h.syncMITMRouting()
+	} else {
+		h.certManager = nil
+	}
+}
+
+// syncMITMRouting pushes current PAC domains/path patterns into the running MITM whitelist.
+func (h *ProxyHandler) syncMITMRouting() {
+	if h == nil || h.mitmServer == nil || h.pacGen == nil {
+		return
+	}
+	domains := h.pacGen.GetDomains()
+	patterns := h.pacGen.GetPathPatterns()
+	h.mitmServer.SetRoutingRules(domains, patterns)
+	logger.Info("MITM routing rules synced from PAC",
+		zap.Int("domains", len(domains)),
+		zap.Int("path_patterns", len(patterns)))
 }
 
 // ServePAC 提供PAC文件
@@ -109,6 +142,23 @@ func (h *ProxyHandler) GetCACert(c *gin.Context) {
 	c.Data(200, "application/x-x509-ca-cert", certPEM)
 }
 
+// RefreshPACConfig replaces PAC generator config while preserving domain/pattern lists when empty in src.
+func (h *ProxyHandler) RefreshPACConfig(pacConfig *pac.Config) {
+	if pacConfig == nil {
+		return
+	}
+	if h.pacConfig != nil {
+		if len(pacConfig.Domains) == 0 {
+			pacConfig.Domains = h.pacGen.GetDomains()
+		}
+		if len(pacConfig.PathPatterns) == 0 {
+			pacConfig.PathPatterns = h.pacGen.GetPathPatterns()
+		}
+	}
+	h.pacConfig = pacConfig
+	h.pacGen = pac.NewPACGenerator(pacConfig)
+}
+
 // GetProxyStatus 获取代理状态
 func (h *ProxyHandler) GetProxyStatus(c *gin.Context) {
 	pacEnabled := true
@@ -124,6 +174,64 @@ func (h *ProxyHandler) GetProxyStatus(c *gin.Context) {
 	}
 
 	c.JSON(200, status)
+}
+
+// GetSetupStatus returns client/onboarding-oriented proxy setup status (auth required).
+func (h *ProxyHandler) GetSetupStatus(c *gin.Context) {
+	sp := config.GetDefaultSystemProxyConfig()
+	apiPort := 20060
+	if h.cfg != nil {
+		sp = h.cfg.SystemProxy
+		config.NormalizeSystemProxyConfig(&sp)
+		if h.cfg.Server.Port > 0 {
+			apiPort = h.cfg.Server.Port
+		}
+	}
+
+	apiBase := sp.PublicAPIBase(apiPort)
+	status := gin.H{
+		"mode":                  sp.SetupMode(),
+		"mitm_enabled":          h.mitmServer != nil,
+		"listen_addr":           sp.MITMListenAddr(),
+		"listen_is_loopback":    sp.ListenIsLoopback(),
+		"allow_lan_clients":     sp.AllowLANClients,
+		"advertise_host":        sp.AdvertiseHost,
+		"pac_enabled":           sp.PACEnabled,
+		"pac_url":               apiBase + "/api/v1/proxy/pac",
+		"ca_download_url":       apiBase + "/api/v1/proxy/ca.crt",
+		"ca_fingerprint_sha256": h.caFingerprintSHA256(),
+		"global_proxy_mode":     !sp.PACEnabled,
+		"mitm_proxy":            sp.PACProxyHost() + ":" + strconv.Itoa(sp.ListenPort),
+	}
+	c.JSON(200, status)
+}
+
+func (h *ProxyHandler) caFingerprintSHA256() string {
+	var certPEM []byte
+	var err error
+	if h.certManager != nil {
+		certPEM, err = h.certManager.GetCACertPEM()
+		if err != nil {
+			return ""
+		}
+	} else if h.certPath != "" {
+		certPEM, err = os.ReadFile(h.certPath)
+		if err != nil {
+			return ""
+		}
+	} else {
+		return ""
+	}
+	block, _ := pem.Decode(certPEM)
+	if block == nil {
+		return ""
+	}
+	cert, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		return ""
+	}
+	sum := sha256.Sum256(cert.Raw)
+	return hex.EncodeToString(sum[:])
 }
 
 // AddDomain 添加域名到PAC
@@ -149,6 +257,9 @@ func (h *ProxyHandler) AddDomain(c *gin.Context) {
 			return
 		}
 	}
+
+	// PAC + MITM 白名单立即同步（无需重启）
+	h.syncMITMRouting()
 
 	logger.Info("Domain added to PAC", zap.String("domain", req.Domain))
 
@@ -181,6 +292,8 @@ func (h *ProxyHandler) RemoveDomain(c *gin.Context) {
 			return
 		}
 	}
+
+	h.syncMITMRouting()
 
 	logger.Info("Domain removed from PAC", zap.String("domain", req.Domain))
 
@@ -221,12 +334,9 @@ func (h *ProxyHandler) AddPathPattern(c *gin.Context) {
 			c.JSON(500, gin.H{"error": "Failed to save config: " + err.Error()})
 			return
 		}
-
-		// 如果MITM服务器存在，需要重启以应用新配置
-		if h.mitmServer != nil {
-			logger.Info("Path pattern added, MITM server may need restart to apply changes", zap.String("pattern", req.Pattern))
-		}
 	}
+
+	h.syncMITMRouting()
 
 	logger.Info("Path pattern added to PAC", zap.String("pattern", req.Pattern))
 
@@ -258,12 +368,9 @@ func (h *ProxyHandler) RemovePathPattern(c *gin.Context) {
 			c.JSON(500, gin.H{"error": "Failed to save config: " + err.Error()})
 			return
 		}
-
-		// 如果MITM服务器存在，需要重启以应用新配置
-		if h.mitmServer != nil {
-			logger.Info("Path pattern removed, MITM server may need restart to apply changes", zap.String("pattern", req.Pattern))
-		}
 	}
+
+	h.syncMITMRouting()
 
 	logger.Info("Path pattern removed from PAC", zap.String("pattern", req.Pattern))
 

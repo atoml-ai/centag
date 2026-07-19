@@ -838,13 +838,15 @@ func New(cfg *config.Config) *Server {
 	var mitmServer *mitm.Server
 	var proxyHandlerExt *handler.ProxyHandler
 
-	// 始终创建PAC配置和ProxyHandler,以便在未启用时也能管理域名
-	pacConfig := &pac.Config{
-		ProxyHost:    "127.0.0.1",
-		ProxyPort:    cfg.SystemProxy.ListenPort,
-		Domains:      cfg.SystemProxy.Domains,
-		PathPatterns: cfg.SystemProxy.PathPatterns,
+	// Normalize/validate system proxy before PAC/MITM wiring
+	if err := config.ValidateSystemProxyConfig(&cfg.SystemProxy); err != nil {
+		logger.Warnf("system_proxy config invalid, falling back to local defaults: %v", err)
+		cfg.SystemProxy.AllowLANClients = false
+		config.NormalizeSystemProxyConfig(&cfg.SystemProxy)
 	}
+
+	// 始终创建PAC配置和ProxyHandler,以便在未启用时也能管理域名
+	pacConfig := buildSystemProxyPACConfig(cfg)
 
 	// 创建扩展代理处理器(即使未启用也要创建,用于管理PAC域名)
 	proxyHandlerExt = handler.NewProxyHandler(nil, pacConfig, cfg)
@@ -859,16 +861,7 @@ func New(cfg *config.Config) *Server {
 			backendHost = "127.0.0.1"
 		}
 
-		mitmConfig := &mitm.Config{
-			Addr:          fmt.Sprintf(":%d", cfg.SystemProxy.ListenPort),
-			BackendAddr:   fmt.Sprintf("%s:%d", backendHost, cfg.Server.Port),
-			CACertPath:    cfg.SystemProxy.CACertPath,
-			CAKeyPath:     cfg.SystemProxy.CAKeyPath,
-			CertDir:       cfg.SystemProxy.CertDir,
-			CertValidDays: cfg.SystemProxy.CertValidDays,
-			Domains:       cfg.SystemProxy.Domains,
-			PathPatterns:  cfg.SystemProxy.PathPatterns,
-		}
+		mitmConfig := buildMITMConfig(cfg, backendHost)
 
 		var err error
 		mitmServer, err = mitm.NewServer(mitmConfig)
@@ -880,7 +873,11 @@ func New(cfg *config.Config) *Server {
 
 			logger.Info("System proxy initialized successfully",
 				zap.Int("mitm_port", cfg.SystemProxy.ListenPort),
-				zap.Int("domains", len(cfg.SystemProxy.Domains)))
+				zap.Int("domains", len(cfg.SystemProxy.Domains)),
+				zap.Bool("egress_api_key_configured", mitmConfig.BackendAuthToken != ""))
+			if mitmConfig.BackendAuthToken == "" {
+				logger.Warn("System proxy MITM has no egress API key; Agent upstream tokens will fail Centag auth. Set LLM_PROXY_SYSTEM_PROXY_EGRESS_API_KEY or LLM_PROXY_DEFAULT_ADMIN_API_KEY (llmproxy_*)")
+			}
 		}
 	}
 
@@ -994,6 +991,8 @@ func New(cfg *config.Config) *Server {
 	configHandler.SetProxyCache(proxyCache)
 	configHandler.SetMitmToggle(srv.toggleMITM)
 	configHandler.SetMitmForceRestart(srv.forceRestartMITM)
+	configHandler.SetMitmSyncEgress(srv.syncMITMEgressAuth)
+	configHandler.SetProxyHandlerRefresh(srv.refreshProxyHandlerPAC)
 
 	// 注册路由
 	srv.setupRoutes()
@@ -1631,6 +1630,7 @@ func (s *Server) setupRoutes() {
 		proxy := v1Protected.Group("/proxy")
 		{
 			proxy.GET("/status", s.proxyHandlerExt.GetProxyStatus)
+			proxy.GET("/setup/status", s.proxyHandlerExt.GetSetupStatus)
 			proxy.GET("/domains", s.proxyHandlerExt.GetPACDomains)
 			proxy.POST("/domains/add", s.proxyHandlerExt.AddDomain)
 			proxy.POST("/domains/remove", s.proxyHandlerExt.RemoveDomain)
@@ -1850,31 +1850,20 @@ func (s *Server) toggleMITM(enabled bool) {
 		if backendHost == "0.0.0.0" || backendHost == "" {
 			backendHost = "127.0.0.1"
 		}
-		mitmConfig := &mitm.Config{
-			Addr:          fmt.Sprintf(":%d", cfg.SystemProxy.ListenPort),
-			BackendAddr:   fmt.Sprintf("%s:%d", backendHost, cfg.Server.Port),
-			CACertPath:    cfg.SystemProxy.CACertPath,
-			CAKeyPath:     cfg.SystemProxy.CAKeyPath,
-			CertDir:       cfg.SystemProxy.CertDir,
-			CertValidDays: cfg.SystemProxy.CertValidDays,
-			Domains:       cfg.SystemProxy.Domains,
-			PathPatterns:  cfg.SystemProxy.PathPatterns,
+		if err := config.ValidateSystemProxyConfig(&cfg.SystemProxy); err != nil {
+			logger.Errorf("Invalid system_proxy config on hot-enable: %v", err)
+			return
 		}
+		mitmConfig := buildMITMConfig(cfg, backendHost)
 		srv, err := mitm.NewServer(mitmConfig)
 		if err != nil {
 			logger.Errorf("Failed to create MITM server on hot-enable: %v", err)
 			return
 		}
 		s.mitmServer = srv
-		// 更新 proxyHandlerExt 的 mitmServer 引用（若已初始化）
+		// Gin 路由绑定的是注册时的 handler 实例，只能就地更新引用，不能整体替换
 		if s.proxyHandlerExt != nil {
-			pacConfig := &pac.Config{
-				ProxyHost:    "127.0.0.1",
-				ProxyPort:    cfg.SystemProxy.ListenPort,
-				Domains:      cfg.SystemProxy.Domains,
-				PathPatterns: cfg.SystemProxy.PathPatterns,
-			}
-			s.proxyHandlerExt = handler.NewProxyHandler(s.mitmServer, pacConfig, cfg)
+			s.proxyHandlerExt.SetMitmServer(s.mitmServer)
 		}
 		s.mitmWg.Add(1)
 		go func() {
@@ -1897,18 +1886,53 @@ func (s *Server) toggleMITM(enabled bool) {
 			logger.Info("MITM proxy server hot-stopped")
 		}
 		s.mitmServer = nil
-		// 恢复 proxyHandlerExt 为不带 mitmServer 的实例
 		if s.proxyHandlerExt != nil {
-			cfg := s.cfg
-			pacConfig := &pac.Config{
-				ProxyHost:    "127.0.0.1",
-				ProxyPort:    cfg.SystemProxy.ListenPort,
-				Domains:      cfg.SystemProxy.Domains,
-				PathPatterns: cfg.SystemProxy.PathPatterns,
-			}
-			s.proxyHandlerExt = handler.NewProxyHandler(nil, pacConfig, cfg)
+			s.proxyHandlerExt.SetMitmServer(nil)
 		}
 	}
+}
+
+func buildSystemProxyPACConfig(cfg *config.Config) *pac.Config {
+	sp := cfg.SystemProxy
+	config.NormalizeSystemProxyConfig(&sp)
+	return &pac.Config{
+		ProxyHost:    sp.PACProxyHost(),
+		ProxyPort:    sp.ListenPort,
+		Domains:      sp.Domains,
+		PathPatterns: sp.PathPatterns,
+	}
+}
+
+func buildMITMConfig(cfg *config.Config, backendHost string) *mitm.Config {
+	return &mitm.Config{
+		Addr:             cfg.SystemProxy.MITMListenAddr(),
+		BackendAddr:      fmt.Sprintf("%s:%d", backendHost, cfg.Server.Port),
+		CACertPath:       cfg.SystemProxy.CACertPath,
+		CAKeyPath:        cfg.SystemProxy.CAKeyPath,
+		CertDir:          cfg.SystemProxy.CertDir,
+		CertValidDays:    cfg.SystemProxy.CertValidDays,
+		Domains:          cfg.SystemProxy.Domains,
+		PathPatterns:     cfg.SystemProxy.PathPatterns,
+		BackendAuthToken: config.ResolveSystemProxyEgressAPIKey(&cfg.SystemProxy),
+	}
+}
+
+func (s *Server) syncMITMEgressAuth() {
+	s.mitmMu.Lock()
+	defer s.mitmMu.Unlock()
+	if s.mitmServer == nil || s.cfg == nil {
+		return
+	}
+	token := config.ResolveSystemProxyEgressAPIKey(&s.cfg.SystemProxy)
+	s.mitmServer.SetBackendAuthToken(token)
+	logger.Infof("MITM egress API key synced (configured=%v)", token != "")
+}
+
+func (s *Server) refreshProxyHandlerPAC() {
+	if s == nil || s.proxyHandlerExt == nil || s.cfg == nil {
+		return
+	}
+	s.proxyHandlerExt.RefreshPACConfig(buildSystemProxyPACConfig(s.cfg))
 }
 
 // registerBuiltinPluginsToStore 将 NodeRegistry 中的内置插件注册到 PluginRegistryStore
