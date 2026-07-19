@@ -455,12 +455,12 @@
         <el-tab-pane label="代理设置" name="proxy_settings">
           <el-tabs type="border-card">
             <!-- Host 代理 -->
-            <el-tab-pane label="Host代理">
+            <el-tab-pane label="Host代理（高级）">
               <HostProxyView />
             </el-tab-pane>
 
             <!-- 系统代理 -->
-            <el-tab-pane label="系统代理">
+            <el-tab-pane label="本机代理出口（PAC）">
               <SystemProxyView />
             </el-tab-pane>
 
