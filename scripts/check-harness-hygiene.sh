@@ -28,15 +28,15 @@ for d in tooling var webui desktop; do
 done
 
 # apps/ is reserved for optional client shells (must stay decoupled from core).
-# Currently only apps/launcher (L1 menu + browser) is allowed.
+# Allowed: launcher (L1 menu + browser), proxyctl (OS PAC/CA helper for system egress).
 if [[ -d apps ]]; then
   shopt -s nullglob
   for child in apps/*; do
     base="$(basename "$child")"
     case "$base" in
-      launcher) ;;
+      launcher|proxyctl) ;;
       *)
-        echo "UNEXPECTED PATH: $child (only apps/launcher is allowed under apps/)"
+        echo "UNEXPECTED PATH: $child (only apps/launcher and apps/proxyctl are allowed under apps/)"
         fail=1
         ;;
     esac
