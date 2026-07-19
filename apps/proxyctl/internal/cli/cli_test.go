@@ -55,3 +55,20 @@ func TestParseServerFlag(t *testing.T) {
 		})
 	}
 }
+
+func TestParseRunArgs(t *testing.T) {
+	server, argv, err := parseRunArgs([]string{"--server", "http://h:20060", "--", "opencode", "-v"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if server != "http://h:20060" {
+		t.Fatalf("server=%q", server)
+	}
+	if len(argv) != 2 || argv[0] != "opencode" || argv[1] != "-v" {
+		t.Fatalf("argv=%v", argv)
+	}
+	_, argv, err = parseRunArgs([]string{"opencode"})
+	if err != nil || len(argv) != 1 || argv[0] != "opencode" {
+		t.Fatalf("argv=%v err=%v", argv, err)
+	}
+}
