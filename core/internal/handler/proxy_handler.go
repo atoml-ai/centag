@@ -190,18 +190,19 @@ func (h *ProxyHandler) GetSetupStatus(c *gin.Context) {
 
 	apiBase := sp.PublicAPIBase(apiPort)
 	status := gin.H{
-		"mode":                  sp.SetupMode(),
-		"mitm_enabled":          h.mitmServer != nil,
-		"listen_addr":           sp.MITMListenAddr(),
-		"listen_is_loopback":    sp.ListenIsLoopback(),
-		"allow_lan_clients":     sp.AllowLANClients,
-		"advertise_host":        sp.AdvertiseHost,
-		"pac_enabled":           sp.PACEnabled,
-		"pac_url":               apiBase + "/api/v1/proxy/pac",
-		"ca_download_url":       apiBase + "/api/v1/proxy/ca.crt",
-		"ca_fingerprint_sha256": h.caFingerprintSHA256(),
-		"global_proxy_mode":     !sp.PACEnabled,
-		"mitm_proxy":            sp.PACProxyHost() + ":" + strconv.Itoa(sp.ListenPort),
+		"mode":                     sp.SetupMode(),
+		"mitm_enabled":             h.mitmServer != nil,
+		"listen_addr":              sp.MITMListenAddr(),
+		"listen_is_loopback":       sp.ListenIsLoopback(),
+		"allow_lan_clients":        sp.AllowLANClients,
+		"advertise_host":           sp.AdvertiseHost,
+		"pac_enabled":              sp.PACEnabled,
+		"pac_url":                  apiBase + "/api/v1/proxy/pac",
+		"ca_download_url":          apiBase + "/api/v1/proxy/ca.crt",
+		"ca_fingerprint_sha256":    h.caFingerprintSHA256(),
+		"global_proxy_mode":        !sp.PACEnabled,
+		"mitm_proxy":               sp.PACProxyHost() + ":" + strconv.Itoa(sp.ListenPort),
+		"egress_api_key_configured": config.ResolveSystemProxyEgressAPIKey(&sp) != "",
 	}
 	c.JSON(200, status)
 }
