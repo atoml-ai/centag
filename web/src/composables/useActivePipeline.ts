@@ -1,16 +1,13 @@
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted } from 'vue'
 import { getPipelineDefaults, getPipelines } from '@/api/pipeline'
 import { useAuthStore } from '@/stores/auth'
 
-export function useActivePipeline(options?: { pollMs?: number; enabled?: boolean }) {
+export function useActivePipeline(options?: { enabled?: boolean }) {
   const authStore = useAuthStore()
-  const pollMs = options?.pollMs ?? 30_000
   const enabled = options?.enabled ?? true
 
   const pipelineId = ref('')
   const pipelineName = ref('')
-
-  let intervalId: number | null = null
 
   async function loadActivePipeline() {
     if (!authStore.isAuthenticated) return
@@ -31,22 +28,9 @@ export function useActivePipeline(options?: { pollMs?: number; enabled?: boolean
     }
   }
 
-  function startPolling() {
-    loadActivePipeline()
-    intervalId = window.setInterval(loadActivePipeline, pollMs)
-  }
-
-  function stopPolling() {
-    if (intervalId !== null) {
-      clearInterval(intervalId)
-      intervalId = null
-    }
-  }
-
   onMounted(() => {
-    if (enabled) startPolling()
+    if (enabled) loadActivePipeline()
   })
-  onUnmounted(stopPolling)
 
   return {
     pipelineId,

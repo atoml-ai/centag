@@ -464,7 +464,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   Document, CircleCheck, TrendCharts, Warning,
@@ -919,12 +919,9 @@ async function load() {
   }
 }
 
-let timer: number | null = null
 onMounted(() => {
   load()
-  timer = window.setInterval(load, 10000)
 })
-onUnmounted(() => { if (timer) clearInterval(timer) })
 </script>
 
 <style scoped>

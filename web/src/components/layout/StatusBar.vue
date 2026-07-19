@@ -52,7 +52,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { Collection, CircleCheck, CircleClose, Coin, Share, Monitor } from '@element-plus/icons-vue'
 import { getStatus } from '@/api'
@@ -67,11 +67,9 @@ const { visible: logPanelVisible, toggle: toggleLogPanel } = useLogPanel()
 const { isMinimal } = useEdition()
 
 const { cacheStats, hitRate, hitRateColor, formatNumber } = useCacheStats({
-  pollMs: 5000,
   enabled: !isMinimal.value
 })
 const { pipelineId, pipelineName } = useActivePipeline({
-  pollMs: 30_000,
   enabled: true
 })
 
@@ -129,13 +127,8 @@ async function loadStatus() {
   }
 }
 
-let timer: number | null = null
 onMounted(() => {
   loadStatus()
-  timer = window.setInterval(loadStatus, 30000)
-})
-onUnmounted(() => {
-  if (timer) clearInterval(timer)
 })
 </script>
 

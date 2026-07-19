@@ -1,11 +1,10 @@
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { getCacheStats, getCacheList } from '@/api'
 import { useAuthStore } from '@/stores/auth'
 import { isMinimalEdition } from '@/utils/edition'
 
-export function useCacheStats(options?: { pollMs?: number; enabled?: boolean }) {
+export function useCacheStats(options?: { enabled?: boolean }) {
   const authStore = useAuthStore()
-  const pollMs = options?.pollMs ?? 5000
   const enabled = options?.enabled ?? true
 
   const cacheStats = ref({
@@ -32,8 +31,6 @@ export function useCacheStats(options?: { pollMs?: number; enabled?: boolean }) 
     return '#f56c6c'
   })
 
-  let intervalId: number | null = null
-
   function formatNumber(num: number): string {
     if (num >= 1_000_000) return (num / 1_000_000).toFixed(1) + 'M'
     if (num >= 1_000) return (num / 1_000).toFixed(1) + 'K'
@@ -57,22 +54,9 @@ export function useCacheStats(options?: { pollMs?: number; enabled?: boolean }) 
     }
   }
 
-  function startPolling() {
-    loadStats()
-    intervalId = window.setInterval(loadStats, pollMs)
-  }
-
-  function stopPolling() {
-    if (intervalId !== null) {
-      clearInterval(intervalId)
-      intervalId = null
-    }
-  }
-
   onMounted(() => {
-    if (enabled && !isMinimalEdition()) startPolling()
+    if (enabled && !isMinimalEdition()) loadStats()
   })
-  onUnmounted(stopPolling)
 
   return {
     cacheStats,

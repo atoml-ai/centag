@@ -128,7 +128,7 @@ import { useEdition } from '@/composables/useEdition'
 import type { NavItem } from '@/utils/nav'
 import { Refresh, ArrowDown, ArrowRight, User, SwitchButton } from '@element-plus/icons-vue'
 import CentagMark from '@/components/icons/CentagMark.vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessageBox } from 'element-plus'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -169,10 +169,7 @@ function handleDropdownCommand(command: string, parentItem: NavItem) {
 
 const handleRefresh = () => {
   refreshing.value = true
-  setTimeout(() => {
-    refreshing.value = false
-    ElMessage.success('已刷新')
-  }, 500)
+  window.location.reload()
 }
 
 // ── User menu ────────────────────────────────────────────────────────────────

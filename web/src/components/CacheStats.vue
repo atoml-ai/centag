@@ -40,7 +40,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { Collection, CircleCheck, CircleClose, Coin } from '@element-plus/icons-vue'
 import { getCacheStats, getCacheList } from '@/api'
 import { useAuthStore } from '@/stores/auth'
@@ -56,7 +56,6 @@ const cacheStats = ref({
   max_size: 0
 })
 
-let intervalId: number | null = null
 const authStore = useAuthStore()
 
 // 计算命中率
@@ -106,14 +105,6 @@ async function loadStats() {
 
 onMounted(() => {
   loadStats()
-  // 每 5 秒自动刷新
-  intervalId = window.setInterval(loadStats, 5000)
-})
-
-onUnmounted(() => {
-  if (intervalId !== null) {
-    clearInterval(intervalId)
-  }
 })
 </script>
 
