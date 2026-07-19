@@ -181,7 +181,7 @@
 |------|------|--------|---------|-------------|
 | `⚠️` Clash 订阅 | `/api/v1/user/clash/*`, `/clash/subscribe/:token` | 9 | 垂直业务场景接口 | 迁移为插件或移至独立应用 |
 | `⚠️` Agent 记忆 | `/api/v1/memory/*` | 12 | 面向 Agent 的业务专用接口 | 迁移为插件实现 |
-| `⚠️` 系统代理 MITM | `/api/v1/proxy/pac`, `/api/v1/proxy/ca.crt`, `/api/v1/proxy/status`, `/api/v1/proxy/domains/*`, `/api/v1/proxy/patterns/*` | 8 | 桌面应用专属功能，非 LLM 代理核心 | 移至 `web/` 或独立模块 |
+| `⚠️` 系统代理 MITM | `/api/v1/proxy/pac`, `/api/v1/proxy/ca.crt`, `/api/v1/proxy/status`, `/api/v1/proxy/setup/status`, `/api/v1/proxy/domains/*`, `/api/v1/proxy/patterns/*` | 9 | 桌面/Team 本机出口；`setup/status` 含 local\|lan、advertise、PAC/CA URL | 保留；产品化见 v0.2.5 |
 | `⚠️` 主机代理 | `/api/v1/host-proxy/*` | 4 | 桌面应用专属功能，非 LLM 代理核心 | 移至 `web/` 或独立模块 |
 
 ### 3.2 待确认接口（定位需讨论）
