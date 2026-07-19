@@ -607,7 +607,7 @@ build_proxyctl_shell() {
     bash "$script"
 }
 
-# ./start.sh run proxyctl [--server URL] <enable|disable|doctor|status> ...
+# ./start.sh run proxyctl [--server URL] <enable|disable|doctor|status|run|env> ...
 # Ensures binary exists, then execs the real CLI (same args as 真源 centag-proxyctl).
 run_proxyctl() {
     local proxyctl_bin
@@ -3358,7 +3358,7 @@ _help_run() {
     echo ""
     echo -e "${CYAN}用法:${NC}"
     echo -e "  ./start.sh run <服务> [--launcher]"
-    echo -e "  ./start.sh run proxyctl [enable|disable|doctor|status] [选项...]"
+    echo -e "  ./start.sh run proxyctl [enable|disable|doctor|status|run|env] [选项...]"
     echo ""
     echo -e "${CYAN}服务:${NC}"
     echo -e "  ${GREEN}be${NC} | backend        启动后端服务 (端口 20060)"
@@ -3376,12 +3376,15 @@ _help_run() {
     echo -e "  ./start.sh run personal            # 普通个人版服务"
     echo -e "  ./start.sh run personal --launcher     # 启动器方式"
     echo -e "  ./start.sh run minimal --launcher"
-    echo -e "  ./start.sh run proxyctl enable"
+    echo -e "  ./start.sh run proxyctl run --server http://192.168.1.10:20060 -- opencode"
+    echo -e "  ./start.sh run proxyctl env --server http://192.168.1.10:20060"
     echo -e "  ./start.sh run proxyctl enable --server http://192.168.1.10:20060"
     echo -e "  ./start.sh run proxyctl doctor"
     echo -e "  ./start.sh run proxyctl disable"
     echo ""
     echo -e "${CYAN}真源命令（员工机直接用二进制，与 start.sh 等价）:${NC}"
+    echo -e "  centag-proxyctl run [--server URL] -- <agent命令>"
+    echo -e "  centag-proxyctl env [--server URL]"
     echo -e "  centag-proxyctl enable [--server URL]"
     echo -e "  centag-proxyctl doctor [--server URL]"
     echo -e "  centag-proxyctl disable"
@@ -4422,7 +4425,7 @@ main() {
                     print_error "未知运行目标: $svc"
                     echo "支持的运行目标: be, fe, personal, minimal, proxyctl"
                     echo "启动器: ./start.sh run personal --launcher  或  ./start.sh run minimal --launcher"
-                    echo "系统代理: ./start.sh run proxyctl enable|disable|doctor|status"
+                    echo "系统代理: ./start.sh run proxyctl enable|disable|doctor|status|run|env"
                     echo ""
                     show_all_mode_info
                     exit 1

@@ -13,6 +13,8 @@ var allowed = map[string]bool{
 	"disable": true,
 	"status":  true,
 	"doctor":  true,
+	"run":     true,
+	"env":     true,
 	"help":    true,
 	"-h":      true,
 	"--help":  true,
@@ -26,7 +28,7 @@ func Run(args []string) error {
 	}
 	cmd := args[0]
 	if !allowed[cmd] {
-		return fmt.Errorf("unknown command %q (allowed: enable|disable|status|doctor)", cmd)
+		return fmt.Errorf("unknown command %q (allowed: enable|disable|status|doctor|run|env)", cmd)
 	}
 	if cmd == "help" || cmd == "-h" || cmd == "--help" {
 		printHelp()
@@ -52,6 +54,18 @@ func Run(args []string) error {
 			return err
 		}
 		return eng.Doctor(server)
+	case "env":
+		server, err := parseServerFlag(rest)
+		if err != nil {
+			return err
+		}
+		return eng.Env(server)
+	case "run":
+		server, argv, err := parseRunArgs(rest)
+		if err != nil {
+			return err
+		}
+		return eng.Run(server, argv)
 	default:
 		return fmt.Errorf("unknown command %q", cmd)
 	}
@@ -79,16 +93,54 @@ func parseServerFlag(args []string) (string, error) {
 	return server, nil
 }
 
+// parseRunArgs: [--server URL] -- <cmd> [args...]
+// Also accepts: [--server URL] <cmd> [args...] when first non-flag is not --
+func parseRunArgs(args []string) (server string, argv []string, err error) {
+	i := 0
+	for i < len(args) {
+		a := args[i]
+		switch {
+		case a == "--":
+			return server, args[i+1:], nil
+		case a == "--server" || a == "-s":
+			if i+1 >= len(args) {
+				return "", nil, fmt.Errorf("%s requires a value", a)
+			}
+			i++
+			server = strings.TrimSpace(args[i])
+			i++
+		case strings.HasPrefix(a, "--server="):
+			server = strings.TrimSpace(strings.TrimPrefix(a, "--server="))
+			i++
+		case a == "--help" || a == "-h":
+			i++
+		case strings.HasPrefix(a, "-"):
+			return "", nil, fmt.Errorf("unknown flag %q", a)
+		default:
+			return server, args[i:], nil
+		}
+	}
+	return server, nil, nil
+}
+
 func printHelp() {
-	fmt.Print(`centag-proxyctl — configure OS PAC/CA to use Centag as LLM egress
+	fmt.Print(`centag-proxyctl — Centag system PAC / process-proxy helper
 
 Usage:
   centag-proxyctl enable [--server http://host:20060]
   centag-proxyctl disable
   centag-proxyctl status
   centag-proxyctl doctor [--server http://host:20060]
+  centag-proxyctl env [--server http://host:20060]
+  centag-proxyctl run [--server http://host:20060] -- <command> [args...]
 
-Local mode (default): ensure local Centag MITM + install CA + write system PAC.
-Remote/Team mode: --server points at team Centag API; does not stop remote MITM on disable.
+Process proxy (recommended for OpenCode / CLI agents):
+  Downloads CA, sets HTTPS_PROXY + NODE_EXTRA_CA_CERTS, then execs the command.
+  Does NOT inject Centag API keys (MITM injects egress key on the server).
+
+Examples:
+  centag-proxyctl run -- opencode
+  centag-proxyctl run --server http://192.168.1.4:20060 -- opencode
+  eval "$(centag-proxyctl env --server http://192.168.1.4:20060)"
 `)
 }
