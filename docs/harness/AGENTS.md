@@ -280,6 +280,7 @@ docs/versions/<版本>/<需求>/
 | `cmd/` `core/` `plugins/` `sdk/` | Go 模块核心 |
 | `web/` | Vue 管理端 |
 | `apps/launcher/` | 可选桌面启动器（L1：菜单/托盘+浏览器；独立 go.mod，不入 go.work） |
+| `apps/proxyctl/` | 本机 PAC/CA 一键工具（系统代理出口；独立 go.mod，不入 go.work；见 `docs/guide/system-proxy-egress.md`） |
 | `config/initdata/` `config/profiles/` `config/secrets/` | 种子数据、场景 Profile、本地密钥 |
 | `deploy/docker/` `deploy/stack/` `deploy/fnos/` | 容器编排与 NAS 打包 |
 | `scripts/` | 开发/运维脚本与集成测试 |
