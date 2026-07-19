@@ -33,6 +33,7 @@ export PACKAGE_APP_NAME PACKAGE_APP_ID PACKAGE_ARCH PACKAGE_MODE PACKAGE_EDITION
 export PACKAGE_ADMIN_PASSWORD="${PACKAGE_ADMIN_PASSWORD:-}"
 export PACKAGE_ADMIN_USERNAME="${PACKAGE_ADMIN_USERNAME:-}"
 export PACKAGE_ADMIN_API_KEY="${PACKAGE_ADMIN_API_KEY:-}"
+export PACKAGE_API_KEY_STORAGE_SECRET="${PACKAGE_API_KEY_STORAGE_SECRET:-}"
 
 usage() {
   cat <<EOF
@@ -53,8 +54,11 @@ ${PACKAGE_APP_NAME} 第三方打包工具
   PACKAGE_OUTPUT=${PACKAGE_OUTPUT}
   IMAGE_PREFIX=${IMAGE_PREFIX}
 
-管理员密码来源（fnos）:
-  --admin-password > PACKAGE_ADMIN_PASSWORD > config/secrets/.env
+管理员凭据来源（fnos → config/runtime.env）:
+  密码: --admin-password > PACKAGE_ADMIN_PASSWORD > config/secrets/.env
+  API Key: PACKAGE_ADMIN_API_KEY > .env 的 LLM_PROXY_ADMIN_API_KEY / DEFAULT
+  存储密钥: PACKAGE_API_KEY_STORAGE_SECRET > .env 的 LLM_PROXY_API_KEY_STORAGE_SECRET
+            （均空则打包时自动生成；缺失会导致 Web 无法复制完整 API Key）
 
 示例:
   ./scripts/packaging/package.sh fnos

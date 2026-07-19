@@ -129,6 +129,8 @@ Native 模式的 `cmd/main` 脚本参考 fnOS 官方 [Notepad 示例](https://de
 | `SERVER_HOST` | `0.0.0.0` |
 | `SERVER_PORT` | `20060` |
 | `LLM_PROXY_ADMIN_PASSWORD` | 来自包内 `config/runtime.env`（打包时注入） |
+| `LLM_PROXY_ADMIN_API_KEY` / `DEFAULT` | 同上；首轮 seed 预置管理员 API Key |
+| `LLM_PROXY_API_KEY_STORAGE_SECRET` | 同上；**必须有**，否则预置 Key 无法在 Web 复制完整密钥 |
 | `STATIC_DIR` / `STATIC_PATH` | `${TRIM_APPDEST}/webui` |
 
 ---
@@ -154,5 +156,9 @@ Native 模式的 `cmd/main` 脚本参考 fnOS 官方 [Notepad 示例](https://de
 3. **数据目录**：
    - Docker: 由 fnOS 的 `data-share` 自动管理
    - Native: 由 fnOS 的 `TRIM_DATA_SHARE_PATHS` 环境变量指定
-4. **管理员密码**：打包时写入 `config/runtime.env`（默认读 `config/secrets/.env` 的 `LLM_PROXY_ADMIN_PASSWORD`；也可用 `--admin-password` / `PACKAGE_ADMIN_PASSWORD`）。**已安装过的数据目录**若已有用户/密码哈希，不会被新密码覆盖——需清空数据卷后重装，或用当前有效密码登录后修改。
+4. **管理员密码 / 默认 API Key / 存储密钥**：打包时写入 `config/runtime.env`：
+   - 密码：`--admin-password` / `PACKAGE_ADMIN_PASSWORD` / `.env` 的 `LLM_PROXY_ADMIN_PASSWORD`
+   - API Key：`PACKAGE_ADMIN_API_KEY` / `.env` 的 `LLM_PROXY_ADMIN_API_KEY`（或 `DEFAULT`）
+   - **`LLM_PROXY_API_KEY_STORAGE_SECRET`**（Web 复制完整 Key 必需）：`PACKAGE_API_KEY_STORAGE_SECRET` / `.env`；均空则打包时**自动生成**
+   - **已安装过的数据目录**若已有用户/Key，不会被新包覆盖——需清空数据卷后重装，或在 Web 新建 Key（需已配置 STORAGE_SECRET）
 5. **发行版**：默认 `minimal`；`--edition personal|team` 分别对应个人全功能 / 团队版。
