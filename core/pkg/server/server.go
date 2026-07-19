@@ -854,6 +854,19 @@ func New(cfg *config.Config) *Server {
 	if cfg.SystemProxy.Enabled {
 		logger.Info("Initializing system proxy...")
 
+		// Auto-bind egress API key at startup (no env restart required for daily ops)
+		if config.ResolveSystemProxyEgressAPIKey(&cfg.SystemProxy) == "" {
+			if changed, err := EnsureSystemProxyEgressAPIKey(context.Background(), cfg, 0); err != nil {
+				logger.Warnf("system_proxy: ensure egress API key at startup: %v", err)
+			} else if changed {
+				if err := config.SaveConfig(cfg); err != nil {
+					logger.Warnf("system_proxy: save egress API key at startup: %v", err)
+				} else {
+					logger.Info("system_proxy: egress API key auto-bound at startup")
+				}
+			}
+		}
+
 		// 创建MITM服务器
 		// 注意: BackendAddr不能用0.0.0.0,需要改为127.0.0.1
 		backendHost := cfg.Server.Host
@@ -876,7 +889,7 @@ func New(cfg *config.Config) *Server {
 				zap.Int("domains", len(cfg.SystemProxy.Domains)),
 				zap.Bool("egress_api_key_configured", mitmConfig.BackendAuthToken != ""))
 			if mitmConfig.BackendAuthToken == "" {
-				logger.Warn("System proxy MITM has no egress API key; Agent upstream tokens will fail Centag auth. Set LLM_PROXY_SYSTEM_PROXY_EGRESS_API_KEY or LLM_PROXY_DEFAULT_ADMIN_API_KEY (llmproxy_*)")
+				logger.Warn("System proxy MITM has no egress API key; open Web → 本机代理出口 → 一键绑定出口 Key（热更新，无需停服）")
 			}
 		}
 	}
@@ -1631,6 +1644,8 @@ func (s *Server) setupRoutes() {
 		{
 			proxy.GET("/status", s.proxyHandlerExt.GetProxyStatus)
 			proxy.GET("/setup/status", s.proxyHandlerExt.GetSetupStatus)
+			proxy.POST("/egress-key/ensure", s.configHandler.EnsureSystemProxyEgress)
+			proxy.POST("/egress-key/bind", s.configHandler.BindSystemProxyEgress)
 			proxy.GET("/domains", s.proxyHandlerExt.GetPACDomains)
 			proxy.POST("/domains/add", s.proxyHandlerExt.AddDomain)
 			proxy.POST("/domains/remove", s.proxyHandlerExt.RemoveDomain)

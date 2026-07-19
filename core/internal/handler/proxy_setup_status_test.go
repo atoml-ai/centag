@@ -93,6 +93,9 @@ func TestGetSetupStatus_LocalMode(t *testing.T) {
 	if got["pac_url"] != "http://127.0.0.1:20060/api/v1/proxy/pac" {
 		t.Fatalf("pac_url=%v", got["pac_url"])
 	}
+	if got["egress_api_key_configured"] != false {
+		t.Fatalf("egress_api_key_configured=%v", got["egress_api_key_configured"])
+	}
 }
 
 func TestGetSetupStatus_LANFields(t *testing.T) {

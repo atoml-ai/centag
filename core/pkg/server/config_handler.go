@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"centag/core/internal/auth"
 	"centag/core/internal/cache"
 	"centag/core/internal/hostproxy"
 	"centag/core/internal/llm"
@@ -419,6 +420,16 @@ func (h *ConfigHandler) SaveAllConfig(c *gin.Context) {
 		// 不更新证书路径等敏感配置字段
 		// 不更新domains和path_patterns,这些应该通过单独的API管理
 	}
+
+	// MITM 开启时自动绑定出口 Key（热生效，无需改环境变量停服）
+	if cfg.SystemProxy.Enabled {
+		uid, _ := auth.GetUserID(c)
+		if changed, err := EnsureSystemProxyEgressAPIKey(c.Request.Context(), cfg, uid); err != nil {
+			logger.Warnf("system_proxy: ensure egress API key: %v", err)
+		} else if changed {
+			logger.Info("system_proxy: egress API key ensured before config save")
+		}
+	}
 	if req.HostProxy != nil {
 		// 合并更新：只覆盖显式提供的字段，保留 DomainMapping/证书路径等运行时数据
 		if req.HostProxy.HTTPPort > 0 {
@@ -546,4 +557,67 @@ func (h *ConfigHandler) SaveAllConfig(c *gin.Context) {
 	}
 
 	RespondSuccessWithMessage(c, "Configuration saved successfully")
+}
+
+// EnsureSystemProxyEgress handles POST /api/v1/proxy/egress-key/ensure
+// Creates or reuses system-proxy-egress key and binds it (hot sync, no restart).
+func (h *ConfigHandler) EnsureSystemProxyEgress(c *gin.Context) {
+	cfg := config.Get()
+	if cfg == nil {
+		RespondInternalError(c, "Config not initialized")
+		return
+	}
+	uid, _ := auth.GetUserID(c)
+	changed, err := EnsureSystemProxyEgressAPIKey(c.Request.Context(), cfg, uid)
+	if err != nil {
+		RespondInternalError(c, "ensure egress API key: "+err.Error())
+		return
+	}
+	if changed {
+		if err := config.SaveConfig(cfg); err != nil {
+			RespondInternalError(c, "Failed to save config: "+err.Error())
+			return
+		}
+	}
+	if cfg.SystemProxy.Enabled && h.mitmSyncEgress != nil {
+		h.mitmSyncEgress()
+	}
+	RespondSuccess(c, gin.H{
+		"configured": config.ResolveSystemProxyEgressAPIKey(&cfg.SystemProxy) != "",
+		"changed":    changed,
+		"key_name":   SystemProxyEgressKeyName,
+	})
+}
+
+type bindEgressRequest struct {
+	APIKeyID int64 `json:"api_key_id" binding:"required"`
+}
+
+// BindSystemProxyEgress handles POST /api/v1/proxy/egress-key/bind
+func (h *ConfigHandler) BindSystemProxyEgress(c *gin.Context) {
+	var req bindEgressRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		RespondBadRequest(c, err.Error())
+		return
+	}
+	cfg := config.Get()
+	if cfg == nil {
+		RespondInternalError(c, "Config not initialized")
+		return
+	}
+	if err := BindSystemProxyEgressAPIKeyByID(c.Request.Context(), cfg, req.APIKeyID); err != nil {
+		RespondBadRequest(c, err.Error())
+		return
+	}
+	if err := config.SaveConfig(cfg); err != nil {
+		RespondInternalError(c, "Failed to save config: "+err.Error())
+		return
+	}
+	if cfg.SystemProxy.Enabled && h.mitmSyncEgress != nil {
+		h.mitmSyncEgress()
+	}
+	RespondSuccess(c, gin.H{
+		"configured": true,
+		"api_key_id": req.APIKeyID,
+	})
 }
