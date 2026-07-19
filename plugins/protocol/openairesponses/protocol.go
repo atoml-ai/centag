@@ -92,7 +92,7 @@ func (p *Protocol) ParseRequest(c *gin.Context) (*plugin.ProxyRequest, error) {
 		req.TopP = *respReq.TopP
 	}
 
-	// 转换 input 到 messages
+	// 转换 input 到 messages（input 可为 string，或 content 为 string/数组的 message 列表）
 	if respReq.Input.StringVal != "" {
 		req.Messages = []plugin.Message{
 			{Role: "user", Content: respReq.Input.StringVal},
@@ -100,18 +100,15 @@ func (p *Protocol) ParseRequest(c *gin.Context) (*plugin.ProxyRequest, error) {
 	} else {
 		for _, item := range respReq.Input.Items {
 			role := item.Role
+			if role == "" {
+				role = "user"
+			}
 			if role == "developer" {
 				role = "system"
 			}
-			var text string
-			for _, cp := range item.Content {
-				if cp.Type == "input_text" {
-					text += cp.Text
-				}
-			}
 			req.Messages = append(req.Messages, plugin.Message{
 				Role:    role,
-				Content: text,
+				Content: item.Content.PlainText(),
 			})
 		}
 	}

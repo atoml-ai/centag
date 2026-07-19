@@ -7,25 +7,17 @@ import (
 )
 
 // ResolveTransparentTargetURL picks the upstream URL for transparent forwarding.
-// Priority: explicit target_url → original_host + request_path → backend base + path.
+// Priority:
+//  1. explicit target_url
+//  2. configured Centag backend (system-proxy / transparent-proxy 主路径：勿打回原厂 Host)
+//  3. original_host + path（#raw / Host 劫持真透传）
+//
+// MITM 会带 X-Original-Host=opencode.ai 等；若优先 original_host，会用 Centag Key 打回 Zen
+// 导致 AuthError: Invalid API key，并绕过「走 Centag 后端」的出口策略。
 func ResolveTransparentTargetURL(meta map[string]interface{}, backendID, requestPath, defaultScheme string) (string, error) {
 	if meta != nil {
 		if u := strings.TrimSpace(stringMeta(meta, "target_url")); u != "" {
 			return normalizeTargetURL(u, requestPath, defaultScheme)
-		}
-		if host := strings.TrimSpace(stringMeta(meta, "original_host")); host != "" {
-			path := requestPath
-			if p := strings.TrimSpace(stringMeta(meta, "original_path")); p != "" {
-				path = p
-			}
-			if path == "" {
-				path = "/v1/chat/completions"
-			}
-			scheme := defaultScheme
-			if s := strings.TrimSpace(stringMeta(meta, "target_scheme")); s != "" {
-				scheme = s
-			}
-			return fmt.Sprintf("%s://%s%s", scheme, host, ensureLeadingSlash(path)), nil
 		}
 	}
 
@@ -44,6 +36,23 @@ func ResolveTransparentTargetURL(meta map[string]interface{}, backendID, request
 			// 不能直接拼到后端 BaseURL 上（会导致 /v4/v1/chat/completions 这类错误）。
 			// OpenAI 兼容 API 的聊天补全端点统一为 /chat/completions，由后端 BaseURL 提供版本前缀。
 			return base + "/chat/completions", nil
+		}
+	}
+
+	if meta != nil {
+		if host := strings.TrimSpace(stringMeta(meta, "original_host")); host != "" {
+			path := requestPath
+			if p := strings.TrimSpace(stringMeta(meta, "original_path")); p != "" {
+				path = p
+			}
+			if path == "" {
+				path = "/v1/chat/completions"
+			}
+			scheme := defaultScheme
+			if s := strings.TrimSpace(stringMeta(meta, "target_scheme")); s != "" {
+				scheme = s
+			}
+			return fmt.Sprintf("%s://%s%s", scheme, host, ensureLeadingSlash(path)), nil
 		}
 	}
 

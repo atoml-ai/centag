@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"centag/core/internal/auth"
+	"centag/core/pkg/config"
 	"centag/core/pkg/metrics"
 	"centag/core/pkg/pipeline"
 	"centag/core/pkg/plugin"
@@ -453,18 +454,7 @@ func (d *ModeDispatcher) writeResponse(
 	setPipelineOutputHeaders(c, output)
 
 	if shouldPassthroughTransparentResponse(mode, output) {
-		statusCode := http.StatusOK
-		contentType := "application/json"
-		if output.Metadata != nil {
-			if sc, ok := output.Metadata["status_code"].(int); ok && sc > 0 {
-				statusCode = sc
-			} else if scf, ok := output.Metadata["status_code"].(float64); ok && scf > 0 {
-				statusCode = int(scf)
-			}
-			if ct, ok := output.Metadata["content_type"].(string); ok && ct != "" {
-				contentType = ct
-			}
-		}
+		statusCode, contentType := transparentPassthroughStatusAndType(output)
 		c.Data(statusCode, contentType, []byte(output.Content))
 		return nil
 	}
@@ -481,7 +471,8 @@ func (d *ModeDispatcher) writeResponse(
 
 	requestID := c.GetHeader("X-Request-ID")
 	backendID := extractBackendFromPipelineOutput(output)
-	logRequestResponse(requestID, "", backendID, http.StatusOK, resp.Content)
+	responseModel := effectiveResponseModel(c, "", output)
+	logRequestResponse(requestID, responseModel, backendID, http.StatusOK, resp.Content)
 
 	// 构建 message：有 tool_calls 时输出 tool_calls（function calling），否则输出 content
 	message := gin.H{
@@ -520,12 +511,15 @@ func (d *ModeDispatcher) writeResponse(
 		finishReason = "stop"
 	}
 
+	if responseModel == "" {
+		responseModel = "pipeline-mode"
+	}
 	// 返回 JSON 响应
 	c.JSON(http.StatusOK, gin.H{
 		"id":      fmt.Sprintf("chatcmpl-%d", time.Now().Unix()),
 		"object":  "chat.completion",
 		"created": time.Now().Unix(),
-		"model":   "pipeline-mode",
+		"model":   responseModel,
 		"choices": []gin.H{
 			{
 				"index":         0,
@@ -576,7 +570,11 @@ func attachTransparentRequestMetadata(c *gin.Context, metadata map[string]interf
 	}
 	metadata["request_path"] = c.Request.URL.Path
 	metadata["request_method"] = c.Request.Method
-	if auth := strings.TrimSpace(c.GetHeader("Authorization")); auth != "" {
+	// MITM 会把 Centag egress Key 写入 Authorization，原厂 Key 放在 X-Original-Authorization。
+	// 透明转发打 Centag 后端时用后端 Key；#raw 打回原厂时需要原厂 Key。
+	if orig := strings.TrimSpace(c.GetHeader("X-Original-Authorization")); orig != "" {
+		metadata["forward_authorization"] = orig
+	} else if auth := strings.TrimSpace(c.GetHeader("Authorization")); auth != "" {
 		metadata["forward_authorization"] = auth
 	}
 
@@ -611,6 +609,46 @@ func shouldPassthroughTransparentResponse(mode ProxyMode, output *pipeline.Pipel
 		}
 	}
 	return false
+}
+
+func transparentPassthroughStatusAndType(output *pipeline.PipelineOutput) (int, string) {
+	statusCode := http.StatusOK
+	contentType := "application/json"
+	if output != nil && output.Metadata != nil {
+		if sc, ok := output.Metadata["status_code"].(int); ok && sc > 0 {
+			statusCode = sc
+		} else if scf, ok := output.Metadata["status_code"].(float64); ok && scf > 0 {
+			statusCode = int(scf)
+		}
+		if ct, ok := output.Metadata["content_type"].(string); ok && strings.TrimSpace(ct) != "" {
+			contentType = strings.TrimSpace(ct)
+		}
+	}
+	// 上游 SSE 被缓冲进 Content 时，必须按 event-stream 写出，不能再包一层 chat.completion.chunk。
+	if looksLikeOpenAISSE(output.Content) && !strings.Contains(strings.ToLower(contentType), "event-stream") {
+		contentType = "text/event-stream"
+	}
+	return statusCode, contentType
+}
+
+func looksLikeOpenAISSE(body string) bool {
+	trim := strings.TrimSpace(body)
+	return strings.HasPrefix(trim, "data:") || strings.Contains(body, "\ndata:")
+}
+
+// shouldRawWriteTransparentStream：流式路径下是否原样写出 Content。
+// 仅当节点声明 raw_passthrough，或 Content 已是上游 SSE 时才 bypass FormatChunk，
+// 避免 ModeTransparentProxy 下普通文本被误当成透传。
+func shouldRawWriteTransparentStream(output *pipeline.PipelineOutput) bool {
+	if output == nil || strings.TrimSpace(output.Content) == "" {
+		return false
+	}
+	if output.Metadata != nil {
+		if v, ok := output.Metadata["raw_passthrough"].(bool); ok && v {
+			return true
+		}
+	}
+	return looksLikeOpenAISSE(output.Content)
 }
 
 func extractQueryParams(c *gin.Context) map[string]string {
@@ -708,8 +746,8 @@ func (d *ModeDispatcher) DispatchStream(
 		return fmt.Errorf("pipeline stream execution failed: %w", err)
 	}
 
-	// 写入 SSE 流式响应
-	return d.writeStreamResponse(c, resultCh, mode, req.Model)
+	// 写入 SSE 流式响应（直连/透明等忽略客户端 model 时，回写系统默认模型名，避免 Agent 显示错误模型）
+	return d.writeStreamResponse(c, resultCh, mode, effectiveResponseModel(c, req.Model, nil))
 }
 
 // shouldSkipPipelineStreamChunk 判断是否跳过流水线流式 chunk。
@@ -728,8 +766,6 @@ func (d *ModeDispatcher) writeStreamResponse(
 	mode ProxyMode,
 	model string,
 ) error {
-	// 设置 SSE 响应头
-	c.Header("Content-Type", "text/event-stream")
 	c.Header("Cache-Control", "no-cache")
 	c.Header("Connection", "keep-alive")
 	c.Header("X-Accel-Buffering", "no")
@@ -753,12 +789,42 @@ func (d *ModeDispatcher) writeStreamResponse(
 	chunkIndex := 0
 	var finalOutput *pipeline.PipelineOutput
 	var responseContent strings.Builder
+	sseHeadersReady := false
+
+	ensureSSEHeaders := func() {
+		if sseHeadersReady {
+			return
+		}
+		c.Header("Content-Type", "text/event-stream")
+		sseHeadersReady = true
+	}
 
 	splitter := thinksplit.NewStreamSplitter()
 
 	// 逐块消费流式结果
 	for result := range resultCh {
+		// 透明透传：上游响应（SSE 或 JSON）已在 Content 中，禁止再 FormatChunk 包一层。
+		if result.Output != nil {
+			finalOutput = result.Output
+			if shouldRawWriteTransparentStream(result.Output) {
+				statusCode, contentType := transparentPassthroughStatusAndType(result.Output)
+				c.Header("Content-Type", contentType)
+				c.Status(statusCode)
+				if _, err := c.Writer.Write([]byte(result.Output.Content)); err != nil {
+					return err
+				}
+				flusher.Flush()
+				requestID := c.GetHeader("X-Request-ID")
+				backendID := extractBackendFromPipelineOutput(finalOutput)
+				logRequestResponse(requestID, effectiveResponseModel(c, model, finalOutput), backendID, statusCode, result.Output.Content)
+				setPipelineExecutionHeaders(c, finalOutput, c.GetHeader("X-Pipeline-ID"))
+				setPipelineOutputHeaders(c, finalOutput)
+				return nil
+			}
+		}
+
 		if result.Chunk != nil {
+			ensureSSEHeaders()
 			if result.Chunk.Error != nil {
 				// 错误返回
 				errorJSON := fmt.Sprintf(`data: {"error":{"message":"%s","type":"pipeline_error"}}`+"\n\n", result.Chunk.Error.Error())
@@ -803,6 +869,25 @@ func (d *ModeDispatcher) writeStreamResponse(
 		}
 	}
 
+	// 透明透传兜底：仅 Output、无 chunk（streamEmitter 跳过 Adapt）时在此写出。
+	if finalOutput != nil && shouldRawWriteTransparentStream(finalOutput) && responseContent.Len() == 0 && !sseHeadersReady {
+		statusCode, contentType := transparentPassthroughStatusAndType(finalOutput)
+		c.Header("Content-Type", contentType)
+		c.Status(statusCode)
+		if _, err := c.Writer.Write([]byte(finalOutput.Content)); err != nil {
+			return err
+		}
+		flusher.Flush()
+		requestID := c.GetHeader("X-Request-ID")
+		backendID := extractBackendFromPipelineOutput(finalOutput)
+		logRequestResponse(requestID, effectiveResponseModel(c, model, finalOutput), backendID, statusCode, finalOutput.Content)
+		setPipelineExecutionHeaders(c, finalOutput, c.GetHeader("X-Pipeline-ID"))
+		setPipelineOutputHeaders(c, finalOutput)
+		return nil
+	}
+
+	ensureSSEHeaders()
+
 	// 刷新 StreamSplitter 剩余内容
 	if flushVisible, flushReasoning := splitter.Flush(); flushVisible != "" || flushReasoning != "" {
 		flushChunk := &plugin.StreamChunk{
@@ -821,7 +906,9 @@ func (d *ModeDispatcher) writeStreamResponse(
 	}
 
 	// 兜底：流式 chunk 全部被跳过但流水线有完整输出时，补发一条正文
-	if responseContent.Len() == 0 && finalOutput != nil && strings.TrimSpace(finalOutput.Content) != "" {
+	// 注意：raw_passthrough 的 Content 是上游原始 SSE/JSON，绝不能塞进 delta.content。
+	if responseContent.Len() == 0 && finalOutput != nil && strings.TrimSpace(finalOutput.Content) != "" &&
+		!shouldRawWriteTransparentStream(finalOutput) {
 		fallbackChunk := &plugin.StreamChunk{
 			Content: finalOutput.Content,
 			Done:    true,
@@ -841,14 +928,15 @@ func (d *ModeDispatcher) writeStreamResponse(
 	if finalOutput != nil {
 		actualFinishReason = finalOutput.FinishReason
 	}
-	doneLine := formatter.FormatDone(model, usage, actualFinishReason)
+	doneModel := effectiveResponseModel(c, model, finalOutput)
+	doneLine := formatter.FormatDone(doneModel, usage, actualFinishReason)
 	if doneLine != "" {
 		fmt.Fprint(c.Writer, doneLine)
 	}
 
-	// 注入 Centag 流水线执行元数据事件（TUI 等客户端可解析此事件获取完整执行信息）
-	// 必须在 [DONE] 之前注入，因为 TUI SSE scanner 在遇到 [DONE] 时会 break
-	if finalOutput != nil {
+	// Centag 元数据仅对显式订阅读取的客户端注入（WebUI / Centag TUI）。
+	// 禁止对 OpenCode 等第三方以 data: JSON 注入 —— 会被当成 chat.completion 校验失败。
+	if finalOutput != nil && shouldInjectCentagMetaSSE(c) {
 		meta := buildStreamCentagMeta(finalOutput, c.GetHeader("X-Pipeline-ID"), mode)
 		if d.logger != nil {
 			d.logger.Debug("writeStreamResponse: injecting SSE centag_meta event",
@@ -860,7 +948,7 @@ func (d *ModeDispatcher) writeStreamResponse(
 			)
 		}
 		if metaJSON, err := json.Marshal(meta); err == nil {
-			fmt.Fprintf(c.Writer, "data: %s\n\n", metaJSON)
+			fmt.Fprintf(c.Writer, "event: centag.meta\ndata: %s\n\n", metaJSON)
 			flusher.Flush()
 		}
 	}
@@ -944,6 +1032,22 @@ func buildNodeResultsSummary(output *pipeline.PipelineOutput) []nodeResultSummar
 	}
 
 	return nil
+}
+
+// shouldInjectCentagMetaSSE reports whether the client opted into Centag SSE metadata.
+// Third-party Agents (OpenCode, Cursor, …) must not receive _centag_meta as data: payloads.
+func shouldInjectCentagMetaSSE(c *gin.Context) bool {
+	if c == nil || c.Request == nil {
+		return false
+	}
+	if v := strings.TrimSpace(c.GetHeader("X-Centag-Include-Meta")); v == "1" || strings.EqualFold(v, "true") {
+		return true
+	}
+	ua := strings.ToLower(c.GetHeader("User-Agent"))
+	if strings.Contains(ua, "centag") || strings.Contains(ua, "llm-proxy") {
+		return true
+	}
+	return false
 }
 
 // buildStreamCentagMeta 从流水线输出构建 SSE 代理元数据事件体。
@@ -1454,6 +1558,27 @@ func extractBackendFromPipelineOutput(output *pipeline.PipelineOutput) string {
 	return ""
 }
 
+// effectiveResponseModel prefers the model actually used by the pipeline over the
+// Agent-declared name (e.g. OpenCode hy3-free vs Centag default glm-4-flash / mimo).
+func effectiveResponseModel(c *gin.Context, clientModel string, output *pipeline.PipelineOutput) string {
+	if m := extractModelFromPipelineOutput(output); m != "" {
+		return m
+	}
+	pipelineID := ""
+	if c != nil {
+		pipelineID = c.GetHeader("X-Pipeline-ID")
+	}
+	switch pipelineID {
+	case "direct-backend", "transparent-proxy", "transparent-fast":
+		if cfg := config.Get(); cfg != nil {
+			if m := strings.TrimSpace(cfg.Proxy.DefaultModel); m != "" {
+				return m
+			}
+		}
+	}
+	return strings.TrimSpace(clientModel)
+}
+
 func extractSelectedRouteFromPipelineOutput(output *pipeline.PipelineOutput) string {
 	if output == nil {
 		return ""
@@ -1501,15 +1626,22 @@ func extractModelFromPipelineOutput(output *pipeline.PipelineOutput) string {
 	if output.ExecutionLog != nil {
 		for i := len(output.ExecutionLog.NodeLogs) - 1; i >= 0; i-- {
 			log := output.ExecutionLog.NodeLogs[i]
-			if log.Success && strings.TrimSpace(log.Model) != "" {
-				return strings.TrimSpace(log.Model)
+			m := strings.TrimSpace(log.Model)
+			if m == "" || strings.Contains(m, "{{") {
+				continue
+			}
+			if log.Success || i == len(output.ExecutionLog.NodeLogs)-1 {
+				return m
 			}
 		}
 	}
 	if output.Metadata != nil {
-		for _, key := range []string{"model", "executor_model"} {
-			if v, ok := output.Metadata[key].(string); ok && strings.TrimSpace(v) != "" {
-				return strings.TrimSpace(v)
+		for _, key := range []string{"model", "response_model", "executor_model"} {
+			if v, ok := output.Metadata[key].(string); ok {
+				m := strings.TrimSpace(v)
+				if m != "" && !strings.Contains(m, "{{") {
+					return m
+				}
 			}
 		}
 	}

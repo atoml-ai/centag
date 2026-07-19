@@ -34,6 +34,7 @@ type Handler struct {
 	questionProcessor       processor.QuestionProcessor      // 问题拆分处理器（可为 nil）
 	tokenUsageService       *tokenusage.Service              // Token 计量（可为 nil）
 	pipelineEngine          PipelineEngineInterface          // 流水线引擎（可为 nil）
+	pipelineRegistry        *pipeline.PipelineRegistry       // 流水线注册表（可为 nil，供 /v1/models）
 	modeDispatcher          *ModeDispatcher                  // 统一模式分发器（Phase 2 新增，可为 nil）
 	businessPluginRegistry  *pipeline.BusinessPluginRegistry // 业务插件注册表（可为 nil）
 	defaultPipelineResolver *DefaultPipelineResolver         // 默认流水线解析器（可为 nil）
@@ -84,8 +85,9 @@ func (h *Handler) SetPipelineEngine(engine PipelineEngineInterface) {
 	}
 }
 
-// SetPipelineRegistry 注入流水线注册表（与策略管理列表同源，供动态解析快捷码）。
+// SetPipelineRegistry 注入流水线注册表（与策略管理列表同源，供动态解析快捷码与 /v1/models）。
 func (h *Handler) SetPipelineRegistry(registry *pipeline.PipelineRegistry) {
+	h.pipelineRegistry = registry
 	if h.modeDispatcher != nil {
 		h.modeDispatcher.SetRegistry(registry)
 		logger.Infof("[Handler] ModeDispatcher registry injected")
@@ -523,43 +525,40 @@ func (h *Handler) ListBackends(c *gin.Context) {
 	})
 }
 
-// ListModels 列出模型
+// ListModels 列出当前可用的流水线，以 OpenAI models 格式返回。
+// 客户端应使用 id（如 pipeline.direct-backend）作为 chat/completions 的 model。
 func (h *Handler) ListModels(c *gin.Context) {
-	backendPluginName := "openai-backend"
-
-	// 获取后端插件
-	backend, err := h.pluginManager.GetBackend(backendPluginName)
-	if err != nil {
-		c.JSON(500, gin.H{
-			"error": fmt.Sprintf("Failed to get backend plugin: %v", err),
-		})
-		return
-	}
-
-	// 获取模型列表
-	models, err := backend.GetAvailableModels()
-	if err != nil {
-		c.JSON(500, gin.H{
-			"error": fmt.Sprintf("Failed to get models: %v", err),
-		})
-		return
-	}
-
-	// 转换为 OpenAI 格式
-	data := make([]gin.H, len(models))
-	for i, model := range models {
-		data[i] = gin.H{
-			"id":       model.ID,
+	pipelines := h.listModelsPipelines()
+	data := make([]gin.H, 0, len(pipelines))
+	for _, p := range pipelines {
+		if p == nil || strings.TrimSpace(p.ID) == "" {
+			continue
+		}
+		data = append(data, gin.H{
+			"id":       "pipeline." + p.ID,
 			"object":   "model",
 			"created":  0,
-			"owned_by": "openai",
-		}
+			"owned_by": "centag",
+		})
 	}
 
 	c.JSON(200, gin.H{
 		"object": "list",
 		"data":   data,
 	})
+}
+
+func (h *Handler) listModelsPipelines() []*pipeline.AgentPatternPipeline {
+	if h == nil {
+		return nil
+	}
+	if h.pipelineRegistry != nil {
+		return h.pipelineRegistry.List()
+	}
+	if h.modeDispatcher != nil && h.modeDispatcher.registry != nil {
+		return h.modeDispatcher.registry.List()
+	}
+	return nil
 }
 
 // processQASplit 处理问答拆分
