@@ -2,22 +2,102 @@
   <div class="system-proxy">
     <div class="header-with-toolbar">
       <div class="header-left">
-        <h1 class="page-title">系统代理管理</h1>
-        <p class="page-description">基于MITM的HTTP代理,支持PAC自动配置,无需修改hosts文件</p>
+        <h1 class="page-title">本机代理出口</h1>
+        <p class="page-description">将 Agent 的大模型流量导入 Centag：多数 CLI 用进程级 HTTPS_PROXY；认系统代理的客户端再用 PAC。均不改 Agent 内模型配置</p>
       </div>
       <div class="toolbar-actions">
         <el-button :loading="loading" @click="load">
           <el-icon><Refresh /></el-icon>
           刷新
         </el-button>
-        <el-button type="primary" @click="openSetupWizard">
+        <el-button @click="openSetupWizard">
           <el-icon><MagicStick /></el-icon>
-          快速配置向导
+          手动排查向导
         </el-button>
       </div>
     </div>
 
     <div class="content-wrapper">
+      <!-- 一键主路径 -->
+      <el-card class="control-card hero-card">
+        <template #header>
+          <div class="card-header">
+            <span class="card-title">一键配置（推荐）</span>
+            <el-tag size="small" :type="setupStatus?.mode === 'lan' ? 'warning' : 'success'">
+              {{ setupStatus?.mode === 'lan' ? '团队局域网出口' : '本机模式' }}
+            </el-tag>
+          </div>
+        </template>
+        <el-radio-group v-model="uiMode" class="mb-md">
+          <el-radio-button value="local">本机 Centag</el-radio-button>
+          <el-radio-button value="team">团队服务器</el-radio-button>
+        </el-radio-group>
+        <el-alert
+          class="mb-md"
+          type="info"
+          :closable="false"
+          show-icon
+          title="多数 Agent（如 OpenCode）不读系统 PAC：请只在启动该进程时设置 HTTPS_PROXY=http://127.0.0.1:8081（勿写进全局 shell）。非白名单域名由 MITM 隧道直通，不干扰其它上网。"
+        />
+        <el-alert
+          class="mb-md"
+          type="warning"
+          :closable="false"
+          show-icon
+          title="MITM 服务开启 ≠ 本机系统代理已写入。认 PAC 的客户端请用下方 proxyctl；仅用环境变量时不必 enable 系统代理。"
+        />
+
+        <template v-if="uiMode === 'local'">
+          <p class="mb-md">本机 Centag：MITM 默认仅监听 127.0.0.1。进程代理指向 <code>http://127.0.0.1:8081</code>；系统 PAC 仅代理白名单 LLM 域名。</p>
+          <el-space wrap class="mb-md">
+            <el-button @click="copyEnvProxyCmd">复制：进程 HTTPS_PROXY 启动示例</el-button>
+          </el-space>
+          <el-space wrap>
+            <el-button type="primary" @click="copyProxyctlCmd('enable')">复制：一键启用</el-button>
+            <el-button type="danger" plain @click="copyProxyctlCmd('disable')">复制：一键停用并恢复</el-button>
+            <el-button @click="copyProxyctlCmd('doctor')">复制：诊断</el-button>
+          </el-space>
+        </template>
+
+        <template v-else>
+          <el-form label-width="140px" class="mb-md">
+            <el-form-item label="允许局域网客户端">
+              <el-switch v-model="allowLanClients" :loading="savingLan" @change="onAllowLanChange" />
+              <span class="form-hint">Team 主场景：员工电脑 PAC 指向本机 advertise 地址</span>
+            </el-form-item>
+            <el-form-item label="Advertise Host" v-if="allowLanClients">
+              <el-input v-model="advertiseHost" placeholder="如 192.168.1.50" style="max-width: 280px" />
+              <el-button class="ml-sm" @click="detectLanIP" :loading="detectingIP">探测局域网 IP</el-button>
+              <el-button type="primary" class="ml-sm" :loading="savingLan" @click="saveLanConfig">保存</el-button>
+            </el-form-item>
+            <el-form-item label="Listen Addr" v-if="allowLanClients">
+              <el-input v-model="listenAddr" placeholder="0.0.0.0" style="max-width: 280px" />
+            </el-form-item>
+          </el-form>
+          <el-descriptions v-if="setupStatus" :column="1" border size="small" class="mb-md">
+            <el-descriptions-item label="员工 PAC URL">{{ setupStatus.pac_url }}</el-descriptions-item>
+            <el-descriptions-item label="CA 下载">{{ setupStatus.ca_download_url }}</el-descriptions-item>
+            <el-descriptions-item label="CA 指纹">{{ setupStatus.ca_fingerprint_sha256 || '（启 MITM 后生成）' }}</el-descriptions-item>
+            <el-descriptions-item label="MITM PROXY">{{ setupStatus.mitm_proxy }}</el-descriptions-item>
+          </el-descriptions>
+          <el-form label-width="140px" class="mb-md">
+            <el-form-item label="员工连接 API">
+              <el-input v-model="employeeServer" placeholder="http://192.168.1.50:20060" style="max-width: 360px" />
+              <el-button class="ml-sm" type="primary" @click="copyEmployeeEnable">复制员工启用命令</el-button>
+            </el-form-item>
+          </el-form>
+          <el-alert type="warning" :closable="false" show-icon title="员工 disable 只恢复自己电脑，不会关闭服务器 MITM。" />
+        </template>
+
+        <el-divider />
+        <el-descriptions :column="2" size="small" border>
+          <el-descriptions-item label="MITM 服务">{{ setupStatus?.mitm_enabled || status.enabled ? '运行中' : '未运行' }}</el-descriptions-item>
+          <el-descriptions-item label="监听">{{ setupStatus?.listen_addr || `${listenAddr || '127.0.0.1'}:${listenPort}` }}</el-descriptions-item>
+          <el-descriptions-item label="PAC URL">{{ apiPACURL }}</el-descriptions-item>
+          <el-descriptions-item label="Loopback">{{ setupStatus?.listen_is_loopback !== false ? '是' : '否' }}</el-descriptions-item>
+        </el-descriptions>
+      </el-card>
+
       <!-- 状态卡片 -->
       <el-row :gutter="12" class="metrics-grid">
         <el-col :xs="12" :sm="8" :md="8" :lg="4">
@@ -77,17 +157,17 @@
         </el-col>
       </el-row>
 
-      <!-- 代理控制 -->
+      <!-- 高级：仅 MITM 服务 -->
       <el-card class="control-card">
         <template #header>
           <div class="card-header">
-            <span class="card-title">代理控制</span>
+            <span class="card-title">高级：MITM 服务（非系统代理写入）</span>
             <el-switch
               v-model="status.enabled"
               :loading="toggling"
               @change="toggleProxy"
-              active-text="已启用"
-              inactive-text="已禁用"
+              active-text="服务已开"
+              inactive-text="服务已关"
             />
           </div>
         </template>
@@ -107,7 +187,7 @@
               </el-col>
               <el-col :span="12">
                 <el-form-item label="代理模式">
-                  <el-select v-model="status.pac_enabled" :disabled="status.enabled" style="width: 100%">
+                  <el-select v-model="status.pac_enabled" :disabled="status.enabled" style="width: 100%" @change="onPacModeChange">
                     <el-option label="PAC模式(仅代理指定域名)" :value="true" />
                     <el-option label="全局模式(代理所有流量)" :value="false" />
                   </el-select>
@@ -196,8 +276,8 @@
         </template>
         <el-alert type="info" :closable="false" class="mb-md">
           <template #default>
-            <p>路径模式用于匹配需要代理的API路径。例如: /v1、/openai、/api</p>
-            <p>只有同时匹配域名和路径模式的请求才会被转发到LLM Proxy后端</p>
+            <p>路径模式用于匹配需要代理的API路径。例如: /v1、/openai、/api（可选；白名单域名上识别到 /v1、/chat/completions、/responses 等也会转发）</p>
+            <p>域名须在白名单；命中后会统一改写到 Centag 的 /v1/*，无需为每个 Agent 单独适配路径（变更立即同步 MITM）</p>
           </template>
         </el-alert>
         <el-table :data="patternList" stripe v-loading="loading" max-height="300">
@@ -608,6 +688,7 @@ import {
   FolderOpened
 } from '@element-plus/icons-vue'
 import api from '@/api'
+import { getProxySetupStatus, type ProxySetupStatus } from '@/api/system-proxy'
 
 interface SystemProxyStatus {
   enabled: boolean
@@ -626,6 +707,14 @@ interface CertInfo {
 const loading = ref(false)
 const toggling = ref(false)
 const testing = ref(false)
+const savingLan = ref(false)
+const detectingIP = ref(false)
+const uiMode = ref<'local' | 'team'>('local')
+const setupStatus = ref<ProxySetupStatus | null>(null)
+const allowLanClients = ref(false)
+const advertiseHost = ref('')
+const listenAddr = ref('127.0.0.1')
+const employeeServer = ref('')
 const status = ref<SystemProxyStatus>({
   enabled: false,
   pac_enabled: true,
@@ -674,18 +763,133 @@ const setupSteps = ref({
   active: -1
 })
 
-const pacURL = computed(() => {
-  return `http://127.0.0.1:${listenPort.value}/api/v1/proxy/pac`
-})
-
-// API URL (用于从主服务访问PAC文件和证书)
+// PAC / CA 一律走 API 口（非 MITM 口）
 const apiPACURL = computed(() => {
+  if (setupStatus.value?.pac_url) return setupStatus.value.pac_url
   return `http://127.0.0.1:${apiPort.value}/api/v1/proxy/pac`
 })
 
+const pacURL = computed(() => apiPACURL.value)
+
 const apiCACertURL = computed(() => {
+  if (setupStatus.value?.ca_download_url) return setupStatus.value.ca_download_url
   return `http://127.0.0.1:${apiPort.value}/api/v1/proxy/ca.crt`
 })
+
+function proxyctlBin() {
+  return 'centag-proxyctl'
+}
+
+function copyProxyctlCmd(kind: 'enable' | 'disable' | 'doctor') {
+  const bin = proxyctlBin()
+  const cmd =
+    kind === 'enable' ? `${bin} enable` : kind === 'disable' ? `${bin} disable` : `${bin} doctor`
+  copyCommand(cmd)
+}
+
+/** 仅进程级代理：勿写入全局 shell，避免影响浏览器与其它 App */
+function copyEnvProxyCmd() {
+  const host =
+    uiMode.value === 'team' && advertiseHost.value
+      ? advertiseHost.value.trim()
+      : '127.0.0.1'
+  const port = listenPort.value || 8081
+  const proxy = `http://${host}:${port}`
+  copyCommand(
+    [
+      `# 仅本次终端 / 启动 Agent 时使用，不要写进 ~/.zshrc`,
+      `export NO_PROXY=localhost,127.0.0.1,::1`,
+      `export no_proxy="$NO_PROXY"`,
+      `export HTTPS_PROXY=${proxy}`,
+      `export HTTP_PROXY=${proxy}`,
+      `export https_proxy="$HTTPS_PROXY"`,
+      `export http_proxy="$HTTP_PROXY"`,
+      `# 然后启动你的 Agent，例如：opencode`,
+    ].join('\n')
+  )
+}
+
+function copyEmployeeEnable() {
+  const base = (employeeServer.value || setupStatus.value?.pac_url || '').replace(/\/api\/v1\/proxy\/pac$/, '')
+  const server = base || `http://127.0.0.1:${apiPort.value}`
+  copyCommand(`${proxyctlBin()} enable --server ${server}`)
+}
+
+async function onAllowLanChange(val: boolean) {
+  if (!val) {
+    await saveLanConfig()
+    return
+  }
+  try {
+    await ElMessageBox.confirm(
+      '开启后 MITM 将对局域网可达，请仅在可信内网使用，并配置防火墙。是否继续？',
+      '允许局域网客户端',
+      { type: 'warning', confirmButtonText: '确认开启', cancelButtonText: '取消' }
+    )
+    if (!listenAddr.value || listenAddr.value === '127.0.0.1') {
+      listenAddr.value = '0.0.0.0'
+    }
+    if (!advertiseHost.value) {
+      await detectLanIP()
+    }
+    await saveLanConfig()
+  } catch {
+    allowLanClients.value = false
+  }
+}
+
+async function onPacModeChange(val: boolean) {
+  if (val) return
+  try {
+    await ElMessageBox.confirm(
+      '全局模式会代理所有 HTTP/HTTPS 流量，可能影响其它应用。确定切换？',
+      '全局模式警告',
+      { type: 'warning' }
+    )
+  } catch {
+    status.value.pac_enabled = true
+  }
+}
+
+async function detectLanIP() {
+  detectingIP.value = true
+  try {
+    // Best-effort: use host from current location if not loopback
+    const host = window.location.hostname
+    if (host && host !== 'localhost' && host !== '127.0.0.1') {
+      advertiseHost.value = host
+      employeeServer.value = `${window.location.protocol}//${host}:${apiPort.value}`
+      ElMessage.success(`已填入 ${host}`)
+      return
+    }
+    ElMessage.info('请手动填写局域网 IP（如 192.168.x.x）')
+  } finally {
+    detectingIP.value = false
+  }
+}
+
+async function saveLanConfig() {
+  savingLan.value = true
+  try {
+    await api.put('/api/v1/config', {
+      system_proxy: {
+        enabled: status.value.enabled,
+        listen_port: listenPort.value,
+        pac_enabled: status.value.pac_enabled,
+        allow_lan_clients: allowLanClients.value,
+        listen_addr: allowLanClients.value ? listenAddr.value || '0.0.0.0' : '127.0.0.1',
+        advertise_host: allowLanClients.value ? advertiseHost.value : ''
+      }
+    })
+    ElMessage.success('局域网出口配置已保存')
+    await load()
+  } catch (error: any) {
+    ElMessage.error('保存失败: ' + error.message)
+    allowLanClients.value = !!setupStatus.value?.allow_lan_clients
+  } finally {
+    savingLan.value = false
+  }
+}
 
 // 加载状态
 const load = async () => {
@@ -697,12 +901,28 @@ const load = async () => {
       status.value.enabled = configData.system_proxy.enabled
       status.value.pac_enabled = configData.system_proxy.pac_enabled
       listenPort.value = configData.system_proxy.listen_port || 8081
+      allowLanClients.value = !!configData.system_proxy.allow_lan_clients
+      advertiseHost.value = configData.system_proxy.advertise_host || ''
+      listenAddr.value = configData.system_proxy.listen_addr || '127.0.0.1'
+      if (allowLanClients.value) uiMode.value = 'team'
+    }
+    if (configData.server?.port) {
+      apiPort.value = configData.server.port
     }
 
     // 从proxy status获取域名等信息
     const proxyData = await api.get('/api/v1/proxy/status')
     status.value.pac_domains = proxyData.pac_domains || []
     status.value.pac_patterns = proxyData.pac_patterns || []
+
+    try {
+      setupStatus.value = await getProxySetupStatus()
+      if (setupStatus.value?.pac_url && !employeeServer.value) {
+        employeeServer.value = setupStatus.value.pac_url.replace(/\/api\/v1\/proxy\/pac$/, '')
+      }
+    } catch {
+      setupStatus.value = null
+    }
   } catch (error: any) {
     ElMessage.error('加载状态失败: ' + error.message)
   } finally {
@@ -728,10 +948,13 @@ const toggleProxy = async () => {
       system_proxy: {
         enabled: status.value.enabled,
         listen_port: listenPort.value,
-        pac_enabled: status.value.pac_enabled
+        pac_enabled: status.value.pac_enabled,
+        allow_lan_clients: allowLanClients.value,
+        listen_addr: allowLanClients.value ? listenAddr.value || '0.0.0.0' : '127.0.0.1',
+        advertise_host: allowLanClients.value ? advertiseHost.value : ''
       }
     })
-    ElMessage.success(status.value.enabled ? '系统代理已启用' : '系统代理已禁用')
+    ElMessage.success(status.value.enabled ? 'MITM 服务已启用' : 'MITM 服务已禁用')
     await load()
   } catch (error: any) {
     ElMessage.error('操作失败: ' + error.message)
@@ -1198,6 +1421,20 @@ onMounted(() => {
 }
 
 .mb-md {
+  margin-bottom: 16px;
+}
+
+.ml-sm {
+  margin-left: 8px;
+}
+
+.form-hint {
+  margin-left: 12px;
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+}
+
+.hero-card {
   margin-bottom: 16px;
 }
 
