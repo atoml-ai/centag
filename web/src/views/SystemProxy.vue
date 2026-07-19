@@ -37,23 +37,28 @@
           type="info"
           :closable="false"
           show-icon
-          title="多数 Agent（如 OpenCode）不读系统 PAC：请只在启动该进程时设置 HTTPS_PROXY=http://127.0.0.1:8081（勿写进全局 shell）。非白名单域名由 MITM 隧道直通，不干扰其它上网。"
+          title="多数 Agent（如 OpenCode）不读系统 PAC：请用 centag-proxyctl run -- opencode（自动 CA + HTTPS_PROXY）。勿把代理写进全局 shell。"
         />
         <el-alert
           class="mb-md"
           type="warning"
           :closable="false"
           show-icon
-          title="MITM 服务开启 ≠ 本机系统代理已写入。认 PAC 的客户端请用下方 proxyctl；仅用环境变量时不必 enable 系统代理。"
+          title="开启 MITM 后请确认「出口 API Key」已配置（可一键绑定，热生效）。MITM 开启 ≠ 系统 PAC 已写入；CLI 优先用 run，不必 enable。"
         />
 
         <template v-if="uiMode === 'local'">
-          <p class="mb-md">本机 Centag：MITM 默认仅监听 127.0.0.1。进程代理指向 <code>http://127.0.0.1:8081</code>；系统 PAC 仅代理白名单 LLM 域名。</p>
+          <p class="mb-md">本机 Centag：MITM 默认仅监听 127.0.0.1。推荐 <code>centag-proxyctl run -- opencode</code>（自动证书+进程代理）。</p>
           <el-space wrap class="mb-md">
-            <el-button @click="copyEnvProxyCmd">复制：进程 HTTPS_PROXY 启动示例</el-button>
+            <el-tag :type="egressConfigured ? 'success' : 'danger'" size="small">
+              出口 Key：{{ egressConfigured ? '已配置' : '未配置' }}
+            </el-tag>
+            <el-button size="small" :loading="ensuringEgress" @click="ensureEgressKey">一键绑定出口 Key</el-button>
+            <el-button @click="copyLocalRunCmd">复制：proxyctl run</el-button>
+            <el-button @click="copyEnvProxyCmd">复制：手写 HTTPS_PROXY</el-button>
           </el-space>
           <el-space wrap>
-            <el-button type="primary" @click="copyProxyctlCmd('enable')">复制：一键启用</el-button>
+            <el-button type="primary" @click="copyProxyctlCmd('enable')">复制：PAC 启用</el-button>
             <el-button type="danger" plain @click="copyProxyctlCmd('disable')">复制：一键停用并恢复</el-button>
             <el-button @click="copyProxyctlCmd('doctor')">复制：诊断</el-button>
           </el-space>
@@ -79,14 +84,46 @@
             <el-descriptions-item label="CA 下载">{{ setupStatus.ca_download_url }}</el-descriptions-item>
             <el-descriptions-item label="CA 指纹">{{ setupStatus.ca_fingerprint_sha256 || '（启 MITM 后生成）' }}</el-descriptions-item>
             <el-descriptions-item label="MITM PROXY">{{ setupStatus.mitm_proxy }}</el-descriptions-item>
+            <el-descriptions-item label="出口 API Key">
+              <el-tag :type="egressConfigured ? 'success' : 'danger'" size="small">
+                {{ egressConfigured ? '已配置（热加载）' : '未配置' }}
+              </el-tag>
+            </el-descriptions-item>
           </el-descriptions>
           <el-form label-width="140px" class="mb-md">
+            <el-form-item label="出口 API Key">
+              <el-space wrap>
+                <el-button type="primary" :loading="ensuringEgress" @click="ensureEgressKey">
+                  一键绑定/创建出口 Key
+                </el-button>
+                <el-select
+                  v-model="selectedEgressKeyId"
+                  clearable
+                  filterable
+                  placeholder="或选择已有 Key"
+                  style="width: 220px"
+                  :loading="loadingKeys"
+                >
+                  <el-option
+                    v-for="k in apiKeyOptions"
+                    :key="k.id"
+                    :label="`${k.name} (${k.key_prefix}…)`"
+                    :value="k.id"
+                  />
+                </el-select>
+                <el-button :disabled="!selectedEgressKeyId" :loading="bindingEgress" @click="bindSelectedEgressKey">
+                  绑定所选
+                </el-button>
+              </el-space>
+              <div class="form-hint">MITM 转发时注入；员工 Agent 无需知道此 Key。保存后热生效，无需停服。</div>
+            </el-form-item>
             <el-form-item label="员工连接 API">
               <el-input v-model="employeeServer" placeholder="http://192.168.1.50:20060" style="max-width: 360px" />
-              <el-button class="ml-sm" type="primary" @click="copyEmployeeEnable">复制员工启用命令</el-button>
+              <el-button class="ml-sm" type="primary" @click="copyEmployeeRun">复制：proxyctl run 启动 Agent</el-button>
+              <el-button class="ml-sm" @click="copyEmployeeEnable">复制：PAC enable</el-button>
             </el-form-item>
           </el-form>
-          <el-alert type="warning" :closable="false" show-icon title="员工 disable 只恢复自己电脑，不会关闭服务器 MITM。" />
+          <el-alert type="warning" :closable="false" show-icon title="员工 disable 只恢复自己电脑，不会关闭服务器 MITM。多数 CLI 请用 proxyctl run，不要依赖系统 PAC。" />
         </template>
 
         <el-divider />
@@ -95,6 +132,7 @@
           <el-descriptions-item label="监听">{{ setupStatus?.listen_addr || `${listenAddr || '127.0.0.1'}:${listenPort}` }}</el-descriptions-item>
           <el-descriptions-item label="PAC URL">{{ apiPACURL }}</el-descriptions-item>
           <el-descriptions-item label="Loopback">{{ setupStatus?.listen_is_loopback !== false ? '是' : '否' }}</el-descriptions-item>
+          <el-descriptions-item label="出口 API Key">{{ egressConfigured ? '已配置' : '未配置' }}</el-descriptions-item>
         </el-descriptions>
       </el-card>
 
@@ -688,7 +726,13 @@ import {
   FolderOpened
 } from '@element-plus/icons-vue'
 import api from '@/api'
-import { getProxySetupStatus, type ProxySetupStatus } from '@/api/system-proxy'
+import { listAPIKeys, type APIKey } from '@/api/user'
+import {
+  bindEgressAPIKey,
+  ensureEgressAPIKey,
+  getProxySetupStatus,
+  type ProxySetupStatus
+} from '@/api/system-proxy'
 
 interface SystemProxyStatus {
   enabled: boolean
@@ -709,12 +753,18 @@ const toggling = ref(false)
 const testing = ref(false)
 const savingLan = ref(false)
 const detectingIP = ref(false)
+const ensuringEgress = ref(false)
+const bindingEgress = ref(false)
+const loadingKeys = ref(false)
 const uiMode = ref<'local' | 'team'>('local')
 const setupStatus = ref<ProxySetupStatus | null>(null)
 const allowLanClients = ref(false)
 const advertiseHost = ref('')
 const listenAddr = ref('127.0.0.1')
 const employeeServer = ref('')
+const selectedEgressKeyId = ref<number | undefined>()
+const apiKeyOptions = ref<APIKey[]>([])
+const egressConfigured = computed(() => !!setupStatus.value?.egress_api_key_configured)
 const status = ref<SystemProxyStatus>({
   enabled: false,
   pac_enabled: true,
@@ -809,10 +859,63 @@ function copyEnvProxyCmd() {
   )
 }
 
-function copyEmployeeEnable() {
+function employeeAPIBase() {
   const base = (employeeServer.value || setupStatus.value?.pac_url || '').replace(/\/api\/v1\/proxy\/pac$/, '')
-  const server = base || `http://127.0.0.1:${apiPort.value}`
-  copyCommand(`${proxyctlBin()} enable --server ${server}`)
+  return base || `http://127.0.0.1:${apiPort.value}`
+}
+
+function copyEmployeeEnable() {
+  copyCommand(`${proxyctlBin()} enable --server ${employeeAPIBase()}`)
+}
+
+function copyEmployeeRun() {
+  copyCommand(`${proxyctlBin()} run --server ${employeeAPIBase()} -- opencode`)
+}
+
+function copyLocalRunCmd() {
+  copyCommand(`${proxyctlBin()} run -- opencode`)
+}
+
+async function loadAPIKeys() {
+  loadingKeys.value = true
+  try {
+    apiKeyOptions.value = await listAPIKeys()
+  } catch {
+    apiKeyOptions.value = []
+  } finally {
+    loadingKeys.value = false
+  }
+}
+
+async function ensureEgressKey() {
+  ensuringEgress.value = true
+  try {
+    const res = await ensureEgressAPIKey()
+    if (res.configured) {
+      ElMessage.success(res.changed ? '出口 Key 已绑定（热生效）' : '出口 Key 已就绪')
+    } else {
+      ElMessage.warning('出口 Key 仍未配置，请检查 API Key 存储密钥或手动绑定')
+    }
+    await load()
+  } catch (error: any) {
+    ElMessage.error('绑定失败: ' + (error.message || error))
+  } finally {
+    ensuringEgress.value = false
+  }
+}
+
+async function bindSelectedEgressKey() {
+  if (!selectedEgressKeyId.value) return
+  bindingEgress.value = true
+  try {
+    await bindEgressAPIKey(selectedEgressKeyId.value)
+    ElMessage.success('已绑定所选出口 Key（热生效）')
+    await load()
+  } catch (error: any) {
+    ElMessage.error('绑定失败: ' + (error.message || error))
+  } finally {
+    bindingEgress.value = false
+  }
 }
 
 async function onAllowLanChange(val: boolean) {
@@ -923,6 +1026,7 @@ const load = async () => {
     } catch {
       setupStatus.value = null
     }
+    void loadAPIKeys()
   } catch (error: any) {
     ElMessage.error('加载状态失败: ' + error.message)
   } finally {

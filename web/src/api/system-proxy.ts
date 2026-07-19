@@ -13,8 +13,26 @@ export interface ProxySetupStatus {
   ca_fingerprint_sha256: string
   global_proxy_mode: boolean
   mitm_proxy: string
+  egress_api_key_configured?: boolean
+}
+
+export interface EgressKeyEnsureResult {
+  configured: boolean
+  changed: boolean
+  key_name: string
 }
 
 export function getProxySetupStatus(): Promise<ProxySetupStatus> {
   return api.get('/api/v1/proxy/setup/status') as Promise<ProxySetupStatus>
+}
+
+export function ensureEgressAPIKey(): Promise<EgressKeyEnsureResult> {
+  return api.post('/api/v1/proxy/egress-key/ensure') as Promise<EgressKeyEnsureResult>
+}
+
+export function bindEgressAPIKey(apiKeyId: number): Promise<{ configured: boolean; api_key_id: number }> {
+  return api.post('/api/v1/proxy/egress-key/bind', { api_key_id: apiKeyId }) as Promise<{
+    configured: boolean
+    api_key_id: number
+  }>
 }
