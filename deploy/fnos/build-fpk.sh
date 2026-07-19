@@ -157,11 +157,35 @@ resolve_admin_credentials() {
     fi
   fi
 
+  # 界面「复制完整 API Key」依赖加密存储；打包必须写入 STORAGE_SECRET
+  API_KEY_STORAGE_SECRET=""
+  if [ -n "${PACKAGE_API_KEY_STORAGE_SECRET:-}" ]; then
+    API_KEY_STORAGE_SECRET="${PACKAGE_API_KEY_STORAGE_SECRET}"
+  else
+    API_KEY_STORAGE_SECRET="$(read_env_key "$secrets" "LLM_PROXY_API_KEY_STORAGE_SECRET" 2>/dev/null || true)"
+  fi
+  if [ -z "${API_KEY_STORAGE_SECRET}" ]; then
+    if command -v openssl >/dev/null 2>&1; then
+      API_KEY_STORAGE_SECRET="$(openssl rand -hex 32)"
+      echo "[OK] 未在 .env 找到 LLM_PROXY_API_KEY_STORAGE_SECRET，已现场生成并写入 runtime.env"
+    else
+      API_KEY_STORAGE_SECRET="$(head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n')"
+      echo "[OK] 未在 .env 找到 LLM_PROXY_API_KEY_STORAGE_SECRET，已用 /dev/urandom 生成并写入 runtime.env"
+    fi
+  else
+    echo "[OK] API Key 存储密钥已解析（界面可反复复制完整 Key）"
+  fi
+
   if [ -z "${ADMIN_PASSWORD}" ]; then
     echo "[WARN] 未解析到管理员密码（--admin-password / PACKAGE_ADMIN_PASSWORD / config/secrets/.env）"
     echo "       minimal 首次需 Web 设置密码；personal/team 首轮 seed 将使用内置默认口令"
   else
     echo "[OK] 管理员密码已解析（来源: CLI/packaging.env/secrets，不会回显）用户=${ADMIN_USERNAME}"
+  fi
+  if [ -n "${ADMIN_API_KEY}" ]; then
+    echo "[OK] 默认管理员 API Key 已解析（将写入 runtime.env 供首轮 seed）"
+  else
+    echo "[WARN] 未解析到 LLM_PROXY_ADMIN_API_KEY / DEFAULT；首轮不会预置 API Key"
   fi
 }
 
@@ -195,6 +219,10 @@ write_runtime_env() {
     if [ -n "${ADMIN_API_KEY}" ]; then
       echo "LLM_PROXY_ADMIN_API_KEY=$(shell_single_quote "${ADMIN_API_KEY}")"
       echo "LLM_PROXY_DEFAULT_ADMIN_API_KEY=$(shell_single_quote "${ADMIN_API_KEY}")"
+    fi
+    # 必须写入：否则 seed 的 Key 只有哈希，Web 无法复制完整密钥
+    if [ -n "${API_KEY_STORAGE_SECRET:-}" ]; then
+      echo "LLM_PROXY_API_KEY_STORAGE_SECRET=$(shell_single_quote "${API_KEY_STORAGE_SECRET}")"
     fi
   } > "${dest_dir}/runtime.env"
   chmod 600 "${dest_dir}/runtime.env"

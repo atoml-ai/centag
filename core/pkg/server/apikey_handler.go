@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"centag/core/internal/auth"
+	"centag/core/pkg/bootstrap"
 	"centag/core/pkg/database"
 	"centag/core/pkg/logger"
 
@@ -71,14 +72,9 @@ func (h *APIKeyHandler) GetAPIKey(c *gin.Context) {
 	resp := apiKeyDetailResponse{
 		apiKeyResponse: toAPIKeyResponse(key),
 	}
-	storageKey := auth.APIKeyStorageKey()
-	if key.KeySecretEnc != "" && storageKey != nil {
-		plain, decErr := auth.DecryptAPIKeyPlaintext(key.KeySecretEnc, storageKey)
-		if decErr != nil {
-			logger.Warnf("decrypt api key id=%d: %v", keyID, decErr)
-		} else {
-			resp.FullKey = plain
-		}
+	if plain, ok := revealAPIKeyPlaintext(key); ok {
+		resp.FullKey = plain
+		resp.RevealAvailable = true
 	}
 
 	RespondSuccess(c, resp)
@@ -335,14 +331,9 @@ func (h *APIKeyHandler) GetAdminAPIKey(c *gin.Context) {
 	resp := apiKeyDetailResponse{
 		apiKeyResponse: toAPIKeyResponse(key),
 	}
-	storageKey := auth.APIKeyStorageKey()
-	if key.KeySecretEnc != "" && storageKey != nil {
-		plain, decErr := auth.DecryptAPIKeyPlaintext(key.KeySecretEnc, storageKey)
-		if decErr != nil {
-			logger.Warnf("decrypt api key id=%d: %v", keyID, decErr)
-		} else {
-			resp.FullKey = plain
-		}
+	if plain, ok := revealAPIKeyPlaintext(key); ok {
+		resp.FullKey = plain
+		resp.RevealAvailable = true
 	}
 
 	RespondSuccess(c, resp)
@@ -627,13 +618,51 @@ type apiKeyDetailResponse struct {
 	FullKey string `json:"full_key,omitempty"`
 }
 
+// revealAPIKeyPlaintext returns the full key when encrypted storage is available,
+// or when the record matches the bootstrap default key still present in env
+// (legacy packages that seeded without LLM_PROXY_API_KEY_STORAGE_SECRET).
+func revealAPIKeyPlaintext(key *database.APIKey) (string, bool) {
+	if key == nil {
+		return "", false
+	}
+	if sk := auth.APIKeyStorageKey(); key.KeySecretEnc != "" && sk != nil {
+		plain, err := auth.DecryptAPIKeyPlaintext(key.KeySecretEnc, sk)
+		if err != nil {
+			logger.Warnf("decrypt api key id=%d: %v", key.ID, err)
+		} else if plain != "" {
+			return plain, true
+		}
+	}
+	if raw := bootstrap.DefaultAdminAPIKeyString(); raw != "" {
+		hash, _ := auth.APIKeyMetadataFromFullKey(raw)
+		if hash == key.KeyHash {
+			return raw, true
+		}
+	}
+	return "", false
+}
+
+func apiKeyRevealAvailable(k *database.APIKey) bool {
+	if k == nil {
+		return false
+	}
+	if k.KeySecretEnc != "" {
+		return true
+	}
+	if raw := bootstrap.DefaultAdminAPIKeyString(); raw != "" {
+		hash, _ := auth.APIKeyMetadataFromFullKey(raw)
+		return hash == k.KeyHash
+	}
+	return false
+}
+
 func toAPIKeyResponse(k *database.APIKey) apiKeyResponse {
 	r := apiKeyResponse{
 		ID:              k.ID,
 		Name:            k.Name,
 		KeyPrefix:       k.KeyPrefix,
 		MaskedKey:       auth.MaskAPIKey(k.KeyPrefix),
-		RevealAvailable: k.KeySecretEnc != "",
+		RevealAvailable: apiKeyRevealAvailable(k),
 		Enabled:         k.Enabled,
 		BudgetUSD:       k.BudgetUSD,
 		UsedUSD:         k.UsedUSD,
