@@ -70,6 +70,52 @@ func TestWriteStreamResponse_IncludesFinishReason(t *testing.T) {
 	}
 }
 
+func TestWriteStreamResponse_RawPassthroughSSENotDoubleWrapped(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	upstreamSSE := "data: {\"id\":\"1\",\"object\":\"chat.completion.chunk\",\"model\":\"glm-4-flash\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"我\"}}]}\n\n" +
+		"data: [DONE]\n\n"
+
+	ch := make(chan pipeline.PipelineStreamResult, 1)
+	ch <- pipeline.PipelineStreamResult{
+		Output: &pipeline.PipelineOutput{
+			Content: upstreamSSE,
+			Metadata: map[string]interface{}{
+				"raw_passthrough": true,
+				"content_type":    "text/event-stream",
+				"status_code":     200,
+				"backend_id":      "openai-bigmodel-ai",
+				"model":           "glm-4-flash",
+			},
+			ExecutionLog: &pipeline.ExecutionLog{Success: true},
+		},
+	}
+	close(ch)
+
+	dispatcher := NewModeDispatcher(&stubStreamPipelineEngine{}, nil, nil)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil)
+	c.Request.Header.Set("X-Pipeline-ID", "transparent-proxy")
+
+	if err := dispatcher.writeStreamResponse(c, ch, ModeTransparentProxy, "hy3-free"); err != nil {
+		t.Fatalf("writeStreamResponse: %v", err)
+	}
+
+	body := w.Body.String()
+	if body != upstreamSSE {
+		t.Fatalf("expected raw upstream SSE passthrough,\n got: %q\n want: %q", body, upstreamSSE)
+	}
+	ct := w.Header().Get("Content-Type")
+	if !strings.Contains(ct, "text/event-stream") {
+		t.Fatalf("Content-Type=%q, want text/event-stream", ct)
+	}
+	// 禁止把 data: 再包进 delta.content
+	if strings.Contains(body, `"delta":{"content":"data:`) || strings.Count(body, "data: [DONE]") != 1 {
+		t.Fatalf("SSE was double-wrapped or [DONE] duplicated: %s", body)
+	}
+}
+
 func TestWriteStreamResponse_AnthropicNoDoneMarker(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 

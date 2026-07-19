@@ -47,3 +47,23 @@ func TestResolveTransparentTargetURLFromBackend(t *testing.T) {
 		t.Fatalf("url = %q", got)
 	}
 }
+
+func TestResolveTransparentTargetURL_BackendBeatsOriginalHost(t *testing.T) {
+	// MITM 场景：既有 original_host=opencode.ai，又有 Centag 默认后端 —— 必须走后端
+	ResolveBackendEndpoint = func(backendID string) (*BackendEndpoint, error) {
+		return &BackendEndpoint{BaseURL: "https://api.deepseek.com/v1", APIKey: "sk-ds"}, nil
+	}
+	defer func() { ResolveBackendEndpoint = nil }()
+
+	got, err := ResolveTransparentTargetURL(map[string]interface{}{
+		"original_host": "opencode.ai",
+		"original_path": "/zen/v1/chat/completions",
+		"backend_id":    "deepseek",
+	}, "deepseek", "/v1/chat/completions", "https")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "https://api.deepseek.com/v1/chat/completions" {
+		t.Fatalf("url = %q, want Centag backend not opencode.ai", got)
+	}
+}

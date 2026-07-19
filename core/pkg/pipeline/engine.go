@@ -794,8 +794,12 @@ func streamEmitter(
 	}
 
 	if stream {
-		// 如果有 tool_calls，直接作为单个 chunk 发送（不分块）
-		if len(toolCalls) > 0 {
+		// transparent_forward 等节点的 Content 可能是上游完整 SSE（含 data: 前缀）。
+		// 不可再经 StreamAdapter 当普通文本分块，否则客户端会把 "data:..." 当成回答正文。
+		if isRawPassthroughNodeOutput(lastOutput) {
+			// 仅下发 Output，由 ModeDispatcher 原样写出。
+		} else if len(toolCalls) > 0 {
+			// 如果有 tool_calls，直接作为单个 chunk 发送（不分块）
 			resultCh <- PipelineStreamResult{Chunk: &plugin.StreamChunk{
 				Content:          outputContent,
 				ReasoningContent: reasoningContent,
@@ -862,6 +866,14 @@ func streamEmitter(
 		finalOutput.ReasoningContent = lastOutput.ReasoningContent
 	}
 	resultCh <- PipelineStreamResult{Output: finalOutput}
+}
+
+func isRawPassthroughNodeOutput(out *NodeOutput) bool {
+	if out == nil || out.Metadata == nil {
+		return false
+	}
+	v, ok := out.Metadata["raw_passthrough"].(bool)
+	return ok && v
 }
 
 // resolvePipelineOutputContent 从最后节点输出解析应对外返回的正文。

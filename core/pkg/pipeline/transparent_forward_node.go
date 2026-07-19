@@ -86,6 +86,22 @@ func (n *TransparentForwardNode) Execute(ctx context.Context, input *NodeInput) 
 		return nil, fmt.Errorf("transparent_forward node %q: empty request body", n.id)
 	}
 
+	// 走 Centag 配置后端时：保留 messages/tools，但把 Agent 的厂商模型名
+	//（如 OpenCode hy3-free）改写为系统默认模型，否则上游报「模型不存在」。
+	// #raw / 仅 original_host 时不改写，保持原厂模型名。
+	resolvedModel := ""
+	if strings.TrimSpace(backendID) != "" {
+		_, resolvedModel = ResolveVirtualVars(backendID, n.config.Model)
+		if resolvedModel == "" {
+			_, resolvedModel = ResolveVirtualVars("{{system.default_backend}}", "{{system.default_model}}")
+		}
+		if resolvedModel != "" {
+			if rewritten, ok := rewriteTransparentBodyModel(body, resolvedModel); ok {
+				body = rewritten
+			}
+		}
+	}
+
 	req, err := http.NewRequestWithContext(ctx, method, targetURL, strings.NewReader(string(body)))
 	if err != nil {
 		return nil, fmt.Errorf("transparent_forward node %q: build request: %w", n.id, err)
@@ -128,17 +144,47 @@ func (n *TransparentForwardNode) Execute(ctx context.Context, input *NodeInput) 
 		}
 	}
 
+	outMeta := map[string]interface{}{
+		"raw_passthrough": true,
+		"target_url":      targetURL,
+		"target_base_url": baseURL,
+		"status_code":     resp.StatusCode,
+		"content_type":    contentType,
+		"forwarded":       true,
+	}
+	if resolvedModel != "" {
+		outMeta["model"] = resolvedModel
+		outMeta["executor_model"] = resolvedModel
+	}
+	if backendID != "" {
+		outMeta["backend_id"] = backendID
+	}
+
 	return &NodeOutput{
-		Content: string(respBody),
-		Metadata: map[string]interface{}{
-			"raw_passthrough": true,
-			"target_url":      targetURL,
-			"target_base_url": baseURL,
-			"status_code":     resp.StatusCode,
-			"content_type":    contentType,
-			"forwarded":       true,
-		},
+		Content:  string(respBody),
+		Metadata: outMeta,
 	}, nil
+}
+
+// rewriteTransparentBodyModel sets JSON "model" to Centag's resolved model, keeping other fields.
+func rewriteTransparentBodyModel(body []byte, model string) ([]byte, bool) {
+	model = strings.TrimSpace(model)
+	if model == "" || len(body) == 0 {
+		return body, false
+	}
+	var raw map[string]interface{}
+	if err := json.Unmarshal(body, &raw); err != nil || raw == nil {
+		return body, false
+	}
+	if cur, _ := raw["model"].(string); strings.TrimSpace(cur) == model {
+		return body, false
+	}
+	raw["model"] = model
+	out, err := json.Marshal(raw)
+	if err != nil {
+		return body, false
+	}
+	return out, true
 }
 
 func (n *TransparentForwardNode) getHTTPClient(ctx context.Context) (HTTPClient, error) {

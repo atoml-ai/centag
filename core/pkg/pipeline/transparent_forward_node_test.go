@@ -2,6 +2,7 @@ package pipeline
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"net/http"
 	"strings"
@@ -100,6 +101,27 @@ func TestTransparentForwardNode_PrefersBackendAPIKeyOverClientAuth(t *testing.T)
 	}
 	if got := client.lastReq.Header.Get("Authorization"); got != "Bearer sk-backend-real" {
 		t.Fatalf("authorization = %q, want backend API key (not client JWT)", got)
+	}
+}
+
+func TestRewriteTransparentBodyModel(t *testing.T) {
+	in := []byte(`{"model":"hy3-free","messages":[{"role":"user","content":"hi"}],"stream":true}`)
+	out, ok := rewriteTransparentBodyModel(in, "glm-4-flash")
+	if !ok {
+		t.Fatal("expected rewrite")
+	}
+	var raw map[string]interface{}
+	if err := json.Unmarshal(out, &raw); err != nil {
+		t.Fatal(err)
+	}
+	if raw["model"] != "glm-4-flash" {
+		t.Fatalf("model=%v", raw["model"])
+	}
+	if _, ok := raw["messages"]; !ok {
+		t.Fatal("messages must be preserved")
+	}
+	if raw["stream"] != true {
+		t.Fatalf("stream=%v", raw["stream"])
 	}
 }
 
