@@ -247,22 +247,47 @@ type userResponse struct {
 	MonthlyTokenLimit int64  `json:"monthly_token_limit"`
 	DailyTokenUsed   int64  `json:"daily_token_used"`
 	MonthlyTokenUsed int64  `json:"monthly_token_used"`
-	CreatedAt        string `json:"created_at"`
+	// Team: shared resource access
+	AllowedBackendIDs        []string `json:"allowed_backend_ids"`
+	AllowedModelIDs          []string `json:"allowed_model_ids"`
+	AllowedPipelineIDs       []string `json:"allowed_pipeline_ids"`
+	CanAddOwnBackends        bool     `json:"can_add_own_backends"`
+	CanAddOwnPipelines       bool     `json:"can_add_own_pipelines"`
+	CanChangeDefaultPipeline bool     `json:"can_change_default_pipeline"`
+	CreatedAt                string   `json:"created_at"`
 }
 
 func toUserResponse(u *database.User) *userResponse {
+	backends := u.AllowedBackendIDs
+	if backends == nil {
+		backends = []string{}
+	}
+	models := u.AllowedModelIDs
+	if models == nil {
+		models = []string{}
+	}
+	pipelines := u.AllowedPipelineIDs
+	if pipelines == nil {
+		pipelines = []string{}
+	}
 	return &userResponse{
-		ID:                u.ID,
-		Username:          u.Username,
-		Role:              string(u.Role),
-		DisplayName:       u.DisplayName,
-		Email:             u.Email,
-		Enabled:           u.Enabled,
-		DefaultPipelineID: u.DefaultPipelineID,
-		DailyTokenLimit:   u.DailyTokenLimit,
-		MonthlyTokenLimit: u.MonthlyTokenLimit,
-		DailyTokenUsed:   u.DailyTokenUsed,
-		MonthlyTokenUsed: u.MonthlyTokenUsed,
-		CreatedAt:        u.CreatedAt.Format("2006-01-02 15:04:05"),
+		ID:                       u.ID,
+		Username:                 u.Username,
+		Role:                     string(u.Role),
+		DisplayName:              u.DisplayName,
+		Email:                    u.Email,
+		Enabled:                  u.Enabled,
+		DefaultPipelineID:        u.DefaultPipelineID,
+		DailyTokenLimit:          u.DailyTokenLimit,
+		MonthlyTokenLimit:        u.MonthlyTokenLimit,
+		DailyTokenUsed:           u.DailyTokenUsed,
+		MonthlyTokenUsed:         u.MonthlyTokenUsed,
+		AllowedBackendIDs:        backends,
+		AllowedModelIDs:          models,
+		AllowedPipelineIDs:       pipelines,
+		CanAddOwnBackends:        u.CanAddOwnBackends,
+		CanAddOwnPipelines:       u.CanAddOwnPipelines,
+		CanChangeDefaultPipeline: u.CanChangeDefaultPipeline,
+		CreatedAt:                u.CreatedAt.Format("2006-01-02 15:04:05"),
 	}
 }

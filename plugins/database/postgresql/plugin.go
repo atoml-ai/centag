@@ -152,14 +152,22 @@ type pgUserStore struct {
 
 func (s *pgUserStore) Create(ctx context.Context, user *database.User) error {
 	query := `
-		INSERT INTO users (username, password_hash, role, display_name, email, enabled)
-		VALUES ($1, $2, $3, $4, $5, $6)
+		INSERT INTO users (
+			username, password_hash, role, display_name, email, enabled,
+			default_pipeline_id, daily_token_limit, monthly_token_limit,
+			allowed_backend_ids, allowed_model_ids, allowed_pipeline_ids,
+			can_add_own_backends, can_add_own_pipelines, can_change_default_pipeline
+		)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
 		RETURNING id, created_at, updated_at
 	`
 
 	return s.db.QueryRowContext(ctx, query,
 		user.Username, user.Password, user.Role,
 		user.DisplayName, user.Email, user.Enabled,
+		user.DefaultPipelineID, user.DailyTokenLimit, user.MonthlyTokenLimit,
+		encodeUserIDs(user.AllowedBackendIDs), encodeUserIDs(user.AllowedModelIDs), encodeUserIDs(user.AllowedPipelineIDs),
+		user.CanAddOwnBackends, user.CanAddOwnPipelines, user.CanChangeDefaultPipeline,
 	).Scan(&user.ID, &user.CreatedAt, &user.UpdatedAt)
 }
 
@@ -171,58 +179,94 @@ func scanPGUserTenantID(tenantID sql.NullString) *string {
 	return nil
 }
 
+const pgUserSelectCols = `id, username, password_hash, role, display_name, email, enabled, tenant_id,
+	COALESCE(default_pipeline_id, ''), COALESCE(daily_token_limit, 0), COALESCE(monthly_token_limit, 0),
+	COALESCE(daily_token_used, 0), COALESCE(monthly_token_used, 0),
+	COALESCE(allowed_backend_ids, '[]'), COALESCE(allowed_model_ids, '[]'), COALESCE(allowed_pipeline_ids, '[]'),
+	COALESCE(can_add_own_backends, TRUE), COALESCE(can_add_own_pipelines, TRUE), COALESCE(can_change_default_pipeline, TRUE),
+	created_at, updated_at`
+
+func scanPGUserRow(user *database.User, role *string, tenantID *sql.NullString,
+	backendsJSON, modelsJSON, pipelinesJSON *string,
+	canAddBackends, canAddPipelines, canChangeDefault *bool,
+) []any {
+	return []any{
+		&user.ID, &user.Username, &user.Password, role,
+		&user.DisplayName, &user.Email, &user.Enabled, tenantID,
+		&user.DefaultPipelineID, &user.DailyTokenLimit, &user.MonthlyTokenLimit,
+		&user.DailyTokenUsed, &user.MonthlyTokenUsed,
+		backendsJSON, modelsJSON, pipelinesJSON,
+		canAddBackends, canAddPipelines, canChangeDefault,
+		&user.CreatedAt, &user.UpdatedAt,
+	}
+}
+
+func finishPGUser(user *database.User, role string, tenantID sql.NullString,
+	backendsJSON, modelsJSON, pipelinesJSON string,
+	canAddBackends, canAddPipelines, canChangeDefault bool,
+) {
+	user.Role = database.UserRole(role)
+	user.TenantID = scanPGUserTenantID(tenantID)
+	user.AllowedBackendIDs = decodeUserIDs(backendsJSON)
+	user.AllowedModelIDs = decodeUserIDs(modelsJSON)
+	user.AllowedPipelineIDs = decodeUserIDs(pipelinesJSON)
+	user.CanAddOwnBackends = canAddBackends
+	user.CanAddOwnPipelines = canAddPipelines
+	user.CanChangeDefaultPipeline = canChangeDefault
+}
+
 func (s *pgUserStore) GetByID(ctx context.Context, id int64) (*database.User, error) {
-	query := `
-		SELECT id, username, password_hash, role, display_name, email, enabled, tenant_id, created_at, updated_at
-		FROM users WHERE id = $1
-	`
+	query := `SELECT ` + pgUserSelectCols + ` FROM users WHERE id = $1`
 
 	user := &database.User{}
 	var role string
 	var tenantID sql.NullString
-	err := s.db.QueryRowContext(ctx, query, id).Scan(
-		&user.ID, &user.Username, &user.Password, &role,
-		&user.DisplayName, &user.Email, &user.Enabled, &tenantID, &user.CreatedAt, &user.UpdatedAt,
-	)
+	var backendsJSON, modelsJSON, pipelinesJSON string
+	var canAddBackends, canAddPipelines, canChangeDefault bool
+	err := s.db.QueryRowContext(ctx, query, id).Scan(scanPGUserRow(user, &role, &tenantID,
+		&backendsJSON, &modelsJSON, &pipelinesJSON,
+		&canAddBackends, &canAddPipelines, &canChangeDefault)...)
 	if err == sql.ErrNoRows {
 		return nil, database.ErrNotFound
 	}
 	if err != nil {
 		return nil, err
 	}
-	user.Role = database.UserRole(role)
-	user.TenantID = scanPGUserTenantID(tenantID)
+	finishPGUser(user, role, tenantID, backendsJSON, modelsJSON, pipelinesJSON,
+		canAddBackends, canAddPipelines, canChangeDefault)
 	return user, nil
 }
 
 func (s *pgUserStore) GetByUsername(ctx context.Context, username string) (*database.User, error) {
-	query := `
-		SELECT id, username, password_hash, role, display_name, email, enabled, tenant_id, created_at, updated_at
-		FROM users WHERE username = $1
-	`
+	query := `SELECT ` + pgUserSelectCols + ` FROM users WHERE username = $1`
 
 	user := &database.User{}
 	var role string
 	var tenantID sql.NullString
-	err := s.db.QueryRowContext(ctx, query, username).Scan(
-		&user.ID, &user.Username, &user.Password, &role,
-		&user.DisplayName, &user.Email, &user.Enabled, &tenantID, &user.CreatedAt, &user.UpdatedAt,
-	)
+	var backendsJSON, modelsJSON, pipelinesJSON string
+	var canAddBackends, canAddPipelines, canChangeDefault bool
+	err := s.db.QueryRowContext(ctx, query, username).Scan(scanPGUserRow(user, &role, &tenantID,
+		&backendsJSON, &modelsJSON, &pipelinesJSON,
+		&canAddBackends, &canAddPipelines, &canChangeDefault)...)
 	if err == sql.ErrNoRows {
 		return nil, database.ErrNotFound
 	}
 	if err != nil {
 		return nil, err
 	}
-	user.Role = database.UserRole(role)
-	user.TenantID = scanPGUserTenantID(tenantID)
+	finishPGUser(user, role, tenantID, backendsJSON, modelsJSON, pipelinesJSON,
+		canAddBackends, canAddPipelines, canChangeDefault)
 	return user, nil
 }
 
 func (s *pgUserStore) Update(ctx context.Context, user *database.User) error {
 	query := `
 		UPDATE users SET username = $2, password_hash = $3, role = $4, display_name = $5, email = $6,
-			enabled = $7, tenant_id = $8, updated_at = CURRENT_TIMESTAMP
+			enabled = $7, tenant_id = $8,
+			default_pipeline_id = $9, daily_token_limit = $10, monthly_token_limit = $11,
+			allowed_backend_ids = $12, allowed_model_ids = $13, allowed_pipeline_ids = $14,
+			can_add_own_backends = $15, can_add_own_pipelines = $16, can_change_default_pipeline = $17,
+			updated_at = CURRENT_TIMESTAMP
 		WHERE id = $1
 	`
 
@@ -234,6 +278,9 @@ func (s *pgUserStore) Update(ctx context.Context, user *database.User) error {
 	_, err := s.db.ExecContext(ctx, query,
 		user.ID, user.Username, user.Password, string(user.Role),
 		user.DisplayName, user.Email, user.Enabled, tenantID,
+		user.DefaultPipelineID, user.DailyTokenLimit, user.MonthlyTokenLimit,
+		encodeUserIDs(user.AllowedBackendIDs), encodeUserIDs(user.AllowedModelIDs), encodeUserIDs(user.AllowedPipelineIDs),
+		user.CanAddOwnBackends, user.CanAddOwnPipelines, user.CanChangeDefaultPipeline,
 	)
 	return err
 }
@@ -245,10 +292,7 @@ func (s *pgUserStore) Delete(ctx context.Context, id int64) error {
 }
 
 func (s *pgUserStore) List(ctx context.Context) ([]*database.User, error) {
-	query := `
-		SELECT id, username, password_hash, role, display_name, email, enabled, tenant_id, created_at, updated_at
-		FROM users ORDER BY id
-	`
+	query := `SELECT ` + pgUserSelectCols + ` FROM users ORDER BY id`
 
 	rows, err := s.db.QueryContext(ctx, query)
 	if err != nil {
@@ -261,18 +305,49 @@ func (s *pgUserStore) List(ctx context.Context) ([]*database.User, error) {
 		user := &database.User{}
 		var role string
 		var tenantID sql.NullString
-		if err := rows.Scan(
-			&user.ID, &user.Username, &user.Password, &role,
-			&user.DisplayName, &user.Email, &user.Enabled, &tenantID, &user.CreatedAt, &user.UpdatedAt,
-		); err != nil {
+		var backendsJSON, modelsJSON, pipelinesJSON string
+		var canAddBackends, canAddPipelines, canChangeDefault bool
+		if err := rows.Scan(scanPGUserRow(user, &role, &tenantID,
+			&backendsJSON, &modelsJSON, &pipelinesJSON,
+			&canAddBackends, &canAddPipelines, &canChangeDefault)...); err != nil {
 			return nil, err
 		}
-		user.Role = database.UserRole(role)
-		user.TenantID = scanPGUserTenantID(tenantID)
+		finishPGUser(user, role, tenantID, backendsJSON, modelsJSON, pipelinesJSON,
+			canAddBackends, canAddPipelines, canChangeDefault)
 		users = append(users, user)
 	}
 
 	return users, rows.Err()
+}
+
+func encodeUserIDs(ids []string) string {
+	if ids == nil {
+		ids = []string{}
+	}
+	b, err := json.Marshal(ids)
+	if err != nil {
+		return "[]"
+	}
+	return string(b)
+}
+
+func decodeUserIDs(raw string) []string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return []string{}
+	}
+	var ids []string
+	if err := json.Unmarshal([]byte(raw), &ids); err != nil {
+		return []string{}
+	}
+	out := make([]string, 0, len(ids))
+	for _, id := range ids {
+		id = strings.TrimSpace(id)
+		if id != "" {
+			out = append(out, id)
+		}
+	}
+	return out
 }
 
 func (s *pgUserStore) Count(ctx context.Context) (int64, error) {

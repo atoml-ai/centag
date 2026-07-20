@@ -3,14 +3,19 @@ package server
 import (
 	"context"
 	"fmt"
+	"net"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
 	"centag/core/internal/auth"
+	"centag/core/internal/edition"
 	"centag/core/pkg/backend"
 	"centag/core/pkg/circuitbreaker"
+	"centag/core/pkg/database"
 	"centag/core/pkg/logger"
+	"centag/core/pkg/useraccess"
 
 	"github.com/gin-gonic/gin"
 )
@@ -18,6 +23,7 @@ import (
 // BackendHandler 后端配置处理器
 type BackendHandler struct {
 	backendManager *backend.Manager
+	edition        edition.Edition
 }
 
 // NewBackendHandler 创建后端配置处理器
@@ -25,6 +31,17 @@ func NewBackendHandler(manager *backend.Manager) *BackendHandler {
 	return &BackendHandler{
 		backendManager: manager,
 	}
+}
+
+// SetEdition configures product edition for Team resource access rules.
+func (h *BackendHandler) SetEdition(ed edition.Edition) {
+	if h != nil {
+		h.edition = ed
+	}
+}
+
+func (h *BackendHandler) accessUser(c *gin.Context) *database.User {
+	return loadTeamNormalUser(c, h.edition)
 }
 
 // getTenantID 返回当前请求的租户隔离范围。
@@ -41,7 +58,7 @@ func (h *BackendHandler) getTenantID(c *gin.Context) string {
 
 // ListBackends 列出所有后端配置（租户隔离 + 角色感知）
 // - 管理员: 返回全部后端
-// - 普通用户: 仅返回自己租户的后端 + 系统默认后端
+// - 普通用户: 租户自建 + 白名单内且启用的系统后端（空白名单=无系统后端）
 func (h *BackendHandler) ListBackends(c *gin.Context) {
 	tenantID := h.getTenantID(c)
 
@@ -50,6 +67,9 @@ func (h *BackendHandler) ListBackends(c *gin.Context) {
 		backends = h.backendManager.ListByTenant(tenantID)
 	} else {
 		backends = h.backendManager.List()
+	}
+	if user := h.accessUser(c); user != nil {
+		backends = useraccess.FilterBackends(user, backends)
 	}
 
 	// 转换为响应格式（包含 has_api_key 标记，但不暴露实际 api_key）
@@ -70,6 +90,9 @@ func (h *BackendHandler) ExportBackends(c *gin.Context) {
 	} else {
 		backends = h.backendManager.List()
 	}
+	if user := h.accessUser(c); user != nil {
+		backends = useraccess.FilterBackends(user, backends)
+	}
 
 	// 返回完整配置，包含 api_key
 	RespondSuccess(c, backends)
@@ -77,6 +100,10 @@ func (h *BackendHandler) ExportBackends(c *gin.Context) {
 
 // ImportBackends 批量导入后端（同名 id 已存在则跳过）
 func (h *BackendHandler) ImportBackends(c *gin.Context) {
+	if user := h.accessUser(c); user != nil && !user.CanAddOwnBackends {
+		RespondError(c, http.StatusForbidden, "adding or modifying own backends is disabled for this user")
+		return
+	}
 	var req struct {
 		Backends []*backend.BackendConfig `json:"backends"`
 	}
@@ -96,7 +123,7 @@ func (h *BackendHandler) ImportBackends(c *gin.Context) {
 			continue
 		}
 		if cfg.ID == "" {
-			cfg.ID = generateBackendID(cfg.Type, cfg.Name)
+			cfg.ID = generateBackendID(cfg.Type, cfg.Name, cfg.BaseURL)
 		}
 		if tenantID != "" {
 			cfg.TenantID = tenantID
@@ -137,12 +164,24 @@ func (h *BackendHandler) GetBackend(c *gin.Context) {
 		RespondNotFound(c, err.Error())
 		return
 	}
+	if user := h.accessUser(c); user != nil {
+		filtered := useraccess.FilterBackends(user, []*backend.BackendConfig{cfg})
+		if len(filtered) == 0 {
+			RespondError(c, http.StatusForbidden, "backend not found or access denied")
+			return
+		}
+		cfg = filtered[0]
+	}
 
 	RespondSuccess(c, cfg.ToResponse())
 }
 
 // CreateBackend 创建后端配置（自动注入租户ID）
 func (h *BackendHandler) CreateBackend(c *gin.Context) {
+	if user := h.accessUser(c); user != nil && !user.CanAddOwnBackends {
+		RespondError(c, http.StatusForbidden, "adding or modifying own backends is disabled for this user")
+		return
+	}
 	var cfg backend.BackendConfig
 	if !BindJSON(c, &cfg) {
 		return
@@ -150,7 +189,7 @@ func (h *BackendHandler) CreateBackend(c *gin.Context) {
 
 	// 自动生成ID；若客户端传入的 id 已存在则改用唯一 id（避免预设 provider id 与种子数据冲突）
 	if cfg.ID == "" {
-		cfg.ID = generateBackendID(cfg.Type, cfg.Name)
+		cfg.ID = generateBackendID(cfg.Type, cfg.Name, cfg.BaseURL)
 	}
 	cfg.ID = ensureUniqueBackendID(h.backendManager, cfg.ID)
 
@@ -190,10 +229,18 @@ func (h *BackendHandler) UpdateBackend(c *gin.Context) {
 
 	// 注入租户ID（防止越权修改其他租户的后端）
 	if tenantID != "" {
+		if user := h.accessUser(c); user != nil && !user.CanAddOwnBackends {
+			RespondError(c, http.StatusForbidden, "adding or modifying own backends is disabled for this user")
+			return
+		}
 		// 先验证当前租户是否有权限访问该后端
 		existing, err := h.backendManager.GetByTenant(tenantID, id)
 		if err != nil {
 			RespondError(c, http.StatusForbidden, "backend not found or access denied: "+err.Error())
+			return
+		}
+		if existing.TenantID == "" {
+			RespondError(c, http.StatusForbidden, "cannot modify system backend")
 			return
 		}
 		cfg.TenantID = tenantID
@@ -223,6 +270,13 @@ func (h *BackendHandler) UpdateBackend(c *gin.Context) {
 func (h *BackendHandler) DeleteBackend(c *gin.Context) {
 	id := c.Param("id")
 	tenantID := h.getTenantID(c)
+
+	if tenantID != "" {
+		if user := h.accessUser(c); user != nil && !user.CanAddOwnBackends {
+			RespondError(c, http.StatusForbidden, "adding or modifying own backends is disabled for this user")
+			return
+		}
+	}
 
 	var err error
 	if tenantID != "" {
@@ -563,6 +617,14 @@ func (h *BackendHandler) GetModels(c *gin.Context) {
 		RespondNotFound(c, err.Error())
 		return
 	}
+	if user := h.accessUser(c); user != nil {
+		filtered := useraccess.FilterBackends(user, []*backend.BackendConfig{cfg})
+		if len(filtered) == 0 {
+			RespondError(c, http.StatusForbidden, "backend not found or access denied")
+			return
+		}
+		cfg = filtered[0]
+	}
 
 	logger.Info("GetModels: fetching models for backend",
 		logger.GetField("id", cfg.ID),
@@ -586,57 +648,112 @@ func (h *BackendHandler) GetModels(c *gin.Context) {
 
 	// 根据类型过滤模型
 	filteredModels := filterModelsByType(models, modelType)
+	if user := h.accessUser(c); user != nil && cfg.TenantID == "" {
+		kept := make([]string, 0, len(filteredModels))
+		for _, m := range filteredModels {
+			if useraccess.CanUseSharedModel(user, m) {
+				kept = append(kept, m)
+			}
+		}
+		filteredModels = kept
+	}
 
 	RespondSuccess(c, filteredModels)
 }
 
 // FetchModels 用前端提交的配置直接探测远端模型列表
-// 用于编辑对话框中"从服务器获取"按钮（新建后端或修改了 URL/Key 后使用）。
-// 若提供了 backend_id 且后端已存在，探测成功后立即更新该后端的 supported_models
-// 并持久化到数据库，避免页面刷新后获取的模型列表丢失。
+// 用于编辑对话框中「刷新支持的模型」按钮（新建/编辑、各发行版共用）。
+// 若提供了 backend_id 且后端已存在：编辑态可复用已存 API Key；探测成功后立即更新 supported_models 并持久化。
 func (h *BackendHandler) FetchModels(c *gin.Context) {
 	var req struct {
 		BaseURL   string `json:"base_url" binding:"required"`
 		APIKey    string `json:"api_key"`
-		Type      string `json:"type"`    // openai | ollama | anthropic
+		Type      string `json:"type"`    // openai | ollama | anthropic | gemini
 		Timeout   int    `json:"timeout"` // seconds
 		BackendID string `json:"backend_id,omitempty"`
+		Replace   *bool  `json:"replace,omitempty"` // 默认 true：以远端列表覆盖
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		RespondError(c, http.StatusBadRequest, "缺少必要参数："+err.Error())
 		return
 	}
-	if req.Timeout <= 0 {
-		req.Timeout = 30
-	}
-	if req.Type == "" {
-		req.Type = "openai"
+	replace := true
+	if req.Replace != nil {
+		replace = *req.Replace
 	}
 
-	// 构建临时后端配置用于探测
+	apiKey := backend.NormalizeOpenAICompatibleAPIKey(req.APIKey)
+	baseURL := strings.TrimSpace(req.BaseURL)
+	backendType := strings.TrimSpace(req.Type)
+	timeout := req.Timeout
+	if timeout <= 0 {
+		timeout = 30
+	}
+
+	// 编辑态：与 TestConnection 一致，未提交 Key 时复用已存密钥，并允许补全 URL/Type
+	if req.BackendID != "" {
+		h.backendManager.RepairAPIKeyFromDBIfEmpty(c.Request.Context(), req.BackendID)
+		_ = h.backendManager.ApplyAPIKeyFromInitialFileIfEmpty(req.BackendID)
+
+		tenantID := h.getTenantID(c)
+		var stored *backend.BackendConfig
+		var getErr error
+		if tenantID != "" {
+			stored, getErr = h.backendManager.GetByTenant(tenantID, req.BackendID)
+		} else {
+			stored, getErr = h.backendManager.Get(req.BackendID)
+		}
+		if getErr == nil && stored != nil {
+			if apiKey == "" && stored.APIKey != "" {
+				apiKey = backend.NormalizeOpenAICompatibleAPIKey(stored.APIKey)
+			}
+			if baseURL == "" {
+				baseURL = stored.BaseURL
+			}
+			if backendType == "" && stored.Type != "" {
+				backendType = stored.Type
+			}
+			if timeout == 30 && stored.Timeout > 0 {
+				timeout = stored.Timeout
+			}
+		}
+	}
+	if backendType == "" {
+		backendType = "openai"
+	}
+
+	if backendType != "ollama" && apiKey == "" {
+		RespondError(c, http.StatusBadRequest, "未配置 API Key，无法拉取模型列表")
+		return
+	}
+
 	tempCfg := &backend.BackendConfig{
 		Name:            "__fetch_probe__",
-		Type:            req.Type,
-		BaseURL:         req.BaseURL,
-		APIKey:          backend.NormalizeOpenAICompatibleAPIKey(req.APIKey),
-		Timeout:         req.Timeout,
+		Type:            backendType,
+		BaseURL:         baseURL,
+		APIKey:          apiKey,
+		Timeout:         timeout,
 		AutoFetchModels: true,
 	}
 
-	models, err := h.backendManager.GetModelsWithContext(c.Request.Context(), tempCfg)
+	// 强制走远端，忽略本地 supported_models 缓存
+	models, err := h.backendManager.FetchModelsFromRemote(c.Request.Context(), tempCfg)
 	if err != nil {
 		RespondError(c, http.StatusBadGateway, "探测失败："+err.Error())
 		return
 	}
 
-	// 若指定了 backend_id 且后端存在，立即持久化获取到的模型列表
 	if req.BackendID != "" {
 		tenantID := h.getTenantID(c)
 		existing, getErr := h.backendManager.Get(req.BackendID)
 		if getErr == nil && existing != nil {
-			// 仅在租户匹配或无租户隔离时允许更新
 			if tenantID == "" || existing.TenantID == tenantID || existing.TenantID == "" {
-				h.backendManager.UpdateSupportedModels(req.BackendID, models)
+				if replace {
+					h.backendManager.UpdateSupportedModels(req.BackendID, models)
+				} else {
+					merged := mergeModelNameLists(getSupportedModelNameStrings(existing), models)
+					h.backendManager.UpdateSupportedModels(req.BackendID, merged)
+				}
 				if saveErr := h.backendManager.Save(); saveErr != nil {
 					logger.Warn("FetchModels: 模型列表已获取但持久化失败", logger.GetField("backend_id", req.BackendID), logger.GetField("error", saveErr.Error()))
 				} else {
@@ -647,6 +764,51 @@ func (h *BackendHandler) FetchModels(c *gin.Context) {
 	}
 
 	RespondSuccess(c, models)
+}
+
+func getSupportedModelNameStrings(cfg *backend.BackendConfig) []string {
+	if cfg == nil {
+		return nil
+	}
+	out := make([]string, 0, len(cfg.SupportedModels))
+	for _, sm := range cfg.SupportedModels {
+		name := sm.ActualModel
+		if name == "" {
+			name = sm.RequestedModel
+		}
+		if name != "" {
+			out = append(out, name)
+		}
+	}
+	return out
+}
+
+func mergeModelNameLists(existing, remote []string) []string {
+	seen := make(map[string]struct{}, len(existing)+len(remote))
+	out := make([]string, 0, len(existing)+len(remote))
+	for _, name := range existing {
+		name = strings.TrimSpace(name)
+		if name == "" {
+			continue
+		}
+		if _, ok := seen[name]; ok {
+			continue
+		}
+		seen[name] = struct{}{}
+		out = append(out, name)
+	}
+	for _, name := range remote {
+		name = strings.TrimSpace(name)
+		if name == "" {
+			continue
+		}
+		if _, ok := seen[name]; ok {
+			continue
+		}
+		seen[name] = struct{}{}
+		out = append(out, name)
+	}
+	return out
 }
 
 // filterModelsByType 根据类型过滤模型
@@ -693,9 +855,34 @@ func isEmbeddingModel(modelName string) bool {
 	return false
 }
 
-// generateBackendID 生成后端ID（仅保留安全字符，避免中文/空格导致怪异 id）
-func generateBackendID(backendType, name string) string {
-	slug := strings.ToLower(strings.TrimSpace(name))
+// generateBackendID 生成可读且有辨识度的后端 ID。
+// 规则（按优先级）：
+//  1. 名称 slug 有辨识度（非空、且不等于 type/custom/backend）→ 直接用名称 slug
+//  2. 否则用 Base URL 主机名 slug（如 api.deepseek.com → api-deepseek-com）
+//  3. 再不行 → {type}-{4位短码}
+// 不再使用「type-name」硬拼接，避免选 OpenAI 预设变成 openai-openai。
+func generateBackendID(backendType, name, baseURL string) string {
+	typePart := strings.ToLower(strings.TrimSpace(backendType))
+	if typePart == "" {
+		typePart = "backend"
+	}
+	nameSlug := slugifyBackendIDPart(name)
+	hostSlug := slugifyBackendHost(baseURL)
+
+	genericNames := map[string]bool{
+		"": true, typePart: true, "backend": true, "custom": true, "provider": true,
+	}
+	if !genericNames[nameSlug] {
+		return nameSlug
+	}
+	if hostSlug != "" && hostSlug != typePart {
+		return hostSlug
+	}
+	return typePart + "-" + shortBackendIDToken()
+}
+
+func slugifyBackendIDPart(s string) string {
+	slug := strings.ToLower(strings.TrimSpace(s))
 	slug = strings.Map(func(r rune) rune {
 		switch {
 		case r >= 'a' && r <= 'z', r >= '0' && r <= '9':
@@ -709,14 +896,41 @@ func generateBackendID(backendType, name string) string {
 	for strings.Contains(slug, "--") {
 		slug = strings.ReplaceAll(slug, "--", "-")
 	}
-	slug = strings.Trim(slug, "-")
-	if slug == "" {
-		slug = fmt.Sprintf("%d", time.Now().Unix()%100000)
+	return strings.Trim(slug, "-")
+}
+
+func slugifyBackendHost(baseURL string) string {
+	raw := strings.TrimSpace(baseURL)
+	if raw == "" {
+		return ""
 	}
-	if backendType == "" {
-		backendType = "backend"
+	if !strings.Contains(raw, "://") {
+		raw = "https://" + raw
 	}
-	return backendType + "-" + slug
+	u, err := url.Parse(raw)
+	if err != nil {
+		return ""
+	}
+	host := strings.ToLower(u.Hostname())
+	if host == "" {
+		return ""
+	}
+	// localhost / 纯 IP 时带上端口，避免都变成 localhost
+	if (host == "localhost" || net.ParseIP(host) != nil) && u.Port() != "" {
+		host = host + "-" + u.Port()
+	}
+	return slugifyBackendIDPart(host)
+}
+
+func shortBackendIDToken() string {
+	const alphabet = "abcdefghijklmnopqrstuvwxyz0123456789"
+	n := time.Now().UnixNano()
+	buf := make([]byte, 4)
+	for i := 0; i < 4; i++ {
+		buf[i] = alphabet[n%int64(len(alphabet))]
+		n /= int64(len(alphabet))
+	}
+	return string(buf)
 }
 
 // ensureUniqueBackendID 若 id 已被占用则追加 -2/-3...，保证创建成功。

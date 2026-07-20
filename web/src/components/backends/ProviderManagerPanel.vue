@@ -1,7 +1,7 @@
 <template>
   <div class="provider-manager" v-loading="busy">
     <div v-if="!canWrite" class="readonly-tip">
-      当前为只读：团队版仅管理员可添加、修改或探测后端
+      当前为只读：管理员已关闭你的「可添加自有后端」权限
     </div>
     <div v-if="canWrite" class="mgr-toolbar">
       <div class="mgr-toolbar-left">
@@ -179,6 +179,7 @@ import {
 import api from '@/api'
 import { useAuthStore } from '@/stores/auth'
 import { useEdition } from '@/composables/useEdition'
+import { useUserResourceAccess } from '@/composables/useUserResourceAccess'
 
 const props = defineProps<{
   backends: any[]
@@ -190,9 +191,16 @@ const emit = defineEmits<{
 }>()
 
 const authStore = useAuthStore()
-const { isPersonal, isMinimal } = useEdition()
-/** team 仅 admin 可写；personal / minimal 保持原有写权限 */
-const canWrite = computed(() => isPersonal.value || isMinimal.value || authStore.isAdmin)
+const { isPersonal, isMinimal, isTeam } = useEdition()
+const { canAddOwnBackends } = useUserResourceAccess()
+// personal / minimal / 超管不受限；team 普通用户受 can_add_own_backends 控制
+const canWrite = computed(
+  () =>
+    authStore.isAdmin ||
+    isPersonal.value ||
+    isMinimal.value ||
+    (isTeam.value && canAddOwnBackends.value)
+)
 
 const editorRef = ref<InstanceType<typeof BackendEditorDialog> | null>(null)
 const editorVisible = ref(false)
@@ -468,7 +476,7 @@ async function handleDelete(backend: any) {
 
 function openCreate() {
   if (!canWrite.value) {
-    ElMessage.warning('团队版仅管理员可添加后端')
+    ElMessage.warning('当前账号无权添加自有后端')
     return
   }
   editorRef.value?.openCreate()

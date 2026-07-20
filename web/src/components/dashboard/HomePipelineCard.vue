@@ -67,7 +67,7 @@
               测试
             </el-button>
             <el-button
-              v-if="canEdit"
+              v-if="canSetDefault"
               size="small"
               :type="pipeline.id === selectedDefaultId ? 'success' : 'default'"
               :plain="pipeline.id !== selectedDefaultId"
@@ -121,7 +121,7 @@
     </template>
 
     <el-empty v-else-if="!loading" description="暂无流水线" :image-size="56">
-      <el-button v-if="canEdit" type="primary" plain size="small" @click="openCreate">
+      <el-button v-if="canCreatePipeline" type="primary" plain size="small" @click="openCreate">
         创建流水线
       </el-button>
     </el-empty>
@@ -158,6 +158,7 @@ import PipelineFeatureGuard from '@/components/pipeline/PipelineFeatureGuard.vue
 import CapabilitySlotsDialog from '@/components/pipeline/CapabilitySlotsDialog.vue'
 import { useEdition } from '@/composables/useEdition'
 import { useAuthStore } from '@/stores/auth'
+import { useUserResourceAccess } from '@/composables/useUserResourceAccess'
 import { canConfigureCapabilitySlots } from '@/utils/capabilitySlots'
 import {
   getPipelines,
@@ -174,7 +175,7 @@ const emit = defineEmits<{
   test: [pipelineId: string]
 }>()
 
-const { isPersonal, isMinimal } = useEdition()
+const { isPersonal, isMinimal, isTeam } = useEdition()
 const authStore = useAuthStore()
 
 const pipelines = ref<AgentPatternPipeline[]>([])
@@ -191,11 +192,27 @@ const batchDeleting = ref(false)
 const routeAssignVisible = ref(false)
 const routeAssignPipelineId = ref('')
 
-const canEdit = computed(() => isPersonal.value || isMinimal.value || authStore.isAdmin)
+const { canAddOwnPipelines, canChangeDefaultPipeline } = useUserResourceAccess()
+// team 普通用户可编辑租户内流水线（受 can_add_own_pipelines 控制）
+const canEdit = computed(
+  () =>
+    authStore.isAdmin ||
+    isPersonal.value ||
+    isMinimal.value ||
+    (isTeam.value && canAddOwnPipelines.value)
+)
+const canCreatePipeline = computed(() => canEdit.value)
+const canSetDefault = computed(
+  () =>
+    authStore.isAdmin ||
+    isPersonal.value ||
+    isMinimal.value ||
+    (isTeam.value && canChangeDefaultPipeline.value)
+)
 /** 批量选择仅 minimal（精简台高频清理）；personal/team 走单条操作 */
 const selectable = computed(() => isMinimal.value)
 /** personal / minimal 共用精简测试对话抽屉 */
-const canTest = computed(() => isPersonal.value || isMinimal.value)
+const canTest = computed(() => isPersonal.value || isMinimal.value || isTeam.value)
 
 const allSelected = computed(() =>
   pipelines.value.length > 0 && selectedIds.value.length === pipelines.value.length
@@ -265,7 +282,7 @@ async function loadPipelines() {
 }
 
 async function persistDefault(pipelineId: string) {
-  if (!canEdit.value || !pipelineId) return
+  if (!canSetDefault.value || !pipelineId) return
   savingDefault.value = true
   pendingDefaultId.value = pipelineId
   try {

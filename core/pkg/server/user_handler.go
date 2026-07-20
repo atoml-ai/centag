@@ -73,15 +73,21 @@ func (h *UserHandler) CreateUser(c *gin.Context) {
 	}
 
 	user := &database.User{
-		Username:         req.Username,
-		Password:         hash,
-		Role:             database.UserRole(req.Role),
-		DisplayName:      req.DisplayName,
-		Email:            req.Email,
-		Enabled:          true,
-		DefaultPipelineID: req.DefaultPipelineID,
-		DailyTokenLimit:   req.DailyTokenLimit,
-		MonthlyTokenLimit: req.MonthlyTokenLimit,
+		Username:                 req.Username,
+		Password:                 hash,
+		Role:                     database.UserRole(req.Role),
+		DisplayName:              req.DisplayName,
+		Email:                    req.Email,
+		Enabled:                  true,
+		DefaultPipelineID:        req.DefaultPipelineID,
+		DailyTokenLimit:          req.DailyTokenLimit,
+		MonthlyTokenLimit:        req.MonthlyTokenLimit,
+		AllowedBackendIDs:        []string{},
+		AllowedModelIDs:          []string{},
+		AllowedPipelineIDs:       []string{},
+		CanAddOwnBackends:        true,
+		CanAddOwnPipelines:       true,
+		CanChangeDefaultPipeline: true,
 	}
 
 	if err := database.Get().UserStore().Create(c.Request.Context(), user); err != nil {
@@ -129,13 +135,19 @@ func (h *UserHandler) CreateUser(c *gin.Context) {
 // ── Admin: PUT /api/v1/admin/users/:id ──────────────────────────────────────
 
 type updateUserRequest struct {
-	DisplayName      *string `json:"display_name"`
-	Email            *string `json:"email"`
-	Role             *string `json:"role"`
-	Enabled          *bool   `json:"enabled"`
-	DefaultPipelineID *string `json:"default_pipeline_id"` // v2.1: 默认流水线
-	DailyTokenLimit   *int64  `json:"daily_token_limit"`   // v2.1: 每日 Token 限额
-	MonthlyTokenLimit *int64  `json:"monthly_token_limit"` // v2.1: 每月 Token 限额
+	DisplayName       *string  `json:"display_name"`
+	Email             *string  `json:"email"`
+	Role              *string  `json:"role"`
+	Enabled           *bool    `json:"enabled"`
+	DefaultPipelineID *string  `json:"default_pipeline_id"` // v2.1: 默认流水线
+	DailyTokenLimit   *int64   `json:"daily_token_limit"`   // v2.1: 每日 Token 限额
+	MonthlyTokenLimit *int64   `json:"monthly_token_limit"` // v2.1: 每月 Token 限额
+	AllowedBackendIDs  *[]string `json:"allowed_backend_ids"`
+	AllowedModelIDs    *[]string `json:"allowed_model_ids"`
+	AllowedPipelineIDs *[]string `json:"allowed_pipeline_ids"`
+	CanAddOwnBackends        *bool `json:"can_add_own_backends"`
+	CanAddOwnPipelines       *bool `json:"can_add_own_pipelines"`
+	CanChangeDefaultPipeline *bool `json:"can_change_default_pipeline"`
 }
 
 func (h *UserHandler) UpdateUser(c *gin.Context) {
@@ -189,6 +201,24 @@ func (h *UserHandler) UpdateUser(c *gin.Context) {
 	}
 	if req.MonthlyTokenLimit != nil {
 		user.MonthlyTokenLimit = *req.MonthlyTokenLimit
+	}
+	if req.AllowedBackendIDs != nil {
+		user.AllowedBackendIDs = *req.AllowedBackendIDs
+	}
+	if req.AllowedModelIDs != nil {
+		user.AllowedModelIDs = *req.AllowedModelIDs
+	}
+	if req.AllowedPipelineIDs != nil {
+		user.AllowedPipelineIDs = *req.AllowedPipelineIDs
+	}
+	if req.CanAddOwnBackends != nil {
+		user.CanAddOwnBackends = *req.CanAddOwnBackends
+	}
+	if req.CanAddOwnPipelines != nil {
+		user.CanAddOwnPipelines = *req.CanAddOwnPipelines
+	}
+	if req.CanChangeDefaultPipeline != nil {
+		user.CanChangeDefaultPipeline = *req.CanChangeDefaultPipeline
 	}
 
 	if err := db.UserStore().Update(ctx, user); err != nil {

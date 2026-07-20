@@ -29,6 +29,15 @@ type User struct {
 	MonthlyTokenUsed int64      `json:"monthly_token_used"`           // 当月已用 Token
 	QuotaResetDate   *time.Time `json:"quota_reset_date,omitempty"`   // 额度重置日期
 
+	// Team: shared resource whitelist (empty = no shared resources; own tenant resources separate)
+	AllowedBackendIDs  []string `json:"allowed_backend_ids"`
+	AllowedModelIDs    []string `json:"allowed_model_ids"`
+	AllowedPipelineIDs []string `json:"allowed_pipeline_ids"`
+	// Self-service flags (default true for new users)
+	CanAddOwnBackends        bool `json:"can_add_own_backends"`
+	CanAddOwnPipelines       bool `json:"can_add_own_pipelines"`
+	CanChangeDefaultPipeline bool `json:"can_change_default_pipeline"`
+
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 }
