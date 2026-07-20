@@ -5,7 +5,6 @@ use (
 	./core
 	./dist/personal
 	./dist/minimal
-	./dist/team
 	./plugins/backend/anthropic
 	./plugins/backend/azure
 	./plugins/backend/gemini

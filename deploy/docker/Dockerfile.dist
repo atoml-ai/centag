@@ -4,9 +4,9 @@
 # 三个发行版共用此文件，仅通过 DIST_NAME 切换构建入口：
 #   minimal  → 轻量（无 DB；后端+协议；约 16MB）
 #   personal → 个人全功能（与 team 插件对齐；部署默认 SQLite；约 30MB）
-#   team     → 团队版（二进制与 personal 对齐；部署默认外置 PG/向量等；约 30MB）
+#   team     → 已迁至 centag-pro；请勿对本 Dockerfile 使用 DIST_NAME=team
 #
-# BUILD_TAGS 由 start.sh _get_dist_tags() 注入；personal/team 共用全功能 tags。
+# BUILD_TAGS 由 start.sh _get_dist_tags() 注入。
 # ============================================================
 # 阶段 1：前端构建（所有版本共用同一套 Vue 前端）
 # 前端通过 CENTAG_EDITION 环境变量自动适配 minimal/personal/team UI
