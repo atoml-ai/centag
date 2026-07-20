@@ -1,8 +1,8 @@
 version: "2.0"
 description: Profile 共用后端模板 — 所有供应商预置但默认 disabled，各 Profile 按需覆盖启用
 backends:
-  # 此文件为模板，各 Profile 的 config/initdata/backends.yaml 应基于此覆盖所需后端
-  # 完整供应商列表请参见 config/initdata/initial-backends.yaml
+  # 此文件为模板参考，不参与运行时 seed。
+  # 各 Profile 维护自己的 initdata/initial-backends.yaml；完整供应商目录见 backends-catalog.yaml。
   - id: ollama-local
     name: Ollama (本地)
     type: ollama

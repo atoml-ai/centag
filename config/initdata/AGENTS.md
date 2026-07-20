@@ -20,8 +20,7 @@
 
 | 文件 | 用途 |
 |------|------|
-| `initial-backends.json` | 初始后端配置 |
-| `initial-backends.json.README.md` | 后端配置说明 |
+| （已移除运行时全量 backends） | 后端种子在各 `config/profiles/<edition>/initdata/initial-backends.yaml`；参考目录见 `_shared/backends-catalog.yaml` |
 
 ## 使用方式
 

@@ -6,13 +6,13 @@
 // is a no-op.
 //
 // 后端配置初始化优先级（按顺序）:
-// 1. config/initdata/initial-backends.json（主要配置源）
-// 2. internal/config/defaults.go 硬编码回退（JSON加载失败时）
+// 1. Profile/INITDATA_PATH 的 initial-backends.yaml|json（发行版/客户唯一种子）
+// 2. 回退 ProjectRoot()/config/initdata（如自定义 --initdata zip）；无文件则空种子
 //
 // 环境变量占位符说明:
-// - OLLAMA_HOST: 在 initial-backends.json 中用作占位符 {{OLLAMA_HOST|...}}，程序优先读取
+// - OLLAMA_HOST: 在 initial-backends 中用作占位符 {{OLLAMA_HOST|...}}，程序优先读取
 // - LLM_PROXY_INIT_BACKEND_URL: 已合并到 OLLAMA_HOST，保留仅为向后兼容
-// - 第三方后端 API Key：写在 config/initdata/initial-backends.json 的 api_key 字段，或通过 WebUI 后端管理配置
+// - 第三方后端 API Key：写在种子文件的 api_key 字段，或通过 WebUI 后端管理 / 下拉添加
 //
 // 其他可覆盖的环境变量:
 //	LLM_PROXY_ADMIN_USERNAME      (default: admin)
@@ -29,9 +29,12 @@
 //	LLM_PROXY_DEFAULT_ADMIN_API_KEY_FILE      path to file (first line / whole file trimmed); relative paths resolve from executable dir
 //	LLM_PROXY_DEFAULT_ADMIN_API_KEY_NAME      display name for seeded key (default: Default (config)); deprecated alias LLM_PROXY_ADMIN_API_KEY_NAME still read if this is empty
 //
-// To allow viewing full keys again in the Web UI, set:
+// API Key secondary reveal (default on):
 //
-//	LLM_PROXY_API_KEY_STORAGE_SECRET   any non-empty string; used as AES-256 key material (SHA-256 digest)
+//	Startup calls auth.EnsureAPIKeyStorage — auto-generates a secret into system_config
+//	when LLM_PROXY_API_KEY_STORAGE_SECRET is unset.
+//	LLM_PROXY_API_KEY_REVEAL_ONCE=true   disables encryption / secondary reveal (create-time only)
+//	LLM_PROXY_API_KEY_STORAGE_SECRET     optional override for AES-256 key material (SHA-256 digest)
 package bootstrap
 
 import (
@@ -117,7 +120,11 @@ func Seed(ctx context.Context) error {
 
 	logger.Info("bootstrap: 首轮初始化完成")
 	logger.Infof("bootstrap: Web 登录请使用用户名 %q 及环境变量 LLM_PROXY_ADMIN_PASSWORD（与 config/secrets/.env 一致；未设置时使用文档中的内置默认口令）", adminUser.Username)
-	logger.Info("bootstrap: API Key 可在「个人设置」中管理；若已设置 LLM_PROXY_API_KEY_STORAGE_SECRET，可在界面反复查看完整密钥")
+	if auth.APIKeyRevealOnce() {
+		logger.Info("bootstrap: API Key 可在「个人设置」中管理；当前为仅创建时展示一次（LLM_PROXY_API_KEY_REVEAL_ONCE）")
+	} else {
+		logger.Info("bootstrap: API Key 可在「个人设置」中管理；完整密钥已加密落库，可在界面反复查看/复制")
+	}
 	return nil
 }
 
@@ -136,15 +143,12 @@ func SeedDefaultAdminAPIKeyFromConfig(ctx context.Context, db *database.Manager,
 	}
 
 	keyHash, keyPrefix := auth.APIKeyMetadataFromFullKey(raw)
-	enc := ""
-	if sk := auth.APIKeyStorageKey(); sk != nil {
-		var err error
-		enc, err = auth.EncryptAPIKeyPlaintext(raw, sk)
-		if err != nil {
-			return fmt.Errorf("encrypt default admin api key: %w", err)
-		}
-	} else {
-		logger.Warn("bootstrap: 已预置管理员 API Key，但未设置 LLM_PROXY_API_KEY_STORAGE_SECRET，界面将无法解密查看完整密钥（请自行保存配置文件或环境变量中的密钥）")
+	enc, err := auth.EncryptAPIKeyForStorage(raw)
+	if err != nil {
+		return fmt.Errorf("encrypt default admin api key: %w", err)
+	}
+	if enc == "" && auth.APIKeyRevealOnce() {
+		logger.Warn("bootstrap: 已预置管理员 API Key（reveal-once 模式），界面无法二次查看完整密钥")
 	}
 
 	name := strings.TrimSpace(os.Getenv("LLM_PROXY_DEFAULT_ADMIN_API_KEY_NAME"))
@@ -215,11 +219,17 @@ func createAdminUser(ctx context.Context, db *database.Manager) (*database.User,
 	}
 
 	user := &database.User{
-		Username:    username,
-		Password:    string(hash),
-		Role:        database.RoleAdmin,
-		DisplayName: "Administrator",
-		Enabled:     true,
+		Username:                 username,
+		Password:                 string(hash),
+		Role:                     database.RoleAdmin,
+		DisplayName:              "Administrator",
+		Enabled:                  true,
+		AllowedBackendIDs:        []string{},
+		AllowedModelIDs:          []string{},
+		AllowedPipelineIDs:       []string{},
+		CanAddOwnBackends:        true,
+		CanAddOwnPipelines:       true,
+		CanChangeDefaultPipeline: true,
 	}
 	if err := db.UserStore().Create(ctx, user); err != nil {
 		return nil, err

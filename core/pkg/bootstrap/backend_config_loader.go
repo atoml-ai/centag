@@ -149,9 +149,15 @@ type InitialFallbackGroup struct {
 	MaxAttempts     int      `json:"max_attempts" yaml:"max_attempts"`
 }
 
-// loadInitialBackendFile loads backend configurations from both the global
-// initdata directory and the profile-specific initdata directory (if different).
-// Profile configs override global configs with the same backend ID.
+// loadInitialBackendFile loads backend seed from the edition/customer initdata.
+//
+// Priority (no union merge):
+//  1. Profile / INITDATA_PATH directory — if it contains initial-backends.yaml|json, use it alone
+//  2. Global ProjectRoot()/config/initdata — fallback when profile has no backends file
+//     (e.g. custom --initdata zip placed at config/initdata)
+//
+// A universal vendor catalog must not live under config/initdata as a runtime seed;
+// see config/profiles/_shared/initdata/backends-catalog.yaml for reference only.
 func loadInitialBackendFile() (*InitialBackendFile, string, error) {
 	globalRoot, profileRoot := InitdataRoots()
 	if globalRoot == "" && profileRoot == "" {
@@ -159,36 +165,39 @@ func loadInitialBackendFile() (*InitialBackendFile, string, error) {
 		return nil, "", nil
 	}
 
-	// 1. Load global config (base)
-	globalConfig, globalPath, globalLoaded, globalErr := loadBackendFileFromDir(globalRoot)
-	if globalErr != nil {
-		return nil, globalPath, globalErr
-	}
-	if globalLoaded {
-		initialBackendFileOnce.Do(func() {
-			logger.Infof("bootstrap: 从全局配置加载初始后端: %s (%d backends)", globalPath, len(globalConfig.Backends))
-		})
+	sameRoot := globalRoot != "" && profileRoot != "" &&
+		filepath.Clean(globalRoot) == filepath.Clean(profileRoot)
+
+	// 1. Prefer profile / INITDATA_PATH when it has a backends file
+	if profileRoot != "" {
+		profileConfig, profilePath, profileLoaded, profileErr := loadBackendFileFromDir(profileRoot)
+		if profileErr != nil {
+			return nil, profilePath, profileErr
+		}
+		if profileLoaded {
+			initialBackendFileOnce.Do(func() {
+				logger.Infof("bootstrap: 从 Profile/INITDATA 加载初始后端: %s (%d backends)", profilePath, len(profileConfig.Backends))
+			})
+			return profileConfig, profilePath, nil
+		}
 	}
 
-	// 2. Load profile config (overlay)
-	profileConfig, profilePath, profileLoaded, profileErr := loadBackendFileFromDir(profileRoot)
-	if profileErr != nil {
-		return nil, profilePath, profileErr
-	}
-	if profileLoaded {
-		initialBackendFileOnce.Do(func() {
-			logger.Infof("bootstrap: 从 Profile 配置加载初始后端: %s (%d backends)", profilePath, len(profileConfig.Backends))
-		})
-	}
-
-	if !globalLoaded && !profileLoaded {
-		logger.Info("bootstrap: 未找到初始后端配置文件（全局或 Profile），使用空配置")
-		return nil, "", nil
+	// 2. Fallback to global config/initdata (customer zip or bare install)
+	if !sameRoot && globalRoot != "" {
+		globalConfig, globalPath, globalLoaded, globalErr := loadBackendFileFromDir(globalRoot)
+		if globalErr != nil {
+			return nil, globalPath, globalErr
+		}
+		if globalLoaded {
+			initialBackendFileOnce.Do(func() {
+				logger.Infof("bootstrap: Profile 无 initial-backends，回退全局: %s (%d backends)", globalPath, len(globalConfig.Backends))
+			})
+			return globalConfig, globalPath, nil
+		}
 	}
 
-	// 3. Merge: profile overrides global
-	merged := mergeBackendFiles(globalConfig, profileConfig)
-	return merged, profilePath, nil
+	logger.Info("bootstrap: 未找到初始后端配置文件（Profile 或全局），使用空配置")
+	return nil, "", nil
 }
 
 // loadBackendFileFromDir attempts to load initial-backends.yaml then initial-backends.json from a directory.
@@ -222,63 +231,9 @@ func loadBackendFileFromDir(root string) (*InitialBackendFile, string, bool, err
 	return nil, "", false, nil
 }
 
-// mergeBackendFiles merges two InitialBackendFile configs.
-// Profile backends override global backends with the same ID.
-// Pipeline templates from profile override global templates with the same ID.
-func mergeBackendFiles(global, profile *InitialBackendFile) *InitialBackendFile {
-	if global == nil && profile == nil {
-		return nil
-	}
-	if global == nil {
-		return profile
-	}
-	if profile == nil {
-		return global
-	}
-
-	merged := &InitialBackendFile{
-		Version:     profile.Version,
-		Description: profile.Description,
-	}
-	if merged.Version == "" {
-		merged.Version = global.Version
-	}
-	if merged.Description == "" {
-		merged.Description = global.Description
-	}
-
-	// Merge backends: profile overrides global by ID
-	backendMap := make(map[string]InitialBackendConfig, len(global.Backends))
-	for _, b := range global.Backends {
-		backendMap[b.ID] = b
-	}
-	for _, b := range profile.Backends {
-		backendMap[b.ID] = b
-	}
-	merged.Backends = make([]InitialBackendConfig, 0, len(backendMap))
-	for _, b := range backendMap {
-		merged.Backends = append(merged.Backends, b)
-	}
-
-	// Merge pipeline templates: profile overrides global by ID
-	tmplMap := make(map[string]InitialPipelineTemplate, len(global.PipelineTemplates))
-	for _, t := range global.PipelineTemplates {
-		tmplMap[t.ID] = t
-	}
-	for _, t := range profile.PipelineTemplates {
-		tmplMap[t.ID] = t
-	}
-	merged.PipelineTemplates = make([]InitialPipelineTemplate, 0, len(tmplMap))
-	for _, t := range tmplMap {
-		merged.PipelineTemplates = append(merged.PipelineTemplates, t)
-	}
-
-	return merged
-}
-
-// LoadInitialBackendsFromJSON loads backend configurations from config/initdata/initial-backends.json
-// Returns nil if the file doesn't exist or cannot be parsed.
-// Tries multiple paths to support different deployment layouts (dev, Docker, etc.)
+// LoadInitialBackendsFromJSON loads backend seed configurations for first-run bootstrap.
+// Source is edition/customer initial-backends.yaml|json via loadInitialBackendFile (profile-first).
+// Returns nil if no file exists or it contains no backends.
 func LoadInitialBackendsFromJSON() []config.BackendConfig {
 	fileConfig, foundPath, err := loadInitialBackendFile()
 	if err != nil || fileConfig == nil {

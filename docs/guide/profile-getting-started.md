@@ -92,7 +92,7 @@ personal **故意不**把 `deploy/stack/.env` 注入容器，避免 `POSTGRES_*`
 
 挂载路径：`config/profiles/personal/initdata/` → 容器 `/app/initdata-profile`。
 
-**后端**（`initial-backends.yaml`，Profile 覆盖全局）：
+**后端**（`initial-backends.yaml`，Profile 为唯一种子源）：
 
 | 后端 ID | 默认状态 | 说明 |
 |---------|----------|------|
@@ -164,7 +164,7 @@ compose 注入：`deploy/stack/.env` + `config/profiles/cached/.env` + `config/s
 
 挂载路径：`config/profiles/cached/initdata/`。
 
-**后端**：Profile **没有** `initial-backends.yaml`，首轮 seed 使用**全局** `config/initdata/initial-backends.yaml`（ollama-local 默认 enabled 等）。流水线中 LLM 使用 `openai`，Embedding 使用 `ollama-local`——需在 `.env` 配置 `OPENAI_API_KEY`，并在 WebUI 确认 openai 后端已启用。
+**后端**：Profile **没有** `initial-backends.yaml`，首轮 seed 为空（不再并入通用供应商全集）。流水线中 LLM 使用 `openai`，Embedding 使用 `ollama-local`——请在 WebUI 下拉添加并启用对应后端，或在 Profile 中提供自己的 `initial-backends.yaml`；`.env` 中配置 `OPENAI_API_KEY`。
 
 **流水线**（覆盖全局 `cache-mode`）：
 
@@ -301,17 +301,17 @@ curl http://localhost:20060/v1/chat/completions \
 Docker 中 `INITDATA_PATH=/app/initdata-profile`（挂载 `config/profiles/<name>/initdata`）。
 
 ```
-镜像内置 /app/initdata（全局默认）
-        ↓ 合并（同 ID 时 Profile 覆盖全局）
-config/profiles/<name>/initdata（场景定制）
+config/profiles/<name>/initdata（发行版 / 客户种子，优先）
+        ↓ 若无 initial-backends.yaml|json
+镜像内 /app/config/initdata（仅作回退，如自定义 --initdata zip）
 ```
 
 | 资源 | 规则 |
 |------|------|
-| `initial-backends.yaml` | 按 backend ID 合并；personal / agent-memory 有 Profile 文件，cached 无 |
-| `pipeline-templates/*.yaml` | 按模板 ID 合并；三 Profile 各有 `pipeline-default.yaml` |
+| `initial-backends.yaml` | **Profile 优先、不与全局并集**；无 Profile 文件时回退全局；无文件则空种子。供应商参考目录在 `config/profiles/_shared/initdata/backends-catalog.yaml`（非运行时 seed） |
+| `pipeline-templates/*.yaml` | 按模板 ID 合并；各 Profile 可有 `pipeline-default.yaml` |
 
-实现见 `internal/bootstrap/initdata.go`、`backend_config_loader.go`、`pipeline_template_files_loader.go`。
+实现见 `core/pkg/bootstrap/initdata.go`、`backend_config_loader.go`、`pipeline_template_files_loader.go`。
 
 ---
 

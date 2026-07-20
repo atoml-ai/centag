@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"centag/core/internal"
+	"centag/core/internal/auth"
 	"centag/core/pkg/backend"
 	"centag/core/pkg/bootstrap"
 	"centag/core/pkg/config"
@@ -87,7 +88,21 @@ func Run(version, buildTime string) {
 		}
 	}()
 
-	// Step 5: First-run seed
+	// Step 5: API Key 二次查看（默认可揭示；LLM_PROXY_API_KEY_REVEAL_ONCE=true 时关闭）
+	storageCtx, storageCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	if err := auth.EnsureAPIKeyStorage(storageCtx); err != nil {
+		storageCancel()
+		logger.Fatalf("API key storage init failed: %v", err)
+		os.Exit(1)
+	}
+	storageCancel()
+	if auth.APIKeyRevealOnce() {
+		logger.Info("API Key 二次查看已关闭（LLM_PROXY_API_KEY_REVEAL_ONCE）：完整密钥仅在创建响应中返回一次")
+	} else {
+		logger.Info("API Key 二次查看已启用：完整密钥加密落库，可在 Web 再次查看/复制")
+	}
+
+	// Step 6: First-run seed
 	seedCtx, seedCancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer seedCancel()
 
@@ -101,7 +116,7 @@ func Run(version, buildTime string) {
 		logger.Infof("Admin API Key: %s", apiKey)
 	}
 
-	// Step 6: Load full runtime config from database
+	// Step 7: Load full runtime config from database
 	cfgCtx, cfgCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cfgCancel()
 

@@ -1,5 +1,8 @@
+# 供应商参考目录（catalog）—— 不作为运行时 seed 基线。
+# 各发行版 / 客户应在 config/profiles/<edition>/initdata/initial-backends.yaml
+# 或自定义 INITDATA_PATH 中维护自己的种子；用户也可通过 WebUI 下拉（PROVIDER_REGISTRY）按需添加。
 version: "2.0"
-description: Centag 初始后端配置 - 主流 LLM 算力提供商
+description: Centag 后端供应商参考目录（非运行时 seed）
 backends:
   - id: openai
     name: OpenAI

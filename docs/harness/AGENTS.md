@@ -120,7 +120,7 @@ Centag 采用 **薄核心 + 厚管道 + 可插拔实现** 的三层架构：
 | 启动脚本 | `./start.sh` | Docker 子命令为 **`docker up`** / `docker down`（**空格**，不是 `docker-up`）。 |
 | 中间件与 Mem0 等依赖编排 | 子模块 **`deploy/stack/`**（`./deploy/stack/start.sh`） | 本仓库 `docker/docker-compose.yaml` **仅**编排 `centag` 应用容器；数据库/Redis/ES/Mem0 等在 stack 启动。 |
 | 环境变量与密钥 | `config/secrets/`、`docs/guide/configuration.md`、`docs/ENV_VARIABLES.md` | 勿把密钥写入仓库。 |
-| 后端种子 | `config/initdata/initial-backends.json` 等 | 调度与路由相关。 |
+| 后端种子 | 各 `config/profiles/<edition>/initdata/initial-backends.yaml`（Profile 优先；参考目录 `_shared/backends-catalog.yaml` 非 seed） | 调度与路由相关。 |
 
 若外部 README 仍出现 `8060` 或 `docker-up`，视为历史笔误；改代码前以 **本表 + bootstrap.go + start.sh** 为准。
 

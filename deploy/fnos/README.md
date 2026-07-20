@@ -130,7 +130,7 @@ Native 模式的 `cmd/main` 脚本参考 fnOS 官方 [Notepad 示例](https://de
 | `SERVER_PORT` | `20060` |
 | `LLM_PROXY_ADMIN_PASSWORD` | 来自包内 `config/runtime.env`（打包时注入） |
 | `LLM_PROXY_ADMIN_API_KEY` / `DEFAULT` | 同上；首轮 seed 预置管理员 API Key |
-| `LLM_PROXY_API_KEY_STORAGE_SECRET` | 同上；**必须有**，否则预置 Key 无法在 Web 复制完整密钥 |
+| `LLM_PROXY_API_KEY_STORAGE_SECRET` | 可选；留空则运行时自动生成。设 `LLM_PROXY_API_KEY_REVEAL_ONCE=true` 可关闭二次查看 |
 | `STATIC_DIR` / `STATIC_PATH` | `${TRIM_APPDEST}/webui` |
 
 ---
@@ -159,6 +159,6 @@ Native 模式的 `cmd/main` 脚本参考 fnOS 官方 [Notepad 示例](https://de
 4. **管理员密码 / 默认 API Key / 存储密钥**：打包时写入 `config/runtime.env`：
    - 密码：`--admin-password` / `PACKAGE_ADMIN_PASSWORD` / `.env` 的 `LLM_PROXY_ADMIN_PASSWORD`
    - API Key：`PACKAGE_ADMIN_API_KEY` / `.env` 的 `LLM_PROXY_ADMIN_API_KEY`（或 `DEFAULT`）
-   - **`LLM_PROXY_API_KEY_STORAGE_SECRET`**（Web 复制完整 Key 必需）：`PACKAGE_API_KEY_STORAGE_SECRET` / `.env`；均空则打包时**自动生成**
-   - **已安装过的数据目录**若已有用户/Key，不会被新包覆盖——需清空数据卷后重装，或在 Web 新建 Key（需已配置 STORAGE_SECRET）
+   - **`LLM_PROXY_API_KEY_STORAGE_SECRET`**（可选）：`PACKAGE_API_KEY_STORAGE_SECRET` / `.env`；均空则打包或启动时**自动生成**（默认可二次复制完整 Key）
+   - **已安装过的数据目录**若已有用户/Key，不会被新包覆盖——需清空数据卷后重装，或在 Web 新建 Key
 5. **发行版**：默认 `minimal`；`--edition personal|team` 分别对应个人全功能 / 团队版。
