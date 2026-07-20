@@ -2,6 +2,8 @@
 
 LLM 统一网关：协议适配、后端路由、流水线/钩子/插件、token 计量与计费。核心无内置 business 插件树；可选桌面启动器见 `apps/launcher/`（菜单/托盘 + 浏览器，非 Wails）。
 
+**许可证**：核心仓库以 [MIT](LICENSE) 开源。开源发行版仅 **`minimal` / `personal`**（完整独立构建，不依赖其它仓库）。**Team 商业版**由私有仓 [`centag-pro`](https://github.com/atoml-ai/centag-pro) 构建（`cmd/centag-team` + 插件包）；本仓已删除 `dist/team`。本地可 `./start.sh build team`（转调并列 `centag-pro`，或设 `CENTAG_PRO_PATH`）。
+
 ## 目录结构
 
 ```
@@ -45,16 +47,17 @@ make run            # 或 ./start.sh run be
 
 | 发行版 | 说明 |
 |--------|------|
-| minimal | 轻量，无 DB |
-| personal | 个人全功能，默认 SQLite |
-| team | 与 personal 对齐，默认外挂 PG |
+| minimal | 轻量，无 DB（开源） |
+| personal | 个人全功能，默认 SQLite（开源） |
+| team | **商业 SKU**，在 [`centag-pro`](https://github.com/atoml-ai/centag-pro) 构建 |
 
 ```bash
-./start.sh dist build personal
+./start.sh build personal
+./start.sh build team          # 需 centag-pro
 ./start.sh dist docker-build personal
 ```
 
-业务插件外置：见 [docs/guide/external-business-plugins.md](docs/guide/external-business-plugins.md)。
+见 [dist/README.md](dist/README.md)、[docs/guide/dist-profiles.md](docs/guide/dist-profiles.md)、[docs/guide/external-business-plugins.md](docs/guide/external-business-plugins.md)。
 
 可选桌面启动器（菜单/托盘 + 默认浏览器，非 Wails；`--launcher` 辅助开关）：
 
