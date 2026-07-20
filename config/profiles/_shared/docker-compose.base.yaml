@@ -14,6 +14,7 @@ services:
       - ./.env
     ports:
       - "${LLM_PROXY_SERVER_PORT:-20060}:20060"
+      - "${LLM_PROXY_SYSTEM_PROXY_PORT:-8081}:8081"
     volumes:
       - centag_storage:/app/storage
       - centag_logs:/app/logs

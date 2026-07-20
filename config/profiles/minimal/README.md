@@ -62,14 +62,7 @@ docker compose logs -f
 
 ### 后端配置
 
-编辑 `initdata/initial-backends.yaml` 文件：
-
-```yaml
-backends:
-  - id: openai
-    api_key: "${OPENAI_API_KEY}"  # 在 .env 中设置
-    enabled: true
-```
+首启 `initdata/initial-backends.yaml` 为 **空列表**（`backends: []`）。请在 WebUI「添加 Provider」配置；也可编辑该文件后重建/重置 Profile。供应商参考见 `_shared/initdata/backends-catalog.yaml`。
 
 ### 流水线配置
 

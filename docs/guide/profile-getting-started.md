@@ -94,11 +94,7 @@ personal **故意不**把 `deploy/stack/.env` 注入容器，避免 `POSTGRES_*`
 
 **后端**（`initial-backends.yaml`，Profile 为唯一种子源）：
 
-| 后端 ID | 默认状态 | 说明 |
-|---------|----------|------|
-| `openai` | **enabled** | 需在 `.env` 填 `OPENAI_API_KEY` |
-| `deepseek` | disabled | 填 Key 后可启用 |
-| `ollama-local` | disabled | 需 `OLLAMA_ENABLED=true` 并启用后端 |
+首启 **`backends: []`**（无预置 OpenAI 等占位）。请在 WebUI「添加 Provider」配置；供应商参考见 `config/profiles/_shared/initdata/backends-catalog.yaml`（非运行时 seed）。
 
 **流水线**（`pipeline-templates/pipeline-default.yaml`，覆盖全局 `direct-backend`）：
 
@@ -107,8 +103,8 @@ personal **故意不**把 `deploy/stack/.env` 注入容器，避免 `POSTGRES_*`
 | 模板 ID | `direct-backend` |
 | 代理模式 | `direct-backend`（快捷码 `#d`） |
 | 节点 | 单节点 `generator` |
-| 后端 / 模型 | `openai` / `gpt-4o-mini` |
-| 链路 | 请求 → 直连 OpenAI → 返回（无缓存、无记忆） |
+| 后端 / 模型 | 需先在 WebUI 添加后端后再指向具体模型 |
+| 链路 | 请求 → 直连后端 → 返回（无缓存、无记忆） |
 
 ### 3.5 环境变量要点
 
@@ -116,7 +112,7 @@ personal **故意不**把 `deploy/stack/.env` 注入容器，避免 `POSTGRES_*`
 # config/profiles/personal/.env
 OLLAMA_ENABLED=false          # 默认：不启 stack
 LLM_PROXY_DB_DRIVER=sqlite
-OPENAI_API_KEY=sk-xxx         # 至少填一个线上 Key
+# 后端在 WebUI 添加；若模板仍用 ${OPENAI_API_KEY} 占位，再按需填写
 ```
 
 ### 3.6 验证
