@@ -84,28 +84,42 @@ const SECTION_MATRIX: Record<Edition, DashboardSections> = {
     liteChatDrawer: true,
     opsStats: false
   },
+  // team 超管：服务状态 + 共用后端/策略；不含接入/代理开关/业务用量
   team: {
     layout: 'team',
     pageTitle: true,
     headerActions: false,
     serviceStatus: true,
     serviceStatusCompact: false,
-    teamAccessInStatus: true,
-    pluginsStorage: true,
-    proxyControls: true,
+    teamAccessInStatus: false,
+    pluginsStorage: false,
+    proxyControls: false,
     accessPanel: false,
     accessQuickLinks: false,
     accessCompact: false,
     backends: true,
     pipelines: true,
-    pipelineCreateButton: false,
-    usageBilling: true,
+    pipelineCreateButton: true,
+    usageBilling: false,
     usageEphemeralHint: false,
     liteChatDrawer: false,
-    opsStats: true
+    opsStats: false
   }
 }
 
-export function getDashboardSections(edition: Edition): DashboardSections {
+/** team 普通用户：复用 personal lite 干活首页 */
+const TEAM_USER_SECTIONS: DashboardSections = {
+  ...SECTION_MATRIX.personal,
+  layout: 'lite',
+  usageEphemeralHint: false
+}
+
+/**
+ * @param roleAdmin team 下为 true 时使用运维概览；普通用户用 personal 式 lite 首页
+ */
+export function getDashboardSections(edition: Edition, roleAdmin = false): DashboardSections {
+  if (edition === 'team') {
+    return roleAdmin ? SECTION_MATRIX.team : TEAM_USER_SECTIONS
+  }
   return SECTION_MATRIX[edition] ?? SECTION_MATRIX.team
 }

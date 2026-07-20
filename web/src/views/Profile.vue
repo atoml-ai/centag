@@ -244,7 +244,7 @@
     <!-- 新 Key 展示（仅一次） -->
     <el-dialog v-model="showKeyDialog" title="密钥创建成功" width="540px" :close-on-click-modal="false" :close-on-press-escape="false" :show-close="false">
       <el-alert type="warning" :closable="false" show-icon style="margin-bottom:16px;border-radius:6px">
-        <template #title>请保存此密钥。若服务器已配置加密存储（LLM_PROXY_API_KEY_STORAGE_SECRET），之后仍可在列表中查看完整内容。</template>
+        <template #title>请保存此密钥。默认可在列表中再次查看/复制完整内容；仅当服务端开启「仅创建时展示」（LLM_PROXY_API_KEY_REVEAL_ONCE）时例外。</template>
       </el-alert>
       <div class="new-key-box">
         <code class="new-key">{{ newFullKey }}</code>
@@ -471,7 +471,7 @@ async function revealFullKey(row: APIKey, autoCopy: boolean) {
       revealedFullKey.value = d.full_key
       if (autoCopy) await copyText(d.full_key)
     } else {
-      ElMessage.warning('无法展示完整密钥（请确认服务端已设置 LLM_PROXY_API_KEY_STORAGE_SECRET，且与创建该密钥时一致）')
+      ElMessage.warning('无法展示完整密钥（可能创建于「仅创建时展示」模式，或存储密钥已变更；请新建密钥）')
       showRevealDialog.value = false
     }
   } catch (e: any) {
