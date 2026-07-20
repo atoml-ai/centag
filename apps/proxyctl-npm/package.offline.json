@@ -1,0 +1,23 @@
+{
+  "name": "centag-proxyctl-offline",
+  "version": "0.2.7",
+  "private": true,
+  "description": "Offline variant of centag-proxyctl: bundles the platform Go binaries so no network is needed at install. Prefer centag-proxyctl for normal use.",
+  "type": "module",
+  "bin": {
+    "centag-proxyctl": "./bin/run.js"
+  },
+  "files": [
+    "bin/",
+    "lib/",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/atoml-ai/centag.git"
+  }
+}
