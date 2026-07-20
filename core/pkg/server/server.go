@@ -1474,44 +1474,45 @@ func (s *Server) setupRoutes() {
 			backends.POST("/:id/probe", s.backendHandler.ProbeBackend)
 		}
 
-		// 存储配置管理
+		// 存储配置管理（team：写操作仅超管；personal/minimal 保持登录可写）
 		storages := v1Protected.Group("/storage")
 		{
+			adminWrite := s.teamAdminWriteOnly()
 			storages.GET("", s.storageHandler.ListStorages)
 			storages.GET("/get", s.storageHandler.GetStorage)
 			storages.GET("/default-config", s.storageHandler.GetDefaultConfig)
-			storages.POST("/add", s.storageHandler.AddStorage)
-			storages.POST("/update", s.storageHandler.UpdateStorage)
-			storages.DELETE("", s.storageHandler.DeleteStorage)
-			storages.DELETE("/delete", s.storageHandler.DeleteStorage)
-			storages.POST("/delete", s.storageHandler.DeleteStorage)
-			storages.POST("/toggle", s.storageHandler.ToggleStorage)
-			storages.POST("/test", s.storageHandler.TestConnection)
 			storages.GET("/status", s.storageHandler.GetStorageStatus)
-			storages.POST("/connect", s.storageHandler.ConnectStorage)
-			storages.POST("/disconnect", s.storageHandler.DisconnectStorage)
-			storages.POST("/set-default", s.storageHandler.SetDefaultStorage)
-			// KV 数据浏览
 			storages.GET("/kv/keys", s.storageHandler.ListKVKeys)
 			storages.GET("/kv/get", s.storageHandler.GetKVValue)
-			storages.POST("/kv/delete", s.storageHandler.DeleteKVKey)
+			storages.POST("/add", adminWrite, s.storageHandler.AddStorage)
+			storages.POST("/update", adminWrite, s.storageHandler.UpdateStorage)
+			storages.DELETE("", adminWrite, s.storageHandler.DeleteStorage)
+			storages.DELETE("/delete", adminWrite, s.storageHandler.DeleteStorage)
+			storages.POST("/delete", adminWrite, s.storageHandler.DeleteStorage)
+			storages.POST("/toggle", adminWrite, s.storageHandler.ToggleStorage)
+			storages.POST("/test", adminWrite, s.storageHandler.TestConnection)
+			storages.POST("/connect", adminWrite, s.storageHandler.ConnectStorage)
+			storages.POST("/disconnect", adminWrite, s.storageHandler.DisconnectStorage)
+			storages.POST("/set-default", adminWrite, s.storageHandler.SetDefaultStorage)
+			storages.POST("/kv/delete", adminWrite, s.storageHandler.DeleteKVKey)
 		}
 
-		// 数据存储配置管理
+		// 数据存储配置管理（team：写操作仅超管）
 		dataStores := v1Protected.Group("/data-store")
 		{
+			adminWrite := s.teamAdminWriteOnly()
 			dataStores.GET("", s.dataStoreHandler.ListDataStores)
 			dataStores.GET("/get", s.dataStoreHandler.GetDataStore)
-			dataStores.POST("/add", s.dataStoreHandler.AddDataStore)
-			dataStores.POST("/update", s.dataStoreHandler.UpdateDataStore)
-			dataStores.DELETE("", s.dataStoreHandler.DeleteDataStore)
-			dataStores.DELETE("/delete", s.dataStoreHandler.DeleteDataStore)
-			dataStores.POST("/delete", s.dataStoreHandler.DeleteDataStore)
-			dataStores.POST("/toggle", s.dataStoreHandler.ToggleDataStore)
-			dataStores.POST("/test", s.dataStoreHandler.TestConnection)
 			dataStores.GET("/status", s.dataStoreHandler.GetStatus)
-			dataStores.POST("/set-default", s.dataStoreHandler.SetDefault)
-			dataStores.POST("/remove-default", s.dataStoreHandler.RemoveDefault)
+			dataStores.POST("/add", adminWrite, s.dataStoreHandler.AddDataStore)
+			dataStores.POST("/update", adminWrite, s.dataStoreHandler.UpdateDataStore)
+			dataStores.DELETE("", adminWrite, s.dataStoreHandler.DeleteDataStore)
+			dataStores.DELETE("/delete", adminWrite, s.dataStoreHandler.DeleteDataStore)
+			dataStores.POST("/delete", adminWrite, s.dataStoreHandler.DeleteDataStore)
+			dataStores.POST("/toggle", adminWrite, s.dataStoreHandler.ToggleDataStore)
+			dataStores.POST("/test", adminWrite, s.dataStoreHandler.TestConnection)
+			dataStores.POST("/set-default", adminWrite, s.dataStoreHandler.SetDefault)
+			dataStores.POST("/remove-default", adminWrite, s.dataStoreHandler.RemoveDefault)
 		}
 
 		// 缓存管理
