@@ -9,7 +9,7 @@ BASE="${1:-http://localhost:20060}"
 USER="${2:-admin}"
 PASS="${3:-JEAofRz0WteQOsWI}"
 CLI_MODEL="${4:-}"    # 可选 — 手动指定模型名
-EDITION="${5:-}"      # 可选 — 手动指定版本 (minimal/gateway/team)
+EDITION="${5:-}"      # 可选 — 手动指定版本 (minimal/personal/team)
 
 red='\033[0;31m'; green='\033[0;32m'; yellow='\033[1;33m'; cyan='\033[0;36m'; nc='\033[0m'
 ok() { echo -e "  ${green}✓${nc} $1"; }

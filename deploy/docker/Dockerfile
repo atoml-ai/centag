@@ -1,5 +1,5 @@
 # Centag - 全栈 Docker 镜像（前端 + 后端）
-# 日常发行版请优先使用：./start.sh dist docker-build <gateway|team|minimal>
+# 日常发行版请优先使用：./start.sh dist docker-build <personal|team|minimal>
 
 FROM docker.m.daocloud.io/library/node:20-alpine AS frontend-builder
 WORKDIR /apps
@@ -18,13 +18,13 @@ ENV CGO_ENABLED=0 \
 COPY core/ ./core/
 COPY plugins/ ./plugins/
 COPY cmd/ ./cmd/
-COPY dist/gateway/ ./dist/gateway/
+COPY dist/personal/ ./dist/personal/
 ARG VERSION=dev
 ARG BUILD_TIME=unknown
 ARG BUILD_TAGS=protocol_openai,protocol_anthropic,protocol_gemini,protocol_openairesponses,backend_openai,backend_ollama,backend_anthropic,backend_gemini,backend_azure
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
-    cd dist/gateway && go build -tags "${BUILD_TAGS}" \
+    cd dist/personal && go build -tags "${BUILD_TAGS}" \
       -ldflags "-s -w -X 'main.Version=${VERSION}' -X 'main.BuildTime=${BUILD_TIME}'" \
       -o /app/centag .
 

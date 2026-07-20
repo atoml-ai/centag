@@ -428,7 +428,7 @@ check_dependencies() {
 
 # ── 共享：获取发行版构建标签 ──────────────────────────────────────
 # 所有构建路径（本地 build、Docker、debug）通过此函数获取统一的 tags
-# gateway / team 二进制插件集合对齐（个人全功能 vs 团队版差别在部署默认依赖，不在插件裁剪）
+# personal / team 二进制插件集合对齐（个人全功能 vs 团队版差别在部署默认依赖，不在插件裁剪）
 _FULL_FEATURE_TAGS="protocol_openai,protocol_anthropic,protocol_gemini,protocol_openairesponses,backend_openai,backend_ollama,backend_anthropic,backend_gemini,backend_azure"
 
 _get_dist_tags() {
@@ -437,7 +437,7 @@ _get_dist_tags() {
         minimal)
             echo "minimal,protocol_openai,protocol_anthropic,backend_openai,backend_ollama,backend_anthropic"
             ;;
-        gateway|team)
+        personal|team)
             echo "$_FULL_FEATURE_TAGS"
             ;;
         *)
@@ -520,10 +520,10 @@ build() {
     esac
 }
 
-# Map product edition → dist binary name (personal uses gateway dist).
+# Map product edition → dist binary name.
 edition_to_dist() {
     case "$1" in
-        personal|gateway) echo "gateway" ;;
+        personal) echo "personal" ;;
         minimal) echo "minimal" ;;
         team) echo "team" ;;
         *) echo "$1" ;;
@@ -532,7 +532,7 @@ edition_to_dist() {
 
 edition_to_sidecar() {
     case "$1" in
-        personal|gateway) echo "centag-gateway" ;;
+        personal) echo "centag-personal" ;;
         minimal) echo "centag-minimal" ;;
         team) echo "centag-team" ;;
         *) echo "centag-$1" ;;
@@ -632,13 +632,13 @@ run_proxyctl() {
 build_with_launcher() {
     local edition="$1"
     case "$edition" in
-        personal|gateway|minimal) ;;
+        personal|minimal) ;;
         team)
             print_error "--launcher 不支持 team（团队版请用 Web/Docker）"
             exit 1
             ;;
         *)
-            print_error "--launcher 仅支持 personal / minimal（gateway 为 personal 别名）"
+            print_error "--launcher 仅支持 personal / minimal"
             exit 1
             ;;
     esac
@@ -646,9 +646,6 @@ build_with_launcher() {
     local dist_name
     dist_name="$(edition_to_dist "$edition")"
     local label="$edition"
-    if [ "$edition" = "gateway" ]; then
-        label="personal"
-    fi
 
     print_info "Building ${label} service + launcher..."
     build_distribution "$dist_name"
@@ -657,21 +654,21 @@ build_with_launcher() {
     print_success "Ready: $(edition_to_sidecar "$edition") + launcher ($(go env GOOS)/$(go env GOARCH))"
 }
 
-# Build Distribution (minimal/gateway/team)
+# Build Distribution (minimal/personal/team)
 build_distribution() {
     local dist_name="${1:-minimal}"
 
     case "$dist_name" in
-        minimal|gateway|team)
+        minimal|personal|team)
             ;;
         "")
-            print_error "Please specify distribution: minimal, gateway, or team"
-            print_info "Usage: $0 dist <minimal|gateway|team>"
+            print_error "Please specify distribution: minimal, personal, or team"
+            print_info "Usage: $0 dist <minimal|personal|team>"
             exit 1
             ;;
         *)
             print_error "Unknown distribution: $dist_name"
-            print_info "Valid distributions: minimal, gateway, team"
+            print_info "Valid distributions: minimal, personal, team"
             exit 1
             ;;
     esac
@@ -1197,39 +1194,34 @@ detect_database_mode() {
 # 前端文件变化后 Vite 自动重建，刷新浏览器 (localhost:20060) 即可看到最新内容
 #
 # 用法（与 build/run 风格一致）:
-#   ./start.sh debug                 # 默认 personal（对齐 gateway）
+#   ./start.sh debug                 # 默认 personal
 #   ./start.sh debug minimal         # 精简 WebUI + centag-minimal
 #   ./start.sh debug team            # 全功能二进制 + CENTAG_EDITION=team
 #   ./start.sh debug personal        # 显式 personal（同默认）
-#   ./start.sh debug gateway         # personal 别名
 debug() {
     # ── 解析发行版（位置参数，与 build/run 一致）──────────────────
     local edition="personal"
     if [ "$#" -gt 1 ]; then
         print_error "debug 只接受一个发行版参数"
-        echo "用法: $0 debug [personal|minimal|team|gateway]"
+        echo "用法: $0 debug [personal|minimal|team]"
         exit 1
     fi
     if [ "$#" -eq 1 ]; then
         case "$1" in
-            minimal|personal|team|gateway)
+            minimal|personal|team)
                 edition="$1"
                 ;;
-            --minimal|--team|--personal|--gateway)
+            --minimal|--team|--personal)
                 print_error "请使用位置参数，不要加 --：./start.sh debug ${1#--}"
-                echo "用法: $0 debug [personal|minimal|team|gateway]"
+                echo "用法: $0 debug [personal|minimal|team]"
                 exit 1
                 ;;
             *)
                 print_error "未知 debug 发行版: $1"
-                echo "用法: $0 debug [personal|minimal|team|gateway]"
+                echo "用法: $0 debug [personal|minimal|team]"
                 exit 1
                 ;;
         esac
-    fi
-
-    if [ "$edition" = "gateway" ]; then
-        edition="personal"
     fi
 
     # ── minimal 分支：精简 WebUI + centag-minimal ─────────────────
@@ -1249,7 +1241,7 @@ debug() {
     # 开发模式下同时写文件与 stdout，避免仅 file 时启动失败在终端无输出
     centag_export_debug_console_env
 
-    # 覆盖 secrets 中的 edition（与 gateway/team Profile 语义对齐）
+    # 覆盖 secrets 中的 edition
     export CENTAG_EDITION="${edition}"
 
     # ── 清理所有残留进程（保证前台独占）──────────────────────────
@@ -1337,7 +1329,7 @@ run_edition() {
     done
 
     case "$edition" in
-        personal|gateway|minimal) ;;
+        personal|minimal) ;;
         team)
             if $with_launcher; then
                 print_error "--launcher 不支持 team"
@@ -1354,9 +1346,6 @@ run_edition() {
     dist_name="$(edition_to_dist "$edition")"
     sidecar_name="$(edition_to_sidecar "$edition")"
     run_edition="$edition"
-    if [ "$edition" = "gateway" ]; then
-        run_edition="personal"
-    fi
 
     local sidecar="${BIN_DIR}/${sidecar_name}"
     if [ ! -x "$sidecar" ] && [ ! -f "$sidecar" ]; then
@@ -2123,7 +2112,7 @@ check_docker() {
 # Docker 构建镜像
 # ── 统一发行版 Docker 构建 ──────────────────────────────────────────
 # 参数: dist_name tag initdata_path
-#   dist_name   — minimal|gateway|team
+#   dist_name   — minimal|personal|team
 #   tag         — 镜像标签（可选，默认 centag-<dist_name>:latest）
 #   initdata_path — 自定义 initdata.zip 路径（可选）
 _dist_docker_build() {
@@ -2131,8 +2120,8 @@ _dist_docker_build() {
     local tag="${2:-}"
     local initdata_path="${3:-}"
 
-    if [[ ! "$dist_name" =~ ^(minimal|gateway|team)$ ]]; then
-        print_error "无效的发行版名称: $dist_name (支持: minimal, gateway, team)"
+    if [[ ! "$dist_name" =~ ^(minimal|personal|team)$ ]]; then
+        print_error "无效的发行版名称: $dist_name (支持: minimal, personal, team)"
         exit 1
     fi
 
@@ -2162,14 +2151,14 @@ _dist_docker_build() {
         print_info "生成默认 initdata.zip..."
         (
             cd "$initdata_temp_dir"
-            mkdir -p pipeline-templates/common pipeline-templates/gateway
+            mkdir -p pipeline-templates/common pipeline-templates/personal
 
             # 复制流水线模板（按目录结构）
             for f in "$PROJECT_ROOT"/config/initdata/pipeline-templates/common/*.yaml; do
                 [ -f "$f" ] && cp "$f" pipeline-templates/common/
             done
-            for f in "$PROJECT_ROOT"/config/initdata/pipeline-templates/gateway/*.yaml; do
-                [ -f "$f" ] && cp "$f" pipeline-templates/gateway/
+            for f in "$PROJECT_ROOT"/config/initdata/pipeline-templates/personal/*.yaml; do
+                [ -f "$f" ] && cp "$f" pipeline-templates/personal/
             done
 
             # 生成精简版 initial-backends.yaml（仅 OpenAI，无 key）
@@ -2242,8 +2231,8 @@ _dist_docker_run() {
     local port="${2:-20060}"
     local initdata_path="${3:-}"
 
-    if [[ ! "$dist_name" =~ ^(minimal|gateway|team)$ ]]; then
-        print_error "无效的发行版名称: $dist_name (支持: minimal, gateway, team)"
+    if [[ ! "$dist_name" =~ ^(minimal|personal|team)$ ]]; then
+        print_error "无效的发行版名称: $dist_name (支持: minimal, personal, team)"
         exit 1
     fi
 
@@ -2289,7 +2278,7 @@ _dist_docker_run() {
 # 用法: docker_build [be|fe|all]
 #   be/backend  - 代理到 dist docker-build minimal
 #   fe/frontend - 已弃用
-#   all         - 代理到 dist docker-build gateway（默认）
+#   all         - 代理到 dist docker-build personal（默认）
 docker_build() {
     check_docker
     local target="${1:-all}"
@@ -2301,12 +2290,12 @@ docker_build() {
             _dist_docker_build "minimal" "" ""
             ;;
         frontend)
-            print_error "前端独立镜像已弃用，请使用全栈镜像: ./start.sh docker build gateway"
+            print_error "前端独立镜像已弃用，请使用全栈镜像: ./start.sh docker build personal"
             exit 1
             ;;
         all|*)
-            print_info "代理到: ./start.sh docker build gateway"
-            _dist_docker_build "gateway" "" ""
+            print_info "代理到: ./start.sh docker build personal"
+            _dist_docker_build "personal" "" ""
             ;;
     esac
 }
@@ -2601,7 +2590,7 @@ profile_reset() {
             fi
             print_info "模型拉取完成"
             ;;
-        gateway)
+        personal)
             if profile_uses_stack_network "$name" "$profile_dir"; then
                 print_info "通过 stack Ollama 拉取模型（首次需几分钟）..."
                 profile_ensure_stack_deps "$name" "$profile_dir"
@@ -3194,8 +3183,8 @@ show_short_help() {
     echo -e "  ${GREEN}build${NC}    <all|be|fe>             构建项目（开发用）"
     echo -e "  ${GREEN}build${NC}    <personal|minimal|team> [--launcher] [--proxyctl]  构建发行版"
     echo -e "  ${GREEN}build${NC}    proxyctl                仅构建 centag-proxyctl"
-    echo -e "  ${GREEN}docker${NC}   build <minimal|gateway|team>   构建 Docker 镜像"
-    echo -e "  ${GREEN}docker${NC}   run   <minimal|gateway|team>   运行 Docker 容器"
+    echo -e "  ${GREEN}docker${NC}   build <minimal|personal|team>   构建 Docker 镜像"
+    echo -e "  ${GREEN}docker${NC}   run   <minimal|personal|team>   运行 Docker 容器"
     echo -e "  ${GREEN}clean${NC}                            清理构建产物"
     echo -e "  ${GREEN}pack${NC}     [--upload]              打包服务端更新包"
     echo -e "  ${GREEN}package${NC}  <fnos|...> [选项]       第三方系统/渠道打包（见 packaging.env）"
@@ -3313,10 +3302,9 @@ _help_build() {
     echo -e "  ${GREEN}fe${NC} | frontend   构建 Vue 前端"
     echo ""
     echo -e "${CYAN}发行版构建:${NC}"
-    echo -e "  ${GREEN}personal${NC}  个人全功能（= gateway 发行包，默认 SQLite）"
+    echo -e "  ${GREEN}personal${NC}  个人全功能（默认 SQLite）"
     echo -e "  ${GREEN}minimal${NC}   轻量单机（文件配置，无 DB）"
     echo -e "  ${GREEN}team${NC}      团队版（中间件外置：PG/向量等）"
-    echo -e "  ${GREEN}gateway${NC}   personal 的别名（兼容旧命令）"
     echo -e "  ${GREEN}proxyctl${NC}  仅构建本机/员工系统代理工具 centag-proxyctl"
     echo ""
     echo -e "${CYAN}辅助选项:${NC}"
@@ -3338,7 +3326,7 @@ _help_build() {
     echo -e "${CYAN}真源命令（客户端 / 不经 start.sh）:${NC}"
     echo -e "  cd apps/proxyctl && GOWORK=off go build -o centag-proxyctl ."
     echo ""
-    echo -e "${YELLOW}提示:${NC} Docker 镜像请使用: ./start.sh docker build <minimal|gateway|team>"
+    echo -e "${YELLOW}提示:${NC} Docker 镜像请使用: ./start.sh docker build <minimal|personal|team>"
 }
 
 _help_dist() {
@@ -3363,7 +3351,7 @@ _help_run() {
     echo -e "${CYAN}服务:${NC}"
     echo -e "  ${GREEN}be${NC} | backend        启动后端服务 (端口 20060)"
     echo -e "  ${GREEN}fe${NC} | frontend      启动 Vue 开发服务器 (端口 5173)"
-    echo -e "  ${GREEN}personal${NC} | gateway  个人版发行包（前台）"
+    echo -e "  ${GREEN}personal${NC}           个人版发行包（前台）"
     echo -e "  ${GREEN}minimal${NC}             minimal 发行包（前台）"
     echo -e "  ${GREEN}proxyctl${NC}            系统代理出口 CLI（缺省会先构建）"
     echo -e "  ${GREEN}all${NC}                全部（需两个终端分别启动 be/fe）"
@@ -3415,13 +3403,13 @@ _help_debug() {
     echo -e "       ${YELLOW}开发调试模式${NC}"
     echo ""
     echo -e "${CYAN}用法:${NC}"
-    echo -e "  ./start.sh debug              # 默认 personal（对齐 gateway）"
+    echo -e "  ./start.sh debug              # 默认 personal"
     echo -e "  ./start.sh debug minimal      # minimal 精简版"
     echo -e "  ./start.sh debug team         # team 团队版"
-    echo -e "  ./start.sh debug personal     # 显式 personal"
+    echo -e "  ./start.sh debug personal     # 显式 personal（同默认）"
     echo ""
     echo -e "${CYAN}发行版:${NC}"
-    echo -e "  ${GREEN}personal${NC} | gateway   CENTAG_EDITION=personal + 全功能二进制（默认）"
+    echo -e "  ${GREEN}personal${NC}           CENTAG_EDITION=personal + 全功能二进制（默认）"
     echo -e "  ${GREEN}minimal${NC}             精简 WebUI + centag-minimal"
     echo -e "  ${GREEN}team${NC}                全功能二进制 + CENTAG_EDITION=team"
     echo ""
@@ -3498,15 +3486,15 @@ _help_profile() {
     echo -e "  ${GREEN}<name> status${NC}            查看容器状态"
     echo ""
     echo -e "${CYAN}可用场景:${NC}"
-    echo -e "  ${GREEN}gateway${NC}      个人全功能（默认 SQLite 单容器；可外接中间件）"
+    echo -e "  ${GREEN}personal${NC}    个人全功能（默认 SQLite 单容器；可外接中间件）"
     echo -e "  ${GREEN}cached${NC}       缓存加速（PG + pgvector，精确+语义缓存）"
     echo -e "  ${GREEN}agent-memory${NC}  智能体记忆（Mem0 + Sandbox + PG + Qdrant + Ollama）"
     echo ""
     echo -e "${CYAN}示例:${NC}"
     echo -e "  ./start.sh profile list"
-    echo -e "  ./start.sh profile gateway up"
+    echo -e "  ./start.sh profile personal up"
     echo -e "  ./start.sh profile agent-memory up --build"
-    echo -e "  ./start.sh profile gateway logs"
+    echo -e "  ./start.sh profile personal logs"
 }
 
 _help_stack() {
@@ -3539,8 +3527,8 @@ _help_docker() {
     echo -e "  ./start.sh docker <子命令> [参数]"
     echo ""
     echo -e "${CYAN}发行版操作:${NC}"
-    echo -e "  ${GREEN}build${NC} <minimal|gateway|team>              构建 Docker 镜像"
-    echo -e "  ${GREEN}run${NC}   <minimal|gateway|team> [port]       运行 Docker 容器"
+    echo -e "  ${GREEN}build${NC} <minimal|personal|team>              构建 Docker 镜像"
+    echo -e "  ${GREEN}run${NC}   <minimal|personal|team> [port]       运行 Docker 容器"
     echo ""
     echo -e "${CYAN}Compose 操作:${NC}"
     echo -e "  ${GREEN}up${NC}                   启动 Centag 容器"
@@ -3556,7 +3544,7 @@ _help_docker() {
     echo ""
     echo -e "${CYAN}示例:${NC}"
     echo -e "  ./start.sh docker build minimal   # 构建 minimal 镜像"
-    echo -e "  ./start.sh docker run gateway     # 运行 gateway 容器"
+    echo -e "  ./start.sh docker run personal     # 运行 personal 容器"
     echo -e "  ./start.sh docker up              # Compose 启动"
     echo -e "  ./start.sh docker logs            # 查看日志"
 }
@@ -4126,7 +4114,7 @@ wizard_finish() {
     echo "  ./start.sh stop all        # 停止全部"
     echo ""
     echo -e "${YELLOW}开发模式:${NC}"
-    echo "  ./start.sh debug           # personal（默认，对齐 gateway）+ 前端热重载"
+    echo "  ./start.sh debug           # personal（默认）+ 前端热重载"
     echo "  ./start.sh debug minimal   # minimal 精简版"
     echo "  ./start.sh debug team      # team 团队版"
     echo "  ./start.sh logs           # 查看日志"
@@ -4308,7 +4296,7 @@ main() {
                     print_success "Ready: centag-proxyctl ($(go env GOOS)/$(go env GOARCH))"
                     print_info "真源命令: cd apps/proxyctl && GOWORK=off go build -o centag-proxyctl ."
                     ;;
-                personal|gateway|minimal|team)
+                personal|minimal|team)
                     if $with_launcher; then
                         build_with_launcher "$target"
                     else
@@ -4321,7 +4309,7 @@ main() {
                     ;;
                 *)
                     print_error "未知构建目标: '$target'"
-                    echo "支持的构建目标: all, be, fe, personal, minimal, team, gateway, proxyctl"
+                    echo "支持的构建目标: all, be, fe, personal, minimal, team, proxyctl"
                     echo "启动器: ./start.sh build personal --launcher  或  ./start.sh build minimal --launcher"
                     echo "系统代理 CLI: ./start.sh build proxyctl  或  ./start.sh build personal --proxyctl"
                     exit 1
@@ -4368,8 +4356,8 @@ main() {
                         build dist "$subcmd"
                     else
                         print_error "请指定子命令或发行版名称"
-                        print_info "用法: $0 dist <build|run|docker-build|docker-run> <minimal|gateway|team>"
-                        print_info "推荐: $0 build <minimal|gateway|team>  或  $0 docker <build|run> <minimal|gateway|team>"
+                        print_info "用法: $0 dist <build|run|docker-build|docker-run> <minimal|personal|team>"
+                        print_info "推荐: $0 build <minimal|personal|team>  或  $0 docker <build|run> <minimal|personal|team>"
                         exit 1
                     fi
                     ;;
@@ -4405,7 +4393,7 @@ main() {
                 frontend|fe|vue)
                     start_frontend_dev
                     ;;
-                personal|gateway|minimal)
+                personal|minimal)
                     run_edition "$svc" "$@"
                     ;;
                 proxyctl)
@@ -4601,7 +4589,7 @@ main() {
                 build)
                     local edition="${1:-}"
                     case "$edition" in
-                        minimal|gateway|team)
+                        minimal|personal|team)
                             _dist_docker_build "$edition" "" ""
                             ;;
                         *)
@@ -4654,8 +4642,8 @@ main() {
                     echo "用法: $0 docker <子命令> [参数]"
                     echo ""
                     echo "发行版操作:"
-                    echo "  $0 docker build <minimal|gateway|team>              构建 Docker 镜像"
-                    echo "  $0 docker run   <minimal|gateway|team> [port]       运行 Docker 容器"
+                    echo "  $0 docker build <minimal|personal|team>              构建 Docker 镜像"
+                    echo "  $0 docker run   <minimal|personal|team> [port]       运行 Docker 容器"
                     echo ""
                     echo "Compose 操作:"
                     echo "  $0 docker up|down|logs|status|clean|pack|debug|restart"

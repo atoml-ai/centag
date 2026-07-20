@@ -3,7 +3,7 @@ go 1.25.0
 use (
 	.
 	./core
-	./dist/gateway
+	./dist/personal
 	./dist/minimal
 	./dist/team
 	./plugins/backend/anthropic

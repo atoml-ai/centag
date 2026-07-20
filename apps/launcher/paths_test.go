@@ -8,7 +8,7 @@ import (
 
 func TestResolveSidecarBinaryExplicit(t *testing.T) {
 	dir := t.TempDir()
-	bin := filepath.Join(dir, "centag-gateway")
+	bin := filepath.Join(dir, "centag-personal")
 	if err := os.WriteFile(bin, []byte("#!/bin/sh\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}

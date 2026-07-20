@@ -2,7 +2,7 @@
 # =============================================================
 # Centag fnOS (.fpk) 统一打包脚本
 #
-# 发行版（默认 minimal；personal 对应 dist/gateway）:
+# 发行版（默认 minimal）:
 #   ./deploy/fnos/build-fpk.sh --mode native --edition minimal
 #   ./deploy/fnos/build-fpk.sh --mode native --edition personal --arch amd64
 #   ./deploy/fnos/build-fpk.sh --mode native --edition team --arch amd64
@@ -93,10 +93,10 @@ read_env_key() {
   printf '%s' "$line"
 }
 
-# personal → gateway dist；runtime edition 仍为 personal
+# personal → personal dist；runtime edition 仍为 personal
 edition_to_dist() {
   case "$1" in
-    personal|gateway) echo "gateway" ;;
+    personal) echo "personal" ;;
     minimal) echo "minimal" ;;
     team) echo "team" ;;
     *) echo "$1" ;;
@@ -105,7 +105,7 @@ edition_to_dist() {
 
 edition_to_runtime() {
   case "$1" in
-    gateway) echo "personal" ;;
+    personal) echo "personal" ;;
     *) echo "$1" ;;
   esac
 }
@@ -115,7 +115,7 @@ edition_build_tags() {
     minimal)
       echo "minimal,protocol_openai,protocol_anthropic,backend_openai,backend_ollama,backend_anthropic"
       ;;
-    personal|gateway|team)
+    personal|team)
       echo "protocol_openai,protocol_anthropic,protocol_gemini,protocol_openairesponses,backend_openai,backend_ollama,backend_anthropic,backend_gemini,backend_azure"
       ;;
     *)
@@ -357,16 +357,12 @@ while [[ $# -gt 0 ]]; do
 done
 
 case "$EDITION" in
-  minimal|personal|team|gateway) ;;
+  minimal|personal|team) ;;
   *)
     echo "[ERROR] 未知 --edition: ${EDITION}（支持 minimal|personal|team）"
     exit 1
     ;;
 esac
-# gateway 别名统一成 personal（产物命名）
-if [ "$EDITION" = "gateway" ]; then
-  EDITION="personal"
-fi
 
 DIST_NAME="$(edition_to_dist "$EDITION")"
 RUNTIME_EDITION="$(edition_to_runtime "$EDITION")"
@@ -450,7 +446,7 @@ if [ "$MODE" = "docker" ]; then
     fi
   fi
   if [ "$EDITION" = "minimal" ]; then
-    echo "[WARN] Docker 模式当前 Dockerfile 基于 dist/gateway；minimal 请优先使用 --mode native"
+    echo "[WARN] Docker 模式当前 Dockerfile 基于 dist/personal；minimal 请优先使用 --mode native"
   fi
 
   mkdir -p "${APP_DIR}/config"

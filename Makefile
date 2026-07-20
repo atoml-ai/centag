@@ -9,7 +9,7 @@ MAIN_FILE=$(CMD_DIR)/centag/main.go
 VERSION=v$(shell date '+%Y%m%d-%H%M%S')
 BUILD_TIME=$(shell date '+%Y-%m-%d %H:%M:%S')
 LDFLAGS=-ldflags "-s -w -X 'main.Version=$(VERSION)' -X 'main.BuildTime=$(BUILD_TIME)'"
-# 与 start.sh gateway/team 全功能 tags 对齐；否则 backend_*/protocol_*/business_* 的 init 不会编译进来
+# 与 start.sh personal/team 全功能 tags 对齐；否则 backend_*/protocol_*/business_* 的 init 不会编译进来
 # Core tags only; business_* plugins are optional via external go.mod.
 BUILD_TAGS ?= protocol_openai,protocol_anthropic,protocol_gemini,protocol_openairesponses,backend_openai,backend_ollama,backend_anthropic,backend_gemini,backend_azure
 

@@ -1,15 +1,15 @@
 # Centag Distribution Dockerfile — 参数化构建
-# 用法: docker build --build-arg DIST_NAME=minimal|gateway|team -f deploy/docker/Dockerfile.dist .
+# 用法: docker build --build-arg DIST_NAME=minimal|personal|team -f deploy/docker/Dockerfile.dist .
 #
 # 三个发行版共用此文件，仅通过 DIST_NAME 切换构建入口：
-#   minimal → 轻量（无 DB；后端+协议；约 16MB）
-#   gateway → 个人全功能（与 team 插件对齐；部署默认 SQLite；约 30MB）
-#   team    → 团队版（二进制与 gateway 对齐；部署默认外置 PG/向量等；约 30MB）
+#   minimal  → 轻量（无 DB；后端+协议；约 16MB）
+#   personal → 个人全功能（与 team 插件对齐；部署默认 SQLite；约 30MB）
+#   team     → 团队版（二进制与 personal 对齐；部署默认外置 PG/向量等；约 30MB）
 #
-# BUILD_TAGS 由 start.sh _get_dist_tags() 注入；gateway/team 共用全功能 tags。
+# BUILD_TAGS 由 start.sh _get_dist_tags() 注入；personal/team 共用全功能 tags。
 # ============================================================
 # 阶段 1：前端构建（所有版本共用同一套 Vue 前端）
-# 前端通过 CENTAG_EDITION 环境变量自动适配 minimal/gateway/team UI
+# 前端通过 CENTAG_EDITION 环境变量自动适配 minimal/personal/team UI
 # ============================================================
 FROM docker.m.daocloud.io/library/node:20-alpine AS frontend-builder
 
