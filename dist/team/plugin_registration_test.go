@@ -9,7 +9,7 @@ import (
 	"centag/core/pkg/storage"
 )
 
-// team 与 gateway 二进制插件集合对齐。
+// team 与 personal 二进制插件集合对齐。
 func TestTeamPluginRegistration(t *testing.T) {
 	assertExact(t, "backends", plugin.ListBackends(), []string{"anthropic", "ollama", "openai"})
 	assertExact(t, "protocols", plugin.ListProtocols(), []string{"anthropic", "openai"})

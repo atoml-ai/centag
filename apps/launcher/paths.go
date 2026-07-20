@@ -84,7 +84,7 @@ func sidecarCandidateNames(edition Edition) []string {
 	case EditionMinimal:
 		return []string{"centag-minimal", "centag"}
 	default:
-		return []string{"centag-gateway", "centag"}
+		return []string{"centag-personal", "centag"}
 	}
 }
 

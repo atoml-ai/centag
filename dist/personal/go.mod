@@ -1,4 +1,4 @@
-module centag/dist/gateway
+module centag/dist/personal
 
 go 1.25.0
 

@@ -9,7 +9,7 @@ import (
 	"centag/core/pkg/storage"
 )
 
-func TestGatewayPluginRegistration(t *testing.T) {
+func TestPersonalPluginRegistration(t *testing.T) {
 	assertExact(t, "backends", plugin.ListBackends(), []string{"anthropic", "ollama", "openai"})
 	assertExact(t, "protocols", plugin.ListProtocols(), []string{"anthropic", "openai"})
 	assertExact(t, "databases", database.ListRegisteredPlugins(), []string{"postgresql", "sqlite"})

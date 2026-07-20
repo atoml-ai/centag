@@ -22,12 +22,10 @@
 
 | 命令 | 含义 |
 |------|------|
-| `build personal` | 仅 gateway 发行包（个人版服务） |
+| `build personal` | 仅 personal 发行包（个人版服务） |
 | `build personal --launcher` | 发行包 + 前端 + **当前系统**启动器 |
 | `build minimal --launcher` | minimal 发行包 + 前端 + 启动器 |
 | `build team --launcher` | **不支持** |
-
-`gateway` 是 `personal` 的兼容别名。
 
 ## 平台支持
 
@@ -51,7 +49,7 @@ bin/launcher/centag-launcher[.exe]   # 当前主机便捷副本
 
 | 项 | 说明 |
 |----|------|
-| 启动 | exec `centag-minimal` 或 `centag-gateway` |
+| 启动 | exec `centag-minimal` 或 `centag-personal` |
 | 打开 UI | 系统默认浏览器 |
 | 菜单 | 打开管理界面 / 退出（停止 sidecar） |
 | 数据目录 | macOS: `~/Library/Application Support/Centag[Minimal]`（与 `bin/server` 开发库分离） |

@@ -37,7 +37,7 @@ func TestSidecarCandidateNames(t *testing.T) {
 		t.Fatalf("%v", min)
 	}
 	pers := sidecarCandidateNames(EditionPersonal)
-	if pers[0] != "centag-gateway" {
+	if pers[0] != "centag-personal" {
 		t.Fatalf("%v", pers)
 	}
 }
