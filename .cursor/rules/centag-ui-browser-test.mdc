@@ -1,0 +1,42 @@
+---
+description: "Centag UI 浏览器验收 — Cursor 交互入口。仅 AskQuestion 收参；正本 docs/harness/skills/centag-ui-browser-test.md。必须调用 Browser MCP。"
+globs: []
+alwaysApply: false
+---
+
+# Centag UI Browser Test — Cursor 交互入口
+
+> **本文件只做交互。** 正本：`docs/harness/skills/centag-ui-browser-test.md`  
+> 分层：根目录 `AGENT.md`
+
+## 硬性规则
+
+1. 固定选项必须 **`AskQuestion`**（不可用时极短文字提问）。
+2. 确认后 **加载正本执行**；执行中 **必须** 调用 Cursor **Browser MCP**（navigate / snapshot / click 等）。
+3. Browser MCP 不可用 → 按正本判定失败（`BLOCKED`），禁止改用纯 curl 冒充 UI 通过。
+
+## 触发词
+
+`UI浏览器测试` / `ui browser test` / `WebUI 验收` / `浏览器验收` / `centag ui test`
+
+## AskQuestion — 一屏
+
+| id | prompt | options |
+|----|--------|---------|
+| `deploy_type` | 部署类型 | personal / team / minimal |
+| `base_url` | 服务地址 | `http://localhost:20060`；其他（我会输入） |
+| `admin_creds` | Admin 凭据 | 从 .env 读取；其他（我会输入） |
+| `team_user` | team 普通用户（仅 team） | 提供账号；自动创建临时用户；跳过 user 套件 |
+| `confirm` | 开始？ | start / cancel |
+
+## 交接
+
+```bash
+export TEST_DEPLOY_TYPE=...          # personal | team | minimal
+export TEST_BASE_URL=...             # default http://localhost:20060
+export TEST_WEB_BASE="${TEST_BASE_URL}/static/"
+# 凭据：ADMIN_* 或从 config/secrets/.env
+# team：TEST_USER_USERNAME / TEST_USER_PASSWORD 或正本内自动建用户
+```
+
+然后严格执行 **`docs/harness/skills/centag-ui-browser-test.md`**，产出 `/tmp/centag_ui_browser_results.json` + 对话摘要。

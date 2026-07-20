@@ -19,6 +19,7 @@ docs/versions/
 
 | 版本 | 需求 | 分支 | 状态 |
 |------|------|------|------|
+| v0.2.6 | [普通用户 WebUI 能力矩阵](v0.2.6/普通用户WebUI能力矩阵/)（含 [UI浏览器验收](v0.2.6/普通用户WebUI能力矩阵/UI测试流程.md)） | `feature/v0.2.6` | Step 1–5 ✅；Gate 3 ✅；**Gate 4 待人工确认** |
 | v0.2.5 | [本机系统代理出口](v0.2.5/本机系统代理出口/)（本机+远端/Team） | `feature/v0.2.5` | Step 5 CR 有条件批准；Gate 4 待人工确认手工自测 |
 | v0.2.4 | [计费功能](v0.2.4/billing/) | `feature/v0.2.4` | Step 1–3 完成；可 `step4-test` / `step5-review` |
 | v0.2.3 | [能力槽模型配置](v0.2.3/能力槽模型配置/) | `feature/v0.2.3` | Gate 1 通过；可 step2-plan |

@@ -39,7 +39,8 @@
 |------|------|----------|
 | `centag-pipeline-test.md` | 流水线模式测试 | — |
 | `centag-wizard-test.md` | 向导式全面测试 | `wizard-test.sh`、`wizard-report.py` |
-| `centag-admin-e2e.md` | 管理功能 E2E | `admin-e2e-test.sh` |
+| `centag-admin-e2e.md` | 管理功能 E2E（HTTP） | `admin-e2e-test.sh` |
+| `centag-ui-browser-test.md` | WebUI 浏览器自动化验收（**强制 Browser MCP**） | — |
 | `centag-core.md` | 核心操作（**待补**） | — |
 | `centag-deploy.md` | 向导式部署（**待补**） | `deploy-wizard.sh` |
 
@@ -57,6 +58,7 @@
 | `centag-wizard-test.mdc` | `centag-wizard-test.md` |
 | `centag-pipeline-test.mdc` | `centag-pipeline-test.md` |
 | `centag-admin-e2e.mdc` | `centag-admin-e2e.md` |
+| `centag-ui-browser-test.mdc` | `centag-ui-browser-test.md` |
 | `harness-workflow.mdc`（待补） | `step*/SKILL.md` + `quality-gate` |
 | `centag-core.mdc` / `centag-deploy.mdc`（待补） | 对应正本 |
 

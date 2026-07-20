@@ -336,6 +336,7 @@ CI 与脚本侧会做 **轻量卫生检查**（`scripts/check-harness-hygiene.sh
 | `centag-wizard-test.mdc` | 按需 | 向导测试收参 → `skills/centag-wizard-test.md` |
 | `centag-pipeline-test.mdc` | 按需 | 流水线测试收参 → `skills/centag-pipeline-test.md` |
 | `centag-admin-e2e.mdc` | 按需 | 管理 E2E 收参 → `skills/centag-admin-e2e.md` |
+| `centag-ui-browser-test.mdc` | 按需 | WebUI 浏览器验收收参 → `skills/centag-ui-browser-test.md`（强制 Browser MCP） |
 | `harness-baseline.mdc` / `harness-workflow.mdc` | 待补 | 基础规范 / step 路由 |
 | `centag-core.mdc` / `centag-deploy.mdc` | 待补 | 核心操作 / 部署交互入口 |
 
@@ -353,7 +354,8 @@ CI 与脚本侧会做 **轻量卫生检查**（`scripts/check-harness-hygiene.sh
 | 向导式部署 | `skills/centag-deploy.md`（待补） |
 | 流水线模式测试 | `skills/centag-pipeline-test.md` |
 | 向导式全面测试 | `skills/centag-wizard-test.md` |
-| 管理功能端到端测试 | `skills/centag-admin-e2e.md` |
+| 管理功能端到端测试（HTTP） | `skills/centag-admin-e2e.md` |
+| WebUI 浏览器自动化验收 | `skills/centag-ui-browser-test.md` |
 
 ### 9.3 工作流 Step 别名 → 执行指引映射
 
