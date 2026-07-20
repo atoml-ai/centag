@@ -1,4 +1,4 @@
-# Profile: gateway — 个人全功能
+# Profile: personal — 个人全功能
 
 **目标**：个人侧的**全功能** Centag（二进制与 team 插件集对齐）。默认内置 SQLite、单容器即可跑通；需要时再通过配置连接外部 PG / 向量 / Redis 等中间件。
 
@@ -8,7 +8,7 @@
 
 | 层 | 值 | 说明 |
 |----|-----|------|
-| Dist / Profile | `gateway` | 发行包名、compose 项目名 |
+| Dist / Profile | `personal` | 发行包名、compose 项目名 |
 | `CENTAG_EDITION` | **`personal`** | Web/API/钩子语义；对话与计量落 SQLite |
 | 勿用 | `team` | 会打开多租户/计费等团队面，且对话工厂偏 PG |
 
@@ -32,7 +32,7 @@ curl -s http://localhost:20060/api/v1/status | jq .edition
 
 | 服务 | 必需 | 说明 |
 |------|------|------|
-| Centag + WebUI | 是 | 端口 20060，容器 `centag-gateway-app` |
+| Centag + WebUI | 是 | 端口 20060，容器 `centag-personal-app` |
 | SQLite | 是 | 内置文件数据库，无需额外容器 |
 | Ollama | 否 | 仅 `OLLAMA_ENABLED=true` 时 stack ensure `centag-ollama` |
 
@@ -42,13 +42,13 @@ curl -s http://localhost:20060/api/v1/status | jq .edition
 cd /path/to/centag
 
 # 1. 复制环境变量模板
-cp config/profiles/gateway/.env.example config/profiles/gateway/.env
+cp config/profiles/personal/.env.example config/profiles/personal/.env
 
 # 2. 编辑 .env，填入至少一个外部供应商 API Key
-vim config/profiles/gateway/.env
+vim config/profiles/personal/.env
 
 # 3. 一键启动（默认仅应用容器，不启动 Ollama）
-./start.sh profile gateway up
+./start.sh profile personal up
 ```
 
 ## 后端配置方式
@@ -83,7 +83,7 @@ docker exec -it centag-ollama ollama pull llama3.1
 或使用 reset 自动拉取（需 `OLLAMA_ENABLED=true`）：
 
 ```bash
-./start.sh profile gateway reset
+./start.sh profile personal reset
 ```
 
 同时在 WebUI 或 `config/initdata/initial-backends.yaml` 中启用 `ollama-local` 后端。
@@ -91,8 +91,8 @@ docker exec -it centag-ollama ollama pull llama3.1
 ## 启动后验证
 
 ```bash
-# 查看服务状态（应只有 centag-gateway-app）
-./start.sh profile gateway status
+# 查看服务状态（应只有 centag-personal-app）
+./start.sh profile personal status
 
 # 测试直连模式（默认 gpt-4o-mini）
 curl http://localhost:20060/v1/chat/completions \
@@ -115,7 +115,7 @@ curl http://localhost:20060/v1/chat/completions \
 
 ## 与其他 Profile 的关系
 
-| 能力 | gateway | cached | agent-memory |
+| 能力 | personal | cached | agent-memory |
 |------|---------|--------|-------------|
 | 数据库 | SQLite | PostgreSQL + pgvector | PostgreSQL + pgvector |
 | stack 中间件 | 无（默认） | PG + 可选 Ollama | PG + Qdrant + Ollama + Mem0 |
@@ -135,7 +135,7 @@ curl http://localhost:20060/v1/chat/completions \
 
 默认日志写入 **文件** 且路径相对可执行文件（`/app/bin/logs`），与挂载卷 `/app/logs` 不一致时 `docker logs` 只有 entrypoint 输出。
 
-gateway compose 已设置：
+personal compose 已设置：
 
 ```bash
 LLM_PROXY_LOG_PATH=/app/logs
@@ -145,8 +145,8 @@ LLM_PROXY_LOG_OUTPUT=both    # 同时写文件 + stdout
 查看日志：
 
 ```bash
-./start.sh profile gateway logs
-docker exec centag-gateway-app tail -f /app/logs/centag.log
+./start.sh profile personal logs
+docker exec centag-personal-app tail -f /app/logs/centag.log
 ```
 
 ### 保存后端配置长时间无响应
@@ -159,7 +159,7 @@ docker exec centag-gateway-app tail -f /app/logs/centag.log
 
 ## 中间件管理
 
-gateway 默认 **无 stack 依赖**。仅在启用 Ollama 时：
+personal 默认 **无 stack 依赖**。仅在启用 Ollama 时：
 
 ```bash
 # profile up 已自动 stack ensure（需 OLLAMA_ENABLED=true）

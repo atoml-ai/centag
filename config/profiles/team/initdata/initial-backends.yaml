@@ -1,5 +1,5 @@
 version: "2.0"
-description: gateway Profile 后端配置 — 默认线上 API，Ollama 按需启用
+description: personal Profile 后端配置 — 默认线上 API，Ollama 按需启用
 backends:
   # --- OpenAI（默认启用，在 .env 填入 OPENAI_API_KEY） ---
   - id: openai

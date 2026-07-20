@@ -38,7 +38,7 @@ global_config:
   log_level: info
 metadata:
   aligned_proxy_mode: direct-backend
-  profile: gateway
+  profile: personal
   features:
     - system_prompt_inject
   lastUpdated: '2026-07-14T00:00:00.000Z'

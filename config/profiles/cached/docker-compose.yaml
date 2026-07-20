@@ -8,7 +8,7 @@ services:
       context: ../../../
       dockerfile: deploy/docker/Dockerfile.dist
       args:
-        DIST_NAME: gateway
+        DIST_NAME: personal
         INCLUDE_FRONTEND: "true"
     image: centag:latest
     container_name: centag-cached-app

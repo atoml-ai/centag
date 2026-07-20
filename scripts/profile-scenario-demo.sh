@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Profile 场景拓展联调演示 — gateway / cached / agent-memory 通用
-# 用法: PROXY_URL=http://localhost:20060 ./scripts/profile-scenario-demo.sh [cached|gateway|agent-memory|local]
+# Profile 场景拓展联调演示 — personal / cached / agent-memory 通用
+# 用法: PROXY_URL=http://localhost:20060 ./scripts/profile-scenario-demo.sh [cached|personal|agent-memory|local]
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"

@@ -17,7 +17,7 @@ func resolvePipelineTemplates() []pipeline.PatternTemplate {
 // resolvePipelineTemplatesWithEdition 根据版本返回流水线模板。
 // edition 为空时加载所有模板（向后兼容），否则根据文件名前缀过滤：
 //   - "minimal-" 前缀：仅 minimal 版加载
-//   - "gateway-" 前缀：gateway 和 team 版加载
+//   - "personal-" 前缀：personal 和 team 版加载
 //   - "all-" 前缀：所有版本加载
 //   - 无前缀：所有版本加载（向后兼容）
 func resolvePipelineTemplatesWithEdition(edition string) []pipeline.PatternTemplate {

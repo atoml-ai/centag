@@ -2,7 +2,7 @@
 services:
   centag:
     networks:
-      - centag-gateway
+      - centag-personal
       - deploy/stack-network
 
 networks:

@@ -152,8 +152,8 @@ wait_for_service() {
     return 1
 }
 
-# 按 Profile 数据库驱动对齐 entrypoint 行为（与 gateway/cached/agent-memory 设计一致）
-# - sqlite（gateway）     → 不等待任何 stack 中间件
+# 按 Profile 数据库驱动对齐 entrypoint 行为（与 personal/cached/agent-memory 设计一致）
+# - sqlite（personal）    → 不等待任何 stack 中间件
 # - postgresql（cached）  → 等待 stack PostgreSQL
 # - auto（agent-memory）  → 等待 PostgreSQL（主机名由 compose / PG_HOST 注入）
 apply_profile_db_mode() {

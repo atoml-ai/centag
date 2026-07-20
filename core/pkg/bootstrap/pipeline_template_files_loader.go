@@ -15,8 +15,8 @@ import (
 // common 目录始终包含在所有版本中。
 var editionDirMap = map[string][]string{
 	"minimal": {"common"},
-	"gateway": {"common", "gateway"},
-	"team":    {"common", "gateway"},
+	"personal": {"common", "personal"},
+	"team":    {"common", "personal"},
 }
 
 // LoadInitialPipelineTemplatesFromFiles 从全局和 Profile 的 config/initdata/pipeline-templates
@@ -31,7 +31,7 @@ func LoadInitialPipelineTemplatesFromFiles() []InitialPipelineTemplate {
 //
 //	pipeline-templates/
 //	  common/    — 所有版本都加载
-//	  gateway/   — gateway/team 版加载
+//	  personal/  — personal/team 版加载
 // edition 为空时加载所有子目录（向后兼容）。
 func LoadInitialPipelineTemplatesWithEdition(edition string) []InitialPipelineTemplate {
 	globalRoot, profileRoot := InitdataRoots()
@@ -87,7 +87,7 @@ func LoadInitialPipelineTemplatesWithEdition(edition string) []InitialPipelineTe
 func resolveEditionSubdirs(edition string) []string {
 	if edition == "" {
 		// 向后兼容：加载所有子目录
-		return []string{"common", "gateway", "minimal"}
+		return []string{"common", "personal", "minimal"}
 	}
 	if dirs, ok := editionDirMap[edition]; ok {
 		return dirs

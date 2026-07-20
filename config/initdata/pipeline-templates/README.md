@@ -1,8 +1,8 @@
 # 流水线模板清单
 
-真源目录：`config/initdata/pipeline-templates/{common,gateway}/`（按 edition 加载，见 `editionDirMap`）。
+真源目录：`config/initdata/pipeline-templates/{common,personal}/`（按 edition 加载，见 `editionDirMap`）。
 
-> `common/` 供 minimal / gateway / team；`gateway/` 仅 gateway / team。依赖外置中间件或重型业务插件的模板放 `gateway/`。
+> `common/` 供 minimal / personal / team；`personal/` 仅 personal / team。依赖外置中间件或重型业务插件的模板放 `personal/`。
 
 ## 内置模板
 
@@ -15,7 +15,7 @@
 | `smart-scheduling.yaml` | smart-scheduling | `#s` | builtin.scheduler |
 | `router-mode.yaml` | router-mode | `#r` | builtin.router 关键词/意图分支 |
 
-### gateway（gateway / team）
+### personal（personal / team）
 
 | 文件 | pipeline_id | 快捷码 | 说明 |
 |------|-------------|--------|------|

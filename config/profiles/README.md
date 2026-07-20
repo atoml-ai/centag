@@ -10,7 +10,7 @@ Centag 功能强大但配置复杂。Deployment Profiles 将常见使用场景�
 
 | 你的场景 | 推荐 Profile | 一句话说明 | 内存需求 |
 |---------|-------------|-----------|---------|
-| 想快速跑起来，用线上 API | [`gateway`](gateway/) | 个人全功能，默认 SQLite 单容器，可外接中间件 | ~200MB |
+| 想快速跑起来，用线上 API | [`personal`](personal/) | 个人全功能，默认 SQLite 单容器，可外接中间件 | ~200MB |
 | 客服/知识库，重复问题多 | [`cached`](cached/) | 精确+语义缓存，PG + 可选 Ollama，无 Redis/ChromaDB | ~500MB |
 | 开发 AI Agent，需要长记忆 | [`agent-memory`](agent-memory/) | Mem0 + Pi + stack 中间件（modular） | ~2GB |
 
@@ -28,7 +28,7 @@ Centag 功能强大但配置复杂。Deployment Profiles 将常见使用场景�
 
 三种 Profile **不是同一套部署的变体**，而是三层能力递增：
 
-| 维度 | gateway | cached | agent-memory |
+| 维度 | personal | cached | agent-memory |
 |------|---------|--------|--------------|
 | **定位** | 个人全功能 | 缓存加速 | Agent 全栈 |
 | **应用数据库** | SQLite（容器内文件） | stack PostgreSQL | stack PostgreSQL |
@@ -40,7 +40,7 @@ Centag 功能强大但配置复杂。Deployment Profiles 将常见使用场景�
 **两层环境变量（易混淆，需分清）**：
 
 1. **宿主机 orchestration**（`./start.sh profile up`）：`load_profile_env` 链加载 `stack/.env` → `profile/.env` → `config/secrets/.env`，供 `stack ensure` 使用。
-2. **容器 runtime**（compose `env_file`）：各 Profile 的 `docker-compose.yaml` 自行定义；**gateway  deliberately 不包含 `deploy/stack/.env`**。
+2. **容器 runtime**（compose `env_file`）：各 Profile 的 `docker-compose.yaml` 自行定义；**personal  deliberately 不包含 `deploy/stack/.env`**。
 
 entrypoint 按 `LLM_PROXY_DB_DRIVER` 决定是否等待 PostgreSQL：`sqlite` 不等待，`postgresql`/`auto` 等待 `centag-postgresql`。
 
@@ -57,9 +57,9 @@ cd /path/to/centag
 # 2. 查看可用的 Profile
 ./start.sh profile list
 
-# 3. 一键启动（以 gateway 为例）
+# 3. 一键启动（以 personal 为例）
 #    首次会自动从 .env.example 复制 .env，无需手动准备
-./start.sh profile gateway up
+./start.sh profile personal up
 
 # 4. 验证
 open http://localhost:20060          # WebUI
@@ -111,14 +111,14 @@ curl http://localhost:20060/health   # API 健康检查
 ./start.sh profile cached up -d --build
 
 # 停止时一并删除匿名卷
-./start.sh profile gateway down --volumes
+./start.sh profile personal down --volumes
 ```
 
 ---
 
 ## Profile 对比
 
-| 维度 | gateway | cached | agent-memory |
+| 维度 | personal | cached | agent-memory |
 |------|---------|--------|-------------|
 | 外部 API Key | 可选（可用 Ollama） | 需要（LLM） | 可选（可用 Ollama） |
 | 数据库 | SQLite（内置） | PostgreSQL + pgvector | PostgreSQL + pgvector |
@@ -135,7 +135,7 @@ curl http://localhost:20060/health   # API 健康检查
 ## 渐进式体验路线
 
 ```
-Level 0: ./start.sh profile gateway up
+Level 0: ./start.sh profile personal up
          └── 2 分钟内看到 Centag 跑起来，用本地模型聊天
 
 Level 1: 准备一个 API Key，在 WebUI 中添加外部供应商
@@ -155,9 +155,9 @@ Level 4: 自定义流水线模板
 
 ## 自定义 Profile
 
-如果你需要组合多个 Profile 的能力（例如 gateway + cached），可以：
+如果你需要组合多个 Profile 的能力（例如 personal + cached），可以：
 
-1. 复制某个 Profile 目录：`cp -r config/profiles/gateway config/profiles/my-custom`
+1. 复制某个 Profile 目录：`cp -r config/profiles/personal config/profiles/my-custom`
 2. 修改 `docker-compose.yaml` 添加所需服务
 3. 修改 `config/initdata/` 中的流水线模板
 4. 启动：`./start.sh profile my-custom up`
