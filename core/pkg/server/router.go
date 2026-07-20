@@ -7,9 +7,10 @@ import (
 
 	"centag/core/internal"
 	"centag/core/internal/cache"
-	"centag/core/pkg/database"
 	"centag/core/internal/monitor"
 	"centag/core/internal/stats"
+	"centag/core/pkg/database"
+	"centag/core/pkg/editionmodule"
 
 	"github.com/gin-gonic/gin"
 )
@@ -187,6 +188,10 @@ func (s *Server) handleStatus(c *gin.Context) {
 	// 对外访问地址（由环境变量 LLM_PROXY_EXTERNAL_URL 配置）
 	if s.cfg != nil && s.cfg.Server.ExternalURL != "" {
 		resp["external_url"] = s.cfg.Server.ExternalURL
+	}
+
+	if caps := editionmodule.EnrichCapabilities(nil); len(caps) > 0 {
+		resp["capabilities"] = caps
 	}
 
 	c.JSON(200, resp)

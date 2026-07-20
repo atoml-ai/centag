@@ -26,7 +26,9 @@ import (
 	"centag/core/pkg/config"
 	"centag/core/pkg/database"
 	"centag/core/internal/edition"
+	"centag/core/pkg/editionmodule"
 	"centag/core/pkg/embedding"
+	"centag/core/pkg/extension"
 	"centag/core/internal/handler"
 	"centag/core/internal/hostproxy"
 	"centag/core/internal/llm"
@@ -1013,11 +1015,24 @@ func New(cfg *config.Config) *Server {
 	configHandler.SetMitmSyncEgress(srv.syncMITMEgressAuth)
 	configHandler.SetProxyHandlerRefresh(srv.refreshProxyHandlerPAC)
 
+	// Commercial plugins (centag-pro) blank-import Register themselves; Init must run
+	// before setupRoutes so editionmodule admin mounts see registered modules.
+	if err := extension.InitAll(serverExtensionHost{edition: srv.edition.String()}); err != nil {
+		logger.Warnf("extension plugin init failed: %v", err)
+	}
+
 	// 注册路由
 	srv.setupRoutes()
 
 	return srv
 }
+
+// serverExtensionHost adapts Server to extension.Host (open-core whitelist).
+type serverExtensionHost struct {
+	edition string
+}
+
+func (h serverExtensionHost) Edition() string { return h.edition }
 
 func migrateRouterImplementationsToBusinessPlugin(registry *pipeline.PipelineRegistry, store pipeline.PipelineStore) (int, int, error) {
 	if registry == nil || store == nil {
@@ -1379,6 +1394,12 @@ func (s *Server) setupRoutes() {
 			teamAdmin.PUT("/tenants/:id/quota", s.tenantHandler.UpdateTenantQuota)
 			teamAdmin.PUT("/tenants/:id/quota/reset", s.tenantHandler.ResetTenantQuota)
 		}
+	}
+
+	// Commercial edition modules (centag-pro etc.) register via blank import in private assemble builds.
+	proAdmin := adminAPI.Group("/pro")
+	if err := editionmodule.MountAdmin(proAdmin, editionmodule.AdminDeps{}); err != nil {
+		logger.Warnf("edition module mount failed: %v", err)
 	}
 
 	// 代理类 API 共用：JWT 或 API Key（与 OpenAI 兼容路由一致）
