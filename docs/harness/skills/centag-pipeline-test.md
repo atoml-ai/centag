@@ -5,7 +5,7 @@
 
 ## 适用范围
 
-- 适用于 **gateway / team / minimal / personal** 等仍暴露 `/v1/chat/completions` 与流水线管理的发行版。
+- 适用于 **personal / team / minimal** 等仍暴露 `/v1/chat/completions` 与流水线管理的发行版。
 - 不覆盖已移除的 business Agent / Mem0 / RAG 流水线。
 - 优先通过 `/api/v1/logs` 取证；仅在 API 不可用时回退本地 `logs/*.log`。
 

@@ -1,7 +1,7 @@
 # Centag Admin E2E Test — 正本
 
 > **业务正本**（`docs/harness/skills/`）。交互入口在 `.cursor/rules/centag-admin-e2e.mdc`、`.opencode/skills/centag-admin-e2e/` 等。分层见根目录 **`AGENT.md`**。
-> 覆盖管理功能端到端测试。按 `TEST_DEPLOY_TYPE`（gateway / team / minimal / personal）裁剪；Agent 供应商默认跳过。
+> 覆盖管理功能端到端测试。按 `TEST_DEPLOY_TYPE`（personal / team / minimal）裁剪；Agent 供应商默认跳过。
 >
 > ## 原则
 > - **只验证 HTTP 状态码 + 响应内容**，不分析代码
@@ -18,13 +18,13 @@
 | JWT Token | `TEST_JWT_TOKEN` | ✅ | 通过 POST /api/auth/login 获取 |
 | Admin 用户名 | `ADMIN_USERNAME` | ✅ | 用于登录 |
 | Admin 密码 | `ADMIN_PASSWORD` | ✅ | 用于登录 |
-| 部署类型 | `TEST_DEPLOY_TYPE` | ✅ | `gateway` / `team` / `minimal` / `personal` |
+| 部署类型 | `TEST_DEPLOY_TYPE` | ✅ | `personal` / `team` / `minimal` |
 
 ---
 
 ## Edition 裁剪
 
-| 模块 | gateway / personal | team | minimal |
+| 模块 | personal | team | minimal |
 |------|--------------------|------|---------|
 | 用户管理 | ✅ | ✅ | ❌ 跳过 |
 | `/api/v1/user/apikeys` | ✅ | ✅ | ❌ 改测 `/api/v1/settings/api-keys` |

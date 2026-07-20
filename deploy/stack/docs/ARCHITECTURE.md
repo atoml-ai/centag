@@ -74,7 +74,7 @@ middleware/          services/mem0/          services/pi-sandbox/
 
 | Profile | STACK_DEPS | 说明 |
 |---------|------------|------|
-| gateway | `ollama` | 应用 SQLite，可选 stack Ollama |
+| personal | `ollama` | 应用 SQLite，可选 stack Ollama |
 | cached | `postgresql ollama` | 应用连 stack PG |
 | agent-memory | `postgresql qdrant ollama mem0` | 应用 + Pi；中间件全走 stack |
 

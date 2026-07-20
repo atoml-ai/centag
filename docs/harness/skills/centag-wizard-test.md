@@ -22,7 +22,7 @@
 
 | 参数 | 环境变量 | 必需 | 说明 |
 |------|----------|------|------|
-| 产品版本 | `CENTAG_DEPLOY_TYPE` | ✅ | `gateway` / `team` / `minimal` / `personal` |
+| 产品版本 | `CENTAG_DEPLOY_TYPE` | ✅ | `personal` / `team` / `minimal` |
 | 服务地址 | `TEST_BASE_URL` | ✅ | 如 `http://localhost:20060` |
 | JWT Token | `TEST_JWT_TOKEN` | ✅ | 通过 POST /api/auth/login 获取的 access_token |
 | Admin 用户名 | `ADMIN_USERNAME` | ✅ | 用于 JWT 过期时自动重新登录 |
@@ -142,7 +142,7 @@ security-mode     → security-mode
 
 ### 产品版本 → 测试差异
 
-| | gateway / personal | team | minimal |
+| | personal | team | minimal |
 |---|---|---|---|
 | 默认端口 | 20060 | 可变 | 20060 |
 | 启动方式 | `./start.sh run be` 或 profile | `./start.sh profile team up` | `./start.sh debug minimal` |
@@ -241,7 +241,7 @@ bash docs/harness/skills/wizard-test.sh
 
 该脚本自动执行 Steps A–F：
 - **Step A**: 健康探测 (`GET /health`)
-- **Step B**: 验证 JWT + 确定认证方式（gateway/personal/minimal 用 JWT，team 用用户 Key）
+- **Step B**: 验证 JWT + 确定认证方式（personal/minimal 用 JWT，team 用用户 Key）
 - **Step B2**: 团队版验证测试用户
 - **Step B4**: 根据 `TEST_BACKEND_SOURCE` 选择真实/Mock 后端模式（Mock 模式自动拉起本地 fake-openai，并自动备份/恢复目标后端配置）
 - **Step C**: 配置后端 (`PUT /api/v1/backends/:id`)
@@ -271,7 +271,7 @@ bash docs/harness/skills/admin-e2e-test.sh
 
 管理功能测试覆盖范围（按 edition 裁剪，见 `centag-admin-e2e.md`）：
 - 通用：后端、流水线、健康检查
-- gateway/team：用户、API Key、Token 用量、配置、Profile；Agent 供应商可选
+- personal/team：用户、API Key、Token 用量、配置、Profile；Agent 供应商可选
 - team：多租户、成本看板
 - minimal：登录/改密探测、`/api/v1/settings/api-keys`、后端、流水线、健康检查
 
@@ -330,7 +330,7 @@ open /tmp/wizard_test_report_*.html
 
 | 症状 | 原因 | 解决 |
 |------|------|------|
-| `/health` 不通 | 服务未启动 | gateway: `./start.sh run be`；team: `./start.sh profile team up`；minimal: `./start.sh debug minimal` |
+| `/health` 不通 | 服务未启动 | personal: `./start.sh run be`；team: `./start.sh profile team up`；minimal: `./start.sh debug minimal` |
 | JWT 登录失败 | 用户名或密码错误 | 报告错误消息，用 ask_followup_question 让用户重试 |
 | JWT 401 "invalid token" | token 过期或字段错误 | 用 `/api/auth/login` 重新获取 `access_token` |
 | API 返回 401 | JWT 过期 | wizard-test.sh Step B 会自动重新登录 |

@@ -11,7 +11,7 @@ set -u
 set -o pipefail
 
 BASE_URL="${TEST_BASE_URL:-http://localhost:20060}"
-TEST_DEPLOY_TYPE="${TEST_DEPLOY_TYPE:-${CENTAG_DEPLOY_TYPE:-gateway}}"
+TEST_DEPLOY_TYPE="${TEST_DEPLOY_TYPE:-${CENTAG_DEPLOY_TYPE:-personal}}"
 ENV_FILE="${ADMIN_ENV_FILE:-config/secrets/.env}"
 RESULTS_NDJSON="/tmp/admin_e2e_results.ndjson"
 RESULTS_JSON="/tmp/admin_e2e_results.json"
@@ -406,7 +406,7 @@ jq -s '
   {
     timestamp:(now|strftime("%Y-%m-%d %H:%M:%S")),
     mode:"admin",
-    deploy_type:(env.TEST_DEPLOY_TYPE // "gateway"),
+    deploy_type:(env.TEST_DEPLOY_TYPE // "personal"),
     base_url:(env.TEST_BASE_URL // "http://localhost:20060"),
     total:($rows|length),
     passed:($rows|map(select(.ok))|length),

@@ -22,5 +22,5 @@ alwaysApply: false
 
 1. 探测 `/api/v1/status`（静默）。
 2. 未运行 → AskQuestion：手动启动 / agent 自动 / 退出。
-3. AskQuestion：edition（gateway/team/minimal/personal）、测试范围（快速/标准/自定义）。
+3. AskQuestion：edition（team/minimal/personal）、测试范围（快速/标准/自定义）。
 4. 交接 **`docs/harness/skills/centag-pipeline-test.md`**。

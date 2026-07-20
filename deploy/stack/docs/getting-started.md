@@ -48,7 +48,7 @@ cp .env.example .env
 cd /path/to/centag
 
 # 场景化一键（自动 stack ensure + 应用层）
-./start.sh profile gateway up
+./start.sh profile personal up
 ./start.sh profile cached up
 ./start.sh profile agent-memory up
 

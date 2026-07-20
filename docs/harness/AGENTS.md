@@ -286,7 +286,7 @@ docs/versions/<版本>/<需求>/
 | `scripts/` | 开发/运维脚本与集成测试 |
 | `docs/` `docs/harness/` | 人类文档与 Agent 规范 |
 | `docs/versions/` | 版本归档（新需求产物） |
-| `dist/` | 发行版入口源码（minimal / gateway / team） |
+| `dist/` | 发行版入口源码（minimal / personal / team） |
 | `bin/` | 本地构建产物（gitignore，勿提交） |
 
 - **`cmd/` / `dist/`**: 仅入口与组装，避免写复杂业务逻辑。

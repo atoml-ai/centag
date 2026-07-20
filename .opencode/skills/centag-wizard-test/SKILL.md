@@ -20,7 +20,7 @@ description: "Centag 向导测试 OpenCode 交互入口（触发：向导测试/
 
 ## 收参步骤（question）
 
-1. **基础配置**：`deploy_type`（gateway/team/minimal/personal）、`base_url`、Admin 凭据（.env / 自定义）、`test_type`（pipeline/admin/all）
+1. **基础配置**：`deploy_type`（personal/team/minimal）、`base_url`、Admin 凭据（.env / 自定义）、`test_type`（pipeline/admin/all）
 2. **若 pipeline|all**：`backend_source`（real/mock）、`backend_id`、`test_scope`（快速/标准）
 3. **确认**：开始测试 / 修改配置
 

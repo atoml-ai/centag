@@ -15,7 +15,7 @@
 #   export TEST_BACKEND_SOURCE="real"   # real|mock
 #   export TEST_MOCK_OPENAI_HOST="127.0.0.1"
 #   export TEST_MOCK_OPENAI_PORT="28081"
-#   export CENTAG_DEPLOY_TYPE="gateway"  # gateway|team|minimal|personal
+#   export CENTAG_DEPLOY_TYPE="personal"  # personal|team|minimal
 #   export TEST_PIPELINES="smart-scheduling,direct-backend,fallback-mode,transparent-fast"
 #   bash wizard-test.sh
 #
@@ -29,7 +29,7 @@ set -o pipefail
 
 BASE="${TEST_BASE_URL:-http://localhost:20060}"
 # Align deploy type for admin-e2e / report scripts
-export CENTAG_DEPLOY_TYPE="${CENTAG_DEPLOY_TYPE:-gateway}"
+export CENTAG_DEPLOY_TYPE="${CENTAG_DEPLOY_TYPE:-personal}"
 export TEST_DEPLOY_TYPE="${TEST_DEPLOY_TYPE:-$CENTAG_DEPLOY_TYPE}"
 JWT="${TEST_JWT_TOKEN}"
 ENTRY_VARIANTS="${TEST_ENTRY_VARIANTS:-header-full}"
@@ -466,8 +466,8 @@ else
   fi
 fi
 
-case "${CENTAG_DEPLOY_TYPE:-gateway}" in
-  desktop|personal|gateway|minimal)
+case "${CENTAG_DEPLOY_TYPE:-personal}" in
+  desktop|personal|minimal)
     echo "=== ${CENTAG_DEPLOY_TYPE} — 使用 Admin JWT 测试 ==="
     TEST_AUTH_KEY="${JWT}"
     ;;
@@ -482,7 +482,7 @@ case "${CENTAG_DEPLOY_TYPE:-gateway}" in
     fi
     ;;
   *)
-    echo "⚠️  未知 CENTAG_DEPLOY_TYPE=${CENTAG_DEPLOY_TYPE}，按 gateway 使用 Admin JWT"
+    echo "⚠️  未知 CENTAG_DEPLOY_TYPE=${CENTAG_DEPLOY_TYPE}，按 personal 使用 Admin JWT"
     TEST_AUTH_KEY="${JWT}"
     ;;
 esac
@@ -684,7 +684,7 @@ echo ""
 # ========================================================================
 echo "=========================================="
 echo "  开始流水线测试"
-echo "  版本: ${CENTAG_DEPLOY_TYPE:-gateway}"
+  echo "  版本: ${CENTAG_DEPLOY_TYPE:-personal}"
 echo "  后端: ${TEST_BACKEND_ID} / ${TEST_BACKEND_MODEL}"
 echo "  流水线: ${TEST_PIPELINES}"
 echo "=========================================="

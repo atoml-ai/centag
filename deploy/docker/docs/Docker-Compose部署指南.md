@@ -9,7 +9,7 @@
 ### 路径 B — Profile（推荐）
 
 ```bash
-./start.sh profile gateway up      # 或 cached / agent-memory
+./start.sh profile personal up      # 或 cached / agent-memory
 ```
 
 ### 路径 A — 手动分层（本文档主体）

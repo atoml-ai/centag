@@ -6,7 +6,7 @@
 # 用法: bash deploy-wizard.sh [选项]
 #
 # 选项:
-#   --mode <mode>       部署模式 (gateway|cached|agent-memory|docker|local)
+#   --mode <mode>       部署模式 (personal|cached|agent-memory|docker|local)
 #   --port <port>       服务端口 (默认 20060)
 #   --admin-user <user> 管理员用户名 (默认 admin)
 #   --admin-pass <pass> 管理员密码 (交互式输入)
@@ -107,7 +107,7 @@ Centag Deploy Wizard - 部署向导脚本
 
 选项:
   --mode <mode>       部署模式
-                      gateway      - 最小网关，SQLite，2分钟启动
+                      personal     - 个人全功能，SQLite，2分钟启动
                       cached       - 缓存加速，PostgreSQL
                       agent-memory - Agent全栈，Mem0+Ollama
                       docker       - 单容器快速部署
@@ -128,14 +128,14 @@ Centag Deploy Wizard - 部署向导脚本
   --help              显示此帮助信息
 
 示例:
-  # 交互式部署 gateway 模式
-  bash deploy-wizard.sh --mode gateway
+  # 交互式部署 personal 模式
+  bash deploy-wizard.sh --mode personal
 
   # 非交互式部署 cached 模式
   bash deploy-wizard.sh --mode cached --admin-pass mypassword --pg-pass pgpassword --no-interact
 
   # 指定端口部署
-  bash deploy-wizard.sh --mode gateway --port 8080
+  bash deploy-wizard.sh --mode personal --port 8080
 EOF
 }
 
@@ -219,8 +219,8 @@ select_mode() {
     local options=()
     
     if [ "$DOCKER_AVAILABLE" = true ] && [ "$COMPOSE_AVAILABLE" = true ]; then
-        options+=("gateway" "cached" "agent-memory" "docker")
-        echo "  1. gateway      - 最小网关，SQLite，2分钟启动"
+        options+=("personal" "cached" "agent-memory" "docker")
+        echo "  1. personal    - 最小网关，SQLite，2分钟启动"
         echo "  2. cached       - 缓存加速，PostgreSQL，降本80%+"
         echo "  3. agent-memory - Agent全栈，Mem0+Ollama，需要2GB内存"
         echo "  4. docker       - 单容器快速部署，SQLite"
@@ -353,7 +353,7 @@ configure_middleware() {
 
     log_step "Step 6: 中间件配置"
 
-    if [ "$DEPLOY_MODE" = "gateway" ]; then
+    if [ "$DEPLOY_MODE" = "personal" ]; then
         local enable_ollama=$(read_input "是否启用 Ollama 本地模型？(y/n)" "n")
         if [ "$enable_ollama" = "y" ]; then
             OLLAMA_ENABLED=true
@@ -408,7 +408,7 @@ EOF
 
     # 根据模式添加数据库配置
     case "$DEPLOY_MODE" in
-        gateway|docker|local)
+        personal|docker|local)
             cat >> config/secrets/.env << EOF
 LLM_PROXY_DB_DRIVER=sqlite
 SQLITE_PATH=./storage/centag.db
@@ -449,8 +449,8 @@ execute_deploy() {
     local deploy_cmd=""
     
     case "$DEPLOY_MODE" in
-        gateway)
-            deploy_cmd="./start.sh profile gateway up -d"
+        personal)
+            deploy_cmd="./start.sh profile personal up -d"
             ;;
         cached)
             deploy_cmd="./start.sh profile cached up -d"

@@ -42,7 +42,7 @@ deploy/stack/.env  →  config/profiles/<name>/.env  →  config/secrets/.env
 
 ```bash
 ./start.sh profile list
-./start.sh profile gateway up
+./start.sh profile personal up
 ./start.sh profile cached up
 ./start.sh profile agent-memory up
 ./start.sh profile <name> status|logs|down|reset
@@ -62,7 +62,7 @@ deploy/stack/.env  →  config/profiles/<name>/.env  →  config/secrets/.env
 
 ## 3. Profile 对照表（设计差异）
 
-| 维度 | gateway | cached | agent-memory |
+| 维度 | personal | cached | agent-memory |
 |------|---------|--------|--------------|
 | 应用 DB | **SQLite** | PostgreSQL | PostgreSQL（`auto`） |
 | STACK_DEPS | 无（默认）/ `ollama`（可选） | `postgresql ollama` | `postgresql qdrant ollama mem0` |
@@ -70,7 +70,7 @@ deploy/stack/.env  →  config/profiles/<name>/.env  →  config/secrets/.env
 | stack .env 进容器 | **否** | 是 | 是 |
 | entrypoint 等 PG | **否** | 是 | 是 |
 
-**为何 gateway 日志里曾出现 PostgreSQL？** 旧版共用 entrypoint 默认 `POSTGRES_ENABLED=true`，且 gateway compose 注入了 `deploy/stack/.env`。现已分离：gateway 容器只用 `config/profiles/gateway/.env` + `config/secrets/.env`；entrypoint 按 `LLM_PROXY_DB_DRIVER=sqlite` 跳过 PG 等待。
+**为何 personal 日志里曾出现 PostgreSQL？** 旧版共用 entrypoint 默认 `POSTGRES_ENABLED=true`，且 personal compose 注入了 `deploy/stack/.env`。现已分离：personal 容器只用 `config/profiles/personal/.env` + `config/secrets/.env`；entrypoint 按 `LLM_PROXY_DB_DRIVER=sqlite` 跳过 PG 等待。
 
 `manifest.conf` 中 `STACK_DEPS` **必须加引号**，例如 `STACK_DEPS="postgresql ollama"`。
 
@@ -78,13 +78,13 @@ deploy/stack/.env  →  config/profiles/<name>/.env  →  config/secrets/.env
 
 ## 4. 各 Profile 说明
 
-### gateway
+### personal
 
-- SQLite 内置，无 PG 依赖；**`CENTAG_EDITION=personal`**（发行包 gateway → 运行时 personal）
+- SQLite 内置，无 PG 依赖；**`CENTAG_EDITION=personal`**（发行包 personal → 运行时 personal）
 - **默认** `OLLAMA_ENABLED=false`：仅启动应用容器，使用线上 API Key
 - `OLLAMA_ENABLED=true` 时自动 `stack ensure ollama`，应用通过 `deploy/stack-network` 访问 `centag-ollama`
 
-详见 [`config/profiles/gateway/README.md`](../../config/profiles/gateway/README.md)。
+详见 [`config/profiles/personal/README.md`](../../config/profiles/personal/README.md)。
 
 ### cached
 

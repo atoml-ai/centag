@@ -12,7 +12,7 @@ require example.com/org/centag-business v0.1.0
 replace example.com/org/centag-business => ../centag-business
 ```
 
-2. 在发行版入口（如 `dist/gateway/main.go` 或 `cmd/centag/main.go`）增加 blank import：
+2. 在发行版入口（如 `dist/personal/main.go` 或 `cmd/centag/main.go`）增加 blank import：
 
 ```go
 import (
@@ -35,7 +35,7 @@ go build -tags 'protocol_openai,...,business_router,business_optimizer' ./cmd/ce
 | 发行版 | 核心插件（本仓） | 业务插件 |
 |--------|------------------|----------|
 | minimal | 精简协议/后端 | 可选外部 |
-| gateway | 全量协议/后端 + sqlite/pg + storage | 可选外部 |
-| team | 与 gateway 对齐 | 可选外部 |
+| personal | 全量协议/后端 + sqlite/pg + storage | 可选外部 |
+| team | 与 personal 对齐 | 可选外部 |
 
 未引入外部业务模块时，网关仍可独立运行；流水线使用内置节点。

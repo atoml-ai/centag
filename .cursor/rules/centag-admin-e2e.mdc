@@ -22,7 +22,7 @@ alwaysApply: false
 
 | id | prompt | options |
 |----|--------|---------|
-| `deploy_type` | 部署类型 | gateway / team / minimal / personal |
+| `deploy_type` | 部署类型 | team / minimal / personal |
 | `base_url` | 服务地址 | `http://localhost:20060`；其他 |
 | `admin_creds` | Admin 凭据 | 从 .env 读取；其他 |
 | `confirm` | 开始？ | start / cancel |

@@ -34,7 +34,7 @@ curl -s -o /dev/null -w "%{http_code}" http://localhost:20060/health
 
 | id | prompt | options |
 |----|--------|---------|
-| `deploy_type` | 部署类型 | gateway / team / minimal / personal |
+| `deploy_type` | 部署类型 | team / minimal / personal |
 | `base_url` | 服务地址 | `http://localhost:20060`；其他（我会输入） |
 | `admin_creds` | Admin 凭据 | 从 .env 读取；其他（我会输入） |
 | `test_type` | 测试类型 | pipeline / admin / all |
