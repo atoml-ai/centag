@@ -97,7 +97,22 @@
       </div>
 
       <div class="form-group">
-        <label>模型列表</label>
+        <div class="model-list-head">
+          <label>
+            模型列表
+            <span v-if="form.models.length" class="model-count">（{{ form.models.length }}）</span>
+          </label>
+          <el-button
+            type="primary"
+            plain
+            size="small"
+            :loading="fetchingModels"
+            :disabled="!canFetchModels"
+            @click="fetchModelsNow"
+          >
+            刷新支持的模型
+          </el-button>
+        </div>
         <div class="model-add-row">
           <el-input
             v-model="newModelName"
@@ -107,7 +122,10 @@
           />
           <el-button @click="onAddModel" :disabled="!newModelName.trim()">添加</el-button>
         </div>
-        <div class="model-preview">
+        <div class="form-tip">
+          填写 Base URL{{ form.type !== 'ollama' ? ' 与 API Key' : '' }} 后，可一键从远端同步模型；也可手动添加。列表区域可滚动，拖动右下角可调整高度。
+        </div>
+        <div class="model-preview" :class="{ empty: form.models.length === 0 }">
           <div v-if="form.models.length > 0" class="model-tags">
             <span
               v-for="(model, mi) in form.models"
@@ -120,7 +138,7 @@
               <span class="tag-remove" @click.stop="onRemoveModel(mi)">×</span>
             </span>
           </div>
-          <div v-else class="model-empty-tip">暂无模型，请在上方添加或选择预设 Provider</div>
+          <div v-else class="model-empty-tip">暂无模型，请点击「刷新支持的模型」或手动添加</div>
         </div>
       </div>
 
@@ -135,9 +153,9 @@
         description="直接接入 Gemini 官方 API，支持所有原生特性。Gemini CLI 用户应选此类型。"
       />
 
-      <!-- Personal 专有能力：折叠，不打断主流程 -->
+      <!-- 高级选项：各发行版共用，不打断主流程 -->
       <el-collapse v-model="advancedOpen" class="advanced-collapse">
-        <el-collapse-item title="高级选项（Personal）" name="advanced">
+        <el-collapse-item title="高级选项" name="advanced">
           <div class="form-group">
             <label>类型</label>
             <el-select v-model="form.type" style="width: 100%" @change="onTypeChanged">
@@ -185,18 +203,10 @@
             </div>
           </div>
           <div class="form-group">
-            <label>模型同步</label>
+            <label>连接探测时自动同步模型</label>
             <div class="fetch-row">
               <el-switch v-model="form.auto_fetch_models" />
-              <span class="switch-label">自动获取模型</span>
-              <el-button
-                size="small"
-                :loading="fetchingModels"
-                :disabled="!form.base_url"
-                @click="fetchModelsNow"
-              >
-                从服务器获取
-              </el-button>
+              <span class="switch-label">探测成功后写入模型列表</span>
             </div>
           </div>
         </el-collapse-item>
@@ -293,6 +303,14 @@ const apiKeyPlaceholder = computed(() => {
 const selectedTypeMeta = computed(() =>
   backendTypes.value.find((bt) => bt.type === form.type) || null
 )
+
+/** 新建需有 URL（及非 ollama 的 Key）；编辑可用已保存 Key */
+const canFetchModels = computed(() => {
+  if (!(form.base_url || '').trim()) return false
+  if (form.type === 'ollama') return true
+  if ((form.api_key || '').trim()) return true
+  return !isCreate.value && !!form.has_api_key
+})
 
 function onTypeChanged(type: string) {
   const meta = backendTypes.value.find((bt) => bt.type === type)
@@ -499,8 +517,12 @@ const ensureEnabledBackendCanBeSaved = async (): Promise<boolean> => {
 }
 
 const fetchModelsNow = async () => {
-  if (!form.base_url) {
-    ElMessage.warning('请先填写 Base URL')
+  if (!canFetchModels.value) {
+    if (!(form.base_url || '').trim()) {
+      ElMessage.warning('请先填写 Base URL')
+    } else {
+      ElMessage.warning('请先填写 API Key')
+    }
     return
   }
   fetchingModels.value = true
@@ -508,28 +530,32 @@ const fetchModelsNow = async () => {
     const reqBody: any = {
       base_url: form.base_url,
       api_key: form.api_key || '',
-      type: form.type,
+      type: form.type || 'openai',
       timeout: form.timeout || 30,
+      replace: true,
     }
     if (!isCreate.value && form.id) {
       reqBody.backend_id = form.id
     }
     const res = await api.post('/api/v1/backends/fetch-models', reqBody)
-    const rawNames: string[] = Array.isArray(res) ? res : []
-    if (rawNames.length === 0) {
+    const rawNames: string[] = Array.isArray(res)
+      ? res
+      : Array.isArray((res as any)?.data)
+        ? (res as any).data
+        : []
+    const names = rawNames.map((n) => String(n || '').trim()).filter(Boolean)
+    if (names.length === 0) {
       ElMessage.warning('远端未返回模型，可手动添加')
       return
     }
-    const existing = new Set(form.models.map((m) => m.name))
-    for (const name of rawNames) {
-      if (!existing.has(name)) {
-        addModelToForm(form, name)
-      }
+    // 刷新 = 以远端列表为准，避免残留已下线模型
+    form.models = names.map((name) => ({ name }))
+    const stillValid = names.includes(form.default_model)
+    if (!stillValid) {
+      form.default_model = names[0]
+      form.probe_model = names[0]
     }
-    if (!form.default_model && form.models.length > 0) {
-      form.default_model = form.models[0].name
-    }
-    ElMessage.success(`已同步 ${rawNames.length} 个模型`)
+    ElMessage.success(`已刷新 ${names.length} 个模型`)
   } catch (error: any) {
     ElMessage.error('获取模型失败：' + (error.message || '未知错误'))
   } finally {
@@ -644,6 +670,23 @@ defineExpose({
   flex: 1;
 }
 
+.model-list-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+
+.model-list-head label {
+  margin-bottom: 0;
+}
+
+.model-count {
+  font-weight: 400;
+  color: #9ca3af;
+}
+
 .model-add-row {
   display: flex;
   gap: 8px;
@@ -655,13 +698,33 @@ defineExpose({
 
 .model-preview {
   margin-top: 10px;
-  min-height: 36px;
+  height: 160px;
+  min-height: 96px;
+  max-height: 360px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  resize: vertical;
+  padding: 10px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #fafafa;
+  overscroll-behavior: contain;
+}
+
+.model-preview.empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 96px;
+  min-height: 96px;
+  resize: none;
 }
 
 .model-tags {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+  align-content: flex-start;
 }
 
 .model-tag {
