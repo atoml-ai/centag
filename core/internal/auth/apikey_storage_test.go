@@ -1,24 +1,59 @@
 package auth
 
 import (
-	"os"
 	"strings"
 	"testing"
 )
 
+func TestAPIKeyRevealOnce(t *testing.T) {
+	t.Setenv(envAPIKeyRevealOnce, "")
+	if APIKeyRevealOnce() {
+		t.Fatal("default should allow secondary reveal")
+	}
+	t.Setenv(envAPIKeyRevealOnce, "true")
+	if !APIKeyRevealOnce() {
+		t.Fatal("true should enable reveal-once")
+	}
+	t.Setenv(envAPIKeyRevealOnce, "1")
+	if !APIKeyRevealOnce() {
+		t.Fatal("1 should enable reveal-once")
+	}
+}
+
 func TestAPIKeyStorageKey_Unset(t *testing.T) {
-	os.Unsetenv(envAPIKeyStorageSecret)
+	resetAPIKeyStorageForTest()
+	t.Setenv(envAPIKeyStorageSecret, "")
+	t.Setenv(envAPIKeyRevealOnce, "")
 
 	key := APIKeyStorageKey()
 	if key != nil {
-		t.Error("APIKeyStorageKey should return nil when env var is unset")
+		t.Error("APIKeyStorageKey should return nil when env var is unset and not ensured")
+	}
+}
+
+func TestAPIKeyStorageKey_RevealOnce(t *testing.T) {
+	resetAPIKeyStorageForTest()
+	t.Setenv(envAPIKeyStorageSecret, "present-but-ignored")
+	t.Setenv(envAPIKeyRevealOnce, "true")
+	defer t.Setenv(envAPIKeyRevealOnce, "")
+
+	if APIKeyStorageKey() != nil {
+		t.Error("reveal-once mode must not expose storage key")
+	}
+	enc, err := EncryptAPIKeyForStorage("llmproxy_x")
+	if err != nil {
+		t.Fatalf("EncryptAPIKeyForStorage: %v", err)
+	}
+	if enc != "" {
+		t.Error("reveal-once should skip encryption")
 	}
 }
 
 func TestAPIKeyStorageKey_Set(t *testing.T) {
+	resetAPIKeyStorageForTest()
+	t.Setenv(envAPIKeyRevealOnce, "")
 	testSecret := "test_secret_12345"
-	os.Setenv(envAPIKeyStorageSecret, testSecret)
-	defer os.Unsetenv(envAPIKeyStorageSecret)
+	t.Setenv(envAPIKeyStorageSecret, testSecret)
 
 	key := APIKeyStorageKey()
 	if key == nil {
@@ -31,8 +66,9 @@ func TestAPIKeyStorageKey_Set(t *testing.T) {
 }
 
 func TestAPIKeyStorageKey_EmptyString(t *testing.T) {
-	os.Setenv(envAPIKeyStorageSecret, "   ")
-	defer os.Unsetenv(envAPIKeyStorageSecret)
+	resetAPIKeyStorageForTest()
+	t.Setenv(envAPIKeyRevealOnce, "")
+	t.Setenv(envAPIKeyStorageSecret, "   ")
 
 	key := APIKeyStorageKey()
 	if key != nil {
@@ -152,5 +188,15 @@ func TestDecryptAPIKeyPlaintext_CiphertextTooShort(t *testing.T) {
 	_, err := DecryptAPIKeyPlaintext(shortCiphertext, key)
 	if err == nil {
 		t.Error("DecryptAPIKeyPlaintext should fail with ciphertext too short")
+	}
+}
+
+func TestEncryptAPIKeyForStorage_RequiresKey(t *testing.T) {
+	resetAPIKeyStorageForTest()
+	t.Setenv(envAPIKeyRevealOnce, "")
+	t.Setenv(envAPIKeyStorageSecret, "")
+	_, err := EncryptAPIKeyForStorage("llmproxy_x")
+	if err == nil {
+		t.Fatal("expected error when storage not ready")
 	}
 }

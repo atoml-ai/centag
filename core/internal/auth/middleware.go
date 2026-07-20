@@ -150,9 +150,9 @@ func ProxyAuthMiddleware(cfg *AuthConfig) gin.HandlerFunc {
 				return
 			}
 
-			// ── Virtual key checks (Team edition only) ────────────────
+			// ── API key limit checks (Team edition only) ────────────────
 			if cfg != nil && !cfg.IsDesktop {
-				if !checkVirtualKeyChecks(c, key, cfg.RateLimiter, hash) {
+				if !checkAPIKeyLimits(c, key, cfg.RateLimiter, hash) {
 					return
 				}
 			}
@@ -206,14 +206,14 @@ func ProxyAuthMiddleware(cfg *AuthConfig) gin.HandlerFunc {
 	}
 }
 
-// checkVirtualKeyChecks performs model whitelist, rate limit, and budget
-// checks for virtual key requests. Returns false if the request should be aborted.
-func checkVirtualKeyChecks(c *gin.Context, key *database.APIKey, limiter RateLimiter, keyHash string) bool {
+// checkAPIKeyLimits performs model whitelist, rate limit, and budget
+// checks for API key budget/rate/whitelist limits. Returns false if the request should be aborted.
+func checkAPIKeyLimits(c *gin.Context, key *database.APIKey, limiter RateLimiter, keyHash string) bool {
 	// ── 1. Model whitelist ─────────────────────────────────────────
 	if key.ModelWhitelist != "" && key.ModelWhitelist != "*" {
 		bodyBytes, err := io.ReadAll(c.Request.Body)
 		if err != nil {
-			logger.Warnf("Virtual key check: failed to read body for model check (key=%d)", key.ID)
+			logger.Warnf("API key limit check: failed to read body for model check (key=%d)", key.ID)
 		} else {
 			c.Request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 			var chatReq struct {
@@ -221,7 +221,7 @@ func checkVirtualKeyChecks(c *gin.Context, key *database.APIKey, limiter RateLim
 			}
 			if err := json.Unmarshal(bodyBytes, &chatReq); err == nil && chatReq.Model != "" {
 				if !isModelAllowed(chatReq.Model, key.ModelWhitelist) {
-					logger.Warnf("Virtual key check: model %q not in whitelist (key=%d)", chatReq.Model, key.ID)
+					logger.Warnf("API key limit check: model %q not in whitelist (key=%d)", chatReq.Model, key.ID)
 					c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
 						"success": false,
 						"error":   "model not allowed for this API key",
@@ -240,9 +240,9 @@ func checkVirtualKeyChecks(c *gin.Context, key *database.APIKey, limiter RateLim
 		c.Header("X-RateLimit-RPM-Remaining", strconv.FormatInt(int64(remRPM), 10))
 		c.Header("X-RateLimit-TPM-Remaining", strconv.FormatInt(int64(remTPM), 10))
 		if err != nil {
-			logger.Warnf("Virtual key check: rate limiter error (%v), allowing (key=%d)", err, key.ID)
+			logger.Warnf("API key limit check: rate limiter error (%v), allowing (key=%d)", err, key.ID)
 		} else if !ok {
-			logger.Warnf("Virtual key check: rate limit exceeded (key=%d, rpm=%d, tpm=%d)", key.ID, key.RateLimitRPM, key.RateLimitTPM)
+			logger.Warnf("API key limit check: rate limit exceeded (key=%d, rpm=%d, tpm=%d)", key.ID, key.RateLimitRPM, key.RateLimitTPM)
 			c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{
 				"success": false,
 				"error":   "rate limit exceeded",
@@ -256,7 +256,7 @@ func checkVirtualKeyChecks(c *gin.Context, key *database.APIKey, limiter RateLim
 		result := (BudgetChecker{}).Check(key.UsedUSD, key.BudgetUSD)
 		c.Header("X-Budget-Remaining", strconv.FormatFloat(result.Remaining, 'f', -1, 64))
 		if !result.OK {
-			logger.Warnf("Virtual key check: budget exhausted (key=%d, used=%.4f, budget=%.4f)", key.ID, key.UsedUSD, key.BudgetUSD)
+			logger.Warnf("API key limit check: budget exhausted (key=%d, used=%.4f, budget=%.4f)", key.ID, key.UsedUSD, key.BudgetUSD)
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
 				"success": false,
 				"error":   "budget exhausted",

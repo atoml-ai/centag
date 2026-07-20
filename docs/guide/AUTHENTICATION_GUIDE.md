@@ -46,7 +46,7 @@ cd ../centag
 
 ### `generate-secrets` 生成的字段（摘要）
 
-- Web 管理员用户名/密码、`LLM_PROXY_ADMIN_API_KEY`、`LLM_PROXY_API_KEY_STORAGE_SECRET`
+- Web 管理员用户名/密码、`LLM_PROXY_ADMIN_API_KEY`、可选 `LLM_PROXY_API_KEY_STORAGE_SECRET`（留空则启动自动生成；`LLM_PROXY_API_KEY_REVEAL_ONCE=true` 可关闭二次查看）
 - **`PG_*`**（元数据库）
 - 基础 **`LLM_PROXY_*`**（端口、默认路由、日志）
 

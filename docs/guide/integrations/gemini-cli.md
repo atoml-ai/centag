@@ -10,7 +10,7 @@ Gemini CLI 可通过两种方式接入 Centag：**OpenAI 兼容模式** 和 **Ge
 
 ```bash
 # Centag 服务地址
-export GEMINI_API_KEY="sk-your-virtual-key-here"
+export GEMINI_API_KEY="sk-your-centag-api-key-here"
 export GEMINI_API_BASE="http://localhost:20060/v1"
 ```
 
@@ -30,7 +30,7 @@ Centag 提供了 `/v1beta/models/*action` 原生 Gemini 入口，可直接代理
 在 Gemini CLI 中将 API Base 指向 Centag 的 Gemini 入口：
 
 ```bash
-export GEMINI_API_KEY="sk-your-virtual-key-here"
+export GEMINI_API_KEY="sk-your-centag-api-key-here"
 export GOOGLE_GENERATIVE_AI_API_BASE="http://localhost:20060/v1beta"
 ```
 

@@ -133,15 +133,13 @@ func (h *APIKeyHandler) CreateAPIKey(c *gin.Context) {
 		key.TenantID = &tenantID
 	}
 
-	if sk := auth.APIKeyStorageKey(); sk != nil {
-		enc, encErr := auth.EncryptAPIKeyPlaintext(fullKey, sk)
-		if encErr != nil {
-			logger.Errorf("encrypt api key user %d: %v", userID, encErr)
-			RespondInternalError(c, "failed to persist API key")
-			return
-		}
-		key.KeySecretEnc = enc
+	enc, encErr := auth.EncryptAPIKeyForStorage(fullKey)
+	if encErr != nil {
+		logger.Errorf("encrypt api key user %d: %v", userID, encErr)
+		RespondInternalError(c, "failed to persist API key")
+		return
 	}
+	key.KeySecretEnc = enc
 	if req.ExpiresIn != nil && *req.ExpiresIn > 0 {
 		t := time.Now().Add(time.Duration(*req.ExpiresIn) * 24 * time.Hour)
 		key.ExpiresAt = &t
@@ -408,14 +406,12 @@ func (h *APIKeyHandler) CreateAdminAPIKey(c *gin.Context) {
 		ModelWhitelist: req.ModelWhitelist,
 	}
 
-	if sk := auth.APIKeyStorageKey(); sk != nil {
-		enc, encErr := auth.EncryptAPIKeyPlaintext(fullKey, sk)
-		if encErr != nil {
-			RespondInternalError(c, "failed to persist API key")
-			return
-		}
-		key.KeySecretEnc = enc
+	enc, encErr := auth.EncryptAPIKeyForStorage(fullKey)
+	if encErr != nil {
+		RespondInternalError(c, "failed to persist API key")
+		return
 	}
+	key.KeySecretEnc = enc
 	if req.ExpiresIn != nil && *req.ExpiresIn > 0 {
 		t := time.Now().Add(time.Duration(*req.ExpiresIn) * 24 * time.Hour)
 		key.ExpiresAt = &t
@@ -646,12 +642,8 @@ func apiKeyRevealAvailable(k *database.APIKey) bool {
 	if k == nil {
 		return false
 	}
-	if k.KeySecretEnc != "" {
+	if _, ok := revealAPIKeyPlaintext(k); ok {
 		return true
-	}
-	if raw := bootstrap.DefaultAdminAPIKeyString(); raw != "" {
-		hash, _ := auth.APIKeyMetadataFromFullKey(raw)
-		return hash == k.KeyHash
 	}
 	return false
 }
