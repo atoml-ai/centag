@@ -11,11 +11,11 @@ Centag 支持通过发行版（distribution）自定义包含的插件组合。�
 | 发行版 | 会注册的插件（概览） | 与部署的关系 | 适用场景 |
 |--------|----------------------|----------------|----------|
 | `dist/minimal/` | 3 后端 + 2 协议 + router（无 DB） | 文件配置，无中间件 | 轻量单机 / CLI |
-| `dist/gateway/` | **全功能 29 插件**（5 后端 + 4 协议 + 13 业务 + 7 存储/DB） | **默认 SQLite**；可配置连外部中间件 | 个人全功能 |
-| `dist/team/` | **与 gateway 相同** | **中间件单独部署**（PG / 向量等） | 团队 / 多租户 |
-| `cmd/centag`（本地 `make build`） | 与 gateway/team 相同 | 视本地 `.env` | 本地开发调试 |
+| `dist/personal/` | **全功能 29 插件**（5 后端 + 4 协议 + 13 业务 + 7 存储/DB） | **默认 SQLite**；可配置连外部中间件 | 个人全功能 |
+| `dist/team/` | **与 personal 相同** | **中间件单独部署**（PG / 向量等） | 团队 / 多租户 |
+| `cmd/centag`（本地 `make build`） | 与 personal/team 相同 | 视本地 `.env` | 本地开发调试 |
 
-> gateway 与 team **二进制插件集合对齐**；差别在 Config Profile 的默认依赖，不在插件裁剪。
+> personal 与 team **二进制插件集合对齐**；差别在 Config Profile 的默认依赖，不在插件裁剪。
 
 ## 创建新发行版
 
@@ -119,7 +119,7 @@ go build -o centag-mydist .
 
 ```bash
 ./start.sh dist build minimal
-./start.sh dist build gateway
+./start.sh dist build personal
 ./start.sh dist build team
 ```
 
@@ -129,7 +129,7 @@ go build -o centag-mydist .
 #!/bin/bash
 # 示例：构建全部发行版（委托 start.sh，确保 tags 正确）
 set -e
-for dist in minimal gateway team; do
+for dist in minimal personal team; do
     ./start.sh dist build "$dist"
 done
 ```

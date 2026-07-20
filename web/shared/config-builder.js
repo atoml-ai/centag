@@ -5,7 +5,7 @@
  * 与 provider-form.js 分工：
  *   - provider-form：共用「选预设→填表→校验→中间态」流程
  *   - ConfigBuilder：把中间态序列化为 YAML / zip（initdata 打包）
- *   - Gateway 持久化走 toApiBackendPayload → /api/v1/backends → DB，不经本文件写盘
+ *   - Personal 持久化走 toApiBackendPayload → /api/v1/backends → DB，不经本文件写盘
  *
  * 依赖：provider-registry.js (getProviderById), yaml-writer.js (YamlWriter)
  */
@@ -139,7 +139,7 @@ metadata:
       max_retries: settings.maxRetries || 3,
       auto_fetch_models: false,
       description: provider.description,
-      // 与 Gateway PreferredDefaultModel 对齐：写入用户选择的默认模型
+      // 与 Personal PreferredDefaultModel 对齐：写入用户选择的默认模型
       probe_model: defaultModel,
       supported_models: models.map(m => ({
         requested_model: m.name,
@@ -216,7 +216,7 @@ metadata:
 1. 将 \`.env\` 文件中的 API Key 填写完整
 2. 将 \`initial-backends.yaml\` 复制到对应的 profile 目录：
    - minimal: \`config/profiles/minimal/initdata/initial-backends.yaml\`
-   - gateway: \`config/profiles/gateway/initdata/initial-backends.yaml\`
+   - personal: \`config/profiles/personal/initdata/initial-backends.yaml\`
    - team: \`config/profiles/team/initdata/initial-backends.yaml\`
 3. 启动 Centag
 

@@ -133,7 +133,7 @@ onMounted(async () => {
       isSetup.value = true
     }
   } catch {
-    // gateway/team may not expose bootstrap-status — ignore
+    // personal/team may not expose bootstrap-status — ignore
   } finally {
     bootLoading.value = false
   }
