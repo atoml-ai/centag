@@ -1,17 +1,9 @@
+import type { Capabilities } from '@/utils/capabilities'
 import type { NavItem } from './types'
 
 /**
  * 导航叶子与分组工厂（personal / team / minimal 共用，避免重复 path/icon）。
- *
- * 一级分类（team）：
- * - 首页/概览
- * - 代理策略（后端、流水线、节点插件）
- * - 应用（对话、用量、日志）
- * - 缓存与记忆
- * - 接入（主机/系统代理、Clash）
- * - 系统管理
- *
- * personal 桌面：首页 / 配置 / 对话 / 应用 / 更多（更多下再分接入·缓存·Agent·系统）
+ * 普通用户菜单由 buildWorkerNav(capabilities) 同源生成。
  */
 
 type LeafOpts = { requiresAdmin?: boolean; requiresTeam?: boolean; label?: string }
@@ -61,6 +53,7 @@ export function nodePluginsNav(opts?: LeafOpts): NavItem {
   )
 }
 
+/** @deprecated 独立对话导航已取消；仅保留供兼容引用 */
 export function chatNav(): NavItem {
   return { id: 'chat', label: '对话', icon: 'ChatDotRound', path: '/chat' }
 }
@@ -73,7 +66,7 @@ export function tokenUsageNav(label = '用量统计'): NavItem {
   return { id: 'token-usage', label, icon: 'TrendCharts', path: '/token-usage' }
 }
 
-/** @deprecated 计费规则已并入「用量与计费」页，勿再作为独立菜单 */
+/** @deprecated 计费规则已并入「用量与计费」页 */
 export function billingRulesNav(): NavItem {
   return {
     id: 'billing-rules',
@@ -127,7 +120,7 @@ export function dataStoresNav(opts?: LeafOpts): NavItem {
 }
 
 export function memoryNav(): NavItem {
-  return { id: 'memory', label: '云记忆', icon: 'Folder', path: '/memory' }
+  return { id: 'memory', label: '记忆', icon: 'Folder', path: '/memory' }
 }
 
 export function hostProxyNav(opts?: LeafOpts): NavItem {
@@ -146,7 +139,7 @@ export function configNav(opts?: LeafOpts): NavItem {
   return withOpts({ id: 'config-basic', label: '系统配置', icon: 'Setting', path: '/config' }, opts)
 }
 
-/** 通用分组（可嵌套：更多 → 分类 → 叶子） */
+/** 通用分组（可嵌套） */
 export function navGroup(
   id: string,
   label: string,
@@ -163,15 +156,110 @@ export function navGroup(
   }
 }
 
-/** 桌面 personal：后端 + 策略作为二级菜单 */
-export function personalConfigGroup(): NavItem {
-  return navGroup('personal-config', '配置', 'Connection', [
-    backendsNav({ label: '后端管理' }),
-    pipelinesNav({ label: '策略管理' })
-  ], '/backends')
+/** 用量：会话 + 用量与计费 */
+export function usageNavGroup(): NavItem {
+  return navGroup(
+    'usage',
+    '用量',
+    'TrendCharts',
+    [tokenUsageNav('用量与计费'), conversationsNav()],
+    '/token-usage'
+  )
 }
 
-/** 桌面 personal：应用相关（会话 / 用量与计费 / 日志） */
+/** 本机代理（上提为一等能力；页面仍复用三路由） */
+export function localProxyNavGroup(): NavItem {
+  return navGroup(
+    'local-proxy',
+    '本机代理',
+    'Connection',
+    [systemProxyNav(), hostProxyNav(), clashRulesNav()],
+    '/system-proxy'
+  )
+}
+
+export function storageConfigNavGroup(): NavItem {
+  return navGroup(
+    'storage-config',
+    '存储配置',
+    'FolderOpened',
+    [storageNav(), dataStoresNav(), cacheNav(), evaluationNav()],
+    '/storage'
+  )
+}
+
+/**
+ * Personal / Team User 同源导航（由 capabilities 裁剪节点）。
+ * 无独立「对话」；无侧栏后端/策略列表（主入口在首页）。
+ */
+export function buildWorkerNav(caps: Capabilities): NavItem[] {
+  const items: NavItem[] = [dashboardNav('首页')]
+
+  if (caps.usageBilling) {
+    items.push(usageNavGroup())
+  }
+  if (caps.localProxy) {
+    items.push(localProxyNavGroup())
+  }
+  if (caps.memoryQuery) {
+    items.push(memoryNav())
+  }
+
+  const moreChildren: NavItem[] = []
+  if (caps.agentSetup) {
+    moreChildren.push(
+      navGroup(
+        'more-agent',
+        'Agent',
+        'Cpu',
+        [agentSetupNav(), agentProvidersNav()],
+        '/agent-setup'
+      )
+    )
+  }
+  if (caps.storageConfig) {
+    moreChildren.push(storageConfigNavGroup())
+  }
+  moreChildren.push(logsNav())
+
+  const systemChildren: NavItem[] = []
+  if (caps.myTenant) {
+    systemChildren.push({
+      id: 'my-tenant',
+      label: '我的租户',
+      icon: 'OfficeBuilding',
+      path: '/my-tenant',
+      requiresTeam: true
+    })
+  }
+  if (caps.systemConfig) {
+    systemChildren.push(configNav())
+  }
+  if (systemChildren.length) {
+    moreChildren.push(
+      navGroup('more-system', '系统', 'Setting', systemChildren, systemChildren[0]?.path)
+    )
+  }
+
+  if (moreChildren.length) {
+    items.push(navGroup('more', '更多', 'MoreFilled', moreChildren, moreChildren[0]?.path))
+  }
+
+  return items
+}
+
+/** @deprecated 使用 buildWorkerNav(getCapabilities(...)) */
+export function personalConfigGroup(): NavItem {
+  return navGroup(
+    'personal-config',
+    '配置',
+    'Connection',
+    [backendsNav({ label: '后端管理' }), pipelinesNav({ label: '策略管理' })],
+    '/backends'
+  )
+}
+
+/** @deprecated */
 export function personalAppGroup(): NavItem {
   return navGroup(
     'personal-app',
@@ -182,56 +270,38 @@ export function personalAppGroup(): NavItem {
   )
 }
 
-/** 桌面 personal：进阶能力按分类挂在「更多」下；team 普通用户可附带「我的租户」 */
+/** @deprecated */
 export function personalMoreGroup(options?: { teamUser?: boolean }): NavItem {
-  const systemChildren: NavItem[] = options?.teamUser
-    ? [
-        {
-          id: 'my-tenant',
-          label: '我的租户',
-          icon: 'OfficeBuilding',
-          path: '/my-tenant',
-          requiresTeam: true
-        }
-      ]
-    : [configNav()]
-
-  return navGroup(
-    'more',
-    '更多',
-    'MoreFilled',
-    [
-      navGroup(
-        'more-access',
-        '接入',
-        'Link',
-        [hostProxyNav(), systemProxyNav(), clashRulesNav()],
-        '/host-proxy'
-      ),
-      navGroup(
-        'more-cache',
-        '缓存与记忆',
-        'Coin',
-        [cacheNav(), evaluationNav(), storageNav(), dataStoresNav(), memoryNav()],
-        '/memory'
-      ),
-      navGroup(
-        'more-agent',
-        'Agent',
-        'Cpu',
-        [agentSetupNav(), agentProvidersNav(), nodePluginsNav()],
-        '/agent-setup'
-      ),
-      navGroup(
-        'more-system',
-        '系统',
-        'Setting',
-        systemChildren,
-        systemChildren[0]?.path ?? '/config'
-      )
-    ],
-    '/host-proxy'
-  )
+  const caps = {
+    myTenant: !!options?.teamUser,
+    systemConfig: !options?.teamUser,
+    storageConfig: !options?.teamUser,
+    agentSetup: true,
+    localProxy: true,
+    memoryQuery: true
+  }
+  // 兼容旧调用：拼一个近似 more
+  return buildWorkerNav({
+    role: options?.teamUser ? 'team_user' : 'personal',
+    manageBackends: true,
+    managePipelines: true,
+    homeBackendsPanel: true,
+    homePipelinesPanel: true,
+    navBackendsPage: false,
+    navPipelinesPage: false,
+    pipelineTestChat: true,
+    navChatPage: false,
+    localProxy: caps.localProxy,
+    storageConfig: caps.storageConfig,
+    memoryQuery: caps.memoryQuery,
+    memoryFull: !options?.teamUser,
+    usageBilling: true,
+    agentSetup: caps.agentSetup,
+    systemConfig: caps.systemConfig,
+    myTenant: caps.myTenant,
+    userAdmin: false,
+    liteHome: true
+  }).find((i) => i.id === 'more')!
 }
 
 /** 代理策略：后端 + 流水线；团队版含节点插件且仅管理员可见 */
@@ -261,9 +331,8 @@ export function appGroup(options?: { tokenUsageLabel?: string }): NavItem {
     id: 'app',
     label: '应用',
     icon: 'Grid',
-    path: '/chat',
+    path: '/token-usage',
     children: [
-      chatNav(),
       conversationsNav(),
       tokenUsageNav(options?.tokenUsageLabel ?? '用量与计费'),
       costDashboardNav(),

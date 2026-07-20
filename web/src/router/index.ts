@@ -2,12 +2,8 @@ import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { getStatus } from '@/api'
 import {
-  isPersonalEdition,
-  isMinimalEdition,
-  isTeamEdition,
-  isTeamOnlyRoute,
-  isTeamAdminAllowedRoute,
-  isMinimalAllowedRoute,
+  currentEdition,
+  resolveEditionRouteRedirect,
   syncEditionFromStatus
 } from '@/utils/edition'
 
@@ -268,19 +264,10 @@ router.beforeEach(async (to, _from, next) => {
     return next('/dashboard')
   }
 
-  // Personal / team edition guards.
-  if (isPersonalEdition() && isTeamOnlyRoute(to.path)) {
-    return next('/dashboard')
-  }
-
-  // Team 超管：白名单外（对话/接入/缓存/应用等业务页）一律回概览。
-  if (isTeamEdition() && authStore.isAdmin && !isTeamAdminAllowedRoute(to.path)) {
-    return next('/dashboard')
-  }
-
-  // Minimal lite: only allow a small route set.
-  if (isMinimalEdition() && !isMinimalAllowedRoute(to.path)) {
-    return next('/dashboard')
+  // Capability / edition 路由意图（列表 redirect、深链放行、无独立对话页等）
+  const redirect = resolveEditionRouteRedirect(to.path, currentEdition(), authStore.isAdmin)
+  if (redirect) {
+    return next(redirect)
   }
 
   next()

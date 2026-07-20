@@ -211,8 +211,8 @@ const canSetDefault = computed(
 )
 /** 批量选择仅 minimal（精简台高频清理）；personal/team 走单条操作 */
 const selectable = computed(() => isMinimal.value)
-/** personal / minimal 共用精简测试对话抽屉 */
-const canTest = computed(() => isPersonal.value || isMinimal.value || isTeam.value)
+/** 全角色流水线「测试」→ MinimalChat（含 team admin） */
+const canTest = computed(() => true)
 
 const allSelected = computed(() =>
   pipelines.value.length > 0 && selectedIds.value.length === pipelines.value.length

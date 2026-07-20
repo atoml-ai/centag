@@ -217,10 +217,7 @@
         :shadow="sections.accessCompact ? 'never' : undefined"
       >
         <ApiAccessPanel :base-url="baseUrl" :compact="sections.accessCompact" />
-        <div v-if="sections.accessQuickLinks" class="hero-actions">
-          <el-button @click="$router.push('/backends')">配置模型</el-button>
-          <el-button type="primary" plain @click="$router.push('/chat')">开始对话</el-button>
-        </div>
+        <!-- accessQuickLinks 已关闭：对话走流水线「测试」抽屉，后端在首页面板 -->
       </el-card>
 
       <!-- 后端 -->
