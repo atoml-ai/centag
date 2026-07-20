@@ -86,10 +86,14 @@ func triggerConversationResponseHooks(c *gin.Context, output *pipeline.PipelineO
 		content = output.Content
 		backend = extractBackendFromPipelineOutput(output)
 		inTok, outTok, _ = tokenCountsFromOutput(output)
+		if inTok+outTok == 0 {
+			if p, cTok, t := tokenCountsFromSSEContent(content); t > 0 {
+				inTok, outTok = p, cTok
+			}
+		}
 		if m := extractModelFromPipelineOutput(output); m != "" {
 			model = m
 		}
-		// prefer router category when present
 	}
 	category := strings.TrimSpace(c.GetHeader("X-Conversation-Category"))
 	if category == "" {
