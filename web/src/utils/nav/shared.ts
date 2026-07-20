@@ -49,14 +49,16 @@ export function agentProvidersNav(opts?: LeafOpts): NavItem {
   )
 }
 
-export function nodePluginsNav(): NavItem {
-  return {
-    id: 'node-plugins',
-    label: '节点插件',
-    icon: 'Connection',
-    path: '/pipeline/node-plugins',
-    requiresAdmin: true
-  }
+export function nodePluginsNav(opts?: LeafOpts): NavItem {
+  return withOpts(
+    {
+      id: 'node-plugins',
+      label: '节点插件',
+      icon: 'Connection',
+      path: '/pipeline/node-plugins'
+    },
+    opts
+  )
 }
 
 export function chatNav(): NavItem {
@@ -71,12 +73,13 @@ export function tokenUsageNav(label = '用量统计'): NavItem {
   return { id: 'token-usage', label, icon: 'TrendCharts', path: '/token-usage' }
 }
 
+/** @deprecated 计费规则已并入「用量与计费」页，勿再作为独立菜单 */
 export function billingRulesNav(): NavItem {
   return {
     id: 'billing-rules',
     label: '计费规则',
     icon: 'Coin',
-    path: '/billing',
+    path: '/token-usage',
     requiresAdmin: true
   }
 }
@@ -168,19 +171,31 @@ export function personalConfigGroup(): NavItem {
   ], '/backends')
 }
 
-/** 桌面 personal：应用相关（会话 / 用量 / 计费 / 日志） */
+/** 桌面 personal：应用相关（会话 / 用量与计费 / 日志） */
 export function personalAppGroup(): NavItem {
   return navGroup(
     'personal-app',
     '应用',
     'Grid',
-    [conversationsNav(), tokenUsageNav('用量'), billingRulesNav(), logsNav()],
+    [conversationsNav(), tokenUsageNav('用量与计费'), logsNav()],
     '/conversations'
   )
 }
 
-/** 桌面 personal：进阶能力按分类挂在「更多」下 */
-export function personalMoreGroup(): NavItem {
+/** 桌面 personal：进阶能力按分类挂在「更多」下；team 普通用户可附带「我的租户」 */
+export function personalMoreGroup(options?: { teamUser?: boolean }): NavItem {
+  const systemChildren: NavItem[] = options?.teamUser
+    ? [
+        {
+          id: 'my-tenant',
+          label: '我的租户',
+          icon: 'OfficeBuilding',
+          path: '/my-tenant',
+          requiresTeam: true
+        }
+      ]
+    : [configNav()]
+
   return navGroup(
     'more',
     '更多',
@@ -207,7 +222,13 @@ export function personalMoreGroup(): NavItem {
         [agentSetupNav(), agentProvidersNav(), nodePluginsNav()],
         '/agent-setup'
       ),
-      navGroup('more-system', '系统', 'Setting', [configNav()], '/config')
+      navGroup(
+        'more-system',
+        '系统',
+        'Setting',
+        systemChildren,
+        systemChildren[0]?.path ?? '/config'
+      )
     ],
     '/host-proxy'
   )
@@ -244,8 +265,7 @@ export function appGroup(options?: { tokenUsageLabel?: string }): NavItem {
     children: [
       chatNav(),
       conversationsNav(),
-      tokenUsageNav(options?.tokenUsageLabel),
-      billingRulesNav(),
+      tokenUsageNav(options?.tokenUsageLabel ?? '用量与计费'),
       costDashboardNav(),
       abComparisonNav(),
       logsNav()
@@ -295,14 +315,6 @@ export function systemAdminGroup(options?: { teamExtras?: boolean; relaxedAccess
       label: '用户管理',
       icon: 'UserFilled',
       path: '/system/users',
-      requiresAdmin: true,
-      requiresTeam: true
-    },
-    {
-      id: 'virtual-keys',
-      label: '虚拟密钥',
-      icon: 'Key',
-      path: '/system/virtual-keys',
       requiresAdmin: true,
       requiresTeam: true
     }

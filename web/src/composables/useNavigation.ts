@@ -13,7 +13,7 @@ export function useNavigation() {
   const authStore = useAuthStore()
   const { edition } = useEdition()
 
-  const navMenu = computed(() => getNavMenu(edition.value))
+  const navMenu = computed(() => getNavMenu(edition.value, authStore.isAdmin))
 
   const visibleNavItems = computed(() => {
     return filterNavMenu(navMenu.value, {
@@ -90,7 +90,7 @@ export function useNavigation() {
 
   function bindRouteSync(routeRef: Ref<string> = computed(() => route.path)) {
     watch(routeRef, syncNavFromRoute, { immediate: true })
-    watch(edition, () => syncNavFromRoute(route.path))
+    watch([edition, () => authStore.isAdmin], () => syncNavFromRoute(route.path))
   }
 
   return {

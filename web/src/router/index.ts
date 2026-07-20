@@ -4,7 +4,9 @@ import { getStatus } from '@/api'
 import {
   isPersonalEdition,
   isMinimalEdition,
+  isTeamEdition,
   isTeamOnlyRoute,
+  isTeamAdminAllowedRoute,
   isMinimalAllowedRoute,
   syncEditionFromStatus
 } from '@/utils/edition'
@@ -42,7 +44,6 @@ const TenantList = () => import('@/views/tenant/TenantList.vue')
 const TenantMy = () => import('@/views/tenant/TenantMy.vue')
 const AgentSetup = () => import('@/views/AgentSetup.vue')
 const AgentProviders = () => import('@/views/AgentProviders.vue')
-const VirtualKeys = () => import('@/views/VirtualKeys.vue')
 const StorageKVBrowser = () => import('@/views/StorageKVBrowser.vue')
 const Settings = () => import('@/views/Settings.vue')
 const routes = [
@@ -147,7 +148,7 @@ const routes = [
     component: RequestTrace,
     meta: { title: '请求追踪' }
   },
-  { path: '/token-usage', name: 'TokenUsage', component: TokenUsage, meta: { title: 'Token 统计' } },
+  { path: '/token-usage', name: 'TokenUsage', component: TokenUsage, meta: { title: '用量与计费' } },
   {
     path: '/conversations',
     name: 'Conversations',
@@ -159,13 +160,13 @@ const routes = [
     path: '/billing',
     name: 'BillingRules',
     component: BillingRules,
-    meta: { title: '计费规则' }
+    meta: { title: '计费规则', requiresAdmin: true }
   },
   {
     path: '/cost',
     name: 'CostDashboard',
     component: CostDashboard,
-    meta: { title: '成本看板' }
+    meta: { title: '成本看板', requiresAdmin: true }
   },
   {
     path: '/ab-comparison',
@@ -186,19 +187,19 @@ const routes = [
     path: '/storage',
     name: 'Storage',
     component: Storage,
-    meta: { title: '存储管理', requiresAdmin: true }
+    meta: { title: '存储管理' }
   },
   {
     path: '/storage/kv',
     name: 'StorageKVBrowser',
     component: StorageKVBrowser,
-    meta: { title: 'KV 数据浏览', requiresAdmin: true }
+    meta: { title: 'KV 数据浏览' }
   },
   {
     path: '/data-stores',
     name: 'DataStores',
     component: DataStores,
-    meta: { title: '数据存储管理', requiresAdmin: true }
+    meta: { title: '数据存储管理' }
   },
   {
     path: '/system/users',
@@ -212,13 +213,6 @@ const routes = [
     component: SystemUpdate,
     meta: { title: '系统更新', requiresAdmin: true }
   },
-  {
-    path: '/system/virtual-keys',
-    name: 'VirtualKeys',
-    component: VirtualKeys,
-    meta: { title: '虚拟密钥管理', requiresAdmin: true }
-  },
-
   { path: '/:pathMatch(.*)*', name: 'NotFound', redirect: '/dashboard' }
 ]
 
@@ -276,6 +270,11 @@ router.beforeEach(async (to, _from, next) => {
 
   // Personal / team edition guards.
   if (isPersonalEdition() && isTeamOnlyRoute(to.path)) {
+    return next('/dashboard')
+  }
+
+  // Team 超管：白名单外（对话/接入/缓存/应用等业务页）一律回概览。
+  if (isTeamEdition() && authStore.isAdmin && !isTeamAdminAllowedRoute(to.path)) {
     return next('/dashboard')
   }
 

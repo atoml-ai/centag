@@ -495,14 +495,21 @@ import { useAuthStore } from '@/stores/auth'
 const router = useRouter()
 const authStore = useAuthStore()
 const { edition, isPersonal } = useEdition()
-const sections = computed(() => getDashboardSections(edition.value))
+const sections = computed(() =>
+  getDashboardSections(edition.value, edition.value === 'team' && authStore.isAdmin)
+)
 const rootClass = computed(() => ({
   'dashboard--personal': sections.value.layout === 'personal' || sections.value.layout === 'lite',
   'dashboard--lite': sections.value.layout === 'lite',
   'dashboard--team': sections.value.layout === 'team'
 }))
 const pageDescription = computed(() => {
-  if (isPersonal.value) return '配置后端与默认流水线，复制 API 地址即可在客户端使用'
+  if (isPersonal.value || (edition.value === 'team' && !authStore.isAdmin)) {
+    return '配置后端与默认流水线，复制 API 地址即可在客户端使用'
+  }
+  if (edition.value === 'team' && authStore.isAdmin) {
+    return '管理共用后端/策略、用户与限额；业务干活请使用普通用户账号'
+  }
   return 'Centag 服务运行状态与基础配置总览'
 })
 const usageHint = computed(() =>
