@@ -88,9 +88,9 @@
           v-model="form.default_model"
           placeholder="输入模型名称，如 gpt-4o"
           autocomplete="off"
-          list="gateway-model-suggestions"
+          list="personal-model-suggestions"
         />
-        <datalist id="gateway-model-suggestions">
+        <datalist id="personal-model-suggestions">
           <option v-for="m in form.models" :key="m.name" :value="m.name" />
         </datalist>
         <div class="form-tip">点击下方模型标签可快速设为默认</div>
@@ -135,9 +135,9 @@
         description="直接接入 Gemini 官方 API，支持所有原生特性。Gemini CLI 用户应选此类型。"
       />
 
-      <!-- Gateway 专有能力：折叠，不打断主流程 -->
+      <!-- Personal 专有能力：折叠，不打断主流程 -->
       <el-collapse v-model="advancedOpen" class="advanced-collapse">
-        <el-collapse-item title="高级选项（Gateway）" name="advanced">
+        <el-collapse-item title="高级选项（Personal）" name="advanced">
           <div class="form-group">
             <label>类型</label>
             <el-select v-model="form.type" style="width: 100%" @change="onTypeChanged">
@@ -301,7 +301,7 @@ function onTypeChanged(type: string) {
   }
 }
 
-/** 与 Minimal 共用校验；Gateway 编辑时允许沿用已有 Key */
+/** 与 Minimal 共用校验；Personal 编辑时允许沿用已有 Key */
 const canSave = computed(() =>
   validateProviderForm(form, {
     isCreate: isCreate.value,
@@ -387,7 +387,7 @@ watch(
 )
 
 /**
- * Gateway 分叉点：共用 toApiBackendPayload 构建语义一致的载荷，
+ * Personal 分叉点：共用 toApiBackendPayload 构建语义一致的载荷，
  * 然后 POST/PUT /api/v1/backends → DB（BackendStore / DBBackendStore）。
  * Minimal 则在 backends export 用 toBackendEntry → ConfigBuilder → YAML。
  */

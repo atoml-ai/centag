@@ -54,7 +54,7 @@ type PageQuery struct {
 }
 
 // Store is the unified conversation persistence API.
-// Implementations: FileStore (minimal), SQLiteStore (personal/gateway), PostgresStore (team).
+// Implementations: FileStore (minimal), SQLiteStore (personal), PostgresStore (team).
 type Store interface {
 	EnsureSession(ctx context.Context, s *Session) (*Session, error)
 	AppendMessage(ctx context.Context, m *Message) error

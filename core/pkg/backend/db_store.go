@@ -8,7 +8,7 @@ import (
 )
 
 // DBBackendStore implements BackendStore using the system config database.
-// It is used by the gateway / team / personal editions.
+// It is used by the personal / team editions.
 type DBBackendStore struct{}
 
 // NewDBBackendStore creates a new DBBackendStore.

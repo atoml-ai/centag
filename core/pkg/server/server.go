@@ -667,7 +667,7 @@ func New(cfg *config.Config) *Server {
 			opts.Driver = database.Get().DriverName()
 		}
 		if ed.IsTeam() && opts.Driver != "" && !isPostgresDriverName(opts.Driver) {
-			logger.Warnf("[edition] CENTAG_EDITION=team with DB driver %q — gateway profile should use CENTAG_EDITION=personal (SQLite conversations without team billing)", opts.Driver)
+			logger.Warnf("[edition] CENTAG_EDITION=team with DB driver %q — personal profile should use CENTAG_EDITION=personal (SQLite conversations without team billing)", opts.Driver)
 		}
 		if store, err := conversation.NewStore(opts); err != nil {
 			logger.Warnf("[conversation] store init failed: %v", err)
@@ -992,7 +992,7 @@ func New(cfg *config.Config) *Server {
 
 	switch {
 	case srv.edition.IsPersonal():
-		logger.Infof("Product edition: personal (gateway/single-user; multi-tenant admin APIs disabled; no BillingHook)")
+		logger.Infof("Product edition: personal (single-user; multi-tenant admin APIs disabled; no BillingHook)")
 	case srv.edition.IsMinimal():
 		logger.Infof("Product edition: minimal")
 	default:

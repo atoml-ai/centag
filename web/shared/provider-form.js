@@ -1,11 +1,11 @@
 /**
- * Provider Form — Gateway / Minimal 共用的 Provider 添加/编辑流程
+ * Provider Form — Personal / Minimal 共用的 Provider 添加/编辑流程
  *
  * 策略：
  *   1) 共用：选预设 → 填表 → 校验 → 构建中间态（BackendEntry）
  *   2) 分叉：仅在最终持久化时区分
  *      - Minimal: toBackendEntry() → ConfigBuilder → PUT /api/config/backends → YAML + reload
- *      - Gateway: toApiBackendPayload() → POST/PUT /api/v1/backends → DB (BackendStore)
+ *      - Personal: toApiBackendPayload() → POST/PUT /api/v1/backends → DB (BackendStore)
  *
  * 依赖解析（禁止裸引用 getProviderById / ConfigBuilder，否则 Vite ESM 会 ReferenceError）：
  *   - WebUI：shared-modules.ts 调用 initProviderFormDeps(...)
@@ -70,8 +70,8 @@ function resolveConfigBuilder() {
  * @property {string} default_model
  * @property {Array<{name:string,supports_tools?:boolean,supports_images?:boolean,supports_thinking?:boolean,max_context_tokens?:number,actual_model?:string}>} models
  * @property {boolean} isPreset
- * @property {string} [id]              Gateway 编辑时使用
- * @property {boolean} [has_api_key]    Gateway：服务端是否已有 Key
+ * @property {string} [id]              Personal 编辑时使用
+ * @property {boolean} [has_api_key]    Personal：服务端是否已有 Key
  * @property {string} [description]
  * @property {number} [timeout]
  * @property {number} [max_retries]
@@ -192,7 +192,7 @@ function slugifyProviderId(name) {
 }
 
 /**
- * 表单校验（两端共用规则；Gateway 编辑时可通过 options 放宽 API Key）
+ * 表单校验（两端共用规则；Personal 编辑时可通过 options 放宽 API Key）
  * @param {ProviderFormModel} form
  * @param {{ isCreate?: boolean, requireApiKey?: boolean }} [options]
  * @returns {{ ok: boolean, errors: string[] }}
@@ -260,7 +260,7 @@ function toBackendEntry(form) {
 }
 
 /**
- * Gateway 持久化载荷：复用 ConfigBuilder 字段语义，再叠加 Gateway 专有字段。
+ * Personal 持久化载荷：复用 ConfigBuilder 字段语义，再叠加 Personal 专有字段。
  * 调用方负责 POST/PUT /api/v1/backends（写入 DB）。
  *
  * @param {ProviderFormModel} form
@@ -273,7 +273,7 @@ function toApiBackendPayload(form, options) {
   var Builder = resolveConfigBuilder()
   var payload = Builder.buildSingleBackend(entry)
 
-  // Gateway：尊重表单启用状态（Minimal YAML 里用「有 key 才 enabled」）
+  // Personal：尊重表单启用状态（Minimal YAML 里用「有 key 才 enabled」）
   payload.enabled = form.enabled !== false
   payload.auto_fetch_models = !!form.auto_fetch_models
   // 表单「默认模型」是用户可见真源；探测模型留空时回退到它。
@@ -286,7 +286,7 @@ function toApiBackendPayload(form, options) {
   if (!opts.isCreate && form.id) {
     payload.id = form.id
   } else if (opts.isCreate) {
-    // Gateway 创建：不要用 preset id（如 bigmodel）当后端 id。
+    // Personal 创建：不要用 preset id（如 bigmodel）当后端 id。
     // 种子数据里常已有同名 id；交给服务端 generateBackendID 生成唯一 id。
     // Minimal YAML 路径仍通过 toBackendEntry().provider.id 使用 preset id。
     delete payload.id
@@ -303,7 +303,7 @@ function toApiBackendPayload(form, options) {
 }
 
 /**
- * 从 Gateway API 响应回填表单（编辑）
+ * 从 Personal API 响应回填表单（编辑）
  * @param {Object} row - BackendConfigResponse
  * @returns {ProviderFormModel}
  */

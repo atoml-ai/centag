@@ -1,4 +1,4 @@
--- Conversation sessions and messages (gateway/personal)
+-- Conversation sessions and messages (personal)
 CREATE TABLE IF NOT EXISTS conversation_sessions (
     id TEXT PRIMARY KEY,
     user_id INTEGER NOT NULL DEFAULT 0,

@@ -17,7 +17,7 @@ func TestNewStore_PersonalRequiresDB(t *testing.T) {
 }
 
 func TestNewStore_PersonalUsesSQLiteDialect(t *testing.T) {
-	// personal always selects SQLStore with sqlite dialect (gateway profile).
+	// personal always selects SQLStore with sqlite dialect (personal profile).
 	store, err := NewStore(Options{Edition: edition.Personal, DB: &sql.DB{}, Driver: "postgresql"})
 	if err != nil {
 		t.Fatal(err)

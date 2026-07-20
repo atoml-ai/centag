@@ -30,8 +30,8 @@ centag/
 │   └── business/                  # 业务插件
 └── dist/                          # 发行版
     ├── minimal/                   # 轻量（无 DB，仅 router）
-    ├── gateway/                   # 个人全功能（与 team 插件对齐）
-    └── team/                      # 团队版（插件同 gateway；部署默认外置中间件）
+    ├── personal/                  # 个人全功能（与 team 插件对齐）
+    └── team/                      # 团队版（插件同 personal；部署默认外置中间件）
 ```
 
 ## 插件接口
@@ -155,7 +155,7 @@ go build ./...
 
 在 `dist/` 中创建发行版，通过 `_ import` + 对应 `-tags` 触发插件注册。
 
-完整矩阵与 gateway/team 定位见 [`docs/guide/dist-profiles.md`](../../docs/guide/dist-profiles.md)。
+完整矩阵与 personal/team 定位见 [`docs/guide/dist-profiles.md`](../../docs/guide/dist-profiles.md)。
 
 ```go
 // dist/mydist/main.go
@@ -175,7 +175,7 @@ func main() {
 构建请使用：
 
 ```bash
-./start.sh dist build <minimal|gateway|team>
+./start.sh dist build <minimal|personal|team>
 ```
 ## 插件注册机制
 
