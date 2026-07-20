@@ -139,7 +139,7 @@ func (h *LoggingHook) OnResponse(ctx context.Context, resp *types.UnifiedRespons
 		pending = pendingTurn{sessionID: sessionID, requestID: requestID}
 	}
 
-	assistant := resp.Content
+	assistant := NormalizeAssistantContent(resp.Content)
 	model := resp.Model
 	backend := metaString(meta, metaBackend)
 	pipelineID := metaString(meta, metaPipelineID)

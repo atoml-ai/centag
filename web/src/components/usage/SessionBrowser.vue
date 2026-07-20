@@ -55,10 +55,14 @@
           <div v-if="messagesLoading" class="msg-loading">加载中…</div>
           <template v-else>
             <div v-for="m in messages" :key="m.id" class="msg" :class="m.role">
-              <span class="role">{{ m.role }}</span>
-              <pre>{{ m.content }}</pre>
+              <span class="role">{{ roleLabel(m.role) }}</span>
+              <pre>{{ displayContent(m) }}</pre>
             </div>
-            <el-empty v-if="messages.length === 0" description="无消息" :image-size="48" />
+            <el-empty
+              v-if="messages.length === 0"
+              :description="emptyDetailHint"
+              :image-size="48"
+            />
           </template>
         </div>
       </template>
@@ -123,14 +127,17 @@
             <div v-else v-loading="messagesLoading" class="message-list">
               <div v-for="m in messages" :key="m.id" class="message" :class="m.role">
                 <div class="message-role">{{ roleLabel(m.role) }}</div>
-                <pre class="message-content">{{ m.content }}</pre>
+                <pre class="message-content">{{ displayContent(m) }}</pre>
                 <div class="message-meta">
                   <span v-if="m.model">{{ m.model }}</span>
                   <span v-if="m.backend">{{ m.backend }}</span>
                   <span>{{ formatTime(m.created_at) }}</span>
                 </div>
               </div>
-              <el-empty v-if="!messagesLoading && messages.length === 0" description="该会话暂无消息" />
+              <el-empty
+                v-if="!messagesLoading && messages.length === 0"
+                :description="emptyDetailHint"
+              />
             </div>
           </el-card>
         </el-col>
@@ -183,6 +190,44 @@ function roleLabel(role: string) {
   return role
 }
 
+const emptyDetailHint = computed(() => {
+  const s = sessions.value.find((x) => x.id === selectedId.value)
+  if (s && (s.message_count || 0) > 0) {
+    return '消息加载失败或为空，请刷新重试'
+  }
+  return '该会话暂无消息（可能仅创建了会话、请求未完成）'
+})
+
+/** 兼容历史落库的上游 SSE：抽 delta.content 拼成可读文本 */
+function displayContent(m: ConversationMessage) {
+  const raw = (m.content || '').trim()
+  if (!raw) return '（空）'
+  if (m.role !== 'assistant' || !raw.includes('data:')) return raw
+  const parts: string[] = []
+  for (const line of raw.split('\n')) {
+    const t = line.trim()
+    if (!t.startsWith('data:')) continue
+    const payload = t.slice(5).trim()
+    if (!payload || payload === '[DONE]') continue
+    try {
+      const o = JSON.parse(payload) as {
+        choices?: Array<{
+          delta?: { content?: string | null }
+          message?: { content?: string | null }
+        }>
+      }
+      for (const ch of o.choices || []) {
+        const c = ch.delta?.content ?? ch.message?.content
+        if (typeof c === 'string' && c) parts.push(c)
+      }
+    } catch {
+      /* ignore bad chunk */
+    }
+  }
+  const text = parts.join('').trim()
+  return text || raw
+}
+
 async function loadCategories() {
   if (props.mode !== 'full') return
   try {
@@ -228,8 +273,9 @@ async function toggleSession(id: string) {
   try {
     const res = await convApi.listMessages(id, { limit: 100 })
     messages.value = res?.messages ?? []
-  } catch {
+  } catch (e: any) {
     messages.value = []
+    ElMessage.error('加载消息失败：' + (e?.message || e))
   } finally {
     messagesLoading.value = false
   }
