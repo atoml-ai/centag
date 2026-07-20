@@ -2161,44 +2161,23 @@ _dist_docker_build() {
                 [ -f "$f" ] && cp "$f" pipeline-templates/personal/
             done
 
-            # 生成精简版 initial-backends.yaml（仅 OpenAI，无 key）
-            cat > initial-backends.yaml << 'INITDATA_EOF'
+            # 首启无预置后端（由 WebUI「添加 Provider」配置；勿塞无 Key 的占位后端）
+            # 优先复制对应 Profile 种子（现为 backends: []），否则写空列表
+            profile_backends="$PROJECT_ROOT/config/profiles/${dist_name}/initdata/initial-backends.yaml"
+            if [ -f "$profile_backends" ]; then
+                cp "$profile_backends" initial-backends.yaml
+            else
+                cat > initial-backends.yaml << 'INITDATA_EOF'
 version: "2.0"
-description: Default initdata - OpenAI backend (configure API key in .env)
-backends:
-  - id: openai
-    name: OpenAI
-    type: openai
-    base_url: https://api.openai.com/v1
-    api_key: "${OPENAI_API_KEY}"
-    enabled: true
-    timeout: 120
-    max_retries: 3
-    auto_fetch_models: true
-    description: OpenAI GPT-4/GPT-3.5 API
-    supported_models:
-      - requested_model: gpt-4o
-        actual_model: gpt-4o
-        is_exact: true
-        compatibility_score: 1.0
-      - requested_model: gpt-4o-mini
-        actual_model: gpt-4o-mini
-        is_exact: true
-        compatibility_score: 1.0
-    capabilities:
-      max_context_tokens: 128000
-      features:
-        - chat
-        - completion
-      supports_tools: true
-    weight: 100
-    priority: 10
+description: First-boot empty backends — add providers in WebUI
+backends: []
 INITDATA_EOF
+            fi
 
             zip -r initdata.zip .
         )
         initdata_archive_flag=true
-        print_info "默认 initdata 已生成"
+        print_info "默认 initdata 已生成（backends 种子随 Profile，默认空）"
     fi
 
     # 构建
@@ -2261,15 +2240,35 @@ _dist_docker_run() {
         # 覆盖 secrets 里常见的 LLM_PROXY_LOG_OUTPUT=file：否则 zap 只写
         # /app/bin/logs，docker logs 只能看到 entrypoint/插件 std 初始化行。
         # 与 config/profiles/*/docker-compose.yaml 对齐：both + console + /app/logs。
+        # 20060=API/Web；8081=系统代理 MITM（proxyctl run / PAC 需要映射到宿主机）
+        #
+        # 持久化（personal/minimal，非 PG）：
+        #   二进制在 /app/bin/centag，相对路径 ./storage 会落到 /app/bin/storage（不可持久）。
+        #   必须用绝对 SQLITE_PATH=/app/storage/centag.db，并挂载宿主机目录。
+        local mitm_port="${LLM_PROXY_SYSTEM_PROXY_PORT:-8081}"
+        local data_root="${PROJECT_ROOT}/var/docker-data/${dist_name}"
+        mkdir -p "${data_root}/storage" "${data_root}/logs" "${data_root}/certs" "${data_root}/storage/memory-store"
+        print_info "持久化目录: ${data_root}/{storage,logs,certs}"
+        print_info "  - SQLite:  ${data_root}/storage/centag.db"
+        print_info "  - 配置:    personal→SQLite system_config；minimal→storage/proxy-config.yaml"
+        print_info "  - MITM CA: ${data_root}/certs/"
         exec docker run --rm -it \
+            --name "centag-${dist_name}" \
             --env-file "${PROJECT_ROOT}/config/secrets/.env" \
             -e CENTAG_EDITION="${dist_name}" \
+            -e CENTAG_IN_DOCKER=1 \
+            -e CENTAG_DATA_DIR=/app/storage \
+            -e LLM_PROXY_DB_DRIVER=sqlite \
+            -e SQLITE_PATH=/app/storage/centag.db \
+            -e MEMORY_STORE_ROOT=/app/storage/memory-store \
             -e LLM_PROXY_LOG_OUTPUT=both \
             -e LLM_PROXY_LOG_FORMAT=console \
             -e LLM_PROXY_LOG_PATH=/app/logs \
             -p "${port}:20060" \
-            -v "${PROJECT_ROOT}/storage:/app/storage" \
-            -v "${PROJECT_ROOT}/logs:/app/logs" \
+            -p "${mitm_port}:8081" \
+            -v "${data_root}/storage:/app/storage" \
+            -v "${data_root}/logs:/app/logs" \
+            -v "${data_root}/certs:/app/bin/certs" \
             "$tag"
     fi
 }
@@ -2293,9 +2292,13 @@ docker_build() {
             print_error "前端独立镜像已弃用，请使用全栈镜像: ./start.sh docker build personal"
             exit 1
             ;;
-        all|*)
+        all)
             print_info "代理到: ./start.sh docker build personal"
             _dist_docker_build "personal" "" ""
+            ;;
+        *)
+            print_error "无效的 docker build 目标: $target (支持: minimal|personal|team；兼容: all|backend|be)"
+            exit 1
             ;;
     esac
 }
@@ -4588,18 +4591,34 @@ main() {
                 # ── 发行版 Docker 操作（新）──
                 build)
                     local edition="${1:-}"
+                    if [ -z "$edition" ]; then
+                        print_error "请指定发行版: minimal, personal, 或 team"
+                        echo "用法: $0 docker build <minimal|personal|team>"
+                        echo "兼容别名: all → personal；backend|be → minimal"
+                        exit 1
+                    fi
                     case "$edition" in
                         minimal|personal|team)
                             _dist_docker_build "$edition" "" ""
                             ;;
-                        *)
-                            # 向后兼容: docker build all/be/fe
+                        all|backend|be|frontend|fe)
+                            # 向后兼容旧目标名（勿把未知拼写吞进 all/*）
                             docker_build "$edition"
+                            ;;
+                        *)
+                            print_error "无效的发行版名称: $edition (支持: minimal, personal, team)"
+                            echo "用法: $0 docker build <minimal|personal|team>"
+                            exit 1
                             ;;
                     esac
                     ;;
                 run)
-                    local edition="${1:-minimal}"
+                    local edition="${1:-}"
+                    if [ -z "$edition" ]; then
+                        print_error "请指定发行版: minimal, personal, 或 team"
+                        echo "用法: $0 docker run <minimal|personal|team> [port]"
+                        exit 1
+                    fi
                     local port="${2:-20060}"
                     local initdata_path=""
                     # 检查 --initdata 参数
