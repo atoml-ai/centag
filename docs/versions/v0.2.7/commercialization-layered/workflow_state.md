@@ -1,6 +1,6 @@
 # 工作流状态 — 商业化分层（插件式 Open Core）
 
-> 版本：v0.2.7 | 需求：commercialization-layered | 分支：v0.2.7  
+> 版本：v0.2.7 | 需求：commercialization-layered | 分支：feature/v0.2.7  
 > 最后更新：2026-07-20
 
 ## 状态概览
@@ -38,4 +38,4 @@
 | 2026-07-20 | 仅 team 构建依赖 pro；personal/minimal 自立 | 用户 |
 | 2026-07-20 | **插件式**扩展；Team main 在 pro；**开源删除 dist/team** | 用户 |
 | 2026-07-20 | 前后端 team 均走 pro（前端 E3） | 用户 |
-| 2026-07-20 | **centag-pro 与 centag 分支同名同步**（当前均为 `v0.2.7`） | 用户 |
+| 2026-07-20 | **centag-pro 与 centag 分支同名同步**（当前均为 `feature/v0.2.7`） | 用户 |

@@ -4,7 +4,7 @@ LLM 统一网关：协议适配、后端路由、流水线/钩子/插件、token
 
 **许可证**：核心仓库以 [MIT](LICENSE) 开源。开源发行版仅 **`minimal` / `personal`**（完整独立构建，不依赖其它仓库）。**Team 商业版**由私有仓 [`centag-pro`](https://github.com/atoml-ai/centag-pro) 构建（`cmd/centag-team` + 插件包）；本仓已删除 `dist/team`。本地可 `./start.sh build team`（转调并列 `centag-pro`，或设 `CENTAG_PRO_PATH`）。
 
-**分支约定**：`centag-pro` 必须与本仓**同名分支**开发（例如本仓 `v0.2.7` ↔ pro `v0.2.7`），见 [dist/README.md](dist/README.md)。
+**分支约定**：`centag-pro` 必须与本仓**同名分支**开发（例如本仓 `feature/v0.2.7` ↔ pro `feature/v0.2.7`），见 [dist/README.md](dist/README.md)。
 
 ## 目录结构
 
