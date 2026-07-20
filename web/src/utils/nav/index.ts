@@ -1,6 +1,7 @@
 import type { Edition } from '@/utils/edition'
-import { NAV_MENU_PERSONAL } from './personal'
-import { NAV_MENU_TEAM, NAV_MENU_TEAM_ADMIN, NAV_MENU_TEAM_USER } from './team'
+import { getCapabilities } from '@/utils/capabilities'
+import { buildWorkerNav } from './shared'
+import { NAV_MENU_TEAM_ADMIN } from './team'
 import { NAV_MENU_MINIMAL } from './minimal'
 import type { NavItem } from './types'
 
@@ -9,10 +10,14 @@ export { NAV_MENU_PERSONAL } from './personal'
 export { NAV_MENU_TEAM, NAV_MENU_TEAM_ADMIN, NAV_MENU_TEAM_USER } from './team'
 export { NAV_MENU_MINIMAL } from './minimal'
 
+/**
+ * 导航真源：minimal 短导航；team admin 运维导航；
+ * personal / team_user 同源 buildWorkerNav(capabilities)。
+ */
 export function getNavMenu(edition: Edition, isAdmin = false): NavItem[] {
   if (edition === 'minimal') return NAV_MENU_MINIMAL
-  if (edition === 'personal') return NAV_MENU_PERSONAL
-  return isAdmin ? NAV_MENU_TEAM_ADMIN : NAV_MENU_TEAM_USER
+  if (edition === 'team' && isAdmin) return NAV_MENU_TEAM_ADMIN
+  return buildWorkerNav(getCapabilities(edition, isAdmin))
 }
 
 /** Flatten menu for route → nav id sync. */

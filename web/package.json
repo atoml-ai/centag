@@ -14,7 +14,12 @@
     "preview": "vite preview",
     "lint": "eslint \"src/**/*.{vue,ts}\" --fix",
     "lint:ci": "eslint \"src/**/*.{vue,ts}\" --max-warnings 0",
-    "test:capability-slots": "npx --yes tsx src/utils/capabilitySlots.selftest.ts"
+    "test:capability-slots": "npx --yes tsx src/utils/capabilitySlots.selftest.ts",
+    "test:capabilities": "npx --yes tsx src/utils/capabilities.selftest.ts",
+    "test:edition-routes": "npx --yes tsx src/utils/edition.route.selftest.ts",
+    "test:nav": "npx --yes tsx src/utils/nav/nav.selftest.ts",
+    "test:dashboard-sections": "npx --yes tsx src/utils/dashboard-sections.selftest.ts",
+    "test:ui-caps": "npm run test:capabilities && npm run test:edition-routes && npm run test:nav && npm run test:dashboard-sections"
   },
   "dependencies": {
     "@element-plus/icons-vue": "^2.3.1",

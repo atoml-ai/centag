@@ -1,29 +1,21 @@
 import type { NavItem } from './types'
 import {
-  accessGroup,
-  appGroup,
   backendsNav,
-  cacheMemoryGroup,
+  pipelinesNav,
   costDashboardNav,
   dashboardNav,
-  personalAppGroup,
-  personalConfigGroup,
-  personalMoreGroup,
-  pipelinesNav,
-  proxyStrategyGroup,
-  chatNav,
+  storageConfigNavGroup,
   navGroup,
+  configNav,
+  appGroup,
+  cacheMemoryGroup,
+  accessGroup,
   systemAdminGroup,
-  configNav
+  proxyStrategyGroup
 } from './shared'
 
 /**
- * 团队超管：只管「人 + 共享资源」，不管业务干活页（对话/接入/缓存/应用等）。
- *
- * - 用户 CRUD / 限额 / 租户（API Key 在用户管理内操作）
- * - 共用后端与共用策略（系统预设）
- * - 系统配置与更新
- * - 成本看板（限额与用量总览）
+ * 团队超管：人 + 共享资源 + 存储配置；流水线测试对话在首页抽屉（非侧栏）。
  */
 export const NAV_MENU_TEAM_ADMIN: NavItem[] = [
   dashboardNav('概览'),
@@ -33,7 +25,8 @@ export const NAV_MENU_TEAM_ADMIN: NavItem[] = [
     'Connection',
     [
       backendsNav({ label: '共用后端', requiresAdmin: true }),
-      pipelinesNav({ label: '共用策略', requiresAdmin: true })
+      pipelinesNav({ label: '共用策略', requiresAdmin: true }),
+      storageConfigNavGroup()
     ],
     '/backends'
   ),
@@ -88,16 +81,8 @@ export const NAV_MENU_TEAM_ADMIN: NavItem[] = [
   )
 ]
 
-/**
- * 团队普通用户：与 personal 导航一致，另在「更多 → 系统」提供「我的租户」。
- */
-export const NAV_MENU_TEAM_USER: NavItem[] = [
-  dashboardNav('首页'),
-  personalConfigGroup(),
-  chatNav(),
-  personalAppGroup(),
-  personalMoreGroup({ teamUser: true })
-]
+/** @deprecated 使用 getNavMenu(edition, isAdmin)；保留导出以免外部引用断裂 */
+export const NAV_MENU_TEAM_USER: NavItem[] = []
 
 /** @deprecated 使用 getNavMenu(edition, isAdmin) */
 export const NAV_MENU_TEAM: NavItem[] = [

@@ -63,8 +63,8 @@
               </el-select>
             </el-card>
 
-            <!-- 操作按钮 -->
-            <el-card class="actions-card">
+            <!-- 写运维：仅 memoryFull（personal）；team_user 为查询模式 -->
+            <el-card v-if="memoryFull" class="actions-card">
               <el-button :loading="syncing" @click="handleSync" style="width: 100%">
                 <el-icon><Upload /></el-icon>
                 同步到云端
@@ -110,7 +110,12 @@
             <template #header>
               <div class="card-header">
                 <span class="card-title">{{ searchQuery ? '搜索结果' : '记忆文件' }}</span>
-                <el-button type="primary" size="small" @click="showAddDialog = true">
+                <el-button
+                  v-if="memoryFull"
+                  type="primary"
+                  size="small"
+                  @click="showAddDialog = true"
+                >
                   <el-icon><Plus /></el-icon>
                   新建文件
                 </el-button>
@@ -213,19 +218,25 @@
       <pre class="file-content">{{ viewingFile?.content }}</pre>
       <template #footer>
         <el-button @click="showViewDialog = false">关闭</el-button>
-        <el-button type="primary" @click="handleEditFile">编辑</el-button>
+        <el-button v-if="memoryFull" type="primary" @click="handleEditFile">编辑</el-button>
       </template>
     </el-dialog>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Search, Upload, Download, Plus } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
+import { useEdition } from '@/composables/useEdition'
+import { getCapabilities } from '@/utils/capabilities'
 
 const authStore = useAuthStore()
+const { edition } = useEdition()
+const memoryFull = computed(
+  () => getCapabilities(edition.value, authStore.isAdmin).memoryFull
+)
 
 function memoryAuthHeaders(json = false) {
   const h = { Authorization: `Bearer ${authStore.accessToken}` }

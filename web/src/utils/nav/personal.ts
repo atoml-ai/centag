@@ -1,21 +1,6 @@
 import type { NavItem } from './types'
-import {
-  chatNav,
-  dashboardNav,
-  personalAppGroup,
-  personalConfigGroup,
-  personalMoreGroup
-} from './shared'
+import { buildWorkerNav } from './shared'
+import { getCapabilities } from '@/utils/capabilities'
 
-/**
- * 个人桌面版导航：
- * 一级 = 首页 / 配置 / 对话 / 应用 / 更多
- * 更多下再分：接入 / 缓存与记忆 / Agent / 系统
- */
-export const NAV_MENU_PERSONAL: NavItem[] = [
-  dashboardNav('首页'),
-  personalConfigGroup(),
-  chatNav(),
-  personalAppGroup(),
-  personalMoreGroup()
-]
+/** @deprecated 使用 getNavMenu('personal')；静态快照仅兼容旧导入 */
+export const NAV_MENU_PERSONAL: NavItem[] = buildWorkerNav(getCapabilities('personal', true))
