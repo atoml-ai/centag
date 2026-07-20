@@ -9,7 +9,7 @@ centag/
 ├── cmd/centag/          # 本地开发入口
 ├── core/                # Go 核心库
 ├── plugins/             # protocol / backend / database / storage
-├── dist/                # minimal | gateway | team 发行版入口（仅源码）
+├── dist/                # minimal | personal | team 发行版入口（仅源码）
 ├── web/                 # Vue 管理端
 ├── apps/launcher/       # 可选：桌面启动器（与核心解耦）
 ├── config/              # profiles / initdata / secrets
@@ -46,12 +46,12 @@ make run            # 或 ./start.sh run be
 | 发行版 | 说明 |
 |--------|------|
 | minimal | 轻量，无 DB |
-| gateway | 个人全功能，默认 SQLite |
-| team | 与 gateway 对齐，默认外挂 PG |
+| personal | 个人全功能，默认 SQLite |
+| team | 与 personal 对齐，默认外挂 PG |
 
 ```bash
-./start.sh dist build gateway
-./start.sh dist docker-build gateway
+./start.sh dist build personal
+./start.sh dist docker-build personal
 ```
 
 业务插件外置：见 [docs/guide/external-business-plugins.md](docs/guide/external-business-plugins.md)。

@@ -10,7 +10,7 @@
 
 它们是**三层能力递增的独立场景**：
 
-| 维度 | **gateway** | **cached** | **agent-memory** |
+| 维度 | **personal** | **cached** | **agent-memory** |
 |------|-------------|------------|------------------|
 | **策略定位** | 最快跑通，线上 API 直连 | 高频问答降本，精确+语义缓存 | Agent 全栈，长记忆 + 工具沙盒 |
 | **应用数据库** | SQLite（容器内文件） | PostgreSQL + pgvector | PostgreSQL（`auto`） |
@@ -25,7 +25,7 @@
 
 | 你的场景 | 推荐 Profile | 启动命令 |
 |---------|-------------|----------|
-| 快速体验、只要线上大模型 | `gateway` | `./start.sh profile gateway up` |
+| 快速体验、只要线上大模型 | `personal` | `./start.sh profile personal up` |
 | 客服/知识库、重复问题多 | `cached` | `./start.sh profile cached up` |
 | 开发 AI Agent、需要长记忆 | `agent-memory` | `./start.sh profile agent-memory up` |
 
@@ -55,13 +55,13 @@
 | **宿主机 orchestration** | 三种 Profile 都链加载 `stack/.env` | `stack ensure`、过滤 Ollama 等 |
 | **容器 runtime** | 各 Profile compose 的 `env_file` 自定 | 应用进程实际读到的变量 |
 
-gateway **故意不**把 `deploy/stack/.env` 注入容器，避免 `POSTGRES_*` 污染 SQLite 模式。这与 `LLM_PROXY_DB_DRIVER=sqlite` 是两条独立配置链。
+personal **故意不**把 `deploy/stack/.env` 注入容器，避免 `POSTGRES_*` 污染 SQLite 模式。这与 `LLM_PROXY_DB_DRIVER=sqlite` 是两条独立配置链。
 
 `profile_resolve_stack_deps` 仅对 **ollama** 做运行时过滤：`OLLAMA_ENABLED=false` 时跳过；PostgreSQL / Qdrant / Mem0 在 manifest 中则始终 ensure。
 
 ---
 
-## 3. gateway — 个人全功能
+## 3. personal — 个人全功能
 
 ### 3.1 策略
 
@@ -74,11 +74,11 @@ gateway **故意不**把 `deploy/stack/.env` 注入容器，避免 `POSTGRES_*` 
 | 层级 | 默认 | 可选（`OLLAMA_ENABLED=true`） |
 |------|------|-------------------------------|
 | Stack | **无** | `centag-ollama` |
-| Profile | `centag-gateway-app` | 同上 + `deploy/stack-network` |
+| Profile | `centag-personal-app` | 同上 + `deploy/stack-network` |
 | 数据库 | SQLite `./storage/centag.db` | — |
 | Redis / 向量库 | 关闭 | — |
 
-真源：`config/profiles/gateway/manifest.conf`、`docker-compose.yaml`。
+真源：`config/profiles/personal/manifest.conf`、`docker-compose.yaml`。
 
 ### 3.3 默认中间件连接
 
@@ -90,7 +90,7 @@ gateway **故意不**把 `deploy/stack/.env` 注入容器，避免 `POSTGRES_*` 
 
 ### 3.4 initdata 与默认流水线
 
-挂载路径：`config/profiles/gateway/initdata/` → 容器 `/app/initdata-profile`。
+挂载路径：`config/profiles/personal/initdata/` → 容器 `/app/initdata-profile`。
 
 **后端**（`initial-backends.yaml`，Profile 覆盖全局）：
 
@@ -113,7 +113,7 @@ gateway **故意不**把 `deploy/stack/.env` 注入容器，避免 `POSTGRES_*` 
 ### 3.5 环境变量要点
 
 ```bash
-# config/profiles/gateway/.env
+# config/profiles/personal/.env
 OLLAMA_ENABLED=false          # 默认：不启 stack
 LLM_PROXY_DB_DRIVER=sqlite
 OPENAI_API_KEY=sk-xxx         # 至少填一个线上 Key
@@ -122,7 +122,7 @@ OPENAI_API_KEY=sk-xxx         # 至少填一个线上 Key
 ### 3.6 验证
 
 ```bash
-./start.sh profile gateway up
+./start.sh profile personal up
 curl http://localhost:20060/health
 
 curl http://localhost:20060/v1/chat/completions \
@@ -308,7 +308,7 @@ config/profiles/<name>/initdata（场景定制）
 
 | 资源 | 规则 |
 |------|------|
-| `initial-backends.yaml` | 按 backend ID 合并；gateway / agent-memory 有 Profile 文件，cached 无 |
+| `initial-backends.yaml` | 按 backend ID 合并；personal / agent-memory 有 Profile 文件，cached 无 |
 | `pipeline-templates/*.yaml` | 按模板 ID 合并；三 Profile 各有 `pipeline-default.yaml` |
 
 实现见 `internal/bootstrap/initdata.go`、`backend_config_loader.go`、`pipeline_template_files_loader.go`。
@@ -331,7 +331,7 @@ LLM_PROXY_DEFAULT_MODE=transparent-proxy   # 默认
 
 | Profile | 定制主流水线模板 | 无头请求默认（未改 env） |
 |---------|------------------|--------------------------|
-| gateway / minimal / team | `transparent-proxy` | 透明模式 |
+| personal / minimal / team | `transparent-proxy` | 透明模式 |
 | cached | `cache-mode`（可选） | 仍为透明；可设 `LLM_PROXY_DEFAULT_MODE=cache-mode` |
 | agent-memory | `mem0-memory`（可选） | 仍为透明；可设 `LLM_PROXY_DEFAULT_MODE=mem0-memory` |
 
@@ -342,7 +342,7 @@ LLM_PROXY_DEFAULT_MODE=transparent-proxy   # 默认
 ## 8. 架构一览
 
 ```
-gateway（默认）
+personal（默认）
   [Centag] ──SQLite──┐
        │                │
        └──HTTP──► 线上 API（OpenAI 等）
@@ -366,7 +366,7 @@ agent-memory（默认）
 
 ```bash
 ./start.sh profile list
-./start.sh profile gateway up
+./start.sh profile personal up
 ./start.sh profile cached up
 ./start.sh profile agent-memory up
 ./start.sh profile <name> status|logs|down|reset
@@ -377,7 +377,7 @@ agent-memory（默认）
 
 ---
 
-## 10. gateway 常见问题
+## 10. personal 常见问题
 
 ### 启动或页面访问慢
 
@@ -389,7 +389,7 @@ agent-memory（默认）
 
 应用默认 `LLM_PROXY_LOG_OUTPUT=file`，且日志路径相对可执行文件（`/app/bin/logs`），与挂载卷 `/app/logs` 不一致时，`docker logs` 只有 entrypoint 输出。
 
-gateway compose 已配置：
+personal compose 已配置：
 
 ```bash
 LLM_PROXY_LOG_PATH=/app/logs
@@ -399,8 +399,8 @@ LLM_PROXY_LOG_OUTPUT=both
 查看方式：
 
 ```bash
-./start.sh profile gateway logs
-docker exec centag-gateway-app tail -f /app/logs/centag.log
+./start.sh profile personal logs
+docker exec centag-personal-app tail -f /app/logs/centag.log
 ```
 
 ### 保存后端配置长时间无响应
@@ -418,7 +418,7 @@ docker exec centag-gateway-app tail -f /app/logs/centag.log
 | [config/profiles/README.md](../../config/profiles/README.md) | Profile 选择与命令速查 |
 | [deployment-profiles-and-stack.md](./deployment-profiles-and-stack.md) | 与 stack 的分层架构 |
 | [config/profiles/TESTING.md](../../config/profiles/TESTING.md) | 验证手册 |
-| [config/profiles/gateway/README.md](../../config/profiles/gateway/README.md) | gateway 详细配置 |
+| [config/profiles/personal/README.md](../../config/profiles/personal/README.md) | personal 详细配置 |
 | [config/profiles/cached/README.md](../../config/profiles/cached/README.md) | cached 详细配置 |
 | [config/profiles/agent-memory/README.md](../../config/profiles/agent-memory/README.md) | agent-memory 详细配置 |
 | [proxy-modes.md](./proxy-modes.md) | 代理模式与流水线说明 |

@@ -4,7 +4,7 @@
 
 | Profile | 场景 | 命令 |
 |---------|------|------|
-| [`gateway`](../config/profiles/gateway/) | 个人全功能，默认 SQLite | `./start.sh profile gateway up` |
+| [`personal`](../config/profiles/personal/) | 个人全功能，默认 SQLite | `./start.sh profile personal up` |
 | [`cached`](../config/profiles/cached/) | 缓存加速 | `./start.sh profile cached up` |
 | [`agent-memory`](../config/profiles/agent-memory/) | Agent + 长记忆 | `./start.sh profile agent-memory up` |
 

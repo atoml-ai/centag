@@ -28,7 +28,7 @@ cd /path/to/centag
 git submodule update --init
 
 # Profile 一键（自动 stack ensure）
-./start.sh profile gateway up
+./start.sh profile personal up
 ./start.sh profile agent-memory up
 
 # 仅管理 stack

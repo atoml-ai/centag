@@ -614,7 +614,7 @@ func listBusinessPlugins(c *gin.Context) {
 
 ## 12. 对话记录 API (v0.2.2)
 
-> 统一 Conversation/Session 抽象。存储：minimal=文件，personal/gateway=SQLite，team=PostgreSQL。  
+> 统一 Conversation/Session 抽象。存储：minimal=文件，personal=SQLite，team=PostgreSQL。  
 > 代理请求可通过 `X-Session-ID` 续写同一会话；响应回显该头。可选 `X-Conversation-Category`。
 
 ### GET /api/v1/conversations/sessions
