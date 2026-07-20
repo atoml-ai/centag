@@ -215,12 +215,21 @@ main() {
         print_success "已初始化 ${data_dir}/centag.db（默认配置，首次仅执行一次）"
     fi
 
-    # 确保目录存在
-    mkdir -p /app/logs /app/storage /app/plugins
-    
+    # 确保持久化目录存在（宿主机 bind-mount 时也需可写）
+    # storage: SQLite + CENTAG_DATA_DIR 配置文件；bin/certs: MITM CA（相对可执行文件）
+    mkdir -p /app/logs /app/storage /app/storage/memory-store /app/plugins /app/bin/certs /app/bin/certs/domains
+
+    # 提示：相对 SQLITE_PATH 会落到 /app/bin/storage，脱离常见挂载点
+    if [ -n "${SQLITE_PATH:-}" ]; then
+        echo "  - SQLITE_PATH: ${SQLITE_PATH}"
+    fi
+    if [ -n "${CENTAG_DATA_DIR:-}" ]; then
+        echo "  - CENTAG_DATA_DIR: ${CENTAG_DATA_DIR}"
+    fi
+
     # 设置权限
     if [ "$(id -u)" -eq 0 ]; then
-        chown -R llmproxy:llmproxy /app/logs /app/storage /app/plugins
+        chown -R llmproxy:llmproxy /app/logs /app/storage /app/plugins /app/bin/certs 2>/dev/null || true
     fi
 
     # 检查是否使用守护进程模式

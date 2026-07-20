@@ -131,6 +131,8 @@ COPY deploy/docker/entrypoint.sh ./entrypoint.sh
 COPY config/initdata/ ./config/initdata/
 # 发行版种子：各 edition 自带精简 initial-backends，覆盖进运行时 initdata
 COPY config/profiles/${DIST_NAME}/initdata/ ./config/initdata/
+# 计费规则种子（启动时 EnsureSeededFromYAML → pricing_rules；缺省则规则为空、成本恒为 0）
+COPY config/pricing/ ./config/pricing/
 
 # 注入用户自定义 initdata archive（由 start.sh --initdata 提供）
 # 当 INITDATA_ARCHIVE=true 时，zip 作为唯一来源替换所有默认初始化数据
