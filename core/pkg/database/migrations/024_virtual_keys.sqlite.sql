@@ -1,4 +1,4 @@
--- 024: Add virtual key columns (budget, rate limit, model whitelist) to api_keys.
+-- 024: Add API key limit columns (budget, rate limit, model whitelist) to api_keys.
 
 ALTER TABLE api_keys ADD COLUMN budget_usd REAL NOT NULL DEFAULT 0;
 ALTER TABLE api_keys ADD COLUMN used_usd REAL NOT NULL DEFAULT 0;

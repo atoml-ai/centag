@@ -10,8 +10,8 @@
 # Centag 服务地址
 export ANTHROPIC_BASE_URL="http://localhost:20060/v1"
 
-# 在 Centag 管理后台创建的 Virtual Key
-export ANTHROPIC_API_KEY="sk-your-virtual-key-here"
+# 在 Centag「个人设置 / 用户管理」创建的 API Key
+export ANTHROPIC_API_KEY="sk-your-centag-api-key-here"
 
 # 如需代理（可选）
 # export HTTP_PROXY="http://proxy:port"

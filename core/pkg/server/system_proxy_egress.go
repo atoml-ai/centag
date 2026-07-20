@@ -120,7 +120,7 @@ func decryptAPIKeyPlain(key *database.APIKey) (string, error) {
 	}
 	sk := auth.APIKeyStorageKey()
 	if key.KeySecretEnc == "" || sk == nil {
-		return "", fmt.Errorf("api key id=%d has no recoverable plaintext (set LLM_PROXY_API_KEY_STORAGE_SECRET)", key.ID)
+		return "", fmt.Errorf("api key id=%d has no recoverable plaintext (storage secret missing or reveal-once mode)", key.ID)
 	}
 	plain, err := auth.DecryptAPIKeyPlaintext(key.KeySecretEnc, sk)
 	if err != nil {
@@ -153,14 +153,13 @@ func createSystemProxyEgressKey(ctx context.Context, db *database.Manager, userI
 		Enabled:   true,
 		CreatedAt: time.Now().UTC(),
 	}
-	if sk := auth.APIKeyStorageKey(); sk != nil {
-		enc, encErr := auth.EncryptAPIKeyPlaintext(fullKey, sk)
-		if encErr != nil {
-			return "", fmt.Errorf("encrypt egress api key: %w", encErr)
-		}
-		rec.KeySecretEnc = enc
-	} else {
-		logger.Warn("system_proxy: created egress key without storage secret; key stored only in system_proxy.egress_api_key")
+	enc, encErr := auth.EncryptAPIKeyForStorage(fullKey)
+	if encErr != nil {
+		return "", fmt.Errorf("encrypt egress api key: %w", encErr)
+	}
+	rec.KeySecretEnc = enc
+	if enc == "" && auth.APIKeyRevealOnce() {
+		logger.Warn("system_proxy: created egress key in reveal-once mode; key stored only in system_proxy.egress_api_key")
 	}
 	if err := db.APIKeyStore().Create(ctx, rec); err != nil {
 		return "", fmt.Errorf("create egress api key: %w", err)

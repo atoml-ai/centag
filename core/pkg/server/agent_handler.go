@@ -388,7 +388,7 @@ func supportedTypes(r *agent.TemplateRegistry) []string {
 func (h *AgentHandler) respondProxyAPIKeyError(c *gin.Context, err error) {
 	if errors.Is(err, errNoUsableProxyAPIKey) {
 		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "未找到可用于 Agent 接入的 Centag API Key（llmproxy_*）。请先在“个人设置 -> API Keys”创建，并确保服务端配置了 LLM_PROXY_API_KEY_STORAGE_SECRET 以支持解密展示。",
+			"error": "未找到可用于 Agent 接入的 Centag API Key（llmproxy_*）。请先在「个人设置 → API Keys」创建；若开启了 LLM_PROXY_API_KEY_REVEAL_ONCE，历史密钥可能无法解密，请新建。",
 		})
 		return
 	}

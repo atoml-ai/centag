@@ -14,7 +14,7 @@ provider = "openai"
 
 [models.openai]
 base_url = "http://localhost:20060/v1"
-api_key = "sk-your-virtual-key-here"
+api_key = "sk-your-centag-api-key-here"
 chat_model = "gpt-4o"
 ```
 
@@ -37,7 +37,7 @@ driver = "openai"
 
 [models.openai]
 base_url = "http://localhost:20060/v1"
-api_key = "sk-your-virtual-key-here"
+api_key = "sk-your-centag-api-key-here"
 # 指向 Centag 的 /v1/responses 端点
 chat_model = "gpt-4o"
 wire_api = "responses"
@@ -59,6 +59,6 @@ Centag 的 ThinkSplit 自动处理推理内容分流，Codex 可正常展示模�
 ## 故障排查
 
 1. **连接失败**：确认 `base_url` 格式正确，末尾 `/v1` 不缺失
-2. **401 错误**：检查 Centag 后台 Virtual Key 是否有效
+2. **401 错误**：检查 Centag 后台 API Key 是否有效
 3. **模型不存在**：确认 `chat_model` 名称与 Centag 后端配置中的模型别名一致
 4. **Responses API 404**：确认 Centag 编译时启用了 `protocol_openairesponses` tag（默认包含）

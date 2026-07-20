@@ -64,7 +64,7 @@ func TestIsModelAllowed_CaseSensitive(t *testing.T) {
 	}
 }
 
-// ── checkVirtualKeyChecks ────────────────────────────────────────────────────
+// ── checkAPIKeyLimits ────────────────────────────────────────────────────
 
 // mockRateLimiter always allows.
 type mockAllowLimiter struct{}
@@ -88,13 +88,13 @@ func setupGinTest(body string) (*gin.Context, *httptest.ResponseRecorder) {
 	return c, w
 }
 
-func TestCheckVirtualKeyChecks_ModelNotAllowed(t *testing.T) {
+func TestCheckAPIKeyLimits_ModelNotAllowed(t *testing.T) {
 	key := &database.APIKey{
 		ID:             1,
 		ModelWhitelist: `["gpt-4"]`,
 	}
 	c, w := setupGinTest(`{"model":"claude-3","messages":[]}`)
-	if checkVirtualKeyChecks(c, key, mockAllowLimiter{}, "h") {
+	if checkAPIKeyLimits(c, key, mockAllowLimiter{}, "h") {
 		t.Error("should reject model not in whitelist")
 	}
 	if w.Code != http.StatusForbidden {
@@ -102,13 +102,13 @@ func TestCheckVirtualKeyChecks_ModelNotAllowed(t *testing.T) {
 	}
 }
 
-func TestCheckVirtualKeyChecks_ModelAllowed(t *testing.T) {
+func TestCheckAPIKeyLimits_ModelAllowed(t *testing.T) {
 	key := &database.APIKey{
 		ID:             1,
 		ModelWhitelist: `["gpt-4"]`,
 	}
 	c, w := setupGinTest(`{"model":"gpt-4","messages":[]}`)
-	if !checkVirtualKeyChecks(c, key, mockAllowLimiter{}, "h") {
+	if !checkAPIKeyLimits(c, key, mockAllowLimiter{}, "h") {
 		t.Error("should allow model in whitelist")
 	}
 	// Body should be restored
@@ -117,14 +117,14 @@ func TestCheckVirtualKeyChecks_ModelAllowed(t *testing.T) {
 	}
 }
 
-func TestCheckVirtualKeyChecks_WildcardWhitelist(t *testing.T) {
+func TestCheckAPIKeyLimits_WildcardWhitelist(t *testing.T) {
 	key := &database.APIKey{
 		ID:             1,
 		ModelWhitelist: "*",
 		RateLimitRPM:   10,
 	}
 	c, w := setupGinTest(`{"model":"any-model","messages":[]}`)
-	if !checkVirtualKeyChecks(c, key, mockAllowLimiter{}, "h") {
+	if !checkAPIKeyLimits(c, key, mockAllowLimiter{}, "h") {
 		t.Error("wildcard whitelist should allow any model")
 	}
 	if w.Code != http.StatusOK {
@@ -132,14 +132,14 @@ func TestCheckVirtualKeyChecks_WildcardWhitelist(t *testing.T) {
 	}
 }
 
-func TestCheckVirtualKeyChecks_EmptyWhitelist(t *testing.T) {
+func TestCheckAPIKeyLimits_EmptyWhitelist(t *testing.T) {
 	key := &database.APIKey{
 		ID:             1,
 		ModelWhitelist: "", // empty = wildcard
 		RateLimitRPM:   10,
 	}
 	c, w := setupGinTest(`{"model":"any-model","messages":[]}`)
-	if !checkVirtualKeyChecks(c, key, mockAllowLimiter{}, "h") {
+	if !checkAPIKeyLimits(c, key, mockAllowLimiter{}, "h") {
 		t.Error("empty whitelist should allow any model")
 	}
 	if w.Code != http.StatusOK {
@@ -147,13 +147,13 @@ func TestCheckVirtualKeyChecks_EmptyWhitelist(t *testing.T) {
 	}
 }
 
-func TestCheckVirtualKeyChecks_RateLimitExceeded(t *testing.T) {
+func TestCheckAPIKeyLimits_RateLimitExceeded(t *testing.T) {
 	key := &database.APIKey{
 		ID:           1,
 		RateLimitRPM: 60,
 	}
 	c, w := setupGinTest(`{"model":"gpt-4"}`)
-	if checkVirtualKeyChecks(c, key, mockDenyLimiter{}, "h") {
+	if checkAPIKeyLimits(c, key, mockDenyLimiter{}, "h") {
 		t.Error("should reject when rate limit exceeded")
 	}
 	if w.Code != http.StatusTooManyRequests {
@@ -161,14 +161,14 @@ func TestCheckVirtualKeyChecks_RateLimitExceeded(t *testing.T) {
 	}
 }
 
-func TestCheckVirtualKeyChecks_RateLimitHeaders(t *testing.T) {
+func TestCheckAPIKeyLimits_RateLimitHeaders(t *testing.T) {
 	key := &database.APIKey{
 		ID:           1,
 		RateLimitRPM: 60,
 		RateLimitTPM: 100000,
 	}
 	c, w := setupGinTest(`{"model":"gpt-4"}`)
-	if !checkVirtualKeyChecks(c, key, mockAllowLimiter{}, "h") {
+	if !checkAPIKeyLimits(c, key, mockAllowLimiter{}, "h") {
 		t.Error("should allow when within rate limit")
 	}
 	if w.Header().Get("X-RateLimit-RPM-Remaining") == "" {
@@ -179,11 +179,11 @@ func TestCheckVirtualKeyChecks_RateLimitHeaders(t *testing.T) {
 	}
 }
 
-func TestCheckVirtualKeyChecks_NoRateLimit(t *testing.T) {
+func TestCheckAPIKeyLimits_NoRateLimit(t *testing.T) {
 	// When both RPM and TPM are 0, the rate limit check is skipped entirely.
 	key := &database.APIKey{ID: 1}
 	c, w := setupGinTest(`{"model":"gpt-4"}`)
-	if !checkVirtualKeyChecks(c, key, mockAllowLimiter{}, "h") {
+	if !checkAPIKeyLimits(c, key, mockAllowLimiter{}, "h") {
 		t.Error("should pass when no rate limits set")
 	}
 	if w.Header().Get("X-RateLimit-RPM-Remaining") != "" {
@@ -191,14 +191,14 @@ func TestCheckVirtualKeyChecks_NoRateLimit(t *testing.T) {
 	}
 }
 
-func TestCheckVirtualKeyChecks_BudgetExhausted(t *testing.T) {
+func TestCheckAPIKeyLimits_BudgetExhausted(t *testing.T) {
 	key := &database.APIKey{
 		ID:        1,
 		BudgetUSD: 100,
 		UsedUSD:   100, // exactly at limit — BudgetChecker rejects ">="
 	}
 	c, w := setupGinTest(`{"model":"gpt-4"}`)
-	if checkVirtualKeyChecks(c, key, mockAllowLimiter{}, "h") {
+	if checkAPIKeyLimits(c, key, mockAllowLimiter{}, "h") {
 		t.Error("should reject when budget exhausted")
 	}
 	if w.Code != http.StatusForbidden {
@@ -206,14 +206,14 @@ func TestCheckVirtualKeyChecks_BudgetExhausted(t *testing.T) {
 	}
 }
 
-func TestCheckVirtualKeyChecks_BudgetOK(t *testing.T) {
+func TestCheckAPIKeyLimits_BudgetOK(t *testing.T) {
 	key := &database.APIKey{
 		ID:        1,
 		BudgetUSD: 100,
 		UsedUSD:   50,
 	}
 	c, w := setupGinTest(`{"model":"gpt-4"}`)
-	if !checkVirtualKeyChecks(c, key, mockAllowLimiter{}, "h") {
+	if !checkAPIKeyLimits(c, key, mockAllowLimiter{}, "h") {
 		t.Error("should allow when within budget")
 	}
 	header := w.Header().Get("X-Budget-Remaining")
@@ -222,20 +222,20 @@ func TestCheckVirtualKeyChecks_BudgetOK(t *testing.T) {
 	}
 }
 
-func TestCheckVirtualKeyChecks_UnlimitedBudget(t *testing.T) {
+func TestCheckAPIKeyLimits_UnlimitedBudget(t *testing.T) {
 	key := &database.APIKey{
 		ID:        1,
 		BudgetUSD: 0, // unlimited — budget check skipped entirely
 		UsedUSD:   999999,
 	}
 	c, _ := setupGinTest(`{"model":"gpt-4"}`)
-	if !checkVirtualKeyChecks(c, key, mockAllowLimiter{}, "h") {
+	if !checkAPIKeyLimits(c, key, mockAllowLimiter{}, "h") {
 		t.Error("unlimited budget should always pass")
 	}
 	// Budget header is NOT set when BudgetUSD == 0 (check is skipped).
 }
 
-func TestCheckVirtualKeyChecks_AllPassWithHeaders(t *testing.T) {
+func TestCheckAPIKeyLimits_AllPassWithHeaders(t *testing.T) {
 	key := &database.APIKey{
 		ID:             1,
 		ModelWhitelist: `["gpt-4"]`,
@@ -245,7 +245,7 @@ func TestCheckVirtualKeyChecks_AllPassWithHeaders(t *testing.T) {
 		RateLimitTPM:   100000,
 	}
 	c, w := setupGinTest(`{"model":"gpt-4","messages":[]}`)
-	if !checkVirtualKeyChecks(c, key, mockAllowLimiter{}, "h") {
+	if !checkAPIKeyLimits(c, key, mockAllowLimiter{}, "h") {
 		t.Error("should pass when all checks pass")
 	}
 	if w.Header().Get("X-RateLimit-RPM-Remaining") == "" {

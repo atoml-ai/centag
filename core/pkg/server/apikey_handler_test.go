@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"centag/core/internal/auth"
 	"centag/core/pkg/database"
 )
 
@@ -12,11 +13,19 @@ func TestToAPIKeyResponse_Fields(t *testing.T) {
 	exp := now.Add(30 * 24 * time.Hour)
 	lastUsed := now.Add(-1 * time.Hour)
 
+	t.Setenv("LLM_PROXY_API_KEY_REVEAL_ONCE", "")
+	t.Setenv("LLM_PROXY_API_KEY_STORAGE_SECRET", "unit-test-storage-secret")
+	plain := "llmproxy_unit_test_full_key"
+	enc, err := auth.EncryptAPIKeyForStorage(plain)
+	if err != nil || enc == "" {
+		t.Fatalf("encrypt fixture: %v", err)
+	}
+
 	key := &database.APIKey{
 		ID:             42,
 		Name:           "production-key",
 		KeyPrefix:      "llmproxy_abcd1234",
-		KeySecretEnc:   "encrypted-content",
+		KeySecretEnc:   enc,
 		Enabled:        true,
 		BudgetUSD:      100.0,
 		UsedUSD:        25.5,
@@ -61,7 +70,7 @@ func TestToAPIKeyResponse_Fields(t *testing.T) {
 		t.Error("LastUsedAt should be set")
 	}
 	if !resp.RevealAvailable {
-		t.Error("RevealAvailable should be true when KeySecretEnc is set")
+		t.Error("RevealAvailable should be true when ciphertext decrypts")
 	}
 }
 
@@ -143,7 +152,7 @@ func TestToAPIKeyResponses_Multiple(t *testing.T) {
 	}
 }
 
-func TestToAPIKeyResponse_VirtualKeyFields(t *testing.T) {
+func TestToAPIKeyResponse_APIKeyLimitFields(t *testing.T) {
 	now := time.Now()
 	key := &database.APIKey{
 		ID:             1,
