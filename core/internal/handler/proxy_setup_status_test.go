@@ -64,12 +64,18 @@ func TestRefreshPACConfig_UpdatesProxyHost(t *testing.T) {
 
 func TestGetSetupStatus_LocalMode(t *testing.T) {
 	gin.SetMode(gin.TestMode)
+	// Isolate from developer .env / process env (ResolveSystemProxyEgressAPIKey falls back to these).
+	t.Setenv("LLM_PROXY_SYSTEM_PROXY_EGRESS_API_KEY", "")
+	t.Setenv("LLM_PROXY_DEFAULT_ADMIN_API_KEY", "")
+	t.Setenv("LLM_PROXY_ADMIN_API_KEY", "")
+
 	cfg := &config.Config{
 		Server: config.ServerConfig{Port: 20060},
 		SystemProxy: config.SystemProxyConfig{
 			ListenPort:      8081,
 			AllowLANClients: false,
 			PACEnabled:      true,
+			EgressAPIKey:    "", // explicit empty; do not inherit ambient keys
 		},
 	}
 	_ = config.ValidateSystemProxyConfig(&cfg.SystemProxy)
@@ -95,6 +101,37 @@ func TestGetSetupStatus_LocalMode(t *testing.T) {
 	}
 	if got["egress_api_key_configured"] != false {
 		t.Fatalf("egress_api_key_configured=%v", got["egress_api_key_configured"])
+	}
+}
+
+func TestGetSetupStatus_EgressKeyFromConfig(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	t.Setenv("LLM_PROXY_SYSTEM_PROXY_EGRESS_API_KEY", "")
+	t.Setenv("LLM_PROXY_DEFAULT_ADMIN_API_KEY", "")
+	t.Setenv("LLM_PROXY_ADMIN_API_KEY", "")
+
+	cfg := &config.Config{
+		Server: config.ServerConfig{Port: 20060},
+		SystemProxy: config.SystemProxyConfig{
+			ListenPort:   8081,
+			PACEnabled:   true,
+			EgressAPIKey: "llmproxy_test_egress",
+		},
+	}
+	_ = config.ValidateSystemProxyConfig(&cfg.SystemProxy)
+	h := NewProxyHandler(nil, &pac.Config{ProxyHost: "127.0.0.1", ProxyPort: 8081}, cfg)
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/api/v1/proxy/setup/status", nil)
+	h.GetSetupStatus(c)
+
+	var got map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if got["egress_api_key_configured"] != true {
+		t.Fatalf("egress_api_key_configured=%v, want true", got["egress_api_key_configured"])
 	}
 }
 

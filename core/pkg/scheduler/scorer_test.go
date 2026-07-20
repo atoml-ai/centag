@@ -1,6 +1,7 @@
 package scheduler
 
 import (
+	"math"
 	"testing"
 
 	"centag/core/pkg/backend"
@@ -20,9 +21,10 @@ func TestModelPriceTable(t *testing.T) {
 	})
 
 	t.Run("获取低价模型价格", func(t *testing.T) {
+		// 与 price_table.initDefaultPrices / config/pricing/default.yaml 对齐
 		price := pt.GetPrice("ppinfra", "qwen3.5-plus")
-		if price.InputPrice != 1.5 {
-			t.Errorf("ppinfra qwen3.5-plus input price = %f, want 1.5", price.InputPrice)
+		if price.InputPrice != 0.2083 {
+			t.Errorf("ppinfra qwen3.5-plus input price = %f, want 0.2083", price.InputPrice)
 		}
 		if price.Tier != "low" {
 			t.Errorf("ppinfra qwen3.5-plus tier = %s, want low", price.Tier)
@@ -31,8 +33,8 @@ func TestModelPriceTable(t *testing.T) {
 
 	t.Run("获取高价模型价格", func(t *testing.T) {
 		price := pt.GetPrice("bigmodel", "glm-5")
-		if price.InputPrice != 20.0 {
-			t.Errorf("bigmodel glm-5 input price = %f, want 20.0", price.InputPrice)
+		if price.InputPrice != 2.7778 {
+			t.Errorf("bigmodel glm-5 input price = %f, want 2.7778", price.InputPrice)
 		}
 		if price.Tier != "high" {
 			t.Errorf("bigmodel glm-5 tier = %s, want high", price.Tier)
@@ -41,9 +43,10 @@ func TestModelPriceTable(t *testing.T) {
 
 	t.Run("估算成本", func(t *testing.T) {
 		cost := pt.EstimateCost("ppinfra", "qwen3.5-plus", 1000, 1000)
-		expected := (1000.0/1_000_000)*1.5 + (1000.0/1_000_000)*1.5
-		if cost != expected {
-			t.Errorf("Estimated cost = %f, want %f", cost, expected)
+		price := pt.GetPrice("ppinfra", "qwen3.5-plus")
+		expected := (1000.0/1_000_000)*price.InputPrice + (1000.0/1_000_000)*price.OutputPrice
+		if math.Abs(cost-expected) > 1e-12 {
+			t.Errorf("Estimated cost = %g, want %g", cost, expected)
 		}
 	})
 }
