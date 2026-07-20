@@ -123,6 +123,13 @@ func (h *ConversationHandler) ListMessages(c *gin.Context) {
 	if msgs == nil {
 		msgs = []*conversation.Message{}
 	}
+	// 历史记录可能存了完整上游 SSE；浏览时规范化为可读文本（不改库）
+	for _, m := range msgs {
+		if m == nil || m.Role != "assistant" {
+			continue
+		}
+		m.Content = conversation.NormalizeAssistantContent(m.Content)
+	}
 	c.JSON(http.StatusOK, gin.H{"messages": msgs, "count": len(msgs)})
 }
 
