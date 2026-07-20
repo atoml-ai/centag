@@ -3,524 +3,427 @@
     <div class="header-with-toolbar">
       <div class="header-left">
         <h1 class="page-title">本机代理出口</h1>
-        <p class="page-description">将 Agent 的大模型流量导入 Centag：多数 CLI 用进程级 HTTPS_PROXY；认系统代理的客户端再用 PAC。均不改 Agent 内模型配置</p>
+        <p class="page-description">
+          将 Agent 的大模型流量导入 Centag。推荐用进程级代理（proxyctl run）；认系统代理的客户端再用 PAC。
+        </p>
       </div>
       <div class="toolbar-actions">
         <el-button :loading="loading" @click="load">
           <el-icon><Refresh /></el-icon>
           刷新
         </el-button>
-        <el-button @click="openSetupWizard">
-          <el-icon><MagicStick /></el-icon>
-          手动排查向导
-        </el-button>
       </div>
     </div>
 
-    <div class="content-wrapper">
-      <!-- 一键主路径 -->
-      <el-card class="control-card hero-card">
-        <template #header>
-          <div class="card-header">
-            <span class="card-title">一键配置（推荐）</span>
-            <el-tag size="small" :type="setupStatus?.mode === 'lan' ? 'warning' : 'success'">
-              {{ setupStatus?.mode === 'lan' ? '团队局域网出口' : '本机模式' }}
-            </el-tag>
-          </div>
-        </template>
-        <el-radio-group v-model="uiMode" class="mb-md">
-          <el-radio-button value="local">本机 Centag</el-radio-button>
-          <el-radio-button value="team">团队服务器</el-radio-button>
-        </el-radio-group>
+    <!-- 顶部状态条：一眼看是否正常 -->
+    <div class="status-strip">
+      <div class="status-item" :class="status.enabled ? 'ok' : 'warn'">
+        <span class="status-label">MITM</span>
+        <span class="status-value">{{ status.enabled ? '运行中' : '未启动' }}</span>
+      </div>
+      <div class="status-item" :class="egressConfigured ? 'ok' : 'warn'">
+        <span class="status-label">出口 Key</span>
+        <span class="status-value">{{ egressConfigured ? '已配置' : '未配置' }}</span>
+      </div>
+      <div class="status-item">
+        <span class="status-label">监听</span>
+        <span class="status-value">{{ listenDisplay }}</span>
+      </div>
+      <div class="status-item">
+        <span class="status-label">PAC 域名</span>
+        <span class="status-value">{{ domainCount }}</span>
+      </div>
+      <div class="status-item">
+        <span class="status-label">路径模式</span>
+        <span class="status-value">{{ patternCount }}</span>
+      </div>
+    </div>
+
+    <el-tabs v-model="mainTab" class="main-tabs">
+      <!-- ========== Tab 1: 配置向导 ========== -->
+      <el-tab-pane label="配置向导" name="wizard">
         <el-alert
           class="mb-md"
           type="info"
           :closable="false"
           show-icon
-          title="多数 Agent（如 OpenCode）不读系统 PAC：请用 centag-proxyctl run -- opencode（自动 CA + HTTPS_PROXY）。勿把代理写进全局 shell。"
+          title="按下列 4 步完成即可。多数 CLI（如 OpenCode）用第 3 步的 proxyctl run，不必改系统 PAC，也别把代理写进全局 shell。"
         />
         <el-alert
+          v-if="setupStatus?.in_container"
           class="mb-md"
           type="warning"
           :closable="false"
           show-icon
-          title="开启 MITM 后请确认「出口 API Key」已配置（可一键绑定，热生效）。MITM 开启 ≠ 系统 PAC 已写入；CLI 优先用 run，不必 enable。"
+          title="当前 Centag 运行在 Docker：宿主机必须映射 8081，且容器内 MITM 监听 0.0.0.0。请用 ./start.sh docker run personal（已含 -p 8081:8081）重启后再测。"
         />
 
-        <template v-if="uiMode === 'local'">
-          <p class="mb-md">本机 Centag：MITM 默认仅监听 127.0.0.1。推荐 <code>centag-proxyctl run -- opencode</code>（自动证书+进程代理）。</p>
-          <el-space wrap class="mb-md">
+        <el-alert class="mb-md" type="success" :closable="false" show-icon>
+          <template #title>Key 策略（三层，不要混）</template>
+          <ul class="key-policy-list">
+            <li>
+              <strong>Centag 出口 Key（llmproxy_*）</strong>：只在本页「一键绑定」配置。
+              MITM 转发时自动注入；OpenCode / Agent <em>不要</em>填这个。
+            </li>
+            <li>
+              <strong>上游 Provider Key</strong>：在 Web「后端 / Provider」里配置（DeepSeek、百炼等真实密钥）。
+              Centag 用它去调大模型。personal 首启为空，必须先加至少一个。
+            </li>
+            <li>
+              <strong>Agent 里的 Key</strong>：可填任意占位或原厂 Token；走 proxyctl 时会被 MITM 换成出口 Key。
+              报「无效的 API key」通常是出口 Key 未绑定；报无后端则是 Provider 未配。
+            </li>
+          </ul>
+        </el-alert>
+
+        <el-steps :active="wizardProgress" align-center finish-status="success" class="mb-lg">
+          <el-step title="出口 Key" :description="egressConfigured ? '已就绪' : '待绑定'" />
+          <el-step title="启动 MITM" :description="status.enabled ? '运行中' : '未启动'" />
+          <el-step title="接入 Agent" description="复制命令运行" />
+          <el-step title="验证" description="确认正常" />
+        </el-steps>
+
+        <!-- 步骤 1 -->
+        <el-card class="step-card" shadow="never">
+          <div class="step-head">
+            <span class="step-num">1</span>
+            <div class="step-title-block">
+              <h3>绑定 Centag 出口 Key（仅服务端）</h3>
+              <p>
+                位置：本页。生成/绑定名为 system-proxy-egress 的 llmproxy_* Key，由 MITM 注入到
+                :20060。不要写进 OpenCode 配置。
+              </p>
+            </div>
             <el-tag :type="egressConfigured ? 'success' : 'danger'" size="small">
-              出口 Key：{{ egressConfigured ? '已配置' : '未配置' }}
+              {{ egressConfigured ? '正常：已配置' : '异常：未配置' }}
             </el-tag>
-            <el-button size="small" :loading="ensuringEgress" @click="ensureEgressKey">一键绑定出口 Key</el-button>
-            <el-button @click="copyLocalRunCmd">复制：proxyctl run</el-button>
-            <el-button @click="copyEnvProxyCmd">复制：手写 HTTPS_PROXY</el-button>
-          </el-space>
+          </div>
           <el-space wrap>
-            <el-button type="primary" @click="copyProxyctlCmd('enable')">复制：PAC 启用</el-button>
-            <el-button type="danger" plain @click="copyProxyctlCmd('disable')">复制：一键停用并恢复</el-button>
-            <el-button @click="copyProxyctlCmd('doctor')">复制：诊断</el-button>
+            <el-button type="primary" :loading="ensuringEgress" @click="ensureEgressKey">
+              一键绑定出口 Key
+            </el-button>
+            <el-select
+              v-model="selectedEgressKeyId"
+              clearable
+              filterable
+              placeholder="或选择已有 Key"
+              style="width: 220px"
+              :loading="loadingKeys"
+            >
+              <el-option
+                v-for="k in apiKeyOptions"
+                :key="k.id"
+                :label="`${k.name} (${k.key_prefix}…)`"
+                :value="k.id"
+              />
+            </el-select>
+            <el-button :disabled="!selectedEgressKeyId" :loading="bindingEgress" @click="bindSelectedEgressKey">
+              绑定所选
+            </el-button>
           </el-space>
-        </template>
+        </el-card>
 
-        <template v-else>
-          <el-form label-width="140px" class="mb-md">
-            <el-form-item label="允许局域网客户端">
-              <el-switch v-model="allowLanClients" :loading="savingLan" @change="onAllowLanChange" />
-              <span class="form-hint">Team 主场景：员工电脑 PAC 指向本机 advertise 地址</span>
-            </el-form-item>
-            <el-form-item label="Advertise Host" v-if="allowLanClients">
-              <el-input v-model="advertiseHost" placeholder="如 192.168.1.50" style="max-width: 280px" />
-              <el-button class="ml-sm" @click="detectLanIP" :loading="detectingIP">探测局域网 IP</el-button>
-              <el-button type="primary" class="ml-sm" :loading="savingLan" @click="saveLanConfig">保存</el-button>
-            </el-form-item>
-            <el-form-item label="Listen Addr" v-if="allowLanClients">
-              <el-input v-model="listenAddr" placeholder="0.0.0.0" style="max-width: 280px" />
-            </el-form-item>
-          </el-form>
-          <el-descriptions v-if="setupStatus" :column="1" border size="small" class="mb-md">
-            <el-descriptions-item label="员工 PAC URL">{{ setupStatus.pac_url }}</el-descriptions-item>
-            <el-descriptions-item label="CA 下载">{{ setupStatus.ca_download_url }}</el-descriptions-item>
-            <el-descriptions-item label="CA 指纹">{{ setupStatus.ca_fingerprint_sha256 || '（启 MITM 后生成）' }}</el-descriptions-item>
-            <el-descriptions-item label="MITM PROXY">{{ setupStatus.mitm_proxy }}</el-descriptions-item>
-            <el-descriptions-item label="出口 API Key">
-              <el-tag :type="egressConfigured ? 'success' : 'danger'" size="small">
-                {{ egressConfigured ? '已配置（热加载）' : '未配置' }}
-              </el-tag>
-            </el-descriptions-item>
-          </el-descriptions>
-          <el-form label-width="140px" class="mb-md">
-            <el-form-item label="出口 API Key">
-              <el-space wrap>
-                <el-button type="primary" :loading="ensuringEgress" @click="ensureEgressKey">
-                  一键绑定/创建出口 Key
-                </el-button>
-                <el-select
-                  v-model="selectedEgressKeyId"
-                  clearable
-                  filterable
-                  placeholder="或选择已有 Key"
-                  style="width: 220px"
-                  :loading="loadingKeys"
-                >
-                  <el-option
-                    v-for="k in apiKeyOptions"
-                    :key="k.id"
-                    :label="`${k.name} (${k.key_prefix}…)`"
-                    :value="k.id"
-                  />
-                </el-select>
-                <el-button :disabled="!selectedEgressKeyId" :loading="bindingEgress" @click="bindSelectedEgressKey">
-                  绑定所选
-                </el-button>
-              </el-space>
-              <div class="form-hint">MITM 转发时注入；员工 Agent 无需知道此 Key。保存后热生效，无需停服。</div>
-            </el-form-item>
-            <el-form-item label="员工连接 API">
-              <el-input v-model="employeeServer" placeholder="http://192.168.1.50:20060" style="max-width: 360px" />
-              <el-button class="ml-sm" type="primary" @click="copyEmployeeRun">复制：proxyctl run 启动 Agent</el-button>
-              <el-button class="ml-sm" @click="copyEmployeeEnable">复制：PAC enable</el-button>
-            </el-form-item>
-          </el-form>
-          <el-alert type="warning" :closable="false" show-icon title="员工 disable 只恢复自己电脑，不会关闭服务器 MITM。多数 CLI 请用 proxyctl run，不要依赖系统 PAC。" />
-        </template>
+        <!-- 步骤 2 -->
+        <el-card class="step-card" shadow="never">
+          <div class="step-head">
+            <span class="step-num">2</span>
+            <div class="step-title-block">
+              <h3>启动 MITM 服务</h3>
+              <p>默认只监听本机 127.0.0.1。开启后即可被代理流量命中。</p>
+            </div>
+            <el-tag :type="status.enabled ? 'success' : 'info'" size="small">
+              {{ status.enabled ? '正常：运行中' : '待启动' }}
+            </el-tag>
+          </div>
 
-        <el-divider />
-        <el-descriptions :column="2" size="small" border>
-          <el-descriptions-item label="MITM 服务">{{ setupStatus?.mitm_enabled || status.enabled ? '运行中' : '未运行' }}</el-descriptions-item>
-          <el-descriptions-item label="监听">{{ setupStatus?.listen_addr || `${listenAddr || '127.0.0.1'}:${listenPort}` }}</el-descriptions-item>
-          <el-descriptions-item label="PAC URL">{{ apiPACURL }}</el-descriptions-item>
-          <el-descriptions-item label="Loopback">{{ setupStatus?.listen_is_loopback !== false ? '是' : '否' }}</el-descriptions-item>
-          <el-descriptions-item label="出口 API Key">{{ egressConfigured ? '已配置' : '未配置' }}</el-descriptions-item>
-        </el-descriptions>
-      </el-card>
-
-      <!-- 状态卡片 -->
-      <el-row :gutter="12" class="metrics-grid">
-        <el-col :xs="12" :sm="8" :md="8" :lg="4">
-          <div class="metric-card" :class="{ 'status-active': status.enabled, 'status-inactive': !status.enabled }">
-            <div class="metric-icon" :class="status.enabled ? 'status-active-icon' : 'status-inactive-icon'">
-              <el-icon :size="22"><Connection /></el-icon>
-            </div>
-            <div class="metric-content">
-              <div class="metric-value">{{ status.enabled ? '已启用' : '已禁用' }}</div>
-              <div class="metric-label">代理状态</div>
-            </div>
-          </div>
-        </el-col>
-        <el-col :xs="12" :sm="8" :md="8" :lg="4">
-          <div class="metric-card" :class="{ 'pac-active': status.pac_enabled, 'pac-inactive': !status.pac_enabled }">
-            <div class="metric-icon" :class="status.pac_enabled ? 'pac-active-icon' : 'pac-inactive-icon'">
-              <el-icon :size="22"><DocumentChecked /></el-icon>
-            </div>
-            <div class="metric-content">
-              <div class="metric-value">{{ status.pac_enabled ? 'PAC模式' : '全局模式' }}</div>
-              <div class="metric-label">代理模式</div>
-            </div>
-          </div>
-        </el-col>
-        <el-col :xs="12" :sm="8" :md="8" :lg="4">
-          <div class="metric-card">
-            <div class="metric-icon domain-icon">
-              <el-icon :size="22"><Link /></el-icon>
-            </div>
-            <div class="metric-content">
-              <div class="metric-value">{{ domainCount }}</div>
-              <div class="metric-label">PAC域名数</div>
-            </div>
-          </div>
-        </el-col>
-        <el-col :xs="12" :sm="8" :md="8" :lg="4">
-          <div class="metric-card">
-            <div class="metric-icon pattern-icon">
-              <el-icon :size="22"><FolderOpened /></el-icon>
-            </div>
-            <div class="metric-content">
-              <div class="metric-value">{{ patternCount }}</div>
-              <div class="metric-label">路径模式数</div>
-            </div>
-          </div>
-        </el-col>
-        <el-col :xs="12" :sm="8" :md="8" :lg="4">
-          <div class="metric-card">
-            <div class="metric-icon port-icon">
-              <el-icon :size="22"><Operation /></el-icon>
-            </div>
-            <div class="metric-content">
-              <div class="metric-value">{{ listenPort }}</div>
-              <div class="metric-label">监听端口</div>
-            </div>
-          </div>
-        </el-col>
-      </el-row>
-
-      <!-- 高级：仅 MITM 服务 -->
-      <el-card class="control-card">
-        <template #header>
-          <div class="card-header">
-            <span class="card-title">高级：MITM 服务（非系统代理写入）</span>
+          <div class="step-row">
+            <span class="step-row-label">MITM 服务</span>
             <el-switch
               v-model="status.enabled"
               :loading="toggling"
               @change="toggleProxy"
-              active-text="服务已开"
-              inactive-text="服务已关"
+              active-text="已开"
+              inactive-text="已关"
             />
+            <span class="form-hint">监听 {{ listenDisplay }}</span>
           </div>
-        </template>
-        <div class="control-content">
-          <el-form :model="config" label-width="120px">
-            <el-row :gutter="16">
-              <el-col :span="12">
-                <el-form-item label="监听端口">
-                  <el-input-number
-                    v-model="listenPort"
-                    :min="1024"
-                    :max="65535"
-                    :disabled="status.enabled"
-                    controls-position="right"
-                  />
-                </el-form-item>
-              </el-col>
-              <el-col :span="12">
-                <el-form-item label="代理模式">
-                  <el-select v-model="status.pac_enabled" :disabled="status.enabled" style="width: 100%" @change="onPacModeChange">
-                    <el-option label="PAC模式(仅代理指定域名)" :value="true" />
-                    <el-option label="全局模式(代理所有流量)" :value="false" />
-                  </el-select>
-                </el-form-item>
-              </el-col>
-            </el-row>
-          </el-form>
-          <el-divider />
-          <el-alert
-            :title="status.enabled ? '系统代理已启用' : '系统代理已禁用'"
-            :type="status.enabled ? 'success' : 'info'"
-            :closable="false"
-            show-icon
-          >
-            <template #default>
-              <div v-if="status.enabled">
-                <p>MITM代理服务器正在运行,监听端口: {{ listenPort }}</p>
-                <p v-if="status.pac_enabled">当前为PAC模式,仅代理PAC文件中配置的域名</p>
-                <p v-else>当前为全局模式,将代理所有HTTP/HTTPS流量</p>
-              </div>
-              <div v-else>
-                <p>禁用后,代理服务器停止监听,所有流量将直连</p>
-              </div>
-            </template>
-          </el-alert>
-        </div>
-      </el-card>
 
-      <!-- PAC规则管理 -->
-      <el-card class="pac-card">
-        <template #header>
-          <div class="card-header">
-            <span class="card-title">PAC规则管理</span>
-            <div>
-              <el-button type="primary" link @click="showPACPreview">
-                <el-icon><View /></el-icon>
-                查看PAC文件
-              </el-button>
-              <el-button type="primary" link @click="downloadPAC">
-                <el-icon><Download /></el-icon>
-                下载PAC文件
-              </el-button>
-              <el-button type="primary" @click="openAddDomain" :disabled="!status.enabled">
-                <el-icon><Plus /></el-icon>
-                添加域名
-              </el-button>
+          <div class="step-row">
+            <span class="step-row-label">允许局域网访问</span>
+            <el-switch v-model="allowLanClients" :loading="savingLan" @change="onAllowLanChange" />
+            <span class="form-hint">
+              关闭 = 仅本机（127.0.0.1）；开启 = 监听 0.0.0.0，同网段其它设备可连
+            </span>
+          </div>
+
+          <template v-if="allowLanClients">
+            <el-form label-width="120px" class="lan-form">
+              <el-form-item label="本机局域网 IP" required>
+                <el-input v-model="advertiseHost" placeholder="如 192.168.1.50" style="max-width: 240px" />
+                <el-button class="ml-sm" :loading="detectingIP" @click="detectLanIP">探测</el-button>
+                <el-button type="primary" class="ml-sm" :loading="savingLan" @click="saveLanConfig">保存</el-button>
+                <div v-if="suggestedLanHosts.length" class="form-hint lan-suggest">
+                  可选：
+                  <el-button
+                    v-for="ip in suggestedLanHosts"
+                    :key="ip"
+                    link
+                    type="primary"
+                    @click="pickLanHost(ip)"
+                  >
+                    {{ ip }}
+                  </el-button>
+                </div>
+              </el-form-item>
+              <el-form-item label="对外访问地址">
+                <el-input v-model="employeeServer" placeholder="http://192.168.1.50:20060" style="max-width: 320px" />
+              </el-form-item>
+            </el-form>
+            <el-alert type="warning" :closable="false" show-icon class="mb-sm">
+              必须填写本机局域网 IP 后再保存。仅在可信内网开启，并放行防火墙端口 {{ apiPort }} / {{ listenPort }}。
+            </el-alert>
+          </template>
+        </el-card>
+
+        <!-- 步骤 3 -->
+        <el-card class="step-card" shadow="never">
+          <div class="step-head">
+            <span class="step-num">3</span>
+            <div class="step-title-block">
+              <h3>接入 Agent（推荐进程代理）</h3>
+              <p>一条命令自动处理 CA + HTTPS_PROXY，启动你的 Agent。多数 CLI 到这一步就够了。</p>
+            </div>
+            <el-tag type="success" size="small">推荐</el-tag>
+          </div>
+
+          <div class="cmd-block">
+            <code>{{ runCommand }}</code>
+            <el-button type="primary" size="small" @click="copyRunCmd">复制命令</el-button>
+          </div>
+
+          <el-collapse class="optional-collapse">
+            <el-collapse-item title="可选：系统 PAC（仅认系统代理的桌面客户端）" name="pac">
+              <p class="mb-sm form-hint">
+                OpenCode 等多数 CLI 不读系统 PAC。PAC URL：{{ apiPACURL }}
+              </p>
+              <el-space wrap>
+                <el-button @click="copyProxyctlCmd('enable')">复制：PAC 启用</el-button>
+                <el-button type="danger" plain @click="copyProxyctlCmd('disable')">复制：停用并恢复</el-button>
+                <el-button @click="copyEnvProxyCmd">复制：手写 HTTPS_PROXY</el-button>
+              </el-space>
+            </el-collapse-item>
+          </el-collapse>
+        </el-card>
+
+        <!-- 步骤 4 -->
+        <el-card class="step-card" shadow="never">
+          <div class="step-head">
+            <span class="step-num">4</span>
+            <div class="step-title-block">
+              <h3>验证是否正常</h3>
+              <p>下列全部满足即为配置成功。</p>
             </div>
           </div>
-        </template>
-        <el-table :data="domainList" stripe v-loading="loading" max-height="300">
-          <el-table-column prop="domain" label="域名" min-width="200" />
-          <el-table-column label="测试" width="100" align="center">
-            <template #default="{ row }">
-              <el-button
-                type="primary"
-                link
-                @click="testDomain(row.domain)"
-                :loading="testingDomains[row.domain]"
-              >
-                <el-icon><Position /></el-icon>
-                测试
-              </el-button>
-            </template>
-          </el-table-column>
-          <el-table-column label="操作" width="120" align="center">
-            <template #default="{ row }">
-              <el-button type="danger" link @click="removeDomain(row.domain)" :disabled="!status.enabled">
-                <el-icon><Delete /></el-icon>
-                删除
-              </el-button>
-            </template>
-          </el-table-column>
-        </el-table>
-      </el-card>
-
-      <!-- 路径模式管理 -->
-      <el-card class="pattern-card">
-        <template #header>
-          <div class="card-header">
-            <span class="card-title">路径模式管理</span>
-            <el-button type="primary" @click="openAddPattern" :disabled="!status.enabled">
-              <el-icon><Plus /></el-icon>
-              添加路径模式
-            </el-button>
-          </div>
-        </template>
-        <el-alert type="info" :closable="false" class="mb-md">
-          <template #default>
-            <p>路径模式用于匹配需要代理的API路径。例如: /v1、/openai、/api（可选；白名单域名上识别到 /v1、/chat/completions、/responses 等也会转发）</p>
-            <p>域名须在白名单；命中后会统一改写到 Centag 的 /v1/*，无需为每个 Agent 单独适配路径（变更立即同步 MITM）</p>
-          </template>
-        </el-alert>
-        <el-table :data="patternList" stripe v-loading="loading" max-height="300">
-          <el-table-column prop="pattern" label="路径模式" min-width="200" />
-          <el-table-column label="操作" width="120" align="center">
-            <template #default="{ row }">
-              <el-button type="danger" link @click="removePattern(row.pattern)" :disabled="!status.enabled">
-                <el-icon><Delete /></el-icon>
-                删除
-              </el-button>
-            </template>
-          </el-table-column>
-        </el-table>
-      </el-card>
-
-      <!-- CA证书管理 -->
-      <el-card class="cert-card">
-        <template #header>
-          <div class="card-title">CA证书管理</div>
-        </template>
-        <div class="cert-content">
+          <ul class="check-list">
+            <li :class="egressConfigured ? 'pass' : 'fail'">
+              出口 Key {{ egressConfigured ? '已配置' : '未配置' }}（否则 Agent 会看到「无效的 API key」）
+            </li>
+            <li :class="status.enabled ? 'pass' : 'fail'">
+              MITM {{ status.enabled ? '运行中' : '未启动' }}
+            </li>
+            <li class="info">Web「后端 / Provider」至少有一个已启用且带有效上游 Key（否则 503 无可用后端）</li>
+            <li class="info">Agent 用 proxyctl run 启动后，请求出现在 Centag 日志</li>
+            <li class="info">证书报错 → 到「其它」页下载并信任 CA</li>
+          </ul>
+          <el-space wrap>
+            <el-button @click="copyProxyctlCmd('doctor')">复制：诊断命令</el-button>
+            <el-button type="primary" :loading="testing" @click="testProxy">立即测试</el-button>
+          </el-space>
           <el-alert
-            title="HTTPS请求需要信任CA证书"
-            type="warning"
+            v-if="testResult"
+            class="mt-md"
+            :type="testResult.ok ? 'success' : 'error'"
             :closable="false"
             show-icon
+            :title="testResult.title"
           >
-            <template #default>
-              <p>代理使用自签名证书拦截HTTPS流量,需要将CA证书安装到系统信任库。</p>
-            </template>
+            <ul class="check-list" style="margin-bottom: 0">
+              <li v-for="(line, i) in testResult.lines" :key="i" :class="line.ok ? 'pass' : 'fail'">
+                {{ line.text }}
+              </li>
+            </ul>
           </el-alert>
-          <div class="cert-actions mt-md">
+          <p class="form-hint mt-md">
+            说明：页面测试检查 MITM/PAC/出口 Key/CA 是否就绪，不会从浏览器直连 openai.com（那会 CORS/超时）。
+            端到端连通请用上方「复制：诊断命令」或 proxyctl run 实测。
+          </p>
+        </el-card>
+      </el-tab-pane>
+
+      <!-- ========== Tab 2: 域名与路径 ========== -->
+      <el-tab-pane label="域名与路径" name="rules">
+        <el-card class="pac-card" shadow="never">
+          <template #header>
+            <div class="card-header">
+              <span class="card-title">PAC 域名白名单</span>
+              <div>
+                <el-button type="primary" link @click="showPACPreview">
+                  <el-icon><View /></el-icon>
+                  查看 PAC
+                </el-button>
+                <el-button type="primary" link @click="downloadPAC">
+                  <el-icon><Download /></el-icon>
+                  下载 PAC
+                </el-button>
+                <el-button :loading="ensuringDefaults" @click="ensureDefaultRules">
+                  补全默认列表
+                </el-button>
+                <el-button type="primary" @click="openAddDomain" :disabled="!status.enabled">
+                  <el-icon><Plus /></el-icon>
+                  添加域名
+                </el-button>
+              </div>
+            </div>
+          </template>
+          <el-alert type="info" :closable="false" class="mb-md" show-icon>
+            仅白名单内域名会走代理。初始化列表已覆盖 Provider 目录中的大模型服务域名，可按需增删。
+          </el-alert>
+          <el-table :data="domainList" stripe v-loading="loading" max-height="420">
+            <el-table-column prop="domain" label="域名" min-width="220" />
+            <el-table-column label="测试" width="100" align="center">
+              <template #default="{ row }">
+                <el-button
+                  type="primary"
+                  link
+                  @click="testDomain(row.domain)"
+                  :loading="testingDomains[row.domain]"
+                >
+                  <el-icon><Position /></el-icon>
+                  测试
+                </el-button>
+              </template>
+            </el-table-column>
+            <el-table-column label="操作" width="120" align="center">
+              <template #default="{ row }">
+                <el-button type="danger" link @click="removeDomain(row.domain)" :disabled="!status.enabled">
+                  <el-icon><Delete /></el-icon>
+                  删除
+                </el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+        </el-card>
+
+        <el-card class="pattern-card mt-md" shadow="never">
+          <template #header>
+            <div class="card-header">
+              <span class="card-title">路径模式</span>
+              <el-button type="primary" @click="openAddPattern" :disabled="!status.enabled">
+                <el-icon><Plus /></el-icon>
+                添加路径模式
+              </el-button>
+            </div>
+          </template>
+          <el-alert type="info" :closable="false" class="mb-md" show-icon>
+            域名须在白名单。命中路径后会改写到 Centag 的 /v1/*；白名单域名上识别到常见 LLM 路径也会转发。
+          </el-alert>
+          <el-table :data="patternList" stripe v-loading="loading" max-height="320">
+            <el-table-column prop="pattern" label="路径模式" min-width="220" />
+            <el-table-column label="操作" width="120" align="center">
+              <template #default="{ row }">
+                <el-button type="danger" link @click="removePattern(row.pattern)" :disabled="!status.enabled">
+                  <el-icon><Delete /></el-icon>
+                  删除
+                </el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+        </el-card>
+      </el-tab-pane>
+
+      <!-- ========== Tab 3: 其它 ========== -->
+      <el-tab-pane label="其它" name="advanced">
+        <el-card class="control-card" shadow="never">
+          <template #header>
+            <span class="card-title">MITM 高级选项</span>
+          </template>
+          <el-form :model="config" label-width="120px">
+            <el-form-item label="监听端口">
+              <el-input-number
+                v-model="listenPort"
+                :min="1024"
+                :max="65535"
+                :disabled="status.enabled"
+                controls-position="right"
+              />
+              <span class="form-hint">修改后需关闭再开启 MITM</span>
+            </el-form-item>
+            <el-form-item label="代理模式">
+              <el-select
+                v-model="status.pac_enabled"
+                :disabled="status.enabled"
+                style="max-width: 360px"
+                @change="onPacModeChange"
+              >
+                <el-option label="PAC 模式（仅代理指定域名，推荐）" :value="true" />
+                <el-option label="全局模式（代理所有流量）" :value="false" />
+              </el-select>
+            </el-form-item>
+            <el-form-item label="Listen Addr" v-if="allowLanClients">
+              <el-input v-model="listenAddr" placeholder="0.0.0.0" style="max-width: 240px" />
+              <el-button type="primary" class="ml-sm" :loading="savingLan" @click="saveLanConfig">保存</el-button>
+            </el-form-item>
+          </el-form>
+          <el-descriptions :column="2" size="small" border>
+            <el-descriptions-item label="PAC URL">{{ apiPACURL }}</el-descriptions-item>
+            <el-descriptions-item label="MITM PROXY">
+              {{ setupStatus?.mitm_proxy || `http://127.0.0.1:${listenPort}` }}
+            </el-descriptions-item>
+            <el-descriptions-item label="CA 指纹">
+              {{ setupStatus?.ca_fingerprint_sha256 || '（启 MITM 后生成）' }}
+            </el-descriptions-item>
+            <el-descriptions-item label="Loopback">
+              {{ setupStatus?.listen_is_loopback !== false ? '是' : '否' }}
+            </el-descriptions-item>
+          </el-descriptions>
+        </el-card>
+
+        <el-card class="cert-card mt-md" shadow="never">
+          <template #header>
+            <span class="card-title">CA 证书</span>
+          </template>
+          <el-alert title="HTTPS 需要信任本 CA，否则会证书错误" type="warning" :closable="false" show-icon class="mb-md" />
+          <el-space wrap class="mb-md">
             <el-button type="primary" @click="downloadCACert">
               <el-icon><Download /></el-icon>
-              下载CA证书
+              下载 CA 证书
             </el-button>
             <el-button @click="copyCertCommand">
               <el-icon><DocumentCopy /></el-icon>
               复制安装命令
             </el-button>
-          </div>
-          <el-divider />
-          <div class="cert-info">
-            <el-descriptions :column="2" border>
-              <el-descriptions-item label="证书状态">
-                <el-tag :type="certInfo.valid ? 'success' : 'danger'" size="small">
-                  {{ certInfo.valid ? '有效' : '无效' }}
-                </el-tag>
-              </el-descriptions-item>
-              <el-descriptions-item label="颁发者">{{ certInfo.issuer }}</el-descriptions-item>
-              <el-descriptions-item label="有效期至">{{ certInfo.expires }}</el-descriptions-item>
-              <el-descriptions-item label="剩余天数">{{ certInfo.daysLeft }}天</el-descriptions-item>
-            </el-descriptions>
-          </div>
-        </div>
-      </el-card>
+          </el-space>
+          <el-descriptions :column="2" border size="small">
+            <el-descriptions-item label="证书状态">
+              <el-tag :type="certInfo.valid ? 'success' : 'danger'" size="small">
+                {{ certInfo.valid ? '有效' : '无效' }}
+              </el-tag>
+            </el-descriptions-item>
+            <el-descriptions-item label="颁发者">{{ certInfo.issuer }}</el-descriptions-item>
+            <el-descriptions-item label="有效期至">{{ certInfo.expires }}</el-descriptions-item>
+            <el-descriptions-item label="剩余天数">{{ certInfo.daysLeft }} 天</el-descriptions-item>
+          </el-descriptions>
+        </el-card>
+      </el-tab-pane>
+    </el-tabs>
 
-      <!-- 配置指南 -->
-      <el-card class="guide-card">
-        <template #header>
-          <div class="card-header">
-            <span class="card-title">配置指南</span>
-            <el-button link @click="toggleGuide">
-              {{ showGuide ? '收起' : '展开' }}
-              <el-icon><ArrowDown v-if="!showGuide" /><ArrowUp v-else /></el-icon>
-            </el-button>
-          </div>
-        </template>
-        <div v-show="showGuide" class="guide-content">
-          <el-steps :active="setupSteps.active" align-center>
-            <el-step title="启用代理" description="启动系统代理功能" />
-            <el-step title="配置PAC" description="添加代理域名" />
-            <el-step title="安装证书" description="信任CA证书" />
-            <el-step title="配置系统" description="设置系统代理" />
-            <el-step title="测试验证" description="验证代理工作" />
-          </el-steps>
-
-          <el-divider />
-
-          <div class="step-details">
-            <h3>步骤1: 下载CA证书</h3>
-            <el-alert type="info" :closable="false" class="mb-md">
-              <template #default>
-                <p>首先下载CA证书,后续步骤需要安装到系统</p>
-              </template>
-            </el-alert>
-            <el-input
-              type="textarea"
-              :rows="2"
-              :model-value="`curl -o centag-ca.crt http://127.0.0.1:${apiPort}/api/v1/proxy/ca.crt`"
-              readonly
-              class="mb-md"
-            />
-            <el-button type="primary" @click="copyCommand(`curl -o centag-ca.crt http://127.0.0.1:${apiPort}/api/v1/proxy/ca.crt`)">
-              <el-icon><DocumentCopy /></el-icon>
-              复制下载命令
-            </el-button>
-
-            <el-divider />
-
-            <h3>步骤2: 安装CA证书</h3>
-            <el-alert type="warning" :closable="false" class="mb-md">
-              <template #default>
-                <p>将CA证书安装到系统信任库,否则HTTPS请求会报证书错误</p>
-              </template>
-            </el-alert>
-            <div class="mt-md">
-              <h4>Linux/Mac:</h4>
-              <el-input
-                type="textarea"
-                :rows="2"
-                model-value="sudo cp centag-ca.crt /usr/local/share/ca-certificates/centag-ca.crt && sudo update-ca-certificates"
-                readonly
-                class="mb-md"
-              />
-              <el-button @click="copyCommand('sudo cp centag-ca.crt /usr/local/share/ca-certificates/centag-ca.crt && sudo update-ca-certificates')">
-                <el-icon><DocumentCopy /></el-icon>
-                复制安装命令
-              </el-button>
-            </div>
-            <div class="mt-md">
-              <h4>Windows:</h4>
-              <el-input
-                type="textarea"
-                :rows="2"
-                model-value="双击 centag-ca.crt 文件,选择 安装到 受信任的根证书颁发机构"
-                readonly
-                class="mb-md"
-              />
-            </div>
-
-            <el-divider />
-
-            <h3>步骤3: 配置系统代理</h3>
-            <el-alert type="info" :closable="false" class="mb-md">
-              <template #default>
-                <p>配置系统使用代理服务器</p>
-              </template>
-            </el-alert>
-            <div class="mt-md">
-              <h4>Linux:</h4>
-              <el-input
-                type="textarea"
-                :rows="4"
-                :model-value="`export http_proxy=http://127.0.0.1:${listenPort}
-export https_proxy=http://127.0.0.1:${listenPort}
-export no_proxy=localhost,127.0.0.1`"
-                readonly
-                class="mb-md"
-              />
-              <el-button @click="copyCommand(`export http_proxy=http://127.0.0.1:${listenPort}\nexport https_proxy=http://127.0.0.1:${listenPort}\nexport no_proxy=localhost,127.0.0.1`)">
-                <el-icon><DocumentCopy /></el-icon>
-                复制配置命令
-              </el-button>
-            </div>
-            <div class="mt-md">
-              <h4>Mac:</h4>
-              <p class="mb-md">系统设置 → 网络 → 代理 → HTTP/HTTPS代理 → 输入: 127.0.0.1:{{ listenPort }}</p>
-              <el-button @click="copyPACURL">
-                <el-icon><DocumentCopy /></el-icon>
-                复制PAC URL
-              </el-button>
-            </div>
-            <div class="mt-md">
-              <h4>Windows:</h4>
-              <p class="mb-md">设置 → 网络和Internet → 代理 → 手动设置代理 → 输入: 127.0.0.1:{{ listenPort }}</p>
-              <el-button @click="copyPACURL">
-                <el-icon><DocumentCopy /></el-icon>
-                复制PAC URL
-              </el-button>
-            </div>
-
-            <el-divider />
-
-            <h3>步骤4: 测试代理</h3>
-            <el-alert type="success" :closable="false" class="mb-md">
-              <template #default>
-                <p>验证代理是否正常工作</p>
-              </template>
-            </el-alert>
-            <el-input
-              type="textarea"
-              :rows="1"
-              model-value="curl -x http://127.0.0.1:8081 https://api.openai.com/v1/models"
-              readonly
-              class="mb-md"
-            />
-            <el-button type="primary" @click="copyCommand('curl -x http://127.0.0.1:8081 https://api.openai.com/v1/models')">
-              <el-icon><DocumentCopy /></el-icon>
-              复制测试命令
-            </el-button>
-          </div>
-        </div>
-      </el-card>
-    </div>
-
-    <!-- 添加域名对话框 -->
+    <!-- 添加域名 -->
     <el-dialog v-model="showAddDialog" title="添加域名" width="500px">
       <el-form :model="newDomain" label-width="100px">
         <el-form-item label="域名">
           <el-input v-model="newDomain.domain" placeholder="例如: api.openai.com" />
           <el-alert type="warning" :closable="false" class="mt-md">
-            <template #default>
-              <p>注意: 只输入域名，不要包含协议(https://)或路径(/path)</p>
-            </template>
+            只输入域名，不要包含协议或路径
           </el-alert>
         </el-form-item>
       </el-form>
@@ -530,16 +433,13 @@ export no_proxy=localhost,127.0.0.1`"
       </template>
     </el-dialog>
 
-    <!-- 添加路径模式对话框 -->
+    <!-- 添加路径模式 -->
     <el-dialog v-model="showAddPatternDialog" title="添加路径模式" width="500px">
       <el-form :model="newPattern" label-width="100px">
         <el-form-item label="路径模式">
-          <el-input v-model="newPattern.pattern" placeholder="例如: /v1 或 /openai" />
+          <el-input v-model="newPattern.pattern" placeholder="例如: /v1 或 /api/paas/v4" />
           <el-alert type="info" :closable="false" class="mt-md">
-            <template #default>
-              <p>路径模式用于匹配API路径前缀</p>
-              <p>常见模式: /v1, /openai, /api, /v3</p>
-            </template>
+            常见：/v1、/v2、/openai/v1、/api/paas/v4、/zen/v1
           </el-alert>
         </el-form-item>
       </el-form>
@@ -549,15 +449,9 @@ export no_proxy=localhost,127.0.0.1`"
       </template>
     </el-dialog>
 
-    <!-- PAC文件预览对话框 -->
-    <el-dialog v-model="showPACDialog" title="PAC文件预览" width="800px">
-      <el-input
-        type="textarea"
-        :rows="20"
-        v-model="pacContent"
-        readonly
-        class="pac-preview"
-      />
+    <!-- PAC 预览 -->
+    <el-dialog v-model="showPACDialog" title="PAC 文件预览" width="800px">
+      <el-input type="textarea" :rows="20" v-model="pacContent" readonly class="pac-preview" />
       <template #footer>
         <el-button @click="showPACDialog = false">关闭</el-button>
         <el-button type="primary" @click="downloadPAC">
@@ -570,138 +464,6 @@ export no_proxy=localhost,127.0.0.1`"
         </el-button>
       </template>
     </el-dialog>
-
-    <!-- 配置向导 -->
-    <el-dialog v-model="showWizard" title="系统代理快速配置向导" width="600px">
-      <el-steps :active="wizardStep" finish-status="success" align-center class="mb-lg">
-        <el-step title="检查配置" />
-        <el-step title="安装证书" />
-        <el-step title="配置系统" />
-        <el-step title="测试验证" />
-        <el-step title="完成" />
-      </el-steps>
-
-      <div v-if="wizardStep === 0" class="wizard-step">
-        <el-descriptions :column="1" border>
-          <el-descriptions-item label="代理状态">
-            <el-tag :type="status.enabled ? 'success' : 'info'">{{ status.enabled ? '已启用' : '已禁用' }}</el-tag>
-          </el-descriptions-item>
-          <el-descriptions-item label="代理模式">
-            <el-tag type="primary">{{ status.pac_enabled ? 'PAC模式' : '全局模式' }}</el-tag>
-          </el-descriptions-item>
-          <el-descriptions-item label="监听端口">{{ listenPort }}</el-descriptions-item>
-          <el-descriptions-item label="PAC域名数">{{ domainCount }}</el-descriptions-item>
-        </el-descriptions>
-        <el-alert type="info" class="mt-md" :closable="false">
-          点击"下一步"开始配置CA证书安装
-        </el-alert>
-      </div>
-
-      <div v-if="wizardStep === 1" class="wizard-step">
-        <h3>安装CA证书</h3>
-        <p class="mb-md">首先下载并安装CA证书到系统信任库</p>
-        <el-input
-          type="textarea"
-          :rows="2"
-          :model-value="`curl -o centag-ca.crt http://127.0.0.1:${apiPort}/api/v1/proxy/ca.crt`"
-          readonly
-          class="mb-md"
-        />
-        <el-button @click="downloadCACert">
-          <el-icon><Download /></el-icon>
-          下载CA证书
-        </el-button>
-        <el-button @click="copyCommand(`curl -o centag-ca.crt http://127.0.0.1:${apiPort}/api/v1/proxy/ca.crt`)">
-          <el-icon><DocumentCopy /></el-icon>
-          复制命令
-        </el-button>
-        <el-divider />
-        <p class="text-warning">重要: 安装证书后需要重启浏览器或应用才能生效</p>
-      </div>
-
-      <div v-if="wizardStep === 2" class="wizard-step">
-        <h3>配置系统代理</h3>
-        <el-tabs v-model="activeTab" class="mb-md">
-          <el-tab-pane label="Linux" name="linux">
-            <el-input
-              type="textarea"
-              :rows="4"
-              :model-value="`export http_proxy=http://127.0.0.1:${listenPort}\nexport https_proxy=http://127.0.0.1:${listenPort}\nexport no_proxy=localhost,127.0.0.1`"
-              readonly
-              class="mb-md"
-            />
-            <el-button @click="copyCommand(`export http_proxy=http://127.0.0.1:${listenPort}\nexport https_proxy=http://127.0.0.1:${listenPort}\nexport no_proxy=localhost,127.0.0.1`)">
-              <el-icon><DocumentCopy /></el-icon>
-              复制配置
-            </el-button>
-          </el-tab-pane>
-          <el-tab-pane label="Mac" name="mac">
-            <p class="mb-md">系统设置 → 网络 → 代理 → HTTP/HTTPS代理</p>
-            <el-input
-              type="textarea"
-              :rows="2"
-              :model-value="`地址: 127.0.0.1\n端口: ${listenPort}`"
-              readonly
-              class="mb-md"
-            />
-            <el-button @click="copyPACURL">
-              <el-icon><DocumentCopy /></el-icon>
-              复制PAC URL
-            </el-button>
-          </el-tab-pane>
-          <el-tab-pane label="Windows" name="windows">
-            <p class="mb-md">设置 → 网络和Internet → 代理 → 手动设置代理</p>
-            <el-input
-              type="textarea"
-              :rows="2"
-              :model-value="`地址: 127.0.0.1\n端口: ${listenPort}`"
-              readonly
-              class="mb-md"
-            />
-            <el-button @click="copyPACURL">
-              <el-icon><DocumentCopy /></el-icon>
-              复制PAC URL
-            </el-button>
-          </el-tab-pane>
-        </el-tabs>
-      </div>
-
-      <div v-if="wizardStep === 3" class="wizard-step">
-        <h3>测试代理</h3>
-        <p class="mb-md">测试代理是否正常工作</p>
-        <el-input
-          type="textarea"
-          :rows="1"
-          model-value="curl -x http://127.0.0.1:8081 https://api.openai.com/v1/models"
-          readonly
-          class="mb-md"
-        />
-        <el-button @click="copyCommand('curl -x http://127.0.0.1:8081 https://api.openai.com/v1/models')">
-          <el-icon><DocumentCopy /></el-icon>
-          复制测试命令
-        </el-button>
-        <el-button type="primary" @click="testProxy" :loading="testing">
-          <el-icon><Position /></el-icon>
-          立即测试
-        </el-button>
-      </div>
-
-      <div v-if="wizardStep === 4" class="wizard-step">
-        <el-result icon="success" title="配置完成" sub-title="系统代理已配置完成">
-          <template #extra>
-            <el-button type="primary" @click="showWizard = false">完成</el-button>
-            <el-button @click="testProxy">再次测试</el-button>
-          </template>
-        </el-result>
-      </div>
-
-      <template #footer>
-        <el-button @click="wizardStep--" :disabled="wizardStep === 0">上一步</el-button>
-        <el-button type="primary" @click="wizardStep++" :disabled="wizardStep === 4">
-          下一步
-        </el-button>
-      </template>
-    </el-dialog>
   </div>
 </template>
 
@@ -710,20 +472,12 @@ import { ref, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   Refresh,
-  MagicStick,
-  Connection,
-  Link,
-  Operation,
-  DocumentChecked,
   Plus,
   Position,
   Delete,
   Download,
   DocumentCopy,
-  ArrowDown,
-  ArrowUp,
-  View,
-  FolderOpened
+  View
 } from '@element-plus/icons-vue'
 import api from '@/api'
 import { listAPIKeys, type APIKey } from '@/api/user'
@@ -751,15 +505,17 @@ interface CertInfo {
 const loading = ref(false)
 const toggling = ref(false)
 const testing = ref(false)
+const testResult = ref<{ ok: boolean; title: string; lines: { ok: boolean; text: string }[] } | null>(null)
 const savingLan = ref(false)
 const detectingIP = ref(false)
 const ensuringEgress = ref(false)
 const bindingEgress = ref(false)
 const loadingKeys = ref(false)
-const uiMode = ref<'local' | 'team'>('local')
+const mainTab = ref('wizard')
 const setupStatus = ref<ProxySetupStatus | null>(null)
 const allowLanClients = ref(false)
 const advertiseHost = ref('')
+const suggestedLanHosts = ref<string[]>([])
 const listenAddr = ref('127.0.0.1')
 const employeeServer = ref('')
 const selectedEgressKeyId = ref<number | undefined>()
@@ -778,15 +534,12 @@ const certInfo = ref<CertInfo>({
   daysLeft: 3650
 })
 const testingDomains = ref<Record<string, boolean>>({})
-const showGuide = ref(false)
 const showAddDialog = ref(false)
 const showAddPatternDialog = ref(false)
-const showWizard = ref(false)
 const showPACDialog = ref(false)
-const wizardStep = ref(0)
-const activeTab = ref('linux')
 const adding = ref(false)
 const addingPattern = ref(false)
+const ensuringDefaults = ref(false)
 const listenPort = ref(8081)
 const apiPort = ref(20060)
 const pacContent = ref('')
@@ -802,45 +555,56 @@ const newPattern = ref({
 
 const domainCount = computed(() => status.value.pac_domains.length)
 const patternCount = computed(() => status.value.pac_patterns.length)
-const domainList = computed(() => {
-  return status.value.pac_domains.map(domain => ({ domain }))
-})
-const patternList = computed(() => {
-  return status.value.pac_patterns.map(pattern => ({ pattern }))
+const domainList = computed(() => status.value.pac_domains.map(domain => ({ domain })))
+const patternList = computed(() => status.value.pac_patterns.map(pattern => ({ pattern })))
+
+const listenDisplay = computed(() => {
+  const addr = setupStatus.value?.listen_addr || `${listenAddr.value || '127.0.0.1'}:${listenPort.value}`
+  return addr.includes(':') ? addr : `${addr}:${listenPort.value}`
 })
 
-const setupSteps = ref({
-  active: -1
+const wizardProgress = computed(() => {
+  if (!egressConfigured.value) return 0
+  if (!status.value.enabled) return 1
+  return 3
 })
 
-// PAC / CA 一律走 API 口（非 MITM 口）
 const apiPACURL = computed(() => {
   if (setupStatus.value?.pac_url) return setupStatus.value.pac_url
   return `http://127.0.0.1:${apiPort.value}/api/v1/proxy/pac`
 })
 
-const pacURL = computed(() => apiPACURL.value)
-
-const apiCACertURL = computed(() => {
-  if (setupStatus.value?.ca_download_url) return setupStatus.value.ca_download_url
-  return `http://127.0.0.1:${apiPort.value}/api/v1/proxy/ca.crt`
+const runCommand = computed(() => {
+  if (allowLanClients.value) {
+    return `${proxyctlBin()} run --server ${employeeAPIBase()} -- opencode`
+  }
+  return `${proxyctlBin()} run -- opencode`
 })
 
 function proxyctlBin() {
   return 'centag-proxyctl'
 }
 
+function employeeAPIBase() {
+  const base = (employeeServer.value || setupStatus.value?.pac_url || '').replace(/\/api\/v1\/proxy\/pac$/, '')
+  return base || `http://127.0.0.1:${apiPort.value}`
+}
+
 function copyProxyctlCmd(kind: 'enable' | 'disable' | 'doctor') {
   const bin = proxyctlBin()
-  const cmd =
+  let cmd =
     kind === 'enable' ? `${bin} enable` : kind === 'disable' ? `${bin} disable` : `${bin} doctor`
+  if (allowLanClients.value) {
+    const server = employeeAPIBase()
+    if (kind === 'enable') cmd = `${bin} enable --server ${server}`
+    else if (kind === 'doctor') cmd = `${bin} doctor --server ${server}`
+  }
   copyCommand(cmd)
 }
 
-/** 仅进程级代理：勿写入全局 shell，避免影响浏览器与其它 App */
 function copyEnvProxyCmd() {
   const host =
-    uiMode.value === 'team' && advertiseHost.value
+    allowLanClients.value && advertiseHost.value.trim()
       ? advertiseHost.value.trim()
       : '127.0.0.1'
   const port = listenPort.value || 8081
@@ -854,26 +618,13 @@ function copyEnvProxyCmd() {
       `export HTTP_PROXY=${proxy}`,
       `export https_proxy="$HTTPS_PROXY"`,
       `export http_proxy="$HTTP_PROXY"`,
-      `# 然后启动你的 Agent，例如：opencode`,
+      `# 然后启动你的 Agent，例如：opencode`
     ].join('\n')
   )
 }
 
-function employeeAPIBase() {
-  const base = (employeeServer.value || setupStatus.value?.pac_url || '').replace(/\/api\/v1\/proxy\/pac$/, '')
-  return base || `http://127.0.0.1:${apiPort.value}`
-}
-
-function copyEmployeeEnable() {
-  copyCommand(`${proxyctlBin()} enable --server ${employeeAPIBase()}`)
-}
-
-function copyEmployeeRun() {
-  copyCommand(`${proxyctlBin()} run --server ${employeeAPIBase()} -- opencode`)
-}
-
-function copyLocalRunCmd() {
-  copyCommand(`${proxyctlBin()} run -- opencode`)
+function copyRunCmd() {
+  copyCommand(runCommand.value)
 }
 
 async function loadAPIKeys() {
@@ -925,15 +676,20 @@ async function onAllowLanChange(val: boolean) {
   }
   try {
     await ElMessageBox.confirm(
-      '开启后 MITM 将对局域网可达，请仅在可信内网使用，并配置防火墙。是否继续？',
-      '允许局域网客户端',
+      '开启后 MITM 将对局域网可达（监听 0.0.0.0），请仅在可信内网使用。是否继续？',
+      '允许局域网访问',
       { type: 'warning', confirmButtonText: '确认开启', cancelButtonText: '取消' }
     )
     if (!listenAddr.value || listenAddr.value === '127.0.0.1') {
       listenAddr.value = '0.0.0.0'
     }
-    if (!advertiseHost.value) {
+    if (!advertiseHost.value.trim()) {
       await detectLanIP()
+    }
+    // 探测失败时不要立刻保存：留在表单让用户填 IP / 点候选
+    if (!advertiseHost.value.trim()) {
+      ElMessage.warning('请选择或填写本机局域网 IP，再点「保存」')
+      return
     }
     await saveLanConfig()
   } catch {
@@ -954,24 +710,60 @@ async function onPacModeChange(val: boolean) {
   }
 }
 
+function pickLanHost(ip: string) {
+  advertiseHost.value = ip
+  employeeServer.value = `http://${ip}:${apiPort.value}`
+}
+
 async function detectLanIP() {
   detectingIP.value = true
   try {
-    // Best-effort: use host from current location if not loopback
+    // 1) 浏览器地址栏若已是局域网 IP，直接用
     const host = window.location.hostname
-    if (host && host !== 'localhost' && host !== '127.0.0.1') {
-      advertiseHost.value = host
-      employeeServer.value = `${window.location.protocol}//${host}:${apiPort.value}`
+    if (host && host !== 'localhost' && host !== '127.0.0.1' && host !== '[::1]') {
+      pickLanHost(host)
       ElMessage.success(`已填入 ${host}`)
       return
     }
-    ElMessage.info('请手动填写局域网 IP（如 192.168.x.x）')
+
+    // 2) 向服务端询问本机网卡 IP（localhost 打开页面时也能用）
+    try {
+      const st = await getProxySetupStatus()
+      const list = st.suggested_lan_hosts || []
+      suggestedLanHosts.value = list
+      if (list.length === 1) {
+        pickLanHost(list[0])
+        ElMessage.success(`已填入 ${list[0]}`)
+        return
+      }
+      if (list.length > 1) {
+        pickLanHost(list[0])
+        ElMessage.info(`已填入 ${list[0]}，如有多个网卡可点下方候选切换`)
+        return
+      }
+    } catch {
+      // ignore, fall through
+    }
+
+    ElMessage.warning('未能自动探测，请手动填写局域网 IP（如 192.168.x.x）')
   } finally {
     detectingIP.value = false
   }
 }
 
 async function saveLanConfig() {
+  if (allowLanClients.value) {
+    const host = advertiseHost.value.trim()
+    if (!host) {
+      ElMessage.warning('开启局域网访问时必须填写本机局域网 IP')
+      return
+    }
+    if (host === 'localhost' || host === '127.0.0.1' || host === '::1') {
+      ElMessage.warning('局域网 IP 不能是 127.0.0.1 / localhost')
+      return
+    }
+  }
+
   savingLan.value = true
   try {
     await api.put('/api/v1/config', {
@@ -981,10 +773,10 @@ async function saveLanConfig() {
         pac_enabled: status.value.pac_enabled,
         allow_lan_clients: allowLanClients.value,
         listen_addr: allowLanClients.value ? listenAddr.value || '0.0.0.0' : '127.0.0.1',
-        advertise_host: allowLanClients.value ? advertiseHost.value : ''
+        advertise_host: allowLanClients.value ? advertiseHost.value.trim() : ''
       }
     })
-    ElMessage.success('局域网出口配置已保存')
+    ElMessage.success(allowLanClients.value ? '局域网访问已开启' : '已恢复为仅本机访问')
     await load()
   } catch (error: any) {
     ElMessage.error('保存失败: ' + error.message)
@@ -994,11 +786,9 @@ async function saveLanConfig() {
   }
 }
 
-// 加载状态
 const load = async () => {
   loading.value = true
   try {
-    // 从config获取完整配置
     const configData = await api.get('/api/v1/config')
     if (configData.system_proxy) {
       status.value.enabled = configData.system_proxy.enabled
@@ -1007,24 +797,24 @@ const load = async () => {
       allowLanClients.value = !!configData.system_proxy.allow_lan_clients
       advertiseHost.value = configData.system_proxy.advertise_host || ''
       listenAddr.value = configData.system_proxy.listen_addr || '127.0.0.1'
-      if (allowLanClients.value) uiMode.value = 'team'
     }
     if (configData.server?.port) {
       apiPort.value = configData.server.port
     }
 
-    // 从proxy status获取域名等信息
     const proxyData = await api.get('/api/v1/proxy/status')
     status.value.pac_domains = proxyData.pac_domains || []
     status.value.pac_patterns = proxyData.pac_patterns || []
 
     try {
       setupStatus.value = await getProxySetupStatus()
+      suggestedLanHosts.value = setupStatus.value?.suggested_lan_hosts || []
       if (setupStatus.value?.pac_url && !employeeServer.value) {
         employeeServer.value = setupStatus.value.pac_url.replace(/\/api\/v1\/proxy\/pac$/, '')
       }
     } catch {
       setupStatus.value = null
+      suggestedLanHosts.value = []
     }
     void loadAPIKeys()
   } catch (error: any) {
@@ -1034,7 +824,6 @@ const load = async () => {
   }
 }
 
-// 加载域名列表
 const loadDomains = async () => {
   try {
     const data = await api.get('/api/v1/proxy/domains')
@@ -1044,7 +833,21 @@ const loadDomains = async () => {
   }
 }
 
-// 切换代理状态
+const ensureDefaultRules = async () => {
+  ensuringDefaults.value = true
+  try {
+    const res = await api.post('/api/v1/proxy/domains/ensure-defaults')
+    const d = res.added_domains ?? 0
+    const p = res.added_patterns ?? 0
+    ElMessage.success(d + p === 0 ? '默认列表已是最新' : `已补全 ${d} 个域名、${p} 个路径`)
+    await load()
+  } catch (error: any) {
+    ElMessage.error('补全失败: ' + (error.message || error))
+  } finally {
+    ensuringDefaults.value = false
+  }
+}
+
 const toggleProxy = async () => {
   toggling.value = true
   try {
@@ -1068,11 +871,8 @@ const toggleProxy = async () => {
   }
 }
 
-// 添加域名
 const openAddDomain = () => {
-  newDomain.value = {
-    domain: ''
-  }
+  newDomain.value = { domain: '' }
   showAddDialog.value = true
 }
 
@@ -1081,7 +881,6 @@ const addDomain = async () => {
     ElMessage.warning('请输入域名')
     return
   }
-
   adding.value = true
   try {
     await api.post('/api/v1/proxy/domains/add', { domain: newDomain.value.domain })
@@ -1095,13 +894,9 @@ const addDomain = async () => {
   }
 }
 
-// 删除域名
 const removeDomain = async (domain: string) => {
   try {
-    await ElMessageBox.confirm(`确定删除域名 ${domain} 吗?`, '确认删除', {
-      type: 'warning'
-    })
-
+    await ElMessageBox.confirm(`确定删除域名 ${domain} 吗?`, '确认删除', { type: 'warning' })
     await api.post('/api/v1/proxy/domains/remove', { domain })
     ElMessage.success('域名删除成功')
     await loadDomains()
@@ -1112,11 +907,8 @@ const removeDomain = async (domain: string) => {
   }
 }
 
-// 添加路径模式
 const openAddPattern = () => {
-  newPattern.value = {
-    pattern: ''
-  }
+  newPattern.value = { pattern: '' }
   showAddPatternDialog.value = true
 }
 
@@ -1125,13 +917,10 @@ const addPattern = async () => {
     ElMessage.warning('请输入路径模式')
     return
   }
-
-  // 确保路径以/开头
   let pattern = newPattern.value.pattern.trim()
   if (!pattern.startsWith('/')) {
     pattern = '/' + pattern
   }
-
   addingPattern.value = true
   try {
     await api.post('/api/v1/proxy/patterns/add', { pattern })
@@ -1145,13 +934,9 @@ const addPattern = async () => {
   }
 }
 
-// 删除路径模式
 const removePattern = async (pattern: string) => {
   try {
-    await ElMessageBox.confirm(`确定删除路径模式 ${pattern} 吗?`, '确认删除', {
-      type: 'warning'
-    })
-
+    await ElMessageBox.confirm(`确定删除路径模式 ${pattern} 吗?`, '确认删除', { type: 'warning' })
     await api.post('/api/v1/proxy/patterns/remove', { pattern })
     ElMessage.success('路径模式删除成功')
     await load()
@@ -1162,7 +947,6 @@ const removePattern = async (pattern: string) => {
   }
 }
 
-// 测试域名
 const testDomain = async (domain: string) => {
   testingDomains.value[domain] = true
   try {
@@ -1175,10 +959,8 @@ const testDomain = async (domain: string) => {
   }
 }
 
-// 下载CA证书
 const downloadCACert = async () => {
   try {
-    // 使用原生fetch下载，避免axios响应拦截器处理blob数据
     const response = await fetch('/api/v1/proxy/ca.crt')
     const blob = await response.blob()
     const url = window.URL.createObjectURL(blob)
@@ -1195,17 +977,15 @@ const downloadCACert = async () => {
   }
 }
 
-// 复制命令
 const copyCommand = async (command: string) => {
   try {
     await navigator.clipboard.writeText(command)
     ElMessage.success('已复制到剪贴板')
-  } catch (error) {
+  } catch {
     ElMessage.error('复制失败')
   }
 }
 
-// 复制证书安装命令
 const copyCertCommand = async () => {
   const commands = [
     '# 下载CA证书',
@@ -1220,12 +1000,6 @@ const copyCertCommand = async () => {
   await copyCommand(commands)
 }
 
-// 复制PAC URL
-const copyPACURL = async () => {
-  await copyCommand(`PAC URL: ${pacURL.value}`)
-}
-
-// 查看PAC文件
 const showPACPreview = async () => {
   try {
     const response = await fetch(apiPACURL.value)
@@ -1236,7 +1010,6 @@ const showPACPreview = async () => {
   }
 }
 
-// 下载PAC文件
 const downloadPAC = async () => {
   try {
     const response = await fetch(apiPACURL.value)
@@ -1256,30 +1029,71 @@ const downloadPAC = async () => {
   }
 }
 
-// 复制PAC内容
 const copyPACContent = async () => {
   await copyCommand(pacContent.value)
 }
 
-// 切换指南显示
-const toggleGuide = () => {
-  showGuide.value = !showGuide.value
-}
-
-// 打开配置向导
-const openSetupWizard = () => {
-  wizardStep.value = 0
-  showWizard.value = true
-}
-
-// 测试代理
 const testProxy = async () => {
   testing.value = true
+  testResult.value = null
+  const lines: { ok: boolean; text: string }[] = []
   try {
-    await api.get('https://api.openai.com/v1/models')
-    ElMessage.success('代理测试成功!')
+    await load()
+    lines.push({
+      ok: !!status.value.enabled,
+      text: status.value.enabled ? 'MITM 服务运行中' : 'MITM 未启动（请先在步骤 2 开启）'
+    })
+    lines.push({
+      ok: egressConfigured.value,
+      text: egressConfigured.value ? '出口 Key 已配置' : '出口 Key 未配置（MITM 无法注入鉴权）'
+    })
+
+    try {
+      const pacResp = await fetch(apiPACURL.value, { cache: 'no-store' })
+      const pacText = pacResp.ok ? await pacResp.text() : ''
+      const hasProxy = /PROXY\s+\S+:\d+/i.test(pacText)
+      lines.push({
+        ok: pacResp.ok && hasProxy,
+        text: pacResp.ok && hasProxy
+          ? `PAC 可访问（${pacText.length} bytes，含 PROXY）`
+          : `PAC 异常（HTTP ${pacResp.status}）`
+      })
+    } catch (e: any) {
+      lines.push({ ok: false, text: `PAC 拉取失败: ${e.message || e}` })
+    }
+
+    try {
+      const caResp = await fetch('/api/v1/proxy/ca.crt', { cache: 'no-store' })
+      lines.push({
+        ok: caResp.ok,
+        text: caResp.ok ? 'CA 证书可下载' : `CA 下载失败（HTTP ${caResp.status}）`
+      })
+    } catch (e: any) {
+      lines.push({ ok: false, text: `CA 下载失败: ${e.message || e}` })
+    }
+
+    if (setupStatus.value?.in_container) {
+      lines.push({
+        ok: true,
+        text: 'Docker 部署：请确认宿主机已映射 8081（./start.sh docker run personal）'
+      })
+    }
+
+    const ok = lines.every(l => l.ok)
+    testResult.value = {
+      ok,
+      title: ok ? '本机代理出口就绪（页面自检通过）' : '自检未通过，请按下列项处理',
+      lines
+    }
+    if (ok) ElMessage.success('自检通过')
+    else ElMessage.warning('自检未全部通过')
   } catch (error: any) {
-    ElMessage.error(`测试失败: ${error.message}`)
+    testResult.value = {
+      ok: false,
+      title: '自检失败',
+      lines: [{ ok: false, text: error.message || String(error) }]
+    }
+    ElMessage.error(`测试失败: ${error.message || error}`)
   } finally {
     testing.value = false
   }
@@ -1299,7 +1113,7 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  margin-bottom: 24px;
+  margin-bottom: 16px;
   flex-wrap: wrap;
   gap: 16px;
 }
@@ -1327,122 +1141,151 @@ onMounted(() => {
   gap: 12px;
 }
 
-.content-wrapper {
+.status-strip {
   display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-/* 统计卡片 */
-.metrics-grid {
+  flex-wrap: wrap;
+  gap: 10px;
   margin-bottom: 16px;
 }
 
-.metric-card {
-  background: var(--el-bg-color);
-  border-radius: 8px;
-  padding: 12px 14px;
+.status-item {
   display: flex;
-  align-items: center;
-  gap: 10px;
-  transition: all 0.3s;
+  align-items: baseline;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: 8px;
   border: 1px solid var(--el-border-color);
+  background: var(--el-bg-color);
+  min-width: 120px;
 }
 
-.metric-card:hover {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  transform: translateY(-2px);
-}
-
-.metric-card.status-active {
-  border-color: var(--el-color-success);
-  background: linear-gradient(135deg, rgba(103, 194, 58, 0.1) 0%, var(--el-bg-color) 100%);
-}
-
-.metric-card.status-inactive {
-  border-color: var(--el-color-info);
-  background: linear-gradient(135deg, rgba(144, 147, 153, 0.1) 0%, var(--el-bg-color) 100%);
-}
-
-.metric-card.pac-active {
-  border-color: var(--el-color-primary);
-  background: linear-gradient(135deg, rgba(64, 158, 255, 0.1) 0%, var(--el-bg-color) 100%);
-}
-
-.metric-card.pac-inactive {
-  border-color: var(--el-color-warning);
-  background: linear-gradient(135deg, rgba(230, 162, 60, 0.1) 0%, var(--el-bg-color) 100%);
-}
-
-.metric-icon {
-  width: 40px;
-  height: 40px;
-  border-radius: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--el-color-primary-light-9);
-  color: var(--el-color-primary);
-  flex-shrink: 0;
-}
-
-.metric-icon.status-active-icon {
+.status-item.ok {
+  border-color: var(--el-color-success-light-5);
   background: var(--el-color-success-light-9);
-  color: var(--el-color-success);
 }
 
-.metric-icon.status-inactive-icon {
-  background: var(--el-color-info-light-9);
-  color: var(--el-color-info);
-}
-
-.metric-icon.pac-active-icon {
-  background: var(--el-color-primary-light-9);
-  color: var(--el-color-primary);
-}
-
-.metric-icon.pac-inactive-icon {
+.status-item.warn {
+  border-color: var(--el-color-warning-light-5);
   background: var(--el-color-warning-light-9);
-  color: var(--el-color-warning);
 }
 
-.metric-icon.domain-icon {
-  background: var(--el-color-primary-light-9);
-  color: var(--el-color-primary);
-}
-
-.metric-icon.port-icon {
-  background: var(--el-color-info-light-9);
-  color: var(--el-color-info);
-}
-
-.metric-icon.pattern-icon {
-  background: var(--el-color-warning-light-9);
-  color: var(--el-color-warning);
-}
-
-.metric-content {
-  flex: 1;
-}
-
-.metric-value {
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--el-text-color-primary);
-  margin-bottom: 2px;
-}
-
-.metric-label {
+.status-label {
   font-size: 12px;
   color: var(--el-text-color-secondary);
 }
 
-/* 卡片样式 */
-.control-card,
-.pac-card,
-.cert-card,
-.guide-card {
+.status-value {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--el-text-color-primary);
+}
+
+.main-tabs :deep(.el-tabs__content) {
+  padding-top: 8px;
+}
+
+.step-card {
+  margin-bottom: 12px;
   border-radius: 8px;
+}
+
+.step-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.step-num {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--el-color-primary);
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.step-title-block {
+  flex: 1;
+  min-width: 0;
+}
+
+.step-title-block h3 {
+  margin: 0 0 4px;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.step-title-block p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--el-text-color-secondary);
+}
+
+.step-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.step-row-label {
+  width: 120px;
+  font-size: 14px;
+  color: var(--el-text-color-regular);
+}
+
+.lan-form {
+  margin-top: 8px;
+}
+
+.cmd-block {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: var(--el-fill-color-light);
+  margin-bottom: 12px;
+}
+
+.cmd-block code {
+  flex: 1;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 13px;
+  word-break: break-all;
+}
+
+.optional-collapse {
+  border: none;
+}
+
+.check-list {
+  margin: 0 0 16px;
+  padding-left: 20px;
+}
+
+.check-list li {
+  margin-bottom: 6px;
+  font-size: 14px;
+}
+
+.check-list li.pass {
+  color: var(--el-color-success);
+}
+
+.check-list li.fail {
+  color: var(--el-color-danger);
+}
+
+.check-list li.info {
+  color: var(--el-text-color-secondary);
 }
 
 .card-header {
@@ -1456,68 +1299,9 @@ onMounted(() => {
   font-size: 16px;
 }
 
-.control-content {
-  margin-top: 16px;
-}
-
-/* CA证书 */
-.cert-content {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.cert-actions {
-  display: flex;
-  gap: 12px;
-}
-
-.cert-info {
-  margin-top: 16px;
-}
-
-/* PAC预览 */
 .pac-preview {
-  font-family: 'Courier New', monospace;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: 12px;
-}
-
-/* 配置指南 */
-.guide-content {
-  padding: 16px 0;
-}
-
-.step-details {
-  margin-top: 24px;
-}
-
-.step-details h3 {
-  margin: 24px 0 12px 0;
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--el-text-color-primary);
-}
-
-.step-details h4 {
-  margin: 16px 0 8px 0;
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--el-text-color-primary);
-}
-
-.wizard-step {
-  padding: 20px 0;
-  min-height: 200px;
-}
-
-.text-warning {
-  color: var(--el-color-warning);
-  font-size: 13px;
-}
-
-/* 工具类 */
-.mt-lg {
-  margin-top: 24px;
 }
 
 .mt-md {
@@ -1528,35 +1312,47 @@ onMounted(() => {
   margin-bottom: 16px;
 }
 
+.mb-lg {
+  margin-bottom: 24px;
+}
+
+.mb-sm {
+  margin-bottom: 8px;
+}
+
 .ml-sm {
   margin-left: 8px;
 }
 
 .form-hint {
-  margin-left: 12px;
   color: var(--el-text-color-secondary);
   font-size: 12px;
 }
 
-.hero-card {
-  margin-bottom: 16px;
+.lan-suggest {
+  width: 100%;
+  margin-top: 6px;
+  margin-left: 0;
 }
 
-/* 响应式 */
+.key-policy-list {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.key-policy-list li {
+  margin-bottom: 4px;
+}
+
 @media (max-width: 768px) {
   .header-with-toolbar {
     flex-direction: column;
-    align-items: flex-start;
   }
 
-  .toolbar-actions {
+  .step-row-label {
     width: 100%;
-    flex-wrap: wrap;
-  }
-
-  .toolbar-actions .el-button {
-    flex: 1;
-    min-width: 100px;
   }
 }
 </style>

@@ -181,11 +181,16 @@ async function loadCostSummary() {
       params.to = dateRange.value[1]
     }
     summary.value = await costApi.getCostSummary(params)
-  } catch {
+  } catch (err: any) {
+    // personal 旧版若 cost/summary 被 team-only 拦住会 403；勿静默显示假 0 而不提示
+    const status = err?.response?.status ?? err?.status
     summary.value = {
       ...summary.value,
       total_cost_usd: 0,
       groups: []
+    }
+    if (status === 403) {
+      console.warn('[usage] cost/summary unavailable (403); rebuild/update if on personal edition')
     }
   }
 }

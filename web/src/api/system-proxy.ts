@@ -7,6 +7,8 @@ export interface ProxySetupStatus {
   listen_is_loopback: boolean
   allow_lan_clients: boolean
   advertise_host: string
+  suggested_lan_hosts?: string[]
+  in_container?: boolean
   pac_enabled: boolean
   pac_url: string
   ca_download_url: string
