@@ -7,17 +7,17 @@ Centag 默认二进制**不包含** `plugins/business/*`。流水线保留 `Busi
 1. 在消费方仓库（或本仓临时联调）的 `go.mod` 中：
 
 ```go
-require example.com/org/centag-business v0.1.0
+require example.com/org/centag-pro v0.1.0
 
-replace example.com/org/centag-business => ../centag-business
+replace example.com/org/centag-pro => ../centag-pro
 ```
 
 2. 在发行版入口（如 `dist/personal/main.go` 或 `cmd/centag/main.go`）增加 blank import：
 
 ```go
 import (
-	_ "example.com/org/centag-business/router"
-	_ "example.com/org/centag-business/optimizer"
+	_ "example.com/org/centag-pro/router"
+	_ "example.com/org/centag-pro/optimizer"
 	// ...
 )
 ```
