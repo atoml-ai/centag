@@ -1,8 +1,23 @@
 #!/usr/bin/env bash
-# 列出参与 CI 的 Go 包路径（排除 web/node_modules 下被误识别为 Go 模块的树；
-# 排除 cmd/tools：多 main 的本地调试脚本，非可发布包；
-# 排除 …/deploy/stack/…：子项目树（go list 下为 centag/deploy/stack/...），pi-sandbox/examples 等依赖独立 go-client 模块）。
+# 列出参与 CI / make test 的 Go 包路径。
+#
+# - 覆盖 go.work 中全部模块（不仅是根 go.mod，否则只会测到 cmd/centag + sdk）
+# - 跳过：build constraints 排除全部文件的包、web/node_modules、deploy/stack、
+#   cmd/tools、edition dist stub、无测试的 cmd/centag 主入口
 set -euo pipefail
 cd "$(dirname "$0")/.."
-# -e: 跳过 deploy/stack/pi-sandbox 等缺依赖的包，避免整表失败
-go list -e ./... | grep -v '/node_modules/' | grep -v '^centag/cmd/tools$' | grep -v '/deploy/stack/'
+
+mods=()
+while IFS= read -r dir; do
+	[[ -n "$dir" ]] || continue
+	mods+=("${dir}/...")
+done < <(go list -m -f '{{.Dir}}')
+
+# -e + 过滤 .Error：跳过「build constraints exclude all」的 plugin 包
+go list -e -f '{{if not .Error}}{{.ImportPath}}{{end}}' "${mods[@]}" 2>/dev/null \
+	| grep -v '/node_modules/' \
+	| grep -v '^centag/cmd/tools$' \
+	| grep -v '/deploy/stack/' \
+	| grep -v '^centag/dist/' \
+	| grep -v '^centag/cmd/centag$' \
+	| grep -v '^$'
