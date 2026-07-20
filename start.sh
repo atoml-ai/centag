@@ -470,7 +470,7 @@ _build_team_via_pro() {
     if ! pro_root="$(_resolve_centag_pro)"; then
         print_error "Team 构建已迁至私有仓 centag-pro；开源仓不再包含 dist/team。"
         print_info "请克隆 https://github.com/atoml-ai/centag-pro 到 $(dirname "$PROJECT_ROOT")/centag-pro"
-        print_info "或设置 CENTAG_PRO_PATH=/path/to/centag-pro 后重试: $0 build team"
+        print_info "或设置 CENTAG_PRO_PATH=/path/to/centag-pro 后重试: $0 build team / $0 debug team"
         exit 1
     fi
     if [ ! -x "${pro_root}/scripts/build-team.sh" ] && [ ! -f "${pro_root}/scripts/build-team.sh" ]; then
@@ -1241,7 +1241,7 @@ detect_database_mode() {
 # 用法（与 build/run 风格一致）:
 #   ./start.sh debug                 # 默认 personal
 #   ./start.sh debug minimal         # 精简 WebUI + centag-minimal
-#   ./start.sh debug team            # 全功能二进制 + CENTAG_EDITION=team
+#   ./start.sh debug team            # centag-pro 构建 centag-team + CENTAG_EDITION=team
 #   ./start.sh debug personal        # 显式 personal（同默认）
 debug() {
     # ── 解析发行版（位置参数，与 build/run 一致）──────────────────
@@ -1275,7 +1275,13 @@ debug() {
         return
     fi
 
-    # ── 全功能分支：webui 前端；personal（默认）或 team ─────────────
+    # ── team 分支：经 centag-pro 构建完整商业二进制 ────────────────
+    if [ "$edition" = "team" ]; then
+        _debug_team
+        return
+    fi
+
+    # ── personal：开源全功能二进制 + webui 前端 ───────────────────
 
     load_env
 
@@ -1287,7 +1293,7 @@ debug() {
     centag_export_debug_console_env
 
     # 覆盖 secrets 中的 edition
-    export CENTAG_EDITION="${edition}"
+    export CENTAG_EDITION=personal
 
     # ── 清理所有残留进程（保证前台独占）──────────────────────────
     cleanup_residual_processes
@@ -1297,7 +1303,7 @@ debug() {
     kill_backend_port_or_exit || return 1
 
     check_go
-    print_info "编译后端 (edition=${edition})..."
+    print_info "编译后端 (edition=personal)..."
     build backend
 
     # 检查前端依赖
@@ -1342,7 +1348,7 @@ debug() {
     echo ""
     print_info "════════════════════════════════════════"
     print_info "  开发模式已启动"
-    print_info "  产品版本:    ${edition}"
+    print_info "  产品版本:    personal"
     print_info "  访问地址:    http://localhost:$BACKEND_PORT"
     print_info "  前端变化后:  刷新浏览器即可看到最新内容"
     print_info "  后端变化后:  下次执行 debug 会先自动编译；也可 ./start.sh build be 单独编译"
@@ -1352,7 +1358,70 @@ debug() {
 
     # 前台启动后端（日志直接输出到控制台）
     cd "$BIN_DIR"
-    CENTAG_EDITION="${edition}" ./centag
+    CENTAG_EDITION=personal ./centag
+    cd "$PROJECT_ROOT"
+}
+
+# ── Team 调试：经 centag-pro 构建完整商业二进制 + webui watch ─────────────
+_debug_team() {
+    load_env
+    detect_database_mode
+    centag_export_debug_console_env
+    export CENTAG_EDITION=team
+
+    cleanup_residual_processes
+    rm -f "$BIN_DIR/storage/centag.pid" 2>/dev/null || true
+    kill_backend_port_or_exit || return 1
+
+    check_go
+    print_info "编译 Team 商业二进制（经 centag-pro）..."
+    build_distribution "team"
+
+    check_node
+    local webui_dir="${PROJECT_ROOT}/web"
+    if [ ! -d "$webui_dir/node_modules" ] || [ "$webui_dir/package.json" -nt "$webui_dir/node_modules/.package-lock.json" ]; then
+        print_info "安装 Web UI 依赖..."
+        cd "$webui_dir" && npm install && cd "$PROJECT_ROOT"
+    fi
+
+    mkdir -p "$BIN_DIR/static"
+    print_info "启动前端 watch 构建（变化后刷新浏览器即可生效）..."
+    cd "$webui_dir"
+    npx vite build --watch --outDir "$BIN_DIR/static" --emptyOutDir false > /tmp/centag-vite-team.log 2>&1 &
+    local vite_pid=$!
+    cd "$PROJECT_ROOT"
+
+    print_info "等待首次构建完成..."
+    local waited=0
+    while [ $waited -lt 30 ]; do
+        if grep -q "built in" /tmp/centag-vite-team.log 2>/dev/null; then
+            break
+        fi
+        sleep 1
+        waited=$((waited + 1))
+    done
+
+    if ! kill -0 "$vite_pid" 2>/dev/null; then
+        print_error "前端构建失败，请查看日志: /tmp/centag-vite-team.log"
+        cat /tmp/centag-vite-team.log
+        exit 1
+    fi
+    print_success "前端构建就绪，Vite 监听文件变化中..."
+    trap "kill $vite_pid 2>/dev/null; print_info '已停止前端 watch 进程'" EXIT INT TERM
+
+    echo ""
+    print_info "════════════════════════════════════════"
+    print_info "  Team 开发模式已启动"
+    print_info "  产品版本:    team（centag-pro / centag-team）"
+    print_info "  访问地址:    http://localhost:$BACKEND_PORT"
+    print_info "  前端变化后:  刷新浏览器即可看到最新内容"
+    print_info "  后端变化后:  下次执行 debug team 会经 pro 重新编译"
+    print_info "  按 Ctrl+C 停止所有服务"
+    print_info "════════════════════════════════════════"
+    echo ""
+
+    cd "$BIN_DIR"
+    CENTAG_EDITION=team ./centag-team
     cd "$PROJECT_ROOT"
 }
 
@@ -3462,9 +3531,9 @@ _help_debug() {
     echo -e "  ./start.sh debug personal     # 显式 personal（同默认）"
     echo ""
     echo -e "${CYAN}发行版:${NC}"
-    echo -e "  ${GREEN}personal${NC}           CENTAG_EDITION=personal + 全功能二进制（默认）"
+    echo -e "  ${GREEN}personal${NC}           CENTAG_EDITION=personal + 开源全功能二进制（默认）"
     echo -e "  ${GREEN}minimal${NC}             精简 WebUI + centag-minimal"
-    echo -e "  ${GREEN}team${NC}                全功能二进制 + CENTAG_EDITION=team"
+    echo -e "  ${GREEN}team${NC}                经 centag-pro 构建 centag-team + CENTAG_EDITION=team"
     echo ""
     echo -e "${CYAN}说明:${NC}"
     echo -e "  风格与 build / run 一致：./start.sh debug <minimal|personal|team>"
