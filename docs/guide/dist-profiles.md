@@ -16,11 +16,11 @@ Dist Profile 是 Centag 的**编译时插件子集**。能否真正注册，取�
 |--------|------|------------|--------------|
 | **minimal** | 轻量单机 / CLI | 精简（无 DB、仅 router） | 文件配置，无中间件 |
 | **personal** | **个人全功能** | 与 team **对齐** | **默认内置 SQLite** + **`CENTAG_EDITION=personal`**；可按需接外部中间件 |
-| **team** | **团队版** | 与 personal **对齐** | **中间件单独部署**（PG、向量化等）+ **`CENTAG_EDITION=team`**；可多租户 / HA |
+| **team** | **团队商业版** | 与 personal 同级插件集合 + **pro 插件包** | 构建在 **`centag-pro`**（开源无 `dist/team`）；部署默认外置 PG 等 + `CENTAG_EDITION=team` |
 
-> personal 与 team 的差别**主要不在二进制裁剪**，而在 **Config Profile / 部署默认依赖 / 产品版本**（见 `config/profiles/`）。
-> 两者都编入完整业务插件与 sqlite+postgresql 驱动；personal 默认 sqlite + `personal`，team 默认外部 PG + `team`。
-> **命名**：发行包 `personal` ≠ edition 枚举；运行时 edition 为 `personal`。
+> **Open Core（现行）**：开源仓只含 `dist/minimal` 与 `dist/personal`，可完全独立构建。  
+> **Team**：主程序 `centag-pro/cmd/centag-team`，经 `extension.Plugin` / `bundle/team` 接入；`./start.sh build team` 转调 pro（需 `../centag-pro` 或 `CENTAG_PRO_PATH`）。  
+> personal 与 team 部署差异仍见 `config/profiles/`；商业增值与后续高级能力只加在 pro 插件/前端 pack。
 
 与之对应的是 **Config Profile**（`config/profiles/<name>/`）：部署蓝图（compose + manifest），在运行时决定行为。
 
@@ -36,8 +36,8 @@ Dist Profile 是 Centag 的**编译时插件子集**。能否真正注册，取�
 
 | 项 | minimal | personal | team | 本地 `cmd/centag` |
 |----|---------|---------|------|----------------------|
-| 入口 | `dist/minimal/main.go` | `dist/personal/main.go` | `dist/team/main.go` | `cmd/centag/main.go` |
-| 构建命令 | `./start.sh dist build minimal` | `./start.sh dist build personal` | `./start.sh dist build team` | `./start.sh build be` / `make build` |
+| 入口 | `dist/minimal/main.go` | `dist/personal/main.go` | **`centag-pro/cmd/centag-team`** | `cmd/centag/main.go` |
+| 构建命令 | `./start.sh build minimal` | `./start.sh build personal` | `./start.sh build team`（转调 pro） | `./start.sh build be` / `make build` |
 | 插件集合 | 精简 | **全功能** | **全功能（同 personal）** | 全功能（同 personal/team） |
 | 默认 DB（部署） | 无（文件配置） | SQLite | 外部 PostgreSQL | 视本地 `.env` |
 | 前端（Docker） | 否（config-generator） | 是 | 是 | 本地另跑 `build fe` |
@@ -166,10 +166,11 @@ Dist Profile 是 Centag 的**编译时插件子集**。能否真正注册，取�
 - **部署默认**：`LLM_PROXY_DB_DRIVER=sqlite`，单容器即可；需要时改配置连接外部 PG / Redis / 向量等
 - 对应 Config Profile：`config/profiles/personal/`
 
-### team（团队版）
+### team（团队商业版）
 
-- 入口：`dist/team/main.go`
-- tags / 插件集合：**与 personal 对齐**
+- 入口：**`centag-pro/cmd/centag-team`**（开源无 `dist/team`）
+- tags / 插件集合：与 personal 对齐 + pro `bundle/team` 插件
+- 构建：`./start.sh build team` 或 `centag-pro/scripts/build-team.sh`
 - **部署默认**：外部 PostgreSQL、向量等中间件单独部署；`CENTAG_EDITION=team`、多租户 / 可选 HA
 - 对应 Config Profile：`config/profiles/team/`
 
@@ -186,7 +187,7 @@ Dist Profile 是 Centag 的**编译时插件子集**。能否真正注册，取�
 |----------------|------------|-----------|------------------|---------|
 | `minimal` | `deploy/docker/Dockerfile.dist` | `minimal` | `false` | 无 |
 | `personal` | `deploy/docker/Dockerfile.dist` | `personal` | `true` | SQLite |
-| `team` | `deploy/docker/Dockerfile.dist` | `team` | `true` | 外部 PostgreSQL |
+| `team` | **在 centag-pro 构建镜像**（开源 Dockerfile.dist 拒绝 `DIST_NAME=team`） | — | — | 外部 PostgreSQL |
 
 ### 构建参数
 
