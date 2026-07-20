@@ -51,7 +51,7 @@
           style="display: none"
           @change="handleImportTemplateFile"
         />
-        <el-button type="primary" @click="openCreate">
+        <el-button v-if="canAddOwnPipelines" type="primary" @click="openCreate">
           <el-icon><Plus /></el-icon>
           创建流水线
         </el-button>
@@ -331,12 +331,14 @@ import CapabilitySlotsDialog from '@/components/pipeline/CapabilitySlotsDialog.v
 import type { PipelineCreateInfo } from '@/components/pipeline/PipelineCreateDialog.vue'
 import ExecutionHistory from '@/components/pipeline/ExecutionHistory.vue'
 import { useAuthStore } from '@/stores/auth'
+import { useUserResourceAccess } from '@/composables/useUserResourceAccess'
 import { resolvePipelineFeatureSupport } from '@/utils/pipeline/features'
 import { canConfigureCapabilitySlots } from '@/utils/capabilitySlots'
 
 const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
+const { canAddOwnPipelines } = useUserResourceAccess()
 
 // ── 状态 ─────────────────────────────────────────────────────────────────────
 const loading = ref(false)

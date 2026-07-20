@@ -11,11 +11,14 @@ import (
 	"time"
 
 	"centag/core/internal/auth"
+	"centag/core/internal/edition"
 	"centag/core/pkg/backend"
+	"centag/core/pkg/database"
 	"centag/core/pkg/logger"
 	"centag/core/pkg/pipeline"
 	"centag/core/pkg/proxymode"
 	"centag/core/pkg/scheduler"
+	"centag/core/pkg/useraccess"
 
 	"github.com/gin-gonic/gin"
 	"gopkg.in/yaml.v3"
@@ -30,6 +33,7 @@ type PipelineHandler struct {
 	pluginRegistryStore pipeline.PluginRegistryStore // 插件注册表存储（可为 nil）
 	pipelineStore       pipeline.PipelineStore       // 流水线执行历史存储（可为 nil）
 	modeManager         *proxymode.ModeManager       // 快捷码与 ModeManager 同步（可为 nil）
+	edition             edition.Edition
 	autoBuildScheduler  autoBuildScheduler
 	autoBuildBackendMgr autoBuildBackendManager
 	autoBuildMu         sync.Mutex
@@ -68,6 +72,17 @@ func (h *PipelineHandler) SetPipelineStore(store pipeline.PipelineStore) {
 // SetModeManager 注入模式管理器，使流水线快捷码与 ModeManager 保持同步。
 func (h *PipelineHandler) SetModeManager(mgr *proxymode.ModeManager) {
 	h.modeManager = mgr
+}
+
+// SetEdition configures product edition for Team resource access rules.
+func (h *PipelineHandler) SetEdition(ed edition.Edition) {
+	if h != nil {
+		h.edition = ed
+	}
+}
+
+func (h *PipelineHandler) accessUser(c *gin.Context) *database.User {
+	return loadTeamNormalUser(c, h.edition)
 }
 
 // SetAutoBuildScheduler 注入用于 auto-build 的调度器。
@@ -137,6 +152,16 @@ func (h *PipelineHandler) requirePipelineAccess(c *gin.Context, pipelineID strin
 			"error":   fmt.Sprintf("pipeline %s not found or access denied", pipelineID),
 		})
 		return nil, fmt.Errorf("access denied")
+	}
+	if user := h.accessUser(c); user != nil {
+		filtered := useraccess.FilterPipelines(user, []*pipeline.AgentPatternPipeline{p})
+		if len(filtered) == 0 {
+			c.JSON(http.StatusForbidden, gin.H{
+				"success": false,
+				"error":   fmt.Sprintf("pipeline %s not found or access denied", pipelineID),
+			})
+			return nil, fmt.Errorf("access denied")
+		}
 	}
 	return p, nil
 }
@@ -227,6 +252,9 @@ func (h *PipelineHandler) ListPipelines(c *gin.Context) {
 			pipelines = h.pipelineRegistry.List()
 		}
 	}
+	if user := h.accessUser(c); user != nil {
+		pipelines = useraccess.FilterPipelines(user, pipelines)
+	}
 
 	// 注入 RouteConfig：使前端能获取到完整的 RouteConfig 信息
 	if len(h.templates) > 0 {
@@ -274,6 +302,14 @@ func (h *PipelineHandler) GetPipeline(c *gin.Context) {
 // - 管理员：创建全局流水线
 // - 普通用户：自动绑定到当前租户
 func (h *PipelineHandler) CreatePipeline(c *gin.Context) {
+	tenantID := h.getTenantID(c)
+	if tenantID != "" {
+		if user := h.accessUser(c); user != nil && !user.CanAddOwnPipelines {
+			c.JSON(http.StatusForbidden, gin.H{"success": false, "error": "adding or modifying own pipelines is disabled for this user"})
+			return
+		}
+	}
+
 	var req pipeline.AgentPatternPipeline
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": fmt.Sprintf("invalid request body: %v", err)})
@@ -297,7 +333,6 @@ func (h *PipelineHandler) CreatePipeline(c *gin.Context) {
 	// 检查 overwrite 参数：false 时拒绝覆盖已有流水线
 	overwrite := c.DefaultQuery("overwrite", "true") == "true"
 	if !overwrite {
-		tenantID := h.getTenantID(c)
 		var exists bool
 		if tenantID != "" {
 			exists = h.pipelineRegistry.ExistsInTenant(tenantID, req.ID)
@@ -310,7 +345,6 @@ func (h *PipelineHandler) CreatePipeline(c *gin.Context) {
 		}
 	}
 
-	tenantID := h.getTenantID(c)
 	var err error
 	if tenantID != "" {
 		// 普通用户：注册到租户空间
@@ -351,6 +385,17 @@ func (h *PipelineHandler) UpdatePipeline(c *gin.Context) {
 	if err != nil {
 		return
 	}
+	tenantID := h.getTenantID(c)
+	if tenantID != "" {
+		if user := h.accessUser(c); user != nil && !user.CanAddOwnPipelines {
+			c.JSON(http.StatusForbidden, gin.H{"success": false, "error": "adding or modifying own pipelines is disabled for this user"})
+			return
+		}
+		if existing.TenantID == "" {
+			c.JSON(http.StatusForbidden, gin.H{"success": false, "error": "cannot modify system pipeline"})
+			return
+		}
+	}
 
 	var req pipeline.AgentPatternPipeline
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -379,7 +424,6 @@ func (h *PipelineHandler) UpdatePipeline(c *gin.Context) {
 	oldCopy.Nodes = make([]pipeline.PipelineNodeConfig, len(existing.Nodes))
 	copy(oldCopy.Nodes, existing.Nodes)
 
-	tenantID := h.getTenantID(c)
 	if tenantID != "" {
 		// 普通用户：先移除旧的租户流水线，再注册新的
 		h.pipelineRegistry.RemoveFromTenant(tenantID, id)
@@ -427,11 +471,23 @@ func (h *PipelineHandler) DeletePipeline(c *gin.Context) {
 	}
 
 	// 验证访问权限
-	if _, err := h.requirePipelineAccess(c, id); err != nil {
+	existing, err := h.requirePipelineAccess(c, id)
+	if err != nil {
 		return
 	}
 
 	tenantID := h.getTenantID(c)
+	if tenantID != "" {
+		if user := h.accessUser(c); user != nil && !user.CanAddOwnPipelines {
+			c.JSON(http.StatusForbidden, gin.H{"success": false, "error": "adding or modifying own pipelines is disabled for this user"})
+			return
+		}
+		if existing != nil && existing.TenantID == "" {
+			c.JSON(http.StatusForbidden, gin.H{"success": false, "error": "cannot delete system pipeline"})
+			return
+		}
+	}
+
 	if err := h.pipelineRegistry.DeleteScoped(tenantID, id); err != nil {
 		logger.Warnf("[DeletePipeline] tenant=%s id=%s failed: %v", tenantID, id, err)
 		status := http.StatusInternalServerError

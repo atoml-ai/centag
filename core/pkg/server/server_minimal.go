@@ -207,6 +207,9 @@ func NewMinimal(cfg *config.Config) *Server {
 	if err := auth.EnsureFileSecret(filepath.Join(dataDir, "jwt.secret")); err != nil {
 		logger.Errorf("[Minimal] failed to init JWT secret: %v", err)
 	}
+	if err := auth.EnsureFileAPIKeyStorage(filepath.Join(dataDir, "api_key_storage.secret")); err != nil {
+		logger.Errorf("[Minimal] failed to init API key storage secret: %v", err)
+	}
 	minimalAuth := NewMinimalAuthHandler(dataDir)
 	minimalAuth.EnsurePasswordFromEnv()
 

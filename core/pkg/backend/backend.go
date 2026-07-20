@@ -928,9 +928,9 @@ func (m *Manager) ProbeAndUpdateBackend(ctx context.Context, id string, fetchMod
 	result.ResponseTime = time.Since(startTime).Milliseconds()
 	result.Success = true
 
-	// 2. 获取模型列表（如果启用自动获取）
+	// 2. 获取模型列表（如果启用自动获取）——强制远端，避免沿用本地缓存导致「探测不刷新」
 	if fetchModels && cfg.AutoFetchModels {
-		models, err := m.GetModelsWithContext(ctx, cfg)
+		models, err := m.FetchModelsFromRemote(ctx, cfg)
 		if err != nil {
 			logger.Warn("Probe backend: failed to fetch models",
 				logger.GetField("id", id),
@@ -1141,12 +1141,10 @@ func (m *Manager) GetModels(cfg *BackendConfig) ([]string, error) {
 func (m *Manager) GetModelsWithContext(ctx context.Context, cfg *BackendConfig) ([]string, error) {
 	// Ollama 动态模型：始终查询 /api/tags 获取真实列表，不使用缓存
 	if cfg.Type == "ollama" {
-		client := httpclient.NewClientNoProxy(time.Duration(cfg.Timeout) * time.Second)
-		headers := map[string]string{"Content-Type": "application/json"}
-		return getOllamaModels(ctx, client, cfg, headers)
+		return m.FetchModelsFromRemote(ctx, cfg)
 	}
 
-	// OpenAI 兼容后端：优先使用缓存的模型列表（数据库中已保存）
+	// OpenAI / Gemini 等：优先使用缓存的模型列表（数据库中已保存）
 	cachedModels := getSupportedModelNames(cfg)
 	if len(cachedModels) > 0 {
 		logger.Info("Using cached supported_models", logger.GetField("name", cfg.Name), logger.GetField("count", len(cachedModels)))
@@ -1160,19 +1158,37 @@ func (m *Manager) GetModelsWithContext(ctx context.Context, cfg *BackendConfig) 
 	}
 
 	logger.Info("No cached models, fetching from backend", logger.GetField("name", cfg.Name), logger.GetField("type", cfg.Type))
+	return m.FetchModelsFromRemote(ctx, cfg)
+}
 
-	// 使用不走代理的客户端直连远端，避免系统 http_proxy/https_proxy 环境变量干扰
-	// （本地 Ollama 和外部 API 都应直连）
-	client := httpclient.NewClientNoProxy(time.Duration(cfg.Timeout) * time.Second)
-
-	headers := make(map[string]string)
-	headers["Content-Type"] = "application/json"
-	if norm := NormalizeOpenAICompatibleAPIKey(cfg.APIKey); norm != "" {
-		headers["Authorization"] = "Bearer " + norm
+// FetchModelsFromRemote 强制从远端拉取模型列表（忽略本地 supported_models 缓存）。
+// 供编辑对话框「刷新支持的模型」与 Probe 使用，各后端类型统一入口。
+func (m *Manager) FetchModelsFromRemote(ctx context.Context, cfg *BackendConfig) ([]string, error) {
+	if cfg == nil {
+		return nil, fmt.Errorf("backend config is nil")
 	}
+	timeout := cfg.Timeout
+	if timeout <= 0 {
+		timeout = 30
+	}
+	client := httpclient.NewClientNoProxy(time.Duration(timeout) * time.Second)
+	headers := map[string]string{"Content-Type": "application/json"}
+	norm := NormalizeOpenAICompatibleAPIKey(cfg.APIKey)
 
-	// OpenAI 兼容后端
-	return getOpenAIModels(ctx, client, cfg, headers)
+	switch strings.ToLower(strings.TrimSpace(cfg.Type)) {
+	case "ollama":
+		return getOllamaModels(ctx, client, cfg, headers)
+	case "gemini":
+		if norm != "" {
+			headers["x-goog-api-key"] = norm
+		}
+		return getGeminiModels(ctx, client, cfg, headers)
+	default:
+		if norm != "" {
+			headers["Authorization"] = "Bearer " + norm
+		}
+		return getOpenAIModels(ctx, client, cfg, headers)
+	}
 }
 
 // getOllamaModels 获取 Ollama 模型列表
@@ -1213,6 +1229,50 @@ func getOllamaModels(ctx context.Context, client *httpclient.Client, cfg *Backen
 	}
 
 	return nil, fmt.Errorf("failed to fetch models with status %d: %s", resp.StatusCode, string(resp.Body))
+}
+
+// getGeminiModels 拉取 Gemini 原生 ListModels（name 形如 models/gemini-2.0-flash）
+func getGeminiModels(ctx context.Context, client *httpclient.Client, cfg *BackendConfig, headers map[string]string) ([]string, error) {
+	base := strings.TrimRight(strings.TrimSpace(cfg.BaseURL), "/")
+	if base == "" {
+		base = "https://generativelanguage.googleapis.com/v1beta"
+	}
+	// 常见误配：写成 …/v1beta/models，统一落到 list models 根
+	base = strings.TrimSuffix(base, "/models")
+	testURL := base + "/models"
+	logger.Info("Fetching Gemini models", logger.GetField("url", testURL))
+
+	resp, err := client.Do(ctx, &httpclient.RequestConfig{
+		Method:  "GET",
+		URL:     testURL,
+		Headers: headers,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch gemini models: %w", err)
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("failed to fetch gemini models (HTTP %d): %s", resp.StatusCode, truncateErrBody(resp.Body, 500))
+	}
+
+	var result struct {
+		Models []struct {
+			Name string `json:"name"`
+		} `json:"models"`
+	}
+	if err := json.Unmarshal(resp.Body, &result); err != nil {
+		return nil, fmt.Errorf("failed to parse gemini models response: %w", err)
+	}
+
+	models := make([]string, 0, len(result.Models))
+	for _, model := range result.Models {
+		name := strings.TrimSpace(model.Name)
+		name = strings.TrimPrefix(name, "models/")
+		if name != "" && !containsString(models, name) {
+			models = append(models, name)
+		}
+	}
+	logger.Info("Successfully fetched Gemini models", logger.GetField("count", len(models)))
+	return models, nil
 }
 
 // getOpenAIModels 获取 OpenAI 兼容模型列表

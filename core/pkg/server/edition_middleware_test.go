@@ -44,6 +44,7 @@ func TestTeamEditionOnly_TeamAllows(t *testing.T) {
 }
 
 func TestTeamAdminWriteOnly_TeamNormalForbidden(t *testing.T) {
+	// Sensitive ops (export/import / proxy save) still require admin in team.
 	gin.SetMode(gin.TestMode)
 	s := &Server{edition: edition.Team}
 	r := gin.New()

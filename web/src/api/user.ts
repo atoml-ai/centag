@@ -7,6 +7,9 @@ export interface CreateUserRequest {
   role?: 'admin' | 'normal'
   display_name?: string
   email?: string
+  default_pipeline_id?: string
+  daily_token_limit?: number
+  monthly_token_limit?: number
 }
 
 export interface UpdateUserRequest {
@@ -14,6 +17,15 @@ export interface UpdateUserRequest {
   email?: string
   role?: 'admin' | 'normal'
   enabled?: boolean
+  default_pipeline_id?: string
+  daily_token_limit?: number
+  monthly_token_limit?: number
+  allowed_backend_ids?: string[]
+  allowed_model_ids?: string[]
+  allowed_pipeline_ids?: string[]
+  can_add_own_backends?: boolean
+  can_add_own_pipelines?: boolean
+  can_change_default_pipeline?: boolean
 }
 
 export interface UpdateProfileRequest {
@@ -140,4 +152,9 @@ export function listUserAPIKeys(userId: number): Promise<APIKey[]> {
 
 export function getAdminAPIKey(userId: number, keyId: number): Promise<APIKeyDetail> {
   return api.get(`/api/v1/admin/users/${userId}/apikeys/${keyId}`)
+}
+
+/** 超管为指定用户创建 API Key（创建响应含 full_key，仅返回一次） */
+export function adminCreateAPIKey(req: CreateAPIKeyRequest & { user_id: number }): Promise<APIKeyWithFull> {
+  return api.post('/api/v1/admin/api-keys', req)
 }

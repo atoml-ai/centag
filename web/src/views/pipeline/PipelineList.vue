@@ -28,7 +28,7 @@
           <el-icon><Refresh /></el-icon>
           刷新
         </el-button>
-        <el-button type="primary" @click="handleCreate">
+        <el-button v-if="canAddOwnPipelines" type="primary" @click="handleCreate">
           <el-icon><Plus /></el-icon>
           创建流水线
         </el-button>
@@ -115,10 +115,12 @@ import { Search, Plus, Edit, Delete, Download } from '@element-plus/icons-vue'
 import { getPipelines, deletePipeline, exportPipeline, parsePipelinesResponse, type Pipeline } from '@/api/pipeline'
 import { resolvePipelineFeatureSupport, type PipelineFeatureKey } from '@/utils/pipeline/features'
 import { useAuthStore } from '@/stores/auth'
+import { useUserResourceAccess } from '@/composables/useUserResourceAccess'
 import PipelineFeatureGuard from '@/components/pipeline/PipelineFeatureGuard.vue'
 
 const router = useRouter()
 const authStore = useAuthStore()
+const { canAddOwnPipelines } = useUserResourceAccess()
 const loading = ref(false)
 const pipelines = ref<Pipeline[]>([])
 const searchText = ref('')

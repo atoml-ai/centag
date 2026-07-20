@@ -773,6 +773,10 @@ func New(cfg *config.Config) *Server {
 	if err := auth.LoadSecret(context.Background()); err != nil {
 		logger.Warnf("Failed to load JWT secret: %v – auth endpoints may not work", err)
 	}
+	// API Key 二次查看存储密钥（entrypoint 已 Ensure；此处兜底，便于测试/嵌入启动）
+	if err := auth.EnsureAPIKeyStorage(context.Background()); err != nil {
+		logger.Warnf("Failed to ensure API key storage secret: %v – secondary reveal may not work", err)
+	}
 
 	// 创建系统更新处理器
 	updateConfigPath := "./update_config.yml"
@@ -989,6 +993,8 @@ func New(cfg *config.Config) *Server {
 		pipelineDefaultsHandler: pipelineDefaultsHandler,
 		startTime:               time.Now(),
 	}
+	backendHandler.SetEdition(srv.edition)
+	pipelineHandler.SetEdition(srv.edition)
 
 	switch {
 	case srv.edition.IsPersonal():
@@ -1327,7 +1333,7 @@ func (s *Server) setupRoutes() {
 		teamAdmin.GET("/users/:user_id/apikeys", s.apiKeyHandler.ListUserAPIKeys)
 		teamAdmin.GET("/users/:user_id/apikeys/:id", s.apiKeyHandler.GetAdminAPIKey)
 
-		// 虚拟 Key 管理（全局 Key CRUD + 统计）
+		// 管理员代管用户 API Key（跨用户创建/列表/预算统计）
 		teamAdmin.GET("/api-keys", s.apiKeyHandler.ListAllAPIKeys)
 		teamAdmin.POST("/api-keys", s.apiKeyHandler.CreateAdminAPIKey)
 		teamAdmin.PUT("/api-keys/:id", s.apiKeyHandler.UpdateAdminAPIKey)
@@ -1446,26 +1452,26 @@ func (s *Server) setupRoutes() {
 			s.pluginRegistryAPI.RegisterRoutes(v1Protected)
 		}
 
-		// 后端配置管理（team：写操作与含密钥导出仅 admin）
+		// 后端配置管理（team：租户内 CRUD 全员可写；export/import 等敏感操作仅 admin）
 		backends := v1Protected.Group("/backends")
 		{
-			bw := s.teamAdminWriteOnly()
+			adminSensitive := s.teamAdminWriteOnly()
 			backends.GET("", s.backendHandler.ListBackends)
 			backends.GET("/types", s.backendHandler.ListBackendTypes)
-			backends.GET("/export", bw, s.backendHandler.ExportBackends)
-			backends.POST("/import", bw, s.backendHandler.ImportBackends)
-			backends.POST("/fetch-models", bw, s.backendHandler.FetchModels)
-			backends.POST("", bw, s.backendHandler.CreateBackend)
-			backends.POST("/test", bw, s.backendHandler.TestConnection)
-			backends.POST("/probe-all", bw, s.backendHandler.ProbeAllBackends)
-			backends.POST("/probe-all-sse", bw, s.backendHandler.ProbeAllBackendsSSE)
+			backends.GET("/export", adminSensitive, s.backendHandler.ExportBackends)
+			backends.POST("/import", adminSensitive, s.backendHandler.ImportBackends)
+			backends.POST("/fetch-models", s.backendHandler.FetchModels)
+			backends.POST("", s.backendHandler.CreateBackend)
+			backends.POST("/test", s.backendHandler.TestConnection)
+			backends.POST("/probe-all", adminSensitive, s.backendHandler.ProbeAllBackends)
+			backends.POST("/probe-all-sse", adminSensitive, s.backendHandler.ProbeAllBackendsSSE)
 			backends.GET("/circuit-breaker", s.backendHandler.GetCircuitBreakerStatus)
-			backends.POST("/circuit-breaker/:id/reset", bw, s.backendHandler.ResetCircuitBreaker)
+			backends.POST("/circuit-breaker/:id/reset", adminSensitive, s.backendHandler.ResetCircuitBreaker)
 			backends.GET("/:id", s.backendHandler.GetBackend)
 			backends.GET("/:id/models", s.backendHandler.GetModels)
-			backends.PUT("/:id", bw, s.backendHandler.UpdateBackend)
-			backends.DELETE("/:id", bw, s.backendHandler.DeleteBackend)
-			backends.POST("/:id/probe", bw, s.backendHandler.ProbeBackend)
+			backends.PUT("/:id", s.backendHandler.UpdateBackend)
+			backends.DELETE("/:id", s.backendHandler.DeleteBackend)
+			backends.POST("/:id/probe", s.backendHandler.ProbeBackend)
 		}
 
 		// 存储配置管理
@@ -1621,12 +1627,12 @@ func (s *Server) setupRoutes() {
 		v1Protected.POST("/webhooks/pipeline/:id", s.webhookHandler.TriggerPipeline)
 	}
 
-	// 流水线默认模式配置（仅管理员可访问）
+	// 流水线默认：管理员改系统默认；Team 普通用户改自己的 default_pipeline_id
 	if s.pipelineDefaultsHandler != nil {
 		pipelineDefaults := v1Protected.Group("/pipeline/defaults")
 		{
-			pipelineDefaults.GET("", s.pipelineDefaultsHandler.GetDefaults)
-			pipelineDefaults.PUT("", s.pipelineDefaultsHandler.UpdateDefaults)
+			pipelineDefaults.GET("", s.getPipelineDefaultsForUser)
+			pipelineDefaults.PUT("", s.updatePipelineDefaultsForUser)
 		}
 	}
 
@@ -1695,18 +1701,19 @@ func (s *Server) setupRoutes() {
 	quotaMw := middleware.NewQuotaMiddleware(database.Get()).Middleware()
 	// v2.1: User-level quota middleware
 	userQuotaMw := middleware.NewUserQuotaMiddleware(database.Get()).Middleware()
+	resourceGuard := s.teamResourceModelGuard()
 
 	// 代理模式路由：支持关键字解析（user quota → tenant quota）
-	s.router.POST("/v1/chat/completions", proxyAuth, userQuotaMw, quotaMw, agentDetectMw, proxyModeMw, s.proxyHandler.HandleChatCompletions)
+	s.router.POST("/v1/chat/completions", proxyAuth, userQuotaMw, quotaMw, resourceGuard, agentDetectMw, proxyModeMw, s.proxyHandler.HandleChatCompletions)
 	s.router.GET("/v1/models", proxyAuth, userQuotaMw, quotaMw, agentDetectMw, proxyModeMw, s.proxyHandler.ListModels)
 	s.router.GET("/v1/backends", proxyAuth, userQuotaMw, quotaMw, agentDetectMw, proxyModeMw, s.proxyHandler.ListBackends)
-	s.router.POST("/v1/messages", proxyAuth, userQuotaMw, quotaMw, agentDetectMw, proxyModeMw, s.proxyHandler.HandleChatCompletions)
-	s.router.POST("/v1/responses", proxyAuth, userQuotaMw, quotaMw, agentDetectMw, proxyModeMw, s.proxyHandler.HandleChatCompletions)
-	s.router.POST("/v1beta/models/*action", proxyAuth, userQuotaMw, quotaMw, agentDetectMw, proxyModeMw, s.proxyHandler.HandleChatCompletions)
-	s.router.POST("/v1/completions", proxyAuth, userQuotaMw, quotaMw, agentDetectMw, proxyModeMw, llmProxyHandler.HandleOpenAIRequest)
-	s.router.POST("/v1/embeddings", proxyAuth, userQuotaMw, quotaMw, agentDetectMw, proxyModeMw, llmProxyHandler.HandleOpenAIRequest)
-	s.router.POST("/api/v1/openai/chat/completions", proxyAuth, userQuotaMw, quotaMw, agentDetectMw, proxyModeMw, llmProxyHandler.HandleOpenAIRequest)
-	s.router.POST("/api/v1/openai/embeddings", proxyAuth, userQuotaMw, quotaMw, agentDetectMw, proxyModeMw, llmProxyHandler.HandleOpenAIRequest)
+	s.router.POST("/v1/messages", proxyAuth, userQuotaMw, quotaMw, resourceGuard, agentDetectMw, proxyModeMw, s.proxyHandler.HandleChatCompletions)
+	s.router.POST("/v1/responses", proxyAuth, userQuotaMw, quotaMw, resourceGuard, agentDetectMw, proxyModeMw, s.proxyHandler.HandleChatCompletions)
+	s.router.POST("/v1beta/models/*action", proxyAuth, userQuotaMw, quotaMw, resourceGuard, agentDetectMw, proxyModeMw, s.proxyHandler.HandleChatCompletions)
+	s.router.POST("/v1/completions", proxyAuth, userQuotaMw, quotaMw, resourceGuard, agentDetectMw, proxyModeMw, llmProxyHandler.HandleOpenAIRequest)
+	s.router.POST("/v1/embeddings", proxyAuth, userQuotaMw, quotaMw, resourceGuard, agentDetectMw, proxyModeMw, llmProxyHandler.HandleOpenAIRequest)
+	s.router.POST("/api/v1/openai/chat/completions", proxyAuth, userQuotaMw, quotaMw, resourceGuard, agentDetectMw, proxyModeMw, llmProxyHandler.HandleOpenAIRequest)
+	s.router.POST("/api/v1/openai/embeddings", proxyAuth, userQuotaMw, quotaMw, resourceGuard, agentDetectMw, proxyModeMw, llmProxyHandler.HandleOpenAIRequest)
 	s.router.GET("/api/v1/openai/models", proxyAuth, userQuotaMw, quotaMw, agentDetectMw, proxyModeMw, llmProxyHandler.HandleOpenAIRequest)
 
 	// MCP (Model Context Protocol) 代理路由

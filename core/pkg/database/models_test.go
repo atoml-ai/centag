@@ -149,7 +149,7 @@ func TestAPIKey_Fields(t *testing.T) {
 	}
 }
 
-func TestAPIKey_DefaultVirtualKeyFields(t *testing.T) {
+func TestAPIKey_DefaultLimitFields(t *testing.T) {
 	key := &APIKey{
 		ID:     2,
 		UserID: 200,

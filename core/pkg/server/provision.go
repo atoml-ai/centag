@@ -288,14 +288,20 @@ func (p *TenantProvisioner) createDefaultAPIKey(ctx context.Context, userID int6
 		return "", fmt.Errorf("failed to generate API key: %w", err)
 	}
 
+	enc, encErr := auth.EncryptAPIKeyForStorage(fullKey)
+	if encErr != nil {
+		return "", fmt.Errorf("failed to encrypt API key: %w", encErr)
+	}
+
 	apiKey := &database.APIKey{
-		UserID:    userID,
-		TenantID:  &tenantID,
-		Name:      "default",
-		KeyHash:   hash,
-		KeyPrefix: prefix,
-		Enabled:   true,
-		CreatedAt: time.Now().UTC(),
+		UserID:       userID,
+		TenantID:     &tenantID,
+		Name:         "default",
+		KeyHash:      hash,
+		KeyPrefix:    prefix,
+		KeySecretEnc: enc,
+		Enabled:      true,
+		CreatedAt:    time.Now().UTC(),
 	}
 
 	if err := p.db.APIKeyStore().Create(ctx, apiKey); err != nil {
