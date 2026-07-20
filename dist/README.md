@@ -21,4 +21,9 @@ Team SKU 由私有仓 [`centag-pro`](https://github.com/atoml-ai/centag-pro) 构
 
 或设置 `CENTAG_PRO_PATH`。缺少 pro 时构建会失败（不会产出残缺 team 二进制）。
 
+### 分支同步
+
+`centag-pro` 与本仓 **使用相同分支名**（例如本仓 `v0.2.7` → pro 也必须是 `v0.2.7`）。  
+开发/发版时两侧同时开同名分支；构建脚本在分支不一致时会警告（`CENTAG_PRO_STRICT_BRANCH=1` 时失败）。
+
 架构说明见 `docs/versions/v0.2.7/commercialization-layered/技术方案.md`。
