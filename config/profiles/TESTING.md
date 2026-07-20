@@ -6,7 +6,7 @@
 |------|---------|--------|------|
 | **本地二进制** | `./start.sh run be` | SQLite/PostgreSQL | 开发调试 |
 | **Docker 单容器** | `./start.sh docker up` | SQLite/PostgreSQL | 向后兼容 |
-| **gateway Profile** | `./start.sh profile gateway up` | SQLite | modular，可选 stack Ollama |
+| **personal Profile** | `./start.sh profile personal up` | SQLite | modular，可选 stack Ollama |
 | **cached Profile** | `./start.sh profile cached up` | stack PostgreSQL + pgvector | modular 缓存加速 |
 | **agent-memory Profile** | `./start.sh profile agent-memory up` | stack PG/Qdrant/Mem0/Ollama + Pi | modular Agent |
 
@@ -71,12 +71,12 @@ curl -s -o /dev/null -w "%{http_code}" http://localhost:20060/
 
 ---
 
-## 第二节：Gateway Profile 专属验证
+## 第二节：Personal Profile 专属验证
 
 ### 2.1 SQLite 数据文件
 
 ```bash
-docker exec centag-gateway-app ls -lh /app/storage/centag.db
+docker exec centag-personal-app ls -lh /app/storage/centag.db
 ```
 
 **期望结果**：文件存在且大小 > 0（首次启动后）。
@@ -418,12 +418,12 @@ echo "=== 深度验证完成 ==="
 
 ```yaml
 # .github/workflows/profile-test.yml（示例片段）
-- name: Gateway Profile Test
+- name: Personal Profile Test
   run: |
-    ./start.sh profile gateway up
+    ./start.sh profile personal up
     sleep 15
     bash config/profiles/TESTING.md | grep "通用验证通过"
-    ./start.sh profile gateway down
+    ./start.sh profile personal down
 
 - name: Cached Profile Test
   run: |

@@ -5,12 +5,12 @@
 #
 # | Profile       | 应用 DB     | STACK_DEPS              | 容器内 stack .env | stack-network |
 # |---------------|------------|-------------------------|-------------------|---------------|
-# | gateway       | SQLite     | 无（默认）/ ollama（可选） | 不注入（仅 .env + secrets） | 仅 Ollama 时 |
+# | personal      | SQLite     | 无（默认）/ ollama（可选） | 不注入（仅 .env + secrets） | 仅 Ollama 时 |
 # | cached        | PostgreSQL | postgresql ollama       | 注入（要 PG 密码） | 始终 |
 # | agent-memory  | auto/PG    | postgresql qdrant ollama mem0 | 注入（Mem0 等） | centag 服务 |
 #
 # load_profile_env（start.sh）对三种 Profile 都会加载 stack/.env —— 仅供宿主机侧 stack ensure；
-# gateway 容器 compose  deliberately 不含 deploy/stack/.env，避免 PG 变量污染 SQLite 模式。
+# personal 容器 compose  deliberately 不含 deploy/stack/.env，避免 PG 变量污染 SQLite 模式。
 #
 # embedded — compose 内嵌中间件（agent-memory 可用 docker-compose.embedded.yaml）
 # modular  — profile up 前 stack ensure，应用层连 deploy/stack-network

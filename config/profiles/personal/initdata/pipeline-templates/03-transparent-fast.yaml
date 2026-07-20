@@ -27,7 +27,7 @@ global_config:
   log_level: info
 metadata:
   aligned_proxy_mode: transparent-fast
-  profile: gateway
+  profile: personal
   features:
     - no_system_prompt_inject
   lastUpdated: '2026-07-14T00:00:00.000Z'

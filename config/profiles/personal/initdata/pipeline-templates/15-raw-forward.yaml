@@ -30,7 +30,7 @@ global_config:
   log_level: info
 metadata:
   aligned_proxy_mode: raw-forward
-  profile: gateway
+  profile: personal
   features:
     - transparent_forward
     - raw_passthrough

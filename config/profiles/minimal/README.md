@@ -124,9 +124,9 @@ curl -X POST http://localhost:20060/v1/chat/completions \
   }'
 ```
 
-## 与 gateway 的区别
+## 与 personal 的区别
 
-| 功能 | minimal | gateway |
+| 功能 | minimal | personal |
 |------|:-------:|:-------:|
 | LLM 后端 | ✅ | ✅ |
 | 路由模式 | ✅ | ✅ |

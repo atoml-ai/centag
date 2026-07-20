@@ -2,7 +2,7 @@
 
 **目标**：在**单独部署的中间件**（PostgreSQL、向量等）上运行团队共享入口；支持多租户与负载均衡水平扩展。
 
-> 与 **gateway** 的二进制插件集合**对齐**（同为全功能）。差别在部署：team 默认依赖外部 PG / 向量等；gateway 默认内置 SQLite。详见 [`docs/guide/dist-profiles.md`](../../../docs/guide/dist-profiles.md)。
+> 与 **personal** 的二进制插件集合**对齐**（同为全功能）。差别在部署：team 默认依赖外部 PG / 向量等；personal 默认内置 SQLite。详见 [`docs/guide/dist-profiles.md`](../../../docs/guide/dist-profiles.md)。
 
 ## 特点
 
@@ -11,11 +11,11 @@
 - **就绪探针**：`/health/ready` 验证数据库连接，适合 K8s / Compose healthcheck
 - **可选 HA**：`docker-compose.ha.yaml` + Nginx 对多副本 `centag` 做负载均衡
 
-## 与 gateway / cached 的区别
+## 与 personal / cached 的区别
 
-| 维度 | gateway | cached | **team** |
+| 维度 | personal | cached | **team** |
 |------|---------|--------|----------|
-| 二进制插件 | 全功能 | （视所用 Dist） | **与 gateway 相同** |
+| 二进制插件 | 全功能 | （视所用 Dist） | **与 personal 相同** |
 | Edition | 个人侧默认配置 | team | **team（显式）** |
 | 数据库默认 | **内置 SQLite** | PostgreSQL | **外部 PostgreSQL** |
 | 中间件 | 默认不强制；可配置外接 | stack PG 等 | **默认单独部署** |

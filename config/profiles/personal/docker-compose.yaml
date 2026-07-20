@@ -1,7 +1,7 @@
-# Profile: gateway — 应用层（默认仅 Centag 单容器 + 线上 API）
+# Profile: personal — 应用层（默认仅 Centag 单容器 + 线上 API）
 # SQLite 内置，无 PG 依赖；OLLAMA_ENABLED=true 时 stack ensure ollama
 
-name: centag-gateway
+name: centag-personal
 
 services:
   centag:
@@ -9,18 +9,18 @@ services:
       context: ../../../
       dockerfile: deploy/docker/Dockerfile.dist
       args:
-        DIST_NAME: gateway
+        DIST_NAME: personal
         INCLUDE_FRONTEND: "true"
     image: centag:latest
-    container_name: centag-gateway-app
+    container_name: centag-personal-app
     restart: unless-stopped
-    # gateway 仅用 SQLite：不注入 deploy/stack/.env（避免 PG 变量污染容器）
+    # personal 仅用 SQLite：不注入 deploy/stack/.env（避免 PG 变量污染容器）
     # stack ensure 所需变量由 start.sh load_profile_env 在宿主机侧加载
     env_file:
       - ./.env
       - ../../secrets/.env
     environment:
-      # 发行包 gateway → 运行时 personal（对话/计量走 SQLite；关闭 team 专属面）
+      # 发行包 personal → 运行时 personal（对话/计量走 SQLite；关闭 team 专属面）
       CENTAG_EDITION: personal
       INITDATA_PATH: /app/initdata-profile
       LLM_PROXY_DB_DRIVER: sqlite
@@ -36,11 +36,11 @@ services:
     ports:
       - "${LLM_PROXY_SERVER_PORT:-20060}:20060"
     volumes:
-      - centag_gateway_storage:/app/storage
-      - centag_gateway_logs:/app/logs
+      - centag_personal_storage:/app/storage
+      - centag_personal_logs:/app/logs
       - ./initdata:/app/initdata-profile:ro
     networks:
-      - centag-gateway
+      - centag-personal
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:20060/health"]
       interval: 30s
@@ -49,9 +49,9 @@ services:
       start_period: 15s
 
 volumes:
-  centag_gateway_storage:
-  centag_gateway_logs:
+  centag_personal_storage:
+  centag_personal_logs:
 
 networks:
-  centag-gateway:
+  centag-personal:
     driver: bridge
