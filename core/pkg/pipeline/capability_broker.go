@@ -485,11 +485,17 @@ func (c *controlledHTTPClient) Do(req *http.Request) (*http.Response, error) {
 		}
 	}
 
-	// 创建 HTTP 客户端
+	// 创建 HTTP 客户端。
+	// 优先使用请求 Context 的 deadline（节点 timeout，如 transparent_forward=120s），
+	// 避免全局 Proxy.Timeout=30s 在读 SSE/长响应体时提前打断。
 	client := &http.Client{}
-
-	// 设置超时
-	if c.timeout > 0 {
+	if deadline, ok := req.Context().Deadline(); ok {
+		d := time.Until(deadline)
+		if d < time.Second {
+			d = time.Second
+		}
+		client.Timeout = d + time.Second
+	} else if c.timeout > 0 {
 		client.Timeout = time.Duration(c.timeout) * time.Second
 	}
 

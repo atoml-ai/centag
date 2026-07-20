@@ -7,8 +7,31 @@ import (
 	"strings"
 )
 
+// RunningInContainer reports whether the process appears to run inside Docker/Podman.
+// Used so MITM can bind 0.0.0.0 (host port publish) while PAC still points at 127.0.0.1.
+// CENTAG_IN_DOCKER=0|false forces false (tests); =1|true|yes forces true.
+func RunningInContainer() bool {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv("CENTAG_IN_DOCKER"))) {
+	case "0", "false", "no":
+		return false
+	case "1", "true", "yes":
+		return true
+	}
+	if _, err := os.Stat("/.dockerenv"); err == nil {
+		return true
+	}
+	// Podman / some runtimes
+	if _, err := os.Stat("/run/.containerenv"); err == nil {
+		return true
+	}
+	return false
+}
+
 // NormalizeSystemProxyConfig applies safe defaults.
-// When AllowLANClients is false, ListenAddr is forced to loopback.
+// When AllowLANClients is false:
+//   - bare metal: ListenAddr forced to loopback
+//   - container: ListenAddr becomes 0.0.0.0 so published host ports can reach MITM;
+//     PACProxyHost stays 127.0.0.1 for same-host proxyctl.
 func NormalizeSystemProxyConfig(c *SystemProxyConfig) {
 	if c == nil {
 		return
@@ -17,6 +40,12 @@ func NormalizeSystemProxyConfig(c *SystemProxyConfig) {
 		c.ListenPort = 8081
 	}
 	if !c.AllowLANClients {
+		if RunningInContainer() {
+			if strings.TrimSpace(c.ListenAddr) == "" || IsLoopbackHost(c.ListenAddr) {
+				c.ListenAddr = "0.0.0.0"
+			}
+			return
+		}
 		c.ListenAddr = "127.0.0.1"
 		return
 	}
@@ -56,6 +85,53 @@ func IsLoopbackHost(host string) bool {
 	}
 	ip := net.ParseIP(h)
 	return ip != nil && ip.IsLoopback()
+}
+
+// SuggestLANHosts returns non-loopback IPv4 addresses from local network interfaces.
+// Used to prefill advertise_host when enabling LAN clients.
+// Inside a container the addresses are usually bridge IPs (useless to host agents), so return nil.
+func SuggestLANHosts() []string {
+	if RunningInContainer() {
+		return nil
+	}
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		return nil
+	}
+	seen := make(map[string]struct{})
+	var out []string
+	for _, iface := range ifaces {
+		if iface.Flags&net.FlagUp == 0 || iface.Flags&net.FlagLoopback != 0 {
+			continue
+		}
+		addrs, err := iface.Addrs()
+		if err != nil {
+			continue
+		}
+		for _, addr := range addrs {
+			var ip net.IP
+			switch v := addr.(type) {
+			case *net.IPNet:
+				ip = v.IP
+			case *net.IPAddr:
+				ip = v.IP
+			}
+			if ip == nil || ip.IsLoopback() || ip.IsLinkLocalUnicast() {
+				continue
+			}
+			ip4 := ip.To4()
+			if ip4 == nil {
+				continue
+			}
+			s := ip4.String()
+			if _, ok := seen[s]; ok {
+				continue
+			}
+			seen[s] = struct{}{}
+			out = append(out, s)
+		}
+	}
+	return out
 }
 
 // MITMListenAddr returns host:port for the MITM listener.

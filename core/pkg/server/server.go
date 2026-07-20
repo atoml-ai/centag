@@ -1348,8 +1348,10 @@ func (s *Server) setupRoutes() {
 			teamAdmin.GET("/quotas/:userId", s.tokenUsageHandler.GetUserQuota)
 			teamAdmin.PUT("/quotas/:userId/reset", s.tokenUsageHandler.ResetQuota)
 		}
+		// cost/summary / billing/rules 挂在 adminAPI（非 team-only）：
+		// personal 也要看成本与定价规则；BillingHook 扣费仍仅 team。
 		if s.costHandler != nil {
-			teamAdmin.GET("/cost/summary", s.costHandler.GetSummary)
+			adminAPI.GET("/cost/summary", s.costHandler.GetSummary)
 		}
 		if s.billingRulesHandler != nil {
 			billingRules := adminAPI.Group("/billing/rules")
@@ -1656,6 +1658,7 @@ func (s *Server) setupRoutes() {
 			proxy.GET("/domains", s.proxyHandlerExt.GetPACDomains)
 			proxy.POST("/domains/add", s.proxyHandlerExt.AddDomain)
 			proxy.POST("/domains/remove", s.proxyHandlerExt.RemoveDomain)
+			proxy.POST("/domains/ensure-defaults", s.proxyHandlerExt.EnsureDefaultPACRules)
 			proxy.POST("/patterns/add", s.proxyHandlerExt.AddPathPattern)
 			proxy.POST("/patterns/remove", s.proxyHandlerExt.RemovePathPattern)
 		}

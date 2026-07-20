@@ -190,18 +190,20 @@ func (h *ProxyHandler) GetSetupStatus(c *gin.Context) {
 
 	apiBase := sp.PublicAPIBase(apiPort)
 	status := gin.H{
-		"mode":                     sp.SetupMode(),
-		"mitm_enabled":             h.mitmServer != nil,
-		"listen_addr":              sp.MITMListenAddr(),
-		"listen_is_loopback":       sp.ListenIsLoopback(),
-		"allow_lan_clients":        sp.AllowLANClients,
-		"advertise_host":           sp.AdvertiseHost,
-		"pac_enabled":              sp.PACEnabled,
-		"pac_url":                  apiBase + "/api/v1/proxy/pac",
-		"ca_download_url":          apiBase + "/api/v1/proxy/ca.crt",
-		"ca_fingerprint_sha256":    h.caFingerprintSHA256(),
-		"global_proxy_mode":        !sp.PACEnabled,
-		"mitm_proxy":               sp.PACProxyHost() + ":" + strconv.Itoa(sp.ListenPort),
+		"mode":                      sp.SetupMode(),
+		"mitm_enabled":              h.mitmServer != nil,
+		"listen_addr":               sp.MITMListenAddr(),
+		"listen_is_loopback":        sp.ListenIsLoopback(),
+		"allow_lan_clients":         sp.AllowLANClients,
+		"advertise_host":            sp.AdvertiseHost,
+		"suggested_lan_hosts":       config.SuggestLANHosts(),
+		"in_container":              config.RunningInContainer(),
+		"pac_enabled":               sp.PACEnabled,
+		"pac_url":                   apiBase + "/api/v1/proxy/pac",
+		"ca_download_url":           apiBase + "/api/v1/proxy/ca.crt",
+		"ca_fingerprint_sha256":     h.caFingerprintSHA256(),
+		"global_proxy_mode":         !sp.PACEnabled,
+		"mitm_proxy":                sp.PACProxyHost() + ":" + strconv.Itoa(sp.ListenPort),
 		"egress_api_key_configured": config.ResolveSystemProxyEgressAPIKey(&sp) != "",
 	}
 	c.JSON(200, status)
@@ -310,6 +312,54 @@ func (h *ProxyHandler) GetPACDomains(c *gin.Context) {
 	c.JSON(200, gin.H{
 		"domains": domains,
 		"count":   len(domains),
+	})
+}
+
+// EnsureDefaultPACRules merges default system-proxy domains/path patterns into the live PAC list.
+// Existing custom entries are kept; only missing defaults are added.
+func (h *ProxyHandler) EnsureDefaultPACRules(c *gin.Context) {
+	defaults := config.GetDefaultSystemProxyConfig()
+	addedDomains := 0
+	addedPatterns := 0
+
+	beforeDomains := len(h.pacGen.GetDomains())
+	for _, d := range defaults.Domains {
+		h.pacGen.AddDomain(d)
+	}
+	addedDomains = len(h.pacGen.GetDomains()) - beforeDomains
+
+	beforePatterns := len(h.pacGen.GetPathPatterns())
+	for _, p := range defaults.PathPatterns {
+		h.pacGen.AddPathPattern(p)
+	}
+	addedPatterns = len(h.pacGen.GetPathPatterns()) - beforePatterns
+
+	if h.cfg != nil {
+		h.cfg.SystemProxy.Domains = h.pacGen.GetDomains()
+		h.cfg.SystemProxy.PathPatterns = h.pacGen.GetPathPatterns()
+		if err := config.SaveConfig(h.cfg); err != nil {
+			logger.Error("Failed to save config after ensuring default PAC rules", zap.Error(err))
+			c.JSON(500, gin.H{"error": "Failed to save config: " + err.Error()})
+			return
+		}
+	}
+
+	h.syncMITMRouting()
+
+	logger.Info("Ensured default PAC rules",
+		zap.Int("added_domains", addedDomains),
+		zap.Int("added_patterns", addedPatterns),
+		zap.Int("domains", len(h.pacGen.GetDomains())),
+		zap.Int("patterns", len(h.pacGen.GetPathPatterns())))
+
+	c.JSON(200, gin.H{
+		"message":         "Default PAC rules ensured",
+		"added_domains":   addedDomains,
+		"added_patterns":  addedPatterns,
+		"domains":         h.pacGen.GetDomains(),
+		"path_patterns":   h.pacGen.GetPathPatterns(),
+		"domains_count":   len(h.pacGen.GetDomains()),
+		"patterns_count":  len(h.pacGen.GetPathPatterns()),
 	})
 }
 
