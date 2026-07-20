@@ -30,10 +30,9 @@ var/
 /dist/*.fpk
 /dist/minimal/minimal
 /dist/gateway/gateway
-/dist/team/team
 /dist/minimal/centag*
 /dist/gateway/centag*
-/dist/team/centag*
+/dist/personal/centag*
 *.tar.gz
 *.fpk
 

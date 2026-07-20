@@ -428,7 +428,7 @@ check_dependencies() {
 
 # ── 共享：获取发行版构建标签 ──────────────────────────────────────
 # 所有构建路径（本地 build、Docker、debug）通过此函数获取统一的 tags
-# personal / team 二进制插件集合对齐（个人全功能 vs 团队版差别在部署默认依赖，不在插件裁剪）
+# personal 全功能 tags；team 商业二进制在 centag-pro 构建（开源无 dist/team）
 _FULL_FEATURE_TAGS="protocol_openai,protocol_anthropic,protocol_gemini,protocol_openairesponses,backend_openai,backend_ollama,backend_anthropic,backend_gemini,backend_azure"
 
 _get_dist_tags() {
@@ -437,13 +437,53 @@ _get_dist_tags() {
         minimal)
             echo "minimal,protocol_openai,protocol_anthropic,backend_openai,backend_ollama,backend_anthropic"
             ;;
-        personal|team)
+        personal)
+            echo "$_FULL_FEATURE_TAGS"
+            ;;
+        team)
+            # Team SKU is not built from open-source dist/; tags used only if pro build reuses this helper via env.
             echo "$_FULL_FEATURE_TAGS"
             ;;
         *)
             echo ""
             ;;
     esac
+}
+
+# Resolve private centag-pro checkout (required for team builds).
+_resolve_centag_pro() {
+    if [ -n "${CENTAG_PRO_PATH:-}" ] && [ -d "${CENTAG_PRO_PATH}" ]; then
+        echo "${CENTAG_PRO_PATH}"
+        return 0
+    fi
+    local sibling="${PROJECT_ROOT}/../centag-pro"
+    if [ -d "$sibling" ]; then
+        echo "$(cd "$sibling" && pwd)"
+        return 0
+    fi
+    return 1
+}
+
+# Build commercial Team binary via centag-pro (open repo has no dist/team).
+_build_team_via_pro() {
+    local pro_root
+    if ! pro_root="$(_resolve_centag_pro)"; then
+        print_error "Team 构建已迁至私有仓 centag-pro；开源仓不再包含 dist/team。"
+        print_info "请克隆 https://github.com/atoml-ai/centag-pro 到 $(dirname "$PROJECT_ROOT")/centag-pro"
+        print_info "或设置 CENTAG_PRO_PATH=/path/to/centag-pro 后重试: $0 build team"
+        exit 1
+    fi
+    if [ ! -x "${pro_root}/scripts/build-team.sh" ] && [ ! -f "${pro_root}/scripts/build-team.sh" ]; then
+        print_error "centag-pro 缺少 scripts/build-team.sh: ${pro_root}"
+        exit 1
+    fi
+    print_info "Delegating Team build to centag-pro: ${pro_root}"
+    mkdir -p "${BIN_DIR}"
+    CENTAG_ROOT="${PROJECT_ROOT}" \
+      ASSEMBLE_OUT="${BIN_DIR}/centag-team" \
+      FULL_FEATURE_TAGS="${_FULL_FEATURE_TAGS}" \
+      bash "${pro_root}/scripts/build-team.sh"
+    print_success "Team binary: ${BIN_DIR}/centag-team"
 }
 
 # ── 共享：编译 Go 二进制 ──────────────────────────────────────────
@@ -659,16 +699,21 @@ build_distribution() {
     local dist_name="${1:-minimal}"
 
     case "$dist_name" in
-        minimal|personal|team)
+        team)
+            _build_team_via_pro
+            return
+            ;;
+        minimal|personal)
             ;;
         "")
             print_error "Please specify distribution: minimal, personal, or team"
-            print_info "Usage: $0 dist <minimal|personal|team>"
+            print_info "Usage: $0 build <minimal|personal|team>"
+            print_info "Note: team 由私有仓 centag-pro 构建（需并列 checkout 或 CENTAG_PRO_PATH）"
             exit 1
             ;;
         *)
             print_error "Unknown distribution: $dist_name"
-            print_info "Valid distributions: minimal, personal, team"
+            print_info "Valid distributions: minimal, personal, team(via centag-pro)"
             exit 1
             ;;
     esac
@@ -2122,6 +2167,11 @@ _dist_docker_build() {
 
     if [[ ! "$dist_name" =~ ^(minimal|personal|team)$ ]]; then
         print_error "无效的发行版名称: $dist_name (支持: minimal, personal, team)"
+        exit 1
+    fi
+    if [ "$dist_name" = "team" ]; then
+        print_error "Team Docker 镜像请在 centag-pro 仓库构建（开源仓已删除 dist/team）。"
+        print_info "见 centag-pro/README.md；本地二进制可用: $0 build team"
         exit 1
     fi
 
