@@ -37,6 +37,7 @@ COPY --from=backend-builder /app/centag ./bin/centag
 COPY --from=frontend-builder /bin/server/static ./static
 COPY deploy/docker/entrypoint.sh ./entrypoint.sh
 COPY config/initdata/ ./config/initdata/
+COPY config/pricing/ ./config/pricing/
 RUN chmod +x ./entrypoint.sh ./bin/centag && mkdir -p ./storage ./logs
 EXPOSE 20060
 CMD ["./entrypoint.sh"]

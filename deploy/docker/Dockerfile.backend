@@ -19,6 +19,7 @@ COPY cmd/ ./cmd/
 COPY internal/ ./internal/
 COPY plugins/ ./plugins/
 COPY config/initdata/ ./config/initdata/
+COPY config/pricing/ ./config/pricing/
 
 # 编译 Go 二进制（-s -w 去除调试信息，减小体积）
 RUN go build \
@@ -55,6 +56,7 @@ COPY --from=backend-builder /app/bin/centag ./centag
 # 复制运行时脚本和初始数据
 COPY deploy/docker/entrypoint.sh ./entrypoint.sh
 COPY config/initdata/ ./config/initdata/
+COPY config/pricing/ ./config/pricing/
 
 # 初始化目录结构并设置权限
 RUN chmod +x ./entrypoint.sh ./centag && \
