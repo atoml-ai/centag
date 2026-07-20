@@ -19,6 +19,18 @@ curl -s http://localhost:20060/api/v1/status | jq .edition
 # 期望: "personal"
 ```
 
+## 持久化（Docker）
+
+`./start.sh docker run personal` / compose 将数据 bind-mount 到仓库：
+
+| 宿主机路径 | 容器路径 | 内容 |
+|------------|----------|------|
+| `var/docker-data/personal/storage/` | `/app/storage` | SQLite `centag.db`（含 system_config、API Key、计量、计费规则等） |
+| `var/docker-data/personal/logs/` | `/app/logs` | 应用日志 |
+| `var/docker-data/personal/certs/` | `/app/bin/certs` | MITM / HostProxy CA |
+
+关键环境变量：`SQLITE_PATH=/app/storage/centag.db`（**必须绝对路径**；相对路径会落到 `/app/bin/storage`，重启即丢）。
+
 ## 特点
 
 - **全功能二进制**：含全部业务插件（路由、优化、审核、RAG、Mem0 等）与 sqlite/postgresql 驱动
@@ -108,7 +120,7 @@ curl http://localhost:20060/v1/chat/completions \
 
 - **产品版本**：`CENTAG_EDITION=personal`（compose 与 `.env.example` 已固定）
 - **默认模式**：`transparent-proxy`（透明模式，不注入 system prompt；全发行版统一）
-- **默认后端**：OpenAI `gpt-4o-mini`（需在 `.env` 配置 `OPENAI_API_KEY`）
+- **默认后端**：首启为空；请在 WebUI「添加 Provider」配置
 - **数据库**：SQLite（`./storage/centag.db`）
 - **对话 / Token 计量**：持久化到同一 SQLite（重启不丢；对比 minimal 进程内/文件临时）
 - **stack 依赖**：无（`OLLAMA_ENABLED=false` 时）
