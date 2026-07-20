@@ -23,7 +23,8 @@ import (
 func DefaultProxyConfig() ProxyConfig {
 	defaultMode := envStr("LLM_PROXY_DEFAULT_MODE", DefaultSystemPipelineID)
 	return ProxyConfig{
-		Timeout:             30,
+		// 透明转发 / 长 SSE：CapabilityBroker 会优先用节点 Context；该值作无 Context 时的兜底。
+		Timeout:             180,
 		MaxRetries:          3,
 		RetryDelay:          1,
 		Enabled:             true,

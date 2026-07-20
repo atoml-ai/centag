@@ -3,6 +3,7 @@ package config
 import "testing"
 
 func TestNormalizeSystemProxyConfig_Table(t *testing.T) {
+	t.Setenv("CENTAG_IN_DOCKER", "0")
 	tests := []struct {
 		name      string
 		in        SystemProxyConfig
@@ -40,6 +41,7 @@ func TestNormalizeSystemProxyConfig_Table(t *testing.T) {
 }
 
 func TestNormalizeSystemProxyConfig_DefaultsAndForceLoopback(t *testing.T) {
+	t.Setenv("CENTAG_IN_DOCKER", "0")
 	c := SystemProxyConfig{AllowLANClients: false, ListenAddr: "0.0.0.0", ListenPort: 0}
 	NormalizeSystemProxyConfig(&c)
 	if c.ListenPort != 8081 {
@@ -47,6 +49,18 @@ func TestNormalizeSystemProxyConfig_DefaultsAndForceLoopback(t *testing.T) {
 	}
 	if c.ListenAddr != "127.0.0.1" {
 		t.Fatalf("ListenAddr=%q want 127.0.0.1", c.ListenAddr)
+	}
+}
+
+func TestNormalizeSystemProxyConfig_ContainerBindsAllInterfaces(t *testing.T) {
+	t.Setenv("CENTAG_IN_DOCKER", "1")
+	c := SystemProxyConfig{AllowLANClients: false, ListenAddr: "127.0.0.1", ListenPort: 8081}
+	NormalizeSystemProxyConfig(&c)
+	if c.ListenAddr != "0.0.0.0" {
+		t.Fatalf("ListenAddr=%q want 0.0.0.0 in container", c.ListenAddr)
+	}
+	if got := c.PACProxyHost(); got != "127.0.0.1" {
+		t.Fatalf("PACProxyHost=%q want 127.0.0.1", got)
 	}
 }
 
@@ -71,6 +85,7 @@ func TestValidateSystemProxyConfig_LANRequiresAdvertise(t *testing.T) {
 }
 
 func TestValidateSystemProxyConfig_LocalRejectsNonLoopback(t *testing.T) {
+	t.Setenv("CENTAG_IN_DOCKER", "0")
 	c := SystemProxyConfig{AllowLANClients: false, ListenAddr: "0.0.0.0"}
 	// Normalize forces loopback before validate when AllowLAN=false — call Validate which normalizes first.
 	// Explicitly set after normalize path: Validate normalizes AllowLAN=false → 127.0.0.1 so this passes.
@@ -79,6 +94,15 @@ func TestValidateSystemProxyConfig_LocalRejectsNonLoopback(t *testing.T) {
 	}
 	if c.ListenAddr != "127.0.0.1" {
 		t.Fatalf("ListenAddr=%q", c.ListenAddr)
+	}
+}
+
+func TestSuggestLANHosts_NoPanic(t *testing.T) {
+	hosts := SuggestLANHosts()
+	for _, h := range hosts {
+		if IsLoopbackHost(h) {
+			t.Fatalf("unexpected loopback in SuggestLANHosts: %q", h)
+		}
 	}
 }
 

@@ -199,13 +199,13 @@ func (s *Server) ShouldRouteToBackend(host, path string) bool {
 // Start 启动MITM服务器
 func (s *Server) Start() error {
 	// 使用自定义Handler来处理CONNECT方法
+	// 长 SSE / 流式转发不能设短 WriteTimeout，否则会在 ~30s 切断响应。
 	s.httpServer = &http.Server{
-		Addr:         s.addr,
-		Handler:      s, // 使用Server本身作为Handler
-		TLSConfig:    s.tlsConfig,
-		ReadTimeout:  30 * time.Second,
-		WriteTimeout: 30 * time.Second,
-		IdleTimeout:  60 * time.Second,
+		Addr:              s.addr,
+		Handler:           s, // 使用Server本身作为Handler
+		TLSConfig:         s.tlsConfig,
+		ReadHeaderTimeout: 15 * time.Second,
+		IdleTimeout:       300 * time.Second,
 	}
 
 	logger.Info("MITM proxy server starting",
@@ -518,7 +518,7 @@ func (s *Server) forwardToBackend(w http.ResponseWriter, r *http.Request, scheme
 		body = r.Body
 	}
 
-	req, err := http.NewRequest(r.Method, backendURL.String(), body)
+	req, err := http.NewRequestWithContext(r.Context(), r.Method, backendURL.String(), body)
 	if err != nil {
 		return fmt.Errorf("failed to create backend request: %w", err)
 	}
@@ -542,9 +542,8 @@ func (s *Server) forwardToBackend(w http.ResponseWriter, r *http.Request, scheme
 	// Agent 填的是上游厂商 Token，不知道被 MITM；转发到 Centag 时注入网关 Key。
 	applyBackendAuth(req, s.backendAuthTokenLocked())
 
-	// 发送请求，直连后端（不走系统代理，避免循环）
+	// 直连后端；不设短 Client.Timeout（流式响应可能远超 60s），由请求 Context 取消。
 	client := &http.Client{
-		Timeout: 60 * time.Second,
 		Transport: &http.Transport{
 			Proxy: nil,
 		},
