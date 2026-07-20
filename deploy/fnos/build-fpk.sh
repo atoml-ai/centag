@@ -546,7 +546,7 @@ elif [ "$MODE" = "native" ]; then
   fi
 
   # 初始数据：minimal 用 profile，并合并全局 common 中 minimal 可用的流水线
-  # （开发时 start.sh 会合并全局+profile；fpk 只有包内 INITDATA_PATH，须自包含）
+  # （后端种子为 Profile 自包含；fpk 只打包 minimal initdata，不带通用全集）
   if [ "$EDITION" = "minimal" ] && [ -d "${REPO_ROOT}/config/profiles/minimal/initdata" ]; then
     cp -r "${REPO_ROOT}/config/profiles/minimal/initdata/"* "${APP_DIR}/config/initdata/"
     mkdir -p "${APP_DIR}/config/initdata/pipeline-templates/common"

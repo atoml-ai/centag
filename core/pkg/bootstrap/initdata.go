@@ -88,10 +88,11 @@ func InitdataRoot() string {
 // InitdataRoots returns both the global and profile-specific initdata roots.
 //
 // When INITDATA_PATH is set (e.g. in Docker profiles), it returns:
-//   - global: ProjectRoot()/config/initdata (the project's built-in defaults)
-//   - profile: INITDATA_PATH (the profile's override/overlay)
+//   - global: ProjectRoot()/config/initdata (pipeline templates / customer zip fallback)
+//   - profile: INITDATA_PATH (edition/customer seed; preferred for initial-backends)
 //
 // When INITDATA_PATH is not set, both paths point to the same directory.
+// Backend seed loading is profile-first and does not union-merge with global.
 func InitdataRoots() (global, profile string) {
 	profile = InitdataRoot()
 	global = filepath.Join(ProjectRoot(), "config", "initdata")

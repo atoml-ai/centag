@@ -215,6 +215,83 @@ func TestLoadInitialBackendFile_NotFound(t *testing.T) {
 	assert.Empty(t, foundPath)
 }
 
+func TestLoadInitialBackendFile_ProfilePreferredNoUnion(t *testing.T) {
+	dir := t.TempDir()
+	projectRoot := filepath.Join(dir, "project")
+	globalInit := filepath.Join(projectRoot, "config", "initdata")
+	profileInit := filepath.Join(dir, "profile-initdata")
+	require.NoError(t, os.MkdirAll(globalInit, 0o755))
+	require.NoError(t, os.MkdirAll(profileInit, 0o755))
+
+	t.Setenv("PROJECT_ROOT", projectRoot)
+	t.Setenv("INITDATA_PATH", profileInit)
+	projectRootCache = ""
+
+	globalContent := `version: "1.0"
+backends:
+  - id: global-only
+    name: Global
+    type: openai
+  - id: shared
+    name: Global Shared
+    type: openai
+`
+	require.NoError(t, os.WriteFile(filepath.Join(globalInit, "initial-backends.yaml"), []byte(globalContent), 0o644))
+
+	profileContent := `version: "1.0"
+backends:
+  - id: shared
+    name: Profile Shared
+    type: openai
+  - id: profile-only
+    name: Profile
+    type: ollama
+`
+	require.NoError(t, os.WriteFile(filepath.Join(profileInit, "initial-backends.yaml"), []byte(profileContent), 0o644))
+
+	file, foundPath, err := loadInitialBackendFile()
+	require.NoError(t, err)
+	require.NotNil(t, file)
+	assert.Contains(t, foundPath, "profile-initdata")
+	require.Len(t, file.Backends, 2)
+	ids := map[string]string{}
+	for _, b := range file.Backends {
+		ids[b.ID] = b.Name
+	}
+	assert.Equal(t, "Profile Shared", ids["shared"])
+	assert.Equal(t, "Profile", ids["profile-only"])
+	_, hasGlobal := ids["global-only"]
+	assert.False(t, hasGlobal, "must not union-merge global backends when profile file exists")
+}
+
+func TestLoadInitialBackendFile_FallbackGlobalWhenProfileMissing(t *testing.T) {
+	dir := t.TempDir()
+	projectRoot := filepath.Join(dir, "project")
+	globalInit := filepath.Join(projectRoot, "config", "initdata")
+	profileInit := filepath.Join(dir, "profile-empty")
+	require.NoError(t, os.MkdirAll(globalInit, 0o755))
+	require.NoError(t, os.MkdirAll(profileInit, 0o755))
+
+	t.Setenv("PROJECT_ROOT", projectRoot)
+	t.Setenv("INITDATA_PATH", profileInit)
+	projectRootCache = ""
+
+	globalContent := `version: "1.0"
+backends:
+  - id: from-global
+    name: Global
+    type: openai
+`
+	require.NoError(t, os.WriteFile(filepath.Join(globalInit, "initial-backends.yaml"), []byte(globalContent), 0o644))
+
+	file, foundPath, err := loadInitialBackendFile()
+	require.NoError(t, err)
+	require.NotNil(t, file)
+	assert.Contains(t, foundPath, "config/initdata")
+	require.Len(t, file.Backends, 1)
+	assert.Equal(t, "from-global", file.Backends[0].ID)
+}
+
 func TestLoadInitialBackendFile_InvalidYAML(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("INITDATA_PATH", filepath.Join(dir, "initdata"))

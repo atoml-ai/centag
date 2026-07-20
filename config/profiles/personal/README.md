@@ -86,7 +86,7 @@ docker exec -it centag-ollama ollama pull llama3.1
 ./start.sh profile personal reset
 ```
 
-同时在 WebUI 或 `config/initdata/initial-backends.yaml` 中启用 `ollama-local` 后端。
+同时在 WebUI 下拉添加，或在本 Profile 的 `initdata/initial-backends.yaml` 中启用 `ollama-local` 后端。
 
 ## 启动后验证
 
