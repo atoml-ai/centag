@@ -70,3 +70,24 @@ func TestTokenCountsFromOutput_PrefersNodeLogs(t *testing.T) {
 		t.Fatalf("counts = %d/%d/%d, want 100/40/140", prompt, completion, total)
 	}
 }
+
+func TestTokenCountsFromSSEContent_ParsesUsageChunk(t *testing.T) {
+	sse := "data: {\"choices\":[{\"delta\":{\"content\":\"hi\"}}]}\n\n" +
+		"data: {\"usage\":{\"prompt_tokens\":12,\"completion_tokens\":3,\"total_tokens\":15}}\n\n" +
+		"data: [DONE]\n\n"
+	p, cTok, total := tokenCountsFromSSEContent(sse)
+	if p != 12 || cTok != 3 || total != 15 {
+		t.Fatalf("counts = %d/%d/%d, want 12/3/15", p, cTok, total)
+	}
+}
+
+func TestApproximateTokensFromPassthroughContent_UsesDeltaText(t *testing.T) {
+	// 8 runes → 2 tokens at /4
+	sse := "data: {\"choices\":[{\"delta\":{\"content\":\"abcdefgh\"}}]}\n\n" +
+		"data: [DONE]\n\n"
+	n := approximateTokensFromPassthroughContent(sse)
+	if n != 2 {
+		t.Fatalf("approx = %d, want 2", n)
+	}
+}
+

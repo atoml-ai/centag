@@ -815,10 +815,13 @@ func (d *ModeDispatcher) writeStreamResponse(
 				}
 				flusher.Flush()
 				requestID := c.GetHeader("X-Request-ID")
+				respModel := effectiveResponseModel(c, model, finalOutput)
 				backendID := extractBackendFromPipelineOutput(finalOutput)
-				logRequestResponse(requestID, effectiveResponseModel(c, model, finalOutput), backendID, statusCode, result.Output.Content)
+				logRequestResponse(requestID, respModel, backendID, statusCode, result.Output.Content)
 				setPipelineExecutionHeaders(c, finalOutput, c.GetHeader("X-Pipeline-ID"))
 				setPipelineOutputHeaders(c, finalOutput)
+				// 透明透传提前返回前必须记账（此前漏掉导致计量恒为 0）
+				d.finishStreamSideEffects(c, finalOutput, respModel)
 				return nil
 			}
 		}
@@ -879,10 +882,12 @@ func (d *ModeDispatcher) writeStreamResponse(
 		}
 		flusher.Flush()
 		requestID := c.GetHeader("X-Request-ID")
+		respModel := effectiveResponseModel(c, model, finalOutput)
 		backendID := extractBackendFromPipelineOutput(finalOutput)
-		logRequestResponse(requestID, effectiveResponseModel(c, model, finalOutput), backendID, statusCode, finalOutput.Content)
+		logRequestResponse(requestID, respModel, backendID, statusCode, finalOutput.Content)
 		setPipelineExecutionHeaders(c, finalOutput, c.GetHeader("X-Pipeline-ID"))
 		setPipelineOutputHeaders(c, finalOutput)
+		d.finishStreamSideEffects(c, finalOutput, respModel)
 		return nil
 	}
 
@@ -973,12 +978,18 @@ func (d *ModeDispatcher) writeStreamResponse(
 	backendID := extractBackendFromPipelineOutput(finalOutput)
 	logRequestResponse(requestID, model, backendID, http.StatusOK, responseText)
 
+	d.finishStreamSideEffects(c, finalOutput, model)
+
+	return nil
+}
+
+// finishStreamSideEffects records metering / conversation hooks after a stream completes.
+// Must also run on transparent raw_passthrough early-return paths.
+func (d *ModeDispatcher) finishStreamSideEffects(c *gin.Context, finalOutput *pipeline.PipelineOutput, model string) {
 	maybeRecordTokenUsage(c, finalOutput, model)
 	maybeRecordRouteBackendMetrics(finalOutput)
 	maybeRecordCacheSaving(c, finalOutput, model)
 	triggerConversationResponseHooks(c, finalOutput, model, "")
-
-	return nil
 }
 
 // nodeResultSummary 单个流水线节点的执行摘要。
