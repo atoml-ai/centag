@@ -184,3 +184,154 @@ func TestExtractChatCompletionResult_ToolCallsFromSSE(t *testing.T) {
 		t.Fatalf("args=%q", tc.Function.Arguments)
 	}
 }
+
+// 缺 call_id 的 function_call_output 应当回填最近未配对的 function_call ID，
+// 避免上传到 /chat/completions 后报 "An assistant message with 'tool_calls'
+// must be followed by tool messages"。
+func TestConvertResponsesBodyToChatCompletions_BackfillsMissingOutputCallID(t *testing.T) {
+	in := `{
+		"model":"m",
+		"input":[
+			{"role":"user","content":"ls"},
+			{"type":"function_call","call_id":"call_xyz","name":"bash","arguments":"{\"command\":\"ls\"}"},
+			{"type":"function_call_output","output":"README.md\n"},
+			{"role":"user","content":"继续"}
+		]
+	}`
+	out, ok := convertResponsesBodyToChatCompletions([]byte(in))
+	if !ok {
+		t.Fatalf("expected conversion")
+	}
+	var raw map[string]interface{}
+	if err := json.Unmarshal(out, &raw); err != nil {
+		t.Fatal(err)
+	}
+	msgs, _ := raw["messages"].([]interface{})
+	if len(msgs) != 4 {
+		t.Fatalf("messages len=%d, body=%s", len(msgs), string(out))
+	}
+	asst := msgs[1].(map[string]interface{})
+	tcs, _ := asst["tool_calls"].([]interface{})
+	if len(tcs) != 1 {
+		t.Fatalf("assistant tool_calls=%v", asst["tool_calls"])
+	}
+	tc := tcs[0].(map[string]interface{})
+	if tc["id"] != "call_xyz" {
+		t.Fatalf("assistant tool_call id=%v", tc["id"])
+	}
+	toolMsg := msgs[2].(map[string]interface{})
+	if toolMsg["role"] != "tool" {
+		t.Fatalf("tool role=%v", toolMsg["role"])
+	}
+	if toolMsg["tool_call_id"] != "call_xyz" {
+		t.Fatalf("backfilled tool_call_id=%v want call_xyz, body=%s", toolMsg["tool_call_id"], string(out))
+	}
+}
+
+// assistant.tool_calls 缺配对的 tool 消息时，应整体清理 tool_calls，
+// 若 content 为空则丢弃整条 assistant 消息，避免上传后被上游拒绝。
+func TestConvertResponsesBodyToChatCompletions_DropsUnpairedAssistantToolCalls(t *testing.T) {
+	in := `{
+		"model":"m",
+		"input":[
+			{"role":"user","content":"ls"},
+			{"type":"function_call","call_id":"orphan","name":"bash","arguments":"{\"command\":\"ls\"}"},
+			{"role":"user","content":"不做"}
+		]
+	}`
+	out, ok := convertResponsesBodyToChatCompletions([]byte(in))
+	if !ok {
+		t.Fatalf("expected conversion")
+	}
+	if strings.Contains(string(out), `"tool_calls"`) {
+		t.Fatalf("unpaired tool_calls must be dropped, body=%s", string(out))
+	}
+	if strings.Contains(string(out), `"role":"tool"`) {
+		t.Fatalf("no tool message should be emitted, body=%s", string(out))
+	}
+	var raw map[string]interface{}
+	if err := json.Unmarshal(out, &raw); err != nil {
+		t.Fatal(err)
+	}
+	msgs, _ := raw["messages"].([]interface{})
+	if len(msgs) != 2 {
+		t.Fatalf("messages len=%d want 2 (orphan assistant dropped), body=%s", len(msgs), string(out))
+	}
+	for i, m := range msgs {
+		role, _ := m.(map[string]interface{})["role"].(string)
+		if role == "assistant" {
+			_, hasTC := m.(map[string]interface{})["tool_calls"]
+			if hasTC {
+				t.Fatalf("msg[%d] still has tool_calls: %s", i, string(out))
+			}
+		}
+	}
+}
+
+// 孤儿 tool 消息（无匹配 assistant.tool_calls）应当被丢掉。
+func TestConvertResponsesBodyToChatCompletions_DropsOrphanToolMessage(t *testing.T) {
+	in := `{
+		"model":"m",
+		"input":[
+			{"role":"user","content":"hi"},
+			{"type":"function_call_output","call_id":"missing","output":"done"},
+			{"role":"user","content":"bye"}
+		]
+	}`
+	out, ok := convertResponsesBodyToChatCompletions([]byte(in))
+	if !ok {
+		t.Fatalf("expected conversion")
+	}
+	if strings.Contains(string(out), `"role":"tool"`) {
+		t.Fatalf("orphan tool message must be dropped, body=%s", string(out))
+	}
+	if strings.Contains(string(out), `"tool_calls"`) {
+		t.Fatalf("no assistant.tool_calls should be emitted, body=%s", string(out))
+	}
+}
+
+// function_call 缺 call_id 时应合成稳定 ID，且后续无 call_id 的
+// function_call_output 能引用同一 ID 完成配对。
+func TestConvertResponsesBodyToChatCompletions_SynthesizesMissingCallID(t *testing.T) {
+	in := `{
+		"model":"m",
+		"input":[
+			{"role":"user","content":"ls"},
+			{"type":"function_call","name":"bash","arguments":"{\"command\":\"ls\"}"},
+			{"type":"function_call_output","output":"result"},
+			{"role":"user","content":"continue"}
+		]
+	}`
+	out, ok := convertResponsesBodyToChatCompletions([]byte(in))
+	if !ok {
+		t.Fatalf("expected conversion")
+	}
+	var raw map[string]interface{}
+	if err := json.Unmarshal(out, &raw); err != nil {
+		t.Fatal(err)
+	}
+	msgs, _ := raw["messages"].([]interface{})
+	var asstCallID, toolCallID string
+	for _, m := range msgs {
+		mm, _ := m.(map[string]interface{})
+		switch mm["role"] {
+		case "assistant":
+			tcs, _ := mm["tool_calls"].([]interface{})
+			if len(tcs) > 0 {
+				tc, _ := tcs[0].(map[string]interface{})
+				asstCallID, _ = tc["id"].(string)
+			}
+		case "tool":
+			toolCallID, _ = mm["tool_call_id"].(string)
+		}
+	}
+	if asstCallID == "" {
+		t.Fatalf("assistant.tool_calls missing (id not synthesized), body=%s", string(out))
+	}
+	if toolCallID == "" {
+		t.Fatalf("tool message missing (back-fill failed), body=%s", string(out))
+	}
+	if asstCallID != toolCallID {
+		t.Fatalf("paired IDs differ: assistant=%q tool=%q, body=%s", asstCallID, toolCallID, string(out))
+	}
+}

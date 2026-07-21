@@ -174,6 +174,10 @@ func responsesInputToMessages(input interface{}) []map[string]interface{} {
 		}
 	case []interface{}:
 		msgs := make([]map[string]interface{}, 0, len(v))
+		// pendingCalls 记录 function_call 已发出但尚未被 function_call_output 配对的 call_id，
+		// 用于给缺 call_id 的 function_call_output 回填配对 ID，避免 OpenAI 报
+		// "An assistant message with 'tool_calls' must be followed by tool messages"。
+		var pendingCalls []string
 		for _, item := range v {
 			m, ok := item.(map[string]interface{})
 			if !ok {
@@ -183,12 +187,22 @@ func responsesInputToMessages(input interface{}) []map[string]interface{} {
 			typ = strings.TrimSpace(typ)
 			switch typ {
 			case "function_call":
-				if msg := functionCallItemToChatMessage(m); msg != nil {
-					msgs = append(msgs, msg)
+				msg, callID := functionCallItemToChatMessage(m)
+				if msg == nil {
+					continue
+				}
+				msgs = append(msgs, msg)
+				if callID != "" && !sliceContainsString(pendingCalls, callID) {
+					pendingCalls = append(pendingCalls, callID)
 				}
 			case "function_call_output":
-				if msg := functionCallOutputItemToChatMessage(m); msg != nil {
-					msgs = append(msgs, msg)
+				msg := functionCallOutputItemToChatMessage(m, pendingCalls)
+				if msg == nil {
+					continue
+				}
+				msgs = append(msgs, msg)
+				if id, _ := msg["tool_call_id"].(string); id != "" {
+					pendingCalls = sliceRemoveString(pendingCalls, id)
 				}
 			default:
 				// "message", "", or OpenCode items that only set role/content
@@ -197,17 +211,141 @@ func responsesInputToMessages(input interface{}) []map[string]interface{} {
 				}
 			}
 		}
-		return msgs
+		return enforceToolCallPairing(msgs)
 	}
 	return nil
 }
 
-func functionCallItemToChatMessage(m map[string]interface{}) map[string]interface{} {
+// enforceToolCallPairing 强制 assistant.tool_calls 与 tool 角色消息严格配对，
+// 避免上游 OpenAI 报 "An assistant message with 'tool_calls' must be followed
+// by tool messages responding to each 'tool_call_id'"。规则：
+//   - 收集所有 tool 消息的 tool_call_id（setToolIDs）。
+//   - 遍历 assistant 消息：若其 tool_calls 中某 id 不在 setToolIDs 里，则移除该 tool_call；
+//     若某个 tool 消息的 tool_call_id 不在任何 assistant.tool_calls 里，则移除该 tool 消息。
+//   - 若 assistant 消息的 tool_calls 被清空且 content 为空/nil，整条 assistant 消息删除。
+func enforceToolCallPairing(msgs []map[string]interface{}) []map[string]interface{} {
+	if len(msgs) == 0 {
+		return msgs
+	}
+	toolIDSet := make(map[string]struct{})
+	for _, m := range msgs {
+		if m["role"] != "tool" {
+			continue
+		}
+		id, _ := m["tool_call_id"].(string)
+		if id == "" {
+			continue
+		}
+		toolIDSet[id] = struct{}{}
+	}
+
+	assistantCallIDSet := make(map[string]struct{})
+	for _, m := range msgs {
+		if m["role"] != "assistant" {
+			continue
+		}
+		tcs, _ := m["tool_calls"].([]interface{})
+		if len(tcs) == 0 {
+			continue
+		}
+		for _, tc := range tcs {
+			tm, ok := tc.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			if id, _ := tm["id"].(string); id != "" {
+				assistantCallIDSet[id] = struct{}{}
+			}
+		}
+	}
+
+	out := make([]map[string]interface{}, 0, len(msgs))
+	for _, m := range msgs {
+		role, _ := m["role"].(string)
+		switch role {
+		case "assistant":
+			tcs, _ := m["tool_calls"].([]interface{})
+			if len(tcs) == 0 {
+				out = append(out, m)
+				continue
+			}
+			filtered := make([]interface{}, 0, len(tcs))
+			for _, tc := range tcs {
+				tm, ok := tc.(map[string]interface{})
+				if !ok {
+					continue
+				}
+				id, _ := tm["id"].(string)
+				if id == "" {
+					continue
+				}
+				if _, ok := toolIDSet[id]; ok {
+					filtered = append(filtered, tc)
+				}
+			}
+			if len(filtered) == 0 {
+				// 没有任何 tool_call 被配对，且 content 为空/nil → 丢弃整条 assistant 消息
+				content, hasContent := m["content"]
+				if !hasContent || content == nil || content == "" {
+					continue
+				}
+				// 有正文，保留为普通文本 assistant 消息（去掉 tool_calls 字段）
+				delete(m, "tool_calls")
+				out = append(out, m)
+				continue
+			}
+			m["tool_calls"] = filtered
+			out = append(out, m)
+		case "tool":
+			id, _ := m["tool_call_id"].(string)
+			if id == "" {
+				// 没有配对 ID 的 tool 消息直接丢弃，避免上游报 "tool message following tool_calls" 不匹配
+				continue
+			}
+			if _, ok := assistantCallIDSet[id]; !ok {
+				continue
+			}
+			out = append(out, m)
+		default:
+			out = append(out, m)
+		}
+	}
+	return out
+}
+
+func sliceContainsString(s []string, v string) bool {
+	for _, x := range s {
+		if x == v {
+			return true
+		}
+	}
+	return false
+}
+
+func sliceRemoveString(s []string, v string) []string {
+	for i, x := range s {
+		if x == v {
+			return append(s[:i], s[i+1:]...)
+		}
+	}
+	return s
+}
+
+// functionCallItemToChatMessage 将 Responses 的 function_call 项转换为 Chat
+// assistant.tool_calls 消息。返回的 callID 是实际写入消息的 ID（缺失时会合成
+// 一个稳定 ID），供调用方记录到 pendingCalls 用于回填给后续无 call_id 的
+// function_call_output，避免上游报 tool_calls/tool 配对失败。
+func functionCallItemToChatMessage(m map[string]interface{}) (map[string]interface{}, string) {
 	callID := firstNonEmptyString(m, "call_id", "id")
 	name, _ := m["name"].(string)
 	name = strings.TrimSpace(name)
-	if callID == "" || name == "" {
-		return nil
+	if name == "" {
+		// 没有 name 时无法构造 tool_call，直接放弃（不会留下半截 assistant.tool_calls）
+		return nil, ""
+	}
+	if callID == "" {
+		// 缺失 call_id 时生成稳定 ID，保证后续 function_call_output 能引用。
+		callID = fmt.Sprintf("call_%d_synthetic", timeHash(m))
 	}
 	args := anyToJSONString(m["arguments"])
 	if args == "" {
@@ -226,11 +364,18 @@ func functionCallItemToChatMessage(m map[string]interface{}) map[string]interfac
 				},
 			},
 		},
-	}
+	}, callID
 }
 
-func functionCallOutputItemToChatMessage(m map[string]interface{}) map[string]interface{} {
+// functionCallOutputItemToChatMessage 将 Responses 的 function_call_output 项
+// 转换为 Chat tool 角色消息。call_id 缺失时从 pendingCalls 末尾取最近一个未配对
+// 的 function_call 的 ID 进行回填；若 pendingCalls 为空则返回 nil（交给
+// enforceToolCallPairing 兜底丢弃）。
+func functionCallOutputItemToChatMessage(m map[string]interface{}, pendingCalls []string) map[string]interface{} {
 	callID := firstNonEmptyString(m, "call_id")
+	if callID == "" && len(pendingCalls) > 0 {
+		callID = pendingCalls[len(pendingCalls)-1]
+	}
 	if callID == "" {
 		return nil
 	}
@@ -239,6 +384,30 @@ func functionCallOutputItemToChatMessage(m map[string]interface{}) map[string]in
 		"tool_call_id": callID,
 		"content":      anyToJSONString(m["output"]),
 	}
+}
+
+// timeHash 返回一个对 map 内容稳定的 int64，用于在缺 call_id 时合成可复现的 ID。
+func timeHash(m map[string]interface{}) int64 {
+	var h int64 = 1469598103934665603
+	add := func(b []byte) {
+		for _, c := range b {
+			h ^= int64(c)
+			h *= 1099511628211
+		}
+	}
+	if id, ok := m["id"].(string); ok {
+		add([]byte(id))
+	}
+	if name, ok := m["name"].(string); ok {
+		add([]byte(name))
+	}
+	if args, ok := m["arguments"]; ok {
+		add([]byte(anyToJSONString(args)))
+	}
+	if h < 0 {
+		h = -h
+	}
+	return h
 }
 
 func roleContentItemToChatMessage(m map[string]interface{}) map[string]interface{} {
