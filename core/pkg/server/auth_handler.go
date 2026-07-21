@@ -122,7 +122,7 @@ func (h *AuthHandler) Refresh(c *gin.Context) {
 	hash := auth.SHA256Hex(req.RefreshToken)
 	logger.Info("auth/refresh: looking up refresh token",
 		zap.String("hash_prefix", hash[:8]))
-	
+
 	rt, err := db.RefreshTokenStore().GetByHash(ctx, hash)
 	if err != nil {
 		logger.Warn("auth/refresh: token not found or error",
@@ -234,7 +234,9 @@ func (h *AuthHandler) Me(c *gin.Context) {
 
 // ── shared helpers ───────────────────────────────────────────────────────────
 
-type userResponse struct {
+// UserResponse is the public JSON shape for user records (profile + admin).
+// Exported so commercial plugins (centag-pro) can reuse the same DTO without forking.
+type UserResponse struct {
 	ID          int64  `json:"id"`
 	Username    string `json:"username"`
 	Role        string `json:"role"`
@@ -245,8 +247,8 @@ type userResponse struct {
 	DefaultPipelineID string `json:"default_pipeline_id,omitempty"`
 	DailyTokenLimit   int64  `json:"daily_token_limit"`
 	MonthlyTokenLimit int64  `json:"monthly_token_limit"`
-	DailyTokenUsed   int64  `json:"daily_token_used"`
-	MonthlyTokenUsed int64  `json:"monthly_token_used"`
+	DailyTokenUsed    int64  `json:"daily_token_used"`
+	MonthlyTokenUsed  int64  `json:"monthly_token_used"`
 	// Team: shared resource access
 	AllowedBackendIDs        []string `json:"allowed_backend_ids"`
 	AllowedModelIDs          []string `json:"allowed_model_ids"`
@@ -257,7 +259,15 @@ type userResponse struct {
 	CreatedAt                string   `json:"created_at"`
 }
 
-func toUserResponse(u *database.User) *userResponse {
+// Deprecated: use UserResponse.
+type userResponse = UserResponse
+
+// ToUserResponse maps a DB user to the API DTO (no password).
+func ToUserResponse(u *database.User) *UserResponse {
+	return toUserResponse(u)
+}
+
+func toUserResponse(u *database.User) *UserResponse {
 	backends := u.AllowedBackendIDs
 	if backends == nil {
 		backends = []string{}
