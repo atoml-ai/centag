@@ -1,0 +1,38 @@
+name: ci
+
+on:
+  push:
+    branches: [main, master, 'feature/**']
+  pull_request:
+
+jobs:
+  go:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: No private deps (E4 / R01)
+        run: bash scripts/ci-check-no-private-deps.sh
+      - name: Test selected packages
+        run: |
+          mapfile -t pkgs < <(bash scripts/ci-go-packages.sh | head -n 80)
+          go test "${pkgs[@]}"
+
+  web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - run: npm run test:ui-caps
+      - name: Build personal/minimal host (no team pack)
+        run: npm run build
