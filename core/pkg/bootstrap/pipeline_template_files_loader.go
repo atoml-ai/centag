@@ -12,11 +12,13 @@ import (
 )
 
 // editionDirMap 定义每个版本需要加载的子目录。
-// common 目录始终包含在所有版本中。
+//
+//	common/ — minimal / personal / team
+//	team/   — team 发行版专用（原 personal/ 目录）
 var editionDirMap = map[string][]string{
-	"minimal": {"common"},
-	"personal": {"common", "personal"},
-	"team":    {"common", "personal"},
+	"minimal":  {"common"},
+	"personal": {"common"},
+	"team":     {"common", "team"},
 }
 
 // LoadInitialPipelineTemplatesFromFiles 从全局和 Profile 的 config/initdata/pipeline-templates
@@ -30,9 +32,10 @@ func LoadInitialPipelineTemplatesFromFiles() []InitialPipelineTemplate {
 // 目录结构：
 //
 //	pipeline-templates/
-//	  common/    — 所有版本都加载
-//	  personal/  — personal/team 版加载
-// edition 为空时加载所有子目录（向后兼容）。
+//	  common/ — minimal / personal / team
+//	  team/   — 仅 team 版
+//
+// edition 为空时加载 common+team（测试/全量联调）。
 func LoadInitialPipelineTemplatesWithEdition(edition string) []InitialPipelineTemplate {
 	globalRoot, profileRoot := InitdataRoots()
 	if globalRoot == "" && profileRoot == "" {
@@ -85,9 +88,10 @@ func LoadInitialPipelineTemplatesWithEdition(edition string) []InitialPipelineTe
 
 // resolveEditionSubdirs 根据版本返回需要加载的子目录列表。
 func resolveEditionSubdirs(edition string) []string {
+	edition = strings.TrimSpace(strings.ToLower(edition))
 	if edition == "" {
-		// 向后兼容：加载所有子目录
-		return []string{"common", "personal", "minimal"}
+		// 全量：common + team（不再扫描已废弃的 personal/ 子目录名）
+		return []string{"common", "team"}
 	}
 	if dirs, ok := editionDirMap[edition]; ok {
 		return dirs

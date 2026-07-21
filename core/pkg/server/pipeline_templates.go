@@ -8,18 +8,16 @@ import (
 	"centag/core/pkg/pipeline"
 )
 
-// resolvePipelineTemplates returns pipeline templates loaded from config/initdata/pipeline-templates/ YAML files.
-// Returns nil if no templates are found (system will use DB-stored pipelines instead).
+// resolvePipelineTemplates returns pipeline templates for the current product edition
+// (CENTAG_EDITION / cfg.Server.Edition). Empty edition loads common+team.
 func resolvePipelineTemplates() []pipeline.PatternTemplate {
 	return resolvePipelineTemplatesWithEdition("")
 }
 
-// resolvePipelineTemplatesWithEdition 根据版本返回流水线模板。
-// edition 为空时加载所有模板（向后兼容），否则根据文件名前缀过滤：
-//   - "minimal-" 前缀：仅 minimal 版加载
-//   - "personal-" 前缀：personal 和 team 版加载
-//   - "all-" 前缀：所有版本加载
-//   - 无前缀：所有版本加载（向后兼容）
+// resolvePipelineTemplatesWithEdition 按 edition 子目录加载：
+//
+//	minimal / personal → pipeline-templates/common/
+//	team               → common/ + team/
 func resolvePipelineTemplatesWithEdition(edition string) []pipeline.PatternTemplate {
 	initialTemplates := bootstrap.LoadInitialPipelineTemplatesWithEdition(edition)
 	templates := convertInitialTemplates(initialTemplates)
