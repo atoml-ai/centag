@@ -10,7 +10,7 @@
 #   GH_TOKEN / gh auth   required for --release
 #   DRY_RUN=1            build only, skip gh release
 #   CENTAG_RELEASE_REPO  default atoml-ai/centag
-#   CENTAG_RELEASE_ALLOW_NON_MAIN=1  emergency bypass of main-only gate (on --release)
+#   CENTAG_RELEASE_ALLOW_ANY_BRANCH=1  emergency bypass of version-branch gate (on --release)
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -69,8 +69,8 @@ if [[ "$DO_RELEASE" != "1" ]]; then
   exit 0
 fi
 
-# Upload to GitHub only from main (build-only on feature branches is OK).
-bash "${ROOT}/scripts/release/require-main-branch.sh"
+# Upload only from the version branch matching this release (build-only elsewhere is OK).
+bash "${ROOT}/scripts/release/require-release-branch.sh" --version "${VERSION}"
 
 command -v gh >/dev/null 2>&1 || fail "gh is required for --release"
 
@@ -86,8 +86,8 @@ NOTES="$(cat <<EOF
 Install:
 
 \`\`\`bash
-curl -fsSL https://raw.githubusercontent.com/${REPO}/main/scripts/install.sh | bash
-curl -fsSL https://raw.githubusercontent.com/${REPO}/main/scripts/install.sh | bash -s -- --only proxyctl
+curl -fsSL https://raw.githubusercontent.com/${REPO}/${TAG}/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/${REPO}/${TAG}/scripts/install.sh | bash -s -- --only proxyctl
 \`\`\`
 
 ### Artifacts

@@ -22,22 +22,29 @@
 | 本地构建产物 | `scripts/release/build-artifacts.sh` → `bin/release/<version>/` |
 | 本地上传 Release | `scripts/release/publish-binaries.sh` |
 | CI 发版 | `.github/workflows/release.yml`（`v*` tag 或 workflow_dispatch） |
-| 分支门禁 | `scripts/release/require-main-branch.sh` |
+| 分支门禁 | `scripts/release/require-release-branch.sh` |
 | 版本号真源（无 `--version` 时） | `apps/proxyctl-npm/package.json` → `version` |
 | 默认仓库 | `atoml-ai/centag`（可用 `CENTAG_RELEASE_REPO` 覆盖） |
 
 默认平台：`darwin-amd64`、`darwin-arm64`、`linux-amd64`、`linux-arm64`、`windows-amd64`、`windows-arm64`。
 
-### 强制：仅 main 可发布
+### 强制：仅版本分支可发布
+
+对版本 `0.2.7`（tag `v0.2.7`），允许的分支名：
+
+- `v0.2.7`
+- `feature/v0.2.7`（本仓当前习惯）
+- `release/v0.2.7`
 
 | 场景 | 规则 |
 |------|------|
-| 本地 `--release` / Path A 上传 | 当前分支必须是 `main`；若存在 `origin/main`，不得落后或分叉 |
-| CI `workflow_dispatch` | 必须在 **main** 上 Run workflow |
-| CI 推送 `v*` tag | tag 指向的 commit 必须是 `origin/main` 的祖先（即 tag 打在 main 历史上） |
+| 本地 `--release` / Path A 上传 | 当前分支必须是上表之一，且与 `--version` 一致 |
+| CI `workflow_dispatch` | 必须在对应版本分支上 Run workflow |
+| CI 推送 `v*` tag | tag 版本与门禁一致，且 commit 落在上述某一 `origin/<branch>` 历史上 |
 | 仅构建不上传 | 任意分支可跑 `build-artifacts.sh` / `publish-binaries.sh`（不加 `--release`） |
+| `main` | **不用于**发版上传（可合并，但发版在版本分支完成） |
 
-紧急绕过（不推荐）：`CENTAG_RELEASE_ALLOW_NON_MAIN=1`。Agent **默认禁止**建议用户使用；仅用户明确要求时才设置。
+紧急绕过（不推荐）：`CENTAG_RELEASE_ALLOW_ANY_BRANCH=1`。Agent **默认禁止**建议；仅用户明确要求时才设置。
 
 ---
 
@@ -49,13 +56,13 @@
 | 发版路径 | `CENTAG_RELEASE_PATH` | ✅ | 见下方「发版路径」 |
 | 是否草稿 | `CENTAG_RELEASE_DRAFT` | 可选 | `true`（默认建议）/ `false` |
 | 仓库 | `CENTAG_RELEASE_REPO` | 可选 | 默认 `atoml-ai/centag` |
-| 安装脚本分支 | `CENTAG_INSTALL_REF` | 可选 | 默认 `main` |
+| 安装脚本 ref | `CENTAG_INSTALL_REF` | 可选 | 默认 tag `v<version>`（与 Release 对齐） |
 
 入口层必须确认：
 
-1. 当前在 **main**（或即将在 main 上操作）：`bash scripts/release/require-main-branch.sh`。
+1. 当前在**版本分支**上：`bash scripts/release/require-release-branch.sh --version <ver>`。
 2. `gh auth status` 成功（本地路径 A/B）。
-3. 工作区含要发布的 `scripts/install.sh`（已合入 / 已推送到 **main**，因用户 curl 默认读 main）。
+3. 工作区含要发布的 `scripts/install.sh`（已推到该版本分支；用户 curl 可用 tag `v<ver>`）。
 4. 版本与 `apps/proxyctl-npm/package.json` 的 `version` 对齐（或用户明确指定覆盖）。
 
 ---
@@ -67,8 +74,9 @@
 适用：已跑过构建，`bin/release/<version>/` 下已有 `centag-personal-*.tar.gz`、`centag-proxyctl-*.tar.gz`、`checksums.txt`。
 
 ```bash
-# 0) 必须在 main + 登录
-bash scripts/release/require-main-branch.sh
+# 0) 必须在版本分支（例：feature/v0.2.7）+ 登录
+git checkout "feature/v${CENTAG_RELEASE_VERSION}"   # 或 v${CENTAG_RELEASE_VERSION}
+bash scripts/release/require-release-branch.sh --version "${CENTAG_RELEASE_VERSION}"
 gh auth login   # 若尚未登录
 gh auth status
 
@@ -80,7 +88,7 @@ gh release create "v${CENTAG_RELEASE_VERSION}" \
   --repo "${CENTAG_RELEASE_REPO:-atoml-ai/centag}" \
   --draft \
   --title "Centag ${CENTAG_RELEASE_VERSION}" \
-  --notes "personal CLI + proxyctl. Install: curl -fsSL https://raw.githubusercontent.com/atoml-ai/centag/main/scripts/install.sh | bash" \
+  --notes "personal CLI + proxyctl. Install: curl -fsSL https://raw.githubusercontent.com/atoml-ai/centag/v${CENTAG_RELEASE_VERSION}/scripts/install.sh | bash" \
   "bin/release/${CENTAG_RELEASE_VERSION}"/centag-*.tar.gz \
   "bin/release/${CENTAG_RELEASE_VERSION}/checksums.txt"
 ```
@@ -127,19 +135,19 @@ DRY_RUN=1 ./scripts/release/publish-binaries.sh --version "${CENTAG_RELEASE_VERS
 
 ### Path C — 推 tag，走 GitHub Actions
 
-适用：改动已合入 **main**；希望 CI 交叉编译。
+适用：改动已在**版本分支**上；希望 CI 交叉编译。
 
 ```bash
-git checkout main
-git pull origin main
-bash scripts/release/require-main-branch.sh
+git checkout "feature/v${CENTAG_RELEASE_VERSION}"
+git pull origin "feature/v${CENTAG_RELEASE_VERSION}"
+bash scripts/release/require-release-branch.sh --version "${CENTAG_RELEASE_VERSION}"
 
-# tag 必须打在 main 的 commit 上，再推送
+# tag 打在版本分支的 commit 上，再推送
 git tag "v${CENTAG_RELEASE_VERSION}"
 git push origin "v${CENTAG_RELEASE_VERSION}"
 ```
 
-或：Actions → **release** → 选择分支 **main** → **Run workflow**（非 main 会被 `guard-main` 拒绝）。
+或：Actions → **release** → 选择分支 **`feature/v0.2.7`**（或 `v0.2.7`）→ **Run workflow**（在 `main` 上跑会被 `guard-branch` 拒绝）。
 
 CI 默认组件：`personal,proxyctl`。产物写入草稿（或按 input）Release。
 
@@ -210,7 +218,7 @@ curl -sS -o /dev/null -w "%{http_code}\n" "http://127.0.0.1:20060/" || true
 ## Agent 执行清单（交接后按序）
 
 1. 读取入口注入的 `CENTAG_RELEASE_*`；缺版本则停，要求入口补齐。
-2. **先跑** `bash scripts/release/require-main-branch.sh`（上传/CI 路径）；非 main 则中止并提示先合入 main。
+2. **先跑** `bash scripts/release/require-release-branch.sh --version …`；不在版本分支则中止并提示切换分支。
 3. 按 `CENTAG_RELEASE_PATH` 选 A / B / C 执行；禁止擅自扩大组件集（不加 minimal/launcher）。
 4. Path A/B：确认 `gh auth`；失败则只汇报认证错误，不编造 token。
 5. 上传完成后执行「验收」§1–§2；§3 仅在用户需要 curl 一行命令时做。
@@ -223,9 +231,9 @@ curl -sS -o /dev/null -w "%{http_code}\n" "http://127.0.0.1:20060/" || true
 
 | 现象 | 处理 |
 |------|------|
-| `local release upload only from main` | `git checkout main && git pull` 后再发 |
-| CI：`tag … is not on origin/main` | 在 main 上重新打 tag / 删错 tag |
-| CI：`workflow_dispatch … only from main` | Run workflow 时分支选 main |
+| `only from version branch` | `git checkout feature/v0.2.7`（或 `v0.2.7`）后再发 |
+| CI：`tag … is not on a version branch` | 在 `feature/vX` 上重新打 tag |
+| CI：`workflow_dispatch … only from version branch` | Run workflow 时选 `feature/vX`，不要选 main |
 | `gh`：not logged in | `gh auth login` |
 | `EXTRA_BUILD_ARGS[@]: unbound variable` | 已修；确保使用当前 `publish-binaries.sh` |
 | Actions：`Invalid workflow file` near notes | `run: \|` 内勿顶格 heredoc；见 Path C 注意 |
@@ -241,9 +249,9 @@ curl -sS -o /dev/null -w "%{http_code}\n" "http://127.0.0.1:20060/" || true
 |------|------|
 | `scripts/install.sh` | 用户侧一键安装 |
 | `scripts/release/build-artifacts.sh` | 交叉编译 + checksums |
-| `scripts/release/publish-binaries.sh` | 构建并可选 `gh release`（`--release` 时强制 main） |
-| `scripts/release/require-main-branch.sh` | 仅 main 可发布门禁 |
-| `.github/workflows/release.yml` | tag / 手动触发 CI 发版（`guard-main`） |
+| `scripts/release/publish-binaries.sh` | 构建并可选 `gh release`（`--release` 时强制版本分支） |
+| `scripts/release/require-release-branch.sh` | 版本分支门禁 |
+| `.github/workflows/release.yml` | tag / 手动触发 CI 发版（`guard-branch`） |
 | `apps/proxyctl-npm/package.json` | 版本号对齐参考 |
 | `apps/proxyctl-npm/lib/download.js` | npm 侧下载同名 `centag-proxyctl-*.tar.gz` |
 

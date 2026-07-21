@@ -26,22 +26,42 @@ centag/
 └── go.work
 ```
 
-## 一键安装（预编译）
+## 一键安装（`install.sh`）
+
+默认安装 **personal CLI + proxyctl** 到 `~/.centag/bin`（并尝试写入 PATH）。需已发布的 GitHub Release 资产。
 
 ```bash
-# 默认：personal CLI + proxyctl → ~/.centag/bin
-curl -fsSL https://raw.githubusercontent.com/atoml-ai/centag/main/scripts/install.sh | bash
+# 推荐：按 Release tag 拉取安装脚本（与发版 tag 一致，例如 v0.2.7）
+curl -fsSL https://raw.githubusercontent.com/atoml-ai/centag/v0.2.7/scripts/install.sh | bash
 
-# 只装某一组件
-curl -fsSL https://raw.githubusercontent.com/atoml-ai/centag/main/scripts/install.sh | bash -s -- --only proxyctl
+# 指定版本（脚本仍从 tag/分支取，二进制从对应 Release 下载）
+curl -fsSL https://raw.githubusercontent.com/atoml-ai/centag/v0.2.7/scripts/install.sh | bash -s -- --version 0.2.7
 
-# 无 Release 或指定源码构建
-curl -fsSL https://raw.githubusercontent.com/atoml-ai/centag/main/scripts/install.sh | bash -s -- --from-source
+# 只装 personal 或只装 proxyctl
+curl -fsSL https://raw.githubusercontent.com/atoml-ai/centag/v0.2.7/scripts/install.sh | bash -s -- --only personal
+curl -fsSL https://raw.githubusercontent.com/atoml-ai/centag/v0.2.7/scripts/install.sh | bash -s -- --only proxyctl
+
+# 等价写法（位置参数）
+curl -fsSL https://raw.githubusercontent.com/atoml-ai/centag/v0.2.7/scripts/install.sh | bash -s -- proxyctl
+
+# 无可用 Release 时：克隆源码构建（需 Go / Node）
+curl -fsSL https://raw.githubusercontent.com/atoml-ai/centag/v0.2.7/scripts/install.sh | bash -s -- --from-source
+
+# 自定义安装目录、不改 shell rc
+curl -fsSL https://raw.githubusercontent.com/atoml-ai/centag/v0.2.7/scripts/install.sh | bash -s -- \
+  --prefix "$HOME/.centag" --no-modify-path
 ```
 
-安装后：`centag` 启动服务，`centag-proxyctl run -- opencode` 走本机代理。
+安装后常用命令：
 
-发版产物与上传：`./scripts/release/publish-binaries.sh --version <ver> --release`（或推送 `v*` tag 触发 `.github/workflows/release.yml`）。当前默认只发布 **personal + proxyctl**。完整步骤见 [docs/harness/skills/centag-release.md](docs/harness/skills/centag-release.md)（Agent 触发词：发版 / release）。
+```bash
+centag                 # 启动 personal（默认端口 20060）
+centag-personal        # 直接跑二进制
+centag-proxyctl run -- opencode
+centag-proxyctl doctor
+```
+
+脚本说明见 `scripts/install.sh --help`。发版流程见 [docs/harness/skills/centag-release.md](docs/harness/skills/centag-release.md)（触发词：发版 / release）。
 
 ## 快速开始（开发机）
 

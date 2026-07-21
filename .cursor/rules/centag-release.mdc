@@ -15,7 +15,7 @@ alwaysApply: false
 2. 收齐参数并确认后，**加载正本执行**，不在此文件发明步骤。
 3. AskQuestion 不可用时才允许极短文字提问。
 4. 当前范围仅 **personal + proxyctl**；用户要求 minimal/launcher 时说明「正本标明以后再说」，勿擅自发版。
-5. **仅 main 可发布**：收参后先确认分支；非 main 则引导合入 main，禁止建议 `CENTAG_RELEASE_ALLOW_NON_MAIN`（除非用户明确要求紧急绕过）。
+5. **仅版本分支可发布**（`vX` / `feature/vX` / `release/vX`）：非版本分支则引导切换；禁止建议 `CENTAG_RELEASE_ALLOW_ANY_BRANCH`（除非用户明确要求紧急绕过）。
 
 ## 触发词
 
@@ -27,10 +27,11 @@ alwaysApply: false
 
 ```bash
 git rev-parse --abbrev-ref HEAD
-bash scripts/release/require-main-branch.sh 2>&1 || true
+VER="$(node -p "require('./apps/proxyctl-npm/package.json').version" 2>/dev/null || true)"
+bash scripts/release/require-release-branch.sh --version "${VER:-0.0.0}" 2>&1 || true
 gh auth status 2>&1 | head -20
 ls bin/release/*/centag-*.tar.gz 2>/dev/null | head -20
-node -p "require('./apps/proxyctl-npm/package.json').version" 2>/dev/null
+echo "package.json version=${VER}"
 ```
 
 ### 1. AskQuestion — 发版参数
