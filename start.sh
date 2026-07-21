@@ -450,40 +450,21 @@ _get_dist_tags() {
     esac
 }
 
-# Resolve private centag-pro checkout (required for team builds).
-_resolve_centag_pro() {
-    if [ -n "${CENTAG_PRO_PATH:-}" ] && [ -d "${CENTAG_PRO_PATH}" ]; then
-        echo "${CENTAG_PRO_PATH}"
-        return 0
+# Team SKU is built only in the private centag-pro repo (no OSS convenience wrapper).
+_reject_team_build_in_oss() {
+    local via="${1:-build}"
+    print_error "开源仓不再提供 Team 构建入口（含转调）。"
+    print_info "请在私有仓 centag-pro 构建（用法与本仓对齐）："
+    print_info "  cd ../centag-pro   # 或你的 checkout 路径；分支须与 centag 同名"
+    print_info "  export CENTAG_ROOT=${PROJECT_ROOT}"
+    print_info "  ./start.sh build team                 # 后端 → bin/centag-team"
+    print_info "  ./start.sh build fe                   # Team 前端"
+    print_info "  ./start.sh build all                  # 后端 + 前端"
+    if [ "$via" = "debug" ]; then
+        print_info "  ./start.sh debug team                 # 开发模式（后端 + Team 前端 watch）"
     fi
-    local sibling="${PROJECT_ROOT}/../centag-pro"
-    if [ -d "$sibling" ]; then
-        echo "$(cd "$sibling" && pwd)"
-        return 0
-    fi
-    return 1
-}
-
-# Build commercial Team binary via centag-pro (open repo has no dist/team).
-_build_team_via_pro() {
-    local pro_root
-    if ! pro_root="$(_resolve_centag_pro)"; then
-        print_error "Team 构建已迁至私有仓 centag-pro；开源仓不再包含 dist/team。"
-        print_info "请克隆 https://github.com/atoml-ai/centag-pro 到 $(dirname "$PROJECT_ROOT")/centag-pro"
-        print_info "或设置 CENTAG_PRO_PATH=/path/to/centag-pro 后重试: $0 build team / $0 debug team"
-        exit 1
-    fi
-    if [ ! -x "${pro_root}/scripts/build-team.sh" ] && [ ! -f "${pro_root}/scripts/build-team.sh" ]; then
-        print_error "centag-pro 缺少 scripts/build-team.sh: ${pro_root}"
-        exit 1
-    fi
-    print_info "Delegating Team build to centag-pro: ${pro_root}"
-    mkdir -p "${BIN_DIR}"
-    CENTAG_ROOT="${PROJECT_ROOT}" \
-      ASSEMBLE_OUT="${BIN_DIR}/centag-team" \
-      FULL_FEATURE_TAGS="${_FULL_FEATURE_TAGS}" \
-      bash "${pro_root}/scripts/build-team.sh"
-    print_success "Team binary: ${BIN_DIR}/centag-team"
+    print_info "详见 centag-pro/README.md"
+    exit 1
 }
 
 # ── 共享：编译 Go 二进制 ──────────────────────────────────────────
@@ -700,20 +681,19 @@ build_distribution() {
 
     case "$dist_name" in
         team)
-            _build_team_via_pro
-            return
+            _reject_team_build_in_oss build
             ;;
         minimal|personal)
             ;;
         "")
-            print_error "Please specify distribution: minimal, personal, or team"
-            print_info "Usage: $0 build <minimal|personal|team>"
-            print_info "Note: team 由私有仓 centag-pro 构建（需并列 checkout 或 CENTAG_PRO_PATH）"
+            print_error "Please specify distribution: minimal or personal"
+            print_info "Usage: $0 build <minimal|personal>"
+            print_info "Team：cd ../centag-pro && ./start.sh build team"
             exit 1
             ;;
         *)
             print_error "Unknown distribution: $dist_name"
-            print_info "Valid distributions: minimal, personal, team(via centag-pro)"
+            print_info "Valid distributions: minimal, personal（Team → centag-pro）"
             exit 1
             ;;
     esac
@@ -1241,14 +1221,14 @@ detect_database_mode() {
 # 用法（与 build/run 风格一致）:
 #   ./start.sh debug                 # 默认 personal
 #   ./start.sh debug minimal         # 精简 WebUI + centag-minimal
-#   ./start.sh debug team            # centag-pro 构建 centag-team + CENTAG_EDITION=team
 #   ./start.sh debug personal        # 显式 personal（同默认）
+#   Team：cd ../centag-pro && ./start.sh debug team
 debug() {
     # ── 解析发行版（位置参数，与 build/run 一致）──────────────────
     local edition="personal"
     if [ "$#" -gt 1 ]; then
         print_error "debug 只接受一个发行版参数"
-        echo "用法: $0 debug [personal|minimal|team]"
+        echo "用法: $0 debug [personal|minimal]"
         exit 1
     fi
     if [ "$#" -eq 1 ]; then
@@ -1258,12 +1238,12 @@ debug() {
                 ;;
             --minimal|--team|--personal)
                 print_error "请使用位置参数，不要加 --：./start.sh debug ${1#--}"
-                echo "用法: $0 debug [personal|minimal|team]"
+                echo "用法: $0 debug [personal|minimal]"
                 exit 1
                 ;;
             *)
                 print_error "未知 debug 发行版: $1"
-                echo "用法: $0 debug [personal|minimal|team]"
+                echo "用法: $0 debug [personal|minimal]（Team → centag-pro）"
                 exit 1
                 ;;
         esac
@@ -1275,10 +1255,9 @@ debug() {
         return
     fi
 
-    # ── team 分支：经 centag-pro 构建完整商业二进制 ────────────────
+    # ── team：开源仓不再构建/转调；请到 centag-pro ────────────────
     if [ "$edition" = "team" ]; then
-        _debug_team
-        return
+        _reject_team_build_in_oss debug
     fi
 
     # ── personal：开源全功能二进制 + webui 前端 ───────────────────
@@ -1359,69 +1338,6 @@ debug() {
     # 前台启动后端（日志直接输出到控制台）
     cd "$BIN_DIR"
     CENTAG_EDITION=personal ./centag
-    cd "$PROJECT_ROOT"
-}
-
-# ── Team 调试：经 centag-pro 构建完整商业二进制 + webui watch ─────────────
-_debug_team() {
-    load_env
-    detect_database_mode
-    centag_export_debug_console_env
-    export CENTAG_EDITION=team
-
-    cleanup_residual_processes
-    rm -f "$BIN_DIR/storage/centag.pid" 2>/dev/null || true
-    kill_backend_port_or_exit || return 1
-
-    check_go
-    print_info "编译 Team 商业二进制（经 centag-pro）..."
-    build_distribution "team"
-
-    check_node
-    local webui_dir="${PROJECT_ROOT}/web"
-    if [ ! -d "$webui_dir/node_modules" ] || [ "$webui_dir/package.json" -nt "$webui_dir/node_modules/.package-lock.json" ]; then
-        print_info "安装 Web UI 依赖..."
-        cd "$webui_dir" && npm install && cd "$PROJECT_ROOT"
-    fi
-
-    mkdir -p "$BIN_DIR/static"
-    print_info "启动前端 watch 构建（变化后刷新浏览器即可生效）..."
-    cd "$webui_dir"
-    npx vite build --watch --outDir "$BIN_DIR/static" --emptyOutDir false > /tmp/centag-vite-team.log 2>&1 &
-    local vite_pid=$!
-    cd "$PROJECT_ROOT"
-
-    print_info "等待首次构建完成..."
-    local waited=0
-    while [ $waited -lt 30 ]; do
-        if grep -q "built in" /tmp/centag-vite-team.log 2>/dev/null; then
-            break
-        fi
-        sleep 1
-        waited=$((waited + 1))
-    done
-
-    if ! kill -0 "$vite_pid" 2>/dev/null; then
-        print_error "前端构建失败，请查看日志: /tmp/centag-vite-team.log"
-        cat /tmp/centag-vite-team.log
-        exit 1
-    fi
-    print_success "前端构建就绪，Vite 监听文件变化中..."
-    trap "kill $vite_pid 2>/dev/null; print_info '已停止前端 watch 进程'" EXIT INT TERM
-
-    echo ""
-    print_info "════════════════════════════════════════"
-    print_info "  Team 开发模式已启动"
-    print_info "  产品版本:    team（centag-pro / centag-team）"
-    print_info "  访问地址:    http://localhost:$BACKEND_PORT"
-    print_info "  前端变化后:  刷新浏览器即可看到最新内容"
-    print_info "  后端变化后:  下次执行 debug team 会经 pro 重新编译"
-    print_info "  按 Ctrl+C 停止所有服务"
-    print_info "════════════════════════════════════════"
-    echo ""
-
-    cd "$BIN_DIR"
-    CENTAG_EDITION=team ./centag-team
     cd "$PROJECT_ROOT"
 }
 
@@ -2240,7 +2156,7 @@ _dist_docker_build() {
     fi
     if [ "$dist_name" = "team" ]; then
         print_error "Team Docker 镜像请在 centag-pro 仓库构建（开源仓已删除 dist/team）。"
-        print_info "见 centag-pro/README.md；本地二进制可用: $0 build team"
+        print_info "见 centag-pro/README.md；本地: cd ../centag-pro && ./start.sh build team"
         exit 1
     fi
 
@@ -3294,7 +3210,7 @@ show_short_help() {
     echo -e "  ${GREEN}run${NC}      <be|fe|personal|minimal> [--launcher]  运行服务"
     echo -e "  ${GREEN}run${NC}      proxyctl [子命令...]     系统代理出口 CLI（PAC/CA）"
     echo -e "  ${GREEN}daemon${NC}                           后台守护进程模式（自动重启）"
-    echo -e "  ${GREEN}debug${NC} [--minimal|--team]         开发模式（默认 personal）+ 前端热重载"
+    echo -e "  ${GREEN}debug${NC} [personal|minimal]         开发模式（默认 personal）+ 前端热重载；Team → centag-pro"
     echo -e "  ${GREEN}stop${NC}     <be|fe>               停止服务"
     echo -e "  ${GREEN}status${NC}                           查看服务状态"
     echo -e "  ${GREEN}logs${NC}                             查看服务日志"
@@ -3303,7 +3219,7 @@ show_short_help() {
     # ── 构建 ──
     echo -e "  ${CYAN}── 构建 ──────────────────────────────────────────────${NC}"
     echo -e "  ${GREEN}build${NC}    <all|be|fe>             构建项目（开发用）"
-    echo -e "  ${GREEN}build${NC}    <personal|minimal|team> [--launcher] [--proxyctl]  构建发行版"
+    echo -e "  ${GREEN}build${NC}    <personal|minimal> [--launcher] [--proxyctl]  构建发行版（Team → centag-pro ./start.sh）"
     echo -e "  ${GREEN}build${NC}    proxyctl                仅构建 centag-proxyctl"
     echo -e "  ${GREEN}docker${NC}   build <minimal|personal|team>   构建 Docker 镜像"
     echo -e "  ${GREEN}docker${NC}   run   <minimal|personal|team>   运行 Docker 容器"
@@ -3433,14 +3349,14 @@ _help_build() {
     echo -e "  ${GREEN}--launcher${NC}    额外构建当前系统的桌面启动器（仅 personal/minimal）"
     echo -e "             自动识别 darwin / linux / windows（GOOS/GOARCH）"
     echo -e "             ${YELLOW}team 不支持 --launcher${NC}"
-    echo -e "  ${GREEN}--proxyctl${NC}    额外构建 centag-proxyctl（可与 personal/minimal/team 同用）"
+    echo -e "  ${GREEN}--proxyctl${NC}    额外构建 centag-proxyctl（可与 personal/minimal 同用）"
     echo -e "             产物: bin/proxyctl/<goos>-<goarch>/centag-proxyctl"
     echo ""
     echo -e "${CYAN}示例:${NC}"
     echo -e "  ./start.sh build personal           # 普通个人版服务"
     echo -e "  ./start.sh build personal --launcher    # 个人版 + 桌面启动器"
     echo -e "  ./start.sh build personal --proxyctl    # 个人版 + 系统代理 CLI"
-    echo -e "  ./start.sh build team --proxyctl        # 团队版 + 员工侧 proxyctl"
+    echo -e "  # Team：cd ../centag-pro && ./start.sh build team（本仓不构建 team）"
     echo -e "  ./start.sh build proxyctl               # 仅构建 centag-proxyctl"
     echo -e "  ./start.sh build minimal --launcher"
     echo -e "  ./start.sh build be"
@@ -3527,16 +3443,16 @@ _help_debug() {
     echo -e "${CYAN}用法:${NC}"
     echo -e "  ./start.sh debug              # 默认 personal"
     echo -e "  ./start.sh debug minimal      # minimal 精简版"
-    echo -e "  ./start.sh debug team         # team 团队版"
     echo -e "  ./start.sh debug personal     # 显式 personal（同默认）"
+    echo -e "  # Team：cd ../centag-pro && ./start.sh debug team"
     echo ""
     echo -e "${CYAN}发行版:${NC}"
     echo -e "  ${GREEN}personal${NC}           CENTAG_EDITION=personal + 开源全功能二进制（默认）"
     echo -e "  ${GREEN}minimal${NC}             精简 WebUI + centag-minimal"
-    echo -e "  ${GREEN}team${NC}                经 centag-pro 构建 centag-team + CENTAG_EDITION=team"
+    echo -e "  ${YELLOW}team${NC}                本仓拒绝；请: cd ../centag-pro && ./start.sh debug team"
     echo ""
     echo -e "${CYAN}说明:${NC}"
-    echo -e "  风格与 build / run 一致：./start.sh debug <minimal|personal|team>"
+    echo -e "  风格与 build / run 一致：./start.sh debug <minimal|personal>"
     echo -e "  均支持：后端 debug 日志 + 前端文件变更自动同步 + 一键 Ctrl+C 停止。"
 }
 
@@ -4238,7 +4154,7 @@ wizard_finish() {
     echo -e "${YELLOW}开发模式:${NC}"
     echo "  ./start.sh debug           # personal（默认）+ 前端热重载"
     echo "  ./start.sh debug minimal   # minimal 精简版"
-    echo "  ./start.sh debug team      # team 团队版"
+    echo "  # Team：cd ../centag-pro && ./start.sh build team"
     echo "  ./start.sh logs           # 查看日志"
     echo ""
     echo -e "${YELLOW}构建:${NC}"
@@ -4431,7 +4347,7 @@ main() {
                     ;;
                 *)
                     print_error "未知构建目标: '$target'"
-                    echo "支持的构建目标: all, be, fe, personal, minimal, team, proxyctl"
+                    echo "支持的构建目标: all, be, fe, personal, minimal, proxyctl（Team → centag-pro）"
                     echo "启动器: ./start.sh build personal --launcher  或  ./start.sh build minimal --launcher"
                     echo "系统代理 CLI: ./start.sh build proxyctl  或  ./start.sh build personal --proxyctl"
                     exit 1
