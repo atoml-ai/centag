@@ -1,5 +1,13 @@
 <template>
   <div class="home-pipeline-card" v-loading="loading">
+    <input
+      ref="importInputRef"
+      type="file"
+      accept=".yaml,.yml,text/yaml,application/x-yaml"
+      multiple
+      class="hidden-file-input"
+      @change="handleImportFiles"
+    />
     <template v-if="pipelines.length > 0">
       <div class="pipeline-list-head">
         <span class="section-label">流水线列表</span>
@@ -16,6 +24,9 @@
         </el-checkbox>
         <template v-if="selectedIds.length > 0">
           <span class="toolbar-count">已选 {{ selectedIds.length }} 项</span>
+          <el-button size="small" :loading="batchExporting" @click="handleBatchExport">
+            批量导出
+          </el-button>
           <el-button size="small" type="danger" :loading="batchDeleting" @click="handleBatchDelete">
             批量删除
           </el-button>
@@ -87,6 +98,24 @@
               配置模型
             </el-button>
             <PipelineFeatureGuard
+              feature="pipelineExport"
+              :pipeline="pipeline"
+              :is-admin="authStore.isAdmin"
+              action-label="导出"
+            >
+              <template #default="{ disabled }">
+                <el-button
+                  size="small"
+                  plain
+                  :disabled="disabled || exportingId === pipeline.id"
+                  :loading="exportingId === pipeline.id"
+                  @click="handleExportOne(pipeline)"
+                >
+                  导出
+                </el-button>
+              </template>
+            </PipelineFeatureGuard>
+            <PipelineFeatureGuard
               feature="pipelineEdit"
               :pipeline="pipeline"
               :is-admin="authStore.isAdmin"
@@ -110,7 +139,6 @@
               size="small"
               type="danger"
               plain
-              :disabled="pipeline.id === selectedDefaultId"
               @click="handleDelete(pipeline)"
             >
               删除
@@ -121,9 +149,20 @@
     </template>
 
     <el-empty v-else-if="!loading" description="暂无流水线" :image-size="56">
-      <el-button v-if="canCreatePipeline" type="primary" plain size="small" @click="openCreate">
-        创建流水线
-      </el-button>
+      <div class="empty-actions">
+        <el-button v-if="canCreatePipeline" type="primary" plain size="small" @click="openCreate">
+          创建流水线
+        </el-button>
+        <el-button
+          v-if="canCreatePipeline"
+          plain
+          size="small"
+          :loading="importing"
+          @click="triggerImport"
+        >
+          导入流水线
+        </el-button>
+      </div>
     </el-empty>
 
     <PipelineCreateDialog
@@ -144,6 +183,31 @@
       :pipeline-id="routeAssignPipelineId"
       @saved="handleRouteAssignSaved"
     />
+
+    <el-dialog
+      v-model="importConflictVisible"
+      title="导入冲突"
+      width="580px"
+      :close-on-click-modal="false"
+      :close-on-press-escape="false"
+      :before-close="handleConflictCancel"
+    >
+      <p class="conflict-hint">以下流水线 ID 已存在，请选择处理方式：</p>
+      <el-table :data="importConflictItems" size="small" border max-height="320" stripe>
+        <el-table-column prop="id" label="ID" min-width="140" show-overflow-tooltip />
+        <el-table-column prop="name" label="名称" min-width="160" show-overflow-tooltip />
+      </el-table>
+      <p class="conflict-summary">
+        共 <strong>{{ importConflictItems.length }}</strong> 个冲突
+      </p>
+      <template #footer>
+        <el-button @click="handleConflictCancel">取消</el-button>
+        <el-button @click="handleConflictSkip">
+          跳过重复（{{ importConflictItems.length }} 个）
+        </el-button>
+        <el-button type="primary" @click="handleConflictOverwrite">覆盖导入</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -169,6 +233,13 @@ import {
   parsePipelinesResponse,
   type AgentPatternPipeline
 } from '@/api/pipeline'
+import {
+  downloadPipelineYaml,
+  downloadPipelinesAsZip,
+  parsePipelineYamlFiles,
+  importPipelineTemplates,
+  type ParsedPipelineTemplate
+} from '@/utils/pipeline/importExport'
 
 const emit = defineEmits<{
   'update:count': [count: number]
@@ -189,6 +260,13 @@ const isCreating = ref(false)
 const createInfoVisible = ref(false)
 const selectedIds = ref<string[]>([])
 const batchDeleting = ref(false)
+const batchExporting = ref(false)
+const exportingId = ref('')
+const importing = ref(false)
+const importInputRef = ref<HTMLInputElement | null>(null)
+const importConflictVisible = ref(false)
+const importConflictItems = ref<ParsedPipelineTemplate[]>([])
+const importConflictResolve = ref<((value: 'overwrite' | 'skip' | 'cancel') => void) | null>(null)
 const routeAssignVisible = ref(false)
 const routeAssignPipelineId = ref('')
 
@@ -209,8 +287,8 @@ const canSetDefault = computed(
     isMinimal.value ||
     (isTeam.value && canChangeDefaultPipeline.value)
 )
-/** 批量选择仅 minimal（精简台高频清理）；personal/team 走单条操作 */
-const selectable = computed(() => isMinimal.value)
+/** 可编辑角色开放勾选：批量导出 / 批量删除 */
+const selectable = computed(() => canEdit.value)
 /** 全角色流水线「测试」→ MinimalChat（含 team admin） */
 const canTest = computed(() => true)
 
@@ -302,14 +380,24 @@ function selectDefault(pipelineId: string) {
   persistDefault(pipelineId)
 }
 
-async function handleDelete(pipeline: AgentPatternPipeline) {
-  if (pipeline.id === selectedDefaultId.value) {
-    ElMessage.warning('不能删除当前默认流水线，请先设置其他流水线为默认')
-    return
+async function reassignDefaultIfNeeded(deletedIds: string[]) {
+  const deletedDefault = deletedIds.includes(selectedDefaultId.value)
+  if (!deletedDefault) return
+  await loadPipelines()
+  if (!canSetDefault.value || pipelines.value.length === 0) return
+  const next = pipelines.value[0]
+  if (next?.id) {
+    await persistDefault(next.id)
   }
+}
+
+async function handleDelete(pipeline: AgentPatternPipeline) {
+  const wasDefault = pipeline.id === selectedDefaultId.value
   try {
     await ElMessageBox.confirm(
-      `确定删除流水线「${pipeline.name || pipeline.id}」吗？此操作不可恢复。`,
+      wasDefault
+        ? `「${pipeline.name || pipeline.id}」当前为默认流水线，删除后将自动改用剩余流水线（若还有）。此操作不可恢复。`
+        : `确定删除流水线「${pipeline.name || pipeline.id}」吗？此操作不可恢复。`,
       '确认删除',
       { confirmButtonText: '删除', cancelButtonText: '取消', type: 'warning' }
     )
@@ -319,7 +407,11 @@ async function handleDelete(pipeline: AgentPatternPipeline) {
   try {
     await deletePipeline(pipeline.id)
     ElMessage.success(`已删除流水线「${pipeline.name || pipeline.id}」`)
-    loadPipelines()
+    if (wasDefault) {
+      await reassignDefaultIfNeeded([pipeline.id])
+    } else {
+      await loadPipelines()
+    }
   } catch (error: any) {
     ElMessage.error(error?.response?.data?.message || '删除流水线失败')
   }
@@ -327,16 +419,12 @@ async function handleDelete(pipeline: AgentPatternPipeline) {
 
 async function handleBatchDelete() {
   if (!selectedIds.value.length) return
-  const ids = selectedIds.value.filter(id => id !== selectedDefaultId.value)
-  if (!ids.length) {
-    ElMessage.warning('不能删除当前默认流水线，请先设置其他流水线为默认')
-    return
-  }
-  const skippedDefault = ids.length < selectedIds.value.length
+  const ids = [...selectedIds.value]
+  const includesDefault = ids.includes(selectedDefaultId.value)
   try {
     await ElMessageBox.confirm(
-      skippedDefault
-        ? `将删除选中的 ${ids.length} 个流水线（已跳过当前默认），此操作不可恢复。`
+      includesDefault
+        ? `将删除选中的 ${ids.length} 个流水线（含当前默认）；若仍有剩余流水线，将自动改设默认。此操作不可恢复。`
         : `确定删除选中的 ${ids.length} 个流水线吗？此操作不可恢复。`,
       '批量删除',
       { confirmButtonText: '删除', cancelButtonText: '取消', type: 'warning' }
@@ -351,12 +439,127 @@ async function handleBatchDelete() {
     }
     ElMessage.success(`已删除 ${ids.length} 个流水线`)
     selectedIds.value = []
-    await loadPipelines()
+    if (includesDefault) {
+      await reassignDefaultIfNeeded(ids)
+    } else {
+      await loadPipelines()
+    }
   } catch (error: any) {
     ElMessage.error(error?.response?.data?.message || '批量删除失败')
     await loadPipelines()
   } finally {
     batchDeleting.value = false
+  }
+}
+
+async function handleExportOne(pipeline: AgentPatternPipeline) {
+  exportingId.value = pipeline.id
+  try {
+    await downloadPipelineYaml(pipeline.id, pipeline.name || pipeline.id)
+    ElMessage.success(`已导出「${pipeline.name || pipeline.id}」`)
+  } catch (error: any) {
+    ElMessage.error('导出失败：' + (error?.message || error))
+  } finally {
+    exportingId.value = ''
+  }
+}
+
+async function handleBatchExport() {
+  if (!selectedIds.value.length) return
+  const items = selectedIds.value
+    .map((id) => {
+      const p = pipelines.value.find((x) => x.id === id)
+      return p ? { id: p.id, name: p.name || p.id } : null
+    })
+    .filter((x): x is { id: string; name: string } => !!x)
+  if (!items.length) return
+  batchExporting.value = true
+  try {
+    await downloadPipelinesAsZip(items)
+    ElMessage.success(`已导出 ${items.length} 个流水线（ZIP）`)
+  } catch (error: any) {
+    ElMessage.error('批量导出失败：' + (error?.message || error))
+  } finally {
+    batchExporting.value = false
+  }
+}
+
+function triggerImport() {
+  importInputRef.value?.click()
+}
+
+function showImportConflictDialog(
+  duplicates: ParsedPipelineTemplate[]
+): Promise<'overwrite' | 'skip' | 'cancel'> {
+  return new Promise((resolve) => {
+    importConflictItems.value = duplicates
+    importConflictResolve.value = resolve
+    importConflictVisible.value = true
+  })
+}
+
+function handleConflictOverwrite() {
+  importConflictVisible.value = false
+  importConflictResolve.value?.('overwrite')
+  importConflictResolve.value = null
+}
+
+function handleConflictSkip() {
+  importConflictVisible.value = false
+  importConflictResolve.value?.('skip')
+  importConflictResolve.value = null
+}
+
+function handleConflictCancel() {
+  importConflictVisible.value = false
+  importConflictResolve.value?.('cancel')
+  importConflictResolve.value = null
+}
+
+async function handleImportFiles(e: Event) {
+  const input = e.target as HTMLInputElement
+  const files = input.files
+  if (!files?.length) return
+
+  importing.value = true
+  try {
+    const { templates, failedFiles } = await parsePipelineYamlFiles(files)
+    if (!templates.length) {
+      ElMessage.error('导入失败，请确认文件是有效的流水线 YAML（需含 id、name）')
+      return
+    }
+
+    const existingIds = new Set(pipelines.value.map((p) => p.id))
+    const duplicates = templates.filter((t) => existingIds.has(t.id))
+    let onDuplicate: 'overwrite' | 'skip' = 'overwrite'
+    if (duplicates.length > 0) {
+      const action = await showImportConflictDialog(duplicates)
+      if (action === 'cancel') return
+      onDuplicate = action
+    }
+
+    const { successCount, failCount, skippedCount } = await importPipelineTemplates(templates, {
+      existingIds,
+      onDuplicate
+    })
+
+    if (successCount > 0) {
+      await loadPipelines()
+      const parts = [`成功导入 ${successCount} 个流水线`]
+      if (skippedCount > 0) parts.push(`跳过 ${skippedCount} 个`)
+      if (failCount > 0) parts.push(`${failCount} 个失败`)
+      if (failedFiles.length > 0) parts.push(`${failedFiles.length} 个文件无法解析`)
+      ElMessage.success(parts.join('，'))
+    } else if (skippedCount > 0 && failCount === 0) {
+      ElMessage.warning(`已跳过全部 ${skippedCount} 个重复流水线`)
+    } else {
+      ElMessage.error('导入失败，请确认文件是有效的流水线 YAML')
+    }
+  } catch (error: any) {
+    ElMessage.error('导入失败：' + (error?.message || error))
+  } finally {
+    importing.value = false
+    input.value = ''
   }
 }
 
@@ -443,7 +646,7 @@ onMounted(() => {
   loadPipelines()
 })
 
-defineExpose({ reload: loadPipelines, openCreate })
+defineExpose({ reload: loadPipelines, openCreate, openImport: triggerImport })
 </script>
 
 <style scoped>
@@ -469,9 +672,33 @@ defineExpose({ reload: loadPipelines, openCreate })
   color: #374151;
 }
 
+.empty-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .list-count {
   font-size: 0.75rem;
   color: #9ca3af;
+}
+
+.hidden-file-input {
+  display: none;
+}
+
+.conflict-hint {
+  margin: 0 0 10px;
+  font-size: 0.875rem;
+  color: #4b5563;
+}
+
+.conflict-summary {
+  margin: 10px 0 0;
+  font-size: 0.8125rem;
+  color: #6b7280;
 }
 
 .list-toolbar {
