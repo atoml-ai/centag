@@ -1,0 +1,275 @@
+#!/usr/bin/env bash
+# Build GitHub Release artifacts consumed by scripts/install.sh.
+#
+# Usage:
+#   ./scripts/release/build-artifacts.sh [--version 0.2.7]
+#   ./scripts/release/build-artifacts.sh --components personal,proxyctl
+#   CENTAG_RELEASE_PLATFORMS=linux-amd64,darwin-arm64 ./scripts/release/build-artifacts.sh
+#
+# Outputs under bin/release/<version>/ (default components):
+#   centag-personal-<goos>-<goarch>.tar.gz
+#   centag-proxyctl-<goos>-<goarch>.tar.gz
+#   checksums.txt
+#
+# Other components (minimal / launcher / launcher-tray) remain callable via
+# --components for later; not part of the default install/release set.
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+NPM_PKG="${ROOT}/apps/proxyctl-npm/package.json"
+
+log() { echo "==> $*" >&2; }
+fail() { echo "error: $*" >&2; exit 1; }
+
+VERSION=""
+COMPONENTS="personal,proxyctl"
+PLATFORMS="${CENTAG_RELEASE_PLATFORMS:-darwin-amd64,darwin-arm64,linux-amd64,linux-arm64,windows-amd64,windows-arm64}"
+SKIP_FRONTEND="${CENTAG_RELEASE_SKIP_FRONTEND:-0}"
+BUILD_LAUNCHER_TRAY="${CENTAG_RELEASE_LAUNCHER_TRAY:-0}"
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --version) VERSION="${2:-}"; shift 2 ;;
+    --components) COMPONENTS="${2:-}"; shift 2 ;;
+    --platforms) PLATFORMS="${2:-}"; shift 2 ;;
+    --skip-frontend) SKIP_FRONTEND=1; shift ;;
+    --launcher-tray) BUILD_LAUNCHER_TRAY=1; shift ;;
+    -h|--help)
+      sed -n '2,24p' "$0"
+      exit 0
+      ;;
+    *) fail "unknown arg: $1" ;;
+  esac
+done
+
+if [[ -z "$VERSION" ]]; then
+  if [[ -f "$NPM_PKG" ]] && command -v node >/dev/null 2>&1; then
+    VERSION="$(node -p "require('${NPM_PKG}').version")"
+  else
+    VERSION="$(git -C "$ROOT" describe --tags --abbrev=0 2>/dev/null | sed 's/^v//' || true)"
+  fi
+fi
+[[ -n "$VERSION" ]] || fail "version required (--version or apps/proxyctl-npm/package.json)"
+VERSION="${VERSION#v}"
+
+OUT_DIR="${ROOT}/bin/release/${VERSION}"
+rm -rf "$OUT_DIR"
+mkdir -p "$OUT_DIR"
+
+IFS=',' read -r -a COMP_ARR <<< "$COMPONENTS"
+IFS=',' read -r -a PLAT_ARR <<< "$PLATFORMS"
+
+need_component() {
+  local want="$1" c
+  for c in "${COMP_ARR[@]}"; do
+    c="$(printf '%s' "$c" | tr -d '[:space:]')"
+    [[ "$c" == "$want" ]] && return 0
+  done
+  return 1
+}
+
+sha256_of() {
+  if command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "$1" | awk '{print $1}'
+  else
+    sha256sum "$1" | awk '{print $1}'
+  fi
+}
+
+dist_tags() {
+  case "$1" in
+    minimal)
+      echo "minimal,protocol_openai,protocol_anthropic,backend_openai,backend_ollama,backend_anthropic"
+      ;;
+    personal)
+      echo "protocol_openai,protocol_anthropic,protocol_gemini,protocol_openairesponses,backend_openai,backend_ollama,backend_anthropic,backend_gemini,backend_azure"
+      ;;
+    *) fail "unknown edition: $1" ;;
+  esac
+}
+
+HOST_GOOS="$(go env GOOS)"
+HOST_GOARCH="$(go env GOARCH)"
+
+# --- frontend (shared static) ---------------------------------------------
+STATIC_SRC="${ROOT}/bin/server/static"
+if need_component personal || need_component minimal; then
+  if [[ "$SKIP_FRONTEND" != "1" ]]; then
+    log "building frontend → ${STATIC_SRC}"
+    (
+      cd "${ROOT}/web"
+      if [[ -f package-lock.json ]]; then npm ci; else npm install; fi
+      npm run build
+    )
+  fi
+  [[ -d "$STATIC_SRC" ]] || fail "frontend static missing at ${STATIC_SRC} (build web or omit --skip-frontend)"
+fi
+
+package_tar() {
+  local stage_parent="$1" stage_name="$2" out_tarball="$3"
+  (
+    cd "$stage_parent"
+    tar -czf "$out_tarball" "$stage_name"
+  )
+}
+
+# --- personal / minimal ---------------------------------------------------
+build_edition() {
+  local edition="$1" goos="$2" goarch="$3"
+  local ext="" tags out_bin stage_parent stage_name tarball
+  if [[ "$goos" == "windows" ]]; then ext=".exe"; fi
+  tags="$(dist_tags "$edition")"
+  out_bin="${OUT_DIR}/.build/${edition}-${goos}-${goarch}/centag-${edition}${ext}"
+  mkdir -p "$(dirname "$out_bin")"
+
+  log "build centag-${edition} ${goos}/${goarch}"
+  (
+    cd "${ROOT}/dist/${edition}"
+    GOWORK=off CGO_ENABLED=0 GOOS="$goos" GOARCH="$goarch" \
+      go build -trimpath -tags "$tags" -ldflags="-s -w" -o "$out_bin" .
+  )
+
+  stage_parent="${OUT_DIR}/.stage"
+  stage_name="centag-${edition}-${goos}-${goarch}"
+  rm -rf "${stage_parent}/${stage_name}"
+  mkdir -p "${stage_parent}/${stage_name}"
+  cp -f "$out_bin" "${stage_parent}/${stage_name}/centag-${edition}${ext}"
+  chmod 755 "${stage_parent}/${stage_name}/centag-${edition}${ext}"
+  cp -R "$STATIC_SRC" "${stage_parent}/${stage_name}/static"
+
+  tarball="${OUT_DIR}/centag-${edition}-${goos}-${goarch}.tar.gz"
+  package_tar "$stage_parent" "$stage_name" "$tarball"
+  log "OK ${tarball}"
+}
+
+# --- proxyctl -------------------------------------------------------------
+build_proxyctl() {
+  local goos="$1" goarch="$2"
+  local ext="" out_bin stage_parent stage_name tarball
+  if [[ "$goos" == "windows" ]]; then ext=".exe"; fi
+  out_bin="${OUT_DIR}/.build/proxyctl-${goos}-${goarch}/centag-proxyctl${ext}"
+  mkdir -p "$(dirname "$out_bin")"
+
+  log "build centag-proxyctl ${goos}/${goarch}"
+  (
+    cd "${ROOT}/apps/proxyctl"
+    GOWORK=off CGO_ENABLED=0 GOOS="$goos" GOARCH="$goarch" \
+      go build -trimpath -ldflags="-s -w" -o "$out_bin" .
+  )
+
+  stage_parent="${OUT_DIR}/.stage"
+  stage_name="centag-proxyctl-${goos}-${goarch}"
+  rm -rf "${stage_parent}/${stage_name}"
+  mkdir -p "${stage_parent}/${stage_name}"
+  cp -f "$out_bin" "${stage_parent}/${stage_name}/centag-proxyctl${ext}"
+  chmod 755 "${stage_parent}/${stage_name}/centag-proxyctl${ext}"
+
+  tarball="${OUT_DIR}/centag-proxyctl-${goos}-${goarch}.tar.gz"
+  package_tar "$stage_parent" "$stage_name" "$tarball"
+  log "OK ${tarball}"
+}
+
+# --- launcher lite (cross-compile, no CGO) --------------------------------
+build_launcher_lite() {
+  local goos="$1" goarch="$2"
+  local ext="" out_bin stage_parent stage_name tarball
+  if [[ "$goos" == "windows" ]]; then ext=".exe"; fi
+
+  log "build centag-launcher (lite) ${goos}/${goarch}"
+  (
+    cd "$ROOT"
+    CENTAG_LAUNCHER_GOOS="$goos" CENTAG_LAUNCHER_GOARCH="$goarch" \
+      bash scripts/build-launcher.sh
+  )
+  out_bin="${ROOT}/bin/launcher/${goos}-${goarch}/centag-launcher${ext}"
+  [[ -f "$out_bin" ]] || fail "launcher binary missing: $out_bin"
+
+  stage_parent="${OUT_DIR}/.stage"
+  stage_name="centag-launcher-${goos}-${goarch}"
+  rm -rf "${stage_parent}/${stage_name}"
+  mkdir -p "${stage_parent}/${stage_name}"
+  cp -f "$out_bin" "${stage_parent}/${stage_name}/centag-launcher${ext}"
+  chmod 755 "${stage_parent}/${stage_name}/centag-launcher${ext}"
+
+  tarball="${OUT_DIR}/centag-launcher-${goos}-${goarch}.tar.gz"
+  package_tar "$stage_parent" "$stage_name" "$tarball"
+  log "OK ${tarball}"
+}
+
+# --- launcher tray (host only; CGO / systray) ------------------------------
+build_launcher_tray_host() {
+  local goos="$HOST_GOOS" goarch="$HOST_GOARCH"
+  local ext="" out_bin stage_parent stage_name tarball
+  if [[ "$goos" == "windows" ]]; then ext=".exe"; fi
+
+  log "build centag-launcher-tray ${goos}/${goarch} (host/CGO)"
+  (
+    cd "$ROOT"
+    CENTAG_LAUNCHER_GOOS="$goos" CENTAG_LAUNCHER_GOARCH="$goarch" \
+      bash scripts/build-launcher.sh --tray
+  )
+  out_bin="${ROOT}/bin/launcher/${goos}-${goarch}/centag-launcher-tray${ext}"
+  [[ -f "$out_bin" ]] || fail "launcher-tray binary missing: $out_bin"
+
+  stage_parent="${OUT_DIR}/.stage"
+  stage_name="centag-launcher-tray-${goos}-${goarch}"
+  rm -rf "${stage_parent}/${stage_name}"
+  mkdir -p "${stage_parent}/${stage_name}"
+  cp -f "$out_bin" "${stage_parent}/${stage_name}/centag-launcher-tray${ext}"
+  chmod 755 "${stage_parent}/${stage_name}/centag-launcher-tray${ext}"
+
+  tarball="${OUT_DIR}/centag-launcher-tray-${goos}-${goarch}.tar.gz"
+  package_tar "$stage_parent" "$stage_name" "$tarball"
+  log "OK ${tarball}"
+}
+
+# --- drive builds ---------------------------------------------------------
+command -v go >/dev/null 2>&1 || fail "go is required"
+
+# launcher-tray in --components implies tray build
+if need_component launcher-tray; then
+  BUILD_LAUNCHER_TRAY=1
+fi
+
+for plat in "${PLAT_ARR[@]}"; do
+  plat="$(printf '%s' "$plat" | tr -d '[:space:]')"
+  [[ -z "$plat" ]] && continue
+  goos="${plat%-*}"
+  goarch="${plat##*-}"
+
+  if need_component personal; then
+    build_edition personal "$goos" "$goarch"
+  fi
+  if need_component minimal; then
+    build_edition minimal "$goos" "$goarch"
+  fi
+  if need_component proxyctl; then
+    build_proxyctl "$goos" "$goarch"
+  fi
+  if need_component launcher; then
+    build_launcher_lite "$goos" "$goarch"
+  fi
+done
+
+if [[ "$BUILD_LAUNCHER_TRAY" == "1" ]] || need_component launcher-tray; then
+  build_launcher_tray_host
+fi
+
+# --- checksums ------------------------------------------------------------
+log "checksums.txt"
+: > "${OUT_DIR}/checksums.txt"
+(
+  cd "$OUT_DIR"
+  for f in centag-*.tar.gz; do
+    [[ -f "$f" ]] || continue
+    printf '%s  %s\n' "$(sha256_of "$f")" "$f" >> checksums.txt
+  done
+)
+cat "${OUT_DIR}/checksums.txt" >&2
+
+# cleanup staging
+rm -rf "${OUT_DIR}/.build" "${OUT_DIR}/.stage"
+
+log "artifacts in ${OUT_DIR}"
+ls -lh "$OUT_DIR" >&2
+echo "$OUT_DIR"

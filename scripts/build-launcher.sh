@@ -1,16 +1,23 @@
 #!/usr/bin/env bash
-# Build the optional Centag desktop launcher (apps/launcher) for the *current* host OS/arch.
-# energye/systray needs CGO — native build only (no reliable cross-compile).
+# Build Centag desktop launcher (apps/launcher).
 #
-# Supported hosts: darwin (macOS), linux, windows
+# Default: lite (no CGO, cross-compile OK) → centag-launcher
+# Tray:    --tray / CENTAG_LAUNCHER_TRAY=1 (CGO + systray) → centag-launcher-tray
+#
 # Output:
-#   bin/launcher/<goos>-<goarch>/centag-launcher[.exe]
-#   bin/launcher/centag-launcher[.exe]   (convenience copy for current host)
+#   bin/launcher/<goos>-<goarch>/centag-launcher[.exe]          # lite
+#   bin/launcher/<goos>-<goarch>/centag-launcher-tray[.exe]     # tray
+#   bin/launcher/centag-launcher[.exe]                          # host convenience (active variant)
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 LAUNCHER_DIR="${ROOT}/apps/launcher"
 OUT_ROOT="${ROOT}/bin/launcher"
+
+TRAY=0
+if [[ "${1:-}" == "--tray" ]] || [[ "${CENTAG_LAUNCHER_TRAY:-}" == "1" ]]; then
+  TRAY=1
+fi
 
 if ! command -v go >/dev/null 2>&1; then
   echo "error: go is required" >&2
@@ -19,7 +26,6 @@ fi
 
 GOOS="$(go env GOOS)"
 GOARCH="$(go env GOARCH)"
-# Allow explicit override, but warn — CGO cross builds usually fail for systray.
 if [[ -n "${CENTAG_LAUNCHER_GOOS:-}" ]]; then
   GOOS="${CENTAG_LAUNCHER_GOOS}"
 fi
@@ -37,11 +43,6 @@ esac
 
 HOST_OS="$(uname -s 2>/dev/null | tr '[:upper:]' '[:lower:]' || echo unknown)"
 HOST_ARCH="$(uname -m 2>/dev/null || echo unknown)"
-echo "==> launcher host: ${HOST_OS}/${HOST_ARCH} → target ${GOOS}/${GOARCH}"
-
-if [[ "${GOOS}" != "$(go env GOOS)" || "${GOARCH}" != "$(go env GOARCH)" ]]; then
-  echo "    warn: cross-compile requested; CGO/systray often fails — prefer building on the target OS"
-fi
 
 EXT=""
 if [[ "$GOOS" == "windows" ]]; then
@@ -49,25 +50,34 @@ if [[ "$GOOS" == "windows" ]]; then
 fi
 
 OUT_DIR="${OUT_ROOT}/${GOOS}-${GOARCH}"
-OUT_BIN="${OUT_DIR}/centag-launcher${EXT}"
-LATEST_BIN="${OUT_ROOT}/centag-launcher${EXT}"
-
 mkdir -p "${OUT_DIR}"
-export CGO_ENABLED="${CGO_ENABLED:-1}"
 
-if [[ "${CGO_ENABLED}" != "1" ]]; then
-  echo "error: launcher requires CGO_ENABLED=1 (systray)" >&2
-  exit 1
+if [[ "$TRAY" == "1" ]]; then
+  OUT_BIN="${OUT_DIR}/centag-launcher-tray${EXT}"
+  LATEST_BIN="${OUT_ROOT}/centag-launcher-tray${EXT}"
+  # Also refresh convenience "centag-launcher" when building tray on request? Keep separate.
+  echo "==> launcher tray host: ${HOST_OS}/${HOST_ARCH} → target ${GOOS}/${GOARCH} (CGO)"
+  if [[ "${GOOS}" != "$(go env GOOS)" || "${GOARCH}" != "$(go env GOARCH)" ]]; then
+    echo "    warn: tray/systray cross-compile often fails — prefer building on the target OS" >&2
+  fi
+  echo "==> building centag-launcher-tray → ${OUT_BIN}"
+  (
+    cd "${LAUNCHER_DIR}"
+    GOWORK=off CGO_ENABLED=1 GOOS="${GOOS}" GOARCH="${GOARCH}" \
+      go build -tags tray -trimpath -ldflags="-s -w" -o "${OUT_BIN}" .
+  )
+else
+  OUT_BIN="${OUT_DIR}/centag-launcher${EXT}"
+  LATEST_BIN="${OUT_ROOT}/centag-launcher${EXT}"
+  echo "==> launcher lite host: ${HOST_OS}/${HOST_ARCH} → target ${GOOS}/${GOARCH} (CGO_ENABLED=0)"
+  echo "==> building centag-launcher (lite) → ${OUT_BIN}"
+  (
+    cd "${LAUNCHER_DIR}"
+    GOWORK=off CGO_ENABLED=0 GOOS="${GOOS}" GOARCH="${GOARCH}" \
+      go build -trimpath -ldflags="-s -w" -o "${OUT_BIN}" .
+  )
 fi
-
-echo "==> building centag-launcher → ${OUT_BIN}"
-(
-  cd "${LAUNCHER_DIR}"
-  # Keep launcher outside the root go.work so CGO/systray never pollutes core CI.
-  GOWORK=off CGO_ENABLED=1 GOOS="${GOOS}" GOARCH="${GOARCH}" \
-    go build -trimpath -ldflags="-s -w" -o "${OUT_BIN}" .
-)
 
 cp -f "${OUT_BIN}" "${LATEST_BIN}"
 echo "OK: ${OUT_BIN}"
-echo "OK: ${LATEST_BIN} (current-host convenience link)"
+echo "OK: ${LATEST_BIN} (current-host convenience copy)"

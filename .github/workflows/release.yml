@@ -1,0 +1,141 @@
+name: release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version without v prefix (e.g. 0.2.7). Empty = tag or package.json'
+        required: false
+        default: ''
+      draft:
+        description: 'Create draft release'
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+jobs:
+  # Default release set: personal CLI + proxyctl (cross-compile, no CGO).
+  binaries:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Resolve version
+        id: ver
+        run: |
+          if [[ -n "${{ inputs.version }}" ]]; then
+            V="${{ inputs.version }}"
+          elif [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            V="${GITHUB_REF_NAME#v}"
+          else
+            V="$(node -p "require('./apps/proxyctl-npm/package.json').version")"
+          fi
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+          echo "Building release v$V"
+
+      - name: Build personal + proxyctl
+        run: |
+          bash scripts/release/build-artifacts.sh \
+            --version "${{ steps.ver.outputs.version }}" \
+            --components personal,proxyctl
+
+      - name: Upload artifact bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: centag-binaries-${{ steps.ver.outputs.version }}
+          path: bin/release/${{ steps.ver.outputs.version }}/
+          if-no-files-found: error
+
+  publish:
+    needs: [binaries]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve version
+        id: ver
+        run: |
+          if [[ -n "${{ inputs.version }}" ]]; then
+            V="${{ inputs.version }}"
+          elif [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            V="${GITHUB_REF_NAME#v}"
+          else
+            V="$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' apps/proxyctl-npm/package.json | head -1)"
+          fi
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-staging
+
+      - name: Flatten assets
+        id: assets
+        run: |
+          V="${{ steps.ver.outputs.version }}"
+          OUT="bin/release/${V}"
+          mkdir -p "$OUT"
+          find release-staging -type f \( -name 'centag-*.tar.gz' -o -name 'checksums.txt' \) -exec cp -f {} "$OUT/" \;
+          : > "$OUT/checksums.txt"
+          (
+            cd "$OUT"
+            for f in centag-*.tar.gz; do
+              [[ -f "$f" ]] || continue
+              printf '%s  %s\n' "$(sha256sum "$f" | awk '{print $1}')" "$f" >> checksums.txt
+            done
+          )
+          ls -lh "$OUT"
+          echo "dir=$OUT" >> "$GITHUB_OUTPUT"
+
+      - name: Create / update GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          V="${{ steps.ver.outputs.version }}"
+          TAG="v${V}"
+          OUT="${{ steps.assets.outputs.dir }}"
+          DRAFT_FLAG="--draft"
+          if [[ "${{ github.event_name }}" == "push" ]]; then
+            DRAFT_FLAG="--draft"
+          elif [[ "${{ inputs.draft }}" == "false" ]]; then
+            DRAFT_FLAG=""
+          fi
+
+          NOTES_FILE="$(mktemp)"
+          cat > "$NOTES_FILE" <<EOF
+## Centag ${TAG}
+
+Install:
+
+\`\`\`bash
+curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/main/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/main/scripts/install.sh | bash -s -- --only proxyctl
+\`\`\`
+
+Artifacts: \`centag-personal-*\`, \`centag-proxyctl-*\`, \`checksums.txt\`.
+EOF
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$OUT"/centag-*.tar.gz "$OUT"/checksums.txt --clobber
+          else
+            # shellcheck disable=SC2086
+            gh release create "$TAG" $DRAFT_FLAG \
+              --title "Centag ${V}" \
+              --notes-file "$NOTES_FILE" \
+              "$OUT"/centag-*.tar.gz "$OUT"/checksums.txt
+          fi

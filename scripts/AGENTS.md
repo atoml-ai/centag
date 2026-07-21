@@ -22,6 +22,9 @@
 
 | 脚本 | 用途 |
 |------|------|
+| `install.sh` | 一键安装（`curl \| bash`；默认 personal + proxyctl） |
+| `release/build-artifacts.sh` | 交叉编译 Release 产物（tar.gz + checksums） |
+| `release/publish-binaries.sh` | 构建并上传 GitHub Release |
 | `check-harness-hygiene.sh` | Harness 卫生检查（Centag 布局） |
 | `ci-go-packages.sh` | CI 包列表生成 |
 | `packaging/package.sh` | 渠道打包调度（参数见根目录 `packaging.env`） |
