@@ -50,8 +50,9 @@ func (e *Engine) PrepareProcessEnv(server string) (*ProcessEnv, error) {
 		return nil, err
 	}
 
-	// Remote (--server) must not use loopback MITM (employee machine ≠ server).
-	if strings.TrimSpace(server) != "" && remote.IsLoopbackMITM(mitm) {
+	// Remote team host must not advertise loopback MITM (employee ≠ server).
+	// Local --server http://127.0.0.1:20060 with MITM 127.0.0.1:8081 is OK.
+	if remote.RejectLoopbackMITMForRemote(api, mitm) {
 		return nil, fmt.Errorf("MITM still points to %s; admin must enable LAN egress (allow_lan_clients + advertise_host) so PAC/advertise is the team host", mitm)
 	}
 
