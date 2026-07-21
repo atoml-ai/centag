@@ -2,9 +2,19 @@
 // edition plugins (centag-pro). Open distributions (minimal/personal) never
 // load private plugins. Team/enterprise binaries are built in centag-pro and
 // blank-import plugin bundles that register here via init().
+//
+// Host whitelist (E2.0+): Edition, Deps, RegisterTeamAdmin, RegisterUserAPI,
+// RegisterSystemAPI, RegisterProtectedMiddleware, RegisterBillingHook, RegisterCloser.
+// Route paths stay on existing prefixes; /api/v1/admin/pro remains editionmodule-only.
 package extension
 
-import "sync"
+import (
+	"sync"
+
+	"centag/core/pkg/hooks"
+
+	"github.com/gin-gonic/gin"
+)
 
 // Plugin is a commercial capability pack (team base, future SSO, etc.).
 // Implementations live in private repos; open core only defines the contract.
@@ -13,14 +23,8 @@ type Plugin interface {
 	Init(host Host) error
 }
 
-// Host is the whitelist of capabilities the open core exposes to plugins.
-// Wave E0 keeps this small; grow carefully with versioned docs in centag-pro.
-type Host interface {
-	// Edition returns the running product edition string (personal|team|minimal).
-	Edition() string
-}
-
 // nopHost is used when Init is invoked before a real host is bound (tests).
+// All Register* methods are no-ops so InitAll(nil) stays side-effect free.
 type nopHost struct{ edition string }
 
 func (h nopHost) Edition() string {
@@ -29,6 +33,16 @@ func (h nopHost) Edition() string {
 	}
 	return h.edition
 }
+
+func (nopHost) Deps() Deps                                  { return Deps{} }
+func (nopHost) RegisterTeamAdmin(RouteRegistrar)            {}
+func (nopHost) RegisterUserAPI(RouteRegistrar)              {}
+func (nopHost) RegisterSystemAPI(RouteRegistrar)            {}
+func (nopHost) RegisterProtectedMiddleware(gin.HandlerFunc) {}
+func (nopHost) RegisterBillingHook(hooks.BillingHook)       {}
+func (nopHost) RegisterCloser(func())                       {}
+
+var _ Host = nopHost{}
 
 var (
 	mu      sync.RWMutex
