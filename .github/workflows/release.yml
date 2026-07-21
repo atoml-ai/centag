@@ -25,7 +25,7 @@ jobs:
     outputs:
       version: ${{ steps.ver.outputs.version }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
@@ -47,17 +47,21 @@ jobs:
         run: bash scripts/release/require-release-branch.sh --ci --version "${{ steps.ver.outputs.version }}"
 
   # Default release set: personal CLI + wrap (cross-compile, no CGO).
+  # build-artifacts writes under $CENTAG_INSTALL_ROOT/var/release/<ver>/
+  # (same layout as local ~/.centag; CI pins INSTALL_ROOT into the workspace).
   binaries:
     needs: [guard-branch]
     runs-on: ubuntu-latest
+    env:
+      CENTAG_INSTALL_ROOT: ${{ github.workspace }}/.centag
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: '22'
           cache: npm
@@ -70,17 +74,17 @@ jobs:
             --components personal,wrap
 
       - name: Upload artifact bundle
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: centag-binaries-${{ needs.guard-branch.outputs.version }}
-          path: bin/release/${{ needs.guard-branch.outputs.version }}/
+          path: .centag/var/release/${{ needs.guard-branch.outputs.version }}/
           if-no-files-found: error
 
   publish:
     needs: [guard-branch, binaries]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Resolve version
         id: ver
@@ -88,7 +92,7 @@ jobs:
           echo "version=${{ needs.guard-branch.outputs.version }}" >> "$GITHUB_OUTPUT"
 
       - name: Download artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           path: release-staging
 
@@ -96,7 +100,8 @@ jobs:
         id: assets
         run: |
           V="${{ steps.ver.outputs.version }}"
-          OUT="bin/release/${V}"
+          # Staging dir for gh release upload (not the install-root layout).
+          OUT="release-assets/${V}"
           mkdir -p "$OUT"
           find release-staging -type f \( -name 'centag-*.tar.gz' -o -name 'checksums.txt' \) -exec cp -f {} "$OUT/" \;
           : > "$OUT/checksums.txt"
