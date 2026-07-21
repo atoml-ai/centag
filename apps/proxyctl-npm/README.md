@@ -55,7 +55,7 @@ centag-proxyctl doctor [--server URL]
 
 | 变量 | 说明 |
 |------|------|
-| `CENTAG_PROXYCTL_MIRROR` | 覆盖下载 base URL（默认 `https://github.com/atoml-ai/centag/releases/download/v<version>`），用于私有/CDN 镜像 |
+| `CENTAG_PROXYCTL_MIRROR` | 覆盖下载 base URL（默认 `https://github.com/atoml-ai/centag/releases/download/v<version>`），用于私有/CDN 镜像。资产名：`centag-proxyctl-<goos>-<goarch>.tar.gz`（与 `scripts/install.sh` 一致） |
 | `CENTAG_PROXYCTL_TOKEN` | 私有镜像的 Bearer token |
 | `CENTAG_PROXYCTL_SKIP_DOWNLOAD` | `1` 时跳过下载（仅离线包或已预置二进制时有用） |
 | `CENTAG_PROXYCTL_REQUIRE_DOWNLOAD` | `1` 时下载失败则安装报错（默认失败仅警告，运行时再惰性下载） |

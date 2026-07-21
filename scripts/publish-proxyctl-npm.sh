@@ -120,12 +120,12 @@ if [[ -n "${CENTAG_PROXYCTL_NPM_TOKEN:-}" ]]; then
 fi
 
 if [[ "$RELEASE" == "1" ]]; then
-  if ! command -v gh >/dev/null 2>&1; then echo "error: gh required for --release" >&2; exit 1; fi
-  echo "==> draft GitHub release ${RELEASE_TAG}"
-  gh release create "${RELEASE_TAG}" \
-    --draft --title "centag-proxyctl ${VERSION}" \
-    --notes "Centag proxyctl npm distribution binaries." \
-    "${VENDOR_DIR}"/*/centag-proxyctl* "${VENDOR_DIR}/checksums.txt"
+  # Prefer the unified release pipeline (personal/minimal/launcher/proxyctl + install.sh assets).
+  echo "==> delegating GitHub release assets to scripts/release/publish-binaries.sh"
+  bash "${ROOT}/scripts/release/publish-binaries.sh" \
+    --version "${VERSION}" \
+    --components proxyctl \
+    --release
 fi
 
 echo "OK"

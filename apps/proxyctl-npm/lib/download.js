@@ -2,6 +2,9 @@
 // Downloads (and verifies) the platform-specific centag-proxyctl Go binary.
 //
 // Default source: GitHub Releases of atoml-ai/centag, tagged by package version.
+// Asset name (aligned with scripts/install.sh / scripts/release/build-artifacts.sh):
+//   centag-proxyctl-<goos>-<goarch>.tar.gz
+//
 // Overridable via:
 //   CENTAG_PROXYCTL_MIRROR   base URL that replaces the GitHub release base
 //                           (must end with the tag dir, e.g. https://cdn.example.com/centag/v0.2.7)
@@ -9,12 +12,14 @@
 //   CENTAG_PROXYCTL_SKIP_DOWNLOAD=1   skip entirely (binary must already exist)
 
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, writeFileSync, chmodSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync, chmodSync, rmSync, cpSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { get as httpsGet } from 'node:https';
 import { get as httpGet } from 'node:http';
+import { spawnSync } from 'node:child_process';
+import { readdirSync } from 'node:fs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PKG_ROOT = join(__dirname, '..');
@@ -34,6 +39,10 @@ export function platformKey(platform = process.platform, arch = process.arch) {
 
 export function binaryName(key) {
   return key.startsWith('windows-') ? 'centag-proxyctl.exe' : 'centag-proxyctl';
+}
+
+export function assetName(key) {
+  return `centag-proxyctl-${key}.tar.gz`;
 }
 
 // Where the binary lives once installed (inside this npm package, cached).
@@ -85,6 +94,27 @@ function sha256(buf) {
   return createHash('sha256').update(buf).digest('hex');
 }
 
+function findFileRecursive(dir, name) {
+  for (const ent of readdirSync(dir, { withFileTypes: true })) {
+    const p = join(dir, ent.name);
+    if (ent.isDirectory()) {
+      const hit = findFileRecursive(p, name);
+      if (hit) return hit;
+    } else if (ent.name === name) {
+      return p;
+    }
+  }
+  return null;
+}
+
+function extractTarGz(archivePath, destDir) {
+  mkdirSync(destDir, { recursive: true });
+  const r = spawnSync('tar', ['-xzf', archivePath, '-C', destDir], { encoding: 'utf8' });
+  if (r.status !== 0) {
+    throw new Error(`tar extract failed: ${r.stderr || r.stdout || `exit ${r.status}`}`);
+  }
+}
+
 // Ensure the binary for this platform exists; download + verify if missing.
 // Returns the absolute path to the binary (throws if unavailable).
 export async function ensureBinary() {
@@ -95,16 +125,16 @@ export async function ensureBinary() {
   if (process.env.CENTAG_PROXYCTL_SKIP_DOWNLOAD === '1') {
     throw new Error(
       `binary not found at ${dest} and CENTAG_PROXYCTL_SKIP_DOWNLOAD=1; ` +
-      `install with the offline package or unset the flag`
+        `install with the offline package or unset the flag`
     );
   }
 
   const baseURL = releaseBaseURL();
+  const archive = assetName(key);
+  const url = `${baseURL}/${archive}`;
   const name = binaryName(key);
-  const assetName = `${key}/${name}`;
-  const url = `${baseURL}/${assetName}`;
 
-  process.stderr.write(`centag-proxyctl: downloading ${assetName} from ${baseURL}\n`);
+  process.stderr.write(`centag-proxyctl: downloading ${archive} from ${baseURL}\n`);
   const token = process.env.CENTAG_PROXYCTL_TOKEN;
   const headers = token ? { Authorization: `Bearer ${token}` } : {};
   const buf = await httpGetFollow(url, headers);
@@ -112,11 +142,11 @@ export async function ensureBinary() {
   // Verify against checksums.txt when present.
   try {
     const sums = await fetchChecksums(baseURL);
-    const want = sums[assetName];
+    const want = sums[archive];
     if (want) {
       const got = sha256(buf);
       if (got !== want) {
-        throw new Error(`checksum mismatch for ${assetName}: want ${want}, got ${got}`);
+        throw new Error(`checksum mismatch for ${archive}: want ${want}, got ${got}`);
       }
     }
   } catch (e) {
@@ -124,12 +154,22 @@ export async function ensureBinary() {
     process.stderr.write(`centag-proxyctl: warning: could not verify checksum (${e.message}); continuing\n`);
   }
 
+  const work = join(tmpdir(), `centag-proxyctl-${key}-${process.pid}`);
+  mkdirSync(work, { recursive: true });
+  const tarPath = join(work, archive);
+  writeFileSync(tarPath, buf);
+  extractTarGz(tarPath, work);
+
+  const found = findFileRecursive(work, name);
+  if (!found) {
+    rmSync(work, { recursive: true, force: true });
+    throw new Error(`archive ${archive} did not contain ${name}`);
+  }
+
   mkdirSync(dirname(dest), { recursive: true });
-  const tmp = join(tmpdir(), `centag-proxyctl-${key}-${process.pid}`);
-  writeFileSync(tmp, buf);
-  chmodSync(tmp, 0o755);
-  writeFileSync(dest, readFileSync(tmp));
+  cpSync(found, dest);
   chmodSync(dest, 0o755);
+  rmSync(work, { recursive: true, force: true });
   return dest;
 }
 

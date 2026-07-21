@@ -582,16 +582,43 @@ resolve_launcher_bin() {
     return 1
 }
 
-# Optional L1 launcher (apps/launcher). Used via --launcher on build/run.
-# Native build for current OS only (darwin|linux|windows); CGO required.
+# Optional L1 launcher (apps/launcher). Used via --launcher / --launcher-tray on build/run.
+# Default lite: no CGO. Tray variant: CGO + systray → centag-launcher-tray.
 build_launcher_shell() {
+    local mode="${1:-lite}"
     local script="${PROJECT_ROOT}/scripts/build-launcher.sh"
     if [ ! -x "$script" ]; then
         print_error "未找到构建脚本: $script"
         exit 1
     fi
-    print_info "Building desktop launcher for current host ($(go env GOOS)/$(go env GOARCH))..."
-    bash "$script"
+    if [ "$mode" = "tray" ]; then
+        print_info "Building tray launcher (CGO) for current host ($(go env GOOS)/$(go env GOARCH))..."
+        bash "$script" --tray
+    else
+        print_info "Building lite launcher (no CGO) for ($(go env GOOS)/$(go env GOARCH))..."
+        bash "$script"
+    fi
+}
+
+resolve_launcher_tray_bin() {
+    local goos goarch ext plat
+    goos="$(go env GOOS 2>/dev/null || echo "")"
+    goarch="$(go env GOARCH 2>/dev/null || echo "")"
+    ext=""
+    if [ "$goos" = "windows" ]; then
+        ext=".exe"
+    fi
+    plat="${PROJECT_ROOT}/bin/launcher/${goos}-${goarch}/centag-launcher-tray${ext}"
+    if [ -x "$plat" ] || [ -f "$plat" ]; then
+        echo "$plat"
+        return 0
+    fi
+    local latest="${PROJECT_ROOT}/bin/launcher/centag-launcher-tray${ext}"
+    if [ -x "$latest" ] || [ -f "$latest" ]; then
+        echo "$latest"
+        return 0
+    fi
+    return 1
 }
 
 # Resolve current-host proxyctl binary (auto-detect GOOS/GOARCH).
@@ -649,9 +676,11 @@ run_proxyctl() {
     fi
 }
 
-# ./start.sh build <personal|minimal> --launcher
+# ./start.sh build <personal|minimal> --launcher|--launcher-tray
+# $2 = lite|tray (default lite)
 build_with_launcher() {
     local edition="$1"
+    local launcher_mode="${2:-lite}"
     case "$edition" in
         personal|minimal) ;;
         team)
@@ -668,11 +697,11 @@ build_with_launcher() {
     dist_name="$(edition_to_dist "$edition")"
     local label="$edition"
 
-    print_info "Building ${label} service + launcher..."
+    print_info "Building ${label} service + launcher (${launcher_mode})..."
     build_distribution "$dist_name"
     build_frontend_prod
-    build_launcher_shell
-    print_success "Ready: $(edition_to_sidecar "$edition") + launcher ($(go env GOOS)/$(go env GOARCH))"
+    build_launcher_shell "$launcher_mode"
+    print_success "Ready: $(edition_to_sidecar "$edition") + launcher/${launcher_mode} ($(go env GOOS)/$(go env GOARCH))"
 }
 
 # Build Distribution (minimal/personal/team)
@@ -1350,16 +1379,19 @@ debug() {
     cd "$PROJECT_ROOT"
 }
 
-# ./start.sh run <personal|minimal> [--launcher]
-# Without --launcher: foreground sidecar. With --launcher: menu/tray + browser shell.
+# ./start.sh run <personal|minimal> [--launcher|--launcher-tray]
+# Without launcher flags: foreground sidecar.
+# --launcher: lite (browser + sidecar, no CGO). --launcher-tray: systray menu.
 run_edition() {
     local edition="$1"
     shift || true
     local with_launcher=false
+    local with_launcher_tray=false
     local extra_args=()
     for arg in "$@"; do
         case "$arg" in
             --launcher) with_launcher=true ;;
+            --launcher-tray) with_launcher_tray=true; with_launcher=true ;;
             --) ;;
             *)
                 extra_args+=("$arg")
@@ -1405,12 +1437,22 @@ run_edition() {
         build_frontend_prod
     fi
 
-    local launcher_bin
-    if ! launcher_bin="$(resolve_launcher_bin)"; then
-        print_info "未找到当前系统启动器二进制，先构建..."
-        build_launcher_shell
+    local launcher_bin launcher_mode="lite"
+    if $with_launcher_tray; then
+        launcher_mode="tray"
+        if ! launcher_bin="$(resolve_launcher_tray_bin)"; then
+            print_info "未找到 tray 启动器，先构建..."
+            build_launcher_shell tray
+            launcher_bin="$(resolve_launcher_tray_bin)" || {
+                print_error "tray 启动器构建后仍未找到"
+                exit 1
+            }
+        fi
+    elif ! launcher_bin="$(resolve_launcher_bin)"; then
+        print_info "未找到 lite 启动器，先构建..."
+        build_launcher_shell lite
         launcher_bin="$(resolve_launcher_bin)" || {
-            print_error "启动器二进制构建后仍未找到"
+            print_error "lite 启动器构建后仍未找到"
             exit 1
         }
     fi
@@ -3364,7 +3406,8 @@ _help_build() {
     echo -e "  ${GREEN}proxyctl${NC}  仅构建本机/员工系统代理工具 centag-proxyctl"
     echo ""
     echo -e "${CYAN}辅助选项:${NC}"
-    echo -e "  ${GREEN}--launcher${NC}    额外构建当前系统的桌面启动器（仅 personal/minimal）"
+    echo -e "  ${GREEN}--launcher${NC}       额外构建 lite 启动器（无 CGO；仅 personal/minimal）"
+    echo -e "  ${GREEN}--launcher-tray${NC}  额外构建托盘启动器（CGO/systray；仅 personal/minimal）"
     echo -e "             自动识别 darwin / linux / windows（GOOS/GOARCH）"
     echo -e "             ${YELLOW}team 不支持 --launcher${NC}"
     echo -e "  ${GREEN}--proxyctl${NC}    额外构建 centag-proxyctl（可与 personal/minimal 同用）"
@@ -3372,10 +3415,11 @@ _help_build() {
     echo ""
     echo -e "${CYAN}示例:${NC}"
     echo -e "  ./start.sh build personal           # 普通个人版服务"
-    echo -e "  ./start.sh build personal --launcher    # 个人版 + 桌面启动器"
-    echo -e "  ./start.sh build personal --proxyctl    # 个人版 + 系统代理 CLI"
+    echo -e "  ./start.sh build personal --launcher         # 个人版 + lite 启动器"
+    echo -e "  ./start.sh build personal --launcher-tray    # 个人版 + 托盘启动器"
+    echo -e "  ./start.sh build personal --proxyctl         # 个人版 + 系统代理 CLI"
     echo -e "  # Team：cd ../centag-pro && ./start.sh build team（本仓不构建 team）"
-    echo -e "  ./start.sh build proxyctl               # 仅构建 centag-proxyctl"
+    echo -e "  ./start.sh build proxyctl                    # 仅构建 centag-proxyctl"
     echo -e "  ./start.sh build minimal --launcher"
     echo -e "  ./start.sh build be"
     echo ""
@@ -3413,12 +3457,14 @@ _help_run() {
     echo -e "  ${GREEN}all${NC}                全部（需两个终端分别启动 be/fe）"
     echo ""
     echo -e "${CYAN}辅助选项:${NC}"
-    echo -e "  ${GREEN}--launcher${NC}    以桌面启动器启动（菜单/托盘 + 浏览器；仅 personal/minimal）"
+    echo -e "  ${GREEN}--launcher${NC}       以 lite 启动器启动（浏览器 + sidecar；仅 personal/minimal）"
+    echo -e "  ${GREEN}--launcher-tray${NC}  以托盘启动器启动（菜单/托盘；仅 personal/minimal）"
     echo ""
     echo -e "${CYAN}示例:${NC}"
     echo -e "  ./start.sh run be"
     echo -e "  ./start.sh run personal            # 普通个人版服务"
-    echo -e "  ./start.sh run personal --launcher     # 启动器方式"
+    echo -e "  ./start.sh run personal --launcher          # lite 启动器"
+    echo -e "  ./start.sh run personal --launcher-tray     # 托盘启动器"
     echo -e "  ./start.sh run minimal --launcher"
     echo -e "  ./start.sh run proxyctl run --server http://192.168.1.10:20060 -- opencode"
     echo -e "  ./start.sh run proxyctl env --server http://192.168.1.10:20060"
@@ -4291,11 +4337,13 @@ main() {
             local target="${1:-all}"
             shift || true
             local with_launcher=false
+            local with_launcher_tray=false
             local with_proxyctl=false
             local unknown_args=()
             for arg in "$@"; do
                 case "$arg" in
                     --launcher) with_launcher=true ;;
+                    --launcher-tray) with_launcher_tray=true; with_launcher=true ;;
                     --proxyctl) with_proxyctl=true ;;
                     *)
                         unknown_args+=("$arg")
@@ -4304,7 +4352,7 @@ main() {
             done
             if [ ${#unknown_args[@]} -gt 0 ]; then
                 print_error "未知 build 参数: ${unknown_args[*]}"
-                echo "用法: $0 build <目标> [--launcher] [--proxyctl]"
+                echo "用法: $0 build <目标> [--launcher|--launcher-tray] [--proxyctl]"
                 exit 1
             fi
             target=$(normalize_type "$target")
@@ -4354,7 +4402,11 @@ main() {
                     ;;
                 personal|minimal|team)
                     if $with_launcher; then
-                        build_with_launcher "$target"
+                        if $with_launcher_tray; then
+                            build_with_launcher "$target" tray
+                        else
+                            build_with_launcher "$target" lite
+                        fi
                     else
                         build dist "$(edition_to_dist "$target")"
                     fi
@@ -4366,7 +4418,7 @@ main() {
                 *)
                     print_error "未知构建目标: '$target'"
                     echo "支持的构建目标: all, be, fe, personal, minimal, proxyctl（Team → centag-pro）"
-                    echo "启动器: ./start.sh build personal --launcher  或  ./start.sh build minimal --launcher"
+                    echo "启动器: ./start.sh build personal --launcher  或  --launcher-tray"
                     echo "系统代理 CLI: ./start.sh build proxyctl  或  ./start.sh build personal --proxyctl"
                     exit 1
                     ;;

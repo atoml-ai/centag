@@ -26,7 +26,24 @@ centag/
 └── go.work
 ```
 
-## 快速开始
+## 一键安装（预编译）
+
+```bash
+# 默认：personal CLI + proxyctl → ~/.centag/bin
+curl -fsSL https://raw.githubusercontent.com/atoml-ai/centag/main/scripts/install.sh | bash
+
+# 只装某一组件
+curl -fsSL https://raw.githubusercontent.com/atoml-ai/centag/main/scripts/install.sh | bash -s -- --only proxyctl
+
+# 无 Release 或指定源码构建
+curl -fsSL https://raw.githubusercontent.com/atoml-ai/centag/main/scripts/install.sh | bash -s -- --from-source
+```
+
+安装后：`centag` 启动服务，`centag-proxyctl run -- opencode` 走本机代理。
+
+发版产物与上传：`./scripts/release/publish-binaries.sh --version <ver> --release`（或推送 `v*` tag 触发 `.github/workflows/release.yml`）。当前默认只发布 **personal + proxyctl**。
+
+## 快速开始（开发机）
 
 ```bash
 # 密钥模板 → 本地 secrets（勿提交）
@@ -61,13 +78,14 @@ make run            # 或 ./start.sh run be
 
 见 [dist/README.md](dist/README.md)、[docs/guide/dist-profiles.md](docs/guide/dist-profiles.md)、[docs/guide/external-business-plugins.md](docs/guide/external-business-plugins.md)。
 
-可选桌面启动器（菜单/托盘 + 默认浏览器，非 Wails；`--launcher` 辅助开关）：
+可选桌面启动器（默认 lite 无 CGO；`--launcher-tray` 为托盘版）：
 
 ```bash
-./start.sh build personal              # 普通个人版服务
-./start.sh build personal --launcher   # 个人版 + 当前系统启动器
+./start.sh build personal                   # 普通个人版服务
+./start.sh build personal --launcher        # 个人版 + lite 启动器
+./start.sh build personal --launcher-tray   # 个人版 + 托盘启动器（CGO）
 ./start.sh run personal --launcher
-./start.sh build minimal --launcher    # team 不支持 --launcher
+./start.sh build minimal --launcher         # team 不支持 --launcher
 ```
 
 详见 [apps/launcher/README.md](apps/launcher/README.md)。
