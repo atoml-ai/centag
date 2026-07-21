@@ -1,10 +1,15 @@
 #!/usr/bin/env bash
 # Centag one-line installer (OpenCode-style).
 #
-# Usage:
-#   curl -fsSL https://raw.githubusercontent.com/atoml-ai/centag/main/scripts/install.sh | bash
-#   curl -fsSL .../install.sh | bash -s -- --only wrap
+# Usage (activate PATH in the same command — curl|bash cannot mutate the parent shell):
+#   curl -fsSL https://raw.githubusercontent.com/atoml-ai/centag/main/scripts/install.sh \
+#     | bash -s -- && . "$HOME/.centag/env"
+#   curl -fsSL .../install.sh | bash -s -- --only wrap && . "$HOME/.centag/env"
 #   curl -fsSL .../install.sh | bash -s -- --from-source   # explicit only; never auto
+#
+# Why not "source ~/.zshrc" inside install.sh?
+#   Piped bash runs in a child process. Sourcing there only changes that child;
+#   your interactive zsh/bash keeps the old PATH. Chain:  … | bash && . ~/.centag/env
 #
 # Default (no args): personal CLI + wrap (centag-wrap)
 # Asset convention (GitHub Releases, tag v<version>):
@@ -33,8 +38,9 @@ usage() {
 Centag installer
 
 Usage:
-  curl -fsSL https://raw.githubusercontent.com/atoml-ai/centag/main/scripts/install.sh | bash
-  curl -fsSL .../install.sh | bash -s -- [options] [component]
+  curl -fsSL https://raw.githubusercontent.com/atoml-ai/centag/main/scripts/install.sh \\
+    | bash -s -- && . "\$HOME/.centag/env"
+  curl -fsSL .../install.sh | bash -s -- [options] [component] && . "\$HOME/.centag/env"
 
 Components: personal | wrap
 Default (no args): personal + wrap
@@ -448,11 +454,34 @@ finalize_permissions() {
   fi
 }
 
+# Written every install. Source this in the *current* shell after curl|bash
+# (a child bash cannot mutate the caller's PATH).
+write_env_files() {
+  mkdir -p "$INSTALL_ROOT" "$BIN_DIR"
+  cat > "${INSTALL_ROOT}/env" <<EOF
+# Centag PATH helper — source after install, or from your shell rc:
+#   source ${INSTALL_ROOT}/env
+case ":\$PATH:" in
+  *":${BIN_DIR}:"*) ;;
+  *) export PATH="${BIN_DIR}:\$PATH" ;;
+esac
+hash -r 2>/dev/null || true
+EOF
+  cat > "${INSTALL_ROOT}/env.fish" <<EOF
+# Centag PATH helper for fish — source after install:
+#   source ${INSTALL_ROOT}/env.fish
+fish_add_path -g ${BIN_DIR}
+EOF
+}
+
 add_to_path() {
   local config_file=$1
   local command=$2
-  if grep -Fqh "${BIN_DIR}" "$config_file" 2>/dev/null; then
+  # Match either the env source line or a legacy inline PATH export for BIN_DIR.
+  if grep -Fqh "${INSTALL_ROOT}/env" "$config_file" 2>/dev/null \
+    || grep -Fqh "${BIN_DIR}" "$config_file" 2>/dev/null; then
     info "PATH entry already in ${config_file}"
+    PATH_RC_FILE="$config_file"
     return 0
   fi
   if [[ ! -e "$config_file" ]]; then
@@ -471,6 +500,7 @@ add_to_path() {
       echo "$command"
     } >> "$config_file"
     info "Added ${BIN_DIR} to PATH in ${config_file}"
+    PATH_RC_FILE="$config_file"
   else
     warn "Manually add to ${config_file}: ${command}"
     return 1
@@ -478,7 +508,9 @@ add_to_path() {
 }
 
 # Persist PATH for future shells. (curl|bash cannot change the caller's shell PATH.)
+PATH_RC_FILE=""
 ensure_path() {
+  write_env_files
   [[ "$no_modify_path" == true ]] && return 0
   mkdir -p "$BIN_DIR"
 
@@ -515,9 +547,10 @@ ensure_path() {
   fi
 
   if [[ "$current_shell" == "fish" ]]; then
-    add_to_path "$config_file" "fish_add_path ${BIN_DIR}"
+    add_to_path "$config_file" "source ${INSTALL_ROOT}/env.fish"
   else
-    add_to_path "$config_file" "export PATH=\"${BIN_DIR}:\$PATH\""
+    # Prefer sourcing env file so upgrades keep a single PATH snippet.
+    add_to_path "$config_file" "[ -f \"${INSTALL_ROOT}/env\" ] && . \"${INSTALL_ROOT}/env\""
   fi
 }
 
@@ -536,23 +569,26 @@ print_next_steps() {
   info "Install root: ${INSTALL_ROOT}"
   info "Bin dir:      ${BIN_DIR}"
   echo ""
-  log "${MUTED}# Activate in THIS terminal (curl|bash cannot change your current shell):${NC}"
-  echo "  export PATH=\"${BIN_DIR}:\$PATH\""
-  echo "  hash -r 2>/dev/null || true"
-  echo ""
-  log "${MUTED}# Or open a new terminal window (PATH was written to your shell rc).${NC}"
+  log "${ORANGE}# Important: curl|bash cannot change THIS shell's PATH.${NC}"
+  log "${MUTED}# Activate now (pick one):${NC}"
+  echo "  source \"${INSTALL_ROOT}/env\""
+  if [[ -n "${PATH_RC_FILE:-}" ]]; then
+    echo "  # or: source \"${PATH_RC_FILE}\""
+  fi
+  echo "  # or open a new terminal"
   echo ""
   if [[ "$has_personal" == true ]]; then
     log "${MUTED}# Start the gateway (http://127.0.0.1:20060):${NC}"
     echo "  centag"
-    echo "  # absolute path (no leading ./ ):"
+    echo "  # absolute path (works before sourcing PATH):"
     echo "  ${BIN_DIR}/centag"
     echo ""
   fi
   if [[ "$has_wrap" == true ]]; then
     log "${MUTED}# Optional: wrap third-party CLIs with Centag egress:${NC}"
     echo "  centag-wrap doctor"
-    echo "  centag-wrap run -- opencode"
+    echo "  # absolute path:"
+    echo "  ${BIN_DIR}/centag-wrap doctor"
     echo ""
   fi
   if [[ "$(uname -s 2>/dev/null || true)" == "Darwin" ]]; then
