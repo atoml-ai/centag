@@ -61,7 +61,7 @@ centag-proxyctl run -- opencode
 centag-proxyctl doctor
 ```
 
-脚本说明见 `scripts/install.sh --help`。发版流程见 [docs/harness/skills/centag-release.md](docs/harness/skills/centag-release.md)（触发词：发版 / release）。
+脚本说明见 `scripts/install.sh --help`。发版流程见 [docs/harness/skills/step6-release/SKILL.md](docs/harness/skills/step6-release/SKILL.md)（触发词：`step6-release` / 发版；须先过 Step 5 Gate 4）。
 
 ## 快速开始（开发机）
 
