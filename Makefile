@@ -3,9 +3,10 @@
 # Install-compatible layout (same as scripts/install.sh / scripts/lib/centag-layout.sh)
 CENTAG_INSTALL_ROOT ?= $(HOME)/.centag
 CENTAG_EDITION ?= personal
-CENTAG_BIN_DIR ?= $(CENTAG_INSTALL_ROOT)/bin
-CENTAG_LIB_DIR ?= $(CENTAG_INSTALL_ROOT)/lib
-CENTAG_VAR_DIR ?= $(CENTAG_INSTALL_ROOT)/var
+# Derive layout from INSTALL_ROOT only — ignore stale CENTAG_*_DIR exported in the shell.
+CENTAG_BIN_DIR := $(CENTAG_INSTALL_ROOT)/bin
+CENTAG_LIB_DIR := $(CENTAG_INSTALL_ROOT)/lib
+CENTAG_VAR_DIR := $(CENTAG_INSTALL_ROOT)/var
 BIN_DIR=$(CENTAG_LIB_DIR)/$(CENTAG_EDITION)
 STATIC_DIR=$(BIN_DIR)/static
 PATH_BIN_DIR=$(CENTAG_BIN_DIR)
@@ -13,7 +14,9 @@ PACKAGES_DIR=$(CENTAG_VAR_DIR)/packages
 BINARY_NAME=centag-$(CENTAG_EDITION)
 CMD_DIR=cmd
 MAIN_FILE=$(CMD_DIR)/centag/main.go
-VERSION=v$(shell date '+%Y%m%d-%H%M%S')
+# Product version for `centag version`: prefer version branch (feature/v0.2.7 → v0.2.7),
+# then newest git tag; BUILD_TIME is only the build timestamp line.
+VERSION ?= $(shell bash scripts/lib/centag-version.sh)
 BUILD_TIME=$(shell date '+%Y-%m-%d %H:%M:%S')
 LDFLAGS=-ldflags "-s -w -X 'main.Version=$(VERSION)' -X 'main.BuildTime=$(BUILD_TIME)'"
 # 与 start.sh personal/team 全功能 tags 对齐；否则 backend_*/protocol_*/business_* 的 init 不会编译进来

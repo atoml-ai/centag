@@ -53,14 +53,12 @@ if command -v go >/dev/null 2>&1; then
     export PATH="$PATH:$(go env GOPATH)/bin"
 fi
 
-# 版本号 — 优先从 git tag 获取，否则使用日期
-CENTAG_VERSION=""
-if command -v git >/dev/null 2>&1; then
-    CENTAG_VERSION=$(git describe --tags --abbrev=0 2>/dev/null || true)
-fi
-if [ -z "$CENTAG_VERSION" ]; then
-    CENTAG_VERSION="v2.1-dev"
-fi
+# 产品版本（注入 main.Version / `centag version`）—
+# 优先版本分支名 feature/v0.2.7 → v0.2.7，其次 git tag（见 scripts/lib/centag-version.sh）。
+# VERSION 仍为构建时间戳，仅用于横幅「构建号」，不写入二进制 Version。
+# shellcheck source=scripts/lib/centag-version.sh
+source "${PROJECT_ROOT}/scripts/lib/centag-version.sh"
+CENTAG_VERSION="$(centag_resolve_version)"
 VERSION=$(date '+%Y%m%d-%H%M%S')
 BUILD_TIME=$(date '+%Y-%m-%d %H:%M:%S')
 
@@ -767,8 +765,9 @@ build_distribution() {
 
     local go_tags=$(_get_dist_tags "$dist_name")
     local output_name="centag-${dist_name}"
+    local ver_ldflags="-X 'main.Version=${CENTAG_VERSION}' -X 'main.BuildTime=${BUILD_TIME}'"
 
-    _compile_go_binary "$dist_dir" "." "$output_name" "$go_tags" ""
+    _compile_go_binary "$dist_dir" "." "$output_name" "$go_tags" "$ver_ldflags"
 }
 
 # Build Backend
@@ -3615,13 +3614,13 @@ _help_run() {
     echo -e "  ./start.sh run wrap doctor"
     echo -e "  ./start.sh run wrap disable"
     echo ""
-    echo -e "${CYAN}真源命令（员工机直接用二进制，与 start.sh 等价）:${NC}"
-    echo -e "  centag-wrap run [--server URL] -- <agent命令>"
-    echo -e "  centag-wrap env [--server URL]"
-    echo -e "  centag-wrap enable [--server URL]"
-    echo -e "  centag-wrap doctor [--server URL]"
-    echo -e "  centag-wrap disable"
-    echo -e "  centag-wrap status"
+    echo -e "${CYAN}真源命令（推荐：主二进制子命令，与 start.sh 等价）:${NC}"
+    echo -e "  centag wrap run [--server URL] -- <agent命令>"
+    echo -e "  centag wrap env [--server URL]"
+    echo -e "  centag wrap enable [--server URL]"
+    echo -e "  centag wrap doctor [--server URL]"
+    echo -e "  centag wrap disable"
+    echo -e "  centag wrap status"
     echo ""
     echo -e "${YELLOW}注意:${NC} 开发模式需两个终端: 终端1 run be, 终端2 run fe"
 }

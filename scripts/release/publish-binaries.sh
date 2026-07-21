@@ -21,7 +21,7 @@ fail() { echo "error: $*" >&2; exit 1; }
 
 VERSION=""
 DO_RELEASE=0
-COMPONENTS="personal,wrap"
+COMPONENTS="personal"
 EXTRA_BUILD_ARGS=()
 
 while [[ $# -gt 0 ]]; do
@@ -90,14 +90,10 @@ NOTES="$(cat <<EOF
 \`\`\`bash
 # pin version (recommended — no GitHub API lookup)
 curl -fsSL https://raw.githubusercontent.com/${REPO}/${TAG}/scripts/install.sh | bash -s ${VERSION} && . "\$HOME/.centag/env"
-
-# personal only / wrap only
-curl -fsSL https://raw.githubusercontent.com/${REPO}/${TAG}/scripts/install.sh | bash -s personal ${VERSION} && . "\$HOME/.centag/env"
-curl -fsSL https://raw.githubusercontent.com/${REPO}/${TAG}/scripts/install.sh | bash -s wrap ${VERSION} && . "\$HOME/.centag/env"
 \`\`\`
 
 Default install root: \`~/.centag\`. Chain \`. ~/.centag/env\` so PATH applies in this shell.  
-\`minimal\` / \`launcher\` are not published in this release.
+Release ships **personal** only (\`centag wrap\` is a subcommand — no separate wrap tarball).
 
 ### Default login (first run)
 
@@ -105,9 +101,17 @@ Default install root: \`~/.centag\`. Chain \`. ~/.centag/env\` so PATH applies i
 - Password: \`centag123\`  
   (override with \`LLM_PROXY_ADMIN_PASSWORD\` before first start)
 
-### centag-wrap auth (API key)
+### Wrap / process proxy (API key)
 
-\`centag-wrap\` talks to the Centag gateway. When the server requires login, set a **gateway API key** (not the upstream LLM provider key):
+Process proxy is built into the personal binary (\`centag wrap …\` does **not** start the gateway):
+
+\`\`\`bash
+centag wrap doctor
+centag wrap run -- opencode
+centag wrap run --server http://host:20060 -- opencode
+\`\`\`
+
+When the server requires login, set a **gateway API key** (not the upstream LLM provider key):
 
 | Variable | Required | Meaning |
 |----------|----------|---------|
@@ -115,22 +119,10 @@ Default install root: \`~/.centag\`. Chain \`. ~/.centag/env\` so PATH applies i
 | \`CENTAG_API_BASE\` | Optional | Gateway base URL (default \`http://127.0.0.1:20060\`) |
 
 \`\`\`bash
-# 1) Create an API key in Centag WebUI (Settings / API Keys), copy the token
-# 2) Export for the current shell (or add to ~/.zshrc / ~/.bashrc)
-export CENTAG_WRAP_TOKEN='ctg_xxxxxxxx'          # paste your Centag API key
-export CENTAG_API_BASE='http://127.0.0.1:20060' # optional; remote: http://host:20060
-
-# 3) Verify / use wrap
-centag-wrap doctor
-centag-wrap enable
-centag-wrap run -- opencode   # example: run an agent through the wrap proxy
-\`\`\`
-
-One-shot (no permanent export):
-
-\`\`\`bash
-CENTAG_WRAP_TOKEN='ctg_xxxxxxxx' centag-wrap doctor
-CENTAG_WRAP_TOKEN='ctg_xxxxxxxx' centag-wrap run -- opencode
+export CENTAG_WRAP_TOKEN='ctg_xxxxxxxx'
+export CENTAG_API_BASE='http://127.0.0.1:20060'   # optional
+centag wrap doctor
+centag wrap run -- opencode
 \`\`\`
 
 Notes:
@@ -142,11 +134,8 @@ Notes:
 There is no dedicated uninstall command yet. Remove manually:
 
 \`\`\`bash
-# If system proxy was enabled, turn it off first
-centag-wrap disable 2>/dev/null || true
-# Stop the gateway if it is running
-pkill -f 'centag-personal|/\.centag/bin/centag' 2>/dev/null || true
-# Remove the install directory
+centag wrap disable 2>/dev/null || true
+pkill -f 'centag-personal|/\\.centag/bin/centag' 2>/dev/null || true
 rm -rf "\${HOME}/.centag"
 # Also remove the PATH line from your shell rc (~/.zshrc / ~/.bashrc, etc.) if present:
 #   export PATH="\$HOME/.centag/bin:\$PATH"
@@ -154,8 +143,7 @@ rm -rf "\${HOME}/.centag"
 
 ### Artifacts
 
-- \`centag-personal-<goos>-<goarch>.tar.gz\` — personal CLI + WebUI static
-- \`centag-wrap-<goos>-<goarch>.tar.gz\` — third-party CLI launcher / process helper
+- \`centag-personal-<goos>-<goarch>.tar.gz\` — personal CLI + WebUI static (\`centag\` / \`centag wrap\`)
 - \`checksums.txt\` — SHA-256 sums
 EOF
 )"

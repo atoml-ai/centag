@@ -3,16 +3,15 @@
 #
 # Usage:
 #   ./scripts/release/build-artifacts.sh [--version 0.2.7]
-#   ./scripts/release/build-artifacts.sh --components personal,wrap
+#   ./scripts/release/build-artifacts.sh --components personal
 #   CENTAG_RELEASE_PLATFORMS=linux-amd64,darwin-arm64 ./scripts/release/build-artifacts.sh
 #
 # Outputs under ~/.centag/var/release/<version>/ (default components):
-#   centag-personal-<goos>-<goarch>.tar.gz
-#   centag-wrap-<goos>-<goarch>.tar.gz
+#   centag-personal-<goos>-<goarch>.tar.gz   # includes `centag wrap` subcommand
 #   checksums.txt
 #
-# Other components (minimal / launcher / launcher-tray) remain callable via
-# --components for later; not part of the default install/release set.
+# Optional (not in default GitHub Release): wrap / minimal / launcher via --components.
+# Process proxy for users: `centag wrap …` (no separate centag-wrap tarball required).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -25,7 +24,7 @@ log() { echo "==> $*" >&2; }
 fail() { echo "error: $*" >&2; exit 1; }
 
 VERSION=""
-COMPONENTS="personal,wrap"
+COMPONENTS="personal"
 PLATFORMS="${CENTAG_RELEASE_PLATFORMS:-darwin-amd64,darwin-arm64,linux-amd64,linux-arm64,windows-amd64,windows-arm64}"
 SKIP_FRONTEND="${CENTAG_RELEASE_SKIP_FRONTEND:-0}"
 BUILD_LAUNCHER_TRAY="${CENTAG_RELEASE_LAUNCHER_TRAY:-0}"

@@ -3,6 +3,7 @@ go 1.25.0
 use (
 	.
 	./core
+	./apps/wrap
 	./dist/personal
 	./dist/minimal
 	./plugins/backend/anthropic

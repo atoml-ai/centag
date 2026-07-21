@@ -123,8 +123,9 @@ if [[ -n "${CENTAG_WRAP_NPM_TOKEN:-}" ]]; then
 fi
 
 if [[ "$RELEASE" == "1" ]]; then
-  # Prefer the unified release pipeline (personal/minimal/launcher/wrap + install.sh assets).
-  echo "==> delegating GitHub release assets to scripts/release/publish-binaries.sh"
+  # Optional npm channel only: default GitHub Release is personal (with `centag wrap`).
+  # This builds/uploads standalone wrap tarballs for apps/wrap-npm download.js.
+  echo "==> building wrap-only assets for npm (not the default personal release set)"
   bash "${ROOT}/scripts/release/publish-binaries.sh" \
     --version "${VERSION}" \
     --components wrap \
