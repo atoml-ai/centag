@@ -426,3 +426,113 @@ func TestTransparentForwardNode_FallbackFirstUsableBackend(t *testing.T) {
 		t.Fatalf("url=%v", inner.lastReq.URL)
 	}
 }
+
+func TestTransparentForwardNode_ResponsesToChatCompletions(t *testing.T) {
+	inner := &mockHTTPClient{
+		status: 200,
+		body: "data: {\"choices\":[{\"delta\":{\"content\":\"glm\"}}]}\n\n" +
+			"data: [DONE]\n\n",
+	}
+	capturing := &capturingHTTPClient{inner: inner}
+	broker := &mockCapabilityBroker{httpClient: capturing}
+
+	prevEP := ResolveBackendEndpoint
+	t.Cleanup(func() { ResolveBackendEndpoint = prevEP })
+	ResolveBackendEndpoint = func(backendID string) (*BackendEndpoint, error) {
+		return &BackendEndpoint{BaseURL: "https://open.bigmodel.cn/api/paas/v4", APIKey: "sk"}, nil
+	}
+
+	node, err := NewTransparentForwardNode(NodeConfig{})
+	if err != nil {
+		t.Fatalf("NewTransparentForwardNode: %v", err)
+	}
+	tf := node.(*TransparentForwardNode)
+	tf.BaseNode.id = "forward"
+	tf.SetCapabilityBroker(broker)
+
+	out, err := tf.Execute(context.Background(), &NodeInput{
+		Metadata: map[string]interface{}{
+			"backend_id":   "bigmodel-ai",
+			"request_path": "/v1/responses",
+			"raw_request_body": `{
+				"model":"gpt-5.6-luna",
+				"stream":true,
+				"input":[{"role":"user","content":"你使用的是什么大模型"}]
+			}`,
+		},
+	})
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if !strings.Contains(capturing.body, `"messages"`) {
+		t.Fatalf("upstream body missing messages: %s", capturing.body)
+	}
+	if strings.Contains(capturing.body, `"input"`) {
+		t.Fatalf("upstream body still has input: %s", capturing.body)
+	}
+	if !strings.HasSuffix(inner.lastReq.URL.Path, "/chat/completions") {
+		t.Fatalf("url=%v", inner.lastReq.URL)
+	}
+	if out.Metadata["raw_passthrough"] != false {
+		t.Fatalf("raw_passthrough=%v, want false for responses rewrite", out.Metadata["raw_passthrough"])
+	}
+	if out.Content != "glm" {
+		t.Fatalf("content=%q, want extracted assistant text", out.Content)
+	}
+}
+
+func TestTransparentForwardNode_ResponsesToChatCompletions_ToolCalls(t *testing.T) {
+	inner := &mockHTTPClient{
+		status: 200,
+		body: "data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"call_1\",\"type\":\"function\",\"function\":{\"name\":\"bash\",\"arguments\":\"{\\\"command\\\":\\\"pwd\\\"}\"}}]}}]}\n\n" +
+			"data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"tool_calls\"}]}\n\n" +
+			"data: [DONE]\n\n",
+	}
+	capturing := &capturingHTTPClient{inner: inner}
+	broker := &mockCapabilityBroker{httpClient: capturing}
+
+	prevEP := ResolveBackendEndpoint
+	t.Cleanup(func() { ResolveBackendEndpoint = prevEP })
+	ResolveBackendEndpoint = func(backendID string) (*BackendEndpoint, error) {
+		return &BackendEndpoint{BaseURL: "https://open.bigmodel.cn/api/paas/v4", APIKey: "sk"}, nil
+	}
+
+	node, err := NewTransparentForwardNode(NodeConfig{})
+	if err != nil {
+		t.Fatalf("NewTransparentForwardNode: %v", err)
+	}
+	tf := node.(*TransparentForwardNode)
+	tf.BaseNode.id = "forward"
+	tf.SetCapabilityBroker(broker)
+
+	out, err := tf.Execute(context.Background(), &NodeInput{
+		Metadata: map[string]interface{}{
+			"backend_id":   "bigmodel-ai",
+			"request_path": "/v1/responses",
+			"raw_request_body": `{
+				"model":"gpt-5.6-luna",
+				"stream":true,
+				"tools":[{"type":"function","name":"bash","description":"shell","parameters":{"type":"object"}}],
+				"input":[{"role":"user","content":"pwd"}]
+			}`,
+		},
+	})
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if !strings.Contains(capturing.body, `"function":{"`) && !strings.Contains(capturing.body, `"function":{`) {
+		// nested function object required for chat completions
+		if !strings.Contains(capturing.body, `"function"`) {
+			t.Fatalf("upstream tools not nested: %s", capturing.body)
+		}
+	}
+	if len(out.ToolCalls) != 1 || out.ToolCalls[0].Function.Name != "bash" {
+		t.Fatalf("ToolCalls=%+v", out.ToolCalls)
+	}
+	if out.FinishReason != "tool_calls" {
+		t.Fatalf("FinishReason=%q", out.FinishReason)
+	}
+	if out.Metadata["raw_passthrough"] != false {
+		t.Fatalf("raw_passthrough=%v", out.Metadata["raw_passthrough"])
+	}
+}
