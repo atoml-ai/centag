@@ -134,21 +134,15 @@ jobs:
             echo "### Install"
             echo ""
             echo '```bash'
-            echo "# default: personal + wrap  (&& source activates PATH in THIS shell)"
-            echo "curl -fsSL https://raw.githubusercontent.com/${REPO}/${TAG}/scripts/install.sh | bash -s -- --version ${V} \\"
-            echo '  && source "${HOME}/.centag/env"'
+            echo "# default: personal + wrap"
+            echo "curl -fsSL https://raw.githubusercontent.com/${REPO}/${TAG}/scripts/install.sh | bash && . \"\$HOME/.centag/env\""
             echo ""
-            echo "# personal only (no wrap)"
-            echo "curl -fsSL https://raw.githubusercontent.com/${REPO}/${TAG}/scripts/install.sh | bash -s -- --only personal --version ${V} \\"
-            echo '  && source "${HOME}/.centag/env"'
-            echo ""
-            echo "# wrap only"
-            echo "curl -fsSL https://raw.githubusercontent.com/${REPO}/${TAG}/scripts/install.sh | bash -s -- --only wrap --version ${V} \\"
-            echo '  && source "${HOME}/.centag/env"'
+            echo "# personal only / wrap only"
+            echo "curl -fsSL https://raw.githubusercontent.com/${REPO}/${TAG}/scripts/install.sh | bash -s personal && . \"\$HOME/.centag/env\""
+            echo "curl -fsSL https://raw.githubusercontent.com/${REPO}/${TAG}/scripts/install.sh | bash -s wrap && . \"\$HOME/.centag/env\""
             echo '```'
             echo ""
-            echo "Default install root: \`~/.centag\` (\`CENTAG_INSTALL_ROOT\` / \`--prefix\`)."
-            echo "\`curl|bash\` cannot mutate your current shell PATH — always \`source ~/.centag/env\` (or open a new terminal)."
+            echo "Default install root: \`~/.centag\`. Chain \`. ~/.centag/env\` so PATH applies in this shell."
             echo "\`minimal\` / \`launcher\` are not published in this release."
             echo ""
             echo "### Uninstall"
