@@ -262,16 +262,11 @@ async function loadPipelines() {
       selectedDefaultId.value &&
       !pipelines.value.some(p => p.id === selectedDefaultId.value)
     ) {
-      pipelines.value = [
-        {
-          id: selectedDefaultId.value,
-          name: selectedDefaultId.value,
-          description: '',
-          version: '1.0',
-          nodes: []
-        },
-        ...pipelines.value
-      ]
+      // Do not inject an empty ghost row — it looks like a broken pipeline
+      // (edit shows no nodes) when seed data failed to load.
+      console.warn(
+        `[HomePipelineCard] default pipeline "${selectedDefaultId.value}" is missing from the registry`
+      )
     }
   } catch (error: any) {
     ElMessage.error('加载流水线失败：' + (error.message || '未知错误'))

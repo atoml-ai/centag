@@ -1,0 +1,42 @@
+id: raw-forward
+name: 原始 HTTP 转发（高级）
+description: 高级能力：将原始 HTTP 请求透传到 X-Target-URL 或 hostproxy 的 X-Original-Host；标准聊天客户端请用透明/直连模式
+version: "1.0"
+shortcut_code: '#raw'
+nodes:
+  - id: forward
+    type: transparent_forward
+    kind: proxy.transparent_forward
+    implementation: builtin.transparent_forward
+    name: 原始转发
+    backend: "{{system.default_backend}}"
+    model: "{{system.default_model}}"
+    config:
+      backend: "{{system.default_backend}}"
+      model: "{{system.default_model}}"
+      template_vars:
+        backend: "system.default_backend"
+        model: "system.default_model"
+      custom_config:
+        default_scheme: https
+    timeout: 120
+    retry:
+      max_attempts: 0
+      backoff_strategy: exponential
+      initial_delay: 1000
+      max_delay: 30000
+global_config:
+  timeout: 120
+  max_retries: 0
+  bypass_on_error: false
+  parallel_limit: 1
+  log_level: info
+metadata:
+  aligned_proxy_mode: raw-forward
+  features:
+    - transparent_forward
+    - raw_passthrough
+    - requires_target_url
+  lastUpdated: '2026-07-14T00:00:00.000Z'
+  layoutVersion: '1.1'
+  template_scope: mode-id-alignment
