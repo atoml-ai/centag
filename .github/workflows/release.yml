@@ -19,20 +19,36 @@ permissions:
   contents: write
 
 jobs:
-  # Only main may publish: workflow_dispatch must run on main; tags must be on origin/main.
-  guard-main:
+  # Version-branch gate: workflow_dispatch / tags must match vX | feature/vX | release/vX.
+  guard-branch:
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.ver.outputs.version }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Require main branch
-        run: bash scripts/release/require-main-branch.sh --ci
+      - name: Resolve version
+        id: ver
+        run: |
+          if [[ -n "${{ inputs.version }}" ]]; then
+            V="${{ inputs.version }}"
+          elif [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            V="${GITHUB_REF_NAME#v}"
+          else
+            V="$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' apps/proxyctl-npm/package.json | head -1)"
+          fi
+          V="${V#v}"
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+          echo "Release version v$V"
+
+      - name: Require version branch
+        run: bash scripts/release/require-release-branch.sh --ci --version "${{ steps.ver.outputs.version }}"
 
   # Default release set: personal CLI + proxyctl (cross-compile, no CGO).
   binaries:
-    needs: [guard-main]
+    needs: [guard-branch]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -47,34 +63,21 @@ jobs:
           cache: npm
           cache-dependency-path: web/package-lock.json
 
-      - name: Resolve version
-        id: ver
-        run: |
-          if [[ -n "${{ inputs.version }}" ]]; then
-            V="${{ inputs.version }}"
-          elif [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
-            V="${GITHUB_REF_NAME#v}"
-          else
-            V="$(node -p "require('./apps/proxyctl-npm/package.json').version")"
-          fi
-          echo "version=$V" >> "$GITHUB_OUTPUT"
-          echo "Building release v$V"
-
       - name: Build personal + proxyctl
         run: |
           bash scripts/release/build-artifacts.sh \
-            --version "${{ steps.ver.outputs.version }}" \
+            --version "${{ needs.guard-branch.outputs.version }}" \
             --components personal,proxyctl
 
       - name: Upload artifact bundle
         uses: actions/upload-artifact@v4
         with:
-          name: centag-binaries-${{ steps.ver.outputs.version }}
-          path: bin/release/${{ steps.ver.outputs.version }}/
+          name: centag-binaries-${{ needs.guard-branch.outputs.version }}
+          path: bin/release/${{ needs.guard-branch.outputs.version }}/
           if-no-files-found: error
 
   publish:
-    needs: [guard-main, binaries]
+    needs: [guard-branch, binaries]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -82,14 +85,7 @@ jobs:
       - name: Resolve version
         id: ver
         run: |
-          if [[ -n "${{ inputs.version }}" ]]; then
-            V="${{ inputs.version }}"
-          elif [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
-            V="${GITHUB_REF_NAME#v}"
-          else
-            V="$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' apps/proxyctl-npm/package.json | head -1)"
-          fi
-          echo "version=$V" >> "$GITHUB_OUTPUT"
+          echo "version=${{ needs.guard-branch.outputs.version }}" >> "$GITHUB_OUTPUT"
 
       - name: Download artifacts
         uses: actions/download-artifact@v4
@@ -138,8 +134,8 @@ jobs:
             echo "Install:"
             echo ""
             echo '```bash'
-            echo "curl -fsSL https://raw.githubusercontent.com/${REPO}/main/scripts/install.sh | bash"
-            echo "curl -fsSL https://raw.githubusercontent.com/${REPO}/main/scripts/install.sh | bash -s -- --only proxyctl"
+            echo "curl -fsSL https://raw.githubusercontent.com/${REPO}/${TAG}/scripts/install.sh | bash"
+            echo "curl -fsSL https://raw.githubusercontent.com/${REPO}/${TAG}/scripts/install.sh | bash -s -- --only proxyctl"
             echo '```'
             echo ""
             echo "Artifacts: \`centag-personal-*\`, \`centag-proxyctl-*\`, \`checksums.txt\`."
