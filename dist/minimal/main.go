@@ -1,6 +1,8 @@
 package main
 
 import (
+	"os"
+
 	"centag/core/pkg/entrypoint"
 
 	_ "centag/plugins/backend/anthropic"
@@ -11,6 +13,16 @@ import (
 	_ "centag/plugins/protocol/openai"
 )
 
+var (
+	// Version is injected at build time via -ldflags.
+	Version = "dev"
+	// BuildTime is injected at build time via -ldflags.
+	BuildTime = "unknown"
+)
+
 func main() {
-	entrypoint.Run("dev", "unknown")
+	if entrypoint.HandleVersionCommand(Version, BuildTime, os.Args) {
+		return
+	}
+	entrypoint.Run(Version, BuildTime)
 }

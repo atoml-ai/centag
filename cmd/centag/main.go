@@ -1,6 +1,8 @@
 package main
 
 import (
+	"os"
+
 	"centag/core/pkg/entrypoint"
 
 	// Core LLM backends + protocols (business plugins: external go.mod)
@@ -33,5 +35,9 @@ var (
 )
 
 func main() {
+	// Exit before server bootstrap when asked for version.
+	if entrypoint.HandleVersionCommand(Version, BuildTime, os.Args) {
+		return
+	}
 	entrypoint.Run(Version, BuildTime)
 }
