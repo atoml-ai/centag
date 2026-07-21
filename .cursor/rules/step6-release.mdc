@@ -48,7 +48,7 @@ echo "package.json version=${VER}"
 | `version` | 版本号（无 v 前缀） | 读自 package.json；其他（我会输入） |
 | `path` | 发版路径 | A 已有产物只上传 / B 脚本重建并上传 / C 推 tag 走 CI |
 | `draft` | 是否草稿 | 是（推荐）/ 否直接公开 |
-| `verify` | 发版后验收 | 本机 install 冒烟 / 仅检查 Release 资产 / 两者都做 |
+| `verify` | 发版后验收 | **仅检查 Release 资产（默认）** / 额外做本机 install 冒烟（用户点名） |
 
 ### 3. 导出环境变量后交接正本
 

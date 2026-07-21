@@ -165,7 +165,7 @@ CI 默认组件：`personal,wrap`。产物写入草稿（或按 input）Release�
 
 ## 验收（发版后必做）
 
-### 1. Release 资产齐全
+### 1. Release 资产齐全（Agent 默认只做这一项）
 
 ```bash
 gh release view "v${CENTAG_RELEASE_VERSION}" --repo "${CENTAG_RELEASE_REPO:-atoml-ai/centag}"
@@ -177,9 +177,13 @@ gh release view "v${CENTAG_RELEASE_VERSION}" --repo "${CENTAG_RELEASE_REPO:-atom
 - `centag-wrap-<goos>-<goarch>.tar.gz` × 支持平台
 - `checksums.txt`
 
-**草稿 Release 的资产 URL 对匿名 `curl` 不可用**；验收安装前必须 **Publish**（或本地用已登录的 `gh release download`）。
+**草稿 Release 的资产 URL 对匿名 `curl` 不可用**；用户侧安装前必须 **Publish**。
 
-### 2. 本机安装冒烟（不依赖 main）
+资产列表齐全即可将 Gate 5 标 ✅。**安装 / 部署验收由用户手动完成**；Agent **默认不跑**本机 `install.sh` 冒烟、curl 一行安装、起服务探测（耗时长）。
+
+### 2. 可选：本机安装冒烟（仅用户明确要求时）
+
+仅当用户在本轮明确要求「做冒烟 / 安装验收」时才执行；否则跳过并在汇报中写「安装验收：用户手动」。
 
 ```bash
 PREFIX="${TMPDIR:-/tmp}/centag-install-smoke"
@@ -195,31 +199,7 @@ test -x "$PREFIX/bin/centag-wrap"
 "$PREFIX/bin/centag-wrap" --help >/dev/null || "$PREFIX/bin/centag-wrap" -h >/dev/null || true
 ```
 
-只测 wrap：
-
-```bash
-bash scripts/install.sh --only wrap --version "${CENTAG_RELEASE_VERSION}" \
-  --prefix "${TMPDIR:-/tmp}/centag-wrap-smoke" --no-modify-path
-```
-
-### 3. 一行命令（需 install.sh 已在目标 ref）
-
-```bash
-# main 已合入 install.sh 且 Release 已公开后：
-curl -fsSL "https://raw.githubusercontent.com/${CENTAG_RELEASE_REPO:-atoml-ai/centag}/${CENTAG_INSTALL_REF:-main}/scripts/install.sh" \
-  | bash -s -- --version "${CENTAG_RELEASE_VERSION}" --no-modify-path --prefix "${TMPDIR:-/tmp}/centag-curl-smoke"
-```
-
-未合入 `main` 时：把 `CENTAG_INSTALL_REF` 设为功能分支名，或只用第 2 步本地 `bash scripts/install.sh`。
-
-### 4. 可选：起服务
-
-```bash
-# 默认端口 20060；STATIC_PATH 由 wrapper 指向 lib/personal/static
-"$PREFIX/bin/centag" &
-# 探测健康（以实际 /health 或管理页为准）
-curl -sS -o /dev/null -w "%{http_code}\n" "http://127.0.0.1:20060/" || true
-```
+一行命令 / 起服务等同理：仅用户点名时做，不作为 Step 6 默认路径。
 
 ---
 
@@ -230,8 +210,8 @@ curl -sS -o /dev/null -w "%{http_code}\n" "http://127.0.0.1:20060/" || true
 3. **先跑** `bash scripts/release/require-release-branch.sh --version …`；不在版本分支则中止并提示切换分支。
 4. 按 `CENTAG_RELEASE_PATH` 选 A / B / C 执行；禁止擅自扩大组件集（不加 minimal/launcher）。
 5. Path A/B：确认 `gh auth`；失败则只汇报认证错误，不编造 token。
-6. 上传完成后执行「验收」§1–§2；§3 仅在用户需要 curl 一行命令时做。
-7. 汇报：Release URL、资产列表摘要、安装冒烟通过/失败（含 HTTP/命令退出码）；更新 `workflow_state` Step 6 / Gate 5。
+6. 上传完成后执行「验收」§1（资产齐全）；**默认跳过** §2 安装冒烟。
+7. 汇报：Release URL、资产列表摘要、安装验收=用户手动；更新 `workflow_state` Step 6 / Gate 5。
 8. **禁止**在 skill 执行中改业务代码；workflow/脚本缺陷单独提修，不塞进发版步骤。
 
 ---

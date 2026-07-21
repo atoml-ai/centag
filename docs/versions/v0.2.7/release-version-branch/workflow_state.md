@@ -12,7 +12,7 @@
 | Phase 3 | Step 3 编码 | ✅ | 2026-07-21 | bc6840c 已实现 |
 | | Step 4 单测补全 | ✅ | 2026-07-21 | require-release-branch_test.sh（15 case） |
 | Phase 4 | Step 5 CR | ✅ | 2026-07-21 | 自测记录 + CR；人工已批准发版 |
-| Phase 5 | Step 6 发版 | ✅ | 2026-07-21 | 公开仓重建并 Publish；见 `发版验收.md` |
+| Phase 5 | Step 6 发版 | ✅ | 2026-07-21 | wrap 重命名重发；tag→5d7000c；见 `发版验收.md` |
 
 ## 门禁
 
@@ -22,7 +22,7 @@
 | Gate 2 | ✅ | |
 | Gate 3 | ✅ | shell 测试 + `make test` + lint；harness 既有路径告警不阻塞 |
 | Gate 4 | ✅ | 2026-07-21：人工确认「批准 — 可发版」 |
-| Gate 5 | ✅ | 公开 Release 13 资产；raw/download URL 可达；本机 install 偶发超时见验收说明 |
+| Gate 5 | ✅ | 公开 Release 13 资产（personal+wrap）；安装验收用户手动 |
 
 ## 产物
 
@@ -43,3 +43,5 @@
 | 2026-07-21 | Gate 5 准出：以 GitHub 资产校验为准；私有仓 `install.sh` 匿名 404 记残余 | 用户/验收 |
 | 2026-07-21 | 仓改 public 后重做 Step 6：重建产物 + Publish v0.2.7 | 用户 |
 | 2026-07-21 | 修复 publish-binaries 解析 OUT_DIR（tail -n1） | Agent |
+| 2026-07-21 | Step 6 默认跳过安装冒烟；用户手动部署 | 用户 |
+| 2026-07-21 | 重发 v0.2.7：wrap 资产 + 删 proxyctl + tag→5d7000c | 用户 |

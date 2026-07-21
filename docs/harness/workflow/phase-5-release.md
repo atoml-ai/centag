@@ -4,7 +4,7 @@
 
 ## 目标
 
-在 **Gate 4（CR 发版许可）** 通过后，于版本分支发布 GitHub Release（personal + wrap），并完成安装验收。
+在 **Gate 4（CR 发版许可）** 通过后，于版本分支发布 GitHub Release（personal + wrap），并校验资产齐全；安装/部署由用户手动验收。
 
 ## 前置门禁
 
@@ -31,7 +31,7 @@
 ### 3. 验收 → Gate 5
 
 - [ ] Release 资产齐全（personal + wrap × 平台 + checksums）
-- [ ] 本机 `install.sh` 冒烟通过（或用户明确跳过并记录）
+- [ ] **默认不做**本机 install 冒烟（用户手动部署）；仅用户点名时才跑
 - [ ] 更新 `workflow_state`：Step 6 → ✅，Gate 5 → ✅
 
 ## 产出

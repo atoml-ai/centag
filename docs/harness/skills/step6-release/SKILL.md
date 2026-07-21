@@ -1,6 +1,6 @@
 ---
 name: step6-release
-description: "工作流 Step 6：发版 — GitHub Release 与一键安装验收。触发场景：step6-release、发版、publish release"
+description: "工作流 Step 6：发版 — GitHub Release 与资产校验（安装由用户手动）。触发场景：step6-release、发版、publish release"
 ---
 
 # Step 6: 发版（GitHub Release）
@@ -59,10 +59,10 @@ description: "工作流 Step 6：发版 — GitHub Release 与一键安装验收
 
 ### 第四步：发版验收与 Gate 5
 
-按 procedure「验收」完成资产检查与安装冒烟后：
+按 procedure「验收」完成 **Release 资产齐全**检查后（**默认不跑**安装冒烟）：
 
-- 更新 `workflow_state.md`：Step 6 → ✅，Gate 5 → ✅（若验收通过）
-- 汇报 Release URL、资产摘要、冒烟结果
+- 更新 `workflow_state.md`：Step 6 → ✅，Gate 5 → ✅（资产齐全即可）
+- 汇报 Release URL、资产摘要；安装/部署验收写「用户手动」
 
 ## 产出
 
@@ -74,5 +74,5 @@ description: "工作流 Step 6：发版 — GitHub Release 与一键安装验收
 
 ## 完成后
 
-- 确认 Gate 5 准出（Release 公开或按约定保留草稿 + 冒烟通过）
-- 提示用户：合入 `main`（若尚未）、更新版本索引；**禁止**在非版本分支补传正式 Release
+- 确认 Gate 5 准出（Release 公开或按约定保留草稿 + 资产齐全）
+- 提示用户：自行安装/部署验收；合入 `main`（若尚未）、更新版本索引；**禁止**在非版本分支补传正式 Release
