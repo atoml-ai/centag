@@ -85,17 +85,45 @@ done < <(find "$OUT_DIR" -maxdepth 1 \( -name 'centag-*.tar.gz' -o -name 'checks
 NOTES="$(cat <<EOF
 ## Centag ${TAG}
 
-Install:
+### Install
 
 \`\`\`bash
-curl -fsSL https://raw.githubusercontent.com/${REPO}/${TAG}/scripts/install.sh | bash
-curl -fsSL https://raw.githubusercontent.com/${REPO}/${TAG}/scripts/install.sh | bash -s -- --only wrap
+# default: personal + wrap  (&& source activates PATH in THIS shell)
+curl -fsSL https://raw.githubusercontent.com/${REPO}/${TAG}/scripts/install.sh | bash -s -- --version ${VERSION} \\
+  && source "\${HOME}/.centag/env"
+
+# personal only (no wrap)
+curl -fsSL https://raw.githubusercontent.com/${REPO}/${TAG}/scripts/install.sh | bash -s -- --only personal --version ${VERSION} \\
+  && source "\${HOME}/.centag/env"
+
+# wrap only
+curl -fsSL https://raw.githubusercontent.com/${REPO}/${TAG}/scripts/install.sh | bash -s -- --only wrap --version ${VERSION} \\
+  && source "\${HOME}/.centag/env"
+\`\`\`
+
+Default install root: \`~/.centag\` (override with \`CENTAG_INSTALL_ROOT\` / \`--prefix\`).  
+\`curl|bash\` cannot mutate your current shell PATH — always \`source ~/.centag/env\` (or open a new terminal).  
+\`minimal\` / \`launcher\` are not published in this release.
+
+### Uninstall
+
+There is no dedicated uninstall command yet. Remove manually:
+
+\`\`\`bash
+# If system proxy was enabled, turn it off first
+centag-wrap disable 2>/dev/null || true
+# Stop the gateway if it is running
+pkill -f 'centag-personal|/\.centag/bin/centag' 2>/dev/null || true
+# Remove the install directory
+rm -rf "\${HOME}/.centag"
+# Also remove the PATH line from your shell rc (~/.zshrc / ~/.bashrc, etc.) if present:
+#   export PATH="\$HOME/.centag/bin:\$PATH"
 \`\`\`
 
 ### Artifacts
 
 - \`centag-personal-<goos>-<goarch>.tar.gz\` — personal CLI + WebUI static
-- \`centag-wrap-<goos>-<goarch>.tar.gz\` — system/process proxy helper
+- \`centag-wrap-<goos>-<goarch>.tar.gz\` — third-party CLI launcher / process helper
 - \`checksums.txt\` — SHA-256 sums
 EOF
 )"

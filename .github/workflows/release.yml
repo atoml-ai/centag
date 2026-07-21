@@ -131,14 +131,43 @@ jobs:
           {
             echo "## Centag ${TAG}"
             echo ""
-            echo "Install:"
+            echo "### Install"
             echo ""
             echo '```bash'
-            echo "curl -fsSL https://raw.githubusercontent.com/${REPO}/${TAG}/scripts/install.sh | bash"
-            echo "curl -fsSL https://raw.githubusercontent.com/${REPO}/${TAG}/scripts/install.sh | bash -s -- --only wrap"
+            echo "# default: personal + wrap  (&& source activates PATH in THIS shell)"
+            echo "curl -fsSL https://raw.githubusercontent.com/${REPO}/${TAG}/scripts/install.sh | bash -s -- --version ${V} \\"
+            echo '  && source "${HOME}/.centag/env"'
+            echo ""
+            echo "# personal only (no wrap)"
+            echo "curl -fsSL https://raw.githubusercontent.com/${REPO}/${TAG}/scripts/install.sh | bash -s -- --only personal --version ${V} \\"
+            echo '  && source "${HOME}/.centag/env"'
+            echo ""
+            echo "# wrap only"
+            echo "curl -fsSL https://raw.githubusercontent.com/${REPO}/${TAG}/scripts/install.sh | bash -s -- --only wrap --version ${V} \\"
+            echo '  && source "${HOME}/.centag/env"'
             echo '```'
             echo ""
-            echo "Artifacts: \`centag-personal-*\`, \`centag-wrap-*\`, \`checksums.txt\`."
+            echo "Default install root: \`~/.centag\` (\`CENTAG_INSTALL_ROOT\` / \`--prefix\`)."
+            echo "\`curl|bash\` cannot mutate your current shell PATH — always \`source ~/.centag/env\` (or open a new terminal)."
+            echo "\`minimal\` / \`launcher\` are not published in this release."
+            echo ""
+            echo "### Uninstall"
+            echo ""
+            echo "No dedicated uninstall command yet — remove manually:"
+            echo ""
+            echo '```bash'
+            echo 'centag-wrap disable 2>/dev/null || true'
+            echo "pkill -f 'centag-personal|/\\.centag/bin/centag' 2>/dev/null || true"
+            echo 'rm -rf "${HOME}/.centag"'
+            echo '# Also remove PATH line from ~/.zshrc / ~/.bashrc if present:'
+            echo '#   export PATH="$HOME/.centag/bin:$PATH"'
+            echo '```'
+            echo ""
+            echo "### Artifacts"
+            echo ""
+            echo "- \`centag-personal-<goos>-<goarch>.tar.gz\` — personal CLI + WebUI static"
+            echo "- \`centag-wrap-<goos>-<goarch>.tar.gz\` — third-party CLI launcher / process helper"
+            echo "- \`checksums.txt\` — SHA-256 sums"
           } > "$NOTES_FILE"
 
           if gh release view "$TAG" >/dev/null 2>&1; then

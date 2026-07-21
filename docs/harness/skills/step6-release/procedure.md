@@ -92,16 +92,43 @@ gh auth status
 ls -lh "bin/release/${CENTAG_RELEASE_VERSION}/"
 
 # 2) 创建草稿 Release 并上传
+# Release notes MUST be English and include Install + Uninstall.
+# Template source of truth: scripts/release/publish-binaries.sh (Path B writes them automatically).
+# Prefer: ./scripts/release/publish-binaries.sh --version … --release
 gh release create "v${CENTAG_RELEASE_VERSION}" \
   --repo "${CENTAG_RELEASE_REPO:-atoml-ai/centag}" \
   --draft \
   --title "Centag ${CENTAG_RELEASE_VERSION}" \
-  --notes "personal CLI + wrap. Install: curl -fsSL https://raw.githubusercontent.com/atoml-ai/centag/v${CENTAG_RELEASE_VERSION}/scripts/install.sh | bash" \
+  --notes "$(cat <<EOF
+## Centag v${CENTAG_RELEASE_VERSION}
+
+### Install
+\`\`\`bash
+# default: personal + wrap
+curl -fsSL https://raw.githubusercontent.com/atoml-ai/centag/v${CENTAG_RELEASE_VERSION}/scripts/install.sh | bash -s -- --version ${CENTAG_RELEASE_VERSION}
+# personal only / wrap only:
+# … --only personal --version ${CENTAG_RELEASE_VERSION}
+# … --only wrap --version ${CENTAG_RELEASE_VERSION}
+\`\`\`
+(\`minimal\` not published — omit from notes.)
+
+### Uninstall
+\`\`\`bash
+centag-wrap disable 2>/dev/null || true
+pkill -f 'centag-personal|/\\.centag/bin/centag' 2>/dev/null || true
+rm -rf \"\${HOME}/.centag\"
+# Also remove PATH from shell rc: export PATH=\"\$HOME/.centag/bin:\$PATH\"
+\`\`\`
+
+### Artifacts
+- \`centag-personal-*\` / \`centag-wrap-*\` / \`checksums.txt\`
+EOF
+)" \
   "bin/release/${CENTAG_RELEASE_VERSION}"/centag-*.tar.gz \
   "bin/release/${CENTAG_RELEASE_VERSION}/checksums.txt"
 ```
 
-若 tag/release 已存在，改为上传：
+若 tag/release 已存在，改为上传（**不会**改 notes；正文过期时另跑 `gh release edit … --notes`）：
 
 ```bash
 gh release upload "v${CENTAG_RELEASE_VERSION}" \
