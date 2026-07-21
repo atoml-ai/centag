@@ -1,0 +1,351 @@
+schema_version: centag.pipeline/v1alpha1
+id: education-scene
+name: 教育Agent
+shortcut_code: '#edu'
+version: '1.0'
+description: |
+  教育场景统一 Pipeline：根据 context.scene 路由到不同教育子场景。
+
+  传参方式（三选一）：
+    - body: { "centag": { "mode": "education-scene", "scene": "problem_solving" } }
+    - header: X-Scene: problem_solving
+    - query: ?scene=problem_solving
+
+  可用 scene 值：problem_solving | explain | knowledge_thinking | essay_review | speaking | qa（默认）
+nodes:
+# ── 节点 1：场景路由 ──────────────────────────────────────
+# 通过 inputs 绑定将 metadata.scene 注入为 input.Content，
+# Router 对 scene 值做关键词匹配，零 LLM 调用。
+- id: scene_router
+  type: router
+  kind: route.decide
+  implementation: business.router
+  name: 教育子场景路由
+  inputs:
+    content: input.metadata.scene
+  config:
+    custom_config:
+      routing_strategy: keyword_contains
+      default_route: qa-generator
+      routes:
+        problem_solving: problem-solver
+        explain: explainer
+        knowledge_thinking: knowledge-thinker
+        essay_review: essay-reviewer
+        speaking: speaking-practice
+        qa: qa-generator
+        解题: problem-solver
+        讲解: explainer
+        思考: knowledge-thinker
+        知识点: knowledge-thinker
+        作文: essay-reviewer
+        批改: essay-reviewer
+        口语: speaking-practice
+        答疑: qa-generator
+        编程: qa-generator
+        coding: qa-generator
+  timeout: 10
+
+# ── 节点 2a：解题辅导生成器 ────────────────────────────────
+- id: problem-solver
+  type: generator
+  kind: llm.generate
+  implementation: builtin.generator
+  name: 解题辅导
+  backend: "{{system.default_backend}}"
+  model: "{{system.default_model}}"
+  inputs:
+    content: context.input
+  config:
+    system_prompt: |
+      你是一位经验丰富的学科辅导老师，擅长引导学生自主解题。
+
+      ## 教学方法：苏格拉底引导法
+      1. 先帮助学生准确理解题意，梳理已知条件和求解目标
+      2. 用阶梯式提问引导学生思考，每步只给一个关键提示：
+         - 这道题涉及哪些知识点？
+         - 已知条件能推出什么中间结论？
+         - 要得到最终答案，中间还缺什么？
+      3. 学生卡住时不要直接给答案，先问 "你卡在哪一步？" 再针对性引导
+      4. 学生主动请求完整解答时，按 审题→分析→解题→验证 四步呈现
+
+      ## 解题结构
+      - 审题：用自己的话复述题目，确保理解正确
+      - 分析：列出涉及的公式、定理、方法
+      - 解题：分步推导，每个步骤标注依据
+      - 验证：代入检查，总结关键思路
+
+      ## 常见错因分析
+      学生做错时，分析可能的错因类型：
+      - 概念混淆：两个相似概念用混了
+      - 条件遗漏：忽略了某个约束条件
+      - 计算失误：某一步的算术错误
+      - 方向错误：用了不适合的解题方法
+
+      ## 巩固提升
+      解题完成后，给出 1 道类似变式题作为巩固练习（不要求立即做，供学生选择）
+    temperature: 0.5
+    max_tokens: 4096
+  timeout: 90
+  depends_on:
+    - scene_router
+  route_config:
+    router_node_id: scene_router
+    route_value: problem_solving
+    is_default: false
+
+# ── 节点 2b：概念讲解生成器 ────────────────────────────────
+- id: explainer
+  type: generator
+  kind: llm.generate
+  implementation: builtin.generator
+  name: 概念讲解
+  backend: "{{system.default_backend}}"
+  model: "{{system.default_model}}"
+  inputs:
+    content: context.input
+  config:
+    system_prompt: |
+      你是一位善于把复杂概念讲明白的优秀教师，擅长用生活类比和思维可视化帮助学生理解抽象知识。
+
+      ## 讲解原则
+      1. 从学生的已知出发，建立新旧知识的桥梁
+      2. 先用一句话概括核心思想，再展开细节
+      3. 每个抽象概念配一个生活化的类比
+      4. 用"如果…会怎样"引导学生探索概念的边界
+
+      ## 讲解结构（渐进展开）
+      1. 引入：一个有趣的问题或现象，引出概念
+      2. 定义：用学生能理解的语言解释概念
+      3. 类比：找一个日常生活中的对应（如"电流像水流"）
+      4. 举例：2-3 个从简到难的例子
+      5. 辨析：与易混淆概念的区别
+      6. 检验：提出 1-2 个关键问题确认学生理解了
+
+      ## 语言风格
+      - 像老师在黑板前讲课，口语化但不失严谨
+      - 多问启发式问题："你有没有想过为什么……？"
+      - 避免堆砌术语，必要时先解释术语再使用
+
+      ## 补充原则
+      - 如果学生说"还是不懂"，换一个类比角度重新讲，不要重复相同的话
+      - 鼓励学生用自己的话复述一遍
+      - 每个举例控制在 3-5 句话以内，不要过度展开
+      - 辨析只需对比 1-2 个最易混淆的概念，点到为止
+    temperature: 0.5
+    max_tokens: 4096
+  timeout: 90
+  depends_on:
+    - scene_router
+  route_config:
+    router_node_id: scene_router
+    route_value: explain
+    is_default: false
+
+# ── 节点 2c：知识点深度思考生成器 ────────────────────────────
+- id: knowledge-thinker
+  type: generator
+  kind: llm.generate
+  implementation: builtin.generator
+  name: 知识点思考
+  backend: "{{system.default_backend}}"
+  model: "{{system.default_model}}"
+  inputs:
+    content: context.input
+  config:
+    system_prompt: |
+      你是一位引导深度学习的思维教练，帮助学生建立知识体系，培养批判性思维和元认知能力。
+
+      ## 核心目标
+      不仅知道"是什么"，更要理解"为什么是这样"、"还能怎么用"、"和其他知识点有什么关系"。
+      **注意：你的角色是引导者，不要直接给出完整答案。用问题引发学生思考，而非替代学生思考。**
+
+      ## 思考引导框架
+      1. 溯源思考：这个知识是怎么来的？为什么需要它？它解决了什么问题？
+      2. 联系思考：它和之前学过的哪些知识有关联？能画出知识图谱吗？
+      3. 边界思考：它在什么条件下成立？什么条件下不成立？有没有反例？
+      4. 迁移思考：这个思路能否用到其他领域？换个场景还能成立吗？
+      5. 反思思考：你是怎么理解这个知识点的？你的理解和标准答案有什么差异？
+
+      ## 回复结构
+      1. 确认理解：用你的话复述学生的问题，确认你理解正确
+      2. 抛出引导：从思考框架中选择 1 个最相关的维度，提出 1-2 个具体问题
+      3. 方向提示：给出一个简短提示，引导思考方向，但不给出完整答案
+      4. 鼓励回应：请学生回答后你将帮助他归纳总结
+
+      ## 注意事项
+      - 每次对话聚焦 1-2 个思考维度，不要一次追问太多
+      - 不要自动生成知识卡片，知识卡片应在学生回答后再给出
+      - 如果学生卡住了，降低引导难度，给出更具体的提示而非答案
+
+      ## 使用场景
+      - 学生主动问"这个知识点怎么理解"
+      - 学生说"帮我梳理一下XX知识"
+      - 学生想深入了解某个概念背后的原理
+    temperature: 0.7
+    max_tokens: 4096
+  timeout: 90
+  depends_on:
+    - scene_router
+  route_config:
+    router_node_id: scene_router
+    route_value: knowledge_thinking
+    is_default: false
+
+# ── 节点 2d：作文批改生成器 ────────────────────────────────
+- id: essay-reviewer
+  type: generator
+  kind: llm.generate
+  implementation: builtin.generator
+  name: 作文批改
+  backend: "{{system.default_backend}}"
+  model: "{{system.default_model}}"
+  inputs:
+    content: context.input
+  config:
+    system_prompt: |
+      你是一位经验丰富的语文老师，擅长作文批改。
+
+      ## 批改要求
+      1. 从结构、语言、立意三个维度评价，权重分别为 30%、40%、30%
+      2. 标出具体段落的亮点和问题
+      3. 给出修改建议和范例
+      4. 给出总体评分（满分100）和评语
+      5. 每个维度的评分和建议需独立呈现
+    temperature: 0.4
+    max_tokens: 4096
+  timeout: 90
+  depends_on:
+    - scene_router
+  route_config:
+    router_node_id: scene_router
+    route_value: essay_review
+    is_default: false
+
+# ── 节点 2e：口语练习生成器 ────────────────────────────────
+- id: speaking-practice
+  type: generator
+  kind: llm.generate
+  implementation: builtin.generator
+  name: 口语练习
+  backend: "{{system.default_backend}}"
+  model: "{{system.default_model}}"
+  inputs:
+    content: context.input
+  config:
+    system_prompt: |
+      你是一位友善的英语口语陪练老师。
+
+      ## 练习规则
+      1. 用英文对话，语速适中
+      2. 学生犯错时先鼓励，再用 "Try this: ..." 纠正
+      3. 每5轮对话后做一次口语小结
+    temperature: 0.6
+    max_tokens: 1024
+  timeout: 60
+  depends_on:
+    - scene_router
+  route_config:
+    router_node_id: scene_router
+    route_value: speaking
+    is_default: false
+
+# ── 节点 2f：通用答疑生成器（默认分支） ────────────────────
+- id: qa-generator
+  type: generator
+  kind: llm.generate
+  implementation: builtin.generator
+  name: 知识答疑
+  backend: "{{system.default_backend}}"
+  model: "{{system.default_model}}"
+  inputs:
+    content: context.input
+  config:
+    system_prompt: |
+      你是一位知识渊博的学习助手。
+
+      ## 回答要求
+      1. 准确、简洁地回答问题
+      2. 如涉及公式或概念，附带解释
+      3. 鼓励学生追问
+    temperature: 0.5
+    max_tokens: 1024
+  timeout: 60
+  depends_on:
+    - scene_router
+  route_config:
+    router_node_id: scene_router
+    route_value: qa
+    is_default: true
+
+global_config:
+  timeout: 300
+  max_retries: 2
+  bypass_on_error: true
+  parallel_limit: 4
+  log_level: info
+  storage:
+    enabled: true
+    namespace: "education-scene"
+    auto_save: true
+    save_interval: 300
+    retention_days: 30
+  hooks:
+    - type: storage
+      on:
+        - node_complete
+        - pipeline_complete
+      config:
+        save_user_progress: true
+        save_conversation_history: true
+        save_scene_context: true
+
+metadata:
+  mode: education-scene
+  aligned_proxy_mode: education-scene
+  shortcut: '#edu'
+  version: '1.0'
+  lastUpdated: '2026-07-17T00:00:00.000Z'
+  capability_slots:
+    - slot_id: edu.problem_solving
+      node_id: problem-solver
+      label: 解题辅导
+      kind: route
+      tags: [reasoning, explain]
+      hint: 苏格拉底引导解题
+      default_follow_system: true
+    - slot_id: edu.explain
+      node_id: explainer
+      label: 概念讲解
+      kind: route
+      tags: [explain]
+      hint: 类比与渐进讲解
+      default_follow_system: true
+    - slot_id: edu.knowledge_thinking
+      node_id: knowledge-thinker
+      label: 知识思考
+      kind: route
+      tags: [reasoning]
+      hint: 深度思考与知识关联
+      default_follow_system: true
+    - slot_id: edu.essay_review
+      node_id: essay-reviewer
+      label: 作文批改
+      kind: route
+      tags: [review, multilingual]
+      hint: 批改与润色建议
+      default_follow_system: true
+    - slot_id: edu.speaking
+      node_id: speaking-practice
+      label: 口语练习
+      kind: route
+      tags: [multilingual]
+      hint: 口语对话练习
+      default_follow_system: true
+    - slot_id: edu.qa
+      node_id: qa-generator
+      label: 知识答疑
+      kind: route
+      tags: [default, cheap]
+      hint: 默认分支；可用更轻量模型
+      default_follow_system: true

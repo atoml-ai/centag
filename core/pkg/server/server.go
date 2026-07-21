@@ -419,9 +419,9 @@ func New(cfg *config.Config) *Server {
 		pipelineRegistry = pipeline.NewPipelineRegistry()
 	}
 
-	// 解析内置流水线模板（无论是否首次启动，模板列表供后续使用）
-	templates := resolvePipelineTemplates()
-	logger.Infof("Pipeline templates loaded: %d builtin templates resolved", len(templates))
+	// 解析内置流水线模板（按 CENTAG_EDITION：personal/minimal 仅 common，team 含 team/）
+	templates := resolvePipelineTemplatesWithEdition(cfg.Server.Edition)
+	logger.Infof("Pipeline templates loaded: %d builtin templates resolved (edition=%q)", len(templates), cfg.Server.Edition)
 
 	// 仅当数据库中完全没有流水线时（首次启动），才从模板创建默认流水线
 	// 用户主动删除后不应重新创建

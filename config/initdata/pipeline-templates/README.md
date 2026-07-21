@@ -1,21 +1,29 @@
 # 流水线模板清单
 
-真源目录：`config/initdata/pipeline-templates/{common,personal}/`（按 edition 加载，见 `editionDirMap`）。
+真源目录：`config/initdata/pipeline-templates/{common,team}/`（按 edition 加载，见 `editionDirMap`）。
 
-> `common/` 供 minimal / personal / team；`personal/` 仅 personal / team。依赖外置中间件或重型业务插件的模板放 `personal/`。
+| 子目录 | 发行版 |
+|--------|--------|
+| `common/` | **minimal / personal / team** 均加载 |
+| `team/` | **仅 team** 发行版（原 `personal/` 目录已改名） |
+
+> personal / minimal 一键安装包与 Docker Profile **只打包 `common/`**。  
+> team 目录下的模板仅在构建 team 版本时带上。
 
 ## 内置模板
 
-### common（全版本）
+### common（minimal / personal / team）
 
 | 文件 | pipeline_id | 快捷码 | 说明 |
 |------|-------------|--------|------|
 | `direct-backend.yaml` | direct-backend | `#d` | 单 generator 直连 |
-| `transparent-proxy.yaml` | transparent-proxy | `#t` | 透明代理（不注入 system） |
+| `transparent-proxy.yaml` | transparent-proxy | `#t` | 透明转发（`transparent_forward`） |
 | `smart-scheduling.yaml` | smart-scheduling | `#s` | builtin.scheduler |
-| `router-mode.yaml` | router-mode | `#r` | builtin.router 关键词/意图分支 |
+| `router-mode.yaml` | router-mode | `#r` | builtin.router |
+| `coding-agent.yaml` | coding-agent | — | Coding agent |
+| `education-agent.yaml` | education-agent | — | Education agent |
 
-### personal（personal / team）
+### team（仅 team）
 
 | 文件 | pipeline_id | 快捷码 | 说明 |
 |------|-------------|--------|------|
@@ -25,7 +33,6 @@
 | `raw-forward.yaml` | raw-forward | — | Raw 转发 |
 | `cache-hit.yaml` | cache-hit | `#ch` | 精确缓存优先 |
 | `cache-mode.yaml` | cache-mode | — | 缓存模式 |
-| `coding-agent.yaml` | coding-agent | — | Coding agent |
 | `transparent-proxy-redis-example.yaml` | — | — | Redis 缓存示例 |
 
 ## 本地联调

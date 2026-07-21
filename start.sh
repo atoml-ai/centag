@@ -2246,15 +2246,19 @@ _dist_docker_build() {
         print_info "生成默认 initdata.zip..."
         (
             cd "$initdata_temp_dir"
-            mkdir -p pipeline-templates/common pipeline-templates/personal
-
-            # 复制流水线模板（按目录结构）
+            # personal/minimal → common only；team → common + team
+            mkdir -p pipeline-templates/common
             for f in "$PROJECT_ROOT"/config/initdata/pipeline-templates/common/*.yaml; do
                 [ -f "$f" ] && cp "$f" pipeline-templates/common/
             done
-            for f in "$PROJECT_ROOT"/config/initdata/pipeline-templates/personal/*.yaml; do
-                [ -f "$f" ] && cp "$f" pipeline-templates/personal/
-            done
+            case "${dist_name}" in
+                team|centag-pro|pro)
+                    mkdir -p pipeline-templates/team
+                    for f in "$PROJECT_ROOT"/config/initdata/pipeline-templates/team/*.yaml; do
+                        [ -f "$f" ] && cp "$f" pipeline-templates/team/
+                    done
+                    ;;
+            esac
 
             # 首启无预置后端（由 WebUI「添加 Provider」配置；勿塞无 Key 的占位后端）
             # 优先复制对应 Profile 种子（现为 backends: []），否则写空列表

@@ -152,27 +152,34 @@ build_edition() {
   chmod 755 "${stage_parent}/${stage_name}/centag-${edition}${ext}"
   cp -R "$STATIC_SRC" "${stage_parent}/${stage_name}/static"
 
-  # Ship pipeline/backends seed with the binary. One-line install puts the
-  # binary under ~/.centag/lib/<edition>/; ProjectRoot resolves to that dir,
-  # so config/initdata must live beside the binary.
+  # Ship pipeline/backends seed beside the binary (one-line install → ~/.centag/lib/<edition>/).
+  # personal/minimal: only pipeline-templates/common/
+  # team (when packaged here): common/ + team/
   if [[ -d "${ROOT}/config/initdata" ]]; then
     mkdir -p "${stage_parent}/${stage_name}/config"
     rm -rf "${stage_parent}/${stage_name}/config/initdata"
     cp -R "${ROOT}/config/initdata" "${stage_parent}/${stage_name}/config/initdata"
-    # Drop bulky/non-runtime docs from the release seed.
     rm -rf "${stage_parent}/${stage_name}/config/initdata/postgresql" \
       "${stage_parent}/${stage_name}/config/initdata/scripts" \
       "${stage_parent}/${stage_name}/config/initdata/update" \
       "${stage_parent}/${stage_name}/config/initdata/secrets" 2>/dev/null || true
-    find "${stage_parent}/${stage_name}/config/initdata" -name 'README.md' -delete 2>/dev/null || true
-    find "${stage_parent}/${stage_name}/config/initdata" -name 'AGENTS.md' -delete 2>/dev/null || true
+    find "${stage_parent}/${stage_name}/config/initdata" \( -name 'README.md' -o -name 'AGENTS.md' \) -delete 2>/dev/null || true
+    # Drop obsolete personal/ dir name if still present; strip team/ for non-team editions.
+    rm -rf "${stage_parent}/${stage_name}/config/initdata/pipeline-templates/personal"
+    case "$edition" in
+      personal|minimal)
+        rm -rf "${stage_parent}/${stage_name}/config/initdata/pipeline-templates/team"
+        ;;
+    esac
   fi
-  # Profile overlay (initial-backends + optional pipeline overrides)
+  # Profile overlay (initial-backends + common pipeline overrides only)
   if [[ -d "${ROOT}/config/profiles/${edition}/initdata" ]]; then
     mkdir -p "${stage_parent}/${stage_name}/config/profiles/${edition}"
     rm -rf "${stage_parent}/${stage_name}/config/profiles/${edition}/initdata"
     cp -R "${ROOT}/config/profiles/${edition}/initdata" \
       "${stage_parent}/${stage_name}/config/profiles/${edition}/initdata"
+    rm -rf "${stage_parent}/${stage_name}/config/profiles/${edition}/initdata/pipeline-templates/personal" \
+      "${stage_parent}/${stage_name}/config/profiles/${edition}/initdata/pipeline-templates/team"
   fi
 
   tarball="${OUT_DIR}/centag-${edition}-${goos}-${goarch}.tar.gz"
