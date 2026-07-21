@@ -17,7 +17,7 @@ Centag API Key **不会**注入到 Agent 环境；由服务端 MITM 注入出口
 ./start.sh build proxyctl
 # 或与发行版一并构建
 ./start.sh build personal --proxyctl
-./start.sh build team --proxyctl
+./start.sh build personal --proxyctl   # Team 二进制在 centag-pro 构建；proxyctl 可单独或与 personal 同编
 ```
 
 产物：

@@ -6,7 +6,7 @@
 
 ## 特点
 
-- **CENTAG_EDITION=team**：启用用户管理、多租户、系统更新等团队功能
+- **CENTAG_EDITION=team**：运行时按团队模式门控；**完整管理面**（用户/租户/系统更新等）需要 **centag-pro** 构建的 `centag-team` 二进制 + 有效 license，不是仅改环境变量即可
 - **PostgreSQL 等中间件单独部署**：共享元数据（stack `centag-postgresql` 等）
 - **就绪探针**：`/health/ready` 验证数据库连接，适合 K8s / Compose healthcheck
 - **可选 HA**：`docker-compose.ha.yaml` + Nginx 对多副本 `centag` 做负载均衡

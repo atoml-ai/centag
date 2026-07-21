@@ -58,13 +58,18 @@ LLM_PROXY_DB_DRIVER=sqlite
 
 **团队版**：
 
+Team **管理面**（Admin 用户/租户/配额、系统更新、AB Admin、BillingHook 等）只存在于闭源仓 `centag-pro` 构建的 `centag-team` 二进制中。  
+开源 `minimal`/`personal`（或裸 `cmd/centag`）即使设置 `CENTAG_EDITION=team`，上述产品路由也**不会注册**（R09）。
+
 ```bash
+# 正确：在 centag-pro 构建并运行
+cd ../centag-pro && ./start.sh build team
+export CENTAG_LICENSE_KEY=...   # 无效/空则不挂商业路由
 export CENTAG_EDITION=team
 ```
 
-或使用 [`config/profiles/team/`](../../config/profiles/team/) Profile 启动（已内置 `CENTAG_EDITION=team` + PostgreSQL stack）。
-
-配额、租户隔离、管理员 API 在 `team` edition 下自动生效；无需再设置已废弃的 `LLM_PROXY_MULTI_TENANT_ENABLED`。
+部署可配合 [`config/profiles/team/`](../../config/profiles/team/)（`CENTAG_EDITION=team` + PostgreSQL stack）。  
+DB schema / TenantID 原语仍在开源；无需再设置已废弃的 `LLM_PROXY_MULTI_TENANT_ENABLED`。
 
 ### 2.2 新用户注册流程
 

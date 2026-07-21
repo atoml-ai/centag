@@ -19,7 +19,7 @@ Dist Profile 是 Centag 的**编译时插件子集**。能否真正注册，取�
 | **team** | **团队商业版** | 与 personal 同级插件集合 + **pro 插件包** | 构建在 **`centag-pro`**（开源无 `dist/team`）；部署默认外置 PG 等 + `CENTAG_EDITION=team` |
 
 > **Open Core（现行）**：开源仓只含 `dist/minimal` 与 `dist/personal`，可完全独立构建。  
-> **Team**：主程序 `centag-pro/cmd/centag-team`，经 `extension.Plugin` / `bundle/team` 接入；`./start.sh build team` 转调 pro（需 `../centag-pro` 或 `CENTAG_PRO_PATH`）。  
+> **Team**：主程序 `centag-pro/cmd/centag-team`，经 `extension.Plugin` / `bundle/team` 接入；**仅在** `centag-pro` 执行 `./start.sh build team`（开源仓不提供 build team 入口）。  
 > personal 与 team 部署差异仍见 `config/profiles/`；商业增值与后续高级能力只加在 pro 插件/前端 pack。
 
 与之对应的是 **Config Profile**（`config/profiles/<name>/`）：部署蓝图（compose + manifest），在运行时决定行为。
@@ -37,7 +37,7 @@ Dist Profile 是 Centag 的**编译时插件子集**。能否真正注册，取�
 | 项 | minimal | personal | team | 本地 `cmd/centag` |
 |----|---------|---------|------|----------------------|
 | 入口 | `dist/minimal/main.go` | `dist/personal/main.go` | **`centag-pro/cmd/centag-team`** | `cmd/centag/main.go` |
-| 构建命令 | `./start.sh build minimal` | `./start.sh build personal` | `./start.sh build team`（转调 pro） | `./start.sh build be` / `make build` |
+| 构建命令 | `./start.sh build minimal` | `./start.sh build personal` | `centag-pro: ./start.sh build team` | `./start.sh build be` / `make build` |
 | 插件集合 | 精简 | **全功能** | **全功能（同 personal）** | 全功能（同 personal/team） |
 | 默认 DB（部署） | 无（文件配置） | SQLite | 外部 PostgreSQL | 视本地 `.env` |
 | 前端（Docker） | 否（config-generator） | 是 | 是 | 本地另跑 `build fe` |
@@ -169,9 +169,10 @@ Dist Profile 是 Centag 的**编译时插件子集**。能否真正注册，取�
 ### team（团队商业版）
 
 - 入口：**`centag-pro/cmd/centag-team`**（开源无 `dist/team`）
-- tags / 插件集合：与 personal 对齐 + pro `bundle/team` 插件
-- 构建：`./start.sh build team` 或 `centag-pro/scripts/build-team.sh`
-- **部署默认**：外部 PostgreSQL、向量等中间件单独部署；`CENTAG_EDITION=team`、多租户 / 可选 HA
+- tags / 插件集合：与 personal 对齐 + pro `bundle/team` + `internal/teamadmin` 产品实现
+- 构建：`cd ../centag-pro && ./start.sh build team`（开源 `start.sh` **拒绝** team，不转调）
+- Host 原语在开源 `pkg/{authapi,tokenusageapi,…}`；**产品 Handler 仅在 pro**（D6）
+- **部署默认**：外部 PostgreSQL、向量等中间件单独部署；`CENTAG_EDITION=team` + 有效 `CENTAG_LICENSE_KEY`
 - 对应 Config Profile：`config/profiles/team/`
 
 ### 本地 `cmd/centag`
@@ -202,13 +203,13 @@ Dist Profile 是 Centag 的**编译时插件子集**。能否真正注册，取�
 ### CLI
 
 ```bash
-./start.sh dist build        <minimal|personal|team>     # 编译发行版二进制
-./start.sh build be                                     # 本地开发二进制（cmd/centag）
-./start.sh dist docker-build <name> [--initdata <zip>]  # 构建 Docker 镜像
-./start.sh dist docker-run   <name> [--initdata <zip>]  # 运行容器
+./start.sh build minimal|personal    # 开源发行版
+./start.sh build be                  # 本地开发二进制（cmd/centag）
+# Team：cd ../centag-pro && ./start.sh build team
+./start.sh docker build minimal|personal   # 开源镜像；team 拒绝对开源 Dockerfile
 ```
 
-> 勿使用已废弃写法 `./start.sh build dist …`；发行版构建走独立子命令 `dist`。
+> 开源仓不提供可用的 `build team` / `dist/team`。Team 镜像与二进制一律在 `centag-pro`。
 ## 如何新增 Dist Profile
 
 1. 创建 `dist/<name>/`，编写 `main.go`（`_ import` 所需插件）
