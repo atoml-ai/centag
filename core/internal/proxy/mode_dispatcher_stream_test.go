@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -261,5 +262,73 @@ func TestResponsesStreamFormatter_ToolCalls(t *testing.T) {
 	}
 	if !strings.Contains(done, "event: response.completed") || !strings.Contains(done, `"call_id":"call_1"`) {
 		t.Fatalf("FormatDone missing completed function_call: %s", done)
+	}
+}
+
+func TestResponsesStreamFormatter_FormatErrorEmitsResponseFailed(t *testing.T) {
+	f := &responsesStreamFormatter{}
+	out := f.FormatError("gpt-5.6-terra", fmt.Errorf("boom: upstream 500"), "resp-err-1", 123)
+	for _, want := range []string{
+		"event: response.created",
+		"event: response.failed",
+		`"type":"response.failed"`,
+		`"status":"failed"`,
+		`"code":"server_error"`,
+		`"message":"boom: upstream 500"`,
+		`"id":"resp-err-1"`,
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("missing %q: %s", want, out)
+		}
+	}
+	// 错误事件绝不能命中 delta 路径导致客户端 union 校验失败
+	if strings.Contains(out, "response.output_text.delta") {
+		t.Fatalf("FormatError must not emit delta events: %s", out)
+	}
+	// 裸 {error:...} 数据行已被替换
+	if strings.Contains(out, "\"type\":\"pipeline_error\"") {
+		t.Fatalf("FormatError must not leak legacy pipeline_error payload: %s", out)
+	}
+}
+
+func TestOpenAIStreamFormatter_FormatErrorEmitsErrorAndDone(t *testing.T) {
+	f := &openaiStreamFormatter{}
+	out := f.FormatError("gpt-4o", fmt.Errorf("kaboom"), "chatcmpl-1", 0)
+	if !strings.Contains(out, "data: {") {
+		t.Fatalf("missing data line: %s", out)
+	}
+	if !strings.Contains(out, `"type":"server_error"`) {
+		t.Fatalf("missing server_error type: %s", out)
+	}
+	if !strings.Contains(out, "kaboom") {
+		t.Fatalf("missing error message: %s", out)
+	}
+	if !strings.HasSuffix(out, "data: [DONE]\n\n") {
+		t.Fatalf("missing [DONE] terminator: %q", out)
+	}
+}
+
+func TestAnthropicStreamFormatter_FormatErrorEmitsErrorEvent(t *testing.T) {
+	f := &anthropicStreamFormatter{}
+	out := f.FormatError("claude-3", fmt.Errorf("rate limited"), "", 0)
+	if !strings.HasPrefix(out, "event: error\n") {
+		t.Fatalf("missing event: error header: %q", out)
+	}
+	if !strings.Contains(out, `"type":"error"`) || !strings.Contains(out, `"type":"api_error"`) {
+		t.Fatalf("missing error envelope: %s", out)
+	}
+	if !strings.Contains(out, "rate limited") {
+		t.Fatalf("missing error message: %s", out)
+	}
+}
+
+func TestGeminiStreamFormatter_FormatErrorEmitsErrorData(t *testing.T) {
+	f := &geminiStreamFormatter{}
+	out := f.FormatError("gemini-1.5", fmt.Errorf("boom"), "", 0)
+	if !strings.HasPrefix(out, "data: {") {
+		t.Fatalf("missing data line: %q", out)
+	}
+	if !strings.Contains(out, `"status":"INTERNAL"`) || !strings.Contains(out, `"code":500`) {
+		t.Fatalf("missing gemini error fields: %s", out)
 	}
 }

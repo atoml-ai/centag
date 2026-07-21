@@ -907,10 +907,12 @@ func (d *ModeDispatcher) writeStreamResponse(
 		if result.Chunk != nil {
 			ensureSSEHeaders()
 			if result.Chunk.Error != nil {
-				// 错误返回
-				errorJSON := fmt.Sprintf(`data: {"error":{"message":"%s","type":"pipeline_error"}}`+"\n\n", result.Chunk.Error.Error())
-				fmt.Fprint(c.Writer, errorJSON)
-				flusher.Flush()
+				// 错误返回 - 按当前协议的 SSE 错误事件规范格式化，避免客户端 schema 校验失败把上游错误吞掉
+				errorLine := formatter.FormatError(model, result.Chunk.Error, responseID, created)
+				if errorLine != "" {
+					fmt.Fprint(c.Writer, errorLine)
+					flusher.Flush()
+				}
 				return result.Chunk.Error
 			}
 
@@ -1220,6 +1222,8 @@ type StreamFormatter interface {
 	// FormatDone 格式化 usage chunk + 结束标记
 	// finishReason 为实际完成原因（如 tool_calls/stop/length），空字符串时回退到 stop
 	FormatDone(model string, usage map[string]interface{}, finishReason string) string
+	// FormatError 在流式过程中发生错误时输出协议相容的错误事件，避免客户端 schema 校验失败把上游错误吞掉
+	FormatError(model string, err error, responseID string, created int64) string
 	// BuildUsage 从 finalOutput 构建 usage map
 	BuildUsage(finalOutput *pipeline.PipelineOutput) map[string]interface{}
 }
@@ -1314,6 +1318,30 @@ func (f *openaiStreamFormatter) BuildUsage(finalOutput *pipeline.PipelineOutput)
 		usage["total_tokens"] = finalOutput.ExecutionLog.TotalTokens
 	}
 	return usage
+}
+
+// FormatError 输出 OpenAI Chat Completions 风格的 SSE 错误块，并以 [DONE] 终止。
+// OpenAI 流式协议未定义错误事件类型，客户端按 `data: {error:...}` 兼容。
+func (f *openaiStreamFormatter) FormatError(model string, err error, responseID string, created int64) string {
+	if err == nil {
+		return ""
+	}
+	msg := err.Error()
+	if msg == "" {
+		msg = "internal error"
+	}
+	payload := map[string]interface{}{
+		"error": map[string]interface{}{
+			"message": msg,
+			"type":    "server_error",
+			"code":    nil,
+		},
+	}
+	if model != "" {
+		payload["model"] = model
+	}
+	dataBytes, _ := json.Marshal(payload)
+	return fmt.Sprintf("data: %s\n\ndata: [DONE]\n\n", string(dataBytes))
 }
 
 // anthropicStreamFormatter Anthropic SSE 格式化器
@@ -1481,6 +1509,27 @@ func (f *anthropicStreamFormatter) BuildUsage(finalOutput *pipeline.PipelineOutp
 	return usage
 }
 
+// FormatError 输出 Anthropic 风格的 `event: error` 块。
+// Anthropic 流式协议要求 error 事件携带 {type:"error", error:{type,message}}。
+func (f *anthropicStreamFormatter) FormatError(model string, err error, responseID string, created int64) string {
+	if err == nil {
+		return ""
+	}
+	msg := err.Error()
+	if msg == "" {
+		msg = "internal error"
+	}
+	payload := map[string]interface{}{
+		"type": "error",
+		"error": map[string]interface{}{
+			"type":    "api_error",
+			"message": msg,
+		},
+	}
+	dataBytes, _ := json.Marshal(payload)
+	return fmt.Sprintf("event: error\ndata: %s\n\n", string(dataBytes))
+}
+
 // geminiStreamFormatter Gemini SSE 格式化器
 type geminiStreamFormatter struct{}
 
@@ -1511,6 +1560,27 @@ func (f *geminiStreamFormatter) FormatChunk(model string, chunk *plugin.StreamCh
 
 func (f *geminiStreamFormatter) FormatDone(model string, usage map[string]interface{}, finishReason string) string {
 	return ""
+}
+
+// FormatError 输出 Gemini 风格的流式错误块。
+// Gemini 流式 SSE 用 `data: {"error":{code,message,status}}` 表示失败。
+func (f *geminiStreamFormatter) FormatError(model string, err error, responseID string, created int64) string {
+	if err == nil {
+		return ""
+	}
+	msg := err.Error()
+	if msg == "" {
+		msg = "internal error"
+	}
+	payload := map[string]interface{}{
+		"error": map[string]interface{}{
+			"code":    500,
+			"message": msg,
+			"status":  "INTERNAL",
+		},
+	}
+	dataBytes, _ := json.Marshal(payload)
+	return fmt.Sprintf("data: %s\n\n", string(dataBytes))
 }
 
 func (f *geminiStreamFormatter) BuildUsage(finalOutput *pipeline.PipelineOutput) map[string]interface{} {
@@ -1792,6 +1862,47 @@ func (f *responsesStreamFormatter) BuildUsage(finalOutput *pipeline.PipelineOutp
 		}
 	}
 	return nil
+}
+
+// FormatError 输出 Responses 流式协议的 `response.failed` 事件。
+// OpenAI Responses SSE 严格要求事件类型命中已知 union；裸 `{error:...}` 数据行
+// 会触发 `type: expected "response.output_text.delta"` 等校验失败并把上游错误吞掉。
+// 因此必须先发 response.created（必要时），再发 response.failed。
+func (f *responsesStreamFormatter) FormatError(model string, err error, responseID string, created int64) string {
+	if err == nil {
+		return ""
+	}
+	if !f.opened {
+		if responseID == "" {
+			responseID = fmt.Sprintf("resp-%d", time.Now().UnixNano())
+		}
+		if created == 0 {
+			created = time.Now().Unix()
+		}
+	}
+	var sb strings.Builder
+	f.ensureResponse(&sb, model, responseID, created)
+
+	msg := err.Error()
+	if msg == "" {
+		msg = "internal error"
+	}
+	resp := map[string]interface{}{
+		"id":         f.responseID,
+		"object":     "response",
+		"created_at": f.created,
+		"status":     "failed",
+		"model":      f.model,
+		"error": map[string]interface{}{
+			"code":    "server_error",
+			"message": msg,
+		},
+		"output": []interface{}{},
+	}
+	f.writeEvent(&sb, "response.failed", map[string]interface{}{
+		"response": resp,
+	})
+	return sb.String()
 }
 
 // getStreamFormatter 根据请求上下文获取对应的流式格式化器
