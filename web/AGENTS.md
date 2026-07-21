@@ -73,7 +73,7 @@ VITE_API_BASE_URL=http://localhost:20060
 
 ## 构建输出
 
-构建产物输出到 `../var/static/`，由后端服务提供。
+构建产物默认输出到 `~/.centag/lib/<edition>/static/`（与 `scripts/install.sh` 一致），由后端服务提供。
 
 ## 相关文档
 

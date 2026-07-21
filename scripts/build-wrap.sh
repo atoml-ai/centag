@@ -2,17 +2,22 @@
 # Build centag-wrap (apps/wrap) for the *current* host OS/arch.
 # Independent go.mod — keep outside root go.work (GOWORK=off).
 #
-# Output:
-#   bin/wrap/<goos>-<goarch>/centag-wrap[.exe]
-#   bin/wrap/centag-wrap[.exe]   (convenience copy for current host)
+# Output (install-compatible):
+#   ~/.centag/bin/centag-wrap[.exe]                         # host PATH binary
+#   ~/.centag/var/cross/wrap/<goos>-<goarch>/centag-wrap    # arch-specific copy
 #
+# Override root: CENTAG_INSTALL_ROOT
 # Source-of-truth (client / CI without start.sh):
 #   cd apps/wrap && GOWORK=off go build -o centag-wrap .
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=scripts/lib/centag-layout.sh
+source "${ROOT}/scripts/lib/centag-layout.sh"
+centag_layout_init
+
 WRAP_DIR="${ROOT}/apps/wrap"
-OUT_ROOT="${ROOT}/bin/wrap"
+CROSS_ROOT="${CENTAG_CROSS_DIR}/wrap"
 
 if ! command -v go >/dev/null 2>&1; then
   echo "error: go is required" >&2
@@ -45,11 +50,10 @@ if [[ "$GOOS" == "windows" ]]; then
   EXT=".exe"
 fi
 
-OUT_DIR="${OUT_ROOT}/${GOOS}-${GOARCH}"
+OUT_DIR="${CROSS_ROOT}/${GOOS}-${GOARCH}"
 OUT_BIN="${OUT_DIR}/centag-wrap${EXT}"
-LATEST_BIN="${OUT_ROOT}/centag-wrap${EXT}"
 
-mkdir -p "${OUT_DIR}"
+mkdir -p "${OUT_DIR}" "${CENTAG_BIN_DIR}"
 
 echo "==> building centag-wrap → ${OUT_BIN}"
 (
@@ -59,7 +63,13 @@ echo "==> building centag-wrap → ${OUT_BIN}"
     go build -trimpath -ldflags="-s -w" -o "${OUT_BIN}" .
 )
 
-cp -f "${OUT_BIN}" "${LATEST_BIN}"
+# Host convenience / install layout: only promote when targeting current host.
+HOST_GOOS="$(go env GOOS)"
+HOST_GOARCH="$(go env GOARCH)"
+if [[ "$GOOS" == "$HOST_GOOS" && "$GOARCH" == "$HOST_GOARCH" ]]; then
+  centag_install_wrap_bin "${OUT_BIN}" "${EXT}"
+  echo "OK: ${CENTAG_BIN_DIR}/centag-wrap${EXT} (install bin/)"
+fi
+
 echo "OK: ${OUT_BIN}"
-echo "OK: ${LATEST_BIN} (current-host convenience link)"
 echo "真源命令: cd apps/wrap && GOWORK=off go build -o centag-wrap ."

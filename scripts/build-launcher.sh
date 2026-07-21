@@ -4,15 +4,20 @@
 # Default: lite (no CGO, cross-compile OK) → centag-launcher
 # Tray:    --tray / CENTAG_LAUNCHER_TRAY=1 (CGO + systray) → centag-launcher-tray
 #
-# Output:
-#   bin/launcher/<goos>-<goarch>/centag-launcher[.exe]          # lite
-#   bin/launcher/<goos>-<goarch>/centag-launcher-tray[.exe]     # tray
-#   bin/launcher/centag-launcher[.exe]                          # host convenience (active variant)
+# Output (install-compatible root):
+#   ~/.centag/var/cross/launcher/<goos>-<goarch>/centag-launcher[.exe]
+#   ~/.centag/bin/centag-launcher[.exe]   # host convenience (active variant)
+#
+# Override root: CENTAG_INSTALL_ROOT
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=scripts/lib/centag-layout.sh
+source "${ROOT}/scripts/lib/centag-layout.sh"
+centag_layout_init
+
 LAUNCHER_DIR="${ROOT}/apps/launcher"
-OUT_ROOT="${ROOT}/bin/launcher"
+CROSS_ROOT="${CENTAG_CROSS_DIR}/launcher"
 
 TRAY=0
 if [[ "${1:-}" == "--tray" ]] || [[ "${CENTAG_LAUNCHER_TRAY:-}" == "1" ]]; then
@@ -49,13 +54,12 @@ if [[ "$GOOS" == "windows" ]]; then
   EXT=".exe"
 fi
 
-OUT_DIR="${OUT_ROOT}/${GOOS}-${GOARCH}"
-mkdir -p "${OUT_DIR}"
+OUT_DIR="${CROSS_ROOT}/${GOOS}-${GOARCH}"
+mkdir -p "${OUT_DIR}" "${CENTAG_BIN_DIR}"
 
 if [[ "$TRAY" == "1" ]]; then
   OUT_BIN="${OUT_DIR}/centag-launcher-tray${EXT}"
-  LATEST_BIN="${OUT_ROOT}/centag-launcher-tray${EXT}"
-  # Also refresh convenience "centag-launcher" when building tray on request? Keep separate.
+  LATEST_BIN="${CENTAG_BIN_DIR}/centag-launcher-tray${EXT}"
   echo "==> launcher tray host: ${HOST_OS}/${HOST_ARCH} → target ${GOOS}/${GOARCH} (CGO)"
   if [[ "${GOOS}" != "$(go env GOOS)" || "${GOARCH}" != "$(go env GOARCH)" ]]; then
     echo "    warn: tray/systray cross-compile often fails — prefer building on the target OS" >&2
@@ -68,7 +72,7 @@ if [[ "$TRAY" == "1" ]]; then
   )
 else
   OUT_BIN="${OUT_DIR}/centag-launcher${EXT}"
-  LATEST_BIN="${OUT_ROOT}/centag-launcher${EXT}"
+  LATEST_BIN="${CENTAG_BIN_DIR}/centag-launcher${EXT}"
   echo "==> launcher lite host: ${HOST_OS}/${HOST_ARCH} → target ${GOOS}/${GOARCH} (CGO_ENABLED=0)"
   echo "==> building centag-launcher (lite) → ${OUT_BIN}"
   (
@@ -78,6 +82,10 @@ else
   )
 fi
 
-cp -f "${OUT_BIN}" "${LATEST_BIN}"
+HOST_GOOS="$(go env GOOS)"
+HOST_GOARCH="$(go env GOARCH)"
+if [[ "$GOOS" == "$HOST_GOOS" && "$GOARCH" == "$HOST_GOARCH" ]]; then
+  cp -f "${OUT_BIN}" "${LATEST_BIN}"
+  echo "OK: ${LATEST_BIN} (install bin/)"
+fi
 echo "OK: ${OUT_BIN}"
-echo "OK: ${LATEST_BIN} (current-host convenience copy)"

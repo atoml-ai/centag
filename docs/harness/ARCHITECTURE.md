@@ -139,7 +139,7 @@ cmd → server → 领域层 → config/database
 
 **约束**：
 - 仅通过 HTTP API / 子进程与主项目交互，不能直接引用 `core/internal` 业务包
-- 构建产物：web 输出到 `bin/server/static/`；launcher 输出到 `bin/launcher/`（可选）
+- 构建产物（与 `scripts/install.sh` 布局一致）：web → `~/.centag/lib/<edition>/static/`；主机二进制 → `~/.centag/bin/`；跨平台中间物 → `~/.centag/var/cross/`（可选 launcher/wrap）
 - launcher 独立 `go.mod`，不加入根 `go.work`，删除不影响发行版
 
 **详细说明**：见 `web/README.md`、`apps/launcher/README.md`

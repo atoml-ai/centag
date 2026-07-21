@@ -131,15 +131,21 @@ main() {
         wait_for_service "$vector_host" "${vector_port:-8000}" "VectorDB" || true
     fi
 
-    # 优先使用挂载进来的本地编译二进制
-    if [ -x /app/bin/centag ]; then
+    # 优先使用挂载进来的本地编译二进制（install 布局: centag-<edition>）
+    if [ -x /app/bin/centag-personal ]; then
+        CENTAG_BIN="/app/bin/centag-personal"
+        print_info "使用本地编译二进制: $CENTAG_BIN"
+        print_warn "提示: 修改本地 ~/.centag/lib/personal 后，执行 ./start.sh docker-restart 即可生效"
+    elif [ -x /app/bin/centag-minimal ]; then
+        CENTAG_BIN="/app/bin/centag-minimal"
+        print_info "使用本地编译二进制: $CENTAG_BIN"
+    elif [ -x /app/bin/centag ]; then
         CENTAG_BIN="/app/bin/centag"
         print_info "使用本地编译二进制: $CENTAG_BIN"
-        print_warn "提示: 修改本地 bin/centag 后，执行 ./start.sh docker-restart 即可生效"
     else
         CENTAG_BIN="/app/centag"
-        print_error "未找到本地编译二进制: /app/bin/centag"
-        print_info "请先在本地编译: go build -o bin/centag ./cmd/centag/main.go"
+        print_error "未找到本地编译二进制: /app/bin/centag-personal"
+        print_info "请先在本地编译: make build"
         print_info "使用容器内置二进制: $CENTAG_BIN"
     fi
 

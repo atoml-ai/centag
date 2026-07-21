@@ -1,7 +1,8 @@
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import { existsSync } from 'fs'
-import { resolve, dirname } from 'path'
+import { homedir } from 'os'
+import { resolve, dirname, join } from 'path'
 import { fileURLToPath } from 'url'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -17,7 +18,18 @@ function resolveTeamPackDir(): string {
   return resolve(__dirname, 'src/packs/team-stub')
 }
 
+/** Align with scripts/install.sh / scripts/lib/centag-layout.sh (default ~/.centag). */
+function resolveStaticOutDir(): string {
+  if (process.env.CENTAG_STATIC_DIR) {
+    return resolve(process.env.CENTAG_STATIC_DIR)
+  }
+  const root = process.env.CENTAG_INSTALL_ROOT || join(homedir(), '.centag')
+  const edition = process.env.CENTAG_EDITION || 'personal'
+  return join(root, 'lib', edition, 'static')
+}
+
 const teamPackDir = resolveTeamPackDir()
+const staticOutDir = resolveStaticOutDir()
 
 export default defineConfig(({ mode }) => ({
   plugins: [vue()],
@@ -55,7 +67,7 @@ export default defineConfig(({ mode }) => ({
     }
   },
   build: {
-    outDir: '../bin/server/static',
+    outDir: staticOutDir,
     // 输出在 webui 之外，须显式允许清空，避免残留旧 hash 资源
     emptyOutDir: true,
     assetsDir: 'assets',

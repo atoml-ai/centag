@@ -36,8 +36,8 @@
 真源构建：
 
 ```bash
-./scripts/build-launcher.sh          # lite → bin/launcher/.../centag-launcher
-./scripts/build-launcher.sh --tray   # tray → bin/launcher/.../centag-launcher-tray
+./scripts/build-launcher.sh          # lite → ~/.centag/var/cross/launcher/... + bin/
+./scripts/build-launcher.sh --tray   # tray → ~/.centag/var/cross/launcher/... + bin/
 ```
 
 ## 平台支持
@@ -54,10 +54,10 @@ tray 因 `energye/systray` 依赖 **CGO**，请在目标系统上本地构建；
 产物：
 
 ```
-bin/launcher/<goos>-<goarch>/centag-launcher[.exe]
-bin/launcher/<goos>-<goarch>/centag-launcher-tray[.exe]
-bin/launcher/centag-launcher[.exe]        # 当前主机 lite 便捷副本
-bin/launcher/centag-launcher-tray[.exe]   # 当前主机 tray 便捷副本
+~/.centag/var/cross/launcher/<goos>-<goarch>/centag-launcher[.exe]
+~/.centag/var/cross/launcher/<goos>-<goarch>/centag-launcher-tray[.exe]
+~/.centag/bin/centag-launcher[.exe]        # 当前主机 lite 便捷副本
+~/.centag/bin/centag-launcher-tray[.exe]   # 当前主机 tray 便捷副本
 ```
 
 ## 能力

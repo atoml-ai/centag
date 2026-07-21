@@ -17,7 +17,10 @@ NC='\033[0m' # No Color
 
 # 项目根目录
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-CERT_DIR="$PROJECT_ROOT/bin/server/certs"
+# shellcheck source=scripts/lib/centag-layout.sh
+source "${PROJECT_ROOT}/scripts/lib/centag-layout.sh"
+centag_layout_init
+CERT_DIR="${CENTAG_EDITION_LIB}/certs"
 
 # CA证书路径
 CA_CERT="$CERT_DIR/ca.crt"

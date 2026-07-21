@@ -29,4 +29,4 @@ echo "Building project..."
 npm run build
 
 echo "Build completed successfully!"
-echo "Output directory: ../bin/server/static"
+echo "Output directory: ${CENTAG_STATIC_DIR:-$HOME/.centag/lib/personal/static}"

@@ -14,12 +14,10 @@ var projectRootCache string
 // Resolution order (deterministic, no fallbacks):
 //  1. PROJECT_ROOT environment variable (absolute path to project root)
 //  2. Parent when the executable resides under bin/ or var/bin/
-//     (convention: ./bin/server/centag → ../../)
+//     (legacy: ./bin/server/centag → ../../)
 //  3. Directory containing the executable itself
-//
-// This convention ensures both physical-machine and container deployments
-// share the same directory layout: binary in ./bin/server/, config in
-// ./config/initdata/, secrets in ./config/secrets/, etc.
+//     (install/dev layout: ~/.centag/lib/<edition>/centag-<edition>;
+//     install wrapper sets PROJECT_ROOT to that lib dir)
 //
 // For development with "go run", set PROJECT_ROOT or INITDATA_PATH explicitly.
 func ProjectRoot() string {

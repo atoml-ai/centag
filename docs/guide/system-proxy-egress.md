@@ -19,7 +19,7 @@
 ./start.sh run wrap run --server http://<advertise_host>:20060 -- opencode
 
 # 或真源二进制
-./bin/wrap/centag-wrap run --server http://<advertise_host>:20060 -- opencode
+~/.centag/bin/centag-wrap run --server http://<advertise_host>:20060 -- opencode
 ```
 
 本机 Centag（无 `--server`）：

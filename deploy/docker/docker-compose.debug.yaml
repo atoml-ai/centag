@@ -10,9 +10,9 @@ services:
     # 将 pg.atoml.net 解析到宿主机（通过 Docker port mapping 访问 PostgreSQL 容器）
     extra_hosts:
       - "pg.atoml.net:host-gateway"
-    # 挂载本地 bin 目录和 debug entrypoint
+    # 挂载本地 install 布局 lib/<edition>（默认 personal）与 debug entrypoint
     volumes:
-      - ../bin/server:/app/bin
+      - ${CENTAG_INSTALL_ROOT:-${HOME}/.centag}/lib/${CENTAG_EDITION:-personal}:/app/bin
       - ./entrypoint.debug.sh:/app/entrypoint.debug.sh
       - centag_storage:/app/storage
       - centag_logs:/app/logs

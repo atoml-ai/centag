@@ -20,12 +20,30 @@ readonly NC='\033[0m'
 
 # Project config
 readonly PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-readonly BIN_DIR="${PROJECT_ROOT}/bin/server"
-readonly PACKAGES_DIR="${PROJECT_ROOT}/bin/packages"
-readonly STATIC_DIR="${PROJECT_ROOT}/bin/server/static"
 readonly BACKEND_PORT=20060
 
 cd "$PROJECT_ROOT" || exit 1
+
+# Install-compatible layout (default: ~/.centag — override with CENTAG_INSTALL_ROOT)
+# shellcheck source=scripts/lib/centag-layout.sh
+source "${PROJECT_ROOT}/scripts/lib/centag-layout.sh"
+centag_layout_init
+# Compatibility aliases used throughout this script:
+#   BIN_DIR     = lib/<edition> (binary + static + storage/logs)
+#   SERVER_BIN  = centag-<edition>
+BIN_DIR="${CENTAG_EDITION_LIB}"
+PACKAGES_DIR="${CENTAG_PACKAGES_DIR}"
+STATIC_DIR="${CENTAG_STATIC_DIR}"
+SERVER_BIN="${CENTAG_SERVER_BIN}"
+
+# Switch active edition paths (personal|minimal|...).
+centag_set_edition() {
+    centag_layout_use_edition "$1"
+    BIN_DIR="${CENTAG_EDITION_LIB}"
+    PACKAGES_DIR="${CENTAG_PACKAGES_DIR}"
+    STATIC_DIR="${CENTAG_STATIC_DIR}"
+    SERVER_BIN="${CENTAG_SERVER_BIN}"
+}
 
 # Allow Go to automatically download required toolchain
 export GOTOOLCHAIN=auto
@@ -134,7 +152,7 @@ kill_port() {
     fi
 
     # 方法5: 仅清理当前项目目录下的 centag 进程 (最后手段)
-    pids=$(pgrep -f "${BIN_DIR}/centag" || true)
+    pids=$(pgrep -f "${BIN_DIR}/${SERVER_BIN}" || true)
     if [ -n "$pids" ]; then
         print_warn "Found centag binary processes: $pids"
         found=1
@@ -494,8 +512,18 @@ _compile_go_binary() {
     local ldflags_str="-s -w"
     [ -n "$extra_ldflags" ] && ldflags_str="$ldflags_str $extra_ldflags"
 
-    print_info "编译 ${output_name} ..."
-    eval go build $tags_arg -ldflags \"$ldflags_str\" -o "${PROJECT_ROOT}/bin/server/${output_name}" "$package_path"
+    local edition=""
+    case "$output_name" in
+        centag-*) edition="${output_name#centag-}" ;;
+        centag) edition="${CENTAG_EDITION:-personal}"; output_name="centag-${edition}" ;;
+        *) edition="${CENTAG_EDITION:-personal}" ;;
+    esac
+    local out_dir
+    out_dir="$(centag_edition_lib "$edition")"
+    mkdir -p "$out_dir"
+
+    print_info "编译 ${output_name} → ${out_dir}/ ..."
+    eval go build $tags_arg -ldflags \"$ldflags_str\" -o "${out_dir}/${output_name}" "$package_path"
 
     if [ $? -ne 0 ]; then
         print_error "编译失败: ${output_name}"
@@ -503,9 +531,11 @@ _compile_go_binary() {
         exit 1
     fi
 
-    local size=$(ls -lh "${PROJECT_ROOT}/bin/server/${output_name}" | awk '{print $5}')
+    centag_install_edition_links "$edition"
+
+    local size=$(ls -lh "${out_dir}/${output_name}" | awk '{print $5}')
     print_success "${output_name} 编译完成 (${size})"
-    print_info "二进制: ${PROJECT_ROOT}/bin/server/${output_name}"
+    print_info "二进制: ${out_dir}/${output_name}"
 
     cd "$PROJECT_ROOT"
 }
@@ -569,12 +599,12 @@ resolve_launcher_bin() {
     if [ "$goos" = "windows" ]; then
         ext=".exe"
     fi
-    plat="${PROJECT_ROOT}/bin/launcher/${goos}-${goarch}/centag-launcher${ext}"
+    plat="${CENTAG_CROSS_DIR}/launcher/${goos}-${goarch}/centag-launcher${ext}"
     if [ -x "$plat" ] || [ -f "$plat" ]; then
         echo "$plat"
         return 0
     fi
-    local latest="${PROJECT_ROOT}/bin/launcher/centag-launcher${ext}"
+    local latest="${CENTAG_BIN_DIR}/centag-launcher${ext}"
     if [ -x "$latest" ] || [ -f "$latest" ]; then
         echo "$latest"
         return 0
@@ -608,12 +638,12 @@ resolve_launcher_tray_bin() {
     if [ "$goos" = "windows" ]; then
         ext=".exe"
     fi
-    plat="${PROJECT_ROOT}/bin/launcher/${goos}-${goarch}/centag-launcher-tray${ext}"
+    plat="${CENTAG_CROSS_DIR}/launcher/${goos}-${goarch}/centag-launcher-tray${ext}"
     if [ -x "$plat" ] || [ -f "$plat" ]; then
         echo "$plat"
         return 0
     fi
-    local latest="${PROJECT_ROOT}/bin/launcher/centag-launcher-tray${ext}"
+    local latest="${CENTAG_BIN_DIR}/centag-launcher-tray${ext}"
     if [ -x "$latest" ] || [ -f "$latest" ]; then
         echo "$latest"
         return 0
@@ -630,12 +660,12 @@ resolve_wrap_bin() {
     if [ "$goos" = "windows" ]; then
         ext=".exe"
     fi
-    plat="${PROJECT_ROOT}/bin/wrap/${goos}-${goarch}/centag-wrap${ext}"
+    plat="${CENTAG_CROSS_DIR}/wrap/${goos}-${goarch}/centag-wrap${ext}"
     if [ -x "$plat" ] || [ -f "$plat" ]; then
         echo "$plat"
         return 0
     fi
-    local latest="${PROJECT_ROOT}/bin/wrap/centag-wrap${ext}"
+    local latest="${CENTAG_BIN_DIR}/centag-wrap${ext}"
     if [ -x "$latest" ] || [ -f "$latest" ]; then
         echo "$latest"
         return 0
@@ -743,8 +773,10 @@ build_distribution() {
 
 # Build Backend
 build_backend() {
+    centag_set_edition "${CENTAG_EDITION:-personal}"
     mkdir -p "$BIN_DIR"
-    make build
+    CENTAG_INSTALL_ROOT="${CENTAG_INSTALL_ROOT}" CENTAG_EDITION="${CENTAG_EDITION}" make build
+    centag_install_edition_links "${CENTAG_EDITION}"
 
     # 检查守护进程是否在运行
     local daemon_pid_file="$BIN_DIR/storage/centag.daemon.pid"
@@ -825,7 +857,7 @@ pack() {
     print_info "通过统一脚本打包更新包..."
 
     # 确保已构建（如果没指定 --upload，仍然检查）
-    if [ ! -f "$BIN_DIR/centag" ]; then
+    if [ ! -f "$BIN_DIR/$SERVER_BIN" ]; then
         print_error "未找到编译后的 centag，请先执行构建"
         echo "  ./start.sh build"
         exit 1
@@ -837,7 +869,7 @@ pack() {
         bash "$package_script" service \
             --version "$VERSION" \
             --build-time "$BUILD_TIME" \
-            --source-bin "$BIN_DIR/centag" \
+            --source-bin "$BIN_DIR/$SERVER_BIN" \
             --source-static "$BIN_DIR/static" \
             --out-dir "$PACKAGES_DIR"
     )"
@@ -1158,11 +1190,11 @@ stack_cmd() {
 run() {
     load_env
     kill_backend_port_or_exit || return 1
-    [ ! -f "$BIN_DIR/centag" ] && build
+    [ ! -f "$BIN_DIR/$SERVER_BIN" ] && build
     print_test_examples
     cd "$BIN_DIR"
     print_info "Starting backend service from: $BIN_DIR (port: $BACKEND_PORT)..."
-    ./centag
+    ./"$SERVER_BIN"
     cd "$PROJECT_ROOT"
 }
 
@@ -1300,8 +1332,8 @@ debug() {
     # 开发模式下同时写文件与 stdout，避免仅 file 时启动失败在终端无输出
     centag_export_debug_console_env
 
-    # 覆盖 secrets 中的 edition
-    export CENTAG_EDITION=personal
+    # 覆盖 secrets 中的 edition；对齐 ~/.centag/lib/personal
+    centag_set_edition personal
 
     # ── 清理所有残留进程（保证前台独占）──────────────────────────
     cleanup_residual_processes
@@ -1322,13 +1354,13 @@ debug() {
         cd "$webui_dir" && npm install && cd "$PROJECT_ROOT"
     fi
 
-    # 确保 bin/static 目录存在
+    # 确保 lib/<edition>/static 目录存在
     mkdir -p "$BIN_DIR/static"
 
-    # 后台启动 Vite watch 模式：监听 web/src 变化，直接构建到 bin/static/
+    # 后台启动 Vite watch：监听 web/src，构建到 lib/<edition>/static
     print_info "启动前端 watch 构建（变化后刷新浏览器即可生效）..."
     cd "$webui_dir"
-    npx vite build --watch --outDir "$BIN_DIR/static" --emptyOutDir false > /tmp/centag-vite.log 2>&1 &
+    CENTAG_STATIC_DIR="$BIN_DIR/static" npx vite build --watch --outDir "$BIN_DIR/static" --emptyOutDir false > /tmp/centag-vite.log 2>&1 &
     local vite_pid=$!
     cd "$PROJECT_ROOT"
 
@@ -1375,7 +1407,7 @@ debug() {
 
     # 前台启动后端（日志直接输出到控制台）
     cd "$BIN_DIR"
-    CENTAG_EDITION=personal ./centag
+    CENTAG_EDITION=personal ./"$SERVER_BIN"
     cd "$PROJECT_ROOT"
 }
 
@@ -1466,7 +1498,7 @@ run_edition() {
     print_info "启动桌面启动器 edition=${run_edition} platform=$(go env GOOS)/$(go env GOARCH)"
     print_info "  launcher: ${launcher_bin}"
     print_info "  sidecar: ${sidecar}"
-    print_info "  data: 用户数据目录（与 bin/server 开发库分离；见 apps/launcher/README）"
+    print_info "  data: 用户数据目录（与 lib/<edition> 开发库分离；见 apps/launcher/README）"
     # macOS bash 3.2 + set -u: empty "${arr[@]}" is "unbound variable"
     if [ ${#extra_args[@]} -gt 0 ]; then
         exec "$launcher_bin" -edition="$run_edition" -bin="$sidecar" "${extra_args[@]}"
@@ -1480,7 +1512,7 @@ _debug_minimal() {
     load_env
     detect_database_mode
     centag_export_debug_console_env
-    export CENTAG_EDITION=minimal
+    centag_set_edition minimal
     export INITDATA_PATH="${PROJECT_ROOT}/config/profiles/minimal/initdata"
 
     cleanup_residual_processes
@@ -1556,7 +1588,7 @@ daemon-debug() {
     detect_database_mode
     centag_export_debug_console_env
     kill_backend_port_or_exit || return 1
-    [ ! -f "$BIN_DIR/centag" ] && build backend >/dev/null 2>&1
+    [ ! -f "$BIN_DIR/$SERVER_BIN" ] && build backend >/dev/null 2>&1
     print_test_examples
     print_info "Starting with daemon in debug mode from: $BIN_DIR..."
     DAEMON_DEBUG=true "${PROJECT_ROOT}/scripts/tools/daemon.sh" "$BIN_DIR"
@@ -1702,7 +1734,7 @@ stop() {
 
     # 3. 确保所有 centag 二进制进程都被清理
     print_info "Cleaning up any remaining centag processes..."
-    local remaining_pids=$(ps aux | grep -E "bin/server/centag|/centag " | grep -v grep | grep -v "start.sh" | awk '{print $2}' || true)
+    local remaining_pids=$(ps aux | grep -E ".centag/lib/.*/centag-|/centag-personal|/centag-minimal|/centag " | grep -v grep | grep -v "start.sh" | awk '{print $2}' || true)
     if [ -n "$remaining_pids" ]; then
         print_warn "Found remaining processes: $remaining_pids"
         for pid in $remaining_pids; do
@@ -1720,7 +1752,7 @@ stop() {
         fi
     fi
 
-    local process_check=$(ps aux | grep -E "bin/server/centag|/centag " | grep -v grep | grep -v "start.sh" || true)
+    local process_check=$(ps aux | grep -E ".centag/lib/.*/centag-|/centag-personal|/centag-minimal|/centag " | grep -v grep | grep -v "start.sh" || true)
     if [ -n "$process_check" ]; then
         print_error "Warning: Some centag processes may still be running:"
         echo "$process_check"
@@ -1734,7 +1766,7 @@ force-stop() {
     print_warn "Force stopping all centag related processes..."
 
     # 1. 强制杀死所有 centag 二进制进程
-    local all_pids=$(ps aux | grep -E "bin/server/centag|/centag " | grep -v grep | grep -v "start.sh" | awk '{print $2}' || true)
+    local all_pids=$(ps aux | grep -E ".centag/lib/.*/centag-|/centag-personal|/centag-minimal|/centag " | grep -v grep | grep -v "start.sh" | awk '{print $2}' || true)
     if [ -n "$all_pids" ]; then
         print_info "Found centag binary processes: $all_pids"
         for pid in $all_pids; do
@@ -1764,7 +1796,7 @@ force-stop() {
     sleep 2
 
     # 4. 验证
-    local remaining=$(ps aux | grep -E "bin/server/centag|/centag " | grep -v grep | grep -v "start.sh" || true)
+    local remaining=$(ps aux | grep -E ".centag/lib/.*/centag-|/centag-personal|/centag-minimal|/centag " | grep -v grep | grep -v "start.sh" || true)
     if [ -n "$remaining" ]; then
         print_error "Some processes still running:"
         echo "$remaining"
@@ -2057,14 +2089,16 @@ webui_build() {
     fi
 
     print_info "开始构建..."
+    export CENTAG_STATIC_DIR="${STATIC_DIR}"
+    export CENTAG_INSTALL_ROOT CENTAG_EDITION
     npm run build
 
     if [ $? -eq 0 ]; then
         print_success "Web UI 构建完成!"
-        print_info "构建产物位置: ../bin/server/static"
+        print_info "构建产物位置: ${STATIC_DIR}"
         cd "$PROJECT_ROOT"
 
-        # 静态文件已直接构建到 bin/server/static，无需同步
+        # 静态文件已直接构建到 lib/<edition>/static，无需同步
         print_success "静态文件位置: ${STATIC_DIR}/"
     else
         print_error "Web UI 构建失败"
@@ -2099,7 +2133,7 @@ webui_lint() {
 
 webui_clean() {
     print_info "清理 Web UI 构建产物..."
-    local static_dir="${PROJECT_ROOT}/bin/server/static"
+    local static_dir="${STATIC_DIR}"
     rm -rf "$static_dir"
     print_success "清理完成"
 }
@@ -2132,11 +2166,11 @@ test() {
 start_backend_foreground() {
     load_env
     kill_backend_port_or_exit || return 1
-    [ ! -f "$BIN_DIR/centag" ] && build backend >/dev/null 2>&1
+    [ ! -f "$BIN_DIR/$SERVER_BIN" ] && build backend >/dev/null 2>&1
     print_test_examples
     cd "$BIN_DIR"
     print_info "Starting backend from: $BIN_DIR (port: $BACKEND_PORT)..."
-    ./centag
+    ./"$SERVER_BIN"
     cd "$PROJECT_ROOT"
 }
 
@@ -2144,7 +2178,7 @@ start_backend_foreground() {
 start_backend_background() {
     load_env
     kill_backend_port_or_exit || return 1
-    [ ! -f "$BIN_DIR/centag" ] && build backend >/dev/null 2>&1
+    [ ! -f "$BIN_DIR/$SERVER_BIN" ] && build backend >/dev/null 2>&1
     print_test_examples
     print_info "Starting daemon from: $BIN_DIR..."
     "${PROJECT_ROOT}/scripts/tools/daemon.sh" "$BIN_DIR"
@@ -2852,16 +2886,16 @@ docker_debug() {
     if [ "$need_cross_compile" = true ]; then
         print_info "正在交叉编译为 linux/amd64 架构..."
         mkdir -p "$BIN_DIR"
-        eval "GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -tags '$_FULL_FEATURE_TAGS' -o \"$BIN_DIR/centag\" ./cmd/centag/main.go"
+        eval "GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -tags '$_FULL_FEATURE_TAGS' -o \"$BIN_DIR/$SERVER_BIN\" ./cmd/centag/main.go"
     else
         print_info "正在编译为 linux/amd64 架构..."
         mkdir -p "$BIN_DIR"
-        eval "CGO_ENABLED=0 go build -tags '$_FULL_FEATURE_TAGS' -o \"$BIN_DIR/centag\" ./cmd/centag/main.go"
+        eval "CGO_ENABLED=0 go build -tags '$_FULL_FEATURE_TAGS' -o \"$BIN_DIR/$SERVER_BIN\" ./cmd/centag/main.go"
     fi
 
     if [ $? -eq 0 ]; then
         # 验证编译结果（macOS 和 Linux 的 file 命令输出格式不同）
-        local compiled_arch=$(file -b "$BIN_DIR/centag" 2>/dev/null || echo "")
+        local compiled_arch=$(file -b "$BIN_DIR/$SERVER_BIN" 2>/dev/null || echo "")
         if echo "$compiled_arch" | grep -qE "ELF|Linux"; then
             print_success "编译成功: $BIN_DIR/centag ($(echo $compiled_arch | cut -d, -f1))"
         else
@@ -2922,7 +2956,7 @@ docker_debug() {
     echo ""
 echo "  本地二进制: $BIN_DIR/centag"
     echo ""
-    echo "  1. 本地修改代码 -> go build -o bin/server/centag"
+    echo "  1. 本地修改代码 -> make build  # → ~/.centag/lib/personal/centag-personal"
     echo "  2. ./start.sh docker restart"
     echo ""
 
@@ -2978,7 +3012,7 @@ docker_restart() {
     if [ "$is_debug_mode" = true ]; then
         # 如果指定了服务，先检查本地二进制
         if [ "$service" = "centag" ]; then
-            if [ -f "$BIN_DIR/centag" ]; then
+            if [ -f "$BIN_DIR/$SERVER_BIN" ]; then
                 print_info "本地二进制已更新: $BIN_DIR/centag"
             fi
         fi
@@ -3415,7 +3449,7 @@ _help_build() {
     echo -e "             自动识别 darwin / linux / windows（GOOS/GOARCH）"
     echo -e "             ${YELLOW}team 不支持 --launcher${NC}"
     echo -e "  ${GREEN}--wrap${NC}    额外构建 centag-wrap（可与 personal/minimal 同用）"
-    echo -e "             产物: bin/wrap/<goos>-<goarch>/centag-wrap"
+    echo -e "             产物: ~/.centag/bin/centag-wrap (+ var/cross/wrap/...)"
     echo ""
     echo -e "${CYAN}示例:${NC}"
     echo -e "  ./start.sh build personal           # 普通个人版服务"
@@ -3561,8 +3595,8 @@ _help_logs() {
     echo ""
     echo -e "${CYAN}说明:${NC}"
     echo -e "  显示后端服务 PID 和日志文件位置。如需实时查看日志，可使用:"
-    echo -e "    tail -f bin/server/logs/centag.log"
-    echo -e "    tail -f bin/server/storage/logs/*.log"
+    echo -e "    tail -f ${CENTAG_EDITION_LIB}/logs/centag.log"
+    echo -e "    tail -f ${CENTAG_EDITION_LIB}/storage/logs/*.log"
 }
 
 _help_clean() {
@@ -3970,14 +4004,14 @@ wizard_run_mode() {
                     if wizard_confirm "是否现在启动?" "y"; then
                         load_env
                         kill_backend_port_or_exit || continue
-                        [ ! -f "$BIN_DIR/centag" ] && build backend >/dev/null 2>&1
+                        [ ! -f "$BIN_DIR/$SERVER_BIN" ] && build backend >/dev/null 2>&1
                         cd "$BIN_DIR"
-                        nohup ./centag > logs/centag.log 2>&1 &
+                        nohup ./"$SERVER_BIN" > logs/centag.log 2>&1 &
                         cd "$PROJECT_ROOT"
                         sleep 2
                         if lsof -ti ":$BACKEND_PORT" >/dev/null 2>&1; then
                             print_success "✅ 服务已启动 (后台运行)"
-                            print_info "日志文件: bin/logs/centag.log"
+                            print_info "日志文件: ${BIN_DIR}/logs/centag.log"
                             print_info "停止服务: ./start.sh stop all"
                         else
                             print_error "❌ 服务启动失败，请查看日志"
@@ -3991,14 +4025,14 @@ wizard_run_mode() {
                     if wizard_confirm "是否现在启动?" "y"; then
                         load_env
                         kill_backend_port_or_exit || continue
-                        [ ! -f "$BIN_DIR/centag" ] && build backend >/dev/null 2>&1
+                        [ ! -f "$BIN_DIR/$SERVER_BIN" ] && build backend >/dev/null 2>&1
                         cd "$BIN_DIR"
-                        nohup ./centag > logs/centag.log 2>&1 &
+                        nohup ./"$SERVER_BIN" > logs/centag.log 2>&1 &
                         cd "$PROJECT_ROOT"
                         sleep 2
                         if lsof -ti ":$BACKEND_PORT" >/dev/null 2>&1; then
                             print_success "✅ 后端服务已启动 (后台运行)"
-                            print_info "日志文件: bin/logs/centag.log"
+                            print_info "日志文件: ${BIN_DIR}/logs/centag.log"
                             print_info "停止服务: ./start.sh stop backend"
                         else
                             print_error "❌ 后端服务启动失败"
@@ -4018,10 +4052,10 @@ wizard_run_mode() {
                             echo ""
                             load_env
                             kill_backend_port_or_exit || continue
-                            [ ! -f "$BIN_DIR/centag" ] && build backend >/dev/null 2>&1
+                            [ ! -f "$BIN_DIR/$SERVER_BIN" ] && build backend >/dev/null 2>&1
                             print_test_examples
                             cd "$BIN_DIR"
-                            ./centag
+                            ./"$SERVER_BIN"
                             cd "$PROJECT_ROOT"
                         else
                             print_info "您可以在两个终端分别运行以下命令:"
@@ -4062,11 +4096,11 @@ wizard_run_mode() {
                         load_env
                         centag_export_debug_console_env
                         kill_backend_port_or_exit || continue
-                        [ ! -f "$BIN_DIR/centag" ] && build backend >/dev/null 2>&1
+                        [ ! -f "$BIN_DIR/$SERVER_BIN" ] && build backend >/dev/null 2>&1
                         print_test_examples
                         cd "$BIN_DIR"
                         print_info "按 Ctrl+C 停止服务"
-                        ./centag
+                        ./"$SERVER_BIN"
                         cd "$PROJECT_ROOT"
                     fi
                     ;;
@@ -4078,11 +4112,11 @@ wizard_run_mode() {
                         load_env
                         centag_export_debug_console_env
                         kill_backend_port_or_exit || continue
-                        [ ! -f "$BIN_DIR/centag" ] && build backend >/dev/null 2>&1
+                        [ ! -f "$BIN_DIR/$SERVER_BIN" ] && build backend >/dev/null 2>&1
                         print_test_examples
                         cd "$BIN_DIR"
                         print_info "按 Ctrl+C 停止服务"
-                        ./centag
+                        ./"$SERVER_BIN"
                         cd "$PROJECT_ROOT"
                     fi
                     ;;
@@ -4100,11 +4134,11 @@ wizard_run_mode() {
                             load_env
                             centag_export_debug_console_env
                             kill_backend_port_or_exit || continue
-                            [ ! -f "$BIN_DIR/centag" ] && build backend >/dev/null 2>&1
+                            [ ! -f "$BIN_DIR/$SERVER_BIN" ] && build backend >/dev/null 2>&1
                             print_test_examples
                             cd "$BIN_DIR"
                             print_info "按 Ctrl+C 停止服务"
-                            ./centag
+                            ./"$SERVER_BIN"
                             cd "$PROJECT_ROOT"
                         else
                             print_info "您可以在两个终端分别运行以下命令:"
@@ -4442,7 +4476,7 @@ main() {
                 run)
                     local dist_name="${1:-minimal}"
                     print_warn "已弃用: './start.sh dist run' → 请用 './start.sh docker run $dist_name'"
-                    local bin_path="$PROJECT_ROOT/bin/server/centag-${dist_name}"
+                    local bin_path; bin_path="$(centag_server_bin_path "$dist_name")"
                     if [ ! -f "$bin_path" ]; then
                         print_error "未找到发行版二进制: $bin_path"
                         print_info "请先执行: $0 build $dist_name"

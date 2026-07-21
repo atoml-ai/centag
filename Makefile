@@ -1,9 +1,16 @@
 .PHONY: all build run clean test install help gen-init-sqlite frontend build-all copy-files harness-check package package-list
 
-# Variables
-BINARY_NAME=centag
-BIN_DIR=bin/server
-STATIC_DIR=bin/server/static
+# Install-compatible layout (same as scripts/install.sh / scripts/lib/centag-layout.sh)
+CENTAG_INSTALL_ROOT ?= $(HOME)/.centag
+CENTAG_EDITION ?= personal
+CENTAG_BIN_DIR ?= $(CENTAG_INSTALL_ROOT)/bin
+CENTAG_LIB_DIR ?= $(CENTAG_INSTALL_ROOT)/lib
+CENTAG_VAR_DIR ?= $(CENTAG_INSTALL_ROOT)/var
+BIN_DIR=$(CENTAG_LIB_DIR)/$(CENTAG_EDITION)
+STATIC_DIR=$(BIN_DIR)/static
+PATH_BIN_DIR=$(CENTAG_BIN_DIR)
+PACKAGES_DIR=$(CENTAG_VAR_DIR)/packages
+BINARY_NAME=centag-$(CENTAG_EDITION)
 CMD_DIR=cmd
 MAIN_FILE=$(CMD_DIR)/centag/main.go
 VERSION=v$(shell date '+%Y%m%d-%H%M%S')
@@ -18,11 +25,18 @@ BUILD_TAGS ?= protocol_openai,protocol_anthropic,protocol_gemini,protocol_openai
 PACKAGE_ARCH ?= amd64
 PACKAGE_MODE ?= native
 PACKAGE_EDITION ?= minimal
-PACKAGE_OUTPUT ?= bin/packages
+PACKAGE_OUTPUT ?= $(PACKAGES_DIR)
 TARGET ?= fnos
 PACKAGE_ARGS ?=
 
-# Copy files to bin directory
+# Refresh PATH wrapper + symlink under $(CENTAG_BIN_DIR)
+link-install:
+	@bash -c 'source scripts/lib/centag-layout.sh && \
+		CENTAG_INSTALL_ROOT="$(CENTAG_INSTALL_ROOT)" CENTAG_BIN_DIR="$(CENTAG_BIN_DIR)" \
+		centag_layout_use_edition "$(CENTAG_EDITION)" && \
+		centag_install_edition_links "$(CENTAG_EDITION)"'
+
+# Copy files to edition lib directory
 copy-files:
 	@echo "Copy static files to $(BIN_DIR)..."
 	@mkdir -p $(BIN_DIR)/static
@@ -58,7 +72,7 @@ all: build-all
 
 # Build backend only
 build:
-	@echo "Building $(BINARY_NAME)..."
+	@echo "Building $(BINARY_NAME) → $(BIN_DIR)/"
 	@echo "Version: $(VERSION)"
 	@echo "Build Time: $(BUILD_TIME)"
 	@mkdir -p $(BIN_DIR)
@@ -71,40 +85,48 @@ build:
 			cp "config/initdata/data/centag.db" "$(BIN_DIR)/storage/centag.db" && echo "Seeded $(BIN_DIR)/storage/centag.db from config/initdata (first time only)"; \
 		fi; \
 	fi
-	GOTOOLCHAIN=auto go build -tags '$(BUILD_TAGS)' $(LDFLAGS) -o $(BIN_DIR)/$(BINARY_NAME) $(MAIN_FILE)
-	@echo "Copy static files to $(BIN_DIR)..."
+	GOTOOLCHAIN=$(or $(GOTOOLCHAIN),auto) go build -tags '$(BUILD_TAGS)' $(LDFLAGS) -o $(BIN_DIR)/$(BINARY_NAME) $(MAIN_FILE)
 	@mkdir -p $(BIN_DIR)/static
-	@echo "Build complete: $(BIN_DIR)/"
+	@$(MAKE) link-install
+	@echo "Build complete: $(BIN_DIR)/$(BINARY_NAME)"
 
-# Build frontend only (Vue 3 + Vite)
+# Build frontend only (Vue 3 + Vite) → lib/<edition>/static
 frontend:
-	@echo "Building frontend..."
-	@cd web && npm install && npm run build
-	@echo "Frontend build complete!"
+	@echo "Building frontend → $(STATIC_DIR)..."
+	@mkdir -p $(STATIC_DIR)
+	@cd web && CENTAG_INSTALL_ROOT="$(CENTAG_INSTALL_ROOT)" CENTAG_EDITION="$(CENTAG_EDITION)" CENTAG_STATIC_DIR="$(abspath $(STATIC_DIR))" npm install && CENTAG_INSTALL_ROOT="$(CENTAG_INSTALL_ROOT)" CENTAG_EDITION="$(CENTAG_EDITION)" CENTAG_STATIC_DIR="$(abspath $(STATIC_DIR))" npm run build
+	@echo "Frontend build complete: $(STATIC_DIR)"
 
 # Build all (backend + frontend)
 build-all: build frontend
 	@echo "All builds complete!"
 
-# Run
+# Run via install-compatible wrapper (or binary beside layout)
 run: build
-	@echo "Running $(BINARY_NAME) from $(BIN_DIR)..."
-	cd $(BIN_DIR) && ./$(BINARY_NAME)
+	@echo "Running $(BINARY_NAME) via $(PATH_BIN_DIR)/centag ..."
+	@if [ -x "$(PATH_BIN_DIR)/centag" ]; then \
+		cd $(BIN_DIR) && "$(PATH_BIN_DIR)/centag"; \
+	else \
+		cd $(BIN_DIR) && ./$(BINARY_NAME); \
+	fi
 
 # Daemon
 daemon: build
 	@echo "Starting $(BINARY_NAME) with daemon..."
-	./scripts/tools/daemon.sh $(BIN_DIR)
+	LLM_PROXY_BINARY="$(abspath $(BIN_DIR)/$(BINARY_NAME))" ./scripts/tools/daemon.sh $(BIN_DIR)
 
 # Daemon Debug
 daemon-debug: build
 	@echo "Starting $(BINARY_NAME) with daemon in debug mode..."
-	DAEMON_DEBUG=true ./scripts/tools/daemon.sh $(BIN_DIR)
+	DAEMON_DEBUG=true LLM_PROXY_BINARY="$(abspath $(BIN_DIR)/$(BINARY_NAME))" ./scripts/tools/daemon.sh $(BIN_DIR)
 
-# Clean
+# Clean install-root build artifacts (keeps wrap/proxyctl runtime state)
 clean:
-	@echo "Cleaning..."
-	rm -rf bin/server bin/desktop bin/packages
+	@echo "Cleaning $(CENTAG_INSTALL_ROOT) build artifacts..."
+	rm -rf $(CENTAG_LIB_DIR)/personal $(CENTAG_LIB_DIR)/minimal
+	rm -f $(PATH_BIN_DIR)/centag $(PATH_BIN_DIR)/centag-personal $(PATH_BIN_DIR)/centag-minimal $(PATH_BIN_DIR)/centag.cmd
+	rm -rf $(CENTAG_VAR_DIR)/packages $(CENTAG_VAR_DIR)/release $(CENTAG_VAR_DIR)/cross
+	rm -rf bin/server bin/packages bin/release
 	@echo "Clean complete"
 
 # Test
@@ -165,15 +187,15 @@ package:
 help:
 	@echo "Available targets:"
 	@echo "  make / make all   - Build backend + frontend (default)"
-	@echo "  make build        - Build backend binary only"
-	@echo "  make frontend     - Build frontend only"
+	@echo "  make build        - Build backend → \$$CENTAG_INSTALL_ROOT/lib/\$$CENTAG_EDITION/"
+	@echo "  make frontend     - Build frontend → lib/<edition>/static"
 	@echo "  make build-all    - Same as default (backend + frontend)"
-	@echo "  make copy-files   - Copy configs and scripts to bin/server/"
+	@echo "  make copy-files   - Copy configs and scripts to lib/<edition>/"
 	@echo "  make gen-init-sqlite - Regenerate config/initdata/data/centag.db from code defaults"
-	@echo "  make run          - Build backend and run from ./bin/server"
+	@echo "  make run          - Build backend and run via ~/.centag/bin/centag"
 	@echo "  make daemon       - Build and run with daemon"
 	@echo "  make daemon-debug - Build and run with daemon in debug mode"
-	@echo "  make clean        - Clean build artifacts"
+	@echo "  make clean        - Clean ~/.centag lib/var build artifacts"
 	@echo "  make test         - Run tests"
 	@echo "  make install      - Install dependencies"
 	@echo "  make fmt          - Format code"
@@ -181,8 +203,12 @@ help:
 	@echo "  make harness-check - Harness doc / go list hygiene (scripts/check-harness-hygiene.sh)"
 	@echo "  make package-list - List third-party packaging targets"
 	@echo "  make package      - Package for TARGET (default fnos); see packaging.env"
-	@echo "                      e.g. make package TARGET=fnos PACKAGE_EDITION=minimal PACKAGE_ARCH=amd64"
-	@echo "                           make package TARGET=fnos PACKAGE_EDITION=personal"
+	@echo ""
+	@echo "Layout (override with CENTAG_INSTALL_ROOT / CENTAG_EDITION):"
+	@echo "  INSTALL_ROOT=$(CENTAG_INSTALL_ROOT)"
+	@echo "  binary=$(BIN_DIR)/$(BINARY_NAME)"
+	@echo "  static=$(STATIC_DIR)"
+	@echo "  packages=$(PACKAGES_DIR)"
 	@echo ""
 	@echo "Development:"
 	@echo "  (cmd 入口: cmd/README.md；示例: archive/deprecated/examples/README.md)"

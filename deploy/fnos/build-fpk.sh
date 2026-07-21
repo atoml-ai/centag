@@ -26,7 +26,7 @@
 #     --edition E        minimal | personal | team（默认 packaging.env / minimal）
 #     --admin-password P 管理员密码（写入 runtime.env）
 #     --admin-username U 管理员用户名（默认 admin）
-#     --output DIR       指定输出目录（默认 bin/packages/）
+#     --output DIR       指定输出目录（默认 ~/.centag/var/packages/）
 #     --image-prefix P   镜像名前缀
 #     --install          打包后自动安装到 fnOS
 #     --help             显示帮助
@@ -35,6 +35,10 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+
+# shellcheck source=scripts/lib/centag-layout.sh
+source "${REPO_ROOT}/scripts/lib/centag-layout.sh"
+centag_layout_init
 
 # 加载根目录第三方打包默认参数（可由环境变量 / CLI 覆盖）
 if [ -f "${REPO_ROOT}/packaging.env" ]; then
@@ -46,7 +50,7 @@ if [ -f "${REPO_ROOT}/packaging.env" ]; then
 fi
 
 BUILD_DIR=$(mktemp -d /tmp/centag-fpk-XXXXXX)
-OUTPUT_DIR="${PACKAGE_OUTPUT:-${REPO_ROOT}/bin/packages}"
+OUTPUT_DIR="${PACKAGE_OUTPUT:-${CENTAG_PACKAGES_DIR}}"
 case "${OUTPUT_DIR}" in
   /*) ;;
   *) OUTPUT_DIR="${REPO_ROOT}/${OUTPUT_DIR}" ;;
@@ -498,51 +502,58 @@ elif [ "$MODE" = "native" ]; then
     exit 1
   fi
 
+  # Staging for fpk uses install-compatible lib/<edition> (may differ from host GOARCH).
+  centag_layout_use_edition "${DIST_NAME}"
+  local_server_bin="$(centag_server_bin_path "${DIST_NAME}")"
+  local_static_dir="${CENTAG_STATIC_DIR}"
+
   if [ "$SKIP_BUILD" = false ]; then
     echo "[1/5] 构建 Go 后端 edition=${EDITION} dist=${DIST_NAME} (${GOARCH})..."
 
+    mkdir -p "$(dirname "${local_server_bin}")"
     cd "${DIST_DIR}"
     GOOS=linux GOARCH="${GOARCH}" GOTOOLCHAIN=auto go build \
       -tags "${BUILD_TAGS}" \
       -ldflags="-s -w -X 'main.Version=v$(date +%Y%m%d-%H%M%S)' -X 'main.BuildTime=$(date +%Y-%m-%d\ %H:%M:%S)'" \
-      -o "${REPO_ROOT}/bin/server/centag" .
+      -o "${local_server_bin}" .
 
     echo "[OK] 后端构建完成 (${GOARCH})"
-    echo "      大小: $(du -h "${REPO_ROOT}/bin/server/centag" | cut -f1)"
+    echo "      大小: $(du -h "${local_server_bin}" | cut -f1)"
 
     echo ""
     echo "[2/5] 构建前端..."
+    cd "$REPO_ROOT/web"
+    export CENTAG_INSTALL_ROOT CENTAG_EDITION="${DIST_NAME}" CENTAG_STATIC_DIR="${local_static_dir}"
+    mkdir -p "${local_static_dir}"
+    if [ -f package-lock.json ]; then npm ci --silent; else npm install --silent; fi
+    npm run build 2>&1 | tail -3
     cd "$REPO_ROOT"
-    cd web/webui && npm install --silent && npm run build 2>&1 | tail -3
-    cd "$REPO_ROOT"
-    mkdir -p bin/server/static
-    [ -d "web/dist" ] && cp -r web/dist/* bin/server/static/ 2>/dev/null || true
-    echo "[OK] 前端构建完成"
+    echo "[OK] 前端构建完成 → ${local_static_dir}"
   else
-    echo "[SKIP] 跳过构建，使用已有的 bin/server/centag"
+    echo "[SKIP] 跳过构建，使用已有的 ${local_server_bin}"
   fi
 
   echo ""
   echo "[3/5] 复制文件到 app 目录..."
 
-  # 主二进制
-  if [ -f "${REPO_ROOT}/bin/server/centag" ]; then
-    cp "${REPO_ROOT}/bin/server/centag" "${APP_DIR}/bin/centag"
+  # 主二进制（fpk 内仍为 bin/centag）
+  if [ -f "${local_server_bin}" ]; then
+    cp "${local_server_bin}" "${APP_DIR}/bin/centag"
     chmod +x "${APP_DIR}/bin/centag"
     echo "  二进制: $(file "${APP_DIR}/bin/centag" | cut -d: -f2)"
     echo "  大小: $(du -h "${APP_DIR}/bin/centag" | cut -f1)"
   else
-    echo "[ERROR] bin/server/centag 不存在，请先构建或去掉 --skip-build"
+    echo "[ERROR] ${local_server_bin} 不存在，请先构建或去掉 --skip-build"
     echo "  例如: ./deploy/fnos/build-fpk.sh --mode native --edition ${EDITION} --arch ${GOARCH}"
     exit 1
   fi
 
   # 前端静态文件
-  if [ -d "${REPO_ROOT}/bin/server/static" ]; then
-    cp -r "${REPO_ROOT}/bin/server/static/"* "${APP_DIR}/webui/"
+  if [ -d "${local_static_dir}" ]; then
+    cp -r "${local_static_dir}/"* "${APP_DIR}/webui/"
     echo "  静态文件: $(find "${APP_DIR}/webui" -type f | wc -l) 个文件"
   else
-    echo "[WARN] 未找到静态文件目录 bin/server/static"
+    echo "[WARN] 未找到静态文件目录 ${local_static_dir}"
   fi
 
   # 初始数据：minimal 用 profile，并合并全局 common 中 minimal 可用的流水线

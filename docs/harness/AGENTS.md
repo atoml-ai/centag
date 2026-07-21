@@ -274,7 +274,7 @@ docs/versions/<版本>/<需求>/
 
 ## 7. 结构约束（防熵增）
 
-→ 目录以根 [`README.md`](../../README.md) 与本仓库实际树为准（`web/`、`scripts/`、`bin/` 为构建产物）。
+→ 目录以根 [`README.md`](../../README.md) 与本仓库实际树为准；本地构建/运行产物默认与安装布局一致（`~/.centag/`）。
 
 **根目录速查**（Centag）：
 
@@ -290,7 +290,8 @@ docs/versions/<版本>/<需求>/
 | `docs/` `docs/harness/` | 人类文档与 Agent 规范 |
 | `docs/versions/` | 版本归档（新需求产物） |
 | `dist/` | 发行版入口源码（minimal / personal / team） |
-| `bin/` | 本地构建产物（gitignore，勿提交） |
+| `~/.centag/` | 本地构建与正式安装共用根：`bin/` PATH、`lib/<edition>/` 二进制与 static、`var/` 非发布中间物 |
+| `bin/`（仓库内） | 遗留/兼容路径（勿再作为默认输出；gitignore） |
 
 - **`cmd/` / `dist/`**: 仅入口与组装，避免写复杂业务逻辑。
 - **`core/`**: 核心业务；依赖方向应 **向内**，避免循环依赖。

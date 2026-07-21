@@ -28,9 +28,9 @@ Dist Profile 是 Centag 的**编译时插件子集**。能否真正注册，取�
 
 | 构建方式 | 入口 | tags 来源 | 产出 |
 |---------|------|-----------|------|
-| `./start.sh dist build <name>` | `dist/<name>/main.go` | `start.sh` → `_get_dist_tags()` | `bin/server/centag-<name>` |
+| `./start.sh dist build <name>` | `dist/<name>/main.go` | `start.sh` → `_get_dist_tags()` | `~/.centag/lib/<name>/centag-<name>` |
 | `./start.sh dist docker-build <name>` | 同上（`Dockerfile.dist`） | 同上，经 `BUILD_TAGS` ARG | Docker 镜像 |
-| `./start.sh build be` / `make build` / `run be` / `debug` | `cmd/centag/main.go` | `Makefile` → `BUILD_TAGS`（默认对齐 personal/team 全功能） | `bin/server/centag` |
+| `./start.sh build be` / `make build` / `run be` / `debug` | `cmd/centag/main.go` | `Makefile` → `BUILD_TAGS`（默认对齐 personal/team 全功能） | `~/.centag/lib/personal/centag-personal` |
 
 ## 总览对照表
 
