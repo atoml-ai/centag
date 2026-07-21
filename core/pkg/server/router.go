@@ -145,26 +145,6 @@ func (s *Server) updatePlugin(c *gin.Context) {
 	})
 }
 
-// handleSystemUpdate 处理系统更新
-func (s *Server) handleSystemUpdate(c *gin.Context) {
-	s.systemUpdate.HandleUpdate(c.Writer, c.Request)
-}
-
-// handleUpdateHistory 获取更新历史
-func (s *Server) handleUpdateHistory(c *gin.Context) {
-	s.systemUpdate.HandleUpdateHistory(c.Writer, c.Request)
-}
-
-// handleRollbackUpdate 回退到指定版本
-func (s *Server) handleRollbackUpdate(c *gin.Context) {
-	s.systemUpdate.HandleRollback(c.Writer, c.Request)
-}
-
-// handleDeleteUpdatePackage 删除更新包
-func (s *Server) handleDeleteUpdatePackage(c *gin.Context) {
-	s.systemUpdate.HandleDelete(c.Writer, c.Request)
-}
-
 // handleStatus 获取服务状态
 func (s *Server) handleStatus(c *gin.Context) {
 	uptime := time.Since(s.startTime).String()

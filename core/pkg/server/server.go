@@ -14,41 +14,44 @@ import (
 	"centag/core/internal"
 	"centag/core/internal/abeval"
 	agentpkg "centag/core/internal/agent"
-	"centag/core/pkg/agentmemory"
 	"centag/core/internal/auth"
 	"centag/core/internal/billing"
-	"centag/core/internal/conversation"
-	"centag/core/pkg/backend"
 	"centag/core/internal/cache"
 	evalmanager "centag/core/internal/cache/evaluation/manager"
 	evaluationplugins "centag/core/internal/cache/evaluation/plugins"
 	cachestrategy "centag/core/internal/cache/strategy"
-	"centag/core/pkg/config"
-	"centag/core/pkg/database"
+	"centag/core/internal/conversation"
 	"centag/core/internal/edition"
-	"centag/core/pkg/editionmodule"
-	"centag/core/pkg/embedding"
-	"centag/core/pkg/extension"
 	"centag/core/internal/handler"
 	"centag/core/internal/hostproxy"
 	"centag/core/internal/llm"
-	"centag/core/pkg/hooks"
-	"centag/core/pkg/logger"
 	"centag/core/internal/middleware"
 	"centag/core/internal/mitm"
 	"centag/core/internal/pac"
-	"centag/core/pkg/pipeline"
-	"centag/core/pkg/plugin"
-	pluginregistry "centag/core/pkg/plugin/registry"
 	"centag/core/internal/proxy"
-	"centag/core/pkg/proxymode"
 	"centag/core/internal/session"
-	"centag/core/pkg/storage"
 	"centag/core/internal/strategy"
 	"centag/core/internal/tokenusage"
 	"centag/core/internal/webhook"
-	"centag/core/pkg/processor"
+	"centag/core/pkg/agentmemory"
+	"centag/core/pkg/backend"
+	"centag/core/pkg/config"
+	"centag/core/pkg/database"
+	"centag/core/pkg/editionmodule"
+	"centag/core/pkg/embedding"
+	"centag/core/pkg/extension"
+	"centag/core/pkg/hooks"
+	"centag/core/pkg/logger"
+	"centag/core/pkg/pipeline"
+	"centag/core/pkg/plugin"
 	pluginapi "centag/core/pkg/plugin"
+	pluginregistry "centag/core/pkg/plugin/registry"
+	"centag/core/pkg/processor"
+	"centag/core/pkg/proxymode"
+	"centag/core/pkg/abevalapi"
+	"centag/core/pkg/storage"
+	"centag/core/pkg/systemupdateapi"
+	"centag/core/pkg/tokenusageapi"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
@@ -85,29 +88,26 @@ type Server struct {
 	hostProxyServer      *hostproxy.Server
 	hostProxyHandler     *hostproxy.Handler
 	systemUpdate         *internal.SystemUpdateHandler
-	tokenUsageHandler    *TokenUsageHandler
-	costHandler          *CostHandler
-	billingRulesHandler  *BillingRulesHandler
-	pricingService       billing.PricingService
-	abEvalHandler        *ABEvalHandler
-	memoryHandler        *MemoryHandler
+	tokenUsageHandler   *TokenUsageHandler
+	costHandler         *CostHandler
+	billingRulesHandler *BillingRulesHandler
+	pricingService      billing.PricingService
+	memoryHandler       *MemoryHandler
 	modeManager          *proxymode.ModeManager
 	proxyModeHandler     *ProxyModeHandler
 	pipelineHandler      *PipelineHandler
 	webhookHandler       *webhook.Handler
 	pluginRegistryAPI    *pluginregistry.Handler
 	sessionStore         *session.ProxyModeStore
-	tenantHandler        *TenantHandler
-	quotaMiddleware      *middleware.QuotaMiddleware
 	userQuotaMiddleware  *middleware.UserQuotaMiddleware // v2.1: User-level quota
 	edition              edition.Edition
 	agentHandler         *AgentHandler
 	agentProviderHandler *agentpkg.AgentProviderHandler
 	mcpProxyHandler      *MCPProxyHandler
-	hookManager             *hooks.DefaultHookManager
-	billingService          *billing.Service
-	conversationHandler     *ConversationHandler
-	conversationStore       conversation.Store
+	hookManager          *hooks.DefaultHookManager
+	conversationHandler *ConversationHandler
+	conversationStore   conversation.Store
+	extensionHost       *extension.RuntimeHost
 
 	// 流水线默认模式相关 handler
 	pipelineDefaultsHandler *handler.PipelineDefaultsHandler
@@ -596,21 +596,12 @@ func New(cfg *config.Config) *Server {
 	// 创建认证/用户/API Key 处理器
 	authHandler := NewAuthHandler()
 
-	// 创建租户供应器（多租户自动初始化）
-	var tenantProvisioner *TenantProvisioner
-	if backendManager != nil && pipelineRegistry != nil {
-		tenantProvisioner = NewTenantProvisioner(database.Get(), backendManager, pipelineRegistry)
-	}
-
-	// 创建租户处理器
-	tenantHandler := NewTenantHandler(database.Get())
-
-	// 创建配额检查中间件（在认证中间件之后、业务处理之前执行）
-	quotaMiddleware := middleware.NewQuotaMiddleware(database.Get())
-	// v2.1: User-level quota middleware
+	// Tenant handler + tenant QuotaMiddleware are registered by centag-pro (E2.3).
+	// v2.1: User-level quota middleware (open-core)
 	userQuotaMiddleware := middleware.NewUserQuotaMiddleware(database.Get())
 
-	userHandler := NewUserHandler(tenantProvisioner)
+	// Profile/self-service only; team admin user CRUD is registered by centag-pro (E2.1).
+	userHandler := NewUserHandler()
 	apiKeyHandler := NewAPIKeyHandler()
 
 	// 钩子管理器（增值能力统一入口：计量 / 计费 / 对话等）
@@ -623,13 +614,13 @@ func New(cfg *config.Config) *Server {
 	var costHandler *CostHandler
 	var billingRulesHandler *BillingRulesHandler
 	var pricingService billing.PricingService
-	var abEvalHandler *ABEvalHandler
+	var abEvalAdmin abevalapi.AdminService
 	if db := database.Get().GetDB(); db != nil {
 		tokenUsageService := tokenusage.NewService(db, database.Get().DriverName())
 		tokenUsageHandler = NewTokenUsageHandler(tokenUsageService)
 		costHandler = NewCostHandler(tokenUsageService)
 		abEvalSvc := abeval.NewService(db, database.Get().DriverName())
-		abEvalHandler = NewABEvalHandler(abEvalSvc)
+		abEvalAdmin = abevalapi.Wrap(abEvalSvc)
 		wireABEvalPersistence(abEvalSvc)
 		tokenusage.SetDefaultService(tokenUsageService)
 		hookManager.RegisterTokenHook(newTokenUsageHookAdapter(tokenUsageService))
@@ -651,14 +642,7 @@ func New(cfg *config.Config) *Server {
 	}
 
 	ed := edition.Parse(cfg.Server.Edition)
-
-	var billingService *billing.Service
-	if ed.IsTeam() {
-		billingService = billing.NewService()
-		billingService.RegisterHandler(&billing.LogHandler{})
-		hookManager.RegisterBillingHook(newBillingHookAdapter(billingService))
-		logger.Infof("[hooks] BillingHook adapter registered (team edition)")
-	}
+	// BillingHook is wired by centag-pro/internal/teamadmin; open-core does not register it.
 
 	var conversationStore conversation.Store
 	var conversationHandler *ConversationHandler
@@ -796,9 +780,6 @@ func New(cfg *config.Config) *Server {
 		logger.Infof("Synced %d pipeline shortcuts into ModeManager (total modes: %d)", synced, len(modeMgr.ListModes()))
 	}
 	pipelineHandler.SetModeManager(modeMgr)
-	if tenantProvisioner != nil {
-		tenantProvisioner.SetModeManager(modeMgr)
-	}
 
 	// 创建会话存储
 	sessionStore := session.NewProxyModeStore()
@@ -960,10 +941,9 @@ func New(cfg *config.Config) *Server {
 		apiKeyHandler:        apiKeyHandler,
 		tokenUsageHandler:    tokenUsageHandler,
 		costHandler:          costHandler,
-		billingRulesHandler:  billingRulesHandler,
-		pricingService:       pricingService,
-		abEvalHandler:        abEvalHandler,
-		memoryHandler:        memoryHandler,
+		billingRulesHandler: billingRulesHandler,
+		pricingService:      pricingService,
+		memoryHandler:       memoryHandler,
 		strategyHandler:      strategyHandler,
 		proxyHandlerExt:      proxyHandlerExt,
 		clashHandler:         clashHandler,
@@ -980,17 +960,14 @@ func New(cfg *config.Config) *Server {
 		webhookHandler:       webhookHandler,
 		pluginRegistryAPI:    pluginRegistryAPI,
 		sessionStore:         sessionStore,
-		tenantHandler:        tenantHandler,
-		quotaMiddleware:      quotaMiddleware,
 		userQuotaMiddleware:  userQuotaMiddleware, // v2.1: User-level quota
 		edition:              edition.Parse(cfg.Server.Edition),
 		agentHandler:         agentHandler,
-		agentProviderHandler:  agentProviderHandler,
-		mcpProxyHandler:       mcpProxyHandler,
-		hookManager:           hookManager,
-		billingService:        billingService,
-		conversationStore:     conversationStore,
-		conversationHandler:   conversationHandler,
+		agentProviderHandler: agentProviderHandler,
+		mcpProxyHandler:      mcpProxyHandler,
+		hookManager:         hookManager,
+		conversationStore:   conversationStore,
+		conversationHandler: conversationHandler,
 		// 流水线默认模式相关 handler
 		pipelineDefaultsHandler: pipelineDefaultsHandler,
 		startTime:               time.Now(),
@@ -1015,24 +992,29 @@ func New(cfg *config.Config) *Server {
 	configHandler.SetMitmSyncEgress(srv.syncMITMEgressAuth)
 	configHandler.SetProxyHandlerRefresh(srv.refreshProxyHandlerPAC)
 
-	// Commercial plugins (centag-pro) blank-import Register themselves; Init must run
-	// before setupRoutes so editionmodule admin mounts see registered modules.
-	if err := extension.InitAll(serverExtensionHost{edition: srv.edition.String()}); err != nil {
+	// Commercial plugins (centag-pro) blank-import Register themselves.
+	// Init runs after Server deps are ready (R13), before setupRoutes so
+	// editionmodule mounts and queued Host registrars see a complete Host.
+	srv.extensionHost = extension.NewRuntimeHost(srv.edition.String(), extension.Deps{
+		HookManager:       hookManager,
+		BackendManager:    backendManager,
+		PipelineRegistry:  pipelineRegistry,
+		Database:          database.Get(),
+		TokenUsageService: tokenusageapi.Default(),
+		SystemUpdate:      systemupdateapi.Wrap(systemUpdate),
+		ABEvalHandler:     abEvalAdmin,
+		ModeManager:       modeMgr,
+	})
+	if err := extension.InitAll(srv.extensionHost); err != nil {
 		logger.Warnf("extension plugin init failed: %v", err)
 	}
+	srv.extensionHost.FlushBillingHooks(hookManager)
 
 	// 注册路由
 	srv.setupRoutes()
 
 	return srv
 }
-
-// serverExtensionHost adapts Server to extension.Host (open-core whitelist).
-type serverExtensionHost struct {
-	edition string
-}
-
-func (h serverExtensionHost) Edition() string { return h.edition }
 
 func migrateRouterImplementationsToBusinessPlugin(registry *pipeline.PipelineRegistry, store pipeline.PipelineStore) (int, int, error) {
 	if registry == nil || store == nil {
@@ -1103,55 +1085,55 @@ func routerPluginMigrationEnabled() bool {
 // registerPlugins 从插件注册表获取已注册的插件并初始化。
 // 插件通过 dist/*/main.go 中的 _ import 触发 init() 注册。
 func registerPlugins(manager *plugin.Manager) error {
-    // 从注册表获取并注册所有已注册的协议插件
-    for _, name := range pluginapi.ListProtocols() {
-        factory, ok := pluginapi.GetProtocol(name)
-        if !ok {
-            continue
-        }
-        p, err := factory(nil)
-        if err != nil {
-            return fmt.Errorf("failed to create protocol plugin %q: %w", name, err)
-        }
-        pluginImpl, ok := p.(plugin.Plugin)
-        if !ok {
-            return fmt.Errorf("protocol plugin %q does not implement plugin.Plugin", name)
-        }
-        if err := manager.Register(pluginImpl); err != nil {
-            return fmt.Errorf("failed to register protocol plugin %q: %w", name, err)
-        }
-    }
+	// 从注册表获取并注册所有已注册的协议插件
+	for _, name := range pluginapi.ListProtocols() {
+		factory, ok := pluginapi.GetProtocol(name)
+		if !ok {
+			continue
+		}
+		p, err := factory(nil)
+		if err != nil {
+			return fmt.Errorf("failed to create protocol plugin %q: %w", name, err)
+		}
+		pluginImpl, ok := p.(plugin.Plugin)
+		if !ok {
+			return fmt.Errorf("protocol plugin %q does not implement plugin.Plugin", name)
+		}
+		if err := manager.Register(pluginImpl); err != nil {
+			return fmt.Errorf("failed to register protocol plugin %q: %w", name, err)
+		}
+	}
 
-    // 从注册表获取并注册所有已注册的后端插件
-    for _, name := range pluginapi.ListBackends() {
-        factory, ok := pluginapi.GetBackend(name)
-        if !ok {
-            continue
-        }
-        p, err := factory(nil)
-        if err != nil {
-            return fmt.Errorf("failed to create backend plugin %q: %w", name, err)
-        }
-        pluginImpl, ok := p.(plugin.Plugin)
-        if !ok {
-            return fmt.Errorf("backend plugin %q does not implement plugin.Plugin", name)
-        }
-        if err := manager.Register(pluginImpl); err != nil {
-            return fmt.Errorf("failed to register backend plugin %q: %w", name, err)
-        }
-    }
+	// 从注册表获取并注册所有已注册的后端插件
+	for _, name := range pluginapi.ListBackends() {
+		factory, ok := pluginapi.GetBackend(name)
+		if !ok {
+			continue
+		}
+		p, err := factory(nil)
+		if err != nil {
+			return fmt.Errorf("failed to create backend plugin %q: %w", name, err)
+		}
+		pluginImpl, ok := p.(plugin.Plugin)
+		if !ok {
+			return fmt.Errorf("backend plugin %q does not implement plugin.Plugin", name)
+		}
+		if err := manager.Register(pluginImpl); err != nil {
+			return fmt.Errorf("failed to register backend plugin %q: %w", name, err)
+		}
+	}
 
-    // 初始化插件
-    if err := manager.Init(); err != nil {
-        return fmt.Errorf("failed to init plugins: %w", err)
-    }
+	// 初始化插件
+	if err := manager.Init(); err != nil {
+		return fmt.Errorf("failed to init plugins: %w", err)
+	}
 
-    // 启动插件
-    if err := manager.Start(); err != nil {
-        return fmt.Errorf("failed to start plugins: %w", err)
-    }
+	// 启动插件
+	if err := manager.Start(); err != nil {
+		return fmt.Errorf("failed to start plugins: %w", err)
+	}
 
-    return nil
+	return nil
 }
 
 // setupRoutes 设置路由
@@ -1312,10 +1294,9 @@ func (s *Server) setupRoutes() {
 			}
 		}
 
-		// 租户信息（仅 team 版）
-		if s.tenantHandler != nil && s.edition.IsTeam() {
-			userAPI.GET("/tenant", s.tenantHandler.GetMyTenant)
-			userAPI.GET("/tenant/quota", s.tenantHandler.GetMyQuota)
+		// /user/tenant* registered by centag-pro via extension.Host (E2.3).
+		if s.extensionHost != nil {
+			s.extensionHost.ApplyUserAPI(userAPI)
 		}
 	}
 
@@ -1338,33 +1319,12 @@ func (s *Server) setupRoutes() {
 	adminAPI := s.router.Group("/api/v1/admin", auth.JWTMiddleware(), auth.AdminOnlyMiddleware())
 	teamAdmin := adminAPI.Group("", s.teamEditionOnly())
 	{
-		teamAdmin.GET("/users", s.userHandler.ListUsers)
-		teamAdmin.POST("/users", s.userHandler.CreateUser)
-		teamAdmin.PUT("/users/:id", s.userHandler.UpdateUser)
-		teamAdmin.DELETE("/users/:id", s.userHandler.DeleteUser)
-		teamAdmin.PUT("/users/:id/password", s.userHandler.AdminResetPassword)
-
-		// 用户API密钥管理
-		teamAdmin.GET("/users/:user_id/apikeys", s.apiKeyHandler.ListUserAPIKeys)
-		teamAdmin.GET("/users/:user_id/apikeys/:id", s.apiKeyHandler.GetAdminAPIKey)
-
-		// 管理员代管用户 API Key（跨用户创建/列表/预算统计）
-		teamAdmin.GET("/api-keys", s.apiKeyHandler.ListAllAPIKeys)
-		teamAdmin.POST("/api-keys", s.apiKeyHandler.CreateAdminAPIKey)
-		teamAdmin.PUT("/api-keys/:id", s.apiKeyHandler.UpdateAdminAPIKey)
-		teamAdmin.DELETE("/api-keys/:id", s.apiKeyHandler.DeleteAdminAPIKey)
-		teamAdmin.GET("/api-keys/:id/stats", s.apiKeyHandler.GetAPIKeyStats)
+		// Admin /users* and /api-keys* are registered by centag-pro via extension.Host (E2.1/E2.2).
 
 		// Token 使用统计（管理员查看所有用户）
-		if s.tokenUsageHandler != nil {
-			teamAdmin.GET("/token-usage/all", s.tokenUsageHandler.GetAllUsersUsage)
-			teamAdmin.GET("/token-usage/ranking", s.tokenUsageHandler.GetUserRanking)
-			teamAdmin.POST("/quotas", s.tokenUsageHandler.SetQuota)
-			teamAdmin.GET("/quotas/:userId", s.tokenUsageHandler.GetUserQuota)
-			teamAdmin.PUT("/quotas/:userId/reset", s.tokenUsageHandler.ResetQuota)
-		}
+		// Admin token-usage/all|ranking and /quotas* registered by centag-pro (E2.4).
 		// cost/summary / billing/rules 挂在 adminAPI（非 team-only）：
-		// personal 也要看成本与定价规则；BillingHook 扣费仍仅 team。
+		// personal 也要看成本与定价规则；BillingHook 扣费仅 team+pro。
 		if s.costHandler != nil {
 			adminAPI.GET("/cost/summary", s.costHandler.GetSummary)
 		}
@@ -1379,20 +1339,10 @@ func (s *Server) setupRoutes() {
 				billingRules.GET("/export", s.billingRulesHandler.ExportRules)
 			}
 		}
-		if s.abEvalHandler != nil {
-			teamAdmin.GET("/ab-eval/results", s.abEvalHandler.ListResults)
-			teamAdmin.GET("/ab-eval/summary", s.abEvalHandler.GetSummary)
-		}
-
-		// 租户管理（多租户）
-		if s.tenantHandler != nil {
-			teamAdmin.GET("/tenants", s.tenantHandler.ListTenants)
-			teamAdmin.GET("/tenants/:id", s.tenantHandler.GetTenant)
-			teamAdmin.PUT("/tenants/:id", s.tenantHandler.UpdateTenant)
-			teamAdmin.DELETE("/tenants/:id", s.tenantHandler.DeleteTenant)
-			teamAdmin.GET("/tenants/:id/quota", s.tenantHandler.GetTenantQuota)
-			teamAdmin.PUT("/tenants/:id/quota", s.tenantHandler.UpdateTenantQuota)
-			teamAdmin.PUT("/tenants/:id/quota/reset", s.tenantHandler.ResetTenantQuota)
+		// /admin/ab-eval* and /admin/tenants* registered by centag-pro (E2.3/E2.5).
+		// Paths stay under /api/v1/admin (not /admin/pro).
+		if s.extensionHost != nil {
+			s.extensionHost.ApplyTeamAdmin(teamAdmin)
 		}
 	}
 
@@ -1415,9 +1365,11 @@ func (s *Server) setupRoutes() {
 	v1Protected := v1.Group("")
 	v1Protected.Use(proxyAuth)
 
-	// 配额检查中间件（多租户）—— 在认证之后、业务处理之前
-	if s.quotaMiddleware != nil {
-		v1Protected.Use(s.quotaMiddleware.Middleware())
+	// Tenant QuotaMiddleware is registered by centag-pro (E2.3) via Host.
+	if s.extensionHost != nil {
+		for _, mw := range s.extensionHost.ProtectedMiddlewares() {
+			v1Protected.Use(mw)
+		}
 	}
 
 	{
@@ -1566,13 +1518,10 @@ func (s *Server) setupRoutes() {
 			cache.POST("/qa-split/config", s.cacheHandler.UpdateQASplitConfig)
 		}
 
-		// 系统更新（仅 team 版）
+		// /system/update* registered by centag-pro via extension.Host (E2.5).
 		system := v1Protected.Group("/system", s.teamEditionOnly())
-		{
-			system.POST("/update", s.handleSystemUpdate)
-			system.GET("/update/history", s.handleUpdateHistory)
-			system.POST("/rollback", s.handleRollbackUpdate)
-			system.POST("/delete-update", s.handleDeleteUpdatePackage)
+		if s.extensionHost != nil {
+			s.extensionHost.ApplySystemAPI(system)
 		}
 
 		// 匹配策略管理（内置 + 自定义）
@@ -1722,24 +1671,32 @@ func (s *Server) setupRoutes() {
 	proxyModeMw := middleware.ProxyModeMiddlewareGin(s.modeManager, s.sessionStore)
 	agentDetectMw := middleware.AgentClientDetectMiddlewareGin()
 
-	// 注册租户配额中间件（多租户模式下限制资源使用）
-	quotaMw := middleware.NewQuotaMiddleware(database.Get()).Middleware()
-	// v2.1: User-level quota middleware
+	// v2.1: User-level quota (open-core). Tenant QuotaMiddleware comes from centag-pro (E2.3).
 	userQuotaMw := middleware.NewUserQuotaMiddleware(database.Get()).Middleware()
 	resourceGuard := s.teamResourceModelGuard()
+	var tenantQuotaMWs []gin.HandlerFunc
+	if s.extensionHost != nil {
+		tenantQuotaMWs = s.extensionHost.ProtectedMiddlewares()
+	}
+	llmChain := func(extra ...gin.HandlerFunc) []gin.HandlerFunc {
+		h := []gin.HandlerFunc{proxyAuth, userQuotaMw}
+		h = append(h, tenantQuotaMWs...)
+		h = append(h, extra...)
+		return h
+	}
 
-	// 代理模式路由：支持关键字解析（user quota → tenant quota）
-	s.router.POST("/v1/chat/completions", proxyAuth, userQuotaMw, quotaMw, resourceGuard, agentDetectMw, proxyModeMw, s.proxyHandler.HandleChatCompletions)
-	s.router.GET("/v1/models", proxyAuth, userQuotaMw, quotaMw, agentDetectMw, proxyModeMw, s.proxyHandler.ListModels)
-	s.router.GET("/v1/backends", proxyAuth, userQuotaMw, quotaMw, agentDetectMw, proxyModeMw, s.proxyHandler.ListBackends)
-	s.router.POST("/v1/messages", proxyAuth, userQuotaMw, quotaMw, resourceGuard, agentDetectMw, proxyModeMw, s.proxyHandler.HandleChatCompletions)
-	s.router.POST("/v1/responses", proxyAuth, userQuotaMw, quotaMw, resourceGuard, agentDetectMw, proxyModeMw, s.proxyHandler.HandleChatCompletions)
-	s.router.POST("/v1beta/models/*action", proxyAuth, userQuotaMw, quotaMw, resourceGuard, agentDetectMw, proxyModeMw, s.proxyHandler.HandleChatCompletions)
-	s.router.POST("/v1/completions", proxyAuth, userQuotaMw, quotaMw, resourceGuard, agentDetectMw, proxyModeMw, llmProxyHandler.HandleOpenAIRequest)
-	s.router.POST("/v1/embeddings", proxyAuth, userQuotaMw, quotaMw, resourceGuard, agentDetectMw, proxyModeMw, llmProxyHandler.HandleOpenAIRequest)
-	s.router.POST("/api/v1/openai/chat/completions", proxyAuth, userQuotaMw, quotaMw, resourceGuard, agentDetectMw, proxyModeMw, llmProxyHandler.HandleOpenAIRequest)
-	s.router.POST("/api/v1/openai/embeddings", proxyAuth, userQuotaMw, quotaMw, resourceGuard, agentDetectMw, proxyModeMw, llmProxyHandler.HandleOpenAIRequest)
-	s.router.GET("/api/v1/openai/models", proxyAuth, userQuotaMw, quotaMw, agentDetectMw, proxyModeMw, llmProxyHandler.HandleOpenAIRequest)
+	// 代理模式路由：支持关键字解析（user quota → optional tenant quota from pro）
+	s.router.POST("/v1/chat/completions", llmChain(resourceGuard, agentDetectMw, proxyModeMw, s.proxyHandler.HandleChatCompletions)...)
+	s.router.GET("/v1/models", llmChain(agentDetectMw, proxyModeMw, s.proxyHandler.ListModels)...)
+	s.router.GET("/v1/backends", llmChain(agentDetectMw, proxyModeMw, s.proxyHandler.ListBackends)...)
+	s.router.POST("/v1/messages", llmChain(resourceGuard, agentDetectMw, proxyModeMw, s.proxyHandler.HandleChatCompletions)...)
+	s.router.POST("/v1/responses", llmChain(resourceGuard, agentDetectMw, proxyModeMw, s.proxyHandler.HandleChatCompletions)...)
+	s.router.POST("/v1beta/models/*action", llmChain(resourceGuard, agentDetectMw, proxyModeMw, s.proxyHandler.HandleChatCompletions)...)
+	s.router.POST("/v1/completions", llmChain(resourceGuard, agentDetectMw, proxyModeMw, llmProxyHandler.HandleOpenAIRequest)...)
+	s.router.POST("/v1/embeddings", llmChain(resourceGuard, agentDetectMw, proxyModeMw, llmProxyHandler.HandleOpenAIRequest)...)
+	s.router.POST("/api/v1/openai/chat/completions", llmChain(resourceGuard, agentDetectMw, proxyModeMw, llmProxyHandler.HandleOpenAIRequest)...)
+	s.router.POST("/api/v1/openai/embeddings", llmChain(resourceGuard, agentDetectMw, proxyModeMw, llmProxyHandler.HandleOpenAIRequest)...)
+	s.router.GET("/api/v1/openai/models", llmChain(agentDetectMw, proxyModeMw, llmProxyHandler.HandleOpenAIRequest)...)
 
 	// MCP (Model Context Protocol) 代理路由
 	if s.mcpProxyHandler != nil {
@@ -1801,8 +1758,8 @@ func (s *Server) Start() error {
 func (s *Server) Stop(ctx context.Context) error {
 	logger.Info("Stopping server...")
 
-	if s.billingService != nil {
-		s.billingService.Close()
+	if s.extensionHost != nil {
+		s.extensionHost.Close()
 	}
 
 	// 停止远程插件健康检查协程，避免后台 goroutine 泄漏。
