@@ -2,14 +2,18 @@
 # Centag one-line installer (OpenCode-style).
 #
 # Usage (activate PATH in the same command — curl|bash cannot mutate the parent shell):
-#   curl -fsSL https://raw.githubusercontent.com/atoml-ai/centag/main/scripts/install.sh \
-#     | bash -s -- && . "$HOME/.centag/env"
-#   curl -fsSL .../install.sh | bash -s -- --only wrap && . "$HOME/.centag/env"
-#   curl -fsSL .../install.sh | bash -s -- --from-source   # explicit only; never auto
+#   curl -fsSL .../install.sh | bash && . "$HOME/.centag/env"
+#   curl -fsSL .../install.sh | bash -s personal && . "$HOME/.centag/env"
+#   curl -fsSL .../install.sh | bash -s wrap && . "$HOME/.centag/env"
+#   curl -fsSL .../install.sh | bash -s wrap 0.2.7 && . "$HOME/.centag/env"
 #
-# Why not "source ~/.zshrc" inside install.sh?
-#   Piped bash runs in a child process. Sourcing there only changes that child;
-#   your interactive zsh/bash keeps the old PATH. Chain:  … | bash && . ~/.centag/env
+# Why "bash -s" / occasional "--"?
+#   -s = read the script from stdin (the curl pipe). Args after -s go to the script.
+#   "--" is only needed when an arg starts with "-" (e.g. --only); prefer "wrap" / "personal".
+#
+# Why not source ~/.zshrc inside install.sh?
+#   Piped bash is a child process; it cannot change your interactive shell PATH.
+#   Chain: … | bash && . ~/.centag/env
 #
 # Default (no args): personal CLI + wrap (centag-wrap)
 # Asset convention (GitHub Releases, tag v<version>):
@@ -38,17 +42,17 @@ usage() {
 Centag installer
 
 Usage:
-  curl -fsSL https://raw.githubusercontent.com/atoml-ai/centag/main/scripts/install.sh \\
-    | bash -s -- && . "\$HOME/.centag/env"
-  curl -fsSL .../install.sh | bash -s -- [options] [component] && . "\$HOME/.centag/env"
+  curl -fsSL .../install.sh | bash && . "$HOME/.centag/env"
+  curl -fsSL .../install.sh | bash -s personal && . "$HOME/.centag/env"
+  curl -fsSL .../install.sh | bash -s wrap [version] && . "$HOME/.centag/env"
 
-Components: personal | wrap
-Default (no args): personal + wrap
+Components (positional): personal | wrap
+Default (no args): personal + wrap → latest GitHub release
 
 Options:
-  --only <personal|wrap>        Install only one component
+  --only <personal|wrap>        Same as positional component
   --with <a,b>                  Explicit list (comma-separated)
-  -v, --version <ver>           Install a specific version (e.g. 0.2.7 or v0.2.7)
+  -v, --version <ver>           Pin version (or pass as 2nd positional: wrap 0.2.7)
   --from-source                 Explicitly clone + build (NOT used automatically)
   --prefix <dir>                Install root (default: ~/.centag)
   --bin-dir <dir>               PATH directory (default: <prefix>/bin)
@@ -57,9 +61,9 @@ Options:
 
 Examples:
   bash install.sh
-  bash install.sh --only wrap
-  bash install.sh personal
   bash install.sh wrap
+  bash install.sh wrap 0.2.7
+  bash install.sh personal
 EOF
 }
 
@@ -109,8 +113,14 @@ while [[ $# -gt 0 ]]; do
       fail "component '$1' is not supported yet (installer currently ships personal + wrap only)"
       ;;
     *)
-      warn "Unknown option '$1'"
-      shift ;;
+      # Short pin: wrap 0.2.7 / personal v0.2.7 / 0.2.7 (default components)
+      if [[ "$1" =~ ^v?[0-9]+([.][0-9]+)+([.-][0-9A-Za-z]+)*$ ]]; then
+        requested_version="$1"; shift
+      else
+        warn "Unknown option '$1'"
+        shift
+      fi
+      ;;
   esac
 done
 

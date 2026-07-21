@@ -88,21 +88,15 @@ NOTES="$(cat <<EOF
 ### Install
 
 \`\`\`bash
-# default: personal + wrap  (&& source activates PATH in THIS shell)
-curl -fsSL https://raw.githubusercontent.com/${REPO}/${TAG}/scripts/install.sh | bash -s -- --version ${VERSION} \\
-  && source "\${HOME}/.centag/env"
+# default: personal + wrap
+curl -fsSL https://raw.githubusercontent.com/${REPO}/${TAG}/scripts/install.sh | bash && . "\$HOME/.centag/env"
 
-# personal only (no wrap)
-curl -fsSL https://raw.githubusercontent.com/${REPO}/${TAG}/scripts/install.sh | bash -s -- --only personal --version ${VERSION} \\
-  && source "\${HOME}/.centag/env"
-
-# wrap only
-curl -fsSL https://raw.githubusercontent.com/${REPO}/${TAG}/scripts/install.sh | bash -s -- --only wrap --version ${VERSION} \\
-  && source "\${HOME}/.centag/env"
+# personal only / wrap only  (optional version: wrap ${VERSION})
+curl -fsSL https://raw.githubusercontent.com/${REPO}/${TAG}/scripts/install.sh | bash -s personal && . "\$HOME/.centag/env"
+curl -fsSL https://raw.githubusercontent.com/${REPO}/${TAG}/scripts/install.sh | bash -s wrap && . "\$HOME/.centag/env"
 \`\`\`
 
-Default install root: \`~/.centag\` (override with \`CENTAG_INSTALL_ROOT\` / \`--prefix\`).  
-\`curl|bash\` cannot mutate your current shell PATH — always \`source ~/.centag/env\` (or open a new terminal).  
+Default install root: \`~/.centag\`. Chain \`. ~/.centag/env\` so PATH applies in this shell.  
 \`minimal\` / \`launcher\` are not published in this release.
 
 ### Uninstall
