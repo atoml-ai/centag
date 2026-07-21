@@ -7,32 +7,32 @@
 
 | 优先级 | 方式 | 适用 |
 |--------|------|------|
-| **首选** | `centag-proxyctl run -- …` | OpenCode 等多数 CLI（不读系统 PAC） |
-| 可选 | `centag-proxyctl enable` + 系统 PAC | 认「自动代理」的桌面客户端 |
+| **首选** | `centag-wrap run -- …` | OpenCode 等多数 CLI（不读系统 PAC） |
+| 可选 | `centag-wrap enable` + 系统 PAC | 认「自动代理」的桌面客户端 |
 | 后续 | Clash TUN 等 | 两者都不认的硬编码客户端 |
 
 员工侧 **一条命令**（自动下 CA、设 `HTTPS_PROXY` + `NODE_EXTRA_CA_CERTS`、启动 Agent）：
 
 ```bash
 # 开发机
-./start.sh build proxyctl   # 首次
-./start.sh run proxyctl run --server http://<advertise_host>:20060 -- opencode
+./start.sh build wrap   # 首次
+./start.sh run wrap run --server http://<advertise_host>:20060 -- opencode
 
 # 或真源二进制
-./bin/proxyctl/centag-proxyctl run --server http://<advertise_host>:20060 -- opencode
+./bin/wrap/centag-wrap run --server http://<advertise_host>:20060 -- opencode
 ```
 
 本机 Centag（无 `--server`）：
 
 ```bash
-./start.sh run proxyctl run -- opencode
+./start.sh run wrap run -- opencode
 ```
 
 调试只看环境变量：
 
 ```bash
-./start.sh run proxyctl env --server http://<advertise_host>:20060
-# 或: eval "$(centag-proxyctl env --server …)"
+./start.sh run wrap env --server http://<advertise_host>:20060
+# 或: eval "$(centag-wrap env --server …)"
 ```
 
 **不要**把 `HTTPS_PROXY` 写进 `~/.zshrc`。Agent **不需要**知道 Centag API Key（由服务端 MITM 注入）。
@@ -70,27 +70,27 @@
 
 | 方式 | 命令 |
 |------|------|
-| 仓库 | `./start.sh build proxyctl` |
-| 真源 | `cd apps/proxyctl && GOWORK=off go build -o centag-proxyctl .` |
+| 仓库 | `./start.sh build wrap` |
+| 真源 | `cd apps/wrap && GOWORK=off go build -o centag-wrap .` |
 
 ## 系统 PAC（可选）
 
 ```bash
-centag-proxyctl enable [--server http://<advertise>:20060]
-centag-proxyctl doctor [--server …]
-centag-proxyctl disable   # 远端模式不关服务器 MITM
+centag-wrap enable [--server http://<advertise>:20060]
+centag-wrap doctor [--server …]
+centag-wrap disable   # 远端模式不关服务器 MITM
 ```
 
-若 `setup/status` 需登录：`CENTAG_PROXYCTL_TOKEN=<Bearer>`。
+若 `setup/status` 需登录：`CENTAG_WRAP_TOKEN=<Bearer>`。
 
 ## 手写环境变量（等价于 run，一般不必）
 
 ```bash
-curl -fsSL -o ~/.centag/proxyctl/ca.crt http://<advertise>:20060/api/v1/proxy/ca.crt
+curl -fsSL -o ~/.centag/wrap/ca.crt http://<advertise>:20060/api/v1/proxy/ca.crt
 HTTPS_PROXY=http://<advertise>:8081 \
 HTTP_PROXY=http://<advertise>:8081 \
 NO_PROXY=localhost,127.0.0.1,::1 \
-NODE_EXTRA_CA_CERTS=$HOME/.centag/proxyctl/ca.crt \
+NODE_EXTRA_CA_CERTS=$HOME/.centag/wrap/ca.crt \
 opencode
 ```
 
@@ -104,8 +104,8 @@ opencode
 
 | 类型 | 例子 | 推荐 |
 |------|------|------|
-| 忽略 PAC | OpenCode 等 | `proxyctl run` |
-| 认系统 PAC | 部分桌面客户端 | `proxyctl enable` |
+| 忽略 PAC | OpenCode 等 | `wrap run` |
+| 认系统 PAC | 部分桌面客户端 | `wrap enable` |
 | 都不认 | 部分 Electron | Clash TUN（后续） |
 
 ## 鉴权与模型
@@ -123,6 +123,6 @@ opencode
 
 ## 相关
 
-- 工具：`apps/proxyctl`  
+- 工具：`apps/wrap`  
 - Web：配置页 →「本机代理出口」  
 - 技术方案：`docs/versions/v0.2.5/本机系统代理出口/技术方案.md`

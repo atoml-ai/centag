@@ -4,7 +4,7 @@
       <div class="header-left">
         <h1 class="page-title">本机代理出口</h1>
         <p class="page-description">
-          将 Agent 的大模型流量导入 Centag。推荐用进程级代理（proxyctl run）；认系统代理的客户端再用 PAC。
+          将 Agent 的大模型流量导入 Centag。推荐用进程级代理（wrap run）；认系统代理的客户端再用 PAC。
         </p>
       </div>
       <div class="toolbar-actions">
@@ -47,7 +47,7 @@
           type="info"
           :closable="false"
           show-icon
-          title="按下列 4 步完成即可。多数 CLI（如 OpenCode）用第 3 步的 proxyctl run，不必改系统 PAC，也别把代理写进全局 shell。"
+          title="按下列 4 步完成即可。多数 CLI（如 OpenCode）用第 3 步的 wrap run，不必改系统 PAC，也别把代理写进全局 shell。"
         />
         <el-alert
           v-if="setupStatus?.in_container"
@@ -70,7 +70,7 @@
               Centag 用它去调大模型。personal 首启为空，必须先加至少一个。
             </li>
             <li>
-              <strong>Agent 里的 Key</strong>：可填任意占位或原厂 Token；走 proxyctl 时会被 MITM 换成出口 Key。
+              <strong>Agent 里的 Key</strong>：可填任意占位或原厂 Token；走 wrap 时会被 MITM 换成出口 Key。
               报「无效的 API key」通常是出口 Key 未绑定；报无后端则是 Provider 未配。
             </li>
           </ul>
@@ -232,7 +232,7 @@
               MITM {{ status.enabled ? '运行中' : '未启动' }}
             </li>
             <li class="info">Web「后端 / Provider」至少有一个已启用且带有效上游 Key（否则 503 无可用后端）</li>
-            <li class="info">Agent 用 proxyctl run 启动后，请求出现在 Centag 日志</li>
+            <li class="info">Agent 用 wrap run 启动后，请求出现在 Centag 日志</li>
             <li class="info">证书报错 → 到「其它」页下载并信任 CA</li>
           </ul>
           <el-space wrap>
@@ -255,7 +255,7 @@
           </el-alert>
           <p class="form-hint mt-md">
             说明：页面测试检查 MITM/PAC/出口 Key/CA 是否就绪，不会从浏览器直连 openai.com（那会 CORS/超时）。
-            端到端连通请用上方「复制：诊断命令」或 proxyctl run 实测。
+            端到端连通请用上方「复制：诊断命令」或 wrap run 实测。
           </p>
         </el-card>
       </el-tab-pane>
@@ -576,13 +576,13 @@ const apiPACURL = computed(() => {
 
 const runCommand = computed(() => {
   if (allowLanClients.value) {
-    return `${proxyctlBin()} run --server ${employeeAPIBase()} -- opencode`
+    return `${wrapBin()} run --server ${employeeAPIBase()} -- opencode`
   }
-  return `${proxyctlBin()} run -- opencode`
+  return `${wrapBin()} run -- opencode`
 })
 
-function proxyctlBin() {
-  return 'centag-proxyctl'
+function wrapBin() {
+  return 'centag-wrap'
 }
 
 function employeeAPIBase() {
@@ -591,7 +591,7 @@ function employeeAPIBase() {
 }
 
 function copyProxyctlCmd(kind: 'enable' | 'disable' | 'doctor') {
-  const bin = proxyctlBin()
+  const bin = wrapBin()
   let cmd =
     kind === 'enable' ? `${bin} enable` : kind === 'disable' ? `${bin} disable` : `${bin} doctor`
   if (allowLanClients.value) {

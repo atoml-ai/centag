@@ -5,9 +5,9 @@ import (
 	"os"
 	"strings"
 
-	"centag/apps/proxyctl/internal/osproxy"
-	"centag/apps/proxyctl/internal/remote"
-	"centag/apps/proxyctl/internal/snapshot"
+	"centag/apps/wrap/internal/osproxy"
+	"centag/apps/wrap/internal/remote"
+	"centag/apps/wrap/internal/snapshot"
 )
 
 const defaultLocalAPI = "http://127.0.0.1:20060"
@@ -38,7 +38,7 @@ func (e *Engine) enableLocal() error {
 	if err != nil {
 		return err
 	}
-	client.Token = os.Getenv("CENTAG_PROXYCTL_TOKEN")
+	client.Token = os.Getenv("CENTAG_WRAP_TOKEN")
 
 	prev, err := e.OS.ReadProxy()
 	if err != nil {
@@ -110,7 +110,7 @@ func (e *Engine) enableRemote(server string) error {
 	if err != nil {
 		return err
 	}
-	client.Token = os.Getenv("CENTAG_PROXYCTL_TOKEN")
+	client.Token = os.Getenv("CENTAG_WRAP_TOKEN")
 
 	prev, err := e.OS.ReadProxy()
 	if err != nil {
@@ -239,7 +239,7 @@ func (e *Engine) Doctor(server string) error {
 	if err != nil {
 		return err
 	}
-	client.Token = os.Getenv("CENTAG_PROXYCTL_TOKEN")
+	client.Token = os.Getenv("CENTAG_WRAP_TOKEN")
 
 	fmt.Printf("doctor api=%s\n", api)
 	pac, err := client.FetchPAC()
@@ -272,7 +272,7 @@ func (e *Engine) Doctor(server string) error {
 
 func ensureLocalMITM(c *remote.Client) error {
 	// Optional: PUT /api/v1/config with system_proxy.enabled=true when token set.
-	// Kept minimal in M1 — Web/admin enables MITM; proxyctl focuses on OS side.
+	// Kept minimal in M1 — Web/admin enables MITM; wrap focuses on OS side.
 	_ = c
 	return nil
 }

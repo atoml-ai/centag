@@ -1,10 +1,10 @@
 {
-  "name": "centag-proxyctl",
+  "name": "centag-wrap",
   "version": "0.2.7",
   "description": "Centag system PAC / process-proxy helper (npm wrapper around the Go binary). Wraps third-party agents (OpenCode etc.) to route LLM traffic through Centag MITM.",
   "type": "module",
   "bin": {
-    "centag-proxyctl": "./bin/run.js"
+    "centag-wrap": "./bin/run.js"
   },
   "files": [
     "bin/",
@@ -40,7 +40,7 @@
     "type": "git",
     "url": "git+https://github.com/atoml-ai/centag.git"
   },
-  "homepage": "https://github.com/atoml-ai/centag/tree/main/apps/proxyctl",
+  "homepage": "https://github.com/atoml-ai/centag/tree/main/apps/wrap",
   "bugs": {
     "url": "https://github.com/atoml-ai/centag/issues"
   }

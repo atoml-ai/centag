@@ -3,14 +3,16 @@
 #
 # Usage:
 #   curl -fsSL https://raw.githubusercontent.com/atoml-ai/centag/main/scripts/install.sh | bash
-#   curl -fsSL .../install.sh | bash -s -- --only proxyctl
-#   curl -fsSL .../install.sh | bash -s -- --from-source
+#   curl -fsSL .../install.sh | bash -s -- --only wrap
+#   curl -fsSL .../install.sh | bash -s -- --from-source   # explicit only; never auto
 #
-# Default (no args): personal CLI + proxyctl
+# Default (no args): personal CLI + wrap (centag-wrap)
 # Asset convention (GitHub Releases, tag v<version>):
 #   centag-personal-<goos>-<goarch>.tar.gz
-#   centag-proxyctl-<goos>-<goarch>.tar.gz
+#   centag-wrap-<goos>-<goarch>.tar.gz
 #   checksums.txt
+#
+# Ordinary installs download Release assets only. Source builds require --from-source.
 set -euo pipefail
 
 APP=centag
@@ -34,14 +36,14 @@ Usage:
   curl -fsSL https://raw.githubusercontent.com/atoml-ai/centag/main/scripts/install.sh | bash
   curl -fsSL .../install.sh | bash -s -- [options] [component]
 
-Components: personal | proxyctl
-Default (no args): personal + proxyctl
+Components: personal | wrap
+Default (no args): personal + wrap
 
 Options:
-  --only <personal|proxyctl>    Install only one component
+  --only <personal|wrap>        Install only one component
   --with <a,b>                  Explicit list (comma-separated)
   -v, --version <ver>           Install a specific version (e.g. 0.2.7 or v0.2.7)
-  --from-source                 Clone + build instead of downloading releases
+  --from-source                 Explicitly clone + build (NOT used automatically)
   --prefix <dir>                Install root (default: ~/.centag)
   --bin-dir <dir>               PATH directory (default: <prefix>/bin)
   --no-modify-path              Do not edit shell rc files
@@ -49,9 +51,9 @@ Options:
 
 Examples:
   bash install.sh
-  bash install.sh --only proxyctl
+  bash install.sh --only wrap
   bash install.sh personal
-  bash install.sh proxyctl
+  bash install.sh wrap
 EOF
 }
 
@@ -75,7 +77,7 @@ while [[ $# -gt 0 ]]; do
       [[ -n "${2:-}" ]] || fail "--version requires an argument"
       requested_version="$2"; shift 2 ;;
     --only)
-      [[ -n "${2:-}" ]] || fail "--only requires personal|proxyctl"
+      [[ -n "${2:-}" ]] || fail "--only requires personal|wrap"
       only_component="$2"; shift 2 ;;
     --with)
       [[ -n "${2:-}" ]] || fail "--with requires a comma-separated list"
@@ -93,12 +95,12 @@ while [[ $# -gt 0 ]]; do
     --no-modify-path) no_modify_path=true; shift ;;
     # deferred: minimal / launcher / launcher-tray
     --edition|--launcher|--launcher-tray)
-      fail "option '$1' is not supported yet (installer currently ships personal + proxyctl only)"
+      fail "option '$1' is not supported yet (installer currently ships personal + wrap only)"
       ;;
-    personal|proxyctl)
+    personal|wrap)
       positional_component="$1"; shift ;;
     minimal|launcher|launcher-tray)
-      fail "component '$1' is not supported yet (installer currently ships personal + proxyctl only)"
+      fail "component '$1' is not supported yet (installer currently ships personal + wrap only)"
       ;;
     *)
       warn "Unknown option '$1'"
@@ -107,7 +109,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 # Resolve component set.
-# Priority: --only > --with > positional > default (personal + proxyctl).
+# Priority: --only > --with > positional > default (personal + wrap).
 declare -a COMPONENTS=()
 resolve_components() {
   if [[ -n "$only_component" ]]; then
@@ -117,7 +119,7 @@ resolve_components() {
   elif [[ -n "$positional_component" ]]; then
     COMPONENTS=("$positional_component")
   else
-    COMPONENTS=("personal" "proxyctl")
+    COMPONENTS=("personal" "wrap")
   fi
 
   local out=() c
@@ -125,8 +127,8 @@ resolve_components() {
     c="$(printf '%s' "$c" | tr -d '[:space:]')"
     [[ -z "$c" ]] && continue
     case "$c" in
-      personal|proxyctl) out+=("$c") ;;
-      *) fail "unknown component '$c' (want personal|proxyctl)" ;;
+      personal|wrap) out+=("$c") ;;
+      *) fail "unknown component '$c' (want personal|wrap)" ;;
     esac
   done
   COMPONENTS=("${out[@]}")
@@ -212,13 +214,15 @@ resolve_version() {
 }
 
 asset_name() {
-  # $1 = component
+  # $1 = component (personal|wrap)
   echo "centag-${1}-${PLATFORM_KEY}.tar.gz"
 }
 
 download() {
   local url="$1" dest="$2"
-  curl -fsSL --connect-timeout 30 --retry 3 -o "$dest" "$url"
+  # Prefer HTTP/1.1: some networks break on HTTP/2 framing to GitHub CDN.
+  curl -fsSL --http1.1 --connect-timeout 30 --retry 5 --retry-delay 2 --retry-all-errors \
+    -o "$dest" "$url"
 }
 
 verify_checksum() {
@@ -273,14 +277,16 @@ EOF
 
 install_component_from_archive() {
   local component="$1"
-  local asset tmp dir
+  local asset tmp
   asset="$(asset_name "$component")"
   tmp="$(mktemp -d)"
+
   info "Downloading ${asset} ..."
   if ! download "${BASE_URL}/${asset}" "${tmp}/${asset}"; then
     rm -rf "$tmp"
     return 1
   fi
+
   if download "${BASE_URL}/checksums.txt" "${tmp}/checksums.txt" 2>/dev/null; then
     verify_checksum "${tmp}/${asset}" "$asset" "${tmp}/checksums.txt"
   else
@@ -318,8 +324,8 @@ install_component_from_archive() {
       ln -sfn "${LIB_DIR}/${component}/centag-${component}${EXT}" "${BIN_DIR}/centag-${component}${EXT}"
       write_wrapper_centag "$component"
       ;;
-    proxyctl)
-      local binname="centag-proxyctl${EXT}"
+    wrap)
+      local binname="centag-wrap${EXT}"
       local found
       found="$(find "$tmp" -type f -name "$binname" | head -1 || true)"
       [[ -n "$found" ]] || fail "archive missing ${binname}"
@@ -364,15 +370,21 @@ install_from_source() {
   need_cmd go
   need_cmd npm
 
-  local src_dir branch_arg=()
-  src_dir="$(mktemp -d)/centag-src"
+  local parent src_dir branch_arg=()
+  parent="$(mktemp -d)"
+  src_dir="${parent}/centag-src"
   info "Building from source → ${src_dir}"
 
   if [[ -n "$requested_version" ]]; then
     branch_arg=(--branch "v$(strip_v "$requested_version")")
   fi
 
-  git clone --depth 1 "${branch_arg[@]}" "https://github.com/${REPO}.git" "$src_dir"
+  if ! git clone --depth 1 "${branch_arg[@]}" "https://github.com/${REPO}.git" "$src_dir"; then
+    rm -rf "$parent"
+    fail "git clone failed; cannot build from source (check network / repo access)"
+  fi
+  [[ -d "$src_dir" ]] || fail "clone directory missing: ${src_dir}"
+
   (
     cd "$src_dir"
     local need_fe=false c
@@ -399,35 +411,73 @@ install_from_source() {
           write_wrapper_centag personal
           log "${GREEN}OK${NC} personal (from source)"
           ;;
-        proxyctl)
-          ./start.sh build proxyctl
+        wrap)
+          ./start.sh build wrap
           mkdir -p "$BIN_DIR"
-          cp -f "bin/proxyctl/centag-proxyctl${EXT}" "${BIN_DIR}/centag-proxyctl${EXT}"
-          chmod 755 "${BIN_DIR}/centag-proxyctl${EXT}"
-          log "${GREEN}OK${NC} proxyctl (from source)"
+          [[ -f "bin/wrap/centag-wrap${EXT}" ]] || fail "from-source build missing centag-wrap binary"
+          cp -f "bin/wrap/centag-wrap${EXT}" "${BIN_DIR}/centag-wrap${EXT}"
+          chmod 755 "${BIN_DIR}/centag-wrap${EXT}"
+          log "${GREEN}OK${NC} wrap (from source)"
           ;;
       esac
     done
   )
+  rm -rf "$parent"
+}
+
+# Make bins executable and clear macOS quarantine so double-click/CLI is not blocked.
+finalize_permissions() {
+  mkdir -p "$BIN_DIR" "$LIB_DIR"
+  local f
+  # bin wrappers / binaries / symlinks targets
+  if [[ -d "$BIN_DIR" ]]; then
+    for f in "$BIN_DIR"/*; do
+      [[ -e "$f" ]] || continue
+      chmod u+rwx,go+rx "$f" 2>/dev/null || chmod 755 "$f" 2>/dev/null || true
+    done
+  fi
+  if [[ -d "$LIB_DIR" ]]; then
+    find "$LIB_DIR" -type f \( -name 'centag-*' -o -name '*.so' -o -name '*.dylib' \) \
+      -exec chmod u+rwx,go+rx {} \; 2>/dev/null || true
+  fi
+
+  # Downloaded archives often carry com.apple.quarantine → "cannot be opened" / odd exec failures.
+  if [[ "$(uname -s 2>/dev/null || true)" == "Darwin" ]] && command -v xattr >/dev/null 2>&1; then
+    xattr -dr com.apple.quarantine "$INSTALL_ROOT" 2>/dev/null || true
+    info "Cleared macOS quarantine flags under ${INSTALL_ROOT}"
+  fi
 }
 
 add_to_path() {
   local config_file=$1
   local command=$2
-  if grep -Fxq "$command" "$config_file" 2>/dev/null; then
+  if grep -Fqh "${BIN_DIR}" "$config_file" 2>/dev/null; then
     info "PATH entry already in ${config_file}"
-  elif [[ -w "$config_file" ]]; then
+    return 0
+  fi
+  if [[ ! -e "$config_file" ]]; then
+    # Create a starter rc so PATH persists for new terminals.
+    if touch "$config_file" 2>/dev/null; then
+      :
+    else
+      warn "Cannot create ${config_file}; add manually: ${command}"
+      return 1
+    fi
+  fi
+  if [[ -w "$config_file" ]]; then
     {
       echo ""
-      echo "# centag"
+      echo "# centag (added by install.sh)"
       echo "$command"
     } >> "$config_file"
     info "Added ${BIN_DIR} to PATH in ${config_file}"
   else
     warn "Manually add to ${config_file}: ${command}"
+    return 1
   fi
 }
 
+# Persist PATH for future shells. (curl|bash cannot change the caller's shell PATH.)
 ensure_path() {
   [[ "$no_modify_path" == true ]] && return 0
   mkdir -p "$BIN_DIR"
@@ -437,10 +487,6 @@ ensure_path() {
     info "Added ${BIN_DIR} to GITHUB_PATH"
     return 0
   fi
-
-  case ":${PATH}:" in
-    *":${BIN_DIR}:"*) return 0 ;;
-  esac
 
   local XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
   local current_shell config_files config_file=""
@@ -454,46 +500,67 @@ ensure_path() {
 
   local file
   for file in $config_files; do
-    if [[ -f "$file" ]]; then
+    if [[ -f "$file" || "$file" == "${ZDOTDIR:-$HOME}/.zshrc" || "$file" == "$HOME/.bashrc" ]]; then
       config_file="$file"
       break
     fi
   done
-
+  # Prefer creating ~/.zshrc / ~/.bashrc when none exist.
   if [[ -z "$config_file" ]]; then
-    warn "No shell config found. Add manually:"
-    info "  export PATH=${BIN_DIR}:\$PATH"
-    return 0
+    case "$current_shell" in
+      zsh) config_file="${ZDOTDIR:-$HOME}/.zshrc" ;;
+      fish) config_file="$HOME/.config/fish/config.fish"; mkdir -p "$(dirname "$config_file")" ;;
+      *) config_file="$HOME/.bashrc" ;;
+    esac
   fi
 
   if [[ "$current_shell" == "fish" ]]; then
     add_to_path "$config_file" "fish_add_path ${BIN_DIR}"
   else
-    add_to_path "$config_file" "export PATH=${BIN_DIR}:\$PATH"
+    add_to_path "$config_file" "export PATH=\"${BIN_DIR}:\$PATH\""
   fi
 }
 
 print_next_steps() {
-  echo ""
-  log "${MUTED}Centag installed.${NC}"
-  echo ""
-  local c
+  local has_personal=false has_wrap=false c
   for c in "${COMPONENTS[@]}"; do
     case "$c" in
-      personal)
-        info "  centag                 # start personal CLI (port 20060)"
-        info "  centag-personal        # direct binary"
-        ;;
-      proxyctl)
-        info "  centag-proxyctl run -- opencode"
-        info "  centag-proxyctl doctor"
-        ;;
+      personal) has_personal=true ;;
+      wrap) has_wrap=true ;;
     esac
   done
+
+  echo ""
+  log "${GREEN}Centag installed.${NC}"
   echo ""
   info "Install root: ${INSTALL_ROOT}"
   info "Bin dir:      ${BIN_DIR}"
-  info "Docs:         https://github.com/${REPO}"
+  echo ""
+  log "${MUTED}# Activate in THIS terminal (curl|bash cannot change your current shell):${NC}"
+  echo "  export PATH=\"${BIN_DIR}:\$PATH\""
+  echo "  hash -r 2>/dev/null || true"
+  echo ""
+  log "${MUTED}# Or open a new terminal window (PATH was written to your shell rc).${NC}"
+  echo ""
+  if [[ "$has_personal" == true ]]; then
+    log "${MUTED}# Start the gateway (http://127.0.0.1:20060):${NC}"
+    echo "  centag"
+    echo "  # absolute path (no leading ./ ):"
+    echo "  ${BIN_DIR}/centag"
+    echo ""
+  fi
+  if [[ "$has_wrap" == true ]]; then
+    log "${MUTED}# Optional: wrap third-party CLIs with Centag egress:${NC}"
+    echo "  centag-wrap doctor"
+    echo "  centag-wrap run -- opencode"
+    echo ""
+  fi
+  if [[ "$(uname -s 2>/dev/null || true)" == "Darwin" ]]; then
+    log "${MUTED}# macOS: if Gatekeeper blocks the binary, allow it in${NC}"
+    log "${MUTED}# System Settings → Privacy & Security, then re-run the command.${NC}"
+    echo ""
+  fi
+  info "Docs: https://github.com/${REPO}"
   echo ""
 }
 
@@ -504,12 +571,17 @@ if [[ "$from_source" == true ]]; then
   install_from_source
 else
   if ! install_from_releases; then
-    warn "falling back to --from-source (release assets missing or incomplete)"
-    if ! install_from_source; then
-      fail "install failed via release download and from-source build"
-    fi
+    fail "release download failed for one or more components.
+
+Ordinary installs never build from source. Please:
+  1) Retry the same command (network/CDN blips are common)
+  2) Or install only what you need:  bash install.sh --only personal
+  3) Developers only:               bash install.sh --from-source
+
+Unset CENTAG_RELEASE_BASE if it points at a local/unreachable mirror."
   fi
 fi
 
+finalize_permissions
 ensure_path
 print_next_steps

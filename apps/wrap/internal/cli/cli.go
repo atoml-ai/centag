@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"centag/apps/proxyctl/internal/engine"
+	"centag/apps/wrap/internal/engine"
 )
 
 // Allowed commands (whitelist). Unknown argv fails.
@@ -20,7 +20,7 @@ var allowed = map[string]bool{
 	"--help":  true,
 }
 
-// Run executes proxyctl with a fixed subcommand whitelist.
+// Run executes wrap with a fixed subcommand whitelist.
 func Run(args []string) error {
 	if len(args) == 0 {
 		printHelp()
@@ -124,23 +124,23 @@ func parseRunArgs(args []string) (server string, argv []string, err error) {
 }
 
 func printHelp() {
-	fmt.Print(`centag-proxyctl — Centag system PAC / process-proxy helper
+	fmt.Print(`centag-wrap — Centag system PAC / process-proxy helper
 
 Usage:
-  centag-proxyctl enable [--server http://host:20060]
-  centag-proxyctl disable
-  centag-proxyctl status
-  centag-proxyctl doctor [--server http://host:20060]
-  centag-proxyctl env [--server http://host:20060]
-  centag-proxyctl run [--server http://host:20060] -- <command> [args...]
+  centag-wrap enable [--server http://host:20060]
+  centag-wrap disable
+  centag-wrap status
+  centag-wrap doctor [--server http://host:20060]
+  centag-wrap env [--server http://host:20060]
+  centag-wrap run [--server http://host:20060] -- <command> [args...]
 
 Process proxy (recommended for OpenCode / CLI agents):
   Downloads CA, sets HTTPS_PROXY + NODE_EXTRA_CA_CERTS, then execs the command.
   Does NOT inject Centag API keys (MITM injects egress key on the server).
 
 Examples:
-  centag-proxyctl run -- opencode
-  centag-proxyctl run --server http://192.168.1.4:20060 -- opencode
-  eval "$(centag-proxyctl env --server http://192.168.1.4:20060)"
+  centag-wrap run -- opencode
+  centag-wrap run --server http://192.168.1.4:20060 -- opencode
+  eval "$(centag-wrap env --server http://192.168.1.4:20060)"
 `)
 }

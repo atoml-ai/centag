@@ -1,15 +1,15 @@
 // lib/download.js
-// Downloads (and verifies) the platform-specific centag-proxyctl Go binary.
+// Downloads (and verifies) the platform-specific centag-wrap Go binary.
 //
 // Default source: GitHub Releases of atoml-ai/centag, tagged by package version.
 // Asset name (aligned with scripts/install.sh / scripts/release/build-artifacts.sh):
-//   centag-proxyctl-<goos>-<goarch>.tar.gz
+//   centag-wrap-<goos>-<goarch>.tar.gz
 //
 // Overridable via:
-//   CENTAG_PROXYCTL_MIRROR   base URL that replaces the GitHub release base
+//   CENTAG_WRAP_MIRROR   base URL that replaces the GitHub release base
 //                           (must end with the tag dir, e.g. https://cdn.example.com/centag/v0.2.7)
-//   CENTAG_PROXYCTL_TOKEN    optional bearer token for private mirrors
-//   CENTAG_PROXYCTL_SKIP_DOWNLOAD=1   skip entirely (binary must already exist)
+//   CENTAG_WRAP_TOKEN    optional bearer token for private mirrors
+//   CENTAG_WRAP_SKIP_DOWNLOAD=1   skip entirely (binary must already exist)
 
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync, chmodSync, rmSync, cpSync } from 'node:fs';
@@ -27,7 +27,7 @@ const PKG_ROOT = join(__dirname, '..');
 // npm package version ↔ GitHub release tag. They are kept in lockstep.
 export const VERSION = JSON.parse(readFileSync(join(PKG_ROOT, 'package.json'), 'utf8')).version;
 
-// Map node platform/arch → the GOOS-GOARCH naming used by scripts/build-proxyctl.sh
+// Map node platform/arch → the GOOS-GOARCH naming used by scripts/build-wrap.sh
 export function platformKey(platform = process.platform, arch = process.arch) {
   const goos = { darwin: 'darwin', linux: 'linux', win32: 'windows' }[platform];
   const goarch = { x64: 'amd64', arm64: 'arm64' }[arch];
@@ -38,11 +38,11 @@ export function platformKey(platform = process.platform, arch = process.arch) {
 }
 
 export function binaryName(key) {
-  return key.startsWith('windows-') ? 'centag-proxyctl.exe' : 'centag-proxyctl';
+  return key.startsWith('windows-') ? 'centag-wrap.exe' : 'centag-wrap';
 }
 
 export function assetName(key) {
-  return `centag-proxyctl-${key}.tar.gz`;
+  return `centag-wrap-${key}.tar.gz`;
 }
 
 // Where the binary lives once installed (inside this npm package, cached).
@@ -52,7 +52,7 @@ export function installedBinaryPath(key) {
 }
 
 export function releaseBaseURL() {
-  const mirror = process.env.CENTAG_PROXYCTL_MIRROR?.replace(/\/+$/, '');
+  const mirror = process.env.CENTAG_WRAP_MIRROR?.replace(/\/+$/, '');
   if (mirror) return `${mirror}`;
   return `https://github.com/atoml-ai/centag/releases/download/v${VERSION}`;
 }
@@ -79,7 +79,7 @@ function httpGetFollow(url, headers = {}) {
 }
 
 async function fetchChecksums(baseURL) {
-  const token = process.env.CENTAG_PROXYCTL_TOKEN;
+  const token = process.env.CENTAG_WRAP_TOKEN;
   const headers = token ? { Authorization: `Bearer ${token}` } : {};
   const body = await httpGetFollow(`${baseURL}/checksums.txt`, headers);
   const map = {};
@@ -122,9 +122,9 @@ export async function ensureBinary() {
   const dest = installedBinaryPath(key);
   if (existsSync(dest)) return dest;
 
-  if (process.env.CENTAG_PROXYCTL_SKIP_DOWNLOAD === '1') {
+  if (process.env.CENTAG_WRAP_SKIP_DOWNLOAD === '1') {
     throw new Error(
-      `binary not found at ${dest} and CENTAG_PROXYCTL_SKIP_DOWNLOAD=1; ` +
+      `binary not found at ${dest} and CENTAG_WRAP_SKIP_DOWNLOAD=1; ` +
         `install with the offline package or unset the flag`
     );
   }
@@ -134,8 +134,8 @@ export async function ensureBinary() {
   const url = `${baseURL}/${archive}`;
   const name = binaryName(key);
 
-  process.stderr.write(`centag-proxyctl: downloading ${archive} from ${baseURL}\n`);
-  const token = process.env.CENTAG_PROXYCTL_TOKEN;
+  process.stderr.write(`centag-wrap: downloading ${archive} from ${baseURL}\n`);
+  const token = process.env.CENTAG_WRAP_TOKEN;
   const headers = token ? { Authorization: `Bearer ${token}` } : {};
   const buf = await httpGetFollow(url, headers);
 
@@ -151,10 +151,10 @@ export async function ensureBinary() {
     }
   } catch (e) {
     if (e.message.startsWith('checksum mismatch')) throw e;
-    process.stderr.write(`centag-proxyctl: warning: could not verify checksum (${e.message}); continuing\n`);
+    process.stderr.write(`centag-wrap: warning: could not verify checksum (${e.message}); continuing\n`);
   }
 
-  const work = join(tmpdir(), `centag-proxyctl-${key}-${process.pid}`);
+  const work = join(tmpdir(), `centag-wrap-${key}-${process.pid}`);
   mkdirSync(work, { recursive: true });
   const tarPath = join(work, archive);
   writeFileSync(tarPath, buf);
@@ -176,9 +176,9 @@ export async function ensureBinary() {
 // CLI entry for `node lib/download.js` (used by postinstall / tests).
 if (import.meta.url === `file://${process.argv[1]}`) {
   ensureBinary()
-    .then((p) => process.stderr.write(`centag-proxyctl: ready at ${p}\n`))
+    .then((p) => process.stderr.write(`centag-wrap: ready at ${p}\n`))
     .catch((e) => {
-      process.stderr.write(`centag-proxyctl: ${e.message}\n`);
+      process.stderr.write(`centag-wrap: ${e.message}\n`);
       process.exit(1);
     });
 }

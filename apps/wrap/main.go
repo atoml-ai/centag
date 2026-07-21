@@ -4,12 +4,12 @@ import (
 	"fmt"
 	"os"
 
-	"centag/apps/proxyctl/internal/cli"
+	"centag/apps/wrap/internal/cli"
 )
 
 func main() {
 	if err := cli.Run(os.Args[1:]); err != nil {
-		fmt.Fprintf(os.Stderr, "centag-proxyctl: %v\n", err)
+		fmt.Fprintf(os.Stderr, "centag-wrap: %v\n", err)
 		os.Exit(1)
 	}
 }

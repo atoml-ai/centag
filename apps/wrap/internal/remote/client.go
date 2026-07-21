@@ -64,7 +64,7 @@ func (c *Client) SetupStatus() (*SetupStatus, error) {
 	defer resp.Body.Close()
 	body, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
-		return nil, fmt.Errorf("setup/status requires auth (HTTP %d); set CENTAG_PROXYCTL_TOKEN", resp.StatusCode)
+		return nil, fmt.Errorf("setup/status requires auth (HTTP %d); set CENTAG_WRAP_TOKEN", resp.StatusCode)
 	}
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("setup/status HTTP %d: %s", resp.StatusCode, truncate(body))

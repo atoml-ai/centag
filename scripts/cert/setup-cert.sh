@@ -3,7 +3,7 @@
 # Centag 证书安装脚本
 # 用于安装MITM代理的CA证书到系统
 #
-# DEPRECATED: 请优先使用 apps/proxyctl（centag-proxyctl enable/disable），
+# DEPRECATED: 请优先使用 apps/wrap（centag-wrap enable/disable），
 # 见 docs/guide/system-proxy-egress.md
 
 set -e
