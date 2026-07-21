@@ -1,41 +1,42 @@
 # 本机 / 团队代理出口（进程代理 + PAC + MITM）
 
-> 版本：v0.2.5  
+> 版本：v0.2.7  
 > 目标：第三方 Agent **尽量不改自身配置**，把 **大模型 API 流量** 导入 Centag；**不**为某个 Agent 做专用适配。
 
 ## 推荐接入（先看这里）
 
 | 优先级 | 方式 | 适用 |
 |--------|------|------|
-| **首选** | `centag-wrap run -- …` | OpenCode 等多数 CLI（不读系统 PAC） |
-| 可选 | `centag-wrap enable` + 系统 PAC | 认「自动代理」的桌面客户端 |
-| 后续 | Clash TUN 等 | 两者都不认的硬编码客户端 |
+| **首选** | `centag wrap run -- …` | OpenCode 等多数 CLI（不读系统 PAC）；主二进制子命令，**不起网关** |
+| 可选 | `centag wrap enable` + 系统 PAC | 认「自动代理」的桌面客户端 |
+| 后续 | Clash TUN 等 | 都不认的硬编码客户端 |
 
 员工侧 **一条命令**（自动下 CA、设 `HTTPS_PROXY` + `NODE_EXTRA_CA_CERTS`、启动 Agent）：
 
 ```bash
-# 开发机
-./start.sh build wrap   # 首次
-./start.sh run wrap run --server http://<advertise_host>:20060 -- opencode
+# 已安装 personal（GitHub Release / install.sh）
+centag wrap run --server http://<advertise_host>:20060 -- opencode
 
-# 或真源二进制
-~/.centag/bin/centag-wrap run --server http://<advertise_host>:20060 -- opencode
-```
-
-本机 Centag（无 `--server`）：
-
-```bash
-./start.sh run wrap run -- opencode
+# 本机 Centag（无 --server）
+centag wrap run -- opencode
 ```
 
 调试只看环境变量：
 
 ```bash
-./start.sh run wrap env --server http://<advertise_host>:20060
-# 或: eval "$(centag-wrap env --server …)"
+centag wrap env --server http://<advertise_host>:20060
+# 或: eval "$(centag wrap env --server …)"
 ```
 
 **不要**把 `HTTPS_PROXY` 写进 `~/.zshrc`。Agent **不需要**知道 Centag API Key（由服务端 MITM 注入）。
+
+鉴权（setup/status 401 时）：
+
+```bash
+export CENTAG_WRAP_TOKEN='ctg_xxxxxxxx'   # Centag WebUI → API Keys
+export CENTAG_API_BASE='http://127.0.0.1:20060'  # 可选
+centag wrap doctor
+```
 
 ---
 
@@ -70,15 +71,15 @@
 
 | 方式 | 命令 |
 |------|------|
-| 仓库 | `./start.sh build wrap` |
-| 真源 | `cd apps/wrap && GOWORK=off go build -o centag-wrap .` |
+| 主二进制（含 `centag wrap`） | `./start.sh build personal` / `make build` |
+| 独立 wrap（仅本地/npm，**不进 GitHub Release**） | `./start.sh build wrap` |
 
 ## 系统 PAC（可选）
 
 ```bash
-centag-wrap enable [--server http://<advertise>:20060]
-centag-wrap doctor [--server …]
-centag-wrap disable   # 远端模式不关服务器 MITM
+centag wrap enable [--server http://<advertise>:20060]
+centag wrap doctor [--server …]
+centag wrap disable   # 远端模式不关服务器 MITM
 ```
 
 若 `setup/status` 需登录：`CENTAG_WRAP_TOKEN=<Bearer>`。
@@ -104,8 +105,8 @@ opencode
 
 | 类型 | 例子 | 推荐 |
 |------|------|------|
-| 忽略 PAC | OpenCode 等 | `wrap run` |
-| 认系统 PAC | 部分桌面客户端 | `wrap enable` |
+| 忽略 PAC | OpenCode 等 | `centag wrap run` |
+| 认系统 PAC | 部分桌面客户端 | `centag wrap enable` |
 | 都不认 | 部分 Electron | Clash TUN（后续） |
 
 ## 鉴权与模型
@@ -123,6 +124,6 @@ opencode
 
 ## 相关
 
-- 工具：`apps/wrap`  
+- 主命令：`centag wrap …`（逻辑真源 `apps/wrap`）  
 - Web：配置页 →「本机代理出口」  
 - 技术方案：`docs/versions/v0.2.5/本机系统代理出口/技术方案.md`

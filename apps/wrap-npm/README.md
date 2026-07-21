@@ -1,8 +1,10 @@
 # centag-wrap (npm)
 
-Centag 的**本机 / Team 员工侧**代理辅助工具，npm 分发外壳。底层是 Go 实现的原生二进制（`apps/wrap`），本包只负责**安装、更新与调用**，让你能像其他 Agent 一样用 npm 分发。
+Centag 的**本机 / Team 员工侧**代理辅助工具，npm 分发外壳。底层是 Go 实现的原生二进制（`apps/wrap`），本包只负责**安装、更新与调用**。
 
-> 工具本体逻辑见 `apps/wrap` 与 `docs/guide/system-proxy-egress.md`。本包不重写 Go 代码。
+> **首选路径**：安装 personal 后使用 `centag wrap …`（GitHub Release 默认只发 personal，已内含子命令）。  
+> 本 npm 包为可选渠道；发布时需单独构建 wrap 资产（`publish-wrap-npm.sh --release`）。  
+> 工具本体逻辑见 `apps/wrap` 与 `docs/guide/system-proxy-egress.md`。
 
 ## 两个包
 

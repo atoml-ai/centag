@@ -57,8 +57,8 @@ curl -fsSL https://raw.githubusercontent.com/atoml-ai/centag/v0.2.7/scripts/inst
 ```bash
 centag                 # 启动 personal（默认端口 20060）
 centag-personal        # 直接跑二进制
-centag-wrap run -- opencode
-centag-wrap doctor
+centag wrap run -- opencode   # 进程代理（不起网关）
+centag wrap doctor
 ```
 
 脚本说明见 `scripts/install.sh --help`。发版流程见 [docs/harness/skills/step6-release/SKILL.md](docs/harness/skills/step6-release/SKILL.md)（触发词：`step6-release` / 发版；须先过 Step 5 Gate 4）。
