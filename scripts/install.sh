@@ -276,6 +276,8 @@ set LIB=%ROOT%\\lib\\%EDITION%
 set BIN=%LIB%\\centag-%EDITION%.exe
 set CENTAG_EDITION=%EDITION%
 if "%STATIC_PATH%"=="" set STATIC_PATH=%LIB%\\static
+if "%PROJECT_ROOT%"=="" set PROJECT_ROOT=%LIB%
+if exist "%LIB%\\config\\profiles\\%EDITION%\\initdata" if "%INITDATA_PATH%"=="" set INITDATA_PATH=%LIB%\\config\\profiles\\%EDITION%\\initdata
 "%BIN%" %*
 EOF
     return 0
@@ -291,6 +293,11 @@ LIB="\$ROOT/lib/\$EDITION"
 BIN="\$LIB/centag-\${EDITION}"
 export CENTAG_EDITION="\$EDITION"
 export STATIC_PATH="\${STATIC_PATH:-\$LIB/static}"
+# Seed data ships beside the binary (config/initdata, profile initdata).
+export PROJECT_ROOT="\${PROJECT_ROOT:-\$LIB}"
+if [[ -d "\$LIB/config/profiles/\$EDITION/initdata" ]]; then
+  export INITDATA_PATH="\${INITDATA_PATH:-\$LIB/config/profiles/\$EDITION/initdata}"
+fi
 [[ -x "\$BIN" ]] || { echo "missing \$BIN" >&2; exit 1; }
 exec "\$BIN" "\$@"
 EOF
@@ -356,6 +363,11 @@ install_component_from_archive() {
       elif [[ -d "${tmp}/static" ]]; then
         rm -rf "${LIB_DIR}/${component}/static"
         cp -R "${tmp}/static" "${LIB_DIR}/${component}/static"
+      fi
+      # Pipeline / backend seed (config/initdata + profile overlay)
+      if [[ -d "${stage}/config" ]]; then
+        rm -rf "${LIB_DIR}/${component}/config"
+        cp -R "${stage}/config" "${LIB_DIR}/${component}/config"
       fi
       ln -sfn "${LIB_DIR}/${component}/centag-${component}${EXT}" "${BIN_DIR}/centag-${component}${EXT}"
       write_wrapper_centag "$component"

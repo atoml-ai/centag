@@ -1,0 +1,42 @@
+id: transparent-proxy
+name: 透明模式
+description: 标准客户端可用：使用系统默认后端 endpoint，model/params/messages 完全按客户端请求
+version: "2.0"
+shortcut_code: '#t'
+nodes:
+  - id: forward
+    type: transparent_forward
+    kind: proxy.transparent_forward
+    implementation: builtin.transparent_forward
+    name: 透明转发
+    backend: "{{system.default_backend}}"
+    model: "{{system.default_model}}"
+    config:
+      backend: "{{system.default_backend}}"
+      model: "{{system.default_model}}"
+      template_vars:
+        backend: "system.default_backend"
+        model: "system.default_model"
+      custom_config:
+        default_scheme: https
+    timeout: 120
+    retry:
+      max_attempts: 0
+      backoff_strategy: exponential
+      initial_delay: 1000
+      max_delay: 30000
+global_config:
+  timeout: 120
+  max_retries: 3
+  bypass_on_error: true
+  parallel_limit: 4
+  log_level: info
+metadata:
+  aligned_proxy_mode: transparent-proxy
+  features:
+    - no_system_prompt_inject
+    - raw_passthrough
+    - transparent_forward
+  lastUpdated: '2026-07-16T00:00:00.000Z'
+  layoutVersion: '1.2'
+  template_scope: mode-id-alignment
