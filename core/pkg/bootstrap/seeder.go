@@ -16,7 +16,7 @@
 //
 // 其他可覆盖的环境变量:
 //	LLM_PROXY_ADMIN_USERNAME      (default: admin)
-//	LLM_PROXY_ADMIN_PASSWORD      (default: JEAofRz0WteQOsWI)
+//	LLM_PROXY_ADMIN_PASSWORD      (default: centag123)
 //	LLM_PROXY_DEFAULT_MODE             (default: transparent-proxy)
 //	LLM_PROXY_DEFAULT_BACKEND_ID       (default: ollama-local)
 //	LLM_PROXY_DEFAULT_MODEL            (default: qwen2.5:1.5b)
@@ -65,7 +65,7 @@ func AdminPassword() string {
 	if v := strings.TrimSpace(os.Getenv("LLM_PROXY_ADMIN_PASSWORD")); v != "" {
 		return v
 	}
-	return "JEAofRz0WteQOsWI"
+	return "centag123"
 }
 
 // Seed checks whether the database has been initialised and, if not, populates

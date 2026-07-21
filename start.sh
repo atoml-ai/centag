@@ -4190,14 +4190,14 @@ wizard_finish() {
         else
             print_warn "未找到 Web UI 管理员凭据配置"
             print_info "默认用户名: admin"
-            print_info "默认密码: JEAofRz0WteQOsWI"
+            print_info "默认密码: centag123"
             print_info "或运行 ./start.sh env gen 生成新凭据"
             echo ""
         fi
     else
         print_warn "未找到密钥配置文件"
         print_info "默认用户名: admin"
-        print_info "默认密码: JEAofRz0WteQOsWI"
+        print_info "默认密码: centag123"
         print_info "或运行 ./start.sh env gen 生成新凭据"
         echo ""
     fi

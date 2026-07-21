@@ -2,12 +2,12 @@
 # Centag dist verification script — probes a running instance via curl.
 # Usage:
 #   bash scripts/verify-dist.sh [url] [username] [password] [model] [edition]
-#   bash scripts/verify-dist.sh http://localhost:20060 admin JEAofRz0WteQOsWI
-#   bash scripts/verify-dist.sh http://localhost:20060 admin JEAofRz0WteQOsWI gpt-4o-mini minimal
+#   bash scripts/verify-dist.sh http://localhost:20060 admin centag123
+#   bash scripts/verify-dist.sh http://localhost:20060 admin centag123 gpt-4o-mini minimal
 
 BASE="${1:-http://localhost:20060}"
 USER="${2:-admin}"
-PASS="${3:-JEAofRz0WteQOsWI}"
+PASS="${3:-centag123}"
 CLI_MODEL="${4:-}"    # 可选 — 手动指定模型名
 EDITION="${5:-}"      # 可选 — 手动指定版本 (minimal/personal/team)
 
@@ -127,7 +127,7 @@ else
     -H 'Content-Type: application/json' \
     -d "$login_json" 2>/dev/null) || {
     fail "POST /api/auth/login — wrong credentials or auth failure"
-    warn "Default credentials: admin / JEAofRz0WteQOsWI (override via env LLM_PROXY_ADMIN_PASSWORD)"
+    warn "Default credentials: admin / centag123 (override via env LLM_PROXY_ADMIN_PASSWORD)"
     JWT=""
   }
 
