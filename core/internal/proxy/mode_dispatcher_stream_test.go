@@ -177,14 +177,20 @@ func TestWriteStreamResponse_ResponsesProtocolKeepsSingleChunkText(t *testing.T)
 	}
 
 	body := w.Body.String()
-	if !strings.Contains(body, "event: response.created") {
-		t.Fatalf("expected response.created, got: %s", body)
-	}
-	if !strings.Contains(body, "event: response.output_text.delta") || !strings.Contains(body, "cached answer") {
-		t.Fatalf("expected output_text.delta with content, got: %s", body)
-	}
-	if !strings.Contains(body, "event: response.completed") {
-		t.Fatalf("expected response.completed, got: %s", body)
+	for _, want := range []string{
+		"event: response.created",
+		"event: response.output_item.added",
+		"event: response.content_part.added",
+		"event: response.output_text.delta",
+		"cached answer",
+		"event: response.output_text.done",
+		"event: response.content_part.done",
+		"event: response.output_item.done",
+		"event: response.completed",
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("expected %q in responses SSE, got: %s", want, body)
+		}
 	}
 	if strings.Contains(body, "data: [DONE]") {
 		t.Fatalf("responses stream should not contain [DONE], got: %s", body)
@@ -194,14 +200,26 @@ func TestWriteStreamResponse_ResponsesProtocolKeepsSingleChunkText(t *testing.T)
 func TestResponsesStreamFormatter_FirstChunkIncludesDelta(t *testing.T) {
 	f := &responsesStreamFormatter{}
 	out := f.FormatChunk("gpt-5.6-terra", &plugin.StreamChunk{Content: "hello", Done: true}, 0, "resp-1", 123)
-	if !strings.Contains(out, "event: response.created") {
-		t.Fatalf("missing created: %s", out)
-	}
-	if !strings.Contains(out, "event: response.output_text.delta") || !strings.Contains(out, "hello") {
-		t.Fatalf("first chunk must include delta text, got: %s", out)
+	for _, want := range []string{
+		"event: response.created",
+		"event: response.output_item.added",
+		"event: response.content_part.added",
+		"event: response.output_text.delta",
+		"hello",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("missing %q: %s", want, out)
+		}
 	}
 	done := f.FormatDone("gpt-5.6-terra", map[string]interface{}{"total_tokens": 3}, "stop")
-	if !strings.Contains(done, "event: response.completed") {
-		t.Fatalf("FormatDone must emit completed, got: %s", done)
+	for _, want := range []string{
+		"event: response.output_text.done",
+		"event: response.content_part.done",
+		"event: response.output_item.done",
+		"event: response.completed",
+	} {
+		if !strings.Contains(done, want) {
+			t.Fatalf("FormatDone missing %q: %s", want, done)
+		}
 	}
 }

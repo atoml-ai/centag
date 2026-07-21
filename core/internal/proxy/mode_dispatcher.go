@@ -1449,62 +1449,170 @@ func (f *geminiStreamFormatter) BuildUsage(finalOutput *pipeline.PipelineOutput)
 }
 
 // responsesStreamFormatter OpenAI Responses SSE 格式化器.
-// OpenCode 等客户端依赖 response.created → output_text.delta → response.completed。
-// 注意：pipeline 非流式结果常以「单块 Content」到达；若 chunkIndex==0 只发 created
-// 会吞掉正文，客户端表现为空白（服务端日志仍显示成功）。
-type responsesStreamFormatter struct{}
+//
+// OpenCode / Codex 等客户端要求完整生命周期（不能只发 created+delta+completed）：
+//
+//	response.created
+//	response.output_item.added
+//	response.content_part.added
+//	response.output_text.delta (+...)
+//	response.output_text.done
+//	response.content_part.done
+//	response.output_item.done
+//	response.completed
+//
+// 缺少 output_item/content_part 时，delta 会被静默丢弃，表现为服务端成功、UI 空白。
+type responsesStreamFormatter struct {
+	seq        int
+	opened     bool
+	responseID string
+	itemID     string
+	model      string
+	created    int64
+	text       strings.Builder
+}
+
+func (f *responsesStreamFormatter) nextSeq() int {
+	f.seq++
+	return f.seq
+}
+
+func (f *responsesStreamFormatter) writeEvent(sb *strings.Builder, typ string, payload map[string]interface{}) {
+	if payload == nil {
+		payload = map[string]interface{}{}
+	}
+	payload["type"] = typ
+	payload["sequence_number"] = f.nextSeq()
+	dataBytes, _ := json.Marshal(payload)
+	sb.WriteString(fmt.Sprintf("event: %s\ndata: %s\n\n", typ, string(dataBytes)))
+}
+
+func (f *responsesStreamFormatter) ensureOpened(sb *strings.Builder, model, responseID string, created int64) {
+	if f.opened {
+		return
+	}
+	f.opened = true
+	f.responseID = responseID
+	f.itemID = "msg_" + responseID
+	f.model = model
+	f.created = created
+
+	f.writeEvent(sb, "response.created", map[string]interface{}{
+		"response": map[string]interface{}{
+			"id":         responseID,
+			"object":     "response",
+			"created_at": created,
+			"status":     "in_progress",
+			"model":      model,
+			"output":     []interface{}{},
+		},
+	})
+	f.writeEvent(sb, "response.output_item.added", map[string]interface{}{
+		"output_index": 0,
+		"item": map[string]interface{}{
+			"id":      f.itemID,
+			"type":    "message",
+			"role":    "assistant",
+			"status":  "in_progress",
+			"content": []interface{}{},
+		},
+	})
+	f.writeEvent(sb, "response.content_part.added", map[string]interface{}{
+		"item_id":       f.itemID,
+		"output_index":  0,
+		"content_index": 0,
+		"part": map[string]interface{}{
+			"type": "output_text",
+			"text": "",
+		},
+	})
+}
 
 func (f *responsesStreamFormatter) FormatChunk(model string, chunk *plugin.StreamChunk, chunkIndex int, responseID string, created int64) string {
 	if chunk == nil {
 		return ""
 	}
 	var sb strings.Builder
-	if chunkIndex == 0 {
-		evt := map[string]interface{}{
-			"type": "response.created",
-			"response": map[string]interface{}{
-				"id":     responseID,
-				"object": "response",
-				"status": "in_progress",
-				"model":  model,
-				"created_at": created,
-			},
-		}
-		dataBytes, _ := json.Marshal(evt)
-		sb.WriteString(fmt.Sprintf("event: response.created\ndata: %s\n\n", string(dataBytes)))
-	}
+	f.ensureOpened(&sb, model, responseID, created)
+
 	deltaText := chunk.Content
 	if deltaText == "" {
 		deltaText = chunk.ReasoningContent
 	}
 	if deltaText != "" {
-		evt := map[string]interface{}{
-			"type":  "response.output_text.delta",
-			"delta": deltaText,
-		}
-		dataBytes, _ := json.Marshal(evt)
-		sb.WriteString(fmt.Sprintf("event: response.output_text.delta\ndata: %s\n\n", string(dataBytes)))
+		f.text.WriteString(deltaText)
+		f.writeEvent(&sb, "response.output_text.delta", map[string]interface{}{
+			"item_id":       f.itemID,
+			"output_index":  0,
+			"content_index": 0,
+			"delta":         deltaText,
+		})
 	}
 	return sb.String()
 }
 
 func (f *responsesStreamFormatter) FormatDone(model string, usage map[string]interface{}, finishReason string) string {
-	resp := map[string]interface{}{
+	var sb strings.Builder
+	if !f.opened {
+		// 无 chunk 时也要给出完整信封，避免客户端挂起
+		rid := fmt.Sprintf("resp-%d", time.Now().UnixNano())
+		f.ensureOpened(&sb, model, rid, time.Now().Unix())
+	}
+	if model != "" {
+		f.model = model
+	}
+	fullText := f.text.String()
+
+	f.writeEvent(&sb, "response.output_text.done", map[string]interface{}{
+		"item_id":       f.itemID,
+		"output_index":  0,
+		"content_index": 0,
+		"text":          fullText,
+	})
+	f.writeEvent(&sb, "response.content_part.done", map[string]interface{}{
+		"item_id":       f.itemID,
+		"output_index":  0,
+		"content_index": 0,
+		"part": map[string]interface{}{
+			"type": "output_text",
+			"text": fullText,
+		},
+	})
+	item := map[string]interface{}{
+		"id":     f.itemID,
+		"type":   "message",
+		"role":   "assistant",
 		"status": "completed",
-		"model":  model,
+		"content": []interface{}{
+			map[string]interface{}{
+				"type": "output_text",
+				"text": fullText,
+			},
+		},
+	}
+	f.writeEvent(&sb, "response.output_item.done", map[string]interface{}{
+		"output_index": 0,
+		"item":         item,
+	})
+
+	resp := map[string]interface{}{
+		"id":         f.responseID,
+		"object":     "response",
+		"created_at": f.created,
+		"status":     "completed",
+		"model":      f.model,
+		"output":     []interface{}{item},
 	}
 	if usage != nil {
 		resp["usage"] = usage
 	}
 	if finishReason != "" {
-		resp["finish_reason"] = finishReason
+		resp["incomplete_details"] = nil
 	}
-	evt := map[string]interface{}{
-		"type":     "response.completed",
+	f.writeEvent(&sb, "response.completed", map[string]interface{}{
 		"response": resp,
-	}
-	dataBytes, _ := json.Marshal(evt)
-	return fmt.Sprintf("event: response.completed\ndata: %s\n\n", string(dataBytes))
+	})
+	return sb.String()
 }
 
 func (f *responsesStreamFormatter) BuildUsage(finalOutput *pipeline.PipelineOutput) map[string]interface{} {
