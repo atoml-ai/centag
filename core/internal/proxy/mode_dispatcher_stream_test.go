@@ -151,3 +151,57 @@ func TestWriteStreamResponse_AnthropicNoDoneMarker(t *testing.T) {
 		t.Fatalf("anthropic stream should contain message_start, got: %s", body)
 	}
 }
+
+func TestWriteStreamResponse_ResponsesProtocolKeepsSingleChunkText(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	engine := &stubStreamPipelineEngine{
+		output: &pipeline.PipelineOutput{
+			Content:      "你好，我是助手",
+			ExecutionLog: &pipeline.ExecutionLog{TotalTokens: 12},
+		},
+	}
+	dispatcher := NewModeDispatcher(engine, nil, nil)
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", nil)
+	c.Set("protocol_plugin", "responses-protocol")
+
+	resultCh, err := engine.ExecuteStream(context.Background(), "direct-backend", &pipeline.PipelineInput{Content: "hi"})
+	if err != nil {
+		t.Fatalf("ExecuteStream: %v", err)
+	}
+	if err := dispatcher.writeStreamResponse(c, resultCh, ModeDirectBackend, "gpt-5.6-terra"); err != nil {
+		t.Fatalf("writeStreamResponse: %v", err)
+	}
+
+	body := w.Body.String()
+	if !strings.Contains(body, "event: response.created") {
+		t.Fatalf("expected response.created, got: %s", body)
+	}
+	if !strings.Contains(body, "event: response.output_text.delta") || !strings.Contains(body, "cached answer") {
+		t.Fatalf("expected output_text.delta with content, got: %s", body)
+	}
+	if !strings.Contains(body, "event: response.completed") {
+		t.Fatalf("expected response.completed, got: %s", body)
+	}
+	if strings.Contains(body, "data: [DONE]") {
+		t.Fatalf("responses stream should not contain [DONE], got: %s", body)
+	}
+}
+
+func TestResponsesStreamFormatter_FirstChunkIncludesDelta(t *testing.T) {
+	f := &responsesStreamFormatter{}
+	out := f.FormatChunk("gpt-5.6-terra", &plugin.StreamChunk{Content: "hello", Done: true}, 0, "resp-1", 123)
+	if !strings.Contains(out, "event: response.created") {
+		t.Fatalf("missing created: %s", out)
+	}
+	if !strings.Contains(out, "event: response.output_text.delta") || !strings.Contains(out, "hello") {
+		t.Fatalf("first chunk must include delta text, got: %s", out)
+	}
+	done := f.FormatDone("gpt-5.6-terra", map[string]interface{}{"total_tokens": 3}, "stop")
+	if !strings.Contains(done, "event: response.completed") {
+		t.Fatalf("FormatDone must emit completed, got: %s", done)
+	}
+}

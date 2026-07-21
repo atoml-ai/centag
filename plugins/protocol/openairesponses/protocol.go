@@ -10,6 +10,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"strings"
 
 	"centag/core/pkg/plugin"
 
@@ -164,36 +165,38 @@ func (p *Protocol) HandleResponse(c *gin.Context, resp *plugin.ProxyResponse) er
 	return nil
 }
 
-// FormatStreamChunk 将内部 StreamChunk 格式化为 Responses API SSE event
+// FormatStreamChunk 将内部 StreamChunk 格式化为 Responses API SSE event.
+// 首块若同时带正文，必须一并输出 delta，否则单块非流式结果会只剩 response.created。
 func (p *Protocol) FormatStreamChunk(model string, chunk *plugin.StreamChunk, chunkIndex int) string {
 	if chunk == nil {
 		return ""
 	}
+	var sb strings.Builder
 	if chunkIndex == 0 {
 		evt := sseEvent{Type: "response.created"}
 		data, _ := json.Marshal(evt)
-		return fmt.Sprintf("event: %s\ndata: %s", evt.Type, string(data))
+		sb.WriteString(fmt.Sprintf("event: %s\ndata: %s\n\n", evt.Type, string(data)))
 	}
-	if chunk.Content != "" || chunk.ReasoningContent != "" {
-		deltaText := chunk.Content
-		if deltaText == "" {
-			deltaText = chunk.ReasoningContent
-		}
+	deltaText := chunk.Content
+	if deltaText == "" {
+		deltaText = chunk.ReasoningContent
+	}
+	if deltaText != "" {
 		evt := sseEvent{
 			Type:  "response.output_text.delta",
 			Delta: deltaText,
 		}
 		data, _ := json.Marshal(evt)
-		return fmt.Sprintf("event: %s\ndata: %s", evt.Type, string(data))
+		sb.WriteString(fmt.Sprintf("event: %s\ndata: %s\n\n", evt.Type, string(data)))
 	}
-	return ""
+	return sb.String()
 }
 
 // FormatStreamDone 返回 Responses 流结束事件
 func (p *Protocol) FormatStreamDone() string {
 	evt := sseEvent{Type: "response.completed"}
 	data, _ := json.Marshal(evt)
-	return fmt.Sprintf("event: %s\ndata: %s", evt.Type, string(data))
+	return fmt.Sprintf("event: %s\ndata: %s\n\n", evt.Type, string(data))
 }
 
 func (p *Protocol) GetModels() ([]plugin.ModelInfo, error) {
