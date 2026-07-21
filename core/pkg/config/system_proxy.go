@@ -32,12 +32,20 @@ func RunningInContainer() bool {
 //   - bare metal: ListenAddr forced to loopback
 //   - container: ListenAddr becomes 0.0.0.0 so published host ports can reach MITM;
 //     PACProxyHost stays 127.0.0.1 for same-host wrap.
+// Empty Domains / PathPatterns are refilled from DefaultMITM* so a wiped DB
+// config does not disable MITM for all LLM hosts (CONNECT tunnel only).
 func NormalizeSystemProxyConfig(c *SystemProxyConfig) {
 	if c == nil {
 		return
 	}
 	if c.ListenPort <= 0 {
 		c.ListenPort = 8081
+	}
+	if len(c.Domains) == 0 {
+		c.Domains = append([]string(nil), DefaultMITMDomains()...)
+	}
+	if len(c.PathPatterns) == 0 {
+		c.PathPatterns = append([]string(nil), DefaultMITMPathPatterns()...)
 	}
 	if !c.AllowLANClients {
 		if RunningInContainer() {
