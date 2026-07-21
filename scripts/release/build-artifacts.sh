@@ -107,9 +107,24 @@ fi
 
 package_tar() {
   local stage_parent="$1" stage_name="$2" out_tarball="$3"
+  # macOS: strip Apple xattrs / provenance so Linux tar does not spam
+  # "Ignoring unknown extended header keyword 'LIBARCHIVE.xattr…'".
+  if [[ "$(uname -s 2>/dev/null || true)" == "Darwin" ]] && command -v xattr >/dev/null 2>&1; then
+    xattr -cr "${stage_parent}/${stage_name}" 2>/dev/null || true
+  fi
   (
     cd "$stage_parent"
-    tar -czf "$out_tarball" "$stage_name"
+    export COPYFILE_DISABLE=1
+    # Prefer portable flags when available (bsdtar / GNU tar).
+    if tar --help 2>&1 | grep -q -- '--no-xattrs'; then
+      if tar --help 2>&1 | grep -q -- '--no-mac-metadata'; then
+        tar --no-xattrs --no-mac-metadata -czf "$out_tarball" "$stage_name"
+      else
+        tar --no-xattrs -czf "$out_tarball" "$stage_name"
+      fi
+    else
+      tar -czf "$out_tarball" "$stage_name"
+    fi
   )
 }
 

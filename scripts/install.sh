@@ -316,7 +316,21 @@ install_component_from_archive() {
   fi
 
   mkdir -p "$BIN_DIR" "$LIB_DIR"
-  tar -xzf "${tmp}/${asset}" -C "$tmp"
+  # macOS-built archives may carry Apple xattrs; GNU tar warns loudly but still extracts.
+  local tar_err="${tmp}/tar.err"
+  if tar --help 2>&1 | grep -q 'warning=no-unknown-keyword'; then
+    tar --warning=no-unknown-keyword -xzf "${tmp}/${asset}" -C "$tmp"
+  else
+    if ! tar -xzf "${tmp}/${asset}" -C "$tmp" 2>"$tar_err"; then
+      cat "$tar_err" >&2 || true
+      rm -rf "$tmp"
+      fail "failed to extract ${asset}"
+    fi
+    if [[ -s "$tar_err" ]]; then
+      # Drop harmless Apple xattr noise; keep real tar diagnostics.
+      grep -Ev 'LIBARCHIVE\.xattr|unknown extended header keyword' "$tar_err" >&2 || true
+    fi
+  fi
 
   case "$component" in
     personal)
