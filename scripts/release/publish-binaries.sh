@@ -99,6 +99,24 @@ curl -fsSL https://raw.githubusercontent.com/${REPO}/${TAG}/scripts/install.sh |
 Default install root: \`~/.centag\`. Chain \`. ~/.centag/env\` so PATH applies in this shell.  
 \`minimal\` / \`launcher\` are not published in this release.
 
+### Default login (first run)
+
+- Username: \`admin\`
+- Password: \`centag123\`  
+  (override with \`LLM_PROXY_ADMIN_PASSWORD\` before first start)
+
+### centag-wrap auth (optional)
+
+\`centag-wrap doctor\` may report \`setup/status requires auth (HTTP 401)\`.  
+PAC/CA still work without a token; doctor can still PASS.  
+To call authenticated setup APIs, create an API Key in the WebUI, then:
+
+\`\`\`bash
+export CENTAG_WRAP_TOKEN='your_api_key'
+centag-wrap doctor
+# optional: centag-wrap enable / run …
+\`\`\`
+
 ### Uninstall
 
 There is no dedicated uninstall command yet. Remove manually:
