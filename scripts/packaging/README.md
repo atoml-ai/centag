@@ -15,7 +15,7 @@
 
 仓库根目录 [`packaging.env`](../../packaging.env)：
 
-- `PACKAGE_ARCH` / `PACKAGE_MODE` / `PACKAGE_OUTPUT`（默认 `bin/packages`，勿写回 `dist/`）
+- `PACKAGE_ARCH` / `PACKAGE_MODE` / `PACKAGE_OUTPUT`（默认 `~/.centag/var/packages`，勿写回 `dist/`）
 - `PACKAGE_EDITION`（默认 `minimal`；可选 `personal` / `team`）
 - `IMAGE_PREFIX`（docker 模式镜像前缀）
 - `PACKAGE_APP_NAME` / `PACKAGE_APP_ID`（品牌标识，固定为 Centag）

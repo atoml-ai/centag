@@ -27,6 +27,8 @@ set -euo pipefail
 APP=centag
 REPO="${CENTAG_REPO:-atoml-ai/centag}"
 RELEASE_BASE="${CENTAG_RELEASE_BASE:-}" # override e.g. https://cdn.example.com/centag/v0.2.7
+# Layout matches local build/run (scripts/lib/centag-layout.sh). This file stays
+# self-contained for curl|bash; layout.sh is the shared helper inside the repo.
 INSTALL_ROOT="${CENTAG_INSTALL_ROOT:-$HOME/.centag}"
 BIN_DIR="${CENTAG_BIN_DIR:-$INSTALL_ROOT/bin}"
 LIB_DIR="${INSTALL_ROOT}/lib"
@@ -436,25 +438,22 @@ install_from_source() {
 
   (
     cd "$src_dir"
+    # Local build/run layout matches install root (see scripts/lib/centag-layout.sh).
+    export CENTAG_INSTALL_ROOT="${INSTALL_ROOT}"
+    export CENTAG_BIN_DIR="${BIN_DIR}"
     local need_fe=false c
     for c in "${COMPONENTS[@]}"; do
       [[ "$c" == "personal" ]] && need_fe=true
     done
     if [[ "$need_fe" == true ]]; then
-      (cd web && npm ci && npm run build)
+      (cd web && npm ci && CENTAG_INSTALL_ROOT="${INSTALL_ROOT}" CENTAG_EDITION=personal npm run build)
     fi
 
     for c in "${COMPONENTS[@]}"; do
       case "$c" in
         personal)
           ./start.sh build personal
-          mkdir -p "${LIB_DIR}/personal"
-          cp -f "bin/server/centag-personal" "${LIB_DIR}/personal/centag-personal${EXT}"
-          chmod 755 "${LIB_DIR}/personal/centag-personal${EXT}"
-          if [[ -d bin/server/static ]]; then
-            rm -rf "${LIB_DIR}/personal/static"
-            cp -R bin/server/static "${LIB_DIR}/personal/static"
-          fi
+          [[ -x "${LIB_DIR}/personal/centag-personal${EXT}" ]] || fail "from-source build missing ${LIB_DIR}/personal/centag-personal${EXT}"
           mkdir -p "$BIN_DIR"
           ln -sfn "${LIB_DIR}/personal/centag-personal${EXT}" "${BIN_DIR}/centag-personal${EXT}"
           write_wrapper_centag personal
@@ -463,8 +462,7 @@ install_from_source() {
         wrap)
           ./start.sh build wrap
           mkdir -p "$BIN_DIR"
-          [[ -f "bin/wrap/centag-wrap${EXT}" ]] || fail "from-source build missing centag-wrap binary"
-          cp -f "bin/wrap/centag-wrap${EXT}" "${BIN_DIR}/centag-wrap${EXT}"
+          [[ -f "${BIN_DIR}/centag-wrap${EXT}" ]] || fail "from-source build missing ${BIN_DIR}/centag-wrap${EXT}"
           chmod 755 "${BIN_DIR}/centag-wrap${EXT}"
           log "${GREEN}OK${NC} wrap (from source)"
           ;;

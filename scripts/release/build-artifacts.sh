@@ -6,7 +6,7 @@
 #   ./scripts/release/build-artifacts.sh --components personal,wrap
 #   CENTAG_RELEASE_PLATFORMS=linux-amd64,darwin-arm64 ./scripts/release/build-artifacts.sh
 #
-# Outputs under bin/release/<version>/ (default components):
+# Outputs under ~/.centag/var/release/<version>/ (default components):
 #   centag-personal-<goos>-<goarch>.tar.gz
 #   centag-wrap-<goos>-<goarch>.tar.gz
 #   checksums.txt
@@ -16,6 +16,9 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+# shellcheck source=scripts/lib/centag-layout.sh
+source "${ROOT}/scripts/lib/centag-layout.sh"
+centag_layout_init
 NPM_PKG="${ROOT}/apps/wrap-npm/package.json"
 
 log() { echo "==> $*" >&2; }
@@ -52,7 +55,7 @@ fi
 [[ -n "$VERSION" ]] || fail "version required (--version or apps/wrap-npm/package.json)"
 VERSION="${VERSION#v}"
 
-OUT_DIR="${ROOT}/bin/release/${VERSION}"
+OUT_DIR="${CENTAG_RELEASE_DIR}/${VERSION}"
 rm -rf "$OUT_DIR"
 mkdir -p "$OUT_DIR"
 
@@ -92,12 +95,13 @@ HOST_GOOS="$(go env GOOS)"
 HOST_GOARCH="$(go env GOARCH)"
 
 # --- frontend (shared static) ---------------------------------------------
-STATIC_SRC="${ROOT}/bin/server/static"
+STATIC_SRC="${CENTAG_STATIC_DIR}"
 if need_component personal || need_component minimal; then
   if [[ "$SKIP_FRONTEND" != "1" ]]; then
     log "building frontend → ${STATIC_SRC}"
     (
       cd "${ROOT}/web"
+      export CENTAG_INSTALL_ROOT CENTAG_EDITION CENTAG_STATIC_DIR="${STATIC_SRC}"
       if [[ -f package-lock.json ]]; then npm ci; else npm install; fi
       npm run build
     )
@@ -226,7 +230,7 @@ build_launcher_lite() {
     CENTAG_LAUNCHER_GOOS="$goos" CENTAG_LAUNCHER_GOARCH="$goarch" \
       bash scripts/build-launcher.sh
   )
-  out_bin="${ROOT}/bin/launcher/${goos}-${goarch}/centag-launcher${ext}"
+  out_bin="${CENTAG_CROSS_DIR}/launcher/${goos}-${goarch}/centag-launcher${ext}"
   [[ -f "$out_bin" ]] || fail "launcher binary missing: $out_bin"
 
   stage_parent="${OUT_DIR}/.stage"
@@ -253,7 +257,7 @@ build_launcher_tray_host() {
     CENTAG_LAUNCHER_GOOS="$goos" CENTAG_LAUNCHER_GOARCH="$goarch" \
       bash scripts/build-launcher.sh --tray
   )
-  out_bin="${ROOT}/bin/launcher/${goos}-${goarch}/centag-launcher-tray${ext}"
+  out_bin="${CENTAG_CROSS_DIR}/launcher/${goos}-${goarch}/centag-launcher-tray${ext}"
   [[ -f "$out_bin" ]] || fail "launcher-tray binary missing: $out_bin"
 
   stage_parent="${OUT_DIR}/.stage"

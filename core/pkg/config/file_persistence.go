@@ -31,6 +31,7 @@ func ResolveDataDir() string {
 	}
 	execDir := filepath.Dir(execPath)
 
+	home, _ := os.UserHomeDir()
 	candidates := []string{
 		filepath.Join(execDir, "data"),
 		filepath.Join(execDir, "..", "data"),
@@ -39,6 +40,12 @@ func ResolveDataDir() string {
 		"../data",
 		"./bin/server/data",
 		"../bin/server/data",
+	}
+	if home != "" {
+		candidates = append(candidates,
+			filepath.Join(home, ".centag", "lib", "personal", "data"),
+			filepath.Join(home, ".centag", "lib", "minimal", "data"),
+		)
 	}
 	for _, dir := range candidates {
 		if info, err := os.Stat(dir); err == nil && info.IsDir() {

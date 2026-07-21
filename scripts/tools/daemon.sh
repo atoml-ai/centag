@@ -118,9 +118,14 @@ find_service_binary() {
     
     # 尝试从常见位置查找
     local current_dir=$(pwd)
+    local install_root="${CENTAG_INSTALL_ROOT:-$HOME/.centag}"
+    local edition="${CENTAG_EDITION:-personal}"
     local locations=(
         "$WORK_DIR/$SERVICE_NAME"
+        "$WORK_DIR/centag-${edition}"
         "$WORK_DIR/bin/$SERVICE_NAME"
+        "$install_root/lib/${edition}/centag-${edition}"
+        "$install_root/bin/centag"
         "$PROJECT_ROOT/$SERVICE_NAME"
         "$PROJECT_ROOT/var/bin/$SERVICE_NAME"
         "$PROJECT_ROOT/bin/server/$SERVICE_NAME"
@@ -129,6 +134,8 @@ find_service_binary() {
         "/usr/local/bin/$SERVICE_NAME"
         "/app/$SERVICE_NAME"
         "/app/bin/$SERVICE_NAME"
+        "/app/bin/centag-personal"
+        "/app/bin/centag-minimal"
     )
     
     for location in "${locations[@]}"; do

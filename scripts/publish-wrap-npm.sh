@@ -24,10 +24,13 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=scripts/lib/centag-layout.sh
+source "${ROOT}/scripts/lib/centag-layout.sh"
+centag_layout_init
 PROXYCTL_DIR="${ROOT}/apps/wrap"
 NPM_DIR="${ROOT}/apps/wrap-npm"
 VENDOR_DIR="${NPM_DIR}/bin/vendor"
-OUT_ROOT="${ROOT}/bin/wrap"
+OUT_ROOT="${CENTAG_CROSS_DIR}/wrap"
 
 PLATFORMS=(darwin-amd64 darwin-arm64 linux-amd64 linux-arm64 windows-amd64 windows-arm64)
 

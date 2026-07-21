@@ -23,8 +23,8 @@ Centag API Key **不会**注入到 Agent 环境；由服务端 MITM 注入出口
 产物：
 
 ```
-bin/wrap/<goos>-<goarch>/centag-wrap[.exe]
-bin/wrap/centag-wrap[.exe]   # 当前主机便捷副本
+~/.centag/var/cross/wrap/<goos>-<goarch>/centag-wrap[.exe]
+~/.centag/bin/centag-wrap[.exe]   # 当前主机 / 正式安装 PATH 入口
 ```
 
 ### 真源命令（客户端 / CI / 不经 start.sh）
@@ -43,10 +43,10 @@ GOWORK=off go build -o centag-wrap .
 ./start.sh run wrap run --server http://192.168.1.4:20060 -- opencode
 
 # 真源二进制
-./bin/wrap/centag-wrap run --server http://192.168.1.4:20060 -- opencode
+~/.centag/bin/centag-wrap run --server http://192.168.1.4:20060 -- opencode
 
 # 只打印 export（可 eval）
-./bin/wrap/centag-wrap env --server http://192.168.1.4:20060
+~/.centag/bin/centag-wrap env --server http://192.168.1.4:20060
 ```
 
 本机 Centag（无 `--server`）默认指向 `http://127.0.0.1:20060`，MITM `http://127.0.0.1:8081`。

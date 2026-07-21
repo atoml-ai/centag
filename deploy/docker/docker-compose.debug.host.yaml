@@ -12,7 +12,7 @@ services:
     extra_hosts: []
     # Host 模式下也需要挂载本地 bin 目录和 debug entrypoint
     volumes:
-      - ../bin/server:/app/bin
+      - ${CENTAG_INSTALL_ROOT:-${HOME}/.centag}/lib/${CENTAG_EDITION:-personal}:/app/bin
       - ./entrypoint.debug.sh:/app/entrypoint.debug.sh
     entrypoint: ["/bin/bash", "/app/entrypoint.debug.sh"]
     environment:

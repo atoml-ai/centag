@@ -8,6 +8,10 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+# shellcheck source=scripts/lib/centag-layout.sh
+source "${ROOT}/scripts/lib/centag-layout.sh"
+centag_layout_init
+
 
 log_info() {
   echo "==> $*" >&2
@@ -79,9 +83,9 @@ package_service() {
   local version=""
   local build_time
   build_time="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-  local source_bin="${ROOT}/bin/server/centag"
-  local source_static="${ROOT}/bin/server/static"
-  local out_dir="${ROOT}/bin/packages"
+  local source_bin="${CENTAG_EDITION_LIB}/${CENTAG_SERVER_BIN}"
+  local source_static="${CENTAG_STATIC_DIR}"
+  local out_dir="${CENTAG_PACKAGES_DIR}"
 
   while [[ $# -gt 0 ]]; do
     case "$1" in

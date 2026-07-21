@@ -28,12 +28,16 @@ print_warn() {
     echo -e "${YELLOW}[WARN]${NC} $1"
 }
 
-# 获取项目根目录
+# 获取项目根目录（web/ 的上一级）
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 WEBUI_DIR="$SCRIPT_DIR"
-STATIC_DIR="$PROJECT_ROOT/bin/server/static"
-BIN_DIR="$PROJECT_ROOT/bin/server"
+
+# shellcheck source=scripts/lib/centag-layout.sh
+source "${PROJECT_ROOT}/scripts/lib/centag-layout.sh"
+centag_layout_init
+STATIC_DIR="${CENTAG_STATIC_DIR}"
+BIN_DIR="${CENTAG_EDITION_LIB}"
 
 cd "$PROJECT_ROOT" || exit 1
 
@@ -51,13 +55,16 @@ check_node() {
         exit 1
     fi
 
-    local node_version=$(node -v | cut -d'v' -f2 | cut -d'.' -f1)
+    local node_version
+    node_version=$(node -v | cut -d'v' -f2 | cut -d'.' -f1)
     if [ "$node_version" -lt 18 ]; then
-        local current_v=$(node -v)
+        local current_v
+        current_v=$(node -v)
         print_warn "Node.js 版本较低（${current_v}），建议使用 >= 18.0.0"
     fi
 
-    local current_version=$(node -v)
+    local current_version
+    current_version=$(node -v)
     print_success "Node.js 环境检查通过 (${current_version})"
 }
 
@@ -95,7 +102,8 @@ dev() {
     print_info "检查端口 $webui_port..."
 
     # 清理可能占用端口的 Node/Vite 进程
-    local node_pids=$(ps aux | grep -E "vite|node.*webui|npm.*dev" | grep -v grep | awk '{print $2}' || true)
+    local node_pids
+    node_pids=$(ps aux | grep -E "vite|node.*webui|npm.*dev" | grep -v grep | awk '{print $2}' || true)
 
     if [ -n "$node_pids" ]; then
         print_warn "发现可能相关的 Node/Vite 进程: $node_pids"
@@ -118,7 +126,8 @@ dev() {
 
     # 清理可能占用端口的进程
     if command -v lsof >/dev/null 2>&1; then
-        local port_pids=$(lsof -ti ":$webui_port" 2>/dev/null || true)
+        local port_pids
+        port_pids=$(lsof -ti ":$webui_port" 2>/dev/null || true)
         if [ -n "$port_pids" ]; then
             print_warn "发现占用端口 $webui_port 的进程: $port_pids"
             print_info "正在清理..."
@@ -153,21 +162,14 @@ build() {
 
     cd "$WEBUI_DIR"
 
-    print_info "开始构建..."
+    print_info "开始构建 → $STATIC_DIR ..."
+    mkdir -p "$STATIC_DIR"
+    export CENTAG_INSTALL_ROOT CENTAG_EDITION CENTAG_STATIC_DIR="$STATIC_DIR"
     npm run build
 
     if [ $? -eq 0 ]; then
         print_success "Web UI 构建完成!"
         print_info "构建产物位置: $STATIC_DIR"
-
-        # 同步到 bin/static（服务器运行目录）
-        if [ -d "$BIN_DIR" ]; then
-            mkdir -p "$BIN_DIR/static"
-            print_info "同步静态文件到 bin/static ..."
-            cp -r "$STATIC_DIR/." "$BIN_DIR/static/"
-            print_success "同步完成: bin/static/"
-        fi
-
         cd "$PROJECT_ROOT"
     else
         print_error "Web UI 构建失败"
@@ -194,11 +196,6 @@ clean() {
         rm -rf "$STATIC_DIR"
         print_success "清理完成: $STATIC_DIR"
     fi
-
-    if [ -d "$BIN_DIR/static" ]; then
-        rm -rf "$BIN_DIR/static"
-        print_success "清理完成: $BIN_DIR/static"
-    fi
 }
 
 # 帮助信息
@@ -210,7 +207,7 @@ ${BLUE}用法:${NC} $0 <命令>
 
 ${BLUE}可用命令:${NC}
   ${GREEN}dev${NC}       启动开发服务器 (http://localhost:5173)
-  ${GREEN}build${NC}     构建生产版本 (输出到 static/)
+  ${GREEN}build${NC}     构建生产版本 (输出到 ~/.centag/lib/<edition>/static)
   ${GREEN}lint${NC}      代码检查
   ${GREEN}clean${NC}     清理构建产物
   ${GREEN}help${NC}      显示帮助信息

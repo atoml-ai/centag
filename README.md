@@ -69,8 +69,8 @@ centag-wrap doctor
 # 密钥模板 → 本地 secrets（勿提交）
 cp config/secrets/.env.example config/secrets/.env
 
-make build          # 后端 → bin/server/
-make frontend       # 前端 → bin/server/static
+make build          # 后端 → ~/.centag/lib/personal/centag-personal
+make frontend       # 前端 → ~/.centag/lib/personal/static
 make run            # 或 ./start.sh run be
 ```
 

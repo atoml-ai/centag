@@ -18,7 +18,7 @@ npm run dev
 
 ```bash
 # 从仓库根目录
-make frontend   # → bin/server/static
+make frontend   # → ~/.centag/lib/personal/static
 ```
 
 ## 相关

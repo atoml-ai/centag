@@ -414,6 +414,12 @@ func resolveDataDir() string {
 		"./bin/server/data",
 		"../bin/server/data",
 	}
+	if home, err := os.UserHomeDir(); err == nil && home != "" {
+		candidates = append(candidates,
+			filepath.Join(home, ".centag", "lib", "personal", "data"),
+			filepath.Join(home, ".centag", "lib", "minimal", "data"),
+		)
+	}
 	for _, dir := range candidates {
 		if info, err := os.Stat(dir); err == nil && info.IsDir() {
 			absDir, err := filepath.Abs(dir)

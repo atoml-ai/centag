@@ -278,11 +278,11 @@ checksum=<manifest 文件的 MD5>
 
 ```bash
 # 分析已构建 fpk 的内部结构
-tar -tzf bin/packages/centag-minimal-native-amd64.fpk
+tar -tzf ~/.centag/var/packages/centag-minimal-native-amd64.fpk
 
 # 单独提取 app.tgz 查看
 mkdir -p /tmp/fpk_debug && cd /tmp/fpk_debug
-tar -xzf "$OLDPWD/bin/packages/centag-minimal-native-amd64.fpk" app.tgz
+tar -xzf "$HOME/.centag/var/packages/centag-minimal-native-amd64.fpk" app.tgz
 tar -xzf app.tgz
 ls -la
 
