@@ -3,11 +3,16 @@ package server
 import (
 	"testing"
 
+	"centag/core/pkg/logger"
 	"centag/core/pkg/pipeline"
 	"centag/core/pkg/scheduler"
 )
 
 func TestWireCircuitBreaker(t *testing.T) {
+	// Defensive: wireCircuitBreaker logs; do not rely solely on TestMain ordering.
+	if err := logger.Init(logger.Config{Level: "error", Format: "console", Output: "stdout"}); err != nil {
+		t.Fatalf("logger.Init: %v", err)
+	}
 	cbManager := scheduler.NewCircuitBreakerManager(scheduler.CircuitBreakerConfig{
 		FailureThreshold: 1,
 		SuccessThreshold: 1,
