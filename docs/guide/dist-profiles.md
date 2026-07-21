@@ -188,7 +188,7 @@ Dist Profile 是 Centag 的**编译时插件子集**。能否真正注册，取�
 |----------------|------------|-----------|------------------|---------|
 | `minimal` | `deploy/docker/Dockerfile.dist` | `minimal` | `false` | 无 |
 | `personal` | `deploy/docker/Dockerfile.dist` | `personal` | `true` | SQLite |
-| `team` | **在 centag-pro 构建镜像**（开源 Dockerfile.dist 拒绝 `DIST_NAME=team`） | — | — | 外部 PostgreSQL |
+| `team` | **centag-pro** `docker/Dockerfile.team`（`./start.sh docker build`；开源 Dockerfile.dist 拒绝 `DIST_NAME=team`） | — | — | 外部 PostgreSQL |
 
 ### 构建参数
 

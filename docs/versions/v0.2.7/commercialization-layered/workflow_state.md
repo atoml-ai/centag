@@ -10,8 +10,8 @@
 | Phase 1 | Step 1 方案设计 | ✅ | 2026-07-20 | 插件态方案（删 dist/team） |
 | Phase 2 | Step 2 任务规划 | ✅ | 2026-07-21 | D1–D6；E2R 纠正落点 |
 | Phase 3 | Step 3 编码 | ✅ | 2026-07-21 | E0–E4 + E2R（D6）完成 |
-| | Step 4 单测补全 | ⬜ | | |
-| Phase 4 | Step 5 CR | ⬜ | | |
+| | Step 4 单测补全 | ✅ | 2026-07-21 | facade 单测 + server TestMain |
+| Phase 4 | Step 5 CR | ✅ | 2026-07-21 | 自测记录 + CR；待人工复核 |
 
 ## 门禁
 
@@ -19,8 +19,8 @@
 |------|:----:|------|
 | Gate 1 | ✅ | |
 | Gate 2 | ✅ | D1–D5（2026-07-21）；D6 用户纠正实现进 pro |
-| Gate 3 | ⬜ | E2+ 与测试后 |
-| Gate 4 | ⬜ | |
+| Gate 3 | ✅ | 相关包测试 + lint + ci-check + pro verify |
+| Gate 4 | ✅ | 产物齐全；Critical=0；**人工复核后合入** |
 
 ## 产物
 
@@ -36,7 +36,9 @@
 - [x] E2.8：文档与 `rg` 无私有边验收
 - [x] E3：`centag-pro/web/packs/team` + D1 `/cost`；`build-web-team.sh`
 - [x] E4：OSS/pro CI workflow；`ci-check-no-private-deps.sh`；`plugins/example`
-- [ ] 自测记录 / CR
+- [x] pro Docker：`docker/Dockerfile.team` + `./start.sh docker build`（R12）
+- [x] 自测记录 / CR
+- [x] debug 退出 `vite_pid` unbound 修复（pro + OSS start.sh）
 
 ## 决策日志
 
@@ -51,3 +53,4 @@
 | 2026-07-21 | **确认计划 + D1–D5，开始 E2.0** | 用户 |
 | 2026-07-21 | **取消开源 `start.sh build team` 转调**；Team 仅在 centag-pro 构建 | 用户 |
 | 2026-07-21 | **D6**：Team 产品实现必须在闭源 pro；禁止开源 `teamadmin` 落盘（纠正 E2.1–E2.4） | 用户 |
+| 2026-07-21 | Step4–5 + pro Docker + 修复 debug 退出 vite_pid | 用户 |

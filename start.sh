@@ -1321,8 +1321,17 @@ debug() {
     fi
     print_success "前端构建就绪，Vite 监听文件变化中..."
 
-    # 退出时自动清理 Vite 进程
-    trap "kill $vite_pid 2>/dev/null; print_info '已停止前端 watch 进程'" EXIT INT TERM
+    # 退出时自动清理 Vite（PID 写入全局，避免 EXIT 在函数返回后遇 set -u unbound）
+    DEBUG_VITE_PID="$vite_pid"
+    cleanup_debug_vite() {
+        trap - EXIT INT TERM
+        if [ -n "${DEBUG_VITE_PID:-}" ]; then
+            kill "$DEBUG_VITE_PID" 2>/dev/null || true
+            DEBUG_VITE_PID=
+        fi
+        print_info '已停止前端 watch 进程'
+    }
+    trap cleanup_debug_vite EXIT INT TERM
 
     echo ""
     print_info "════════════════════════════════════════"
@@ -1465,7 +1474,16 @@ _debug_minimal() {
     npx vite build --watch --outDir "$BIN_DIR/static" --emptyOutDir false > /tmp/centag-vite-minimal.log 2>&1 &
     local vite_pid=$!
     cd "$PROJECT_ROOT"
-    trap "kill $vite_pid 2>/dev/null; print_info '已停止前端 watch'" EXIT INT TERM
+    DEBUG_VITE_PID="$vite_pid"
+    cleanup_debug_vite_minimal() {
+        trap - EXIT INT TERM
+        if [ -n "${DEBUG_VITE_PID:-}" ]; then
+            kill "$DEBUG_VITE_PID" 2>/dev/null || true
+            DEBUG_VITE_PID=
+        fi
+        print_info '已停止前端 watch'
+    }
+    trap cleanup_debug_vite_minimal EXIT INT TERM
 
     echo ""
     print_info "════════════════════════════════════════"

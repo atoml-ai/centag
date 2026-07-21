@@ -46,10 +46,16 @@ func Wrap(s *tokenusage.Service) AdminService {
 func Default() AdminService { return Wrap(tokenusage.DefaultService()) }
 
 func (a *adapter) GetAllUsersUsage(ctx context.Context, from, to time.Time) (*UsageStats, error) {
+	if a == nil || a.s == nil {
+		return nil, errUnavailable
+	}
 	return a.s.GetAllUsersUsage(ctx, from, to)
 }
 
 func (a *adapter) GetUserRanking(ctx context.Context, limit, days int) ([]UserRank, error) {
+	if a == nil || a.s == nil {
+		return nil, errUnavailable
+	}
 	rows, err := a.s.GetUserRanking(ctx, limit, days)
 	if err != nil {
 		return nil, err
@@ -66,13 +72,28 @@ func (a *adapter) GetUserRanking(ctx context.Context, limit, days int) ([]UserRa
 }
 
 func (a *adapter) SetQuota(ctx context.Context, userID int64, dailyLimit, monthlyLimit int) error {
+	if a == nil || a.s == nil {
+		return errUnavailable
+	}
 	return a.s.SetQuota(ctx, userID, dailyLimit, monthlyLimit)
 }
 
 func (a *adapter) GetUserQuota(ctx context.Context, userID int64) (*UserQuota, error) {
+	if a == nil || a.s == nil {
+		return nil, errUnavailable
+	}
 	return a.s.GetUserQuota(ctx, userID)
 }
 
 func (a *adapter) ResetQuota(ctx context.Context, userID int64) error {
+	if a == nil || a.s == nil {
+		return errUnavailable
+	}
 	return a.s.ResetQuota(ctx, userID)
 }
+
+type unavailableError struct{}
+
+func (unavailableError) Error() string { return "token usage service unavailable" }
+
+var errUnavailable = unavailableError{}
