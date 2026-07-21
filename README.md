@@ -41,7 +41,7 @@ curl -fsSL https://raw.githubusercontent.com/atoml-ai/centag/main/scripts/instal
 
 安装后：`centag` 启动服务，`centag-proxyctl run -- opencode` 走本机代理。
 
-发版产物与上传：`./scripts/release/publish-binaries.sh --version <ver> --release`（或推送 `v*` tag 触发 `.github/workflows/release.yml`）。当前默认只发布 **personal + proxyctl**。
+发版产物与上传：`./scripts/release/publish-binaries.sh --version <ver> --release`（或推送 `v*` tag 触发 `.github/workflows/release.yml`）。当前默认只发布 **personal + proxyctl**。完整步骤见 [docs/harness/skills/centag-release.md](docs/harness/skills/centag-release.md)（Agent 触发词：发版 / release）。
 
 ## 快速开始（开发机）
 
