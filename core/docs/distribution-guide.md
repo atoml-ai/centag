@@ -118,19 +118,19 @@ go build -o centag-mydist .
 推荐：
 
 ```bash
-./start.sh dist build minimal
-./start.sh dist build personal
-./start.sh dist build team
+./start.sh build minimal
+./start.sh build personal
+# Team：仅在 centag-pro → ./scripts/build-team.sh
 ```
 
-或在各 `dist/<name>/` 下使用已带 tags 的 `./build.sh`。勿省略 `-tags`，否则带 `//go:build` 的 `register.go` 不会编进二进制。
+或在各 `dist/<name>/`（minimal|personal）下使用已带 tags 的 `./build.sh`。勿省略 `-tags`，否则带 `//go:build` 的 `register.go` 不会编进二进制。
 
 ```bash
 #!/bin/bash
-# 示例：构建全部发行版（委托 start.sh，确保 tags 正确）
+# 示例：构建开源发行版（委托 start.sh，确保 tags 正确）
 set -e
-for dist in minimal personal team; do
-    ./start.sh dist build "$dist"
+for dist in minimal personal; do
+    ./start.sh build "$dist"
 done
 ```
 
