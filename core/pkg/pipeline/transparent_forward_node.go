@@ -80,6 +80,18 @@ func (n *TransparentForwardNode) Execute(ctx context.Context, input *NodeInput) 
 		return nil, fmt.Errorf("transparent_forward node %q: %w", n.id, err)
 	}
 
+	// Responses clients (OpenCode / Codex) POST {input:...} to /v1/responses, but
+	// configured backends are reached at /chat/completions which expects messages.
+	// Rewrite before upstream call; otherwise providers (e.g. BigModel) return
+	// "输入不能为空" while Centag logs still show a non-empty messages_preview.
+	responsesToChat := false
+	if strings.Contains(targetURL, "/chat/completions") {
+		if rewritten, ok := convertResponsesBodyToChatCompletions(body); ok {
+			body = rewritten
+			responsesToChat = true
+		}
+	}
+
 	req, err := http.NewRequestWithContext(ctx, method, targetURL, strings.NewReader(string(body)))
 	if err != nil {
 		return nil, fmt.Errorf("transparent_forward node %q: build request: %w", n.id, err)
@@ -141,9 +153,30 @@ func (n *TransparentForwardNode) Execute(ctx context.Context, input *NodeInput) 
 		outMeta["backend_id"] = backendID
 	}
 
+	content := string(respBody)
+	var toolCalls []ToolCall
+	finishReason := ""
+	// After Responses→Chat rewrite, upstream returns chat.completion(.chunk) SSE/JSON.
+	// OpenCode expects Responses SSE — flatten text/tool_calls and let the protocol
+	// formatter rebuild the Responses envelope (disable raw passthrough).
+	if responsesToChat && resp.StatusCode < 400 {
+		extracted := extractChatCompletionResult(respBody)
+		if extracted.Text != "" || len(extracted.ToolCalls) > 0 {
+			content = extracted.Text
+			toolCalls = extracted.ToolCalls
+			finishReason = extracted.FinishReason
+			outMeta["raw_passthrough"] = false
+			outMeta["responses_to_chat"] = true
+			contentType = "text/plain"
+			outMeta["content_type"] = contentType
+		}
+	}
+
 	return &NodeOutput{
-		Content:  string(respBody),
-		Metadata: outMeta,
+		Content:      content,
+		Metadata:     outMeta,
+		ToolCalls:    toolCalls,
+		FinishReason: finishReason,
 	}, nil
 }
 
