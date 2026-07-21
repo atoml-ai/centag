@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 
+	wrapcli "centag/apps/wrap/cli"
 	"centag/core/pkg/entrypoint"
 
 	// Core LLM backends + protocols (business plugins: external go.mod)
@@ -34,9 +35,20 @@ var (
 	BuildTime = "unknown"
 )
 
+func init() {
+	wrapcli.SetProgramName("centag wrap")
+	entrypoint.SetWrapCLI(wrapcli.Run)
+}
+
 func main() {
-	// Exit before server bootstrap when asked for version.
+	// Exit before server bootstrap for version / help / wrap.
 	if entrypoint.HandleVersionCommand(Version, BuildTime, os.Args) {
+		return
+	}
+	if entrypoint.HandleHelpCommand(os.Args) {
+		return
+	}
+	if entrypoint.HandleWrapCommand(os.Args) {
 		return
 	}
 	entrypoint.Run(Version, BuildTime)

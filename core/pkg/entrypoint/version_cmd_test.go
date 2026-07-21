@@ -21,3 +21,20 @@ func TestIsVersionCommand(t *testing.T) {
 		}
 	}
 }
+
+func TestNormalizeVersionLabel(t *testing.T) {
+	cases := []struct {
+		in, want string
+	}{
+		{"", ""},
+		{"dev", "dev"},
+		{"v0.2.7", "v0.2.7"},
+		{"0.2.7", "v0.2.7"},
+		{"v20260721-211854", "v20260721-211854"},
+	}
+	for _, tc := range cases {
+		if got := normalizeVersionLabel(tc.in); got != tc.want {
+			t.Fatalf("normalizeVersionLabel(%q)=%q, want %q", tc.in, got, tc.want)
+		}
+	}
+}
