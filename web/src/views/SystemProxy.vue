@@ -582,7 +582,8 @@ const runCommand = computed(() => {
 })
 
 function wrapBin() {
-  return 'centag-wrap'
+  // Prefer main-binary subcommand (personal ships wrap; no separate centag-wrap asset).
+  return 'centag wrap'
 }
 
 function employeeAPIBase() {
