@@ -12,7 +12,7 @@
 | Phase 3 | Step 3 编码 | ✅ | 2026-07-21 | bc6840c 已实现 |
 | | Step 4 单测补全 | ✅ | 2026-07-21 | require-release-branch_test.sh（15 case） |
 | Phase 4 | Step 5 CR | ✅ | 2026-07-21 | 自测记录 + CR；人工已批准发版 |
-| Phase 5 | Step 6 发版 | ✅ | 2026-07-21 | Path B 重发；tag→e273272；见 `发版验收.md` |
+| Phase 5 | Step 6 发版 | ✅ | 2026-07-21 | 完整重发：删 Release+tag；tag→53bdf0c（HEAD）；Path B 重建+覆盖 CI 草稿；publish；7 资产（personal+wrap 嵌入）；见 `发版验收.md` |
 
 ## 门禁
 
@@ -22,7 +22,7 @@
 | Gate 2 | ✅ | |
 | Gate 3 | ✅ | shell 测试 + `make test` + lint；harness 既有路径告警不阻塞 |
 | Gate 4 | ✅ | 2026-07-21：人工确认「批准 — 可发版」 |
-| Gate 5 | ✅ | 公开 Release 13 资产（personal+wrap）；安装验收用户手动 |
+| Gate 5 | ✅ | 公开 Release 7 资产（personal 6 平台 + checksums；wrap 已嵌入子命令）；远端 checksums 已 diff 校验；安装验收用户手动 |
 
 ## 产物
 
@@ -46,3 +46,4 @@
 | 2026-07-21 | Step 6 默认跳过安装冒烟；用户手动部署 | 用户 |
 | 2026-07-21 | 重发 v0.2.7：wrap 资产 + 删 proxyctl + tag→5d7000c | 用户 |
 | 2026-07-21 | Path B 再发：重建资产 + 公开 notes（PATH 用 source env） | 用户 |
+| 2026-07-21 | 完整重发 v0.2.7：删 Release+tag；tag→53bdf0c；Path B 重建+覆盖 CI 草稿；publish；资产改为 7 项（personal+wrap 嵌入） | 用户 |
