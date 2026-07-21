@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+
+	"centag/core/pkg/backend"
 )
 
 type mockHTTPClient struct {
@@ -22,6 +24,20 @@ func (m *mockHTTPClient) Do(req *http.Request) (*http.Response, error) {
 		Header:     http.Header{"Content-Type": []string{"application/json"}},
 		Body:       io.NopCloser(strings.NewReader(m.body)),
 	}, nil
+}
+
+type capturingHTTPClient struct {
+	inner *mockHTTPClient
+	body  string
+}
+
+func (c *capturingHTTPClient) Do(req *http.Request) (*http.Response, error) {
+	if req.Body != nil {
+		b, _ := io.ReadAll(req.Body)
+		c.body = string(b)
+		req.Body = io.NopCloser(strings.NewReader(c.body))
+	}
+	return c.inner.Do(req)
 }
 
 func TestTransparentForwardNode_Execute(t *testing.T) {
@@ -145,5 +161,268 @@ func TestResolveTransparentUpstreamAuth(t *testing.T) {
 	})
 	if got != "Bearer client-key" {
 		t.Fatalf("no-backend passthrough got %q", got)
+	}
+}
+
+func TestTransparentForwardNode_PreferClientModelAcrossBackends(t *testing.T) {
+	inner := &mockHTTPClient{status: 200, body: `{"id":"ok"}`}
+	capturing := &capturingHTTPClient{inner: inner}
+	broker := &mockCapabilityBroker{httpClient: capturing}
+
+	prevList := ListEnabledBackendsForMatch
+	prevEP := ResolveBackendEndpoint
+	t.Cleanup(func() {
+		ListEnabledBackendsForMatch = prevList
+		ResolveBackendEndpoint = prevEP
+	})
+
+	ListEnabledBackendsForMatch = func() []*backend.BackendConfig {
+		return []*backend.BackendConfig{
+			{
+				ID:      "backend-a",
+				Name:    "A",
+				Enabled: true,
+				SupportedModels: []backend.ModelMapping{
+					{RequestedModel: "other", ActualModel: "other"},
+				},
+			},
+			{
+				ID:      "backend-b",
+				Name:    "B",
+				Enabled: true,
+				SupportedModels: []backend.ModelMapping{
+					{RequestedModel: "mino2.5 free", ActualModel: "mino2.5 free"},
+				},
+			},
+		}
+	}
+	ResolveBackendEndpoint = func(backendID string) (*BackendEndpoint, error) {
+		return &BackendEndpoint{BaseURL: "https://" + backendID + ".example.com/v1", APIKey: "sk-" + backendID}, nil
+	}
+
+	node, err := NewTransparentForwardNode(NodeConfig{
+		Backend: "{{system.default_backend}}",
+		Model:   "{{system.default_model}}",
+	})
+	if err != nil {
+		t.Fatalf("NewTransparentForwardNode: %v", err)
+	}
+	tf := node.(*TransparentForwardNode)
+	tf.BaseNode.id = "forward"
+	tf.SetCapabilityBroker(broker)
+
+	out, err := tf.Execute(context.Background(), &NodeInput{
+		Metadata: map[string]interface{}{
+			"request_path":     "/v1/chat/completions",
+			"raw_request_body": `{"model":"mino2.5","messages":[{"role":"user","content":"hi"}],"stream":true}`,
+		},
+	})
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if out.Metadata["backend_id"] != "backend-b" {
+		t.Fatalf("backend_id=%v, want backend-b", out.Metadata["backend_id"])
+	}
+	if inner.lastReq == nil || !strings.Contains(inner.lastReq.URL.Host, "backend-b") {
+		t.Fatalf("url=%v, want backend-b host", inner.lastReq)
+	}
+	var sent map[string]interface{}
+	if err := json.Unmarshal([]byte(capturing.body), &sent); err != nil {
+		t.Fatal(err)
+	}
+	// client "mino2.5" != actual "mino2.5 free" → rewrite for upstream
+	if sent["model"] != "mino2.5 free" {
+		t.Fatalf("model=%v, want mino2.5 free", sent["model"])
+	}
+	if out.Metadata["executor_model"] != "mino2.5 free" {
+		t.Fatalf("executor_model=%v, want mino2.5 free", out.Metadata["executor_model"])
+	}
+}
+
+func TestTransparentForwardNode_KeepClientModelWhenExactActual(t *testing.T) {
+	inner := &mockHTTPClient{status: 200, body: `{"id":"ok"}`}
+	capturing := &capturingHTTPClient{inner: inner}
+	broker := &mockCapabilityBroker{httpClient: capturing}
+
+	prevList := ListEnabledBackendsForMatch
+	prevEP := ResolveBackendEndpoint
+	t.Cleanup(func() {
+		ListEnabledBackendsForMatch = prevList
+		ResolveBackendEndpoint = prevEP
+	})
+
+	ListEnabledBackendsForMatch = func() []*backend.BackendConfig {
+		return []*backend.BackendConfig{
+			{
+				ID:      "zen",
+				Name:    "Zen",
+				Enabled: true,
+				SupportedModels: []backend.ModelMapping{
+					{RequestedModel: "mimo-v2.5-free", ActualModel: "mimo-v2.5-free"},
+				},
+			},
+		}
+	}
+	ResolveBackendEndpoint = func(backendID string) (*BackendEndpoint, error) {
+		return &BackendEndpoint{BaseURL: "https://zen.example.com/v1", APIKey: "sk-zen"}, nil
+	}
+
+	node, err := NewTransparentForwardNode(NodeConfig{})
+	if err != nil {
+		t.Fatalf("NewTransparentForwardNode: %v", err)
+	}
+	tf := node.(*TransparentForwardNode)
+	tf.BaseNode.id = "forward"
+	tf.SetCapabilityBroker(broker)
+
+	_, err = tf.Execute(context.Background(), &NodeInput{
+		Metadata: map[string]interface{}{
+			"request_path":     "/v1/chat/completions",
+			"raw_request_body": `{"model":"mimo-v2.5-free","messages":[]}`,
+		},
+	})
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	var raw map[string]interface{}
+	if err := json.Unmarshal([]byte(capturing.body), &raw); err != nil {
+		t.Fatal(err)
+	}
+	if raw["model"] != "mimo-v2.5-free" {
+		t.Fatalf("model rewritten to %v, want keep client string", raw["model"])
+	}
+}
+
+func TestIsUnspecifiedClientModel(t *testing.T) {
+	if !isUnspecifiedClientModel("") || !isUnspecifiedClientModel("auto") {
+		t.Fatal("empty/auto should be unspecified")
+	}
+	if !isUnspecifiedClientModel("pipeline.transparent-proxy.auto") {
+		t.Fatal("virtual model should be unspecified")
+	}
+	if isUnspecifiedClientModel("mino2.5") {
+		t.Fatal("real model should be specified")
+	}
+}
+
+func TestTransparentForwardNode_KeepFreeTierModel(t *testing.T) {
+	inner := &mockHTTPClient{status: 200, body: `{"id":"ok"}`}
+	capturing := &capturingHTTPClient{inner: inner}
+	broker := &mockCapabilityBroker{httpClient: capturing}
+
+	prevList := ListEnabledBackendsForMatch
+	prevEP := ResolveBackendEndpoint
+	t.Cleanup(func() {
+		ListEnabledBackendsForMatch = prevList
+		ResolveBackendEndpoint = prevEP
+	})
+
+	ListEnabledBackendsForMatch = func() []*backend.BackendConfig {
+		return []*backend.BackendConfig{
+			{
+				ID:      "opencode-zen",
+				Name:    "Zen",
+				Type:    "openai",
+				BaseURL: "https://opencode.ai/zen/v1",
+				APIKey:  "sk-zen",
+				Enabled: true,
+				SupportedModels: []backend.ModelMapping{
+					{RequestedModel: "deepseek-v4-flash", ActualModel: "deepseek-v4-flash"},
+					{RequestedModel: "deepseek-v4-flash-free", ActualModel: "deepseek-v4-flash-free"},
+				},
+			},
+		}
+	}
+	ResolveBackendEndpoint = func(backendID string) (*BackendEndpoint, error) {
+		return &BackendEndpoint{BaseURL: "https://opencode.ai/zen/v1", APIKey: "sk-zen"}, nil
+	}
+
+	node, err := NewTransparentForwardNode(NodeConfig{
+		Backend: "{{system.default_backend}}",
+		Model:   "{{system.default_model}}",
+	})
+	if err != nil {
+		t.Fatalf("NewTransparentForwardNode: %v", err)
+	}
+	tf := node.(*TransparentForwardNode)
+	tf.BaseNode.id = "forward"
+	tf.SetCapabilityBroker(broker)
+
+	_, err = tf.Execute(context.Background(), &NodeInput{
+		Metadata: map[string]interface{}{
+			"request_path":     "/v1/chat/completions",
+			"raw_request_body": `{"model":"deepseek-v4-flash-free","messages":[]}`,
+		},
+	})
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	var sent map[string]interface{}
+	if err := json.Unmarshal([]byte(capturing.body), &sent); err != nil {
+		t.Fatal(err)
+	}
+	if sent["model"] != "deepseek-v4-flash-free" {
+		t.Fatalf("model=%v, must keep free tier (not rewrite to paid)", sent["model"])
+	}
+}
+
+func TestTransparentForwardNode_FallbackFirstUsableBackend(t *testing.T) {
+	// pipeline.transparent-proxy → body may keep virtual model or a stripped default;
+	// with empty system DefaultBackendID, must still pick first usable enabled backend.
+	inner := &mockHTTPClient{status: 200, body: `{"id":"ok"}`}
+	capturing := &capturingHTTPClient{inner: inner}
+	broker := &mockCapabilityBroker{httpClient: capturing}
+
+	prevList := ListEnabledBackendsForMatch
+	prevEP := ResolveBackendEndpoint
+	t.Cleanup(func() {
+		ListEnabledBackendsForMatch = prevList
+		ResolveBackendEndpoint = prevEP
+	})
+
+	ListEnabledBackendsForMatch = func() []*backend.BackendConfig {
+		return []*backend.BackendConfig{
+			{
+				ID:      "zen",
+				Name:    "Zen",
+				Type:    "openai",
+				BaseURL: "https://zen.example.com/v1",
+				APIKey:  "sk-zen",
+				Enabled: true,
+				SupportedModels: []backend.ModelMapping{
+					{RequestedModel: "mimo-v2.5-free", ActualModel: "mimo-v2.5-free"},
+				},
+			},
+		}
+	}
+	ResolveBackendEndpoint = func(backendID string) (*BackendEndpoint, error) {
+		return &BackendEndpoint{BaseURL: "https://zen.example.com/v1", APIKey: "sk-zen"}, nil
+	}
+
+	node, err := NewTransparentForwardNode(NodeConfig{
+		Backend: "{{system.default_backend}}",
+		Model:   "{{system.default_model}}",
+	})
+	if err != nil {
+		t.Fatalf("NewTransparentForwardNode: %v", err)
+	}
+	tf := node.(*TransparentForwardNode)
+	tf.BaseNode.id = "forward"
+	tf.SetCapabilityBroker(broker)
+
+	out, err := tf.Execute(context.Background(), &NodeInput{
+		Metadata: map[string]interface{}{
+			"request_path":     "/v1/chat/completions",
+			"raw_request_body": `{"model":"pipeline.transparent-proxy","messages":[{"role":"user","content":"hi"}]}`,
+		},
+	})
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if out.Metadata["backend_id"] != "zen" {
+		t.Fatalf("backend_id=%v, want zen (first usable fallback)", out.Metadata["backend_id"])
+	}
+	if !strings.Contains(inner.lastReq.URL.Host, "zen.example.com") {
+		t.Fatalf("url=%v", inner.lastReq.URL)
 	}
 }

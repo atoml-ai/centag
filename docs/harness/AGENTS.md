@@ -220,9 +220,9 @@ docs/versions/<版本>/<需求>/
 
 | 模式（文档常用名） | 典型请求头 | 行为摘要 |
 |-------------------|------------|----------|
-| **透明模式（默认）** | 不传 `X-Proxy-Mode`，或 `transparent-proxy` / `#t` / `#tf` | 同直连路径，但 **不注入** system prompt；标准客户端可用，无需 `X-Target-URL`。初始化默认见 `config.DefaultSystemPipelineID`。 |
-| **直连后端** | `X-Proxy-Mode: direct-backend`（`#d`） | 配置后端 + **注入**网关 system prompt（覆盖客户端 system）。 |
-| **系统调度 / 智能调度** | `smart-scheduling` / `system-scheduling` / `#s` | 按模型与后端能力、权重与负载做路由与调度（`ModeSystemScheduling`）。 |
+| **透明模式（默认）** | 不传 `X-Proxy-Mode`，或 `transparent-proxy` / `#t` / `#tf` | **不注入** system prompt，尽可能原样透传；若客户端指定 model，则跨已启用后端松匹配（如 `mino2.5` ≈ `mino2.5 free`）并优先该后端，未指定/未命中回落系统默认。初始化默认见 `config.DefaultSystemPipelineID`。 |
+| **直连后端** | `X-Proxy-Mode: direct-backend`（`#d`） | 节点配置的后端/模型（`{{system.default_*}}` → 系统默认）+ **注入**网关 system prompt（覆盖客户端 system）；**不**按客户端 model 跨后端选路。 |
+| **系统调度 / 智能调度** | `smart-scheduling` / `system-scheduling` / `#s` | 按模型与后端能力、权重与负载做路由与调度（`ModeSystemScheduling`）；策略相对透明/直连定位暂不变。 |
 | **原始转发** | `X-Proxy-Mode: raw-forward`（`#raw`）+ `X-Target-URL` / hostproxy | 高级 HTTP 透传；非聊天默认路径。 |
 | **聚合** | `X-Proxy-Mode: aggregator-mode` | 多模型并行生成 → 聚合结果（`ModeAggregator` / `#ag`）。 |
 | **路由** | `X-Proxy-Mode: router-mode` | 意图/关键词路由决策 → 条件分支处理（`ModeRouter` / `#r`；`#c` 已合并至 `#r`）。 |

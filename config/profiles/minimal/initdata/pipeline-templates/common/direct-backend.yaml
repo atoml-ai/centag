@@ -1,7 +1,7 @@
 id: direct-backend
 name: 直连后端
-description: 直连已配置后端，并注入网关 system prompt（覆盖客户端 system）；标准客户端只需改 base_url
-version: "2.0"
+description: 直连节点配置的后端与模型（变量 {{system.default_*}} 时用系统默认），并用网关 system prompt 替换客户端 system；不按客户端 model 跨后端选路
+version: "2.1"
 shortcut_code: '#d'
 nodes:
   - id: generate
@@ -45,5 +45,6 @@ metadata:
   aligned_proxy_mode: direct-backend
   features:
     - system_prompt_inject
-  lastUpdated: '2026-07-14T00:00:00.000Z'
+    - yaml_backend_model
+  lastUpdated: '2026-07-21T00:00:00.000Z'
   layoutVersion: '1.1'

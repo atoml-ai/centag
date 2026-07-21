@@ -1,7 +1,7 @@
 id: transparent-proxy
 name: 透明模式
-description: 标准客户端可用：使用系统默认后端 endpoint，model/params/messages 完全按客户端请求
-version: "2.0"
+description: 尽可能原样透传客户端请求（不注入 system prompt）；若请求指定了 model，则跨已启用后端按模型名松匹配（如 mino2.5 ≈ mino2.5 free）并优先走该后端；未指定或未命中时回落系统默认后端与模型
+version: "2.1"
 shortcut_code: '#t'
 nodes:
   - id: forward
@@ -37,6 +37,8 @@ metadata:
     - no_system_prompt_inject
     - raw_passthrough
     - transparent_forward
-  lastUpdated: '2026-07-16T00:00:00.000Z'
+    - client_model_prefer
+    - loose_model_match
+  lastUpdated: '2026-07-21T00:00:00.000Z'
   layoutVersion: '1.2'
   template_scope: mode-id-alignment

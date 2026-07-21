@@ -313,7 +313,7 @@ config/profiles/<name>/initdata（发行版 / 客户种子，优先）
 
 ## 7. 运行时「默认模式」说明
 
-**策略（全发行版统一）**：首轮初始化 / 无显式配置时，系统默认流水线为 **`transparent-proxy`（透明模式，不注入 system prompt）**。
+**策略（全发行版统一）**：首轮初始化 / 无显式配置时，系统默认流水线为 **`transparent-proxy`（透明模式：不注入 system prompt；优先跟客户端 model 跨后端松匹配，否则系统默认）**。与 **`direct-backend`**（注入网关 prompt + YAML/默认后端模型）相对。
 
 代码真源：`core/pkg/config.DefaultSystemPipelineID`、`DefaultProxyConfig()`；可用环境变量覆盖：
 
