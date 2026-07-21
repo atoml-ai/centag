@@ -49,8 +49,10 @@ if [[ ${#EXTRA_BUILD_ARGS[@]} -gt 0 ]]; then
   BUILD_ARGS+=("${EXTRA_BUILD_ARGS[@]}")
 fi
 
-OUT_DIR="$(bash "${ROOT}/scripts/release/build-artifacts.sh" "${BUILD_ARGS[@]}")"
-[[ -d "$OUT_DIR" ]] || fail "build output missing: $OUT_DIR"
+# build-artifacts prints OUT_DIR on the last stdout line; npm/vite may also write stdout.
+OUT_DIR="$(bash "${ROOT}/scripts/release/build-artifacts.sh" "${BUILD_ARGS[@]}" | tail -n 1)"
+OUT_DIR="${OUT_DIR//$'\r'/}"
+[[ -d "$OUT_DIR" ]] || fail "build output missing: ${OUT_DIR:-<empty>}"
 
 if [[ -z "$VERSION" ]]; then
   VERSION="$(basename "$OUT_DIR")"
