@@ -5,7 +5,7 @@ package osproxy
 import (
 	"fmt"
 
-	"centag/apps/proxyctl/internal/snapshot"
+	"centag/apps/wrap/internal/snapshot"
 )
 
 type stub struct{}

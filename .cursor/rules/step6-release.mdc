@@ -16,7 +16,7 @@ alwaysApply: false
 2. **先检查 Gate 4**（读需求目录 `workflow_state.md` + `CR_报告.md`）；未通过则拒绝发版，引导 `step5-review`。
 3. 收齐参数并确认后，**加载 Step 6 正本执行**，不在此文件发明步骤。
 4. AskQuestion 不可用时才允许极短文字提问。
-5. 当前范围仅 **personal + proxyctl**；用户要求 minimal/launcher 时说明「正本标明以后再说」，勿擅自发版。
+5. 当前范围仅 **personal + wrap**；用户要求 minimal/launcher 时说明「正本标明以后再说」，勿擅自发版。
 6. **仅版本分支可发布**（`vX` / `feature/vX` / `release/vX`）：非版本分支则引导切换；禁止建议 `CENTAG_RELEASE_ALLOW_ANY_BRANCH`（除非用户明确要求紧急绕过）。
 
 ## 触发词
@@ -29,7 +29,7 @@ alwaysApply: false
 
 ```bash
 git rev-parse --abbrev-ref HEAD
-VER="$(node -p "require('./apps/proxyctl-npm/package.json').version" 2>/dev/null || true)"
+VER="$(node -p "require('./apps/wrap-npm/package.json').version" 2>/dev/null || true)"
 bash scripts/release/require-release-branch.sh --version "${VER:-0.0.0}" 2>&1 || true
 gh auth status 2>&1 | head -20
 ls bin/release/*/centag-*.tar.gz 2>/dev/null | head -20

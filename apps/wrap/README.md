@@ -1,4 +1,4 @@
-# centag-proxyctl
+# centag-wrap
 
 本机 / Team 员工侧工具：
 
@@ -14,24 +14,24 @@ Centag API Key **不会**注入到 Agent 环境；由服务端 MITM 注入出口
 ### 仓库入口（推荐开发机）
 
 ```bash
-./start.sh build proxyctl
+./start.sh build wrap
 # 或与发行版一并构建
-./start.sh build personal --proxyctl
-./start.sh build personal --proxyctl   # Team 二进制在 centag-pro 构建；proxyctl 可单独或与 personal 同编
+./start.sh build personal --wrap
+./start.sh build personal --wrap   # Team 二进制在 centag-pro 构建；wrap 可单独或与 personal 同编
 ```
 
 产物：
 
 ```
-bin/proxyctl/<goos>-<goarch>/centag-proxyctl[.exe]
-bin/proxyctl/centag-proxyctl[.exe]   # 当前主机便捷副本
+bin/wrap/<goos>-<goarch>/centag-wrap[.exe]
+bin/wrap/centag-wrap[.exe]   # 当前主机便捷副本
 ```
 
 ### 真源命令（客户端 / CI / 不经 start.sh）
 
 ```bash
-cd apps/proxyctl
-GOWORK=off go build -o centag-proxyctl .
+cd apps/wrap
+GOWORK=off go build -o centag-wrap .
 ```
 
 ## 用法
@@ -40,13 +40,13 @@ GOWORK=off go build -o centag-proxyctl .
 
 ```bash
 # 开发机
-./start.sh run proxyctl run --server http://192.168.1.4:20060 -- opencode
+./start.sh run wrap run --server http://192.168.1.4:20060 -- opencode
 
 # 真源二进制
-./bin/proxyctl/centag-proxyctl run --server http://192.168.1.4:20060 -- opencode
+./bin/wrap/centag-wrap run --server http://192.168.1.4:20060 -- opencode
 
 # 只打印 export（可 eval）
-./bin/proxyctl/centag-proxyctl env --server http://192.168.1.4:20060
+./bin/wrap/centag-wrap env --server http://192.168.1.4:20060
 ```
 
 本机 Centag（无 `--server`）默认指向 `http://127.0.0.1:20060`，MITM `http://127.0.0.1:8081`。
@@ -54,12 +54,12 @@ GOWORK=off go build -o centag-proxyctl .
 ### 系统 PAC（可选）
 
 ```bash
-./start.sh run proxyctl enable [--server URL]
-./start.sh run proxyctl doctor [--server URL]
-./start.sh run proxyctl disable
-./start.sh run proxyctl status
+./start.sh run wrap enable [--server URL]
+./start.sh run wrap doctor [--server URL]
+./start.sh run wrap disable
+./start.sh run wrap status
 ```
 
-可选环境变量：`CENTAG_API_BASE`、`CENTAG_PROXYCTL_TOKEN`。
+可选环境变量：`CENTAG_API_BASE`、`CENTAG_WRAP_TOKEN`。
 
 文档：`docs/guide/system-proxy-egress.md`。

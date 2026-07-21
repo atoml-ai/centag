@@ -44,7 +44,7 @@ services:
       OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://centag-ollama:11434}
     ports:
       - "${LLM_PROXY_SERVER_PORT:-20060}:20060"
-      # 系统代理 MITM（本机 proxyctl / PAC）；容器内需监听 0.0.0.0（见 CENTAG_IN_DOCKER）
+      # 系统代理 MITM（本机 wrap / PAC）；容器内需监听 0.0.0.0（见 CENTAG_IN_DOCKER）
       - "${LLM_PROXY_SYSTEM_PROXY_PORT:-8081}:8081"
     volumes:
       - ../../../var/docker-data/personal/storage:/app/storage

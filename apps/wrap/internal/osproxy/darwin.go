@@ -13,7 +13,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"centag/apps/proxyctl/internal/snapshot"
+	"centag/apps/wrap/internal/snapshot"
 )
 
 type darwinBackend struct{}

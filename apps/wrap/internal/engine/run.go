@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"centag/apps/proxyctl/internal/remote"
-	"centag/apps/proxyctl/internal/snapshot"
+	"centag/apps/wrap/internal/remote"
+	"centag/apps/wrap/internal/snapshot"
 )
 
 const defaultNoProxy = "localhost,127.0.0.1,::1"
@@ -43,7 +43,7 @@ func (e *Engine) PrepareProcessEnv(server string) (*ProcessEnv, error) {
 	if err != nil {
 		return nil, err
 	}
-	client.Token = os.Getenv("CENTAG_PROXYCTL_TOKEN")
+	client.Token = os.Getenv("CENTAG_WRAP_TOKEN")
 
 	mitm, err := resolveMITM(client, api)
 	if err != nil {
@@ -99,7 +99,7 @@ func writeCAFile(pem []byte) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("home dir: %w", err)
 	}
-	dir := filepath.Join(home, ".centag", "proxyctl")
+	dir := filepath.Join(home, ".centag", "wrap")
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return "", err
 	}
@@ -129,7 +129,7 @@ func (e *Engine) Env(server string) error {
 // Run wraps argv with process proxy env and executes it (replaces current process via Wait).
 func (e *Engine) Run(server string, argv []string) error {
 	if len(argv) == 0 {
-		return fmt.Errorf("run requires a command after -- (example: centag-proxyctl run --server URL -- opencode)")
+		return fmt.Errorf("run requires a command after -- (example: centag-wrap run --server URL -- opencode)")
 	}
 	pe, err := e.PrepareProcessEnv(server)
 	if err != nil {
@@ -144,7 +144,7 @@ func (e *Engine) Run(server string, argv []string) error {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Env = mergeEnv(os.Environ(), pe.Vars)
-	fmt.Fprintf(os.Stderr, "proxyctl run: HTTPS_PROXY=%s NODE_EXTRA_CA_CERTS=%s → %v\n",
+	fmt.Fprintf(os.Stderr, "wrap run: HTTPS_PROXY=%s NODE_EXTRA_CA_CERTS=%s → %v\n",
 		pe.Vars["HTTPS_PROXY"], pe.CAPath, argv)
 	if err := cmd.Run(); err != nil {
 		if ee, ok := err.(*exec.ExitError); ok {

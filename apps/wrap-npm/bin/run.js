@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // bin/run.js
-// npm bin shim for centag-proxyctl.
+// npm bin shim for centag-wrap.
 // Locates (downloading on demand) the platform Go binary and execs it,
 // preserving argv, stdio, signals and exit code as closely as possible.
 
@@ -9,14 +9,14 @@ import { existsSync } from 'node:fs';
 import { ensureBinary, installedBinaryPath, platformKey } from '../lib/download.js';
 
 function fail(msg) {
-  process.stderr.write(`centag-proxyctl: ${msg}\n`);
+  process.stderr.write(`centag-wrap: ${msg}\n`);
   process.exit(1);
 }
 
 async function main() {
   let bin;
   try {
-    // Try the pre-bundled offline binary first (centag-proxyctl-offline ships these).
+    // Try the pre-bundled offline binary first (centag-wrap-offline ships these).
     const offline = installedBinaryPath(platformKey());
     if (existsSync(offline)) {
       bin = offline;

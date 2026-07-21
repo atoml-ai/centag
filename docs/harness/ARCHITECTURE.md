@@ -135,7 +135,7 @@ cmd → server → 领域层 → config/database
 |------|--------|------|
 | `web/` | Vue 3 + Element Plus | Web 管理界面 |
 | `apps/launcher/` | Go + systray | 可选桌面启动器：菜单/托盘 + 系统浏览器（L1） |
-| `apps/proxyctl/` | Go CLI | 本机/员工 PAC+CA 配置（系统代理出口；与 core 解耦） |
+| `apps/wrap/` | Go CLI | 本机/员工 PAC+CA 配置（系统代理出口；与 core 解耦） |
 
 **约束**：
 - 仅通过 HTTP API / 子进程与主项目交互，不能直接引用 `core/internal` 业务包

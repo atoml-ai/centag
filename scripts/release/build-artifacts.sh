@@ -3,12 +3,12 @@
 #
 # Usage:
 #   ./scripts/release/build-artifacts.sh [--version 0.2.7]
-#   ./scripts/release/build-artifacts.sh --components personal,proxyctl
+#   ./scripts/release/build-artifacts.sh --components personal,wrap
 #   CENTAG_RELEASE_PLATFORMS=linux-amd64,darwin-arm64 ./scripts/release/build-artifacts.sh
 #
 # Outputs under bin/release/<version>/ (default components):
 #   centag-personal-<goos>-<goarch>.tar.gz
-#   centag-proxyctl-<goos>-<goarch>.tar.gz
+#   centag-wrap-<goos>-<goarch>.tar.gz
 #   checksums.txt
 #
 # Other components (minimal / launcher / launcher-tray) remain callable via
@@ -16,13 +16,13 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-NPM_PKG="${ROOT}/apps/proxyctl-npm/package.json"
+NPM_PKG="${ROOT}/apps/wrap-npm/package.json"
 
 log() { echo "==> $*" >&2; }
 fail() { echo "error: $*" >&2; exit 1; }
 
 VERSION=""
-COMPONENTS="personal,proxyctl"
+COMPONENTS="personal,wrap"
 PLATFORMS="${CENTAG_RELEASE_PLATFORMS:-darwin-amd64,darwin-arm64,linux-amd64,linux-arm64,windows-amd64,windows-arm64}"
 SKIP_FRONTEND="${CENTAG_RELEASE_SKIP_FRONTEND:-0}"
 BUILD_LAUNCHER_TRAY="${CENTAG_RELEASE_LAUNCHER_TRAY:-0}"
@@ -49,7 +49,7 @@ if [[ -z "$VERSION" ]]; then
     VERSION="$(git -C "$ROOT" describe --tags --abbrev=0 2>/dev/null | sed 's/^v//' || true)"
   fi
 fi
-[[ -n "$VERSION" ]] || fail "version required (--version or apps/proxyctl-npm/package.json)"
+[[ -n "$VERSION" ]] || fail "version required (--version or apps/wrap-npm/package.json)"
 VERSION="${VERSION#v}"
 
 OUT_DIR="${ROOT}/bin/release/${VERSION}"
@@ -142,29 +142,29 @@ build_edition() {
   log "OK ${tarball}"
 }
 
-# --- proxyctl -------------------------------------------------------------
-build_proxyctl() {
+# --- wrap -------------------------------------------------------------
+build_wrap() {
   local goos="$1" goarch="$2"
   local ext="" out_bin stage_parent stage_name tarball
   if [[ "$goos" == "windows" ]]; then ext=".exe"; fi
-  out_bin="${OUT_DIR}/.build/proxyctl-${goos}-${goarch}/centag-proxyctl${ext}"
+  out_bin="${OUT_DIR}/.build/wrap-${goos}-${goarch}/centag-wrap${ext}"
   mkdir -p "$(dirname "$out_bin")"
 
-  log "build centag-proxyctl ${goos}/${goarch}"
+  log "build centag-wrap ${goos}/${goarch}"
   (
-    cd "${ROOT}/apps/proxyctl"
+    cd "${ROOT}/apps/wrap"
     GOWORK=off CGO_ENABLED=0 GOOS="$goos" GOARCH="$goarch" \
       go build -trimpath -ldflags="-s -w" -o "$out_bin" .
   )
 
   stage_parent="${OUT_DIR}/.stage"
-  stage_name="centag-proxyctl-${goos}-${goarch}"
+  stage_name="centag-wrap-${goos}-${goarch}"
   rm -rf "${stage_parent}/${stage_name}"
   mkdir -p "${stage_parent}/${stage_name}"
-  cp -f "$out_bin" "${stage_parent}/${stage_name}/centag-proxyctl${ext}"
-  chmod 755 "${stage_parent}/${stage_name}/centag-proxyctl${ext}"
+  cp -f "$out_bin" "${stage_parent}/${stage_name}/centag-wrap${ext}"
+  chmod 755 "${stage_parent}/${stage_name}/centag-wrap${ext}"
 
-  tarball="${OUT_DIR}/centag-proxyctl-${goos}-${goarch}.tar.gz"
+  tarball="${OUT_DIR}/centag-wrap-${goos}-${goarch}.tar.gz"
   package_tar "$stage_parent" "$stage_name" "$tarball"
   log "OK ${tarball}"
 }
@@ -243,8 +243,8 @@ for plat in "${PLAT_ARR[@]}"; do
   if need_component minimal; then
     build_edition minimal "$goos" "$goarch"
   fi
-  if need_component proxyctl; then
-    build_proxyctl "$goos" "$goarch"
+  if need_component wrap; then
+    build_wrap "$goos" "$goarch"
   fi
   if need_component launcher; then
     build_launcher_lite "$goos" "$goarch"

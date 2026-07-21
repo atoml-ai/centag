@@ -19,7 +19,7 @@
 | 发布产物 | 资产名 | 说明 |
 |----------|--------|------|
 | personal CLI + WebUI static | `centag-personal-<goos>-<goarch>.tar.gz` | 默认安装的服务端 |
-| proxyctl | `centag-proxyctl-<goos>-<goarch>.tar.gz` | 本机/进程代理辅助 |
+| wrap | `centag-wrap-<goos>-<goarch>.tar.gz` | 本机/进程代理辅助 |
 | 校验和 | `checksums.txt` | SHA-256 |
 
 **暂不发布**（以后再说）：`minimal`、`launcher` / `launcher-tray`。
@@ -31,7 +31,7 @@
 | 本地上传 Release | `scripts/release/publish-binaries.sh` |
 | CI 发版 | `.github/workflows/release.yml`（`v*` tag 或 workflow_dispatch） |
 | 分支门禁 | `scripts/release/require-release-branch.sh` |
-| 版本号真源（无 `--version` 时） | `apps/proxyctl-npm/package.json` → `version` |
+| 版本号真源（无 `--version` 时） | `apps/wrap-npm/package.json` → `version` |
 | 默认仓库 | `atoml-ai/centag`（可用 `CENTAG_RELEASE_REPO` 覆盖） |
 
 默认平台：`darwin-amd64`、`darwin-arm64`、`linux-amd64`、`linux-arm64`、`windows-amd64`、`windows-arm64`。
@@ -71,7 +71,7 @@
 1. 当前在**版本分支**上：`bash scripts/release/require-release-branch.sh --version <ver>`。
 2. `gh auth status` 成功（本地路径 A/B）。
 3. 工作区含要发布的 `scripts/install.sh`（已推到该版本分支；用户 curl 可用 tag `v<ver>`）。
-4. 版本与 `apps/proxyctl-npm/package.json` 的 `version` 对齐（或用户明确指定覆盖）。
+4. 版本与 `apps/wrap-npm/package.json` 的 `version` 对齐（或用户明确指定覆盖）。
 
 ---
 
@@ -79,7 +79,7 @@
 
 ### Path A — 已有本地产物，仅上传（推荐：避免重编）
 
-适用：已跑过构建，`bin/release/<version>/` 下已有 `centag-personal-*.tar.gz`、`centag-proxyctl-*.tar.gz`、`checksums.txt`。
+适用：已跑过构建，`bin/release/<version>/` 下已有 `centag-personal-*.tar.gz`、`centag-wrap-*.tar.gz`、`checksums.txt`。
 
 ```bash
 # 0) 必须在版本分支（例：feature/v0.2.7）+ 登录
@@ -96,7 +96,7 @@ gh release create "v${CENTAG_RELEASE_VERSION}" \
   --repo "${CENTAG_RELEASE_REPO:-atoml-ai/centag}" \
   --draft \
   --title "Centag ${CENTAG_RELEASE_VERSION}" \
-  --notes "personal CLI + proxyctl. Install: curl -fsSL https://raw.githubusercontent.com/atoml-ai/centag/v${CENTAG_RELEASE_VERSION}/scripts/install.sh | bash" \
+  --notes "personal CLI + wrap. Install: curl -fsSL https://raw.githubusercontent.com/atoml-ai/centag/v${CENTAG_RELEASE_VERSION}/scripts/install.sh | bash" \
   "bin/release/${CENTAG_RELEASE_VERSION}"/centag-*.tar.gz \
   "bin/release/${CENTAG_RELEASE_VERSION}/checksums.txt"
 ```
@@ -137,7 +137,7 @@ DRY_RUN=1 ./scripts/release/publish-binaries.sh --version "${CENTAG_RELEASE_VERS
 等价拆步：
 
 ```bash
-./scripts/release/build-artifacts.sh --version "${CENTAG_RELEASE_VERSION}" --components personal,proxyctl
+./scripts/release/build-artifacts.sh --version "${CENTAG_RELEASE_VERSION}" --components personal,wrap
 # 再按 Path A 用 gh release create/upload
 ```
 
@@ -157,7 +157,7 @@ git push origin "v${CENTAG_RELEASE_VERSION}"
 
 或：Actions → **release** → 选择分支 **`feature/v0.2.7`**（或 `v0.2.7`）→ **Run workflow**（在 `main` 上跑会被 `guard-branch` 拒绝）。
 
-CI 默认组件：`personal,proxyctl`。产物写入草稿（或按 input）Release。
+CI 默认组件：`personal,wrap`。产物写入草稿（或按 input）Release。
 
 **注意**：workflow 里 `run: |` 块禁止出现**顶格**的 heredoc 正文（否则 YAML 解析失败）。改 notes 时保持缩进或用 `echo`。
 
@@ -171,10 +171,10 @@ CI 默认组件：`personal,proxyctl`。产物写入草稿（或按 input）Rele
 gh release view "v${CENTAG_RELEASE_VERSION}" --repo "${CENTAG_RELEASE_REPO:-atoml-ai/centag}"
 ```
 
-期望至少包含（每平台一对 personal + proxyctl，外加 checksums）：
+期望至少包含（每平台一对 personal + wrap，外加 checksums）：
 
 - `centag-personal-<goos>-<goarch>.tar.gz` × 支持平台
-- `centag-proxyctl-<goos>-<goarch>.tar.gz` × 支持平台
+- `centag-wrap-<goos>-<goarch>.tar.gz` × 支持平台
 - `checksums.txt`
 
 **草稿 Release 的资产 URL 对匿名 `curl` 不可用**；验收安装前必须 **Publish**（或本地用已登录的 `gh release download`）。
@@ -191,15 +191,15 @@ bash scripts/install.sh \
   --no-modify-path
 
 test -x "$PREFIX/bin/centag" || test -x "$PREFIX/bin/centag-personal"
-test -x "$PREFIX/bin/centag-proxyctl"
-"$PREFIX/bin/centag-proxyctl" --help >/dev/null || "$PREFIX/bin/centag-proxyctl" -h >/dev/null || true
+test -x "$PREFIX/bin/centag-wrap"
+"$PREFIX/bin/centag-wrap" --help >/dev/null || "$PREFIX/bin/centag-wrap" -h >/dev/null || true
 ```
 
-只测 proxyctl：
+只测 wrap：
 
 ```bash
-bash scripts/install.sh --only proxyctl --version "${CENTAG_RELEASE_VERSION}" \
-  --prefix "${TMPDIR:-/tmp}/centag-proxyctl-smoke" --no-modify-path
+bash scripts/install.sh --only wrap --version "${CENTAG_RELEASE_VERSION}" \
+  --prefix "${TMPDIR:-/tmp}/centag-wrap-smoke" --no-modify-path
 ```
 
 ### 3. 一行命令（需 install.sh 已在目标 ref）
@@ -261,8 +261,8 @@ curl -sS -o /dev/null -w "%{http_code}\n" "http://127.0.0.1:20060/" || true
 | `scripts/release/publish-binaries.sh` | 构建并可选 `gh release`（`--release` 时强制版本分支） |
 | `scripts/release/require-release-branch.sh` | 版本分支门禁 |
 | `.github/workflows/release.yml` | tag / 手动触发 CI 发版（`guard-branch`） |
-| `apps/proxyctl-npm/package.json` | 版本号对齐参考 |
-| `apps/proxyctl-npm/lib/download.js` | npm 侧下载同名 `centag-proxyctl-*.tar.gz` |
+| `apps/wrap-npm/package.json` | 版本号对齐参考 |
+| `apps/wrap-npm/lib/download.js` | npm 侧下载同名 `centag-wrap-*.tar.gz` |
 
 ---
 

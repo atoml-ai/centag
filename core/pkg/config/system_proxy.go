@@ -31,7 +31,7 @@ func RunningInContainer() bool {
 // When AllowLANClients is false:
 //   - bare metal: ListenAddr forced to loopback
 //   - container: ListenAddr becomes 0.0.0.0 so published host ports can reach MITM;
-//     PACProxyHost stays 127.0.0.1 for same-host proxyctl.
+//     PACProxyHost stays 127.0.0.1 for same-host wrap.
 func NormalizeSystemProxyConfig(c *SystemProxyConfig) {
 	if c == nil {
 		return

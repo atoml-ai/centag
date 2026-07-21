@@ -37,7 +37,7 @@ jobs:
           elif [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
             V="${GITHUB_REF_NAME#v}"
           else
-            V="$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' apps/proxyctl-npm/package.json | head -1)"
+            V="$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' apps/wrap-npm/package.json | head -1)"
           fi
           V="${V#v}"
           echo "version=$V" >> "$GITHUB_OUTPUT"
@@ -46,7 +46,7 @@ jobs:
       - name: Require version branch
         run: bash scripts/release/require-release-branch.sh --ci --version "${{ steps.ver.outputs.version }}"
 
-  # Default release set: personal CLI + proxyctl (cross-compile, no CGO).
+  # Default release set: personal CLI + wrap (cross-compile, no CGO).
   binaries:
     needs: [guard-branch]
     runs-on: ubuntu-latest
@@ -63,11 +63,11 @@ jobs:
           cache: npm
           cache-dependency-path: web/package-lock.json
 
-      - name: Build personal + proxyctl
+      - name: Build personal + wrap
         run: |
           bash scripts/release/build-artifacts.sh \
             --version "${{ needs.guard-branch.outputs.version }}" \
-            --components personal,proxyctl
+            --components personal,wrap
 
       - name: Upload artifact bundle
         uses: actions/upload-artifact@v4
@@ -135,10 +135,10 @@ jobs:
             echo ""
             echo '```bash'
             echo "curl -fsSL https://raw.githubusercontent.com/${REPO}/${TAG}/scripts/install.sh | bash"
-            echo "curl -fsSL https://raw.githubusercontent.com/${REPO}/${TAG}/scripts/install.sh | bash -s -- --only proxyctl"
+            echo "curl -fsSL https://raw.githubusercontent.com/${REPO}/${TAG}/scripts/install.sh | bash -s -- --only wrap"
             echo '```'
             echo ""
-            echo "Artifacts: \`centag-personal-*\`, \`centag-proxyctl-*\`, \`checksums.txt\`."
+            echo "Artifacts: \`centag-personal-*\`, \`centag-wrap-*\`, \`checksums.txt\`."
           } > "$NOTES_FILE"
 
           if gh release view "$TAG" >/dev/null 2>&1; then

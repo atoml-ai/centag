@@ -1,11 +1,11 @@
 {
-  "name": "centag-proxyctl-offline",
+  "name": "centag-wrap-offline",
   "version": "0.2.7",
   "private": true,
-  "description": "Offline variant of centag-proxyctl: bundles the platform Go binaries so no network is needed at install. Prefer centag-proxyctl for normal use.",
+  "description": "Offline variant of centag-wrap: bundles the platform Go binaries so no network is needed at install. Prefer centag-wrap for normal use.",
   "type": "module",
   "bin": {
-    "centag-proxyctl": "./bin/run.js"
+    "centag-wrap": "./bin/run.js"
   },
   "files": [
     "bin/",

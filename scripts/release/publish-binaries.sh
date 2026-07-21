@@ -21,7 +21,7 @@ fail() { echo "error: $*" >&2; exit 1; }
 
 VERSION=""
 DO_RELEASE=0
-COMPONENTS="personal,proxyctl"
+COMPONENTS="personal,wrap"
 EXTRA_BUILD_ARGS=()
 
 while [[ $# -gt 0 ]]; do
@@ -89,13 +89,13 @@ Install:
 
 \`\`\`bash
 curl -fsSL https://raw.githubusercontent.com/${REPO}/${TAG}/scripts/install.sh | bash
-curl -fsSL https://raw.githubusercontent.com/${REPO}/${TAG}/scripts/install.sh | bash -s -- --only proxyctl
+curl -fsSL https://raw.githubusercontent.com/${REPO}/${TAG}/scripts/install.sh | bash -s -- --only wrap
 \`\`\`
 
 ### Artifacts
 
 - \`centag-personal-<goos>-<goarch>.tar.gz\` — personal CLI + WebUI static
-- \`centag-proxyctl-<goos>-<goarch>.tar.gz\` — system/process proxy helper
+- \`centag-wrap-<goos>-<goarch>.tar.gz\` — system/process proxy helper
 - \`checksums.txt\` — SHA-256 sums
 EOF
 )"

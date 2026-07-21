@@ -4,7 +4,7 @@
 
 ## 目标
 
-在 **Gate 4（CR 发版许可）** 通过后，于版本分支发布 GitHub Release（personal + proxyctl），并完成安装验收。
+在 **Gate 4（CR 发版许可）** 通过后，于版本分支发布 GitHub Release（personal + wrap），并完成安装验收。
 
 ## 前置门禁
 
@@ -30,7 +30,7 @@
 
 ### 3. 验收 → Gate 5
 
-- [ ] Release 资产齐全（personal + proxyctl × 平台 + checksums）
+- [ ] Release 资产齐全（personal + wrap × 平台 + checksums）
 - [ ] 本机 `install.sh` 冒烟通过（或用户明确跳过并记录）
 - [ ] 更新 `workflow_state`：Step 6 → ✅，Gate 5 → ✅
 

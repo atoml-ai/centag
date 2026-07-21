@@ -16,7 +16,7 @@ import (
 	"testing"
 	"time"
 
-	"centag/apps/proxyctl/internal/snapshot"
+	"centag/apps/wrap/internal/snapshot"
 )
 
 type mockOS struct {

@@ -621,8 +621,8 @@ resolve_launcher_tray_bin() {
     return 1
 }
 
-# Resolve current-host proxyctl binary (auto-detect GOOS/GOARCH).
-resolve_proxyctl_bin() {
+# Resolve current-host wrap binary (auto-detect GOOS/GOARCH).
+resolve_wrap_bin() {
     local goos goarch ext plat
     goos="$(go env GOOS 2>/dev/null || echo "")"
     goarch="$(go env GOARCH 2>/dev/null || echo "")"
@@ -630,12 +630,12 @@ resolve_proxyctl_bin() {
     if [ "$goos" = "windows" ]; then
         ext=".exe"
     fi
-    plat="${PROJECT_ROOT}/bin/proxyctl/${goos}-${goarch}/centag-proxyctl${ext}"
+    plat="${PROJECT_ROOT}/bin/wrap/${goos}-${goarch}/centag-wrap${ext}"
     if [ -x "$plat" ] || [ -f "$plat" ]; then
         echo "$plat"
         return 0
     fi
-    local latest="${PROJECT_ROOT}/bin/proxyctl/centag-proxyctl${ext}"
+    local latest="${PROJECT_ROOT}/bin/wrap/centag-wrap${ext}"
     if [ -x "$latest" ] || [ -f "$latest" ]; then
         echo "$latest"
         return 0
@@ -643,36 +643,36 @@ resolve_proxyctl_bin() {
     return 1
 }
 
-# Optional system-proxy helper (apps/proxyctl). Used via build proxyctl / --proxyctl / run proxyctl.
+# Optional system-proxy helper (apps/wrap). Used via build wrap / --wrap / run wrap.
 # Independent go.mod; GOWORK=off. No CGO.
-build_proxyctl_shell() {
-    local script="${PROJECT_ROOT}/scripts/build-proxyctl.sh"
+build_wrap_shell() {
+    local script="${PROJECT_ROOT}/scripts/build-wrap.sh"
     if [ ! -x "$script" ]; then
         print_error "未找到构建脚本: $script"
         exit 1
     fi
-    print_info "Building centag-proxyctl for current host ($(go env GOOS)/$(go env GOARCH))..."
+    print_info "Building centag-wrap for current host ($(go env GOOS)/$(go env GOARCH))..."
     bash "$script"
 }
 
-# ./start.sh run proxyctl [--server URL] <enable|disable|doctor|status|run|env> ...
-# Ensures binary exists, then execs the real CLI (same args as 真源 centag-proxyctl).
-run_proxyctl() {
-    local proxyctl_bin
-    if ! proxyctl_bin="$(resolve_proxyctl_bin)"; then
-        print_info "未找到 centag-proxyctl，先构建..."
-        build_proxyctl_shell
-        proxyctl_bin="$(resolve_proxyctl_bin)" || {
-            print_error "centag-proxyctl 构建后仍未找到"
+# ./start.sh run wrap [--server URL] <enable|disable|doctor|status|run|env> ...
+# Ensures binary exists, then execs the real CLI (same args as 真源 centag-wrap).
+run_wrap() {
+    local wrap_bin
+    if ! wrap_bin="$(resolve_wrap_bin)"; then
+        print_info "未找到 centag-wrap，先构建..."
+        build_wrap_shell
+        wrap_bin="$(resolve_wrap_bin)" || {
+            print_error "centag-wrap 构建后仍未找到"
             exit 1
         }
     fi
-    print_info "运行: ${proxyctl_bin} $*"
+    print_info "运行: ${wrap_bin} $*"
     # macOS bash 3.2 + set -u: empty "${arr[@]}" is "unbound variable"
     if [ "$#" -gt 0 ]; then
-        exec "$proxyctl_bin" "$@"
+        exec "$wrap_bin" "$@"
     else
-        exec "$proxyctl_bin"
+        exec "$wrap_bin"
     fi
 }
 
@@ -2335,7 +2335,7 @@ _dist_docker_run() {
         # 覆盖 secrets 里常见的 LLM_PROXY_LOG_OUTPUT=file：否则 zap 只写
         # /app/bin/logs，docker logs 只能看到 entrypoint/插件 std 初始化行。
         # 与 config/profiles/*/docker-compose.yaml 对齐：both + console + /app/logs。
-        # 20060=API/Web；8081=系统代理 MITM（proxyctl run / PAC 需要映射到宿主机）
+        # 20060=API/Web；8081=系统代理 MITM（wrap run / PAC 需要映射到宿主机）
         #
         # 持久化（personal/minimal，非 PG）：
         #   二进制在 /app/bin/centag，相对路径 ./storage 会落到 /app/bin/storage（不可持久）。
@@ -3268,7 +3268,7 @@ show_short_help() {
     # ── 服务管理 ──
     echo -e "  ${CYAN}── 服务管理 ──────────────────────────────────────────${NC}"
     echo -e "  ${GREEN}run${NC}      <be|fe|personal|minimal> [--launcher]  运行服务"
-    echo -e "  ${GREEN}run${NC}      proxyctl [子命令...]     系统代理出口 CLI（PAC/CA）"
+    echo -e "  ${GREEN}run${NC}      wrap [子命令...]     系统代理出口 CLI（PAC/CA）"
     echo -e "  ${GREEN}daemon${NC}                           后台守护进程模式（自动重启）"
     echo -e "  ${GREEN}debug${NC} [personal|minimal]         开发模式（默认 personal）+ 前端热重载；Team → centag-pro"
     echo -e "  ${GREEN}stop${NC}     <be|fe>               停止服务"
@@ -3279,8 +3279,8 @@ show_short_help() {
     # ── 构建 ──
     echo -e "  ${CYAN}── 构建 ──────────────────────────────────────────────${NC}"
     echo -e "  ${GREEN}build${NC}    <all|be|fe>             构建项目（开发用）"
-    echo -e "  ${GREEN}build${NC}    <personal|minimal> [--launcher] [--proxyctl]  构建发行版（Team → centag-pro ./start.sh）"
-    echo -e "  ${GREEN}build${NC}    proxyctl                仅构建 centag-proxyctl"
+    echo -e "  ${GREEN}build${NC}    <personal|minimal> [--launcher] [--wrap]  构建发行版（Team → centag-pro ./start.sh）"
+    echo -e "  ${GREEN}build${NC}    wrap                仅构建 centag-wrap"
     echo -e "  ${GREEN}docker${NC}   build <minimal|personal|team>   构建 Docker 镜像"
     echo -e "  ${GREEN}docker${NC}   run   <minimal|personal|team>   运行 Docker 容器"
     echo -e "  ${GREEN}clean${NC}                            清理构建产物"
@@ -3392,7 +3392,7 @@ _help_build() {
     echo -e "       ${YELLOW}构建项目 / 发行版${NC}"
     echo ""
     echo -e "${CYAN}用法:${NC}"
-    echo -e "  ./start.sh build <目标> [--launcher] [--proxyctl]"
+    echo -e "  ./start.sh build <目标> [--launcher] [--wrap]"
     echo ""
     echo -e "${CYAN}开发构建:${NC}"
     echo -e "  ${GREEN}all${NC}             构建全部（后端 + 生产版前端） 【默认】"
@@ -3403,28 +3403,28 @@ _help_build() {
     echo -e "  ${GREEN}personal${NC}  个人全功能（默认 SQLite）"
     echo -e "  ${GREEN}minimal${NC}   轻量单机（文件配置，无 DB）"
     echo -e "  ${GREEN}team${NC}      团队版（中间件外置：PG/向量等）"
-    echo -e "  ${GREEN}proxyctl${NC}  仅构建本机/员工系统代理工具 centag-proxyctl"
+    echo -e "  ${GREEN}wrap${NC}  仅构建本机/员工系统代理工具 centag-wrap"
     echo ""
     echo -e "${CYAN}辅助选项:${NC}"
     echo -e "  ${GREEN}--launcher${NC}       额外构建 lite 启动器（无 CGO；仅 personal/minimal）"
     echo -e "  ${GREEN}--launcher-tray${NC}  额外构建托盘启动器（CGO/systray；仅 personal/minimal）"
     echo -e "             自动识别 darwin / linux / windows（GOOS/GOARCH）"
     echo -e "             ${YELLOW}team 不支持 --launcher${NC}"
-    echo -e "  ${GREEN}--proxyctl${NC}    额外构建 centag-proxyctl（可与 personal/minimal 同用）"
-    echo -e "             产物: bin/proxyctl/<goos>-<goarch>/centag-proxyctl"
+    echo -e "  ${GREEN}--wrap${NC}    额外构建 centag-wrap（可与 personal/minimal 同用）"
+    echo -e "             产物: bin/wrap/<goos>-<goarch>/centag-wrap"
     echo ""
     echo -e "${CYAN}示例:${NC}"
     echo -e "  ./start.sh build personal           # 普通个人版服务"
     echo -e "  ./start.sh build personal --launcher         # 个人版 + lite 启动器"
     echo -e "  ./start.sh build personal --launcher-tray    # 个人版 + 托盘启动器"
-    echo -e "  ./start.sh build personal --proxyctl         # 个人版 + 系统代理 CLI"
+    echo -e "  ./start.sh build personal --wrap         # 个人版 + 系统代理 CLI"
     echo -e "  # Team：cd ../centag-pro && ./start.sh build team（本仓不构建 team）"
-    echo -e "  ./start.sh build proxyctl                    # 仅构建 centag-proxyctl"
+    echo -e "  ./start.sh build wrap                    # 仅构建 centag-wrap"
     echo -e "  ./start.sh build minimal --launcher"
     echo -e "  ./start.sh build be"
     echo ""
     echo -e "${CYAN}真源命令（客户端 / 不经 start.sh）:${NC}"
-    echo -e "  cd apps/proxyctl && GOWORK=off go build -o centag-proxyctl ."
+    echo -e "  cd apps/wrap && GOWORK=off go build -o centag-wrap ."
     echo ""
     echo -e "${YELLOW}提示:${NC} Docker 镜像请使用: ./start.sh docker build <minimal|personal|team>"
 }
@@ -3446,14 +3446,14 @@ _help_run() {
     echo ""
     echo -e "${CYAN}用法:${NC}"
     echo -e "  ./start.sh run <服务> [--launcher]"
-    echo -e "  ./start.sh run proxyctl [enable|disable|doctor|status|run|env] [选项...]"
+    echo -e "  ./start.sh run wrap [enable|disable|doctor|status|run|env] [选项...]"
     echo ""
     echo -e "${CYAN}服务:${NC}"
     echo -e "  ${GREEN}be${NC} | backend        启动后端服务 (端口 20060)"
     echo -e "  ${GREEN}fe${NC} | frontend      启动 Vue 开发服务器 (端口 5173)"
     echo -e "  ${GREEN}personal${NC}           个人版发行包（前台）"
     echo -e "  ${GREEN}minimal${NC}             minimal 发行包（前台）"
-    echo -e "  ${GREEN}proxyctl${NC}            系统代理出口 CLI（缺省会先构建）"
+    echo -e "  ${GREEN}wrap${NC}            系统代理出口 CLI（缺省会先构建）"
     echo -e "  ${GREEN}all${NC}                全部（需两个终端分别启动 be/fe）"
     echo ""
     echo -e "${CYAN}辅助选项:${NC}"
@@ -3466,19 +3466,19 @@ _help_run() {
     echo -e "  ./start.sh run personal --launcher          # lite 启动器"
     echo -e "  ./start.sh run personal --launcher-tray     # 托盘启动器"
     echo -e "  ./start.sh run minimal --launcher"
-    echo -e "  ./start.sh run proxyctl run --server http://192.168.1.10:20060 -- opencode"
-    echo -e "  ./start.sh run proxyctl env --server http://192.168.1.10:20060"
-    echo -e "  ./start.sh run proxyctl enable --server http://192.168.1.10:20060"
-    echo -e "  ./start.sh run proxyctl doctor"
-    echo -e "  ./start.sh run proxyctl disable"
+    echo -e "  ./start.sh run wrap run --server http://192.168.1.10:20060 -- opencode"
+    echo -e "  ./start.sh run wrap env --server http://192.168.1.10:20060"
+    echo -e "  ./start.sh run wrap enable --server http://192.168.1.10:20060"
+    echo -e "  ./start.sh run wrap doctor"
+    echo -e "  ./start.sh run wrap disable"
     echo ""
     echo -e "${CYAN}真源命令（员工机直接用二进制，与 start.sh 等价）:${NC}"
-    echo -e "  centag-proxyctl run [--server URL] -- <agent命令>"
-    echo -e "  centag-proxyctl env [--server URL]"
-    echo -e "  centag-proxyctl enable [--server URL]"
-    echo -e "  centag-proxyctl doctor [--server URL]"
-    echo -e "  centag-proxyctl disable"
-    echo -e "  centag-proxyctl status"
+    echo -e "  centag-wrap run [--server URL] -- <agent命令>"
+    echo -e "  centag-wrap env [--server URL]"
+    echo -e "  centag-wrap enable [--server URL]"
+    echo -e "  centag-wrap doctor [--server URL]"
+    echo -e "  centag-wrap disable"
+    echo -e "  centag-wrap status"
     echo ""
     echo -e "${YELLOW}注意:${NC} 开发模式需两个终端: 终端1 run be, 终端2 run fe"
 }
@@ -4338,13 +4338,13 @@ main() {
             shift || true
             local with_launcher=false
             local with_launcher_tray=false
-            local with_proxyctl=false
+            local with_wrap=false
             local unknown_args=()
             for arg in "$@"; do
                 case "$arg" in
                     --launcher) with_launcher=true ;;
                     --launcher-tray) with_launcher_tray=true; with_launcher=true ;;
-                    --proxyctl) with_proxyctl=true ;;
+                    --wrap) with_wrap=true ;;
                     *)
                         unknown_args+=("$arg")
                         ;;
@@ -4352,7 +4352,7 @@ main() {
             done
             if [ ${#unknown_args[@]} -gt 0 ]; then
                 print_error "未知 build 参数: ${unknown_args[*]}"
-                echo "用法: $0 build <目标> [--launcher|--launcher-tray] [--proxyctl]"
+                echo "用法: $0 build <目标> [--launcher|--launcher-tray] [--wrap]"
                 exit 1
             fi
             target=$(normalize_type "$target")
@@ -4362,8 +4362,8 @@ main() {
                         print_error "--launcher 不能用于 build be"
                         exit 1
                     fi
-                    if $with_proxyctl; then
-                        print_error "--proxyctl 不能用于 build be；请用: build proxyctl"
+                    if $with_wrap; then
+                        print_error "--wrap 不能用于 build be；请用: build wrap"
                         exit 1
                     fi
                     build backend
@@ -4373,8 +4373,8 @@ main() {
                         print_error "--launcher 不能用于 build fe"
                         exit 1
                     fi
-                    if $with_proxyctl; then
-                        print_error "--proxyctl 不能用于 build fe；请用: build proxyctl"
+                    if $with_wrap; then
+                        print_error "--wrap 不能用于 build fe；请用: build wrap"
                         exit 1
                     fi
                     build webui
@@ -4384,21 +4384,21 @@ main() {
                         print_error "--launcher 不能用于 build all；请用: build personal --launcher"
                         exit 1
                     fi
-                    if $with_proxyctl; then
-                        print_error "--proxyctl 不能用于 build all；请用: build proxyctl 或 build personal --proxyctl"
+                    if $with_wrap; then
+                        print_error "--wrap 不能用于 build all；请用: build wrap 或 build personal --wrap"
                         exit 1
                     fi
                     build all
                     ;;
-                proxyctl)
+                wrap)
                     if $with_launcher; then
-                        print_error "--launcher 不能与 build proxyctl 同用"
+                        print_error "--launcher 不能与 build wrap 同用"
                         exit 1
                     fi
-                    # --proxyctl 与目标 proxyctl 等价，忽略重复开关
-                    build_proxyctl_shell
-                    print_success "Ready: centag-proxyctl ($(go env GOOS)/$(go env GOARCH))"
-                    print_info "真源命令: cd apps/proxyctl && GOWORK=off go build -o centag-proxyctl ."
+                    # --wrap 与目标 wrap 等价，忽略重复开关
+                    build_wrap_shell
+                    print_success "Ready: centag-wrap ($(go env GOOS)/$(go env GOARCH))"
+                    print_info "真源命令: cd apps/wrap && GOWORK=off go build -o centag-wrap ."
                     ;;
                 personal|minimal|team)
                     if $with_launcher; then
@@ -4410,16 +4410,16 @@ main() {
                     else
                         build dist "$(edition_to_dist "$target")"
                     fi
-                    if $with_proxyctl; then
-                        build_proxyctl_shell
-                        print_success "Ready: centag-proxyctl ($(go env GOOS)/$(go env GOARCH))"
+                    if $with_wrap; then
+                        build_wrap_shell
+                        print_success "Ready: centag-wrap ($(go env GOOS)/$(go env GOARCH))"
                     fi
                     ;;
                 *)
                     print_error "未知构建目标: '$target'"
-                    echo "支持的构建目标: all, be, fe, personal, minimal, proxyctl（Team → centag-pro）"
+                    echo "支持的构建目标: all, be, fe, personal, minimal, wrap（Team → centag-pro）"
                     echo "启动器: ./start.sh build personal --launcher  或  --launcher-tray"
-                    echo "系统代理 CLI: ./start.sh build proxyctl  或  ./start.sh build personal --proxyctl"
+                    echo "系统代理 CLI: ./start.sh build wrap  或  ./start.sh build personal --wrap"
                     exit 1
                     ;;
             esac
@@ -4504,8 +4504,8 @@ main() {
                 personal|minimal)
                     run_edition "$svc" "$@"
                     ;;
-                proxyctl)
-                    run_proxyctl "$@"
+                wrap)
+                    run_wrap "$@"
                     ;;
                 team)
                     print_error "team 请用 Docker/Profile 运行；托盘不支持 team"
@@ -4519,9 +4519,9 @@ main() {
                     ;;
                 *)
                     print_error "未知运行目标: $svc"
-                    echo "支持的运行目标: be, fe, personal, minimal, proxyctl"
+                    echo "支持的运行目标: be, fe, personal, minimal, wrap"
                     echo "启动器: ./start.sh run personal --launcher  或  ./start.sh run minimal --launcher"
-                    echo "系统代理: ./start.sh run proxyctl enable|disable|doctor|status|run|env"
+                    echo "系统代理: ./start.sh run wrap enable|disable|doctor|status|run|env"
                     echo ""
                     show_all_mode_info
                     exit 1

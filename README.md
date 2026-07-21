@@ -28,7 +28,7 @@ centag/
 
 ## 一键安装（`install.sh`）
 
-默认安装 **personal CLI + proxyctl** 到 `~/.centag/bin`（并尝试写入 PATH）。需已发布的 GitHub Release 资产。
+默认安装 **personal CLI + wrap** 到 `~/.centag/bin`（并尝试写入 PATH）。需已发布的 GitHub Release 资产。
 
 ```bash
 # 推荐：按 Release tag 拉取安装脚本（与发版 tag 一致，例如 v0.2.7）
@@ -37,12 +37,12 @@ curl -fsSL https://raw.githubusercontent.com/atoml-ai/centag/v0.2.7/scripts/inst
 # 指定版本（脚本仍从 tag/分支取，二进制从对应 Release 下载）
 curl -fsSL https://raw.githubusercontent.com/atoml-ai/centag/v0.2.7/scripts/install.sh | bash -s -- --version 0.2.7
 
-# 只装 personal 或只装 proxyctl
+# 只装 personal 或只装 wrap
 curl -fsSL https://raw.githubusercontent.com/atoml-ai/centag/v0.2.7/scripts/install.sh | bash -s -- --only personal
-curl -fsSL https://raw.githubusercontent.com/atoml-ai/centag/v0.2.7/scripts/install.sh | bash -s -- --only proxyctl
+curl -fsSL https://raw.githubusercontent.com/atoml-ai/centag/v0.2.7/scripts/install.sh | bash -s -- --only wrap
 
 # 等价写法（位置参数）
-curl -fsSL https://raw.githubusercontent.com/atoml-ai/centag/v0.2.7/scripts/install.sh | bash -s -- proxyctl
+curl -fsSL https://raw.githubusercontent.com/atoml-ai/centag/v0.2.7/scripts/install.sh | bash -s -- wrap
 
 # 无可用 Release 时：克隆源码构建（需 Go / Node）
 curl -fsSL https://raw.githubusercontent.com/atoml-ai/centag/v0.2.7/scripts/install.sh | bash -s -- --from-source
@@ -57,8 +57,8 @@ curl -fsSL https://raw.githubusercontent.com/atoml-ai/centag/v0.2.7/scripts/inst
 ```bash
 centag                 # 启动 personal（默认端口 20060）
 centag-personal        # 直接跑二进制
-centag-proxyctl run -- opencode
-centag-proxyctl doctor
+centag-wrap run -- opencode
+centag-wrap doctor
 ```
 
 脚本说明见 `scripts/install.sh --help`。发版流程见 [docs/harness/skills/step6-release/SKILL.md](docs/harness/skills/step6-release/SKILL.md)（触发词：`step6-release` / 发版；须先过 Step 5 Gate 4）。

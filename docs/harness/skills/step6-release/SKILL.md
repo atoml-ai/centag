@@ -68,7 +68,7 @@ description: "工作流 Step 6：发版 — GitHub Release 与一键安装验收
 
 | 产物 | 说明 |
 |------|------|
-| GitHub Release `v<version>` | personal + proxyctl 资产 + checksums |
+| GitHub Release `v<version>` | personal + wrap 资产 + checksums |
 | `workflow_state.md` | Step 6 / Gate 5 状态 |
 | 可选：发版记录备注 | 可写在需求目录决策日志 |
 

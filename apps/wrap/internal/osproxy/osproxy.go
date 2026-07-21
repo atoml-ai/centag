@@ -1,6 +1,6 @@
 package osproxy
 
-import "centag/apps/proxyctl/internal/snapshot"
+import "centag/apps/wrap/internal/snapshot"
 
 // Backend reads/writes OS proxy settings and CA trust.
 type Backend interface {

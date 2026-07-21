@@ -44,7 +44,7 @@ func TestPrepareProcessEnv_FromPAC(t *testing.T) {
 	if _, err := os.Stat(pe.CAPath); err != nil {
 		t.Fatal(err)
 	}
-	wantSuffix := filepath.Join(".centag", "proxyctl", "ca.crt")
+	wantSuffix := filepath.Join(".centag", "wrap", "ca.crt")
 	if !strings.HasSuffix(pe.CAPath, wantSuffix) {
 		t.Fatalf("ca path=%q", pe.CAPath)
 	}
