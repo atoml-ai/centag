@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"centag/core/internal/cert"
+	"centag/core/pkg/config"
 	"centag/core/pkg/logger"
 
 	"go.uber.org/zap"
@@ -163,6 +164,8 @@ func stripHostPort(host string) string {
 }
 
 // isWhitelistedHost reports whether CONNECT host is in the PAC/MITM domain allowlist.
+// Match semantics match PAC dnsDomainIs: exact host or subdomain of a listed domain
+// (e.g. listing "openai.azure.com" covers "my-res.openai.azure.com").
 func (s *Server) isWhitelistedHost(host string) bool {
 	if s == nil {
 		return false
@@ -170,7 +173,15 @@ func (s *Server) isWhitelistedHost(host string) bool {
 	h := stripHostPort(host)
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return s.targetDomains[h]
+	if s.targetDomains[h] {
+		return true
+	}
+	for domain := range s.targetDomains {
+		if config.HostMatchesMITMDomain(h, domain) {
+			return true
+		}
+	}
+	return false
 }
 
 // ShouldRouteToBackend reports whether host+path should be forwarded to Centag (:20060).
@@ -184,7 +195,16 @@ func (s *Server) ShouldRouteToBackend(host, path string) bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	if !s.targetDomains[hostWithoutPort] {
-		return false
+		matched := false
+		for domain := range s.targetDomains {
+			if config.HostMatchesMITMDomain(hostWithoutPort, domain) {
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			return false
+		}
 	}
 	for _, pattern := range s.pathPatterns {
 		if pattern != "" && strings.HasPrefix(path, pattern) {

@@ -51,18 +51,24 @@ func TestConvertBackendPath_VendorAgnostic(t *testing.T) {
 
 func TestIsWhitelistedHost(t *testing.T) {
 	s := &Server{}
-	s.SetRoutingRules([]string{"opencode.ai", "api.openai.com"}, nil)
+	s.SetRoutingRules([]string{"opencode.ai", "api.openai.com", "openai.azure.com"}, nil)
 	if !s.isWhitelistedHost("opencode.ai:443") {
 		t.Fatal("expected opencode.ai:443 whitelisted")
 	}
 	if !s.isWhitelistedHost("api.openai.com") {
 		t.Fatal("expected api.openai.com whitelisted")
 	}
+	if !s.isWhitelistedHost("my-res.openai.azure.com:443") {
+		t.Fatal("expected Azure subdomain whitelisted via dnsDomainIs semantics")
+	}
 	if s.isWhitelistedHost("github.com:443") {
 		t.Fatal("github.com must not be whitelisted → CONNECT tunnel, no MITM")
 	}
 	if s.isWhitelistedHost("evil.example") {
 		t.Fatal("non-list host must not be whitelisted")
+	}
+	if s.isWhitelistedHost("openai.com") {
+		t.Fatal("parent of listed api.openai.com must not match")
 	}
 }
 
