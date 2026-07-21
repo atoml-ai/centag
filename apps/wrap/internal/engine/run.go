@@ -130,7 +130,7 @@ func (e *Engine) Env(server string) error {
 // Run wraps argv with process proxy env and executes it (replaces current process via Wait).
 func (e *Engine) Run(server string, argv []string) error {
 	if len(argv) == 0 {
-		return fmt.Errorf("run requires a command after -- (example: centag-wrap run --server URL -- opencode)")
+		return fmt.Errorf("run requires a command after -- (example: centag wrap run --server URL -- opencode)")
 	}
 	pe, err := e.PrepareProcessEnv(server)
 	if err != nil {

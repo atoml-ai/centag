@@ -3,6 +3,7 @@ module centag/dist/personal
 go 1.25.0
 
 require (
+	centag/apps/wrap v0.0.0
 	centag/core v0.0.0
 	centag/plugins/backend/anthropic v0.0.0-00010101000000-000000000000
 	centag/plugins/backend/azure v0.0.0-00010101000000-000000000000
@@ -78,6 +79,7 @@ require (
 )
 
 replace (
+	centag/apps/wrap => ../../apps/wrap
 	centag/core => ../../core
 	centag/plugins/backend/anthropic => ../../plugins/backend/anthropic
 	centag/plugins/backend/azure => ../../plugins/backend/azure

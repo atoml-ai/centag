@@ -7,6 +7,17 @@ import (
 	"centag/apps/wrap/internal/engine"
 )
 
+// programName is the CLI brand shown in help (default: standalone binary).
+var programName = "centag-wrap"
+
+// SetProgramName sets the help/usage brand (e.g. "centag wrap" when embedded).
+func SetProgramName(name string) {
+	name = strings.TrimSpace(name)
+	if name != "" {
+		programName = name
+	}
+}
+
 // Allowed commands (whitelist). Unknown argv fails.
 var allowed = map[string]bool{
 	"enable":  true,
@@ -124,23 +135,29 @@ func parseRunArgs(args []string) (server string, argv []string, err error) {
 }
 
 func printHelp() {
-	fmt.Print(`centag-wrap — Centag system PAC / process-proxy helper
+	name := programName
+	fmt.Printf(`%s — Centag system PAC / process-proxy helper
 
 Usage:
-  centag-wrap enable [--server http://host:20060]
-  centag-wrap disable
-  centag-wrap status
-  centag-wrap doctor [--server http://host:20060]
-  centag-wrap env [--server http://host:20060]
-  centag-wrap run [--server http://host:20060] -- <command> [args...]
+  %s enable [--server http://host:20060]
+  %s disable
+  %s status
+  %s doctor [--server http://host:20060]
+  %s env [--server http://host:20060]
+  %s run [--server http://host:20060] -- <command> [args...]
 
 Process proxy (recommended for OpenCode / CLI agents):
   Downloads CA, sets HTTPS_PROXY + NODE_EXTRA_CA_CERTS, then execs the command.
   Does NOT inject Centag API keys (MITM injects egress key on the server).
 
 Examples:
-  centag-wrap run -- opencode
-  centag-wrap run --server http://192.168.1.4:20060 -- opencode
-  eval "$(centag-wrap env --server http://192.168.1.4:20060)"
+  %s run -- opencode
+  %s run --server http://192.168.1.4:20060 -- opencode
+  eval "$(%s env --server http://192.168.1.4:20060)"
+`, name, name, name, name, name, name, name, name, name, name)
+	if name == "centag-wrap" {
+		fmt.Print(`
+Note: prefer "centag wrap …" when using the main Centag binary (same subcommands).
 `)
+	}
 }

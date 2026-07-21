@@ -3,6 +3,7 @@ module centag/dist/minimal
 go 1.25.0
 
 require (
+	centag/apps/wrap v0.0.0
 	centag/core v0.0.0
 	centag/plugins/backend/anthropic v0.0.0
 	centag/plugins/backend/ollama v0.0.0
@@ -62,6 +63,7 @@ require (
 )
 
 replace (
+	centag/apps/wrap => ../../apps/wrap
 	centag/core => ../../core
 	centag/plugins/backend/anthropic => ../../plugins/backend/anthropic
 	centag/plugins/backend/ollama => ../../plugins/backend/ollama
