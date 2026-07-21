@@ -1448,13 +1448,17 @@ func (f *geminiStreamFormatter) BuildUsage(finalOutput *pipeline.PipelineOutput)
 	return nil
 }
 
-// responsesStreamFormatter OpenAI Responses SSE 格式化器
+// responsesStreamFormatter OpenAI Responses SSE 格式化器.
+// OpenCode 等客户端依赖 response.created → output_text.delta → response.completed。
+// 注意：pipeline 非流式结果常以「单块 Content」到达；若 chunkIndex==0 只发 created
+// 会吞掉正文，客户端表现为空白（服务端日志仍显示成功）。
 type responsesStreamFormatter struct{}
 
 func (f *responsesStreamFormatter) FormatChunk(model string, chunk *plugin.StreamChunk, chunkIndex int, responseID string, created int64) string {
 	if chunk == nil {
 		return ""
 	}
+	var sb strings.Builder
 	if chunkIndex == 0 {
 		evt := map[string]interface{}{
 			"type": "response.created",
@@ -1463,39 +1467,44 @@ func (f *responsesStreamFormatter) FormatChunk(model string, chunk *plugin.Strea
 				"object": "response",
 				"status": "in_progress",
 				"model":  model,
+				"created_at": created,
 			},
 		}
 		dataBytes, _ := json.Marshal(evt)
-		return fmt.Sprintf("event: response.created\ndata: %s\n\n", string(dataBytes))
+		sb.WriteString(fmt.Sprintf("event: response.created\ndata: %s\n\n", string(dataBytes)))
 	}
-	if chunk.Content != "" || chunk.ReasoningContent != "" {
-		deltaText := chunk.Content
-		if deltaText == "" {
-			deltaText = chunk.ReasoningContent
-		}
+	deltaText := chunk.Content
+	if deltaText == "" {
+		deltaText = chunk.ReasoningContent
+	}
+	if deltaText != "" {
 		evt := map[string]interface{}{
 			"type":  "response.output_text.delta",
 			"delta": deltaText,
 		}
 		dataBytes, _ := json.Marshal(evt)
-		return fmt.Sprintf("event: response.output_text.delta\ndata: %s\n\n", string(dataBytes))
+		sb.WriteString(fmt.Sprintf("event: response.output_text.delta\ndata: %s\n\n", string(dataBytes)))
 	}
-	if chunk.Done {
-		evt := map[string]interface{}{
-			"type": "response.completed",
-			"response": map[string]interface{}{
-				"id":     responseID,
-				"status": "completed",
-			},
-		}
-		dataBytes, _ := json.Marshal(evt)
-		return fmt.Sprintf("event: response.completed\ndata: %s\n\n", string(dataBytes))
-	}
-	return ""
+	return sb.String()
 }
 
 func (f *responsesStreamFormatter) FormatDone(model string, usage map[string]interface{}, finishReason string) string {
-	return ""
+	resp := map[string]interface{}{
+		"status": "completed",
+		"model":  model,
+	}
+	if usage != nil {
+		resp["usage"] = usage
+	}
+	if finishReason != "" {
+		resp["finish_reason"] = finishReason
+	}
+	evt := map[string]interface{}{
+		"type":     "response.completed",
+		"response": resp,
+	}
+	dataBytes, _ := json.Marshal(evt)
+	return fmt.Sprintf("event: response.completed\ndata: %s\n\n", string(dataBytes))
 }
 
 func (f *responsesStreamFormatter) BuildUsage(finalOutput *pipeline.PipelineOutput) map[string]interface{} {
