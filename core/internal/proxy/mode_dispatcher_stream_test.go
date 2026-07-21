@@ -223,3 +223,43 @@ func TestResponsesStreamFormatter_FirstChunkIncludesDelta(t *testing.T) {
 		}
 	}
 }
+
+func TestResponsesStreamFormatter_ToolCalls(t *testing.T) {
+	f := &responsesStreamFormatter{}
+	out := f.FormatChunk("gpt-5.6-terra", &plugin.StreamChunk{
+		ToolCalls: []plugin.ToolCall{{
+			ID:   "call_1",
+			Type: "function",
+			Function: plugin.FunctionCall{
+				Name:      "bash",
+				Arguments: `{"command":"ls"}`,
+			},
+		}},
+		FinishReason: "tool_calls",
+		Done:         true,
+	}, 0, "resp-tools", 123)
+	for _, want := range []string{
+		"event: response.created",
+		`"type":"function_call"`,
+		`"call_id":"call_1"`,
+		`"name":"bash"`,
+		"event: response.function_call_arguments.delta",
+		"event: response.function_call_arguments.done",
+		`\"command\":\"ls\"`,
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("missing %q: %s", want, out)
+		}
+	}
+	// Tool-only: must not invent an empty assistant message item before completed.
+	if strings.Contains(out, `"type":"message"`) {
+		t.Fatalf("tool-only FormatChunk should not open message item: %s", out)
+	}
+	done := f.FormatDone("gpt-5.6-terra", nil, "tool_calls")
+	if strings.Contains(done, "response.output_text.done") {
+		t.Fatalf("tool-only FormatDone should skip text lifecycle: %s", done)
+	}
+	if !strings.Contains(done, "event: response.completed") || !strings.Contains(done, `"call_id":"call_1"`) {
+		t.Fatalf("FormatDone missing completed function_call: %s", done)
+	}
+}
