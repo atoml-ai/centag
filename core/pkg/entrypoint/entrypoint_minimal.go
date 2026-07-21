@@ -29,6 +29,10 @@ func Run(version, buildTime string) {
 	Version = version
 	BuildTime = buildTime
 
+	if HandleVersionCommand(version, buildTime, os.Args) {
+		return
+	}
+
 	if len(os.Args) > 1 && os.Args[1] == "plugin" {
 		fmt.Fprintf(os.Stderr, "plugin subcommand not available in this distribution\n")
 		os.Exit(1)

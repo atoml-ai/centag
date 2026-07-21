@@ -142,10 +142,14 @@ build_edition() {
   mkdir -p "$(dirname "$out_bin")"
 
   log "build centag-${edition} ${goos}/${goarch}"
+  local build_time ldflags
+  build_time="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+  # Inject version into main.Version / main.BuildTime for `centag version`
+  ldflags="-s -w -X 'main.Version=${VERSION}' -X 'main.BuildTime=${build_time}'"
   (
     cd "${ROOT}/dist/${edition}"
     GOWORK=off CGO_ENABLED=0 GOOS="$goos" GOARCH="$goarch" \
-      go build -trimpath -tags "$tags" -ldflags="-s -w" -o "$out_bin" .
+      go build -trimpath -tags "$tags" -ldflags="$ldflags" -o "$out_bin" .
   )
 
   stage_parent="${OUT_DIR}/.stage"
