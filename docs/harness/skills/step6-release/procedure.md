@@ -27,7 +27,7 @@
 | 消费者 | 路径 |
 |--------|------|
 | 一键安装脚本 | `scripts/install.sh` |
-| 本地构建产物 | `scripts/release/build-artifacts.sh` → `bin/release/<version>/` |
+| 本地构建产物 | `scripts/release/build-artifacts.sh` → `~/.centag/var/release/<version>/`（可用 `CENTAG_INSTALL_ROOT` 覆盖） |
 | 本地上传 Release | `scripts/release/publish-binaries.sh` |
 | CI 发版 | `.github/workflows/release.yml`（`v*` tag 或 workflow_dispatch） |
 | 分支门禁 | `scripts/release/require-release-branch.sh` |
@@ -79,7 +79,7 @@
 
 ### Path A — 已有本地产物，仅上传（推荐：避免重编）
 
-适用：已跑过构建，`bin/release/<version>/` 下已有 `centag-personal-*.tar.gz`、`centag-wrap-*.tar.gz`、`checksums.txt`。
+适用：已跑过构建，`${CENTAG_INSTALL_ROOT:-$HOME/.centag}/var/release/<version>/` 下已有 `centag-personal-*.tar.gz`、`centag-wrap-*.tar.gz`、`checksums.txt`。
 
 ```bash
 # 0) 必须在版本分支（例：feature/v0.2.7）+ 登录
@@ -89,7 +89,8 @@ gh auth login   # 若尚未登录
 gh auth status
 
 # 1) 确认产物
-ls -lh "bin/release/${CENTAG_RELEASE_VERSION}/"
+RELEASE_OUT="${CENTAG_INSTALL_ROOT:-$HOME/.centag}/var/release/${CENTAG_RELEASE_VERSION}"
+ls -lh "${RELEASE_OUT}/"
 
 # 2) 创建草稿 Release 并上传
 # Release notes MUST be English. Required sections — template真源:
@@ -103,11 +104,12 @@ ls -lh "bin/release/${CENTAG_RELEASE_VERSION}/"
 若 tag/release 已存在，改为上传（**不会**改 notes；正文过期时另跑 `gh release edit … --notes`）：
 
 ```bash
+RELEASE_OUT="${CENTAG_INSTALL_ROOT:-$HOME/.centag}/var/release/${CENTAG_RELEASE_VERSION}"
 gh release upload "v${CENTAG_RELEASE_VERSION}" \
   --repo "${CENTAG_RELEASE_REPO:-atoml-ai/centag}" \
   --clobber \
-  "bin/release/${CENTAG_RELEASE_VERSION}"/centag-*.tar.gz \
-  "bin/release/${CENTAG_RELEASE_VERSION}/checksums.txt"
+  "${RELEASE_OUT}"/centag-*.tar.gz \
+  "${RELEASE_OUT}/checksums.txt"
 ```
 
 草稿确认无误后：在 GitHub Release 页 **Publish release**，或：

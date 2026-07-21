@@ -105,17 +105,37 @@ Default install root: \`~/.centag\`. Chain \`. ~/.centag/env\` so PATH applies i
 - Password: \`centag123\`  
   (override with \`LLM_PROXY_ADMIN_PASSWORD\` before first start)
 
-### centag-wrap auth (optional)
+### centag-wrap auth (API key)
 
-\`centag-wrap doctor\` may report \`setup/status requires auth (HTTP 401)\`.  
-PAC/CA still work without a token; doctor can still PASS.  
-To call authenticated setup APIs, create an API Key in the WebUI, then:
+\`centag-wrap\` talks to the Centag gateway. When the server requires login, set a **gateway API key** (not the upstream LLM provider key):
+
+| Variable | Required | Meaning |
+|----------|----------|---------|
+| \`CENTAG_WRAP_TOKEN\` | When setup/status returns 401 | Centag WebUI → API Keys (Bearer token) |
+| \`CENTAG_API_BASE\` | Optional | Gateway base URL (default \`http://127.0.0.1:20060\`) |
 
 \`\`\`bash
-export CENTAG_WRAP_TOKEN='your_api_key'
+# 1) Create an API key in Centag WebUI (Settings / API Keys), copy the token
+# 2) Export for the current shell (or add to ~/.zshrc / ~/.bashrc)
+export CENTAG_WRAP_TOKEN='ctg_xxxxxxxx'          # paste your Centag API key
+export CENTAG_API_BASE='http://127.0.0.1:20060' # optional; remote: http://host:20060
+
+# 3) Verify / use wrap
 centag-wrap doctor
-# optional: centag-wrap enable / run …
+centag-wrap enable
+centag-wrap run -- opencode   # example: run an agent through the wrap proxy
 \`\`\`
+
+One-shot (no permanent export):
+
+\`\`\`bash
+CENTAG_WRAP_TOKEN='ctg_xxxxxxxx' centag-wrap doctor
+CENTAG_WRAP_TOKEN='ctg_xxxxxxxx' centag-wrap run -- opencode
+\`\`\`
+
+Notes:
+- Without a token, PAC/CA may still work; \`doctor\` can PASS while authenticated setup APIs return HTTP 401.
+- Do **not** put the upstream LLM vendor key in \`CENTAG_WRAP_TOKEN\` — egress keys are injected by Centag MITM on the server.
 
 ### Uninstall
 
