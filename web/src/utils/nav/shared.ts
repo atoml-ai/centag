@@ -83,8 +83,8 @@ export function costDashboardNav(): NavItem {
     label: '成本看板',
     icon: 'Coin',
     path: '/cost',
-    requiresAdmin: true,
-    requiresTeam: true
+    requiresAdmin: true
+    // D1: not requiresTeam — personal admin can open /cost
   }
 }
 

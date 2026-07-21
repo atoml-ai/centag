@@ -1,6 +1,23 @@
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
-import { resolve } from 'path'
+import { existsSync } from 'fs'
+import { resolve, dirname } from 'path'
+import { fileURLToPath } from 'url'
+
+const __dirname = dirname(fileURLToPath(import.meta.url))
+
+/**
+ * E3: Team pack — prefer web/.centag-team-pack symlink (deps resolve under web/),
+ * else CENTAG_TEAM_PACK, else empty stub for personal/minimal.
+ */
+function resolveTeamPackDir(): string {
+  const linked = resolve(__dirname, '.centag-team-pack')
+  if (existsSync(linked)) return linked
+  if (process.env.CENTAG_TEAM_PACK) return resolve(process.env.CENTAG_TEAM_PACK)
+  return resolve(__dirname, 'src/packs/team-stub')
+}
+
+const teamPackDir = resolveTeamPackDir()
 
 export default defineConfig(({ mode }) => ({
   plugins: [vue()],
@@ -10,6 +27,7 @@ export default defineConfig(({ mode }) => ({
     alias: {
       '@': resolve(__dirname, 'src'),
       '@shared': resolve(__dirname, 'shared'),
+      '@team-pack': teamPackDir,
     }
   },
   server: {
@@ -17,7 +35,8 @@ export default defineConfig(({ mode }) => ({
     port: 5173,
     strictPort: true, // 端口被占用时报错,而不是自动选择下一个端口
     fs: {
-      allow: ['.'],
+      // Allow reading team pack outside web/ when CENTAG_TEAM_PACK is set.
+      allow: ['.', teamPackDir, resolve(__dirname, '..')],
     },
     proxy: {
       '/api': {

@@ -33,31 +33,5 @@ export function getBackendStats(params?: { days?: number }) {
   })
 }
 
-export function getAllUsersUsage(params?: { from?: string; to?: string }) {
-  return api({
-    url: '/api/v1/admin/token-usage/all',
-    method: 'get',
-    params,
-  })
-}
-
-export function getUserRanking(params?: { limit?: number; days?: number }) {
-  return api({
-    url: '/api/v1/admin/token-usage/ranking',
-    method: 'get',
-    params,
-  })
-}
-
-/** 管理员设置配额：POST /api/v1/admin/quotas，body 含 user_id */
-export function setUserQuota(userId: number, data: { daily_limit: number; monthly_limit: number }) {
-  return api({
-    url: '/api/v1/admin/quotas',
-    method: 'post',
-    data: {
-      user_id: userId,
-      daily_limit: data.daily_limit,
-      monthly_limit: data.monthly_limit,
-    },
-  })
-}
+// Admin all-users / ranking / quotas APIs live in Team SKU (centag-pro pack);
+// open-core Host only exposes user self-service helpers above.

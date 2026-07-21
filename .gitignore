@@ -112,6 +112,8 @@ web/.vite/
 web/.cache/
 web/.env*
 web/.env.development
+# E3: symlink to centag-pro/web/packs/team during team frontend builds
+web/.centag-team-pack
 
 # Docker static files (built from web/)
 deploy/docker/static/assets/

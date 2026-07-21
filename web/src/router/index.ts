@@ -6,6 +6,7 @@ import {
   resolveEditionRouteRedirect,
   syncEditionFromStatus
 } from '@/utils/edition'
+import { teamPackRoutes } from '@team-pack'
 
 // Lazy-load all page components for better chunking.
 const Login = () => import('@/views/Login.vue')
@@ -20,8 +21,6 @@ const DataStores = () => import('@/views/DataStores.vue')
 const HostProxy = () => import('@/views/HostProxy.vue')
 const SystemProxy = () => import('@/views/SystemProxy.vue')
 const Profile = () => import('@/views/Profile.vue')
-const Users = () => import('@/views/system/Users.vue')
-const SystemUpdate = () => import('@/views/system/SystemUpdate.vue')
 const ClashRules = () => import('@/views/ClashRules.vue')
 const LogViewer = () => import('@/views/LogViewer.vue')
 const RequestTrace = () => import('@/views/RequestTrace.vue')
@@ -29,15 +28,12 @@ const TokenUsage = () => import('@/views/TokenUsage.vue')
 const Conversations = () => import('@/views/Conversations.vue')
 const CostDashboard = () => import('@/views/CostDashboard.vue')
 const BillingRules = () => import('@/views/BillingRules.vue')
-const AbComparison = () => import('@/views/AbComparison.vue')
 const Memory = () => import('@/views/Memory.vue')
 const ProxyModes = () => import('@/views/ProxyModes.vue')
 const SessionMode = () => import('@/views/SessionMode.vue')
 const NodePluginManager = () => import('@/views/pipeline/NodePluginManager.vue')
 const PipelineModes = () => import('@/views/PipelineModes.vue')
 const PluginRegistry = () => import('@/views/plugin/PluginRegistry.vue')
-const TenantList = () => import('@/views/tenant/TenantList.vue')
-const TenantMy = () => import('@/views/tenant/TenantMy.vue')
 const AgentSetup = () => import('@/views/AgentSetup.vue')
 const AgentProviders = () => import('@/views/AgentProviders.vue')
 const StorageKVBrowser = () => import('@/views/StorageKVBrowser.vue')
@@ -115,19 +111,6 @@ const routes = [
     meta: { title: '插件市场' }
   },
 
-  // ── Tenant Management ────────────────────────────────────────────────────
-  {
-    path: '/my-tenant',
-    name: 'TenantMy',
-    component: TenantMy,
-    meta: { title: '我的租户' }
-  },
-  {
-    path: '/tenants',
-    name: 'TenantList',
-    component: TenantList,
-    meta: { title: '租户管理', requiresAdmin: true }
-  },
   { path: '/host-proxy', name: 'HostProxy', component: HostProxy, meta: { title: 'Host 代理管理' } },
   {
     path: '/system-proxy',
@@ -164,12 +147,6 @@ const routes = [
     component: CostDashboard,
     meta: { title: '成本看板', requiresAdmin: true }
   },
-  {
-    path: '/ab-comparison',
-    name: 'AbComparison',
-    component: AbComparison,
-    meta: { title: 'A/B 对比', requiresAdmin: true }
-  },
   { path: '/memory', name: 'Memory', component: Memory, meta: { title: '云记忆管理' } },
 
   // ── Admin only ────────────────────────────────────────────────────────────
@@ -197,18 +174,8 @@ const routes = [
     component: DataStores,
     meta: { title: '数据存储管理' }
   },
-  {
-    path: '/system/users',
-    name: 'Users',
-    component: Users,
-    meta: { title: '用户管理', requiresAdmin: true }
-  },
-  {
-    path: '/system/update',
-    name: 'SystemUpdate',
-    component: SystemUpdate,
-    meta: { title: '系统更新', requiresAdmin: true }
-  },
+  // E3: team-only pages come from @team-pack (stub empty for personal/minimal).
+  ...teamPackRoutes,
   { path: '/:pathMatch(.*)*', name: 'NotFound', redirect: '/dashboard' }
 ]
 
