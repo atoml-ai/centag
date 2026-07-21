@@ -88,12 +88,12 @@ NOTES="$(cat <<EOF
 ### Install
 
 \`\`\`bash
-# default: personal + wrap
-curl -fsSL https://raw.githubusercontent.com/${REPO}/${TAG}/scripts/install.sh | bash && . "\$HOME/.centag/env"
+# pin version (recommended — no GitHub API lookup)
+curl -fsSL https://raw.githubusercontent.com/${REPO}/${TAG}/scripts/install.sh | bash -s ${VERSION} && . "\$HOME/.centag/env"
 
-# personal only / wrap only  (optional version: wrap ${VERSION})
-curl -fsSL https://raw.githubusercontent.com/${REPO}/${TAG}/scripts/install.sh | bash -s personal && . "\$HOME/.centag/env"
-curl -fsSL https://raw.githubusercontent.com/${REPO}/${TAG}/scripts/install.sh | bash -s wrap && . "\$HOME/.centag/env"
+# personal only / wrap only
+curl -fsSL https://raw.githubusercontent.com/${REPO}/${TAG}/scripts/install.sh | bash -s personal ${VERSION} && . "\$HOME/.centag/env"
+curl -fsSL https://raw.githubusercontent.com/${REPO}/${TAG}/scripts/install.sh | bash -s wrap ${VERSION} && . "\$HOME/.centag/env"
 \`\`\`
 
 Default install root: \`~/.centag\`. Chain \`. ~/.centag/env\` so PATH applies in this shell.  
