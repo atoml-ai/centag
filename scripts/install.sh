@@ -207,10 +207,16 @@ need_cmd mktemp
 # --- version / URLs --------------------------------------------------------
 strip_v() { echo "${1#v}"; }
 
+# Prefer github.com redirect (no API quota). Fall back to api.github.com.
 latest_version() {
-  local json tag
-  json="$(curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" 2>/dev/null || true)"
-  tag="$(printf '%s' "$json" | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)"
+  local tag hdr json
+  # e.g. Location: https://github.com/atoml-ai/centag/releases/tag/v0.2.7
+  hdr="$(curl -fsSIL "https://github.com/${REPO}/releases/latest" 2>/dev/null || true)"
+  tag="$(printf '%s' "$hdr" | tr -d '\r' | sed -n 's/^[Ll]ocation: .*\/releases\/tag\/\([^[:space:]]*\).*/\1/p' | head -1)"
+  if [[ -z "$tag" ]]; then
+    json="$(curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" 2>/dev/null || true)"
+    tag="$(printf '%s' "$json" | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)"
+  fi
   [[ -n "$tag" ]] || return 1
   strip_v "$tag"
 }
@@ -360,7 +366,8 @@ install_component_from_archive() {
 
 install_from_releases() {
   resolve_version || {
-    warn "could not resolve latest GitHub release for ${REPO}"
+    warn "could not resolve latest GitHub release for ${REPO} (api.github.com / releases/latest unreachable?)"
+    warn "Pin a version to skip discovery, e.g.:  curl …/install.sh | bash -s 0.2.7"
     return 1
   }
   info "Installing Centag ${TAG} (${PLATFORM_KEY})"
@@ -620,9 +627,10 @@ else
     fail "release download failed for one or more components.
 
 Ordinary installs never build from source. Please:
-  1) Retry the same command (network/CDN blips are common)
-  2) Or install only what you need:  bash install.sh --only personal
-  3) Developers only:               bash install.sh --from-source
+  1) Pin version (skips latest lookup):  curl …/install.sh | bash -s 0.2.7
+  2) Retry (network/CDN blips are common)
+  3) Install one component:             curl …/install.sh | bash -s personal
+  4) Developers only:                  bash install.sh --from-source
 
 Unset CENTAG_RELEASE_BASE if it points at a local/unreachable mirror."
   fi

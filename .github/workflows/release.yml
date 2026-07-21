@@ -134,12 +134,12 @@ jobs:
             echo "### Install"
             echo ""
             echo '```bash'
-            echo "# default: personal + wrap"
-            echo "curl -fsSL https://raw.githubusercontent.com/${REPO}/${TAG}/scripts/install.sh | bash && . \"\$HOME/.centag/env\""
+            echo "# pin version (recommended — no GitHub API lookup)"
+            echo "curl -fsSL https://raw.githubusercontent.com/${REPO}/${TAG}/scripts/install.sh | bash -s ${V} && . \"\$HOME/.centag/env\""
             echo ""
             echo "# personal only / wrap only"
-            echo "curl -fsSL https://raw.githubusercontent.com/${REPO}/${TAG}/scripts/install.sh | bash -s personal && . \"\$HOME/.centag/env\""
-            echo "curl -fsSL https://raw.githubusercontent.com/${REPO}/${TAG}/scripts/install.sh | bash -s wrap && . \"\$HOME/.centag/env\""
+            echo "curl -fsSL https://raw.githubusercontent.com/${REPO}/${TAG}/scripts/install.sh | bash -s personal ${V} && . \"\$HOME/.centag/env\""
+            echo "curl -fsSL https://raw.githubusercontent.com/${REPO}/${TAG}/scripts/install.sh | bash -s wrap ${V} && . \"\$HOME/.centag/env\""
             echo '```'
             echo ""
             echo "Default install root: \`~/.centag\`. Chain \`. ~/.centag/env\` so PATH applies in this shell."
