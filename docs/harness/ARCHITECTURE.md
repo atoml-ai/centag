@@ -14,7 +14,7 @@ Centag 是一个高性能 LLM 反向代理/网关，采用 Go 语言构建，核
 ```
 
 **技术栈**：
-- 语言：Go 1.23.7
+- 语言：Go 1.25.0（根模块 / `go.work`；`apps/wrap` 等子模块可为 `go 1.23.7`）
 - HTTP 框架：Gin
 - 数据库：SQLite（默认）/ PostgreSQL（生产）
 - 缓存：Redis（可选）
@@ -135,12 +135,13 @@ cmd → server → 领域层 → config/database
 |------|--------|------|
 | `web/` | Vue 3 + Element Plus | Web 管理界面 |
 | `apps/launcher/` | Go + systray | 可选桌面启动器：菜单/托盘 + 系统浏览器（L1） |
-| `apps/wrap/` | Go CLI | 本机/员工 PAC+CA 配置（系统代理出口；与 core 解耦） |
+| `apps/wrap/` | Go CLI | 本机/员工 PAC+CA 配置；以 `centag wrap` 嵌入主二进制（仍保持独立 go.mod） |
 
 **约束**：
 - 仅通过 HTTP API / 子进程与主项目交互，不能直接引用 `core/internal` 业务包
 - 构建产物（与 `scripts/install.sh` 布局一致）：web → `~/.centag/lib/<edition>/static/`；主机二进制 → `~/.centag/bin/`；跨平台中间物 → `~/.centag/var/cross/`（可选 launcher/wrap）
 - launcher 独立 `go.mod`，不加入根 `go.work`，删除不影响发行版
+- wrap 独立 `go.mod`，**已加入**根 `go.work`；`cmd/centag` / `dist/*` 通过 `centag/apps/wrap/cli` 嵌入子命令（删除 wrap 模块会破坏 `centag wrap`）
 
 **详细说明**：见 `web/README.md`、`apps/launcher/README.md`
 

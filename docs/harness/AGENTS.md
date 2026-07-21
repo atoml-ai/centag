@@ -10,7 +10,7 @@
 
 **Centag**（Go）是高性能 **LLM 反向代理 / 网关**：统一 OpenAI 兼容入口、多后端调度、缓存（精确 + 语义）、插件化协议/后端/存储、Gin HTTP 服务、Vue3 Web 管理端（`web/` → 构建到 `var/static/`）。
 
-- **Go 模块**: `centag`，`go 1.23.7`（见 `go.mod`）。
+- **Go 模块**: `centag`，`go 1.25.0`（见根 `go.mod` / `go.work`；子模块可声明更低的 `go` 版本，如 `apps/wrap` 为 `1.23.7`）。
 - **主进程入口**: `cmd/centag/main.go`；迁移: `cmd/migrate`；其它入口见 `cmd/README.md`。
 - **业务代码**: 主要在 `internal/`；可选实现与注册在 `plugins/`。
 
@@ -283,7 +283,7 @@ docs/versions/<版本>/<需求>/
 | `cmd/` `core/` `plugins/` `sdk/` | Go 模块核心 |
 | `web/` | Vue 管理端 |
 | `apps/launcher/` | 可选桌面启动器（L1：菜单/托盘+浏览器；独立 go.mod，不入 go.work） |
-| `apps/wrap/` | 本机 PAC/CA 一键工具（系统代理出口；独立 go.mod，不入 go.work；见 `docs/guide/system-proxy-egress.md`） |
+| `apps/wrap/` | 本机 PAC/CA 一键工具；独立 go.mod，**已加入**根 `go.work`，并由 `centag wrap` 子命令嵌入主二进制（见 `docs/guide/system-proxy-egress.md`） |
 | `config/initdata/` `config/profiles/` `config/secrets/` | 种子数据、场景 Profile、本地密钥 |
 | `deploy/docker/` `deploy/stack/` `deploy/fnos/` | 容器编排与 NAS 打包 |
 | `scripts/` | 开发/运维脚本与集成测试 |

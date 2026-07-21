@@ -115,7 +115,7 @@
 ### 准出条件
 
 - [ ] **G5.1** GitHub Release `v<version>` 已创建（草稿或已发布，按约定）
-- [ ] **G5.2** 资产齐全：`centag-personal-*`、`centag-wrap-*`（约定平台）+ `checksums.txt`
+- [ ] **G5.2** 资产齐全：`centag-personal-*`（约定平台）+ `checksums.txt`（含 `centag wrap`，无单独 wrap 包）
 - [ ] **G5.3** 版本分支门禁在发版时已通过
 - [ ] **G5.4** 安装冒烟通过，或用户明确跳过并记入 `workflow_state` 决策日志
 - [ ] **G5.5** `workflow_state`：Step 6 = ✅

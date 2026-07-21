@@ -22,7 +22,7 @@
 
 | 脚本 | 用途 |
 |------|------|
-| `install.sh` | 一键安装（`curl \| bash`；默认 personal + wrap） |
+| `install.sh` | 一键安装（`curl \| bash`；默认 personal，含 `centag wrap`） |
 | `release/build-artifacts.sh` | 交叉编译 Release 产物（tar.gz + checksums） |
 | `release/publish-binaries.sh` | 构建并上传 GitHub Release |
 | `release/require-release-branch.sh` | 发版门禁：仅版本分支（`vX` / `feature/vX` / `release/vX`） |

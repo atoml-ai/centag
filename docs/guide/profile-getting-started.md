@@ -383,7 +383,7 @@ agent-memory（默认）
 
 ### `docker logs` 看不到访问日志
 
-应用默认 `LLM_PROXY_LOG_OUTPUT=file`，且日志路径相对可执行文件（`/app/bin/logs`），与挂载卷 `/app/logs` 不一致时，`docker logs` 只有 entrypoint 输出。
+应用默认 `LLM_PROXY_LOG_OUTPUT=both`，且日志路径相对可执行文件（`/app/bin/logs`）；与挂载卷 `/app/logs` 不一致时请显式设置 `LLM_PROXY_LOG_PATH`。
 
 personal compose 已配置：
 

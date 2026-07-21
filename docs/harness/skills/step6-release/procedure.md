@@ -18,11 +18,10 @@
 
 | 发布产物 | 资产名 | 说明 |
 |----------|--------|------|
-| personal CLI + WebUI static | `centag-personal-<goos>-<goarch>.tar.gz` | 默认安装的服务端 |
-| wrap | `centag-wrap-<goos>-<goarch>.tar.gz` | 本机/进程代理辅助 |
+| personal CLI + WebUI static | `centag-personal-<goos>-<goarch>.tar.gz` | 默认安装；含 `centag wrap` 子命令 |
 | 校验和 | `checksums.txt` | SHA-256 |
 
-**暂不发布**（以后再说）：`minimal`、`launcher` / `launcher-tray`。
+**暂不发布**：独立 `centag-wrap` tarball、`minimal`、`launcher` / `launcher-tray`。进程代理用 `centag wrap …`。
 
 | 消费者 | 路径 |
 |--------|------|
@@ -79,7 +78,7 @@
 
 ### Path A — 已有本地产物，仅上传（推荐：避免重编）
 
-适用：已跑过构建，`${CENTAG_INSTALL_ROOT:-$HOME/.centag}/var/release/<version>/` 下已有 `centag-personal-*.tar.gz`、`centag-wrap-*.tar.gz`、`checksums.txt`。
+适用：已跑过构建，`${CENTAG_INSTALL_ROOT:-$HOME/.centag}/var/release/<version>/` 下已有 `centag-personal-*.tar.gz`、`checksums.txt`。
 
 ```bash
 # 0) 必须在版本分支（例：feature/v0.2.7）+ 登录
@@ -95,7 +94,7 @@ ls -lh "${RELEASE_OUT}/"
 # 2) 创建草稿 Release 并上传
 # Release notes MUST be English. Required sections — template真源:
 #   scripts/release/publish-binaries.sh（NOTES）
-#   Install / Default login / centag-wrap auth (CENTAG_WRAP_TOKEN) / Uninstall / Artifacts
+#   Install / Default login / centag wrap auth (CENTAG_WRAP_TOKEN) / Uninstall / Artifacts
 # 推荐直接 Path B（自动写 notes，勿手写过期正文）:
 ./scripts/release/publish-binaries.sh --version "${CENTAG_RELEASE_VERSION}" --release
 ```
@@ -138,7 +137,7 @@ DRY_RUN=1 ./scripts/release/publish-binaries.sh --version "${CENTAG_RELEASE_VERS
 等价拆步：
 
 ```bash
-./scripts/release/build-artifacts.sh --version "${CENTAG_RELEASE_VERSION}" --components personal,wrap
+./scripts/release/build-artifacts.sh --version "${CENTAG_RELEASE_VERSION}" --components personal
 # 再按 Path A 用 gh release create/upload
 ```
 
@@ -158,7 +157,7 @@ git push origin "v${CENTAG_RELEASE_VERSION}"
 
 或：Actions → **release** → 选择分支 **`feature/v0.2.7`**（或 `v0.2.7`）→ **Run workflow**（在 `main` 上跑会被 `guard-branch` 拒绝）。
 
-CI 默认组件：`personal,wrap`。产物写入草稿（或按 input）Release。
+CI 默认组件：`personal`（含 `centag wrap`）。产物写入草稿（或按 input）Release。
 
 **注意**：workflow 里 `run: |` 块禁止出现**顶格**的 heredoc 正文（否则 YAML 解析失败）。改 notes 时保持缩进或用 `echo`。
 
@@ -172,10 +171,9 @@ CI 默认组件：`personal,wrap`。产物写入草稿（或按 input）Release�
 gh release view "v${CENTAG_RELEASE_VERSION}" --repo "${CENTAG_RELEASE_REPO:-atoml-ai/centag}"
 ```
 
-期望至少包含（每平台一对 personal + wrap，外加 checksums）：
+期望至少包含（每平台 personal + checksums）：
 
 - `centag-personal-<goos>-<goarch>.tar.gz` × 支持平台
-- `centag-wrap-<goos>-<goarch>.tar.gz` × 支持平台
 - `checksums.txt`
 
 **草稿 Release 的资产 URL 对匿名 `curl` 不可用**；用户侧安装前必须 **Publish**。
@@ -196,8 +194,7 @@ bash scripts/install.sh \
   --no-modify-path
 
 test -x "$PREFIX/bin/centag" || test -x "$PREFIX/bin/centag-personal"
-test -x "$PREFIX/bin/centag-wrap"
-"$PREFIX/bin/centag-wrap" --help >/dev/null || "$PREFIX/bin/centag-wrap" -h >/dev/null || true
+"$PREFIX/bin/centag" wrap help >/dev/null
 ```
 
 一行命令 / 起服务等同理：仅用户点名时做，不作为 Step 6 默认路径。
@@ -242,12 +239,12 @@ test -x "$PREFIX/bin/centag-wrap"
 | `scripts/release/publish-binaries.sh` | 构建并可选 `gh release`（`--release` 时强制版本分支） |
 | `scripts/release/require-release-branch.sh` | 版本分支门禁 |
 | `.github/workflows/release.yml` | tag / 手动触发 CI 发版（`guard-branch`） |
-| `apps/wrap-npm/package.json` | 版本号对齐参考 |
-| `apps/wrap-npm/lib/download.js` | npm 侧下载同名 `centag-wrap-*.tar.gz` |
+| `apps/wrap-npm/package.json` | 版本号对齐参考（npm 可选渠道，非默认 Release） |
 
 ---
 
 ## 以后扩展（非当前步骤）
 
 - `--components` 增加 `minimal`、`launcher`、`launcher-tray` 时：先改 `build-artifacts.sh` / `install.sh` / 本正本「范围」表，再改 CI。
+- 独立 `wrap` tarball / npm：仅特殊渠道需要时再加，默认用户路径保持 `centag wrap`。
 - 短链 `https://centag.ai/install`：CDN/站点配置，不在本 skill 内实现。
