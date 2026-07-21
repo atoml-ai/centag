@@ -43,6 +43,7 @@
 | `centag-ui-browser-test.md` | WebUI 浏览器自动化验收（**强制 Browser MCP**） | — |
 | `centag-core.md` | 核心操作（**待补**） | — |
 | `centag-deploy.md` | 向导式部署（**待补**） | `deploy-wizard.sh` |
+| `centag-release.md` | GitHub Release 发版与安装验收 | `scripts/release/*`、`scripts/install.sh` |
 
 本目录下**不再**放置各 Agent 的交互入口 `*/SKILL.md`（已迁至 `.opencode/skills/` 等）。工作流 `step*/SKILL.md` 本身即业务正本，保留。
 
@@ -61,6 +62,7 @@
 | `centag-ui-browser-test.mdc` | `centag-ui-browser-test.md` |
 | `harness-workflow.mdc`（待补） | `step*/SKILL.md` + `quality-gate` |
 | `centag-core.mdc` / `centag-deploy.mdc`（待补） | 对应正本 |
+| `centag-release.mdc` | `centag-release.md` |
 
 ### OpenCode（`.opencode/skills/`）
 

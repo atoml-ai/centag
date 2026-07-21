@@ -339,6 +339,7 @@ CI 与脚本侧会做 **轻量卫生检查**（`scripts/check-harness-hygiene.sh
 | `centag-ui-browser-test.mdc` | 按需 | WebUI 浏览器验收收参 → `skills/centag-ui-browser-test.md`（强制 Browser MCP） |
 | `harness-baseline.mdc` / `harness-workflow.mdc` | 待补 | 基础规范 / step 路由 |
 | `centag-core.mdc` / `centag-deploy.mdc` | 待补 | 核心操作 / 部署交互入口 |
+| `centag-release.mdc` | 按需 | Release 发版收参 → `skills/centag-release.md` |
 
 ### 9.2 技能正本映射（`docs/harness/skills/`）
 
@@ -352,6 +353,7 @@ CI 与脚本侧会做 **轻量卫生检查**（`scripts/check-harness-hygiene.sh
 | 门禁检查 | `skills/quality-gate/SKILL.md` |
 | 核心操作（构建/运行/调试） | `skills/centag-core.md`（待补） |
 | 向导式部署 | `skills/centag-deploy.md`（待补） |
+| GitHub Release 发版与安装验收 | `skills/centag-release.md` |
 | 流水线模式测试 | `skills/centag-pipeline-test.md` |
 | 向导式全面测试 | `skills/centag-wizard-test.md` |
 | 管理功能端到端测试（HTTP） | `skills/centag-admin-e2e.md` |

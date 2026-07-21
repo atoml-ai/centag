@@ -10,6 +10,7 @@
 #   GH_TOKEN / gh auth   required for --release
 #   DRY_RUN=1            build only, skip gh release
 #   CENTAG_RELEASE_REPO  default atoml-ai/centag
+#   CENTAG_RELEASE_ALLOW_NON_MAIN=1  emergency bypass of main-only gate (on --release)
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -67,6 +68,9 @@ if [[ "$DO_RELEASE" != "1" ]]; then
   log "built ${TAG} artifacts in ${OUT_DIR} (pass --release to upload)"
   exit 0
 fi
+
+# Upload to GitHub only from main (build-only on feature branches is OK).
+bash "${ROOT}/scripts/release/require-main-branch.sh"
 
 command -v gh >/dev/null 2>&1 || fail "gh is required for --release"
 

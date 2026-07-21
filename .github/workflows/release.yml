@@ -19,8 +19,20 @@ permissions:
   contents: write
 
 jobs:
+  # Only main may publish: workflow_dispatch must run on main; tags must be on origin/main.
+  guard-main:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Require main branch
+        run: bash scripts/release/require-main-branch.sh --ci
+
   # Default release set: personal CLI + proxyctl (cross-compile, no CGO).
   binaries:
+    needs: [guard-main]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -62,7 +74,7 @@ jobs:
           if-no-files-found: error
 
   publish:
-    needs: [binaries]
+    needs: [guard-main, binaries]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
