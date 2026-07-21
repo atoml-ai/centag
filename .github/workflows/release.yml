@@ -46,7 +46,7 @@ jobs:
       - name: Require version branch
         run: bash scripts/release/require-release-branch.sh --ci --version "${{ steps.ver.outputs.version }}"
 
-  # Default release set: personal CLI + wrap (cross-compile, no CGO).
+  # Default release set: personal CLI only (includes `centag wrap` subcommand).
   # build-artifacts writes under $CENTAG_INSTALL_ROOT/var/release/<ver>/
   # (same layout as local ~/.centag; CI pins INSTALL_ROOT into the workspace).
   binaries:
@@ -67,11 +67,11 @@ jobs:
           cache: npm
           cache-dependency-path: web/package-lock.json
 
-      - name: Build personal + wrap
+      - name: Build personal
         run: |
           bash scripts/release/build-artifacts.sh \
             --version "${{ needs.guard-branch.outputs.version }}" \
-            --components personal,wrap
+            --components personal
 
       - name: Upload artifact bundle
         uses: actions/upload-artifact@v5
@@ -141,14 +141,10 @@ jobs:
             echo '```bash'
             echo "# pin version (recommended — no GitHub API lookup)"
             echo "curl -fsSL https://raw.githubusercontent.com/${REPO}/${TAG}/scripts/install.sh | bash -s ${V} && . \"\$HOME/.centag/env\""
-            echo ""
-            echo "# personal only / wrap only"
-            echo "curl -fsSL https://raw.githubusercontent.com/${REPO}/${TAG}/scripts/install.sh | bash -s personal ${V} && . \"\$HOME/.centag/env\""
-            echo "curl -fsSL https://raw.githubusercontent.com/${REPO}/${TAG}/scripts/install.sh | bash -s wrap ${V} && . \"\$HOME/.centag/env\""
             echo '```'
             echo ""
             echo "Default install root: \`~/.centag\`. Chain \`. ~/.centag/env\` so PATH applies in this shell."
-            echo "\`minimal\` / \`launcher\` are not published in this release."
+            echo "Release ships **personal** only — process proxy is \`centag wrap …\` (no separate wrap tarball)."
             echo ""
             echo "### Default login (first run)"
             echo ""
@@ -156,15 +152,14 @@ jobs:
             echo "- Password: \`centag123\`"
             echo "  (override with \`LLM_PROXY_ADMIN_PASSWORD\` before first start)"
             echo ""
-            echo "### centag-wrap auth (optional)"
+            echo "### Wrap / process proxy (API key)"
             echo ""
-            echo "\`centag-wrap doctor\` may report \`setup/status requires auth (HTTP 401)\`."
-            echo "PAC/CA still work without a token; doctor can still PASS."
-            echo "To call authenticated setup APIs, create an API Key in the WebUI, then:"
+            echo "\`centag wrap\` does not start the gateway. When setup/status returns 401:"
             echo ""
             echo '```bash'
             echo "export CENTAG_WRAP_TOKEN='your_api_key'"
-            echo "centag-wrap doctor"
+            echo "centag wrap doctor"
+            echo "centag wrap run -- opencode"
             echo '```'
             echo ""
             echo "### Uninstall"
@@ -172,7 +167,7 @@ jobs:
             echo "No dedicated uninstall command yet — remove manually:"
             echo ""
             echo '```bash'
-            echo 'centag-wrap disable 2>/dev/null || true'
+            echo 'centag wrap disable 2>/dev/null || true'
             echo "pkill -f 'centag-personal|/\\.centag/bin/centag' 2>/dev/null || true"
             echo 'rm -rf "${HOME}/.centag"'
             echo '# Also remove PATH line from ~/.zshrc / ~/.bashrc if present:'
@@ -181,8 +176,7 @@ jobs:
             echo ""
             echo "### Artifacts"
             echo ""
-            echo "- \`centag-personal-<goos>-<goarch>.tar.gz\` — personal CLI + WebUI static"
-            echo "- \`centag-wrap-<goos>-<goarch>.tar.gz\` — third-party CLI launcher / process helper"
+            echo "- \`centag-personal-<goos>-<goarch>.tar.gz\` — personal CLI + WebUI static (\`centag\` / \`centag wrap\`)"
             echo "- \`checksums.txt\` — SHA-256 sums"
           } > "$NOTES_FILE"
 
