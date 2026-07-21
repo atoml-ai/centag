@@ -465,14 +465,27 @@ func (d *ModeDispatcher) writeResponse(
 		TokensUsed: 0,
 	}
 
+	totalTokens := 0
 	if output.ExecutionLog != nil {
-		resp.TokensUsed = output.ExecutionLog.TotalTokens
+		totalTokens = output.ExecutionLog.TotalTokens
+		resp.TokensUsed = totalTokens
 	}
 
 	requestID := c.GetHeader("X-Request-ID")
 	backendID := extractBackendFromPipelineOutput(output)
 	responseModel := effectiveResponseModel(c, "", output)
 	logRequestResponse(requestID, responseModel, backendID, http.StatusOK, resp.Content)
+
+	if responseModel == "" {
+		responseModel = "pipeline-mode"
+	}
+
+	// Responses 客户端（OpenCode/Codex /v1/responses）必须拿到 {object:"response", output:[...]}，
+	// 不能静默落成 chat.completion（与 getStreamFormatter 的协议分支对齐）。
+	if isResponsesProtocol(c) {
+		writeResponsesAPIJSON(c, output, responseModel, totalTokens)
+		return nil
+	}
 
 	// 构建 message：有 tool_calls 时输出 tool_calls（function calling），否则输出 content
 	message := gin.H{
@@ -511,9 +524,6 @@ func (d *ModeDispatcher) writeResponse(
 		finishReason = "stop"
 	}
 
-	if responseModel == "" {
-		responseModel = "pipeline-mode"
-	}
 	// 返回 JSON 响应
 	c.JSON(http.StatusOK, gin.H{
 		"id":      fmt.Sprintf("chatcmpl-%d", time.Now().Unix()),
@@ -528,13 +538,80 @@ func (d *ModeDispatcher) writeResponse(
 			},
 		},
 		"usage": gin.H{
-			"prompt_tokens":     output.ExecutionLog.TotalTokens / 2,
-			"completion_tokens": output.ExecutionLog.TotalTokens / 2,
-			"total_tokens":      output.ExecutionLog.TotalTokens,
+			"prompt_tokens":     totalTokens / 2,
+			"completion_tokens": totalTokens / 2,
+			"total_tokens":      totalTokens,
 		},
 	})
 
 	return nil
+}
+
+func isResponsesProtocol(c *gin.Context) bool {
+	if c == nil {
+		return false
+	}
+	name, _ := c.Get("protocol_plugin")
+	s, _ := name.(string)
+	return s == "responses-protocol"
+}
+
+// writeResponsesAPIJSON writes a non-stream OpenAI Responses API envelope.
+func writeResponsesAPIJSON(c *gin.Context, output *pipeline.PipelineOutput, model string, totalTokens int) {
+	items := make([]gin.H, 0, 1+len(output.ToolCalls))
+	content := ""
+	if output != nil {
+		content = output.Content
+	}
+	hasTools := output != nil && len(output.ToolCalls) > 0
+
+	// 纯 tool 轮次不伪造空 message；仅文本或空响应保留 message item。
+	if content != "" || !hasTools {
+		msgID := fmt.Sprintf("msg-%d", time.Now().UnixNano())
+		items = append(items, gin.H{
+			"id":     msgID,
+			"type":   "message",
+			"role":   "assistant",
+			"status": "completed",
+			"content": []gin.H{
+				{"type": "output_text", "text": content},
+			},
+		})
+	}
+	if hasTools {
+		for _, tc := range output.ToolCalls {
+			callID := strings.TrimSpace(tc.ID)
+			if callID == "" {
+				callID = fmt.Sprintf("call_%d", time.Now().UnixNano())
+			}
+			args := tc.Function.Arguments
+			if args == "" {
+				args = "{}"
+			}
+			items = append(items, gin.H{
+				"id":        "fc_" + callID,
+				"type":      "function_call",
+				"status":    "completed",
+				"call_id":   callID,
+				"name":      tc.Function.Name,
+				"arguments": args,
+			})
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"id":         fmt.Sprintf("resp-%d", time.Now().UnixNano()),
+		"object":     "response",
+		"status":     "completed",
+		"model":      model,
+		"output":     items,
+		"created_at": time.Now().Unix(),
+		"usage": gin.H{
+			"input_tokens":  totalTokens / 2,
+			"output_tokens": totalTokens / 2,
+			"total_tokens":  totalTokens,
+		},
+	})
 }
 
 // Helper functions
@@ -600,13 +677,14 @@ func shouldPassthroughTransparentResponse(mode ProxyMode, output *pipeline.Pipel
 	if output == nil || strings.TrimSpace(output.Content) == "" {
 		return false
 	}
+	// Explicit false wins (e.g. Responses→Chat rewrite needs protocol formatter).
+	if output.Metadata != nil {
+		if v, ok := output.Metadata["raw_passthrough"].(bool); ok {
+			return v
+		}
+	}
 	if mode == ModeTransparentProxy {
 		return true
-	}
-	if output.Metadata != nil {
-		if v, ok := output.Metadata["raw_passthrough"].(bool); ok && v {
-			return true
-		}
 	}
 	return false
 }
@@ -1054,11 +1132,9 @@ func shouldInjectCentagMetaSSE(c *gin.Context) bool {
 	if v := strings.TrimSpace(c.GetHeader("X-Centag-Include-Meta")); v == "1" || strings.EqualFold(v, "true") {
 		return true
 	}
-	ua := strings.ToLower(c.GetHeader("User-Agent"))
-	if strings.Contains(ua, "centag") || strings.Contains(ua, "llm-proxy") {
-		return true
-	}
-	return false
+	// 仅识别本产品 UA 前缀；避免 "llm-proxy" 子串误伤第三方严格客户端。
+	ua := strings.ToLower(strings.TrimSpace(c.GetHeader("User-Agent")))
+	return strings.HasPrefix(ua, "centag/") || strings.HasPrefix(ua, "opencode-centag/")
 }
 
 // buildStreamCentagMeta 从流水线输出构建 SSE 代理元数据事件体。
@@ -1452,24 +1528,35 @@ func (f *geminiStreamFormatter) BuildUsage(finalOutput *pipeline.PipelineOutput)
 //
 // OpenCode / Codex 等客户端要求完整生命周期（不能只发 created+delta+completed）：
 //
+// Text:
+//
 //	response.created
-//	response.output_item.added
+//	response.output_item.added (message)
 //	response.content_part.added
 //	response.output_text.delta (+...)
-//	response.output_text.done
-//	response.content_part.done
+//	response.output_text.done / content_part.done / output_item.done
+//
+// Tools:
+//
+//	response.output_item.added (function_call)
+//	response.function_call_arguments.delta / .done
 //	response.output_item.done
 //	response.completed
 //
-// 缺少 output_item/content_part 时，delta 会被静默丢弃，表现为服务端成功、UI 空白。
+// 缺少 output_item/content_part 时，文本 delta 会被静默丢弃；缺少 function_call
+// 事件时 Agent 无法进入工具轮次。
 type responsesStreamFormatter struct {
-	seq        int
-	opened     bool
-	responseID string
-	itemID     string
-	model      string
-	created    int64
-	text       strings.Builder
+	seq            int
+	opened         bool
+	messageOpened  bool
+	messageOutIdx  int
+	responseID     string
+	itemID         string
+	model          string
+	created        int64
+	text           strings.Builder
+	nextOutputIdx  int
+	functionItems  []map[string]interface{}
 }
 
 func (f *responsesStreamFormatter) nextSeq() int {
@@ -1487,16 +1574,14 @@ func (f *responsesStreamFormatter) writeEvent(sb *strings.Builder, typ string, p
 	sb.WriteString(fmt.Sprintf("event: %s\ndata: %s\n\n", typ, string(dataBytes)))
 }
 
-func (f *responsesStreamFormatter) ensureOpened(sb *strings.Builder, model, responseID string, created int64) {
+func (f *responsesStreamFormatter) ensureResponse(sb *strings.Builder, model, responseID string, created int64) {
 	if f.opened {
 		return
 	}
 	f.opened = true
 	f.responseID = responseID
-	f.itemID = "msg_" + responseID
 	f.model = model
 	f.created = created
-
 	f.writeEvent(sb, "response.created", map[string]interface{}{
 		"response": map[string]interface{}{
 			"id":         responseID,
@@ -1507,8 +1592,19 @@ func (f *responsesStreamFormatter) ensureOpened(sb *strings.Builder, model, resp
 			"output":     []interface{}{},
 		},
 	})
+}
+
+func (f *responsesStreamFormatter) ensureMessage(sb *strings.Builder) {
+	if f.messageOpened {
+		return
+	}
+	f.messageOpened = true
+	f.itemID = "msg_" + f.responseID
+	f.messageOutIdx = f.nextOutputIdx
+	f.nextOutputIdx++
+
 	f.writeEvent(sb, "response.output_item.added", map[string]interface{}{
-		"output_index": 0,
+		"output_index": f.messageOutIdx,
 		"item": map[string]interface{}{
 			"id":      f.itemID,
 			"type":    "message",
@@ -1519,7 +1615,7 @@ func (f *responsesStreamFormatter) ensureOpened(sb *strings.Builder, model, resp
 	})
 	f.writeEvent(sb, "response.content_part.added", map[string]interface{}{
 		"item_id":       f.itemID,
-		"output_index":  0,
+		"output_index":  f.messageOutIdx,
 		"content_index": 0,
 		"part": map[string]interface{}{
 			"type": "output_text",
@@ -1533,22 +1629,82 @@ func (f *responsesStreamFormatter) FormatChunk(model string, chunk *plugin.Strea
 		return ""
 	}
 	var sb strings.Builder
-	f.ensureOpened(&sb, model, responseID, created)
+	f.ensureResponse(&sb, model, responseID, created)
 
 	deltaText := chunk.Content
 	if deltaText == "" {
 		deltaText = chunk.ReasoningContent
 	}
 	if deltaText != "" {
+		f.ensureMessage(&sb)
 		f.text.WriteString(deltaText)
 		f.writeEvent(&sb, "response.output_text.delta", map[string]interface{}{
 			"item_id":       f.itemID,
-			"output_index":  0,
+			"output_index":  f.messageOutIdx,
 			"content_index": 0,
 			"delta":         deltaText,
 		})
 	}
+
+	for _, tc := range chunk.ToolCalls {
+		f.writeFunctionCallEvents(&sb, tc)
+	}
 	return sb.String()
+}
+
+func (f *responsesStreamFormatter) writeFunctionCallEvents(sb *strings.Builder, tc plugin.ToolCall) {
+	callID := strings.TrimSpace(tc.ID)
+	if callID == "" {
+		callID = fmt.Sprintf("call_%d", f.nextOutputIdx)
+	}
+	itemID := "fc_" + callID
+	name := strings.TrimSpace(tc.Function.Name)
+	if name == "" {
+		return
+	}
+	args := tc.Function.Arguments
+	if args == "" {
+		args = "{}"
+	}
+	outIdx := f.nextOutputIdx
+	f.nextOutputIdx++
+
+	item := map[string]interface{}{
+		"id":        itemID,
+		"type":      "function_call",
+		"status":    "in_progress",
+		"call_id":   callID,
+		"name":      name,
+		"arguments": "",
+	}
+	f.writeEvent(sb, "response.output_item.added", map[string]interface{}{
+		"output_index": outIdx,
+		"item":         item,
+	})
+	f.writeEvent(sb, "response.function_call_arguments.delta", map[string]interface{}{
+		"item_id":      itemID,
+		"output_index": outIdx,
+		"delta":        args,
+	})
+	f.writeEvent(sb, "response.function_call_arguments.done", map[string]interface{}{
+		"item_id":      itemID,
+		"output_index": outIdx,
+		"name":         name,
+		"arguments":    args,
+	})
+	doneItem := map[string]interface{}{
+		"id":        itemID,
+		"type":      "function_call",
+		"status":    "completed",
+		"call_id":   callID,
+		"name":      name,
+		"arguments": args,
+	}
+	f.writeEvent(sb, "response.output_item.done", map[string]interface{}{
+		"output_index": outIdx,
+		"item":         doneItem,
+	})
+	f.functionItems = append(f.functionItems, doneItem)
 }
 
 func (f *responsesStreamFormatter) FormatDone(model string, usage map[string]interface{}, finishReason string) string {
@@ -1556,44 +1712,56 @@ func (f *responsesStreamFormatter) FormatDone(model string, usage map[string]int
 	if !f.opened {
 		// 无 chunk 时也要给出完整信封，避免客户端挂起
 		rid := fmt.Sprintf("resp-%d", time.Now().UnixNano())
-		f.ensureOpened(&sb, model, rid, time.Now().Unix())
+		f.ensureResponse(&sb, model, rid, time.Now().Unix())
 	}
 	if model != "" {
 		f.model = model
 	}
+
+	output := make([]interface{}, 0, 1+len(f.functionItems))
 	fullText := f.text.String()
 
-	f.writeEvent(&sb, "response.output_text.done", map[string]interface{}{
-		"item_id":       f.itemID,
-		"output_index":  0,
-		"content_index": 0,
-		"text":          fullText,
-	})
-	f.writeEvent(&sb, "response.content_part.done", map[string]interface{}{
-		"item_id":       f.itemID,
-		"output_index":  0,
-		"content_index": 0,
-		"part": map[string]interface{}{
-			"type": "output_text",
-			"text": fullText,
-		},
-	})
-	item := map[string]interface{}{
-		"id":     f.itemID,
-		"type":   "message",
-		"role":   "assistant",
-		"status": "completed",
-		"content": []interface{}{
-			map[string]interface{}{
+	// 纯工具调用：不要伪造空 message。仅文本/空响应：保持 message 生命周期。
+	if f.messageOpened || (len(f.functionItems) == 0) {
+		if !f.messageOpened {
+			f.ensureMessage(&sb)
+		}
+		f.writeEvent(&sb, "response.output_text.done", map[string]interface{}{
+			"item_id":       f.itemID,
+			"output_index":  f.messageOutIdx,
+			"content_index": 0,
+			"text":          fullText,
+		})
+		f.writeEvent(&sb, "response.content_part.done", map[string]interface{}{
+			"item_id":       f.itemID,
+			"output_index":  f.messageOutIdx,
+			"content_index": 0,
+			"part": map[string]interface{}{
 				"type": "output_text",
 				"text": fullText,
 			},
-		},
+		})
+		item := map[string]interface{}{
+			"id":     f.itemID,
+			"type":   "message",
+			"role":   "assistant",
+			"status": "completed",
+			"content": []interface{}{
+				map[string]interface{}{
+					"type": "output_text",
+					"text": fullText,
+				},
+			},
+		}
+		f.writeEvent(&sb, "response.output_item.done", map[string]interface{}{
+			"output_index": f.messageOutIdx,
+			"item":         item,
+		})
+		output = append(output, item)
 	}
-	f.writeEvent(&sb, "response.output_item.done", map[string]interface{}{
-		"output_index": 0,
-		"item":         item,
-	})
+	for _, fi := range f.functionItems {
+		output = append(output, fi)
+	}
 
 	resp := map[string]interface{}{
 		"id":         f.responseID,
@@ -1601,7 +1769,7 @@ func (f *responsesStreamFormatter) FormatDone(model string, usage map[string]int
 		"created_at": f.created,
 		"status":     "completed",
 		"model":      f.model,
-		"output":     []interface{}{item},
+		"output":     output,
 	}
 	if usage != nil {
 		resp["usage"] = usage

@@ -249,6 +249,84 @@ func TestDispatch_NonStream_ToolCallsPreserved(t *testing.T) {
 	}
 }
 
+func TestDispatch_NonStream_ResponsesProtocolEnvelope(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	engine := &stubResponsePipelineEngine{
+		output: &pipeline.PipelineOutput{
+			Content: "hello",
+			ToolCalls: []pipeline.ToolCall{{
+				ID:   "call_1",
+				Type: "function",
+				Function: pipeline.FunctionCall{
+					Name:      "bash",
+					Arguments: `{"command":"ls"}`,
+				},
+			}},
+			FinishReason: "tool_calls",
+			ExecutionLog: &pipeline.ExecutionLog{TotalTokens: 10, Success: true},
+		},
+	}
+	dispatcher := NewModeDispatcher(engine, nil, nil)
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", nil)
+	c.Set("protocol_plugin", "responses-protocol")
+
+	if err := dispatcher.Dispatch(c, ModeDirectBackend, &plugin.ProxyRequest{
+		Model:    "gpt-5.6-luna",
+		Messages: []plugin.Message{{Role: "user", Content: "hi"}},
+	}); err != nil {
+		t.Fatalf("Dispatch: %v", err)
+	}
+
+	var resp map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal: %v body=%s", err, w.Body.String())
+	}
+	if resp["object"] != "response" {
+		t.Fatalf("object=%v, want response; body=%s", resp["object"], w.Body.String())
+	}
+	if _, hasChoices := resp["choices"]; hasChoices {
+		t.Fatalf("must not emit chat.completion choices: %s", w.Body.String())
+	}
+	output, _ := resp["output"].([]interface{})
+	if len(output) < 2 {
+		t.Fatalf("output len=%d want message+function_call, body=%s", len(output), w.Body.String())
+	}
+}
+
+func TestShouldInjectCentagMetaSSE(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	cases := []struct {
+		name   string
+		header map[string]string
+		want   bool
+	}{
+		{"header true", map[string]string{"X-Centag-Include-Meta": "true"}, true},
+		{"ua centag prefix", map[string]string{"User-Agent": "centag/0.2.7"}, true},
+		{"ua opencode-centag", map[string]string{"User-Agent": "opencode-centag/1.0"}, true},
+		{"ua llm-proxy substring", map[string]string{"User-Agent": "some-llm-proxy-client/1"}, false},
+		{"ua contains centag mid", map[string]string{"User-Agent": "notcentag/1"}, false},
+		{"empty", nil, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(w)
+			c.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil)
+			for k, v := range tc.header {
+				c.Request.Header.Set(k, v)
+			}
+			if got := shouldInjectCentagMetaSSE(c); got != tc.want {
+				t.Fatalf("got %v want %v", got, tc.want)
+			}
+		})
+	}
+}
+
 // TestWriteStreamResponse_AnthropicToolUse 验证 Anthropic 流式格式化器
 // 在 chunk 携带 tool_calls 时输出 tool_use content block。
 func TestWriteStreamResponse_AnthropicToolUse(t *testing.T) {
