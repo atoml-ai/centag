@@ -130,24 +130,24 @@ Centag 采用 **薄核心 + 厚管道 + 可插拔实现** 的三层架构：
 
 > 完整工作流文档见 `docs/harness/workflow/README.md`。
 
-本项目遵循 **4 阶段 5 步骤 4 门禁** 的统一研发工作流（Step 1 内含强制「开发风险评估」环节），覆盖从方案设计到质量交付的完整链路。
+本项目遵循 **5 阶段 6 步骤 5 门禁** 的统一研发工作流（Step 1 内含强制「开发风险评估」环节；Step 6 为发版），覆盖从方案设计到 GitHub Release 的完整链路。
 
 ### 3.1 工作流全景
 
 ```
-Phase 1              Phase 2             Phase 3              Phase 4
-方案设计              任务规划             编码实现              质量交付
-──────────           ──────────          ──────────           ──────────
+Phase 1              Phase 2             Phase 3              Phase 4              Phase 5
+方案设计              任务规划             编码实现              质量交付              发版
+──────────           ──────────          ──────────           ──────────           ──────────
 
-Step 1: 方案设计      Step 2: 任务规划     Step 3: SDD 编码      Step 5: CR 审查
+Step 1: 方案设计      Step 2: 任务规划     Step 3: SDD 编码      Step 5: CR 审查      Step 6: 发版
   与确认             (拆解+风险映射)         实现
   + 开发风险评估
                                            Step 4: 单元测试
                                               补全
 
-──────────           ──────────          ──────────           ──────────
-     GATE 1 ──────→     GATE 2 ────────→     GATE 3 ──────→     GATE 4
-                                                              (交付准出)
+──────────           ──────────          ──────────           ──────────           ──────────
+     GATE 1 ──────→     GATE 2 ────────→     GATE 3 ──────→     GATE 4 ──────→     GATE 5
+                                                              (CR/发版许可)         (发版准出)
 ```
 
 ### 3.2 快捷别名（Step 别名路由）
@@ -161,7 +161,8 @@ Step 1: 方案设计      Step 2: 任务规划     Step 3: SDD 编码      Step 
 | `step2-plan` / 任务规划 / 拆任务 | Step 2: 任务规划 | 任务拆解规范 | Gate 1 |
 | `step3-code` / 编码 / 开始写代码 | Step 3: SDD 编码实现 | 编码执行规范 | Gate 2 |
 | `step4-test` / 补测试 | Step 4: 单元测试补全 | 单元测试规范 | 无（同 Phase） |
-| `step5-review` / CR / 代码审查 | Step 5: CR 审查 | 审查规范 | Gate 3 |
+| `step5-review` / CR / 代码审查 | Step 5: CR 审查 | 审查规范 + Gate 4 人工确认 | Gate 3 |
+| `step6-release` / 发版 / release | Step 6: 发版 | Release 操作正本 | **Gate 4** |
 
 ### 3.3 门禁链
 
@@ -170,7 +171,8 @@ Step 1: 方案设计      Step 2: 任务规划     Step 3: SDD 编码      Step 
 | Gate 1 | Phase 1 → 2 | 技术方案 + 开发风险评估落盘 + Critical=0 | `step2-plan` |
 | Gate 2 | Phase 2 → 3 | 任务计划落盘 + High 风险已映射任务 | `step3-code` |
 | Gate 3 | Phase 3 → 4 | 全量测试通过 + 覆盖率达标 | `step5-review` |
-| Gate 4 | 交付准出 | CR Critical = 0 + 产物齐全（含风险评估） | CR 完成时 |
+| Gate 4 | Phase 4 → 5 | CR Critical=0 + 产物齐全 + **人工批准可发版** | Step 5 确认；`step6-release` 再检 |
+| Gate 5 | 发版准出 | Release 资产 + 冒烟（或记录跳过） | Step 6 完成时 |
 
 ### 3.4 产物路径
 
@@ -192,6 +194,7 @@ docs/versions/<版本>/<需求>/
 - [Phase 2: 任务规划](workflow/phase-2-plan.md)
 - [Phase 3: 编码实现](workflow/phase-3-implement.md)
 - [Phase 4: 质量交付](workflow/phase-4-deliver.md)
+- [Phase 5: 发版](workflow/phase-5-release.md)
 - [门禁检查清单](workflow/gate-checklist.md)
 
 ---
@@ -259,7 +262,7 @@ docs/versions/<版本>/<需求>/
 ## 6. 下一步（给后续 Agent 的默认 checklist）
 
 1. **先读版本目录**：`docs/versions/` 下查找对应版本的需求。
-2. **确认工作流阶段**：若任务属于研发工作流，先读 `docs/harness/workflow/README.md` 确认当前 Phase，检查 `workflow_state.md`，通过 step 别名（`step1-design` → `step5-review`）进入对应环节。
+2. **确认工作流阶段**：若任务属于研发工作流，先读 `docs/harness/workflow/README.md` 确认当前 Phase，检查 `workflow_state.md`，通过 step 别名（`step1-design` → `step6-release`）进入对应环节。
 3. 阅读与本任务相关的 `docs/versions/` 条目（若有）。
 4. 小步修改：`internal/` 保持清晰分层；新增行为配测试（`go test`，见 CI）。
 5. API 或配置行为变更：同步 `docs/api/` 或 `docs/guide/` 中对应页。
@@ -339,7 +342,7 @@ CI 与脚本侧会做 **轻量卫生检查**（`scripts/check-harness-hygiene.sh
 | `centag-ui-browser-test.mdc` | 按需 | WebUI 浏览器验收收参 → `skills/centag-ui-browser-test.md`（强制 Browser MCP） |
 | `harness-baseline.mdc` / `harness-workflow.mdc` | 待补 | 基础规范 / step 路由 |
 | `centag-core.mdc` / `centag-deploy.mdc` | 待补 | 核心操作 / 部署交互入口 |
-| `centag-release.mdc` | 按需 | Release 发版收参 → `skills/centag-release.md` |
+| `step6-release.mdc` | 按需 | Step 6 发版收参 → `skills/step6-release/` |
 
 ### 9.2 技能正本映射（`docs/harness/skills/`）
 
@@ -350,10 +353,11 @@ CI 与脚本侧会做 **轻量卫生检查**（`scripts/check-harness-hygiene.sh
 | 编码实现 | `skills/step3-code/SKILL.md` |
 | 单元测试补全 | `skills/step4-test/SKILL.md` |
 | CR 审查 | `skills/step5-review/SKILL.md` |
+| 发版（Step 6） | `skills/step6-release/SKILL.md` + `procedure.md` |
 | 门禁检查 | `skills/quality-gate/SKILL.md` |
 | 核心操作（构建/运行/调试） | `skills/centag-core.md`（待补） |
 | 向导式部署 | `skills/centag-deploy.md`（待补） |
-| GitHub Release 发版与安装验收 | `skills/centag-release.md` |
+| GitHub Release（兼容旧名） | `skills/centag-release.md` → 重定向至 Step 6 |
 | 流水线模式测试 | `skills/centag-pipeline-test.md` |
 | 向导式全面测试 | `skills/centag-wizard-test.md` |
 | 管理功能端到端测试（HTTP） | `skills/centag-admin-e2e.md` |
@@ -368,7 +372,8 @@ CI 与脚本侧会做 **轻量卫生检查**（`scripts/check-harness-hygiene.sh
 | `step2-plan` / 任务规划 | `skills/step2-plan/SKILL.md` | Gate 1 → `workflow/phase-2-plan.md` |
 | `step3-code` / 编码 | `skills/step3-code/SKILL.md` | Gate 2 → `workflow/phase-3-implement.md` |
 | `step4-test` / 补测试 | `skills/step4-test/SKILL.md` | `workflow/phase-3-implement.md` §Step 4 |
-| `step5-review` / CR | `skills/step5-review/SKILL.md` | Gate 3 → `workflow/phase-4-deliver.md` |
+| `step5-review` / CR | `skills/step5-review/SKILL.md` | Gate 3 → `workflow/phase-4-deliver.md`（确认 Gate 4） |
+| `step6-release` / 发版 | `skills/step6-release/SKILL.md` | Gate 4 → `workflow/phase-5-release.md` + `procedure.md` |
 | 门禁检查 | `skills/quality-gate/SKILL.md` | `workflow/gate-checklist.md` |
 
 | 规范文件 | 说明 | 何时触发 |

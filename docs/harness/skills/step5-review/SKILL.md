@@ -1,6 +1,6 @@
 ---
 name: step5-review
-description: "工作流 Step 5：CR 审查 — 自测验证 + 代码审查 + 人工复核 + 产物检查。触发场景：CR、step5-review、代码审查"
+description: "工作流 Step 5：CR 审查 — 自测验证 + 代码审查 + 人工确认 Gate 4（发版许可）。触发场景：CR、step5-review、代码审查"
 ---
 
 # Step 5: CR 审查
@@ -53,11 +53,26 @@ description: "工作流 Step 5：CR 审查 — 自测验证 + 代码审查 + 人
 - [ ] CR 报告已落盘（写入 `docs/versions/<版本>/<需求>/CR_报告.md`）
 - [ ] 代码 + 测试已就绪
 
-### 第四步：人工复核
+### 第四步：人工复核 → **Gate 4（发版许可）**
 
-- 用户复核代码变更
-- 用户确认产物完整性
-- 用户确认可交付
+> ⚠️ **禁止**在未获人工确认时将 Gate 4 标为 ✅。写完 CR ≠ 通过 Gate 4。
+
+1. 用户复核代码变更与产物完整性。
+2. **必须**用 AskQuestion 征求结论（不可用时极短文字提问）：
+
+| id | prompt | options |
+|----|--------|---------|
+| `cr_gate4` | CR 结论 / Gate 4 发版许可 | 批准 — 可发版 / 需修改后重审 / 拒绝 |
+
+3. 按选项更新状态：
+
+| 选项 | 动作 |
+|------|------|
+| **批准 — 可发版** | CR 结论勾选批准；`workflow_state`：Step 5 → ✅，Gate 3 → ✅，**Gate 4 → ✅**（备注：人工确认发版许可）；提示可执行 `step6-release` |
+| **需修改后重审** | Gate 4 保持 ⬜；Step 5 可为 🔄；列出待修项 |
+| **拒绝** | Gate 4 保持 ⬜；CR 结论勾选拒绝；不得进入 Step 6 |
+
+4. 仅「批准」时提示下一步：`step6-release`（发版）。合并 `main` 可与发版并行，但**上传 Release 必须以 Gate 4 为准**。
 
 ## 产出
 
@@ -66,8 +81,10 @@ description: "工作流 Step 5：CR 审查 — 自测验证 + 代码审查 + 人
 | 自测记录 | `docs/versions/<版本>/<需求>/自测记录.md` |
 | CR 报告 | `docs/versions/<版本>/<需求>/CR_报告.md` |
 | 风险评估终态 | `docs/versions/<版本>/<需求>/开发风险评估.md`（状态已更新） |
+| Gate 4 状态 | `workflow_state.md`（仅人工批准后 ✅） |
 
 ## 完成后
 
-- 更新 `workflow_state.md`：Step 5 状态 → ✅ 已完成，Gate 3 → ✅，Gate 4 → ✅
-- 确认 Gate 4 准出条件全部满足，提示用户可进行合并或部署。
+- Step 5 文档与审查完成 → Step 5 可标 ✅
+- **Gate 4 仅在人工选择「批准 — 可发版」后**标 ✅
+- 批准后提示用户执行 `step6-release`；未批准则禁止发版

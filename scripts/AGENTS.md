@@ -25,9 +25,8 @@
 | `install.sh` | 一键安装（`curl \| bash`；默认 personal + proxyctl） |
 | `release/build-artifacts.sh` | 交叉编译 Release 产物（tar.gz + checksums） |
 | `release/publish-binaries.sh` | 构建并上传 GitHub Release |
-
-发版流程正本（步骤 / 验收）：`docs/harness/skills/centag-release.md`。  
-仅**版本分支**可上传 Release：`scripts/release/require-release-branch.sh`（`--release` / CI `guard-branch`；允许 `vX` / `feature/vX` / `release/vX`）。
+| `release/require-release-branch.sh` | 发版门禁：仅版本分支（`vX` / `feature/vX` / `release/vX`） |
+| `release/require-release-branch_test.sh` | 上述门禁的表驱动 shell 测试 |
 | `check-harness-hygiene.sh` | Harness 卫生检查（Centag 布局） |
 | `ci-go-packages.sh` | CI 包列表生成 |
 | `packaging/package.sh` | 渠道打包调度（参数见根目录 `packaging.env`） |
@@ -50,9 +49,14 @@ make frontend
 # Harness 检查
 bash scripts/check-harness-hygiene.sh
 
+# 发版分支门禁测试
+bash scripts/release/require-release-branch_test.sh
+
 # CI 包列表
 bash scripts/ci-go-packages.sh
 ```
+
+发版流程正本：`docs/harness/skills/step6-release/`（Step 6；须先过 Gate 4）。
 
 ## 相关文档
 
@@ -61,4 +65,4 @@ bash scripts/ci-go-packages.sh
 
 ---
 
-*最后更新：2026-04-27*
+*最后更新：2026-07-21*

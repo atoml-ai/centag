@@ -30,7 +30,8 @@
 | `step2-plan/SKILL.md` | Step 2: 任务规划（含风险→任务映射） |
 | `step3-code/SKILL.md` | Step 3: SDD 编码实现（关闭关联风险） |
 | `step4-test/SKILL.md` | Step 4: 单元测试补全 |
-| `step5-review/SKILL.md` | Step 5: CR 审查 |
+| `step5-review/SKILL.md` | Step 5: CR 审查（人工确认 **Gate 4 发版许可**） |
+| `step6-release/SKILL.md` | Step 6: 发版（前置 Gate 4；操作见 `procedure.md`） |
 | `quality-gate/SKILL.md` | 门禁检查 |
 
 ### 项目操作 / 测试
@@ -43,7 +44,8 @@
 | `centag-ui-browser-test.md` | WebUI 浏览器自动化验收（**强制 Browser MCP**） | — |
 | `centag-core.md` | 核心操作（**待补**） | — |
 | `centag-deploy.md` | 向导式部署（**待补**） | `deploy-wizard.sh` |
-| `centag-release.md` | GitHub Release 发版与安装验收 | `scripts/release/*`、`scripts/install.sh` |
+| `centag-release.md` | **已迁移** → `step6-release/` | — |
+| `step6-release/procedure.md` | GitHub Release 发版与安装验收（操作正本） | `scripts/release/*`、`scripts/install.sh` |
 
 本目录下**不再**放置各 Agent 的交互入口 `*/SKILL.md`（已迁至 `.opencode/skills/` 等）。工作流 `step*/SKILL.md` 本身即业务正本，保留。
 
@@ -62,7 +64,7 @@
 | `centag-ui-browser-test.mdc` | `centag-ui-browser-test.md` |
 | `harness-workflow.mdc`（待补） | `step*/SKILL.md` + `quality-gate` |
 | `centag-core.mdc` / `centag-deploy.mdc`（待补） | 对应正本 |
-| `centag-release.mdc` | `centag-release.md` |
+| `step6-release.mdc` | `step6-release/SKILL.md` + `procedure.md` |
 
 ### OpenCode（`.opencode/skills/`）
 

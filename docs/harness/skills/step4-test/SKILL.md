@@ -55,4 +55,4 @@ description: "工作流 Step 4：单元测试补全 — 为新增代码编写完
 ## 完成后
 
 - 更新 `workflow_state.md`：Step 4 状态 → ✅ 已完成
-- 提示用户可执行 `step5-review` 进入质量交付阶段（将自动检查 Gate 3）。
+- 提示用户可执行 `step5-review` 进入质量交付阶段（将自动检查 Gate 3）；CR 人工批准 Gate 4 后方可 `step6-release`。

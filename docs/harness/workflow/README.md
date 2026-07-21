@@ -4,7 +4,7 @@
 
 ## 概述
 
-本工作流将研发过程统一为 **4 个阶段、5 个步骤、4 道门禁**，覆盖从方案设计到质量交付的完整链路。
+本工作流将研发过程统一为 **5 个阶段、6 个步骤、5 道门禁**，覆盖从方案设计到发版的完整链路。
 
 ### 设计原则
 
@@ -14,25 +14,26 @@
 | **Spec 驱动编码** | 编码严格依据技术方案实现，测试验证 Spec 合规性 |
 | **风险先于编码** | 开发实现风险独立评估并落盘；Critical=0、High 有任务归属后才允许编码 |
 | **门禁硬约束** | 每个 Phase 有准出门禁，跨 Phase 时自动检查，未通过禁止继续 |
+| **CR 后方可发版** | Gate 4 须人工确认「批准 — 可发版」后，才允许 Step 6 上传 Release |
 | **产物全落盘** | 所有产物有标准路径和格式，可追溯、可审计 |
 | **小步修改** | 每次改动范围可控，新增行为配测试，不放大修改范围 |
 
 ## 工作流全景
 
 ```
-Phase 1              Phase 2             Phase 3              Phase 4
-方案设计              任务规划             编码实现              质量交付
-──────────           ──────────          ──────────           ──────────
+Phase 1              Phase 2             Phase 3              Phase 4              Phase 5
+方案设计              任务规划             编码实现              质量交付              发版
+──────────           ──────────          ──────────           ──────────           ──────────
 
-Step 1: 方案设计      Step 2: 任务规划     Step 3: SDD 编码      Step 5: CR 审查
+Step 1: 方案设计      Step 2: 任务规划     Step 3: SDD 编码      Step 5: CR 审查      Step 6: 发版
   与确认             (拆解+执行计划)         实现
 
                                            Step 4: 单元测试
                                               补全
 
-──────────           ──────────          ──────────           ──────────
-     GATE 1 ──────→     GATE 2 ────────→     GATE 3 ──────→     GATE 4
-                                                              (交付准出)
+──────────           ──────────          ──────────           ──────────           ──────────
+     GATE 1 ──────→     GATE 2 ────────→     GATE 3 ──────→     GATE 4 ──────→     GATE 5
+                                                              (CR/发版许可)         (发版准出)
 ```
 
 ## 阶段详情
@@ -43,7 +44,8 @@ Step 1: 方案设计      Step 2: 任务规划     Step 3: SDD 编码      Step 
 | **Phase 2** 任务规划 | Step 2: 任务规划 | 方案拆解为任务 + 风险映射到任务 | 任务计划（含风险映射） |
 | **Phase 3** 编码实现 | Step 3: SDD 编码实现 | 按 Spec 编码，关闭关联风险 | 代码 + 测试 |
 | | Step 4: 单元测试补全 | 补充边界/异常/安全测试 | 补充测试 |
-| **Phase 4** 质量交付 | Step 5: CR 审查 | 自测 + 审查 + 风险闭环 + 产物检查 | 自测记录 + CR 报告 |
+| **Phase 4** 质量交付 | Step 5: CR 审查 | 自测 + 审查 + **人工确认 Gate 4** | 自测记录 + CR 报告 |
+| **Phase 5** 发版 | Step 6: 发版 | GitHub Release + 安装验收 | Release 资产 + Gate 5 |
 
 ## 快捷别名
 
@@ -57,6 +59,7 @@ Step 1: 方案设计      Step 2: 任务规划     Step 3: SDD 编码      Step 
 | `step3-code` / 编码 | Step 3: SDD 编码实现 | Gate 2 |
 | `step4-test` / 补测试 | Step 4: 单元测试补全 | 无（同 Phase） |
 | `step5-review` / CR / 代码审查 | Step 5: CR 审查 | Gate 3 |
+| `step6-release` / 发版 / release | Step 6: 发版 | **Gate 4**（含人工批准） |
 
 ## 门禁链
 
@@ -65,7 +68,8 @@ Step 1: 方案设计      Step 2: 任务规划     Step 3: SDD 编码      Step 
 | Gate 1 | Phase 1 → 2 | 技术方案 + **开发风险评估**落盘 + Critical=0 + 人工确认 | `step2-plan` |
 | Gate 2 | Phase 2 → 3 | 任务计划落盘 + 可执行验收 + **High 风险已映射任务** | `step3-code` |
 | Gate 3 | Phase 3 → 4 | 全量测试通过 + 覆盖率达标 + lint 无新增 | `step5-review` |
-| Gate 4 | 交付准出 | CR Critical = 0 + Spec 合规 + 产物齐全（含风险评估） | CR 完成时 |
+| Gate 4 | Phase 4 → 5 | CR Critical=0 + 产物齐全 + **人工批准可发版** | Step 5 确认时；`step6-release` 再检 |
+| Gate 5 | 发版准出 | Release 资产齐全 + 冒烟（或记录跳过） | Step 6 完成时 |
 
 ## 产物路径
 
@@ -76,7 +80,7 @@ docs/versions/<版本>/<需求>/
 ├── 开发风险评估.md          ← Step 1（强制）
 ├── 任务计划.md              ← Step 2
 ├── 自测记录.md              ← Step 5
-└── CR_报告.md               ← Step 5
+└── CR_报告.md               ← Step 5（结论含发版批准）
 ```
 
 ## 各阶段执行指南
@@ -85,4 +89,5 @@ docs/versions/<版本>/<需求>/
 - [Phase 2: 任务规划](phase-2-plan.md)
 - [Phase 3: 编码实现](phase-3-implement.md)
 - [Phase 4: 质量交付](phase-4-deliver.md)
+- [Phase 5: 发版](phase-5-release.md)
 - [门禁检查清单](gate-checklist.md)

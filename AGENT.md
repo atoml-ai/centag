@@ -55,8 +55,8 @@ docs/harness/skills/      各 Agent 规范目录
 | 流水线模式测试 | `docs/harness/skills/centag-pipeline-test.md` |
 | 管理功能 E2E（HTTP） | `docs/harness/skills/centag-admin-e2e.md` |
 | WebUI 浏览器自动化验收 | `docs/harness/skills/centag-ui-browser-test.md`（强制 Browser MCP） |
-| 工作流 Step 1–5 / 门禁 | `docs/harness/skills/step*/SKILL.md`、`quality-gate/SKILL.md`（Step 1 含强制开发风险评估） |
+| 工作流 Step 1–6 / 门禁 | `docs/harness/skills/step*/SKILL.md`、`quality-gate/SKILL.md`（Step 1 含强制开发风险评估；Step 6 发版） |
 | 核心操作 / 部署 | `centag-core.md` / `centag-deploy.md`（待补） |
-| GitHub Release 发版 | `docs/harness/skills/centag-release.md` |
+| GitHub Release 发版（Step 6） | `docs/harness/skills/step6-release/SKILL.md` + `procedure.md` |
 
 入口映射明细见 [docs/harness/skills/README.md](docs/harness/skills/README.md)。
