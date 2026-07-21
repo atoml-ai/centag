@@ -12,7 +12,7 @@
 | Phase 3 | Step 3 编码 | ✅ | 2026-07-21 | bc6840c 已实现 |
 | | Step 4 单测补全 | ✅ | 2026-07-21 | require-release-branch_test.sh（15 case） |
 | Phase 4 | Step 5 CR | ✅ | 2026-07-21 | 自测记录 + CR；人工已批准发版 |
-| Phase 5 | Step 6 发版 | ✅ | 2026-07-21 | wrap 重命名重发；tag→5d7000c；见 `发版验收.md` |
+| Phase 5 | Step 6 发版 | ✅ | 2026-07-21 | Path B 重发；tag→e273272；见 `发版验收.md` |
 
 ## 门禁
 
@@ -45,3 +45,4 @@
 | 2026-07-21 | 修复 publish-binaries 解析 OUT_DIR（tail -n1） | Agent |
 | 2026-07-21 | Step 6 默认跳过安装冒烟；用户手动部署 | 用户 |
 | 2026-07-21 | 重发 v0.2.7：wrap 资产 + 删 proxyctl + tag→5d7000c | 用户 |
+| 2026-07-21 | Path B 再发：重建资产 + 公开 notes（PATH 用 source env） | 用户 |
