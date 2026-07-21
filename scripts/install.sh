@@ -4,22 +4,21 @@
 # Usage (activate PATH in the same command — curl|bash cannot mutate the parent shell):
 #   curl -fsSL .../install.sh | bash && . "$HOME/.centag/env"
 #   curl -fsSL .../install.sh | bash -s personal && . "$HOME/.centag/env"
-#   curl -fsSL .../install.sh | bash -s wrap && . "$HOME/.centag/env"
-#   curl -fsSL .../install.sh | bash -s wrap 0.2.7 && . "$HOME/.centag/env"
+#   curl -fsSL .../install.sh | bash -s personal 0.2.7 && . "$HOME/.centag/env"
 #
 # Why "bash -s" / occasional "--"?
 #   -s = read the script from stdin (the curl pipe). Args after -s go to the script.
-#   "--" is only needed when an arg starts with "-" (e.g. --only); prefer "wrap" / "personal".
+#   "--" is only needed when an arg starts with "-" (e.g. --only); prefer "personal".
 #
 # Why not source ~/.zshrc inside install.sh?
 #   Piped bash is a child process; it cannot change your interactive shell PATH.
 #   Chain: … | bash && . ~/.centag/env
 #
-# Default (no args): personal CLI + wrap (centag-wrap)
+# Default (no args): personal CLI (includes `centag wrap` subcommand)
 # Asset convention (GitHub Releases, tag v<version>):
 #   centag-personal-<goos>-<goarch>.tar.gz
-#   centag-wrap-<goos>-<goarch>.tar.gz
 #   checksums.txt
+# Optional/legacy: wrap tarball still installable with `bash -s wrap` if present on a release.
 #
 # Ordinary installs download Release assets only. Source builds require --from-source.
 set -euo pipefail
@@ -46,15 +45,16 @@ Centag installer
 Usage:
   curl -fsSL .../install.sh | bash && . "$HOME/.centag/env"
   curl -fsSL .../install.sh | bash -s personal && . "$HOME/.centag/env"
-  curl -fsSL .../install.sh | bash -s wrap [version] && . "$HOME/.centag/env"
+  curl -fsSL .../install.sh | bash -s personal 0.2.7 && . "$HOME/.centag/env"
 
 Components (positional): personal | wrap
-Default (no args): personal + wrap → latest GitHub release
+Default (no args): personal → latest GitHub release
+  (process proxy: centag wrap … — no separate wrap install required)
 
 Options:
   --only <personal|wrap>        Same as positional component
   --with <a,b>                  Explicit list (comma-separated)
-  -v, --version <ver>           Pin version (or pass as 2nd positional: wrap 0.2.7)
+  -v, --version <ver>           Pin version (or pass as 2nd positional: personal 0.2.7)
   --from-source                 Explicitly clone + build (NOT used automatically)
   --prefix <dir>                Install root (default: ~/.centag)
   --bin-dir <dir>               PATH directory (default: <prefix>/bin)
@@ -63,9 +63,8 @@ Options:
 
 Examples:
   bash install.sh
-  bash install.sh wrap
-  bash install.sh wrap 0.2.7
   bash install.sh personal
+  bash install.sh personal 0.2.7
 EOF
 }
 
@@ -127,7 +126,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 # Resolve component set.
-# Priority: --only > --with > positional > default (personal + wrap).
+# Priority: --only > --with > positional > default (personal only).
 declare -a COMPONENTS=()
 resolve_components() {
   if [[ -n "$only_component" ]]; then
@@ -137,7 +136,7 @@ resolve_components() {
   elif [[ -n "$positional_component" ]]; then
     COMPONENTS=("$positional_component")
   else
-    COMPONENTS=("personal" "wrap")
+    COMPONENTS=("personal")
   fi
 
   local out=() c
@@ -624,9 +623,13 @@ print_next_steps() {
     echo "  # absolute path (works before sourcing PATH):"
     echo "  ${BIN_DIR}/centag"
     echo ""
+    log "${MUTED}# Process proxy for third-party CLIs (subcommand; does not start the gateway):${NC}"
+    echo "  centag wrap doctor"
+    echo "  centag wrap run -- opencode"
+    echo ""
   fi
   if [[ "$has_wrap" == true ]]; then
-    log "${MUTED}# Optional: wrap third-party CLIs with Centag egress:${NC}"
+    log "${MUTED}# Legacy standalone wrap binary (prefer: centag wrap …):${NC}"
     echo "  centag-wrap doctor"
     echo "  # absolute path:"
     echo "  ${BIN_DIR}/centag-wrap doctor"
