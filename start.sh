@@ -1694,11 +1694,116 @@ init_secrets() {
     return 1
 }
 
-# Clean
+# Clean — 清理构建产物 / 已部署的安装布局（~/.centag）
+# 用法:
+#   ./start.sh clean                 # 清理当前 edition 的 lib/<edition>（构建产物）
+#   ./start.sh clean build           # 同上
+#   ./start.sh clean install [-y]    # 停止进程并删除 CENTAG_INSTALL_ROOT（默认 ~/.centag）
+#   ./start.sh clean deploy [-y]     # 同 install（部署安装布局）
+#   ./start.sh clean all [-y]        # build + install
 clean() {
-    echo "[INFO] Cleaning build artifacts..."
-    rm -rf "$BIN_DIR"
-    echo "[SUCCESS] Clean completed"
+    local target="build"
+    local assume_yes=0
+    local arg
+    for arg in "$@"; do
+        case "$arg" in
+            -y|--yes) assume_yes=1 ;;
+            build|install|deploy|all|help|-h|--help) target="$arg" ;;
+            *)
+                print_error "未知 clean 目标: $arg"
+                echo "用法: $0 clean [build|install|deploy|all] [-y|--yes]"
+                return 1
+                ;;
+        esac
+    done
+
+    case "$target" in
+        help|-h|--help)
+            _help_clean
+            return 0
+            ;;
+        build)
+            _clean_build
+            ;;
+        install|deploy)
+            _clean_install "$assume_yes"
+            ;;
+        all)
+            _clean_build
+            _clean_install "$assume_yes"
+            ;;
+    esac
+}
+
+_clean_build() {
+    print_info "清理当前发行版构建产物: $BIN_DIR"
+    if [ -d "$BIN_DIR" ]; then
+        rm -rf "$BIN_DIR"
+        print_success "已删除 $BIN_DIR"
+    else
+        print_warn "目录不存在，跳过: $BIN_DIR"
+    fi
+    # 同步清理 bin/ 下指向该 edition 的包装/链接（保留其它 edition）
+    local wrapper_link="${CENTAG_BIN_DIR}/centag-${CENTAG_EDITION}"
+    local wrapper_link_exe="${wrapper_link}.exe"
+    rm -f "$wrapper_link" "$wrapper_link_exe" 2>/dev/null || true
+    print_success "构建产物清理完成（需要时请重新 ./start.sh build）"
+}
+
+_clean_install() {
+    local assume_yes="${1:-0}"
+    local root="${CENTAG_INSTALL_ROOT:-}"
+    if [ -z "$root" ]; then
+        print_error "CENTAG_INSTALL_ROOT 未设置"
+        return 1
+    fi
+
+    # 安全：禁止删到仓库根或明显危险路径
+    local root_abs project_abs
+    root_abs="$(cd "$root" 2>/dev/null && pwd)" || root_abs="$root"
+    project_abs="$(cd "$PROJECT_ROOT" 2>/dev/null && pwd)" || project_abs="$PROJECT_ROOT"
+    if [ "$root_abs" = "$project_abs" ] || [ "$root_abs" = "/" ] || [ "$root_abs" = "$HOME" ]; then
+        print_error "拒绝删除危险路径: $root_abs"
+        return 1
+    fi
+    case "$root_abs" in
+        "$project_abs"/*)
+            print_error "拒绝删除位于仓库内的路径: $root_abs"
+            return 1
+            ;;
+    esac
+
+    if [ ! -e "$root" ]; then
+        print_warn "安装根目录不存在，无需清理: $root"
+        return 0
+    fi
+
+    print_warn "将删除已部署/安装布局（含二进制、Web 静态、运行时 DB/日志、release 产物等）:"
+    echo "  $root"
+    print_info "不会触碰仓库内 config/secrets/.env"
+    if [ "$assume_yes" != "1" ]; then
+        if [ ! -t 0 ]; then
+            print_error "非交互环境请加 -y/--yes 确认删除"
+            return 1
+        fi
+        local ans=""
+        read -r -p "确认删除以上目录？输入 yes 继续: " ans || true
+        if [ "$ans" != "yes" ]; then
+            print_warn "已取消"
+            return 1
+        fi
+    fi
+
+    print_info "先停止本机 centag 进程..."
+    stop 2>/dev/null || true
+    # wrap 若占用系统代理，尽量关闭（失败忽略）
+    if [ -x "${CENTAG_BIN_DIR}/centag-wrap" ]; then
+        "${CENTAG_BIN_DIR}/centag-wrap" disable 2>/dev/null || true
+    fi
+
+    print_info "删除 $root ..."
+    rm -rf "$root"
+    print_success "已清除部署文件: $root"
 }
 
 # Status
@@ -3321,7 +3426,7 @@ show_short_help() {
     echo -e "  ${GREEN}build${NC}    wrap                仅构建 centag-wrap"
     echo -e "  ${GREEN}docker${NC}   build <minimal|personal|team>   构建 Docker 镜像"
     echo -e "  ${GREEN}docker${NC}   run   <minimal|personal|team>   运行 Docker 容器"
-    echo -e "  ${GREEN}clean${NC}                            清理构建产物"
+    echo -e "  ${GREEN}clean${NC}    [build|install|all] [-y] 清理构建产物 / 已部署文件（~/.centag）"
     echo -e "  ${GREEN}pack${NC}     [--upload]              打包服务端更新包"
     echo -e "  ${GREEN}package${NC}  <fnos|...> [选项]       第三方系统/渠道打包（见 packaging.env）"
     echo -e "  ${GREEN}test${NC}                             运行单元测试"
@@ -3601,13 +3706,23 @@ _help_logs() {
 
 _help_clean() {
     echo -e "${GREEN}命令: clean${NC}"
-    echo -e "       ${YELLOW}清理构建产物${NC}"
+    echo -e "       ${YELLOW}清理构建产物或已部署的安装布局${NC}"
     echo ""
     echo -e "${CYAN}用法:${NC}"
-    echo -e "  ./start.sh clean"
+    echo -e "  ./start.sh clean                 # 清理当前 edition 构建产物（lib/<edition>）"
+    echo -e "  ./start.sh clean build           # 同上"
+    echo -e "  ./start.sh clean install [-y]    # 删除安装根目录（默认 ~/.centag）"
+    echo -e "  ./start.sh clean deploy [-y]     # 同 install"
+    echo -e "  ./start.sh clean all [-y]        # 构建产物 + 安装布局"
     echo ""
     echo -e "${CYAN}说明:${NC}"
-    echo -e "  清理 bin/ 目录下的编译产物。清理后需要重新 build。"
+    echo -e "  ${GREEN}build${NC}   删除 \${CENTAG_EDITION_LIB}（当前: $BIN_DIR）"
+    echo -e "  ${GREEN}install${NC} 停止进程后删除 \${CENTAG_INSTALL_ROOT}（当前: ${CENTAG_INSTALL_ROOT}）"
+    echo -e "           含 bin/、lib/、var/（packages/release/cross）等；不删仓库 secrets"
+    echo -e "  ${GREEN}-y${NC}      跳过交互确认（脚本/CI 用）"
+    echo ""
+    echo -e "${CYAN}示例:${NC}"
+    echo -e "  ./start.sh clean install -y      # 清除本机已安装/部署的 ~/.centag"
 }
 
 _help_profile() {
@@ -4677,7 +4792,7 @@ main() {
 
         # ── 清理 ───────────────────────────────────────────────────────
         clean)
-            clean
+            clean "$@"
             ;;
 
         # ── Stack 中间件（加载 deploy/stack/lib）────────────────────
