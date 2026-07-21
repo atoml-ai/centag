@@ -1,7 +1,9 @@
 package config
 
 import (
+	"context"
 	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -52,5 +54,29 @@ func TestDefaultProxyConfigUsesTransparentMode(t *testing.T) {
 	}
 	if cfg.PipelineConfig == nil || cfg.PipelineConfig.DefaultPipeline != DefaultSystemPipelineID {
 		t.Fatalf("PipelineConfig.DefaultPipeline = %#v, want %q", cfg.PipelineConfig, DefaultSystemPipelineID)
+	}
+}
+
+func TestPersistProxyConfigWritesFileWhenDataDirSet(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("CENTAG_DATA_DIR", dir)
+
+	proxy := ProxyConfig{
+		DefaultBackendID: "opencode-zen",
+		DefaultModel:     "deepseek-v4-flash-free",
+	}
+	if err := PersistProxyConfig(context.Background(), proxy); err != nil {
+		t.Fatalf("PersistProxyConfig: %v", err)
+	}
+	path := filepath.Join(dir, minimalProxyConfigFile)
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("expected %s: %v", path, err)
+	}
+	loaded, err := LoadProxyConfigFromFile(dir, ProxyConfig{})
+	if err != nil {
+		t.Fatalf("LoadProxyConfigFromFile: %v", err)
+	}
+	if loaded.DefaultBackendID != "opencode-zen" || loaded.DefaultModel != "deepseek-v4-flash-free" {
+		t.Fatalf("loaded = %+v", loaded)
 	}
 }

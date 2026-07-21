@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"strings"
 
 	"centag/core/pkg/backend"
@@ -8,9 +9,9 @@ import (
 	"centag/core/pkg/logger"
 )
 
-// syncProxyDefaultModelFromBackend updates in-memory + on-disk proxy config when the
-// edited backend is the current system default. Minimal edition persists to
-// data/proxy-config.yaml; other editions still update the live config.Get() values.
+// syncProxyDefaultModelFromBackend updates in-memory + persisted proxy config when the
+// edited backend is the current system default.
+// Minimal: data/proxy-config.yaml；其它发行版：system_config.proxy_config。
 func syncProxyDefaultModelFromBackend(backendID string) {
 	backendID = strings.TrimSpace(backendID)
 	if backendID == "" {
@@ -43,11 +44,9 @@ func syncProxyDefaultModelFromBackend(backendID string) {
 	}
 
 	cfg.Proxy.DefaultModel = nextModel
-	if dataDir := config.ResolveDataDir(); dataDir != "" {
-		if err := config.SaveProxyConfigToFile(dataDir, cfg.Proxy); err != nil {
-			logger.Warnf("[ProxyConfig] Failed to persist default_model after backend update: %v", err)
-			return
-		}
+	if err := config.PersistProxyConfig(context.Background(), cfg.Proxy); err != nil {
+		logger.Warnf("[ProxyConfig] Failed to persist default_model after backend update: %v", err)
+		return
 	}
 	logger.Infof("[ProxyConfig] Synced default_model=%q from backend %q", nextModel, backendID)
 }
