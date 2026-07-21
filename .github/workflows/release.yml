@@ -105,7 +105,9 @@ jobs:
       - name: Create / update GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
         run: |
+          set -euo pipefail
           V="${{ steps.ver.outputs.version }}"
           TAG="v${V}"
           OUT="${{ steps.assets.outputs.dir }}"
@@ -116,19 +118,20 @@ jobs:
             DRAFT_FLAG=""
           fi
 
+          # Keep all lines indented under `run: |` — unindented heredoc breaks YAML parsing.
           NOTES_FILE="$(mktemp)"
-          cat > "$NOTES_FILE" <<EOF
-## Centag ${TAG}
-
-Install:
-
-\`\`\`bash
-curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/main/scripts/install.sh | bash
-curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/main/scripts/install.sh | bash -s -- --only proxyctl
-\`\`\`
-
-Artifacts: \`centag-personal-*\`, \`centag-proxyctl-*\`, \`checksums.txt\`.
-EOF
+          {
+            echo "## Centag ${TAG}"
+            echo ""
+            echo "Install:"
+            echo ""
+            echo '```bash'
+            echo "curl -fsSL https://raw.githubusercontent.com/${REPO}/main/scripts/install.sh | bash"
+            echo "curl -fsSL https://raw.githubusercontent.com/${REPO}/main/scripts/install.sh | bash -s -- --only proxyctl"
+            echo '```'
+            echo ""
+            echo "Artifacts: \`centag-personal-*\`, \`centag-proxyctl-*\`, \`checksums.txt\`."
+          } > "$NOTES_FILE"
 
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" "$OUT"/centag-*.tar.gz "$OUT"/checksums.txt --clobber
