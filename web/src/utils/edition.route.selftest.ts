@@ -113,6 +113,20 @@ function run() {
     'edition: personal create allowed'
   )
 
+  // D1: /cost is personal-accessible; team-only pages still blocked on personal
+  assert(
+    resolveEditionRouteRedirect('/cost', 'personal', true) === null,
+    'edition: personal admin /cost allowed (D1)'
+  )
+  assert(
+    resolveEditionRouteRedirect('/system/users', 'personal', true) === '/dashboard',
+    'edition: personal /system/users blocked'
+  )
+  assert(
+    resolveEditionRouteRedirect('/tenants', 'personal', true) === '/dashboard',
+    'edition: personal /tenants blocked'
+  )
+
   console.log('edition.route.selftest: OK')
 }
 
