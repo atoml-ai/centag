@@ -19,6 +19,14 @@
         <span class="search-count" v-if="searchText">
           {{ filteredPipelines.length }} 条
         </span>
+        <el-button
+          v-if="selectedPipelines.length > 0"
+          :loading="batchExporting"
+          @click="handleBatchExport"
+        >
+          <el-icon><Download /></el-icon>
+          批量导出（{{ selectedPipelines.length }}）
+        </el-button>
         <el-tooltip v-if="selectedPipelines.length > 0" :content="batchDeleteTooltip" placement="top" :disabled="canBatchDeleteSelected">
           <span>
             <el-button
@@ -41,7 +49,7 @@
         </el-button>
         <el-button @click="triggerImportTemplate">
           <el-icon><Upload /></el-icon>
-          导入模板
+          导入流水线
         </el-button>
         <input
           ref="importTemplateInputRef"
@@ -318,7 +326,6 @@ import {
   createPipeline,
   updatePipeline,
   deletePipeline,
-  exportPipeline,
   getPipelineTemplates,
   parsePipelinesResponse,
   type Pipeline,
@@ -334,6 +341,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useUserResourceAccess } from '@/composables/useUserResourceAccess'
 import { resolvePipelineFeatureSupport } from '@/utils/pipeline/features'
 import { canConfigureCapabilitySlots } from '@/utils/capabilitySlots'
+import { downloadPipelineYaml, downloadPipelinesAsZip } from '@/utils/pipeline/importExport'
 
 const route = useRoute()
 const router = useRouter()
@@ -352,6 +360,7 @@ const currentPipeline = ref<any>(null)
 const searchText = ref('')
 const selectedPipelines = ref<Pipeline[]>([])
 const importTemplateInputRef = ref<HTMLInputElement | null>(null)
+const batchExporting = ref(false)
 const routeAssignVisible = ref(false)
 const routeAssignPipelineId = ref('')
 
@@ -731,23 +740,28 @@ const sortByNodeCount = (a: Pipeline, b: Pipeline): number => {
   return (a.nodes?.length || 0) - (b.nodes?.length || 0)
 }
 
-const handleExport = (row: Pipeline) => {
-  const filename = `${row.name || 'pipeline'}-${row.id}.yaml`
-  exportPipeline(row.id).then((response: any) => {
-    const content = typeof response === 'string' ? response : response?.data || ''
-    const blob = new Blob([content], { type: 'text/yaml' })
-    const url = window.URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = filename
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    window.URL.revokeObjectURL(url)
+const handleExport = async (row: Pipeline) => {
+  try {
+    await downloadPipelineYaml(row.id, row.name || row.id)
     ElMessage.success('导出成功')
-  }).catch((error: any) => {
+  } catch (error: any) {
     ElMessage.error('导出失败：' + (error.message || error))
-  })
+  }
+}
+
+const handleBatchExport = async () => {
+  if (!selectedPipelines.value.length) return
+  batchExporting.value = true
+  try {
+    await downloadPipelinesAsZip(
+      selectedPipelines.value.map((p) => ({ id: p.id, name: p.name || p.id }))
+    )
+    ElMessage.success(`已导出 ${selectedPipelines.value.length} 个流水线（ZIP）`)
+  } catch (error: any) {
+    ElMessage.error('批量导出失败：' + (error.message || error))
+  } finally {
+    batchExporting.value = false
+  }
 }
 
 // 支持通过路由参数打开特定流水线

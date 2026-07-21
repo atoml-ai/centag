@@ -246,14 +246,14 @@
               <span>流水线配置</span>
               <span v-if="sections.pipelineCreateButton" class="card-badge">{{ pipelineCount }} 个</span>
             </div>
-            <el-button
-              v-if="sections.pipelineCreateButton"
-              type="primary"
-              size="small"
-              @click="pipelinePanelRef?.openCreate()"
-            >
-              + 创建流水线
-            </el-button>
+            <div v-if="sections.pipelineCreateButton" class="card-actions">
+              <el-button size="small" plain @click="pipelinePanelRef?.openImport()">
+                导入
+              </el-button>
+              <el-button type="primary" size="small" @click="pipelinePanelRef?.openCreate()">
+                + 创建流水线
+              </el-button>
+            </div>
           </div>
         </template>
         <HomePipelineCard
@@ -514,7 +514,11 @@ const usageHint = computed(() =>
     ? '本次进程内计量与成本估算（重启后清零）。'
     : '计量与成本估算（按当前服务存储策略保留）。'
 )
-const pipelinePanelRef = ref<{ reload: () => void; openCreate: () => void } | null>(null)
+const pipelinePanelRef = ref<{
+  reload: () => void
+  openCreate: () => void
+  openImport: () => void
+} | null>(null)
 const backendListRef = ref<{ openCreate: () => void; reloadDefault: () => void } | null>(null)
 const usagePanelRef = ref<{ reload: () => void } | null>(null)
 const pipelineCount = ref(0)
