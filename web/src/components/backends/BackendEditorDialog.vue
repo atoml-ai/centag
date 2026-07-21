@@ -275,6 +275,15 @@ const fetchingModels = ref(false)
 const advancedOpen = ref<string[]>([])
 const backendTypes = ref<BackendTypeMeta[]>([])
 
+/** 打开编辑时的连接相关快照：仅这些字段变更时才做启用前连通性探测 */
+type ConnectivitySnapshot = {
+  type: string
+  base_url: string
+  api_key: string
+  enabled: boolean
+}
+const connectivitySnapshot = ref<ConnectivitySnapshot | null>(null)
+
 const providerList = ref<ProviderDef[]>(getProviderList())
 const form = reactive<ProviderFormModel>(createEmptyProviderForm())
 
@@ -332,6 +341,28 @@ function resetForm() {
   newModelName.value = ''
   showProviderList.value = false
   advancedOpen.value = []
+  connectivitySnapshot.value = null
+}
+
+function captureConnectivitySnapshot() {
+  connectivitySnapshot.value = {
+    type: form.type || '',
+    base_url: (form.base_url || '').trim(),
+    api_key: (form.api_key || '').trim(),
+    enabled: !!form.enabled,
+  }
+}
+
+/** 连接参数是否相对打开编辑时发生变化（改默认模型不应触发上游探测） */
+function connectivityChanged(): boolean {
+  const snap = connectivitySnapshot.value
+  if (!snap) return true
+  if ((form.type || '') !== snap.type) return true
+  if ((form.base_url || '').trim() !== snap.base_url) return true
+  // 仅当用户填写了新 Key 时视为变更（留空表示沿用已保存 Key）
+  if ((form.api_key || '').trim() !== '' && (form.api_key || '').trim() !== snap.api_key) return true
+  if (form.enabled && !snap.enabled) return true
+  return false
 }
 
 function loadBackendTypes() {
@@ -367,6 +398,7 @@ function setDefaultModel(name: string) {
 
 function populateFromApi(row: any) {
   Object.assign(form, fromApiBackend(row))
+  captureConnectivitySnapshot()
 }
 
 const openCreate = () => {
@@ -426,7 +458,8 @@ const save = async () => {
 
   saving.value = true
   try {
-    if (!isCreate.value && form.enabled) {
+    // 仅当连接参数变更或新启用时探测；只改默认模型等跳过（原逻辑会 probe+拉模型列表，可达数十秒）
+    if (!isCreate.value && form.enabled && connectivityChanged()) {
       const ok = await ensureEnabledBackendCanBeSaved()
       if (!ok) return
     }
@@ -454,17 +487,9 @@ const save = async () => {
         }
       } catch { /* ignore */ }
     } else {
-      const updated: any = await api.put(`/api/v1/backends/${form.id}`, payload)
+      await api.put(`/api/v1/backends/${form.id}`, payload)
       ElMessage.success('Provider 已更新')
-      // 若正在编辑的是系统默认后端，同步 proxy 配置中的 default_model
-      // 优先用保存回包的 probe/default_model，避免表单态与落盘不一致
-      const savedModel =
-        updated?.default_model ||
-        updated?.probe_model ||
-        form.default_model ||
-        form.probe_model ||
-        ''
-      await syncProxyDefaultIfNeeded(form.id, savedModel)
+      // 系统默认后端的 default_model 由服务端 UpdateBackend → syncProxyDefaultModelFromBackend 同步落盘
     }
     dialogVisible.value = false
     emit('saved')
@@ -472,28 +497,6 @@ const save = async () => {
     ElMessage.error('保存失败：' + (error.message || '未知错误'))
   } finally {
     saving.value = false
-  }
-}
-
-/** 编辑默认后端时，把用户新选的默认模型写回 /api/v1/config/proxy */
-async function syncProxyDefaultIfNeeded(backendId: string, defaultModel: string) {
-  if (!backendId) return
-  try {
-    const proxyData: any = await api.get('/api/v1/config/proxy')
-    const data = proxyData?.data ?? proxyData
-    const currentDefaultId = (data?.default_backend_id || '').trim()
-    if (currentDefaultId !== backendId) return
-
-    const nextModel = (defaultModel || '').trim()
-    const currentModel = (data?.default_model || '').trim()
-    if (!nextModel || nextModel === currentModel) return
-
-    await api.put('/api/v1/config/proxy', {
-      default_backend_id: backendId,
-      default_model: nextModel
-    })
-  } catch {
-    /* 后端已保存成功；proxy 同步失败不阻断主流程 */
   }
 }
 
@@ -508,7 +511,8 @@ const ensureEnabledBackendCanBeSaved = async (): Promise<boolean> => {
   if (form.id) payload.id = form.id
 
   try {
-    await api.post('/api/v1/backends/test', payload)
+    // 仅连通性检查，不拉模型列表、不二次 Save（默认 update_and_save=true 会很慢）
+    await api.post('/api/v1/backends/test?update_and_save=false', payload)
     return true
   } catch (error: any) {
     ElMessage.error('保存失败：启用前连接测试未通过（' + (error.message || '未知错误') + '）')

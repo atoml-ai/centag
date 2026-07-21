@@ -267,13 +267,11 @@ func (s *Server) handleSaveProxyConfig(c *gin.Context) {
 		}
 	}
 
-	// Minimal edition: persist proxy config to data/proxy-config.yaml so it survives restarts.
-	if dataDir := config.ResolveDataDir(); dataDir != "" {
-		if err := config.SaveProxyConfigToFile(dataDir, cfg.Proxy); err != nil {
-			logger.Errorf("Failed to persist proxy config: %v", err)
-			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "failed to persist proxy config: " + err.Error()})
-			return
-		}
+	// Personal/team → DB；minimal → proxy-config.yaml（有 data dir 时双写，避免重启丢失）
+	if err := config.PersistProxyConfig(c.Request.Context(), cfg.Proxy); err != nil {
+		logger.Errorf("Failed to persist proxy config: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "failed to persist proxy config: " + err.Error()})
+		return
 	}
 
 	logger.Infof("[ProxyConfig] Updated default_backend_id=%q default_model=%q", cfg.Proxy.DefaultBackendID, cfg.Proxy.DefaultModel)
