@@ -251,19 +251,20 @@ func IsSameFamily(model1, model2 string) bool {
 	return result
 }
 
-// NormalizeModelName 规范化模型名称（用于比较）
+// NormalizeModelName 规范化模型名称（用于比较，不改变对外展示名）。
+// 会剥离常见「免费档」后缀，使 mino2.5 与 mino2.5 free / mino2.5-free 视为同一模型。
 func NormalizeModelName(modelName string) string {
-	// 移除空格和特殊字符
 	normalized := strings.ToLower(strings.TrimSpace(modelName))
+	normalized = strings.Join(strings.Fields(normalized), " ")
 
 	// 替换常见的别名映射
 	aliases := map[string]string{
 		"gpt-4-turbo-2024-04-09": "gpt-4-turbo",
-		"gpt-4-0125-preview":      "gpt-4-turbo",
-		"gpt-3.5-turbo-0125":      "gpt-3.5-turbo",
-		"gpt-3.5-turbo-1106":      "gpt-3.5-turbo",
-		"claude-3-5-sonnet":       "claude-3.5-sonnet",
-		"claude-3-opus-20240229":  "claude-3-opus",
+		"gpt-4-0125-preview":     "gpt-4-turbo",
+		"gpt-3.5-turbo-0125":     "gpt-3.5-turbo",
+		"gpt-3.5-turbo-1106":     "gpt-3.5-turbo",
+		"claude-3-5-sonnet":      "claude-3.5-sonnet",
+		"claude-3-opus-20240229": "claude-3-opus",
 	}
 
 	if alias, ok := aliases[normalized]; ok {
@@ -271,6 +272,65 @@ func NormalizeModelName(modelName string) string {
 		normalized = alias
 	}
 
+	normalized = stripModelTierSuffix(normalized)
 	log.Printf("[ModelInfo] Normalized: %s", normalized)
 	return normalized
+}
+
+// stripModelTierSuffix 去掉比较用的档位后缀（free 等），可迭代剥离。
+func stripModelTierSuffix(name string) string {
+	for {
+		trimmed := strings.TrimSpace(name)
+		changed := false
+		for _, suf := range []string{" free", "-free", "_free", "/free"} {
+			if strings.HasSuffix(trimmed, suf) {
+				trimmed = strings.TrimSpace(strings.TrimSuffix(trimmed, suf))
+				changed = true
+			}
+		}
+		// mino2.5free / mimo-v2.5free：free 紧贴数字或分隔符
+		if strings.HasSuffix(trimmed, "free") && len(trimmed) > 4 {
+			base := trimmed[:len(trimmed)-4]
+			if len(base) > 0 {
+				last := base[len(base)-1]
+				if (last >= '0' && last <= '9') || last == '.' || last == '-' || last == '_' {
+					trimmed = strings.TrimSpace(base)
+					changed = true
+				}
+			}
+		}
+		if !changed || trimmed == name {
+			return trimmed
+		}
+		name = trimmed
+	}
+}
+
+// ModelNamesLooselyEqual 判断两个模型名在规范化后是否视为同一模型。
+func ModelNamesLooselyEqual(a, b string) bool {
+	na := NormalizeModelName(a)
+	if na == "" {
+		return false
+	}
+	return na == NormalizeModelName(b)
+}
+
+// ModelHasFreeTier 名称是否带免费档标记（free / -free 等）。
+// 用于在松匹配候选中优先保留与请求同档的映射，避免 deepseek-v4-flash-free 被改写成付费 deepseek-v4-flash。
+func ModelHasFreeTier(modelName string) bool {
+	n := strings.ToLower(strings.TrimSpace(modelName))
+	n = strings.Join(strings.Fields(n), " ")
+	if n == "" {
+		return false
+	}
+	for _, suf := range []string{" free", "-free", "_free", "/free"} {
+		if strings.HasSuffix(n, suf) {
+			return true
+		}
+	}
+	if strings.HasSuffix(n, "free") && len(n) > 4 {
+		last := n[len(n)-5]
+		return (last >= '0' && last <= '9') || last == '.' || last == '-' || last == '_'
+	}
+	return false
 }

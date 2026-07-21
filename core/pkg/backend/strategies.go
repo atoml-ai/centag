@@ -27,36 +27,35 @@ func NewExactMatchStrategy(minCompatibility float64) *ExactMatchStrategy {
 // Execute 执行精确匹配
 func (s *ExactMatchStrategy) Execute(requestedModel string, backends []*BackendConfig) []*ModelMatchResult {
 	var results []*ModelMatchResult
-	normalizedRequested := NormalizeModelName(requestedModel)
-	
+
 	for _, backend := range backends {
 		if !backend.Enabled {
 			continue
 		}
-		
+
 		for _, mapping := range backend.SupportedModels {
-			normalizedMapping := NormalizeModelName(mapping.RequestedModel)
-			
-			// 精确匹配：模型名完全相同
-			if normalizedRequested == normalizedMapping {
-				result := &ModelMatchResult{
-					BackendID:          backend.ID,
-					BackendName:        backend.Name,
-					RequestedModel:     requestedModel,
-					ActualModel:        mapping.ActualModel,
-					IsExact:            true,
-					CompatibilityScore: 1.0,
-					Strategy:           StrategyExact,
-					Details: MatchDetails{
-						NameSimilarity:  1.0,
-						CapacityMatch:   1.0,
-						FamilyMatch:     1.0,
-					},
-				}
-				
-				if result.CompatibilityScore >= s.minCompatibility {
-					results = append(results, result)
-				}
+			// 精确/松匹配：RequestedModel 或 ActualModel（含 free 档后缀）
+			if !ModelNamesLooselyEqual(requestedModel, mapping.RequestedModel) &&
+				!ModelNamesLooselyEqual(requestedModel, mapping.ActualModel) {
+				continue
+			}
+			result := &ModelMatchResult{
+				BackendID:          backend.ID,
+				BackendName:        backend.Name,
+				RequestedModel:     requestedModel,
+				ActualModel:        mapping.ActualModel,
+				IsExact:            true,
+				CompatibilityScore: 1.0,
+				Strategy:           StrategyExact,
+				Details: MatchDetails{
+					NameSimilarity: 1.0,
+					CapacityMatch:  1.0,
+					FamilyMatch:    1.0,
+				},
+			}
+
+			if result.CompatibilityScore >= s.minCompatibility {
+				results = append(results, result)
 			}
 		}
 	}
@@ -178,9 +177,10 @@ func (s *CapacityMatchStrategy) Execute(requestedModel string, backends []*Backe
 		
 		for _, mapping := range backend.SupportedModels {
 			normalizedMapping := NormalizeModelName(mapping.RequestedModel)
-			
-			// 先检查精确匹配
-			if normalizedRequested == normalizedMapping {
+
+			// 先检查精确/松匹配（Requested 或 Actual）
+			if ModelNamesLooselyEqual(requestedModel, mapping.RequestedModel) ||
+				ModelNamesLooselyEqual(requestedModel, mapping.ActualModel) {
 				result := &ModelMatchResult{
 					BackendID:          backend.ID,
 					BackendName:        backend.Name,
@@ -190,9 +190,9 @@ func (s *CapacityMatchStrategy) Execute(requestedModel string, backends []*Backe
 					CompatibilityScore: 1.0,
 					Strategy:           StrategyCapacity,
 					Details: MatchDetails{
-						NameSimilarity:  1.0,
-						CapacityMatch:   1.0,
-						FamilyMatch:     1.0,
+						NameSimilarity: 1.0,
+						CapacityMatch:  1.0,
+						FamilyMatch:    1.0,
 					},
 				}
 				results = append(results, result)
@@ -269,9 +269,10 @@ func (s *HybridMatchStrategy) Execute(requestedModel string, backends []*Backend
 		
 		for _, mapping := range backend.SupportedModels {
 			normalizedMapping := NormalizeModelName(mapping.RequestedModel)
-			
-			// 先检查精确匹配
-			if normalizedRequested == normalizedMapping {
+
+			// 先检查精确/松匹配（Requested 或 Actual）
+			if ModelNamesLooselyEqual(requestedModel, mapping.RequestedModel) ||
+				ModelNamesLooselyEqual(requestedModel, mapping.ActualModel) {
 				result := &ModelMatchResult{
 					BackendID:          backend.ID,
 					BackendName:        backend.Name,
@@ -281,9 +282,9 @@ func (s *HybridMatchStrategy) Execute(requestedModel string, backends []*Backend
 					CompatibilityScore: 1.0,
 					Strategy:           StrategyHybrid,
 					Details: MatchDetails{
-						NameSimilarity:  1.0,
-						CapacityMatch:   1.0,
-						FamilyMatch:     1.0,
+						NameSimilarity: 1.0,
+						CapacityMatch:  1.0,
+						FamilyMatch:    1.0,
 					},
 				}
 				results = append(results, result)

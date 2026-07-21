@@ -35,8 +35,8 @@ global_config:
   bypass_on_error: true
   parallel_limit: 4
   log_level: info
-description: 通过 builtin.scheduler 节点进行意图分类与多维评分，自动选择最优 backend/model 后生成回答
+description: 智能调度（策略暂不变）：通过 builtin.scheduler 意图分类与多维评分，自动选择最优 backend/model 后生成回答；与透明模式（跟客户端 model）/ 直连模式（注入 prompt + 固定后端模型）相对
 metadata:
   aligned_proxy_mode: smart-scheduling
-  lastUpdated: '2026-06-12T00:00:00.000Z'
+  lastUpdated: '2026-07-21T00:00:00.000Z'
   layoutVersion: '1.2'

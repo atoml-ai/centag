@@ -7,12 +7,14 @@ import (
 	"io"
 	"net/http"
 	"strings"
+
+	"centag/core/pkg/backend"
 )
 
 // TransparentForwardNode forwards the original HTTP request to an upstream API unchanged.
 // Unlike GeneratorNode, it does NOT re-assemble the request body (no prompt_template/system_prompt).
 // The client's raw JSON (including extended fields like thinking, tool_choice, etc.) is forwarded as-is
-// to the backend specified by config.Backend (or overridden via metadata backend_id / X-Backend-ID header).
+// to the backend selected by client model match or system defaults.
 type TransparentForwardNode struct {
 	BaseNode
 	DefaultScheme string
@@ -56,22 +58,6 @@ func (n *TransparentForwardNode) Execute(ctx context.Context, input *NodeInput) 
 		method = http.MethodPost
 	}
 
-	// 后端解析：config.backend（模板配置，支持 {{system.default_backend}} 虚拟变量）
-	// → X-Backend-ID header（运行时覆盖）
-	backendID := strings.TrimSpace(n.config.Backend)
-	if backendID == "" || backendID == "{{system.default_backend}}" {
-		resolvedBackend, _ := ResolveVirtualVars(backendID, n.config.Model)
-		backendID = strings.TrimSpace(resolvedBackend)
-	}
-	if backendID == "" && meta != nil {
-		backendID = strings.TrimSpace(stringMeta(meta, "backend_id"))
-	}
-
-	targetURL, err := ResolveTransparentTargetURL(meta, backendID, requestPath, n.DefaultScheme)
-	if err != nil {
-		return nil, fmt.Errorf("transparent_forward node %q: %w", n.id, err)
-	}
-
 	body := []byte(strings.TrimSpace(stringMeta(meta, "raw_request_body")))
 	// 真实代理场景：raw_request_body 由 attachTransparentRequestMetadata 填充（完整 JSON）
 	// WebUI 测试场景：无 raw_request_body，用 input.Content 构造最小合法 JSON
@@ -86,20 +72,12 @@ func (n *TransparentForwardNode) Execute(ctx context.Context, input *NodeInput) 
 		return nil, fmt.Errorf("transparent_forward node %q: empty request body", n.id)
 	}
 
-	// 走 Centag 配置后端时：保留 messages/tools，但把 Agent 的厂商模型名
-	//（如 OpenCode hy3-free）改写为系统默认模型，否则上游报「模型不存在」。
-	// #raw / 仅 original_host 时不改写，保持原厂模型名。
-	resolvedModel := ""
-	if strings.TrimSpace(backendID) != "" {
-		_, resolvedModel = ResolveVirtualVars(backendID, n.config.Model)
-		if resolvedModel == "" {
-			_, resolvedModel = ResolveVirtualVars("{{system.default_backend}}", "{{system.default_model}}")
-		}
-		if resolvedModel != "" {
-			if rewritten, ok := rewriteTransparentBodyModel(body, resolvedModel); ok {
-				body = rewritten
-			}
-		}
+	clientModel := extractJSONModel(body)
+	backendID, resolvedModel, body := n.resolveTransparentRoute(meta, body, clientModel)
+
+	targetURL, err := ResolveTransparentTargetURL(meta, backendID, requestPath, n.DefaultScheme)
+	if err != nil {
+		return nil, fmt.Errorf("transparent_forward node %q: %w", n.id, err)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, method, targetURL, strings.NewReader(string(body)))
@@ -156,6 +134,9 @@ func (n *TransparentForwardNode) Execute(ctx context.Context, input *NodeInput) 
 		outMeta["model"] = resolvedModel
 		outMeta["executor_model"] = resolvedModel
 	}
+	if clientModel != "" {
+		outMeta["requested_model"] = clientModel
+	}
 	if backendID != "" {
 		outMeta["backend_id"] = backendID
 	}
@@ -164,6 +145,224 @@ func (n *TransparentForwardNode) Execute(ctx context.Context, input *NodeInput) 
 		Content:  string(respBody),
 		Metadata: outMeta,
 	}, nil
+}
+
+// resolveTransparentRoute picks backend/model:
+// 1) explicit X-Backend-ID / metadata backend_id → match client model within that backend
+// 2) client model → loose/exact match across enabled backends
+// 3) miss / unspecified → system default backend, else first usable enabled backend
+// On hit: keep client model string when it already equals ActualModel; else rewrite to ActualModel.
+func (n *TransparentForwardNode) resolveTransparentRoute(
+	meta map[string]interface{},
+	body []byte,
+	clientModel string,
+) (backendID, resolvedModel string, outBody []byte) {
+	outBody = body
+
+	pinnedBackend := strings.TrimSpace(stringMeta(meta, "backend_id"))
+
+	if !isUnspecifiedClientModel(clientModel) {
+		if pinnedBackend != "" {
+			if mapping := matchModelOnBackend(clientModel, pinnedBackend); mapping != nil {
+				backendID = pinnedBackend
+				resolvedModel, outBody = applyClientModelRewrite(outBody, clientModel, mapping)
+				return backendID, resolvedModel, outBody
+			}
+			// pinned backend but model miss → keep backend, use default/preferred model
+			backendID = pinnedBackend
+			resolvedModel, outBody = applyFallbackModel(outBody, backendID, n.config.Model)
+			return backendID, resolvedModel, outBody
+		}
+
+		if matchedBackend, mapping := matchClientModelAcrossBackends(clientModel); matchedBackend != nil && mapping != nil {
+			backendID = matchedBackend.ID
+			resolvedModel, outBody = applyClientModelRewrite(outBody, clientModel, mapping)
+			return backendID, resolvedModel, outBody
+		}
+	}
+
+	// Fallback: node/system default → first usable enabled backend
+	backendID = resolveFallbackBackendID(n.config.Backend, pinnedBackend)
+	if backendID != "" {
+		resolvedModel, outBody = applyFallbackModel(outBody, backendID, n.config.Model)
+	}
+	return backendID, resolvedModel, outBody
+}
+
+// resolveFallbackBackendID resolves {{system.default_backend}} / empty to a concrete backend.
+// When DefaultBackendID is unset, falls back to the first usable enabled backend.
+func resolveFallbackBackendID(nodeBackend, pinnedBackend string) string {
+	candidates := []string{
+		strings.TrimSpace(pinnedBackend),
+		strings.TrimSpace(nodeBackend),
+	}
+	for _, c := range candidates {
+		if c == "" || c == "{{system.default_backend}}" {
+			resolved, _ := ResolveVirtualVars("{{system.default_backend}}", "")
+			c = strings.TrimSpace(resolved)
+		}
+		if c != "" && c != "{{system.default_backend}}" {
+			return c
+		}
+	}
+	if ListEnabledBackendsForMatch == nil {
+		return ""
+	}
+	var firstEnabled string
+	for _, cfg := range ListEnabledBackendsForMatch() {
+		if cfg == nil || !cfg.Enabled || strings.TrimSpace(cfg.ID) == "" {
+			continue
+		}
+		if firstEnabled == "" {
+			firstEnabled = cfg.ID
+		}
+		if backend.IsUsableLLMBackend(cfg) {
+			return cfg.ID
+		}
+	}
+	return firstEnabled
+}
+
+func applyFallbackModel(body []byte, backendID, nodeModel string) (resolved string, out []byte) {
+	out = body
+	_, resolved = ResolveVirtualVars(backendID, nodeModel)
+	if resolved == "" {
+		_, resolved = ResolveVirtualVars("{{system.default_backend}}", "{{system.default_model}}")
+	}
+	if resolved == "" && ListEnabledBackendsForMatch != nil {
+		for _, cfg := range ListEnabledBackendsForMatch() {
+			if cfg != nil && cfg.ID == backendID {
+				resolved = backend.PreferredDefaultModel(cfg)
+				break
+			}
+		}
+	}
+	if resolved != "" {
+		if rewritten, ok := rewriteTransparentBodyModel(out, resolved); ok {
+			out = rewritten
+		}
+	}
+	return resolved, out
+}
+
+func matchClientModelAcrossBackends(clientModel string) (*backend.BackendConfig, *backend.ModelMapping) {
+	if ListEnabledBackendsForMatch == nil {
+		return nil, nil
+	}
+	backends := ListEnabledBackendsForMatch()
+	if len(backends) == 0 {
+		return nil, nil
+	}
+	// Transparent routing: exact/loose name match only (mino2.5 ≈ mino2.5 free), no hybrid family conversion.
+	matchCfg := backend.DefaultModelMatchingConfig()
+	matchCfg.Strategy = backend.StrategyExact
+	matchCfg.ConversionWeight = 0
+	selector := backend.NewBackendSelector(matchCfg)
+	selected, actualModel, err := selector.SelectBackendByModel(clientModel, backends)
+	if err != nil || selected == nil {
+		return nil, nil
+	}
+	mapping := backend.FindLooseModelMapping(clientModel, selected)
+	if mapping == nil {
+		am := strings.TrimSpace(actualModel)
+		if am == "" {
+			return nil, nil
+		}
+		mapping = &backend.ModelMapping{RequestedModel: clientModel, ActualModel: am}
+	}
+	return selected, mapping
+}
+
+func matchModelOnBackend(clientModel, backendID string) *backend.ModelMapping {
+	if ListEnabledBackendsForMatch == nil || strings.TrimSpace(backendID) == "" {
+		return nil
+	}
+	for _, cfg := range ListEnabledBackendsForMatch() {
+		if cfg != nil && cfg.ID == backendID {
+			return backend.FindLooseModelMapping(clientModel, cfg)
+		}
+	}
+	return nil
+}
+
+// applyClientModelRewrite keeps the client model string when it already equals ActualModel
+// or RequestedModel; otherwise rewrites to ActualModel. Never cross free/paid tier on rewrite
+// when the client explicitly asked for one tier (e.g. keep deepseek-v4-flash-free).
+func applyClientModelRewrite(body []byte, clientModel string, mapping *backend.ModelMapping) (resolved string, out []byte) {
+	out = body
+	client := strings.TrimSpace(clientModel)
+	if mapping == nil {
+		return client, out
+	}
+	actual := strings.TrimSpace(mapping.ActualModel)
+	requested := strings.TrimSpace(mapping.RequestedModel)
+	if actual == "" {
+		actual = requested
+	}
+	if client == "" {
+		return actual, out
+	}
+	// Exact usable name — do not rewrite
+	if strings.EqualFold(client, actual) || strings.EqualFold(client, requested) {
+		keep := client
+		if strings.EqualFold(client, actual) {
+			keep = actual
+		} else if strings.EqualFold(client, requested) && requested != "" {
+			// Prefer ActualModel only when same free-tier (alias), else keep client spelling
+			if backend.ModelHasFreeTier(client) == backend.ModelHasFreeTier(actual) && actual != "" {
+				keep = actual
+				if keep != client {
+					if rewritten, ok := rewriteTransparentBodyModel(out, keep); ok {
+						out = rewritten
+					}
+				}
+				return keep, out
+			}
+			return client, out
+		}
+		return keep, out
+	}
+	// Loose match rewrite:
+	// - never rewrite free → paid (CreditsError on OpenCode Zen etc.)
+	// - allow base → free alias (mino2.5 → mino2.5 free) when that is the mapped ActualModel
+	if actual != "" && backend.ModelHasFreeTier(client) && !backend.ModelHasFreeTier(actual) {
+		return client, out
+	}
+	if actual != "" && client != actual {
+		if rewritten, ok := rewriteTransparentBodyModel(out, actual); ok {
+			out = rewritten
+		}
+		return actual, out
+	}
+	return client, out
+}
+
+func extractJSONModel(body []byte) string {
+	if len(body) == 0 {
+		return ""
+	}
+	var raw map[string]interface{}
+	if err := json.Unmarshal(body, &raw); err != nil || raw == nil {
+		return ""
+	}
+	m, _ := raw["model"].(string)
+	return strings.TrimSpace(m)
+}
+
+func isUnspecifiedClientModel(model string) bool {
+	m := strings.TrimSpace(model)
+	if m == "" {
+		return true
+	}
+	lower := strings.ToLower(m)
+	if lower == "auto" || lower == "default" {
+		return true
+	}
+	// virtual pipeline models (pipeline.xxx / pipeline.xxx.auto)
+	if strings.HasPrefix(lower, "pipeline.") || strings.HasPrefix(lower, "pipeline_") {
+		return true
+	}
+	return false
 }
 
 // rewriteTransparentBodyModel sets JSON "model" to Centag's resolved model, keeping other fields.

@@ -182,6 +182,21 @@ func TestNormalizeModelName(t *testing.T) {
 			model:    "gpt-4-0125-preview",
 			expected: "gpt-4-turbo",
 		},
+		{
+			name:     "strip space free",
+			model:    "mino2.5 free",
+			expected: "mino2.5",
+		},
+		{
+			name:     "strip hyphen free",
+			model:    "mino2.5-free",
+			expected: "mino2.5",
+		},
+		{
+			name:     "base without free",
+			model:    "mino2.5",
+			expected: "mino2.5",
+		},
 	}
 
 	for _, tt := range tests {
@@ -191,6 +206,40 @@ func TestNormalizeModelName(t *testing.T) {
 				t.Errorf("NormalizeModelName() = %v, want %v", result, tt.expected)
 			}
 		})
+	}
+}
+
+func TestModelNamesLooselyEqual(t *testing.T) {
+	if !ModelNamesLooselyEqual("mino2.5", "mino2.5 free") {
+		t.Fatal("mino2.5 vs mino2.5 free should match")
+	}
+	if !ModelNamesLooselyEqual("mimo-v2.5", "mimo-v2.5-free") {
+		t.Fatal("mimo-v2.5 vs mimo-v2.5-free should match")
+	}
+	if ModelNamesLooselyEqual("gpt-4", "claude-3") {
+		t.Fatal("different families must not match")
+	}
+	if ModelNamesLooselyEqual("", "gpt-4") {
+		t.Fatal("empty must not match")
+	}
+}
+
+func TestFindLooseModelMapping_PrefersFreeTierExact(t *testing.T) {
+	b := &BackendConfig{
+		ID:      "zen",
+		Enabled: true,
+		SupportedModels: []ModelMapping{
+			{RequestedModel: "deepseek-v4-flash", ActualModel: "deepseek-v4-flash"},
+			{RequestedModel: "deepseek-v4-flash-free", ActualModel: "deepseek-v4-flash-free"},
+		},
+	}
+	got := FindLooseModelMapping("deepseek-v4-flash-free", b)
+	if got == nil || got.ActualModel != "deepseek-v4-flash-free" {
+		t.Fatalf("got %+v, want deepseek-v4-flash-free", got)
+	}
+	gotPaid := FindLooseModelMapping("deepseek-v4-flash", b)
+	if gotPaid == nil || gotPaid.ActualModel != "deepseek-v4-flash" {
+		t.Fatalf("got %+v, want deepseek-v4-flash", gotPaid)
 	}
 }
 

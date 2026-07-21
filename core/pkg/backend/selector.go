@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"sort"
+	"strings"
 )
 
 // BackendSelector 后端选择器
@@ -90,8 +91,9 @@ func (s *BackendSelector) SelectBackendByModel(
 		return nil, "", NewNoUsableBackendError(fmt.Errorf("no enabled backends available"))
 	}
 
-	// 查找精确匹配
+	// 查找精确/松匹配，并优先「字面精确」与「同免费档」的后端
 	exactMatches := s.findExactMatches(requestedModel, enabledBackends)
+	exactMatches = preferNameAlignedBackends(requestedModel, exactMatches)
 	s.logDebug("[BackendSelector] Exact matches found: %d", len(exactMatches))
 	if len(exactMatches) > 0 {
 		// 从精确匹配中选择优先级最高的
@@ -99,14 +101,17 @@ func (s *BackendSelector) SelectBackendByModel(
 		if selected != nil {
 			s.logInfo("[BackendSelector] Selected exact match backend: %s (%s), priority=%d, weight=%d",
 				selected.ID, selected.Name, selected.Priority, selected.Weight)
-			// 在精确匹配中查找对应的实际模型
-			for _, mapping := range selected.SupportedModels {
-				if NormalizeModelName(mapping.RequestedModel) == NormalizeModelName(requestedModel) {
-					s.logDebug("[BackendSelector] Exact match actual model: %s", mapping.ActualModel)
-					return selected, mapping.ActualModel, nil
+			if mapping := FindLooseModelMapping(requestedModel, selected); mapping != nil {
+				actual := strings.TrimSpace(mapping.ActualModel)
+				if actual == "" {
+					actual = strings.TrimSpace(mapping.RequestedModel)
 				}
+				if actual == "" {
+					actual = requestedModel
+				}
+				s.logDebug("[BackendSelector] Exact/loose match actual model: %s", actual)
+				return selected, actual, nil
 			}
-			// 如果没有找到，返回第一个
 			s.logDebug("[BackendSelector] Using requested model as actual model: %s", requestedModel)
 			return selected, requestedModel, nil
 		}
@@ -164,17 +169,17 @@ func (s *BackendSelector) filterEnabled(backends []*BackendConfig) []*BackendCon
 	return enabled
 }
 
-// findExactMatches 查找精确匹配
+// findExactMatches 查找精确/松匹配（RequestedModel 或 ActualModel）。
 func (s *BackendSelector) findExactMatches(
 	requestedModel string,
 	backends []*BackendConfig,
 ) []*BackendConfig {
 	var matches []*BackendConfig
-	normalizedRequested := NormalizeModelName(requestedModel)
 
 	for _, backend := range backends {
 		for _, mapping := range backend.SupportedModels {
-			if NormalizeModelName(mapping.RequestedModel) == normalizedRequested {
+			if ModelNamesLooselyEqual(requestedModel, mapping.RequestedModel) ||
+				ModelNamesLooselyEqual(requestedModel, mapping.ActualModel) {
 				matches = append(matches, backend)
 				break // 找到一个精确匹配就退出
 			}
@@ -305,21 +310,104 @@ func (s *BackendSelector) findActualModel(
 	requestedModel string,
 	backend *BackendConfig,
 ) string {
-	normalizedRequested := NormalizeModelName(requestedModel)
-
-	// 优先精确匹配
-	for _, mapping := range backend.SupportedModels {
-		if NormalizeModelName(mapping.RequestedModel) == normalizedRequested {
-			return mapping.ActualModel
+	if mapping := FindLooseModelMapping(requestedModel, backend); mapping != nil {
+		if am := strings.TrimSpace(mapping.ActualModel); am != "" {
+			return am
 		}
+		return strings.TrimSpace(mapping.RequestedModel)
 	}
 
-	// 如果没有精确匹配，返回第一个兼容的
+	// 如果没有精确/松匹配，返回第一个兼容的
 	if len(backend.SupportedModels) > 0 {
 		return backend.SupportedModels[0].ActualModel
 	}
 
 	return ""
+}
+
+// preferNameAlignedBackends 在候选后端中优先保留字面精确或同免费档命中的后端。
+func preferNameAlignedBackends(requestedModel string, backends []*BackendConfig) []*BackendConfig {
+	if len(backends) <= 1 {
+		return backends
+	}
+	req := strings.TrimSpace(requestedModel)
+	reqLower := strings.ToLower(req)
+	reqFree := ModelHasFreeTier(req)
+
+	var literal, sameTier []*BackendConfig
+	for _, b := range backends {
+		if b == nil {
+			continue
+		}
+		literalHit := false
+		sameTierHit := false
+		for _, m := range b.SupportedModels {
+			requested := strings.TrimSpace(m.RequestedModel)
+			actual := strings.TrimSpace(m.ActualModel)
+			if !ModelNamesLooselyEqual(req, requested) && !ModelNamesLooselyEqual(req, actual) {
+				continue
+			}
+			if strings.EqualFold(reqLower, strings.ToLower(actual)) ||
+				strings.EqualFold(reqLower, strings.ToLower(requested)) {
+				literalHit = true
+			}
+			if ModelHasFreeTier(actual) == reqFree || ModelHasFreeTier(requested) == reqFree {
+				sameTierHit = true
+			}
+		}
+		if literalHit {
+			literal = append(literal, b)
+		} else if sameTierHit {
+			sameTier = append(sameTier, b)
+		}
+	}
+	if len(literal) > 0 {
+		return literal
+	}
+	if len(sameTier) > 0 {
+		return sameTier
+	}
+	return backends
+}
+
+// FindLooseModelMapping 在单个后端内按松等规则查找模型映射。
+// 优先精确匹配；其次同免费档松匹配；最后才是跨档松匹配（如仅有 mino2.5 时匹配 mino2.5 free）。
+func FindLooseModelMapping(requestedModel string, backend *BackendConfig) *ModelMapping {
+	if backend == nil {
+		return nil
+	}
+	req := strings.TrimSpace(requestedModel)
+	if req == "" {
+		return nil
+	}
+	reqLower := strings.ToLower(req)
+	reqFree := ModelHasFreeTier(req)
+
+	var best *ModelMapping
+	bestScore := -1
+	for i := range backend.SupportedModels {
+		mapping := &backend.SupportedModels[i]
+		requested := strings.TrimSpace(mapping.RequestedModel)
+		actual := strings.TrimSpace(mapping.ActualModel)
+		if !ModelNamesLooselyEqual(req, requested) && !ModelNamesLooselyEqual(req, actual) {
+			continue
+		}
+		score := 1 // loose
+		if strings.EqualFold(reqLower, strings.ToLower(actual)) ||
+			strings.EqualFold(reqLower, strings.ToLower(requested)) {
+			score = 3 // exact
+		} else if ModelHasFreeTier(actual) == reqFree || ModelHasFreeTier(requested) == reqFree {
+			score = 2 // same free-tier
+		}
+		if score > bestScore {
+			bestScore = score
+			best = mapping
+			if score == 3 {
+				break
+			}
+		}
+	}
+	return best
 }
 
 // SelectBackendForRequest 选择后端处理请求

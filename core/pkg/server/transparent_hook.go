@@ -19,4 +19,14 @@ func wireTransparentBackend(backendMgr *backend.Manager) {
 			APIKey:  cfg.APIKey,
 		}, nil
 	}
+	pipeline.ListEnabledBackendsForMatch = func() []*backend.BackendConfig {
+		all := backendMgr.List()
+		out := make([]*backend.BackendConfig, 0, len(all))
+		for _, cfg := range all {
+			if cfg != nil && cfg.Enabled {
+				out = append(out, cfg)
+			}
+		}
+		return out
+	}
 }

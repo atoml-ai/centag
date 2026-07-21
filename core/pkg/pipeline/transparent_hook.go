@@ -1,5 +1,7 @@
 package pipeline
 
+import "centag/core/pkg/backend"
+
 // BackendEndpoint describes a resolved upstream API endpoint.
 type BackendEndpoint struct {
 	BaseURL string
@@ -8,3 +10,6 @@ type BackendEndpoint struct {
 
 // ResolveBackendEndpoint resolves backend_id to base URL and API key (wired in server).
 var ResolveBackendEndpoint func(backendID string) (*BackendEndpoint, error)
+
+// ListEnabledBackendsForMatch lists enabled backends for transparent model routing (wired in server).
+var ListEnabledBackendsForMatch func() []*backend.BackendConfig
