@@ -22,42 +22,12 @@ func resolvePipelineTemplatesWithEdition(edition string) []pipeline.PatternTempl
 	initialTemplates := bootstrap.LoadInitialPipelineTemplatesWithEdition(edition)
 	templates := convertInitialTemplates(initialTemplates)
 
-	// 文件加载失败时使用内置兜底模板
+	// 无 initdata 模板时返回空列表：首页/列表显示空白，不注入 simple-chat/chat-node 兜底。
 	if len(templates) == 0 {
-		templates = defaultBuiltinTemplates()
+		logger.Warnf("no pipeline templates loaded for edition=%q; store will stay empty until import/create", edition)
 	}
 
 	return templates
-}
-
-// defaultBuiltinTemplates 返回内置兜底模板，确保启动后始终有模板可用
-func defaultBuiltinTemplates() []pipeline.PatternTemplate {
-	return []pipeline.PatternTemplate{
-		{
-			ID:          "simple-chat",
-			Name:        "Simple Chat",
-			Description: "Single generator node for basic chat",
-			ShortcutCode: "#chat",
-			Metadata:    map[string]interface{}{"builtin": true},
-			GlobalConfig: &pipeline.GlobalPipelineConfig{
-				Timeout:       120,
-				MaxRetries:    3,
-				BypassOnError: true,
-				ParallelLimit: 4,
-			},
-			Nodes: []pipeline.PipelineNodeConfig{
-				{
-					ID:   "chat-node",
-					Type: pipeline.NodeTypeGenerator,
-					Name: "Chat Generator",
-					Config: pipeline.NodeConfig{
-						PromptTemplate: "{{input}}",
-						SystemPrompt:   "You are a helpful assistant.",
-					},
-				},
-			},
-		},
-	}
 }
 
 func convertInitialTemplates(initial []bootstrap.InitialPipelineTemplate) []pipeline.PatternTemplate {

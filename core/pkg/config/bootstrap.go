@@ -51,7 +51,7 @@ type DBBootstrapConfig struct {
 //	LLM_PROXY_SERVER_MODE      default "release"  (gin mode)
 //	LLM_PROXY_LOG_LEVEL        default "info"
 //	LLM_PROXY_LOG_FORMAT       default "json"
-//	LLM_PROXY_LOG_OUTPUT       default "file"
+//	LLM_PROXY_LOG_OUTPUT       default "both" (stdout + file; daemon/launcher may set "file")
 //	LLM_PROXY_LOG_PATH         default "./logs"
 //	LLM_PROXY_LOG_FILENAME     default "centag.log"
 //	LLM_PROXY_LOG_COMPRESS     default true
@@ -91,7 +91,7 @@ func LoadBootstrap() *BootstrapConfig {
 		Log: LogConfig{
 			Level:  envStr("LLM_PROXY_LOG_LEVEL", "info"),
 			Format: envStr("LLM_PROXY_LOG_FORMAT", "json"),
-			Output: envStr("LLM_PROXY_LOG_OUTPUT", "file"),
+			Output: envStr("LLM_PROXY_LOG_OUTPUT", "both"),
 			File: FileLogConfig{
 				Path:       resolvePathRelativeToExecutable(logPath),
 				Filename:   envStr("LLM_PROXY_LOG_FILENAME", "centag.log"),
