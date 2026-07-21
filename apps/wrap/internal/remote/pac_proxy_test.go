@@ -24,3 +24,18 @@ func TestIsLoopbackMITM(t *testing.T) {
 		t.Fatal("expected non-loopback")
 	}
 }
+
+func TestRejectLoopbackMITMForRemote(t *testing.T) {
+	if RejectLoopbackMITMForRemote("http://127.0.0.1:20060", "127.0.0.1:8081") {
+		t.Fatal("local API must allow loopback MITM")
+	}
+	if RejectLoopbackMITMForRemote("http://localhost:20060", "127.0.0.1:8081") {
+		t.Fatal("localhost API must allow loopback MITM")
+	}
+	if !RejectLoopbackMITMForRemote("http://192.168.1.4:20060", "127.0.0.1:8081") {
+		t.Fatal("remote API must reject loopback MITM")
+	}
+	if RejectLoopbackMITMForRemote("http://192.168.1.4:20060", "192.168.1.4:8081") {
+		t.Fatal("remote API + LAN MITM should be allowed")
+	}
+}

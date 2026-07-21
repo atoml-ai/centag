@@ -50,7 +50,8 @@ func TestPrepareProcessEnv_FromPAC(t *testing.T) {
 	}
 }
 
-func TestPrepareProcessEnv_RejectsLoopbackRemote(t *testing.T) {
+func TestPrepareProcessEnv_AllowsLoopbackWhenServerIsLocal(t *testing.T) {
+	// httptest is 127.0.0.1 — same as --server http://127.0.0.1:20060; loopback MITM is valid.
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	ca := mustCA(t)
@@ -67,8 +68,12 @@ func TestPrepareProcessEnv_RejectsLoopbackRemote(t *testing.T) {
 	defer srv.Close()
 
 	e := New()
-	if _, err := e.PrepareProcessEnv(srv.URL); err == nil {
-		t.Fatal("expected error for loopback MITM with --server")
+	pe, err := e.PrepareProcessEnv(srv.URL)
+	if err != nil {
+		t.Fatalf("local server + loopback MITM should be allowed: %v", err)
+	}
+	if pe.MITM != "127.0.0.1:8081" {
+		t.Fatalf("mitm=%q", pe.MITM)
 	}
 }
 
