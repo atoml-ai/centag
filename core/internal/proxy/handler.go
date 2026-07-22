@@ -254,14 +254,8 @@ func (h *Handler) HandleChatCompletions(c *gin.Context) {
 	// Phase 3: 统一使用 ModeDispatcher 作为唯一入口（移除 legacy fallback 路径）
 	if h.modeDispatcher != nil {
 		c.Header("X-Dispatch-Path", "mode-dispatcher")
-		proxyReq := &plugin.ProxyRequest{
-			Model:       req.Model,
-			Messages:    req.Messages,
-			Temperature: req.Temperature,
-			MaxTokens:   req.MaxTokens,
-			Stream:      req.Stream,
-			RawBody:     req.RawBody,
-		}
+		// [v0.2.8 R05] 集中到 helper 拷贝字段，避免分散遗漏新增显式字段
+		proxyReq := copyProxyRequestFields(req)
 
 		if req.Stream {
 			// 流式请求：走流式分发路径
@@ -525,9 +519,34 @@ func (h *Handler) ListBackends(c *gin.Context) {
 	})
 }
 
-// ListModels 列出当前可用的流水线，以 OpenAI models 格式返回。
-// 客户端应使用 id（如 pipeline.direct-backend）作为 chat/completions 的 model。
+// copyProxyRequestFields 构造 ModeDispatcher 入口的 ProxyRequest，集中管理字段拷贝。
+// [v0.2.8 R05] 新增显式字段时强制同步更新该处；G7：Modalities/TopK 为 P2 占位，本轮不拷贝。
+func copyProxyRequestFields(req *plugin.ProxyRequest) *plugin.ProxyRequest {
+	return &plugin.ProxyRequest{
+		Model:       req.Model,
+		Messages:    req.Messages,
+		Temperature: req.Temperature,
+		MaxTokens:   req.MaxTokens,
+		Stream:      req.Stream,
+		RawBody:     req.RawBody,
+		// P0/P1 显式字段
+		Tools:             req.Tools,
+		ToolChoice:        req.ToolChoice,
+		ResponseFormat:    req.ResponseFormat,
+		Seed:              req.Seed,
+		N:                 req.N,
+		User:              req.User,
+		ParallelToolCalls: req.ParallelToolCalls,
+		Reasoning:         req.Reasoning,
+	}
+}
+
+// ListModels 列出当前可用的流水线与后端模型，以 OpenAI models 格式返回。
+// 客户端应使用 id（如 pipeline.direct-backend 或 gpt-4o）作为 chat/completions 的 model。
+// [v0.2.8] 同时输出 Pipeline ID（pipeline.*）和配置后端实际支持的模型列表，支持 ?type=chat|embedding|all 过滤。
 func (h *Handler) ListModels(c *gin.Context) {
+	modelType := c.DefaultQuery("type", "chat") // chat | embedding | all
+
 	pipelines := h.listModelsPipelines()
 	data := make([]gin.H, 0, len(pipelines))
 	for _, p := range pipelines {
@@ -542,10 +561,70 @@ func (h *Handler) ListModels(c *gin.Context) {
 		})
 	}
 
+	// [v0.2.8] 追加启用后端的 supported_models（去重，owned_by=后端名）
+	if mgr := backend.GetManager(); mgr != nil {
+		seen := make(map[string]struct{})
+		for _, b := range mgr.GetAll() {
+			if b == nil || !b.Enabled {
+				continue
+			}
+			for _, sm := range b.SupportedModels {
+				name := sm.ActualModel
+				if name == "" {
+					name = sm.RequestedModel
+				}
+				if name == "" {
+					continue
+				}
+				if _, dup := seen[name]; dup {
+					continue
+				}
+				// 根据 modelType 过滤
+				if modelType != "all" {
+					if modelType == "embedding" && !isEmbeddingModelName(name) {
+						continue
+					}
+					if modelType == "chat" && isEmbeddingModelName(name) {
+						continue
+					}
+				}
+				seen[name] = struct{}{}
+				data = append(data, gin.H{
+					"id":       name,
+					"object":   "model",
+					"created":  0,
+					"owned_by": b.Name,
+				})
+			}
+		}
+	}
+
 	c.JSON(200, gin.H{
 		"object": "list",
 		"data":   data,
 	})
+}
+
+// isEmbeddingModelName 判断是否是向量化模型（与 server.isEmbeddingModel 等价，proxy 层内联实现避免跨层依赖）
+func isEmbeddingModelName(modelName string) bool {
+	modelLower := strings.ToLower(modelName)
+	embeddingKeywords := []string{
+		"embedding",
+		"embed",
+		"bge",
+		"gte",
+		"e5",
+		"sentence",
+		"nomic-embed",
+		"mxbai-embed",
+		"all-minilm",
+	}
+	for _, keyword := range embeddingKeywords {
+		if strings.Contains(modelLower, keyword) {
+			return true
+		}
+	}
+	return false
 }
 
 func (h *Handler) listModelsPipelines() []*pipeline.AgentPatternPipeline {

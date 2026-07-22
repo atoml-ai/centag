@@ -75,7 +75,11 @@ func NormalizeMessagesForKey(messages []interface{}) []interface{} {
 
 // GetRequestKey 生成请求缓存键
 // 只使用最后一条用户消息,因为代理服务应该是透明的,不应该关心历史对话
-func (p *ProxyCache) GetRequestKey(model string, messages []interface{}, temperature float64, maxTokens int) (string, error) {
+//
+// [v0.2.8 R13/G4] responseFormat / toolChoice / seed 为 P0 协议字段，纳入 key 计算防止缓存污染：
+// 不同 response_format/tool_choice/seed 的请求不得命中同一缓存。
+// 三个参数为 nil 时省略（不进 keyData），保证无新字段的旧请求 key 与历史版本一致。
+func (p *ProxyCache) GetRequestKey(model string, messages []interface{}, temperature float64, maxTokens int, responseFormat interface{}, toolChoice interface{}, seed interface{}) (string, error) {
 	// 只提取最后一条用户消息作为缓存键
 	var lastUserMessage interface{}
 	for i := len(messages) - 1; i >= 0; i-- {
@@ -98,6 +102,17 @@ func (p *ProxyCache) GetRequestKey(model string, messages []interface{}, tempera
 		"message":     lastUserMessage,
 		"temperature": temperature,
 		"max_tokens":  maxTokens,
+	}
+
+	// [v0.2.8] P0 字段纳入 key（nil 省略；GenerateKey 对 map 做 json.Marshal，key 排序哈希稳定）
+	if responseFormat != nil {
+		keyData["response_format"] = responseFormat
+	}
+	if toolChoice != nil {
+		keyData["tool_choice"] = toolChoice
+	}
+	if seed != nil {
+		keyData["seed"] = seed
 	}
 
 	logger.Info("GetRequestKey called",

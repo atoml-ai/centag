@@ -49,6 +49,40 @@ type UnifiedRequest struct {
 
 	// Metadata 附加元数据（协议插件可传递额外信息）
 	Metadata map[string]interface{} `json:"metadata,omitempty"`
+
+	// [v0.2.8 协议对齐] 与 plugin.ProxyRequest 显式字段对齐
+
+	// ResponseFormat 响应格式（JSON Mode / JSON Schema）
+	ResponseFormat *ResponseFormatSpec `json:"response_format,omitempty"`
+
+	// Seed 随机种子
+	Seed *int `json:"seed,omitempty"`
+
+	// N 生成 choice 数量
+	N *int `json:"n,omitempty"`
+
+	// User 终端用户标识
+	User string `json:"user,omitempty"`
+
+	// ParallelToolCalls 是否并行工具调用
+	ParallelToolCalls *bool `json:"parallel_tool_calls,omitempty"`
+
+	// Reasoning 推理参数（thinking/reasoning）
+	Reasoning ReasoningSpec `json:"reasoning,omitempty"`
+}
+
+// ReasoningSpec 推理参数（与 plugin.ReasoningSpec 对齐）
+type ReasoningSpec struct {
+	Specified    bool   `json:"specified,omitempty"`
+	Disabled     bool   `json:"disabled,omitempty"`
+	Effort       string `json:"effort,omitempty"`
+	BudgetTokens *int   `json:"budget_tokens,omitempty"`
+}
+
+// ResponseFormatSpec 响应格式规范
+type ResponseFormatSpec struct {
+	Type       string      `json:"type"`
+	JSONSchema interface{} `json:"json_schema,omitempty"`
 }
 
 // UnifiedResponse 统一响应格式。

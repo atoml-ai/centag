@@ -287,8 +287,9 @@ func (h *LLMProxyHandler) HandleOpenAIRequest(c *gin.Context) {
 		maxTokens := getInt(req, "max_tokens", 0)
 		stream := getBool(req, "stream", false)
 
-		// 生成缓存键
-		cacheKey, err := h.proxyCache.GetRequestKey(model, messages, temperature, maxTokens)
+		// 生成缓存键（v0.2.8 R13：纳入 response_format/tool_choice/seed 防缓存污染）
+		rf, tc, seed := cacheKeyProtocolFields(req)
+		cacheKey, err := h.proxyCache.GetRequestKey(model, messages, temperature, maxTokens, rf, tc, seed)
 		if err != nil {
 			logger.Warn("Failed to generate cache key", zap.Error(err))
 		} else {
@@ -656,7 +657,8 @@ func (h *LLMProxyHandler) HandleOpenAIRequest(c *gin.Context) {
 			temperature := getFloat(req, "temperature", 0.7)
 			maxTokens := getInt(req, "max_tokens", 0)
 
-			cacheKey, err := h.proxyCache.GetRequestKey(model, messages, temperature, maxTokens)
+			rf, tc, seed := cacheKeyProtocolFields(req)
+			cacheKey, err := h.proxyCache.GetRequestKey(model, messages, temperature, maxTokens, rf, tc, seed)
 			if err == nil {
 				// 构建请求文本(用于语义匹配的embedding)
 				requestText := h.proxyCache.GetRequestQuery(messages)
@@ -723,7 +725,8 @@ func (h *LLMProxyHandler) HandleOpenAIRequest(c *gin.Context) {
 			temperature := getFloat(req, "temperature", 0.7)
 			maxTokens := getInt(req, "max_tokens", 0)
 
-			cacheKey, err := h.proxyCache.GetRequestKey(model, messages, temperature, maxTokens)
+			rf, tc, seed := cacheKeyProtocolFields(req)
+			cacheKey, err := h.proxyCache.GetRequestKey(model, messages, temperature, maxTokens, rf, tc, seed)
 			if err == nil {
 				requestText := h.proxyCache.GetRequestQuery(messages)
 				reqMetadata["request_text"] = requestText
@@ -770,7 +773,8 @@ func (h *LLMProxyHandler) HandleOpenAIRequest(c *gin.Context) {
 			messages := getSlice(req, "messages", []interface{}{})
 			temperature := getFloat(req, "temperature", 0.7)
 			maxTokens := getInt(req, "max_tokens", 0)
-			cacheKey, err := h.proxyCache.GetRequestKey(model, messages, temperature, maxTokens)
+			rf, tc, seed := cacheKeyProtocolFields(req)
+			cacheKey, err := h.proxyCache.GetRequestKey(model, messages, temperature, maxTokens, rf, tc, seed)
 			if err != nil {
 				logger.Warn("Save-only stream: failed to get cache key", zap.Error(err))
 				return
@@ -958,6 +962,22 @@ func getSlice(m map[string]interface{}, key string, defaultValue []interface{}) 
 		}
 	}
 	return defaultValue
+}
+
+// cacheKeyProtocolFields 提取缓存键所需的 P0 协议字段（v0.2.8 R13/G4）。
+// response_format / tool_choice / seed 必须纳入缓存键，防止不同参数命中相同缓存。
+// 未提供的字段返回 nil，由 GetRequestKey 省略（key 与旧版一致）。
+func cacheKeyProtocolFields(req map[string]interface{}) (responseFormat interface{}, toolChoice interface{}, seed interface{}) {
+	if v, ok := req["response_format"]; ok && v != nil {
+		responseFormat = v
+	}
+	if v, ok := req["tool_choice"]; ok && v != nil {
+		toolChoice = v
+	}
+	if v, ok := req["seed"]; ok && v != nil {
+		seed = v
+	}
+	return
 }
 
 // convertOpenAIToOllamaRequest 转换OpenAI格式请求到Ollama格式
@@ -1332,7 +1352,7 @@ func (h *LLMProxyHandler) cacheSplitQAPair(ctx context.Context, pair processor.Q
 		},
 	}
 
-	splitCacheKey, err := h.proxyCache.GetRequestKey(model, splitMessages, 0.7, 0)
+	splitCacheKey, err := h.proxyCache.GetRequestKey(model, splitMessages, 0.7, 0, nil, nil, nil)
 	if err != nil {
 		return fmt.Errorf("failed to generate split cache key: %w", err)
 	}
