@@ -218,6 +218,7 @@ type CircuitBreakerManager struct {
 	mu           sync.RWMutex
 	breakers     map[string]*CircuitBreaker
 	config       CircuitBreakerConfig
+	rateLimitWeight int // 429 加重系数（默认 2）
 }
 
 // NewCircuitBreakerManager 创建熔断器管理器
@@ -226,9 +227,46 @@ func NewCircuitBreakerManager(config CircuitBreakerConfig) *CircuitBreakerManage
 		config = DefaultCircuitBreakerConfig()
 	}
 	return &CircuitBreakerManager{
-		breakers: make(map[string]*CircuitBreaker),
-		config:   config,
+		breakers:         make(map[string]*CircuitBreaker),
+		config:           config,
+		rateLimitWeight:  2,
 	}
+}
+
+// UpdateConfig 热更新熔断器配置。已创建的熔断器会在下次 Allow/Record 时使用新配置。
+func (m *CircuitBreakerManager) UpdateConfig(config CircuitBreakerConfig, rateLimitWeight int) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if config.FailureThreshold > 0 {
+		m.config = config
+	}
+	if rateLimitWeight > 0 {
+		m.rateLimitWeight = rateLimitWeight
+	}
+	// 同步更新已有熔断器的配置
+	for _, cb := range m.breakers {
+		cb.mu.Lock()
+		cb.config = config
+		cb.mu.Unlock()
+	}
+}
+
+// GetConfig 返回当前配置（热读取）。
+func (m *CircuitBreakerManager) GetConfig() CircuitBreakerConfig {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.config
+}
+
+// GetRateLimitWeight 返回 429 加重系数。
+func (m *CircuitBreakerManager) GetRateLimitWeight() int {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	w := m.rateLimitWeight
+	if w <= 0 {
+		w = 2
+	}
+	return w
 }
 
 // Get 获取后端熔断器
@@ -271,6 +309,39 @@ func (m *CircuitBreakerManager) RecordSuccess(backendID string) {
 func (m *CircuitBreakerManager) RecordFailure(backendID string) {
 	cb := m.Get(backendID)
 	cb.RecordFailure()
+}
+
+// RecordFailureWithWeight 记录带权重的失败（用于429等限流错误）。
+// weight 次数会被追加到 failures 列表中，实现加重计数效果。
+func (m *CircuitBreakerManager) RecordFailureWithWeight(backendID string, weight int) {
+	if weight <= 1 {
+		m.RecordFailure(backendID)
+		return
+	}
+	cb := m.Get(backendID)
+	cb.mu.Lock()
+	defer cb.mu.Unlock()
+
+	now := time.Now()
+	for i := 0; i < weight; i++ {
+		cb.failures = append(cb.failures, now)
+	}
+	cb.lastFailureTime = now
+
+	if cb.state == StateHalfOpen {
+		cb.changeState(StateOpen)
+		cb.successes = make([]time.Time, 0)
+	} else if cb.state == StateClosed {
+		if len(cb.failures) >= cb.config.FailureThreshold {
+			cb.changeState(StateOpen)
+		}
+	}
+}
+
+// RecordRateLimitFailure 记录429限流失败（自动应用加重系数）。
+func (m *CircuitBreakerManager) RecordRateLimitFailure(backendID string) {
+	weight := m.GetRateLimitWeight()
+	m.RecordFailureWithWeight(backendID, weight)
 }
 
 // GetHealthyBackends 获取健康后端列表
