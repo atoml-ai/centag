@@ -102,7 +102,7 @@
 
 ## 测试流程
 
-### Step 1: 执行协议测试
+### Step 1: 协议插件单元测试
 
 ```bash
 # 运行 OpenAI 协议端到端测试
@@ -115,7 +115,33 @@ go test ./plugins/protocol/anthropic/ -run TestAnthropicProtocolE2E -v -count=1
 go test ./plugins/protocol/... -v -count=1
 ```
 
-### Step 2: 生成覆盖率报告
+### Step 2: HTTP 集成测试
+
+```bash
+# 运行 OpenAI HTTP 集成测试
+go test ./plugins/protocol/openai/ -run TestHTTPOpenAI -v -count=1
+
+# 运行 Anthropic HTTP 集成测试
+go test ./plugins/protocol/anthropic/ -run TestHTTPAnthropic -v -count=1
+```
+
+### Step 3: SDK 兼容性测试
+
+```bash
+# 安装 Python 依赖
+cd tests/sdk-compat && pip install -r requirements.txt
+
+# 运行 OpenAI SDK 测试
+CENTAG_BASE_URL=http://localhost:20060 python -m pytest test_openai_sdk.py -v
+
+# 运行 Anthropic SDK 测试
+CENTAG_BASE_URL=http://localhost:20060 python -m pytest test_anthropic_sdk.py -v
+
+# 运行所有 SDK 测试
+./run_all.sh
+```
+
+### Step 4: 生成覆盖率报告
 
 ```bash
 # 生成覆盖率
@@ -128,7 +154,7 @@ go tool cover -func=coverage.out
 go tool cover -html=coverage.out -o coverage.html
 ```
 
-### Step 3: 生成测试报告
+### Step 5: 生成测试报告
 
 运行测试并生成 HTML 报告：
 
@@ -140,7 +166,7 @@ go test ./plugins/protocol/... -v -json -count=1 > test_results.json
 go run scripts/generate-protocol-report.go
 ```
 
-### Step 4: 验证测试结果
+### Step 6: 验证测试结果
 
 ```bash
 # 检查测试通过率
@@ -201,10 +227,21 @@ plugins/protocol/
 │   └── test_helpers.go          # 共享测试工具和 Mock
 ├── openai/
 │   ├── protocol_test.go         # 现有单元测试
-│   └── protocol_e2e_test.go     # 端到端协议转换测试
+│   ├── protocol_e2e_test.go     # 端到端协议转换测试
+│   ├── protocol_http_test.go    # HTTP 集成测试
+│   └── protocol_p2_test.go      # P2 字段测试
 └── anthropic/
     ├── protocol_test.go         # 现有单元测试
-    └── protocol_e2e_test.go     # 端到端协议转换测试
+    ├── protocol_e2e_test.go     # 端到端协议转换测试
+    ├── protocol_http_test.go    # HTTP 集成测试
+    └── protocol_p2_test.go      # P2 字段测试
+
+tests/sdk-compat/
+├── README.md                    # 测试说明
+├── requirements.txt             # Python 依赖
+├── test_openai_sdk.py           # OpenAI SDK 兼容性测试
+├── test_anthropic_sdk.py        # Anthropic SDK 兼容性测试
+└── run_all.sh                   # 一键执行脚本
 ```
 
 ## 常见问题诊断
