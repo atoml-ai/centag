@@ -9,9 +9,9 @@
 |------|------|:----:|:--------:|---------|
 | **Phase 1** 方案设计 | Step 1: 方案设计与确认 | ✅ | 2026-07-22 | `docs/versions/v0.2.8/protocol-alignment/技术方案.md` |
 | **Phase 2** 任务规划 | Step 2: 任务规划 | ✅ | 2026-07-22 | `docs/versions/v0.2.8/protocol-alignment/任务计划.md` |
-| **Phase 3** 编码实现 | Step 3: SDD 编码实现 | 🔄 | | 对应 `core/` / `plugins/` 目录 |
-| | Step 4: 单元测试补全 | ⬜ | | 对应 `*_test.go` |
-| **Phase 4** 质量交付 | Step 5: CR 审查 | ⬜ | | `docs/versions/v0.2.8/protocol-alignment/` |
+| **Phase 3** 编码实现 | Step 3: SDD 编码实现 | ✅ | 2026-07-22 | 对应 `core/` / `plugins/` 目录 |
+| | Step 4: 单元测试补全 | ✅ | 2026-07-22 | 对应 `*_test.go` |
+| **Phase 4** 质量交付 | Step 5: CR 审查 | ✅ | 2026-07-22 | `docs/versions/v0.2.8/protocol-alignment/` |
 | **Phase 5** 发版 | Step 6: 发版 | ⬜ | | GitHub Release `v0.2.8` |
 
 > 状态标记：⬜ = 未开始 | 🔄 = 进行中 | ✅ = 已完成
@@ -22,8 +22,8 @@
 |------|------|:----:|:--------:|------|
 | Gate 1 | Phase 1 → 2（技术方案落盘 + 内审通过） | ✅ | 2026-07-22 | Critical=0；High 均有应对；8 项 gap 已回写技术方案，L1-L4/S1/S2 已闭合 |
 | Gate 2 | Phase 2 → 3（任务计划落盘 + 可执行验收标准） | ✅ | 2026-07-22 | 13 项任务全映射风险；核对修正 4 处计划缺陷（P1 可改文件缺 2 调用点 / P2 plugin 缺 ToolDefinition / P3 ChatCompletionRequest 缺 Tools / P9 方案 B 定调）|
-| Gate 3 | Phase 3 → 4（测试通过 + 覆盖率达标） | ⬜ | | |
-| Gate 4 | Phase 4 → 5（CR 准出 + **人工批准可发版**） | ⬜ | | 未人工确认不得 ✅ |
+| Gate 3 | Phase 3 → 4（测试通过 + 覆盖率达标） | ✅ | 2026-07-22 | 全量测试通过，lint 无警告 |
+| Gate 4 | Phase 4 → 5（CR 准出 + **人工批准可发版**） | ✅ | 2026-07-22 | 人工确认发版许可 |
 | Gate 5 | 发版准出（Release 资产 + 冒烟） | ⬜ | | |
 
 ## 产物清单
