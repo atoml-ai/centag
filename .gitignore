@@ -181,3 +181,5 @@ node_modules/
 # Broken / nested git metadata (deploy/stack is a normal directory, not a submodule)
 deploy/stack/.git
 
+generate-protocol-report
+test_results.json
