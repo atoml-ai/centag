@@ -1,14 +1,15 @@
 {
-  "name": "centag-wrap",
+  "name": "centag",
   "version": "0.2.8",
-  "description": "Centag system PAC / process-proxy helper (npm wrapper around the Go binary). Wraps third-party agents (OpenCode etc.) to route LLM traffic through Centag MITM.",
+  "description": "Centag — LLM unified gateway. Installs the Go binary via postinstall from GitHub Releases.",
   "type": "module",
   "bin": {
-    "centag-wrap": "./bin/run.js"
+    "centag": "./bin/run.js"
   },
   "files": [
     "bin/",
     "lib/",
+    "static/",
     "README.md"
   ],
   "scripts": {
@@ -29,18 +30,20 @@
   ],
   "keywords": [
     "centag",
-    "proxy",
-    "mitm",
     "llm",
-    "agent",
-    "opencode"
+    "proxy",
+    "gateway",
+    "openai",
+    "anthropic",
+    "gemini",
+    "ai"
   ],
   "license": "MIT",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/atoml-ai/centag.git"
   },
-  "homepage": "https://github.com/atoml-ai/centag/tree/main/apps/wrap",
+  "homepage": "https://github.com/atoml-ai/centag",
   "bugs": {
     "url": "https://github.com/atoml-ai/centag/issues"
   }
