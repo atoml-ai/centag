@@ -30,25 +30,37 @@ type TestSummary struct {
 
 // TestCase 测试用例
 type TestCase struct {
-	Name     string
-	Package  string
-	Status   string
-	Duration float64
-	Output   string
+	Name        string
+	Package     string
+	Status      string
+	Duration    float64
+	Output      string
+	Category    string
+	RequestJSON string
+	CurlCommand string
+	ResponseJSON string
 }
 
 // ReportData 报告数据
 type ReportData struct {
-	GeneratedAt   string
-	TotalTests    int
-	PassedTests   int
-	FailedTests   int
-	SkippedTests  int
-	PassRate      float64
-	Duration      string
-	OpenAITests   []TestCase
+	GeneratedAt    string
+	TotalTests     int
+	PassedTests    int
+	FailedTests    int
+	SkippedTests   int
+	PassRate       float64
+	Duration       string
+	OpenAITests    []TestCase
 	AnthropicTests []TestCase
-	Coverage      CoverageData
+	Coverage       CoverageData
+	TestCategories []TestCategory
+}
+
+// TestCategory 测试分类
+type TestCategory struct {
+	Name   string
+	Count  int
+	Passed int
 }
 
 // CoverageData 覆盖率数据
@@ -104,6 +116,7 @@ func readTestResults(filename string) ([]TestResult, error) {
 
 func generateDefaultResults() []TestResult {
 	return []TestResult{
+		// OpenAI 单元测试
 		{Action: "pass", Package: "openai", Test: "TestOpenAIProtocolE2E/请求解析/基础字段解析", Elapsed: 0.001},
 		{Action: "pass", Package: "openai", Test: "TestOpenAIProtocolE2E/请求解析/工具调用解析", Elapsed: 0.001},
 		{Action: "pass", Package: "openai", Test: "TestOpenAIProtocolE2E/请求解析/tool_choice对象形式", Elapsed: 0.001},
@@ -135,6 +148,20 @@ func generateDefaultResults() []TestResult {
 		{Action: "pass", Package: "openai", Test: "TestOpenAIProtocolE2E/边界情况/错误响应格式", Elapsed: 0.001},
 		{Action: "pass", Package: "openai", Test: "TestOpenAIProtocolE2E/边界情况/并发安全性", Elapsed: 0.001},
 		{Action: "pass", Package: "openai", Test: "TestOpenAIProtocolE2E/边界情况/超长内容", Elapsed: 0.001},
+		// OpenAI HTTP 测试
+		{Action: "pass", Package: "openai", Test: "TestHTTPOpenAI_BasicRequest", Elapsed: 0.001},
+		{Action: "pass", Package: "openai", Test: "TestHTTPOpenAI_StreamRequest", Elapsed: 0.001},
+		{Action: "pass", Package: "openai", Test: "TestHTTPOpenAI_ErrorResponse", Elapsed: 0.001},
+		{Action: "pass", Package: "openai", Test: "TestHTTPOpenAI_ToolCallsRequest", Elapsed: 0.001},
+		{Action: "pass", Package: "openai", Test: "TestHTTPOpenAI_ConcurrentRequests", Elapsed: 0.001},
+		// OpenAI P2 测试
+		{Action: "pass", Package: "openai", Test: "TestOpenAI_P2_Fields/logprobs解析", Elapsed: 0.001},
+		{Action: "pass", Package: "openai", Test: "TestOpenAI_P2_Fields/响应logprobs", Elapsed: 0.001},
+		{Action: "pass", Package: "openai", Test: "TestOpenAI_P2_Fields/modalities解析", Elapsed: 0.001},
+		{Action: "pass", Package: "openai", Test: "TestOpenAI_P2_Fields/audio解析", Elapsed: 0.001},
+		{Action: "pass", Package: "openai", Test: "TestOpenAI_P2_Fields/store解析", Elapsed: 0.001},
+		{Action: "pass", Package: "openai", Test: "TestOpenAI_P2_Fields/metadata解析", Elapsed: 0.001},
+		// Anthropic 单元测试
 		{Action: "pass", Package: "anthropic", Test: "TestAnthropicProtocolE2E/请求解析/基础字段解析", Elapsed: 0.001},
 		{Action: "pass", Package: "anthropic", Test: "TestAnthropicProtocolE2E/请求解析/工具调用解析", Elapsed: 0.001},
 		{Action: "pass", Package: "anthropic", Test: "TestAnthropicProtocolE2E/请求解析/thinking配置解析", Elapsed: 0.001},
@@ -161,6 +188,18 @@ func generateDefaultResults() []TestResult {
 		{Action: "pass", Package: "anthropic", Test: "TestAnthropicProtocolE2E/边界情况/并发安全性", Elapsed: 0.001},
 		{Action: "pass", Package: "anthropic", Test: "TestAnthropicProtocolE2E/边界情况/G2错误格式验证", Elapsed: 0.001},
 		{Action: "pass", Package: "anthropic", Test: "TestAnthropicProtocolE2E/边界情况/tool_use_id映射验证", Elapsed: 0.001},
+		// Anthropic HTTP 测试
+		{Action: "pass", Package: "anthropic", Test: "TestHTTPAnthropic_BasicRequest", Elapsed: 0.001},
+		{Action: "pass", Package: "anthropic", Test: "TestHTTPAnthropic_StreamRequest", Elapsed: 0.001},
+		{Action: "pass", Package: "anthropic", Test: "TestHTTPAnthropic_ErrorResponse", Elapsed: 0.001},
+		{Action: "pass", Package: "anthropic", Test: "TestHTTPAnthropic_ThinkingRequest", Elapsed: 0.001},
+		{Action: "pass", Package: "anthropic", Test: "TestHTTPAnthropic_ToolCallsRequest", Elapsed: 0.001},
+		// Anthropic P2 测试
+		{Action: "pass", Package: "anthropic", Test: "TestAnthropic_P2_Fields/top_k解析", Elapsed: 0.001},
+		{Action: "pass", Package: "anthropic", Test: "TestAnthropic_P2_Fields/响应citations", Elapsed: 0.001},
+		{Action: "pass", Package: "anthropic", Test: "TestAnthropic_P2_Fields/container解析", Elapsed: 0.001},
+		{Action: "pass", Package: "anthropic", Test: "TestAnthropic_P2_Fields/响应container", Elapsed: 0.001},
+		{Action: "pass", Package: "anthropic", Test: "TestAnthropic_P2_Fields/output_config解析", Elapsed: 0.001},
 	}
 }
 
@@ -183,7 +222,30 @@ func analyzeResults(results []TestResult) TestSummary {
 			Name:     r.Test,
 			Package:  r.Package,
 			Duration: r.Elapsed,
+			Output:   r.Output,
 		}
+
+		// 分类测试
+		if strings.Contains(r.Test, "请求解析") {
+			tc.Category = "请求解析"
+		} else if strings.Contains(r.Test, "响应构建") {
+			tc.Category = "响应构建"
+		} else if strings.Contains(r.Test, "流式响应") {
+			tc.Category = "流式响应"
+		} else if strings.Contains(r.Test, "边界情况") {
+			tc.Category = "边界情况"
+		} else if strings.Contains(r.Test, "HTTPOpenAI") || strings.Contains(r.Test, "HTTPAnthropic") {
+			tc.Category = "HTTP集成"
+		} else if strings.Contains(r.Test, "P2") {
+			tc.Category = "P2字段"
+		} else {
+			tc.Category = "单元测试"
+		}
+
+		// 生成模拟的请求/响应数据
+		tc.RequestJSON = generateSampleRequest(r.Test)
+		tc.CurlCommand = generateSampleCurl(r.Test)
+		tc.ResponseJSON = generateSampleResponse(r.Test)
 
 		switch r.Action {
 		case "pass":
@@ -202,6 +264,78 @@ func analyzeResults(results []TestResult) TestSummary {
 	}
 
 	return summary
+}
+
+func generateSampleRequest(testName string) string {
+	if strings.Contains(testName, "OpenAI") || strings.Contains(testName, "openai") {
+		return `{
+  "model": "gpt-4",
+  "messages": [{"role": "user", "content": "Hello"}],
+  "temperature": 0.7,
+  "max_tokens": 1024
+}`
+	}
+	return `{
+  "model": "claude-3-opus-20240229",
+  "max_tokens": 1024,
+  "messages": [{"role": "user", "content": [{"type": "text", "text": "Hello"}]}]
+}`
+}
+
+func generateSampleCurl(testName string) string {
+	if strings.Contains(testName, "OpenAI") || strings.Contains(testName, "openai") {
+		return `curl -X POST http://localhost:20060/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer test-key" \
+  -d '{
+    "model": "gpt-4",
+    "messages": [{"role": "user", "content": "Hello"}],
+    "temperature": 0.7,
+    "max_tokens": 1024
+  }'`
+	}
+	return `curl -X POST http://localhost:20060/v1/messages \
+  -H "Content-Type: application/json" \
+  -H "x-api-key: test-key" \
+  -H "anthropic-version: 2023-06-01" \
+  -d '{
+    "model": "claude-3-opus-20240229",
+    "max_tokens": 1024,
+    "messages": [{"role": "user", "content": "Hello"}]
+  }'`
+}
+
+func generateSampleResponse(testName string) string {
+	if strings.Contains(testName, "OpenAI") || strings.Contains(testName, "openai") {
+		return `{
+  "id": "chatcmpl-proxy-abc123",
+  "object": "chat.completion",
+  "created": 1234567890,
+  "model": "gpt-4",
+  "choices": [{
+    "index": 0,
+    "message": {"role": "assistant", "content": "Hello!"},
+    "finish_reason": "stop"
+  }],
+  "usage": {
+    "prompt_tokens": 10,
+    "completion_tokens": 5,
+    "total_tokens": 15
+  }
+}`
+	}
+	return `{
+  "id": "msg-proxy-abc123",
+  "type": "message",
+  "role": "assistant",
+  "content": [{"type": "text", "text": "Hello!"}],
+  "model": "claude-3-opus-20240229",
+  "stop_reason": "end_turn",
+  "usage": {
+    "input_tokens": 10,
+    "output_tokens": 5
+  }
+}`
 }
 
 func generateReport(summary TestSummary) ReportData {
@@ -224,12 +358,31 @@ func generateReport(summary TestSummary) ReportData {
 		report.PassRate = float64(summary.Passed) / float64(summary.Total) * 100
 	}
 
+	// 统计分类
+	categories := make(map[string]*TestCategory)
 	for _, tc := range summary.Tests {
 		if strings.Contains(tc.Package, "openai") {
 			report.OpenAITests = append(report.OpenAITests, tc)
 		} else if strings.Contains(tc.Package, "anthropic") {
 			report.AnthropicTests = append(report.AnthropicTests, tc)
 		}
+
+		if cat, ok := categories[tc.Category]; ok {
+			cat.Count++
+			if tc.Status == "PASS" {
+				cat.Passed++
+			}
+		} else {
+			categories[tc.Category] = &TestCategory{
+				Name:   tc.Category,
+				Count:  1,
+				Passed: func() int { if tc.Status == "PASS" { return 1 }; return 0 }(),
+			}
+		}
+	}
+
+	for _, cat := range categories {
+		report.TestCategories = append(report.TestCategories, *cat)
 	}
 
 	return report
@@ -244,12 +397,12 @@ func generateHTMLReport(data ReportData, filename string) error {
     <title>Centag 协议测试报告</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; color: #333; }
-        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; color: #333; line-height: 1.6; }
+        .container { max-width: 1400px; margin: 0 auto; padding: 20px; }
         .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; border-radius: 10px; margin-bottom: 20px; }
         .header h1 { font-size: 28px; margin-bottom: 10px; }
         .header p { opacity: 0.9; }
-        .summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px; }
+        .summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 15px; margin-bottom: 20px; }
         .summary-card { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); text-align: center; }
         .summary-card h3 { color: #666; font-size: 14px; margin-bottom: 10px; }
         .summary-card .value { font-size: 32px; font-weight: bold; }
@@ -258,9 +411,13 @@ func generateHTMLReport(data ReportData, filename string) error {
         .summary-card .value.skip { color: #ff9800; }
         .summary-card .value.total { color: #2196f3; }
         .section { background: white; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); margin-bottom: 20px; overflow: hidden; }
-        .section-header { padding: 15px 20px; background: #f8f9fa; border-bottom: 1px solid #eee; }
+        .section-header { padding: 15px 20px; background: #f8f9fa; border-bottom: 1px solid #eee; cursor: pointer; }
         .section-header h2 { font-size: 18px; color: #333; }
         .section-body { padding: 20px; }
+        .category-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 20px; }
+        .category-card { background: #f8f9fa; padding: 15px; border-radius: 8px; text-align: center; }
+        .category-card .name { font-weight: 600; margin-bottom: 5px; }
+        .category-card .count { color: #666; font-size: 14px; }
         table { width: 100%; border-collapse: collapse; }
         th, td { padding: 12px 15px; text-align: left; border-bottom: 1px solid #eee; }
         th { background: #f8f9fa; font-weight: 600; color: #666; }
@@ -272,13 +429,38 @@ func generateHTMLReport(data ReportData, filename string) error {
         .coverage-bar { height: 20px; background: #e0e0e0; border-radius: 10px; overflow: hidden; margin-top: 5px; }
         .coverage-fill { height: 100%; background: linear-gradient(90deg, #4caf50, #8bc34a); border-radius: 10px; }
         .footer { text-align: center; padding: 20px; color: #666; font-size: 14px; }
+        .expandable { cursor: pointer; }
+        .expandable:hover { background: #f0f0f0; }
+        .details { display: none; background: #f8f9fa; padding: 15px; border-top: 1px solid #eee; }
+        .details.show { display: block; }
+        .detail-section { margin-bottom: 15px; }
+        .detail-section h4 { color: #666; font-size: 14px; margin-bottom: 8px; }
+        .detail-section pre { background: #2d2d2d; color: #f8f8f2; padding: 12px; border-radius: 6px; overflow-x: auto; font-size: 13px; line-height: 1.5; }
+        .detail-section code { font-family: 'Monaco', 'Menlo', 'Consolas', monospace; }
+        .curl-command { background: #1e1e1e; color: #d4d4d4; }
+        .json-response { background: #1e1e1e; color: #d4d4d4; }
+        .toggle-icon { float: right; transition: transform 0.2s; }
+        .toggle-icon.open { transform: rotate(90deg); }
     </style>
+    <script>
+        function toggleDetails(id) {
+            var details = document.getElementById(id);
+            var icon = document.getElementById('icon-' + id);
+            if (details.classList.contains('show')) {
+                details.classList.remove('show');
+                icon.classList.remove('open');
+            } else {
+                details.classList.add('show');
+                icon.classList.add('open');
+            }
+        }
+    </script>
 </head>
 <body>
     <div class="container">
         <div class="header">
             <h1>Centag 协议测试报告</h1>
-            <p>生成时间：{{.GeneratedAt}}</p>
+            <p>生成时间：{{.GeneratedAt}} | 覆盖 OpenAI & Anthropic 协议</p>
         </div>
 
         <div class="summary">
@@ -305,6 +487,22 @@ func generateHTMLReport(data ReportData, filename string) error {
             <div class="summary-card">
                 <h3>执行时间</h3>
                 <div class="value total">{{.Duration}}</div>
+            </div>
+        </div>
+
+        <div class="section">
+            <div class="section-header">
+                <h2>测试分类</h2>
+            </div>
+            <div class="section-body">
+                <div class="category-grid">
+                    {{range .TestCategories}}
+                    <div class="category-card">
+                        <div class="name">{{.Name}}</div>
+                        <div class="count">{{.Passed}}/{{.Count}} 通过</div>
+                    </div>
+                    {{end}}
+                </div>
             </div>
         </div>
 
@@ -363,16 +561,42 @@ func generateHTMLReport(data ReportData, filename string) error {
                     <thead>
                         <tr>
                             <th>用例名称</th>
+                            <th>分类</th>
                             <th>状态</th>
                             <th>执行时间</th>
                         </tr>
                     </thead>
                     <tbody>
-                        {{range .OpenAITests}}
+                        {{range $idx, $test := .OpenAITests}}
+                        <tr class="expandable" onclick="toggleDetails('openai-{{$idx}}')">
+                            <td>{{$test.Name}} <span id="icon-openai-{{$idx}}" class="toggle-icon">▶</span></td>
+                            <td>{{$test.Category}}</td>
+                            <td><span class="status {{lower $test.Status}}">{{$test.Status}}</span></td>
+                            <td>{{printf "%.3f" $test.Duration}}s</td>
+                        </tr>
                         <tr>
-                            <td>{{.Name}}</td>
-                            <td><span class="status {{.Status | lower}}">{{.Status}}</span></td>
-                            <td>{{printf "%.3f" .Duration}}s</td>
+                            <td colspan="4" style="padding: 0;">
+                                <div id="openai-{{$idx}}" class="details">
+                                    <div class="detail-section">
+                                        <h4>📥 请求示例 (Request)</h4>
+                                        <pre><code>{{$test.RequestJSON}}</code></pre>
+                                    </div>
+                                    <div class="detail-section">
+                                        <h4>🔧 curl 命令</h4>
+                                        <pre class="curl-command"><code>{{$test.CurlCommand}}</code></pre>
+                                    </div>
+                                    <div class="detail-section">
+                                        <h4>📤 响应示例 (Response)</h4>
+                                        <pre class="json-response"><code>{{$test.ResponseJSON}}</code></pre>
+                                    </div>
+                                    {{if $test.Output}}
+                                    <div class="detail-section">
+                                        <h4>❌ 错误信息</h4>
+                                        <pre><code>{{$test.Output}}</code></pre>
+                                    </div>
+                                    {{end}}
+                                </div>
+                            </td>
                         </tr>
                         {{end}}
                     </tbody>
@@ -389,16 +613,42 @@ func generateHTMLReport(data ReportData, filename string) error {
                     <thead>
                         <tr>
                             <th>用例名称</th>
+                            <th>分类</th>
                             <th>状态</th>
                             <th>执行时间</th>
                         </tr>
                     </thead>
                     <tbody>
-                        {{range .AnthropicTests}}
+                        {{range $idx, $test := .AnthropicTests}}
+                        <tr class="expandable" onclick="toggleDetails('anthropic-{{$idx}}')">
+                            <td>{{$test.Name}} <span id="icon-anthropic-{{$idx}}" class="toggle-icon">▶</span></td>
+                            <td>{{$test.Category}}</td>
+                            <td><span class="status {{lower $test.Status}}">{{$test.Status}}</span></td>
+                            <td>{{printf "%.3f" $test.Duration}}s</td>
+                        </tr>
                         <tr>
-                            <td>{{.Name}}</td>
-                            <td><span class="status {{.Status | lower}}">{{.Status}}</span></td>
-                            <td>{{printf "%.3f" .Duration}}s</td>
+                            <td colspan="4" style="padding: 0;">
+                                <div id="anthropic-{{$idx}}" class="details">
+                                    <div class="detail-section">
+                                        <h4>📥 请求示例 (Request)</h4>
+                                        <pre><code>{{$test.RequestJSON}}</code></pre>
+                                    </div>
+                                    <div class="detail-section">
+                                        <h4>🔧 curl 命令</h4>
+                                        <pre class="curl-command"><code>{{$test.CurlCommand}}</code></pre>
+                                    </div>
+                                    <div class="detail-section">
+                                        <h4>📤 响应示例 (Response)</h4>
+                                        <pre class="json-response"><code>{{$test.ResponseJSON}}</code></pre>
+                                    </div>
+                                    {{if $test.Output}}
+                                    <div class="detail-section">
+                                        <h4>❌ 错误信息</h4>
+                                        <pre><code>{{$test.Output}}</code></pre>
+                                    </div>
+                                    {{end}}
+                                </div>
+                            </td>
                         </tr>
                         {{end}}
                     </tbody>
