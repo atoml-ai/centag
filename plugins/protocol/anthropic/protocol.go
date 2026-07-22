@@ -71,27 +71,60 @@ func (p *Protocol) ParseRequest(c *gin.Context) (*plugin.ProxyRequest, error) {
 		return nil, fmt.Errorf("failed to read request body: %w", err)
 	}
 
+	// [v0.2.8 G1] 先解析原始 map 保留透传能力（与 OpenAI 一致），RawBody 存 map 而非已解析 struct
+	var rawBody map[string]interface{}
+	if err := json.Unmarshal(body, &rawBody); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal raw request: %w", err)
+	}
+
 	var anthropicReq MessagesRequest
 	if err := json.Unmarshal(body, &anthropicReq); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal request: %w", err)
 	}
 
 	req := &plugin.ProxyRequest{
-		Messages:         convertAnthropicMessages(anthropicReq.Messages),
-		Model:            anthropicReq.Model,
-		Stream:           anthropicReq.Stream,
-		Temperature:      0,
-		MaxTokens:        anthropicReq.MaxTokens,
-		TopP:             anthropicReq.TopP,
-		Metadata:         make(map[string]interface{}),
-		RawBody:          anthropicReq,
-		Headers:          make(map[string]string),
-		System:           anthropicReq.System,
+		Messages:    convertAnthropicMessages(anthropicReq.Messages),
+		Model:       anthropicReq.Model,
+		Stream:      anthropicReq.Stream,
+		Temperature: 0,
+		MaxTokens:   anthropicReq.MaxTokens,
+		TopP:        anthropicReq.TopP,
+		Metadata:    make(map[string]interface{}),
+		RawBody:     rawBody, // [G1] map，供后端以原文为基础透传
+		Headers:     make(map[string]string),
+		System:      anthropicReq.System,
 	}
 
 	if anthropicReq.Temperature > 0 {
 		req.Temperature = anthropicReq.Temperature
 	}
+
+	// [v0.2.8] thinking → ReasoningSpec
+	if anthropicReq.Thinking != nil && anthropicReq.Thinking.Type == "enabled" {
+		req.Reasoning.Specified = true
+		if anthropicReq.Thinking.BudgetTokens > 0 {
+			budget := anthropicReq.Thinking.BudgetTokens
+			req.Reasoning.BudgetTokens = &budget
+		}
+	}
+
+	// [v0.2.8] metadata.user_id / stream_options → Metadata（无显式字段承载）
+	if anthropicReq.Metadata != nil && anthropicReq.Metadata.UserID != "" {
+		req.Metadata["anthropic_user_id"] = anthropicReq.Metadata.UserID
+	}
+	if anthropicReq.StreamOptions != nil {
+		req.Metadata["stream_options"] = anthropicReq.StreamOptions
+	}
+
+	// [v0.2.8 L4] Tools / ToolChoice → 显式字段（供 ModeDispatcher 工具感知调度）
+	if len(anthropicReq.Tools) > 0 {
+		req.Tools = convertAnthropicTools(anthropicReq.Tools)
+	}
+	if anthropicReq.ToolChoice != nil {
+		req.ToolChoice = anthropicReq.ToolChoice
+	}
+
+	// [G7] TopK 为 P2 占位，本轮不映射，仅 RawBody 透传
 
 	for k, v := range c.Request.Header {
 		if len(v) > 0 {
@@ -105,9 +138,17 @@ func (p *Protocol) ParseRequest(c *gin.Context) (*plugin.ProxyRequest, error) {
 // HandleResponse 处理响应并返回给客户端（非流式）
 func (p *Protocol) HandleResponse(c *gin.Context, resp *plugin.ProxyResponse) error {
 	if resp.Error != nil {
+		// [v0.2.8 G2] Anthropic 标准错误结构：error 为对象 {type, message}，而非字符串
+		errType := resp.Error.Type
+		if errType == "" {
+			errType = "invalid_request_error"
+		}
 		c.JSON(500, gin.H{
-			"type":  "error",
-			"error": resp.Error.Message,
+			"type": "error",
+			"error": gin.H{
+				"type":    errType,
+				"message": resp.Error.Message,
+			},
 		})
 		return nil
 	}
@@ -133,6 +174,19 @@ func (p *Protocol) HandleResponse(c *gin.Context, resp *plugin.ProxyResponse) er
 
 	if metadata, ok := resp.Metadata["prompt_tokens"].(int); ok {
 		anthropicResp.Usage.InputTokens = metadata
+	}
+
+	// [v0.2.8] stop_sequence：从后端响应提取，无则省略
+	if ss, ok := resp.Metadata["stop_sequence"].(string); ok && ss != "" {
+		anthropicResp.StopSequence = ss
+	}
+
+	// [v0.2.8] cache tokens：从后端响应提取，无则 0（omitempty 省略）
+	if ct, ok := resp.Metadata["cache_creation_input_tokens"].(int); ok {
+		anthropicResp.Usage.CacheCreationInputTokens = ct
+	}
+	if ct, ok := resp.Metadata["cache_read_input_tokens"].(int); ok {
+		anthropicResp.Usage.CacheReadInputTokens = ct
 	}
 
 	c.JSON(200, anthropicResp)
@@ -194,6 +248,40 @@ func (p *Protocol) FormatStreamChunk(model string, chunk *plugin.StreamChunk, ch
 		}
 		dataBytes, _ := json.Marshal(delta)
 		events = append(events, fmt.Sprintf("event: content_block_delta\ndata: %s", string(dataBytes)))
+	}
+
+	// [v0.2.8 R04] thinking 事件流（Claude 3.7+）：index=1，与 text 的 index=0 区分。
+	// 接口为每 chunk 无状态调用，故每个 thinking chunk 输出完整 start→delta→stop 事件组，
+	// 每个事件组自成合法 SSE 块（同一 index 的 start/delta/stop 配对完整）。
+	if chunk.ReasoningContent != "" {
+		cbStart := map[string]interface{}{
+			"type":  "content_block_start",
+			"index": 1,
+			"content_block": map[string]interface{}{
+				"type":     "thinking",
+				"thinking": "",
+			},
+		}
+		dataBytes, _ := json.Marshal(cbStart)
+		events = append(events, fmt.Sprintf("event: content_block_start\ndata: %s", string(dataBytes)))
+
+		delta := map[string]interface{}{
+			"type":  "content_block_delta",
+			"index": 1,
+			"delta": map[string]interface{}{
+				"type":     "thinking_delta",
+				"thinking": chunk.ReasoningContent,
+			},
+		}
+		dataBytes, _ = json.Marshal(delta)
+		events = append(events, fmt.Sprintf("event: content_block_delta\ndata: %s", string(dataBytes)))
+
+		cbStopThinking := map[string]interface{}{
+			"type":  "content_block_stop",
+			"index": 1,
+		}
+		dataBytes, _ = json.Marshal(cbStopThinking)
+		events = append(events, fmt.Sprintf("event: content_block_stop\ndata: %s", string(dataBytes)))
 	}
 
 	// done chunk: 发送 content_block_stop + message_delta + message_stop
@@ -299,6 +387,28 @@ type MessagesRequest struct {
 	System      string           `json:"system,omitempty"`
 	Tools       []ToolDefinition `json:"tools,omitempty"`
 	ToolChoice  interface{}      `json:"tool_choice,omitempty"`
+
+	// [v0.2.8 协议对齐] 新增字段
+	TopK          int             `json:"top_k,omitempty"` // P2 占位，本轮不映射
+	Thinking      *ThinkingConfig `json:"thinking,omitempty"`
+	Metadata      *MetadataConfig `json:"metadata,omitempty"`
+	StreamOptions *StreamOptions  `json:"stream_options,omitempty"`
+}
+
+// ThinkingConfig Anthropic 扩展思考配置
+type ThinkingConfig struct {
+	Type         string `json:"type"` // "enabled"
+	BudgetTokens int    `json:"budget_tokens"`
+}
+
+// MetadataConfig Anthropic 请求元数据
+type MetadataConfig struct {
+	UserID string `json:"user_id,omitempty"`
+}
+
+// StreamOptions Anthropic 流式选项
+type StreamOptions struct {
+	IncludeUsage bool `json:"include_usage,omitempty"`
 }
 
 // ToolDefinition 工具定义
@@ -310,22 +420,24 @@ type ToolDefinition struct {
 
 // MessagesResponse Anthropic Messages API 响应
 type MessagesResponse struct {
-	ID         string         `json:"id"`
-	Type       string         `json:"type"`
-	Role       string         `json:"role"`
-	Content    []ContentBlock `json:"content"`
-	Model      string         `json:"model"`
-	StopReason string         `json:"stop_reason"`
-	Usage      Usage          `json:"usage"`
+	ID           string         `json:"id"`
+	Type         string         `json:"type"`
+	Role         string         `json:"role"`
+	Content      []ContentBlock `json:"content"`
+	Model        string         `json:"model"`
+	StopReason   string         `json:"stop_reason"`
+	StopSequence string         `json:"stop_sequence,omitempty"` // [v0.2.8]
+	Usage        Usage          `json:"usage"`
 }
 
 // ContentBlock 内容块
 type ContentBlock struct {
-	Type  string      `json:"type"`
-	Text  string      `json:"text,omitempty"`
-	ID    string      `json:"id,omitempty"`
-	Name  string      `json:"name,omitempty"`
-	Input interface{} `json:"input,omitempty"`
+	Type      string      `json:"type"`
+	Text      string      `json:"text,omitempty"`
+	ID        string      `json:"id,omitempty"`
+	Name      string      `json:"name,omitempty"`
+	Input     interface{} `json:"input,omitempty"`
+	ToolUseID string      `json:"tool_use_id,omitempty"` // [v0.2.8 G3] tool_result 块引用 tool_use 的 id
 }
 
 // Message 消息
@@ -336,8 +448,10 @@ type Message struct {
 
 // Usage 使用量
 type Usage struct {
-	InputTokens  int `json:"input_tokens"`
-	OutputTokens int `json:"output_tokens"`
+	InputTokens              int `json:"input_tokens"`
+	OutputTokens             int `json:"output_tokens"`
+	CacheCreationInputTokens int `json:"cache_creation_input_tokens,omitempty"` // [v0.2.8]
+	CacheReadInputTokens     int `json:"cache_read_input_tokens,omitempty"`     // [v0.2.8]
 }
 
 // --- 转换函数 ---
@@ -381,16 +495,31 @@ func convertAnthropicMessages(messages []Message) []plugin.Message {
 }
 
 // extractToolCallID 从消息中提取 tool_call_id（Anthropic 的 tool_result 消息）
+// [v0.2.8 G3] 修复：tool_result 的引用 id 在顶层 tool_use_id 字段，而非 input
 func extractToolCallID(msg Message) string {
 	for _, block := range msg.Content {
-		if block.Type == "tool_result" {
-			// Anthropic 的 tool_result 使用 tool_use_id 字段
-			if id, ok := block.Input.(string); ok {
-				return id
-			}
+		if block.Type == "tool_result" && block.ToolUseID != "" {
+			return block.ToolUseID
 		}
 	}
 	return ""
+}
+
+// convertAnthropicTools 将 Anthropic 工具定义转换为内部统一 ToolDefinition
+// Anthropic 形态：{name, description, input_schema} → 内部 OpenAI 形态：{type:"function", function:{...}}
+func convertAnthropicTools(tools []ToolDefinition) []plugin.ToolDefinition {
+	result := make([]plugin.ToolDefinition, len(tools))
+	for i, t := range tools {
+		result[i] = plugin.ToolDefinition{
+			Type: "function",
+			Function: plugin.FunctionDef{
+				Name:        t.Name,
+				Description: t.Description,
+				Parameters:  t.InputSchema,
+			},
+		}
+	}
+	return result
 }
 
 // buildContentBlocks 从 ProxyResponse 构建 Anthropic content blocks
