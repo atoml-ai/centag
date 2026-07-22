@@ -1,0 +1,8 @@
+.git
+.opencode
+.cursor
+.github
+*.log
+*.tgz
+node_modules
+bin/vendor/

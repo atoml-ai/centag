@@ -30,6 +30,8 @@ description: "工作流 Step 6：发版 — GitHub Release 与资产校验（安
 
 - 版本分支门禁：`scripts/release/require-release-branch.sh`
 - 安装脚本：`scripts/install.sh`
+- npm 发布脚本：`scripts/publish-centag-npm.sh`
+- npm 包定义：`apps/centag-npm/`
 - 交互入口（Cursor）：`.cursor/rules/step6-release.mdc`
 
 ## 执行流程
@@ -49,6 +51,7 @@ description: "工作流 Step 6：发版 — GitHub Release 与资产校验（安
 |------|----------|------|
 | 版本号 | `CENTAG_RELEASE_VERSION` | 无 `v` 前缀 |
 | 发版路径 | `CENTAG_RELEASE_PATH` | A / B / C |
+| 发布渠道 | `CENTAG_RELEASE_CHANNEL` | `github` / `npm` / `all`（默认） |
 | 是否草稿 | `CENTAG_RELEASE_DRAFT` | 默认建议 `true` |
 | 仓库 | `CENTAG_RELEASE_REPO` | 可选 |
 | 安装脚本 ref | `CENTAG_INSTALL_REF` | 可选 |
@@ -68,7 +71,9 @@ description: "工作流 Step 6：发版 — GitHub Release 与资产校验（安
 
 | 产物 | 说明 |
 |------|------|
-| GitHub Release `v<version>` | personal + wrap 资产 + checksums |
+| GitHub Release `v<version>` | personal + 资产 + checksums |
+| npm `centag` | 在线版（postinstall lazy-download） |
+| npm `centag-offline` | 离线版（打包 6 平台二进制） |
 | `workflow_state.md` | Step 6 / Gate 5 状态 |
 | 可选：发版记录备注 | 可写在需求目录决策日志 |
 

@@ -20,15 +20,19 @@
 |----------|--------|------|
 | personal CLI + WebUI static | `centag-personal-<goos>-<goarch>.tar.gz` | 默认安装；含 `centag wrap` 子命令 |
 | 校验和 | `checksums.txt` | SHA-256 |
+| npm 在线版 | `centag`（npm package） | postinstall 从 GitHub Release lazy-download 二进制 |
+| npm 离线版 | `centag-offline`（npm package） | 打包所有平台二进制，安装即离线可用 |
 
 **暂不发布**：独立 `centag-wrap` tarball、`minimal`、`launcher` / `launcher-tray`。进程代理用 `centag wrap …`。
 
 | 消费者 | 路径 |
 |--------|------|
 | 一键安装脚本 | `scripts/install.sh` |
+| npm 安装 | `npm install -g centag`（在线）/ `npm install -g centag-offline`（离线） |
 | 本地构建产物 | `scripts/release/build-artifacts.sh` → `~/.centag/var/release/<version>/`（可用 `CENTAG_INSTALL_ROOT` 覆盖） |
 | 本地上传 Release | `scripts/release/publish-binaries.sh` |
-| CI 发版 | `.github/workflows/release.yml`（`v*` tag 或 workflow_dispatch） |
+| npm 发布 | `scripts/publish-centag-npm.sh` |
+| CI 发版 | `.github/workflows/release.yml`（`v*` tag 或 workflow_dispatch，含 `npm-publish` job） |
 | 分支门禁 | `scripts/release/require-release-branch.sh` |
 | 版本号真源（无 `--version` 时） | `apps/wrap-npm/package.json` → `version` |
 | 默认仓库 | `atoml-ai/centag`（可用 `CENTAG_RELEASE_REPO` 覆盖） |
@@ -59,16 +63,27 @@
 
 | 参数 | 环境变量 | 必需 | 说明 |
 |------|----------|------|------|
-| 版本号 | `CENTAG_RELEASE_VERSION` | ✅ | 无 `v` 前缀，如 `0.2.7`；tag 为 `v0.2.7` |
+| 版本号 | `CENTAG_RELEASE_VERSION` | ✅ | 无 `v` 前缀，如 `0.2.8`；tag 为 `v0.2.8` |
 | 发版路径 | `CENTAG_RELEASE_PATH` | ✅ | 见下方「发版路径」 |
+| 发布渠道 | `CENTAG_RELEASE_CHANNEL` | 可选 | `github` / `npm` / `all`（默认 `all`） |
 | 是否草稿 | `CENTAG_RELEASE_DRAFT` | 可选 | `true`（默认建议）/ `false` |
 | 仓库 | `CENTAG_RELEASE_REPO` | 可选 | 默认 `atoml-ai/centag` |
 | 安装脚本 ref | `CENTAG_INSTALL_REF` | 可选 | 默认 tag `v<version>`（与 Release 对齐） |
 
+**发布渠道说明**：
+
+| 渠道 | 行为 |
+|------|------|
+| `github` | 仅 GitHub Release（tar.gz + checksums） |
+| `npm` | 仅 npm（`centag` + `centag-offline`） |
+| `all`（默认） | GitHub Release + npm |
+
+> ⚠️ 选 `npm` 渠道时，若为在线版 `centag`，GitHub Release 必须已存在（download.js 需从中下载二进制）。建议先发 GitHub Release 再发 npm，或选 `all`。
+
 入口层必须确认：
 
 1. 当前在**版本分支**上：`bash scripts/release/require-release-branch.sh --version <ver>`。
-2. `gh auth status` 成功（本地路径 A/B）。
+2. `gh auth status` 成功（本地路径 A/B，仅渠道含 `github` 时）。
 3. 工作区含要发布的 `scripts/install.sh`（已推到该版本分支；用户 curl 可用 tag `v<ver>`）。
 4. 版本与 `apps/wrap-npm/package.json` 的 `version` 对齐（或用户明确指定覆盖）。
 
@@ -81,7 +96,7 @@
 适用：已跑过构建，`${CENTAG_INSTALL_ROOT:-$HOME/.centag}/var/release/<version>/` 下已有 `centag-personal-*.tar.gz`、`checksums.txt`。
 
 ```bash
-# 0) 必须在版本分支（例：feature/v0.2.7）+ 登录
+# 0) 必须在版本分支（例：feature/v0.2.8）+ 登录
 git checkout "feature/v${CENTAG_RELEASE_VERSION}"   # 或 v${CENTAG_RELEASE_VERSION}
 bash scripts/release/require-release-branch.sh --version "${CENTAG_RELEASE_VERSION}"
 gh auth login   # 若尚未登录
@@ -117,6 +132,17 @@ gh release upload "v${CENTAG_RELEASE_VERSION}" \
 gh release edit "v${CENTAG_RELEASE_VERSION}" --repo "${CENTAG_RELEASE_REPO:-atoml-ai/centag}" --draft=false
 ```
 
+#### npm 发布（Path A / GitHub Release 完成后）
+
+仅当 `CENTAG_RELEASE_CHANNEL` 包含 `npm` 时执行：
+
+```bash
+# 确认 GitHub Release 已 publish（download.js 需要从 Release 下载二进制）
+CENTAG_NPM_TOKEN=xxx ./scripts/publish-centag-npm.sh
+```
+
+脚本会：交叉编译 → 构建前端 → 打包 → 发布 `centag` + `centag-offline` 到 npm。
+
 ### Path B — 脚本构建并上传
 
 会重新交叉编译（耗时长）。需 Go、Node、网络。
@@ -141,6 +167,30 @@ DRY_RUN=1 ./scripts/release/publish-binaries.sh --version "${CENTAG_RELEASE_VERS
 # 再按 Path A 用 gh release create/upload
 ```
 
+#### npm 发布（GitHub Release 完成后）
+
+仅当 `CENTAG_RELEASE_CHANNEL` 包含 `npm` 时执行：
+
+```bash
+CENTAG_NPM_TOKEN=xxx ./scripts/publish-centag-npm.sh
+```
+
+也可与 GitHub Release 一步完成（`all` 渠道）：
+
+```bash
+CENTAG_NPM_TOKEN=xxx GH_TOKEN=xxx ./scripts/publish-centag-npm.sh --release
+```
+
+#### 仅 npm（不发 GitHub Release）
+
+当 `CENTAG_RELEASE_CHANNEL=npm` 时，跳过 GitHub Release，直接发布 npm：
+
+```bash
+CENTAG_NPM_TOKEN=xxx ./scripts/publish-centag-npm.sh
+```
+
+> ⚠️ 在线版 `centag` 的 download.js 从 GitHub Release 下载二进制，确保对应版本的 Release 已存在。
+
 ### Path C — 推 tag，走 GitHub Actions
 
 适用：改动已在**版本分支**上；希望 CI 交叉编译。
@@ -155,9 +205,9 @@ git tag "v${CENTAG_RELEASE_VERSION}"
 git push origin "v${CENTAG_RELEASE_VERSION}"
 ```
 
-或：Actions → **release** → 选择分支 **`feature/v0.2.7`**（或 `v0.2.7`）→ **Run workflow**（在 `main` 上跑会被 `guard-branch` 拒绝）。
+或：Actions → **release** → 选择分支 **`feature/v0.2.8`**（或 `v0.2.8`）→ **Run workflow**（在 `main` 上跑会被 `guard-branch` 拒绝）。
 
-CI 默认组件：`personal`（含 `centag wrap`）。产物写入草稿（或按 input）Release。
+CI 默认组件：`personal`（含 `centag wrap`）。产物写入草稿（或按 input）Release。CI 会自动执行 `npm-publish` job 发布 npm 包（若 `CENTAG_RELEASE_CHANNEL` 包含 `npm`）。
 
 **注意**：workflow 里 `run: |` 块禁止出现**顶格**的 heredoc 正文（否则 YAML 解析失败）。改 notes 时保持缩进或用 `echo`。
 
@@ -165,7 +215,9 @@ CI 默认组件：`personal`（含 `centag wrap`）。产物写入草稿（或�
 
 ## 验收（发版后必做）
 
-### 1. Release 资产齐全（Agent 默认只做这一项）
+### 1. GitHub Release 资产齐全
+
+仅当 `CENTAG_RELEASE_CHANNEL` 包含 `github` 时执行：
 
 ```bash
 gh release view "v${CENTAG_RELEASE_VERSION}" --repo "${CENTAG_RELEASE_REPO:-atoml-ai/centag}"
@@ -180,7 +232,21 @@ gh release view "v${CENTAG_RELEASE_VERSION}" --repo "${CENTAG_RELEASE_REPO:-atom
 
 资产列表齐全即可将 Gate 5 标 ✅。**安装 / 部署验收由用户手动完成**；Agent **默认不跑**本机 `install.sh` 冒烟、curl 一行安装、起服务探测（耗时长）。
 
-### 2. 可选：本机安装冒烟（仅用户明确要求时）
+### 2. npm 包发布验证
+
+仅当 `CENTAG_RELEASE_CHANNEL` 包含 `npm` 时执行：
+
+```bash
+# 确认在线版已发布
+npm view centag version
+
+# 确认离线版已发布
+npm view centag-offline version
+```
+
+两个包版本号应与 Release tag 一致。
+
+### 3. 可选：本机安装冒烟（仅用户明确要求时）
 
 仅当用户在本轮明确要求「做冒烟 / 安装验收」时才执行；否则跳过并在汇报中写「安装验收：用户手动」。
 
@@ -207,10 +273,11 @@ test -x "$PREFIX/bin/centag" || test -x "$PREFIX/bin/centag-personal"
 2. 读取入口注入的 `CENTAG_RELEASE_*`；缺版本则停，要求入口补齐。
 3. **先跑** `bash scripts/release/require-release-branch.sh --version …`；不在版本分支则中止并提示切换分支。
 4. 按 `CENTAG_RELEASE_PATH` 选 A / B / C 执行；禁止擅自扩大组件集（不加 minimal/launcher）。
-5. Path A/B：确认 `gh auth`；失败则只汇报认证错误，不编造 token。
-6. 上传完成后执行「验收」§1（资产齐全）；**默认跳过** §2 安装冒烟。
-7. 汇报：Release URL、资产列表摘要、安装验收=用户手动；更新 `workflow_state` Step 6 / Gate 5。
-8. **禁止**在 skill 执行中改业务代码；workflow/脚本缺陷单独提修，不塞进发版步骤。
+5. Path A/B：若渠道含 `github`，确认 `gh auth`；失败则只汇报认证错误，不编造 token。
+6. 渠道含 `npm`：GitHub Release 完成后（或直接），执行 npm 发布：`CENTAG_NPM_TOKEN=xxx ./scripts/publish-centag-npm.sh`（Path C 由 CI 自动执行）。
+7. 执行「验收」：渠道含 `github` → §1 资产齐全；渠道含 `npm` → §2 npm 包验证；**默认跳过** §3 安装冒烟。
+8. 汇报：Release URL（若发 GitHub）、npm 包版本（若发 npm）、资产列表摘要、安装验收=用户手动；更新 `workflow_state` Step 6 / Gate 5。
+9. **禁止**在 skill 执行中改业务代码；workflow/脚本缺陷单独提修，不塞进发版步骤。
 
 ---
 
@@ -238,8 +305,10 @@ test -x "$PREFIX/bin/centag" || test -x "$PREFIX/bin/centag-personal"
 | `scripts/release/build-artifacts.sh` | 交叉编译 + checksums |
 | `scripts/release/publish-binaries.sh` | 构建并可选 `gh release`（`--release` 时强制版本分支） |
 | `scripts/release/require-release-branch.sh` | 版本分支门禁 |
-| `.github/workflows/release.yml` | tag / 手动触发 CI 发版（`guard-branch`） |
+| `scripts/publish-centag-npm.sh` | npm 发布（`centag` + `centag-offline`） |
+| `.github/workflows/release.yml` | tag / 手动触发 CI 发版（含 `npm-publish` job） |
 | `apps/wrap-npm/package.json` | 版本号对齐参考（npm 可选渠道，非默认 Release） |
+| `apps/centag-npm/package.json` | npm `centag` 包定义 |
 
 ---
 

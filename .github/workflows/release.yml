@@ -139,7 +139,10 @@ jobs:
             echo "### Install"
             echo ""
             echo '```bash'
-            echo "# pin version (recommended — no GitHub API lookup)"
+            echo "# npm (recommended for Node.js developers)"
+            echo "npm install -g centag"
+            echo ""
+            echo "# curl (one-line installer)"
             echo "curl -fsSL https://raw.githubusercontent.com/${REPO}/${TAG}/scripts/install.sh | bash -s ${V} && . \"\$HOME/.centag/env\""
             echo '```'
             echo ""
@@ -189,3 +192,101 @@ jobs:
               --notes-file "$NOTES_FILE" \
               "$OUT"/centag-*.tar.gz "$OUT"/checksums.txt
           fi
+
+  npm-publish:
+    needs: [guard-branch, publish]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Build & pack npm packages
+        run: |
+          DRY_RUN=1 bash scripts/publish-centag-npm.sh
+
+      - name: Publish to npm
+        if: "!github.event.inputs.draft"
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.CENTAG_NPM_TOKEN }}
+        run: |
+          NPM_DIR="apps/centag-npm"
+          VENDOR_DIR="${NPM_DIR}/bin/vendor"
+          mkdir -p "${VENDOR_DIR}"
+
+          # Cross-compile binaries for all platforms
+          PLATFORMS="darwin-amd64 darwin-arm64 linux-amd64 linux-arm64 windows-amd64 windows-arm64"
+          TAGS="protocol_openai,protocol_anthropic,protocol_gemini,protocol_openairesponses,backend_openai,backend_ollama,backend_anthropic,backend_gemini,backend_azure"
+          VERSION="${{ needs.guard-branch.outputs.version }}"
+
+          for p in $PLATFORMS; do
+            goos="${p%-*}"; goarch="${p##*-}"
+            ext=""; [[ "$goos" == "windows" ]] && ext=".exe"
+            out="${VENDOR_DIR}/${p}/centag-personal${ext}"
+            mkdir -p "$(dirname "$out")"
+            echo "==> build centag-personal ${p}"
+            (
+              cd dist/personal
+              GOWORK=off CGO_ENABLED=0 GOOS="${goos}" GOARCH="${goarch}" \
+                go build -trimpath -tags "$TAGS" -ldflags="-s -w" -o "$(realpath "$out")" .
+            )
+          done
+
+          # Copy config seed data
+          for p in $PLATFORMS; do
+            dest="${VENDOR_DIR}/${p}/config"
+            mkdir -p "${dest}"
+            if [[ -d config/initdata ]]; then
+              rm -rf "${dest}/initdata"
+              cp -R config/initdata "${dest}/initdata"
+              rm -rf "${dest}/initdata/postgresql" "${dest}/initdata/scripts" \
+                "${dest}/initdata/update" "${dest}/initdata/secrets" 2>/dev/null || true
+              find "${dest}/initdata" \( -name 'README.md' -o -name 'AGENTS.md' \) -delete 2>/dev/null || true
+              rm -rf "${dest}/initdata/pipeline-templates/personal" "${dest}/initdata/pipeline-templates/team"
+            fi
+            if [[ -d config/profiles/personal/initdata ]]; then
+              mkdir -p "${dest}/profiles/personal"
+              rm -rf "${dest}/profiles/personal/initdata"
+              cp -R config/profiles/personal/initdata "${dest}/profiles/personal/initdata"
+            fi
+          done
+
+          # Build frontend
+          STATIC_DIR="${NPM_DIR}/static"
+          mkdir -p "${STATIC_DIR}"
+          ( cd web && npm ci && CENTAG_INSTALL_ROOT="$PWD/.." CENTAG_EDITION=personal CENTAG_STATIC_DIR="$(realpath "${STATIC_DIR}")" npm run build )
+
+          # Generate checksums
+          : > "${VENDOR_DIR}/checksums.txt"
+          for p in $PLATFORMS; do
+            goos="${p%-*}"; goarch="${p##*-}"
+            ext=""; [[ "$goos" == "windows" ]] && ext=".exe"
+            f="${VENDOR_DIR}/${p}/centag-personal${ext}"
+            sha="$(sha256sum "$f" | awk '{print $1}')"
+            printf '%s  %s/centag-personal%s\n' "$sha" "$p" "$ext" >> "${VENDOR_DIR}/checksums.txt"
+          done
+
+          # Publish online version
+          echo "==> npm publish centag"
+          ( cd "${NPM_DIR}" && npm publish --access public )
+
+          # Publish offline version
+          echo "==> npm publish centag-offline"
+          OFFLINE_STAGE="$(mktemp -d)"
+          cp -R "${NPM_DIR}/bin" "${OFFLINE_STAGE}/bin"
+          cp -R "${NPM_DIR}/lib" "${OFFLINE_STAGE}/lib"
+          cp -R "${NPM_DIR}/static" "${OFFLINE_STAGE}/static"
+          cp "${NPM_DIR}/README.md" "${OFFLINE_STAGE}/README.md"
+          cp "${NPM_DIR}/package.offline.json" "${OFFLINE_STAGE}/package.json"
+          # Do NOT copy .npmignore — offline variant must include bin/vendor/ and static/
+          ( cd "${OFFLINE_STAGE}" && npm publish --access public )
+          rm -rf "${OFFLINE_STAGE}"

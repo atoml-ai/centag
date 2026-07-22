@@ -168,6 +168,10 @@ secrets/.env
 **/*.password.hash
 **/ca.key
 
+# npm centag-npm build artifacts (cross-compiled binaries, generated during publish)
+apps/centag-npm/bin/vendor/
+apps/centag-npm/static/
+
 # Build artifacts
 node.tar.xz
 
