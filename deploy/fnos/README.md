@@ -46,7 +46,7 @@ make package TARGET=fnos PACKAGE_MODE=docker PACKAGE_ARCH=amd64
 
 ```bash
 # 构建 Docker 镜像
-docker build -t centag:latest -f deploy/docker/Dockerfile .
+docker build -t centag-personal:latest -f deploy/docker/Dockerfile.dist --build-arg DIST_NAME=personal --build-arg INCLUDE_FRONTEND=true .
 
 # 指定架构
 ./deploy/fnos/build-fpk.sh --mode docker --arch amd64
