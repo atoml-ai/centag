@@ -3,6 +3,7 @@
 # Centag - Build, Run, Debug Script (Linux/macOS)
 
 set -euo pipefail
+shopt -s nullglob
 
 # Go module proxy (China mirror)
 export GOPROXY=${GOPROXY:-https://goproxy.cn,direct}
@@ -2441,11 +2442,14 @@ INITDATA_EOF
 }
 
 # ── Docker 运行容器（按版本）─────────────────────────────────────────
-# 参数: dist_name port initdata_path
+# 参数: dist_name port initdata_path reset_data
+#   reset_data=true 时，清空宿主机 var/docker-data/<dist_name>/storage 下的旧库/密码，
+#   让容器以当前 config/secrets/.env 的 LLM_PROXY_ADMIN_PASSWORD 重新 seed。
 _dist_docker_run() {
     local dist_name="${1:-minimal}"
     local port="${2:-20060}"
     local initdata_path="${3:-}"
+    local reset_data="${4:-false}"
 
     if [[ ! "$dist_name" =~ ^(minimal|personal|team)$ ]]; then
         print_error "无效的发行版名称: $dist_name (支持: minimal, personal, team)"
@@ -2472,86 +2476,55 @@ _dist_docker_run() {
         print_info "  - Redis: localhost:6379"
         print_info "  - Qdrant: http://localhost:6333"
         cd "${PROJECT_ROOT}"
-    else
-        print_info "启动容器: ${tag} (端口 ${port})..."
-        # 覆盖 secrets 里常见的 LLM_PROXY_LOG_OUTPUT=file：否则 zap 只写
-        # /app/bin/logs，docker logs 只能看到 entrypoint/插件 std 初始化行。
-        # 与 config/profiles/*/docker-compose.yaml 对齐：both + console + /app/logs。
-        # 20060=API/Web；8081=系统代理 MITM（wrap run / PAC 需要映射到宿主机）
-        #
-        # 持久化（personal/minimal，非 PG）：
-        #   二进制在 /app/bin/centag，相对路径 ./storage 会落到 /app/bin/storage（不可持久）。
-        #   必须用绝对 SQLITE_PATH=/app/storage/centag.db，并挂载宿主机目录。
-        local mitm_port="${LLM_PROXY_SYSTEM_PROXY_PORT:-8081}"
-        local data_root="${PROJECT_ROOT}/var/docker-data/${dist_name}"
-        mkdir -p "${data_root}/storage" "${data_root}/logs" "${data_root}/certs" "${data_root}/storage/memory-store"
-        print_info "持久化目录: ${data_root}/{storage,logs,certs}"
-        print_info "  - SQLite:  ${data_root}/storage/centag.db"
-        print_info "  - 配置:    personal→SQLite system_config；minimal→storage/proxy-config.yaml"
-        print_info "  - MITM CA: ${data_root}/certs/"
-        exec docker run --rm -it \
-            --name "centag-${dist_name}" \
-            --env-file "${PROJECT_ROOT}/config/secrets/.env" \
-            -e CENTAG_EDITION="${dist_name}" \
-            -e CENTAG_IN_DOCKER=1 \
-            -e CENTAG_DATA_DIR=/app/storage \
-            -e LLM_PROXY_DB_DRIVER=sqlite \
-            -e SQLITE_PATH=/app/storage/centag.db \
-            -e MEMORY_STORE_ROOT=/app/storage/memory-store \
-            -e LLM_PROXY_LOG_OUTPUT=both \
-            -e LLM_PROXY_LOG_FORMAT=console \
-            -e LLM_PROXY_LOG_PATH=/app/logs \
-            -p "${port}:20060" \
-            -p "${mitm_port}:8081" \
-            -v "${data_root}/storage:/app/storage" \
-            -v "${data_root}/logs:/app/logs" \
-            -v "${data_root}/certs:/app/bin/certs" \
-            "$tag"
-    fi
-}
-
-# ── Docker 构建（已弃用，代理到 docker build）──────────────────────
-# 用法: docker_build [be|fe|all]
-#   be/backend  - 代理到 dist docker-build minimal
-#   fe/frontend - 已弃用
-#   all         - 代理到 dist docker-build personal（默认）
-docker_build() {
-    check_docker
-    local target="${1:-all}"
-    target=$(normalize_type "$target")
-
-    case "$target" in
-        backend)
-            print_warn "'./start.sh docker build backend' 已弃用，请使用: ./start.sh docker build minimal"
-            _dist_docker_build "minimal" "" ""
-            ;;
-        frontend)
-            print_error "前端独立镜像已弃用，请使用全栈镜像: ./start.sh docker build personal"
-            exit 1
-            ;;
-        all)
-            print_info "代理到: ./start.sh docker build personal"
-            _dist_docker_build "personal" "" ""
-            ;;
-        *)
-            print_error "无效的 docker build 目标: $target (支持: minimal|personal|team；兼容: all|backend|be)"
-            exit 1
-            ;;
-    esac
-}
-
-# Docker 运行容器 (单容器模式)
-docker_run() {
-    check_docker
-
-    # 确保镜像存在
-    if ! docker image inspect centag:latest >/dev/null 2>&1; then
-        print_warn "镜像不存在，正在构建..."
-        docker_build
+        return 0
     fi
 
-    chmod +x "${PROJECT_ROOT}/scripts/docker/docker-run.sh"
-    "${PROJECT_ROOT}/scripts/docker/docker-run.sh"
+    print_info "启动容器: ${tag} (端口 ${port})..."
+    # 覆盖 secrets 里常见的 LLM_PROXY_LOG_OUTPUT=file：否则 zap 只写
+    # /app/bin/logs，docker logs 只能看到 entrypoint/插件 std 初始化行。
+    # 与 config/profiles/*/docker-compose.yaml 对齐：both + console + /app/logs。
+    # 20060=API/Web；8081=系统代理 MITM（wrap run / PAC 需要映射到宿主机）
+    #
+    # 持久化（personal/minimal，非 PG）：
+    #   二进制在 /app/bin/centag，相对路径 ./storage 会落到 /app/bin/storage（不可持久）。
+    #   必须用绝对 SQLITE_PATH=/app/storage/centag.db，并挂载宿主机目录。
+    local mitm_port="${LLM_PROXY_SYSTEM_PROXY_PORT:-8081}"
+    local data_root="${PROJECT_ROOT}/var/docker-data/${dist_name}"
+    mkdir -p "${data_root}/storage" "${data_root}/logs" "${data_root}/certs" "${data_root}/storage/memory-store"
+
+    if [ "$reset_data" = "true" ]; then
+        print_warn "重置 ${dist_name} 本地数据: ${data_root}/storage"
+        rm -f "${data_root}/storage/centag.db" "${data_root}/storage/admin.password.hash"
+        print_info "已删除旧数据库/密码文件，容器将重新 seed"
+    fi
+
+    print_info "持久化目录: ${data_root}/{storage,logs,certs}"
+    print_info "  - SQLite:  ${data_root}/storage/centag.db"
+    print_info "  - 配置:    personal→SQLite system_config；minimal→storage/proxy-config.yaml"
+    print_info "  - MITM CA: ${data_root}/certs/"
+    local docker_run_tty_flags=""
+    if [ -t 0 ]; then
+        docker_run_tty_flags="-it"
+    fi
+
+    exec docker run --rm ${docker_run_tty_flags} \
+        --name "centag-${dist_name}" \
+        --env-file "${PROJECT_ROOT}/config/secrets/.env" \
+        -e CENTAG_EDITION="${dist_name}" \
+        -e CENTAG_IN_DOCKER=1 \
+        -e CENTAG_DATA_DIR=/app/storage \
+        -e LLM_PROXY_DB_DRIVER=sqlite \
+        -e SQLITE_PATH=/app/storage/centag.db \
+        -e MEMORY_STORE_ROOT=/app/storage/memory-store \
+        -e LLM_PROXY_LOG_OUTPUT=both \
+        -e LLM_PROXY_LOG_FORMAT=console \
+        -e LLM_PROXY_LOG_PATH=/app/logs \
+        -p "${port}:20060" \
+        -p "${mitm_port}:8081" \
+        -v "${data_root}/storage:/app/storage" \
+        -v "${data_root}/logs:/app/logs" \
+        -v "${data_root}/certs:/app/bin/certs" \
+        "$tag"
 }
 
 # Docker Compose：附加 config/secrets/.env 作为「项目级」变量，供 compose 文件中 ${VAR} 插值（与容器内 env_file 无关）
@@ -2678,10 +2651,6 @@ profile_up() {
 
     profile_load_stack_helpers "$profile_dir"
     profile_ensure_stack_deps "$name" "$profile_dir"
-
-    if ! docker image inspect centag:latest >/dev/null 2>&1; then
-        print_warn "镜像 centag:latest 不存在，Docker Compose 将自动构建..."
-    fi
 
     local compose_cmd
     compose_cmd=$(profile_compose_cmd)
@@ -2874,9 +2843,9 @@ docker_up() {
 
     load_env
 
-    if ! docker image inspect centag:latest >/dev/null 2>&1; then
-        print_warn "主服务镜像 centag:latest 不存在，正在构建..."
-        docker_build
+    if ! docker image inspect centag-personal:latest >/dev/null 2>&1; then
+        print_warn "主服务镜像 centag-personal:latest 不存在，正在构建..."
+        _dist_docker_build personal "" ""
     fi
 
     # 检查 docker-compose 命令
@@ -2896,11 +2865,11 @@ docker_up() {
     echo "  PostgreSQL、Redis、Elasticsearch、Mem0 等请使用: ./start.sh stack …"
     echo ""
     print_info "示例:"
-    echo "  ./start.sh docker up              # 启动 Centag 容器（默认）"
+    echo "  ./start.sh docker up              # 启动 Centag 容器（默认 personal）"
     echo "  ./start.sh stack start base       # 启动基础中间件"
     echo ""
 
-    cd docker
+    cd "$PROJECT_ROOT/deploy/docker"
 
     docker_compose_invoke "$compose_cmd" up -d
     cd "$PROJECT_ROOT"
@@ -2963,9 +2932,9 @@ docker_debug() {
     load_env
 
     # 检查镜像是否存在
-    if ! docker image inspect centag:latest >/dev/null 2>&1; then
-        print_warn "主服务镜像 centag:latest 不存在，正在构建..."
-        docker_build
+    if ! docker image inspect centag-personal:latest >/dev/null 2>&1; then
+        print_warn "主服务镜像 centag-personal:latest 不存在，正在构建..."
+        _dist_docker_build personal "" ""
     fi
 
     # 编译本地二进制（强制为 linux/amd64 架构，容器需要）
@@ -3261,7 +3230,8 @@ docker_clean() {
     cd "$PROJECT_ROOT"
 
     # 删除主服务镜像
-    docker rmi centag:latest 2>/dev/null || true
+    docker rmi centag-personal:latest 2>/dev/null || true
+    docker rmi centag-minimal:latest 2>/dev/null || true
 
     print_success "清理完成"
 }
@@ -3277,9 +3247,9 @@ docker_pack() {
     local package_dir="release/${package_name}"
 
     # 确保镜像存在
-    if ! docker image inspect centag:latest >/dev/null 2>&1; then
+    if ! docker image inspect centag-personal:latest >/dev/null 2>&1; then
         print_warn "镜像不存在，正在构建..."
-        docker_build
+        _dist_docker_build personal "" ""
     fi
 
     # 创建打包目录
@@ -3287,7 +3257,7 @@ docker_pack() {
 
     # 导出主服务镜像
     print_info "导出主服务镜像..."
-    if docker save -o "${package_dir}/centag-image.tar" "centag:latest"; then
+    if docker save -o "${package_dir}/centag-image.tar" "centag-personal:latest"; then
         print_success "主服务镜像导出成功"
     else
         print_error "主服务镜像导出失败"
@@ -3300,8 +3270,6 @@ docker_pack() {
     print_info "复制配置文件..."
     mkdir -p "${package_dir}"
     cp deploy/docker/docker-compose.yaml "${package_dir}/docker-compose.yaml"
-    cp scripts/docker/docker-run.sh "${package_dir}/docker-run.sh"
-    chmod +x "${package_dir}/docker-run.sh"
     print_success "配置文件复制完成"
 
     # 生成加载脚本
@@ -3322,9 +3290,6 @@ echo "镜像加载完成！"
 echo ""
 echo "使用以下命令启动服务:"
 echo "  docker compose up -d"
-echo ""
-echo "或使用单容器模式:"
-echo "  ./docker-run.sh"
 LOADEOF
     chmod +x "${package_dir}/load-images.sh"
 
@@ -3336,7 +3301,6 @@ LOADEOF
 
 - `centag-image.tar` - 主服务镜像
 - `docker-compose.yaml` - Docker Compose 配置文件（仅 centag 服务）
-- `docker-run.sh` - 单容器启动脚本
 - `load-images.sh` - 镜像加载脚本
 
 中间件（PostgreSQL、Redis、Mem0 等）请使用 **deploy/stack** 子项目单独部署。
@@ -3424,7 +3388,7 @@ show_short_help() {
     echo -e "  ${GREEN}build${NC}    <personal|minimal> [--launcher] [--wrap]  构建发行版（Team → centag-pro ./start.sh）"
     echo -e "  ${GREEN}build${NC}    wrap                仅构建 centag-wrap"
     echo -e "  ${GREEN}docker${NC}   build <minimal|personal|team>   构建 Docker 镜像"
-    echo -e "  ${GREEN}docker${NC}   run   <minimal|personal|team>   运行 Docker 容器"
+    echo -e "  ${GREEN}docker${NC}   run   <minimal|personal|team> [--reset]  运行 Docker 容器"
     echo -e "  ${GREEN}clean${NC}    [build|install|all] [-y] 清理构建产物 / 已部署文件（~/.centag）"
     echo -e "  ${GREEN}pack${NC}     [--upload]              打包服务端更新包"
     echo -e "  ${GREEN}package${NC}  <fnos|...> [选项]       第三方系统/渠道打包（见 packaging.env）"
@@ -3781,11 +3745,11 @@ _help_docker() {
     echo -e "  ./start.sh docker <子命令> [参数]"
     echo ""
     echo -e "${CYAN}发行版操作:${NC}"
-    echo -e "  ${GREEN}build${NC} <minimal|personal|team>              构建 Docker 镜像"
-    echo -e "  ${GREEN}run${NC}   <minimal|personal|team> [port]       运行 Docker 容器"
+    echo -e "  ${GREEN}build${NC} <minimal|personal|team>              构建 Docker 镜像（统一使用 Dockerfile.dist）"
+    echo -e "  ${GREEN}run${NC}   <minimal|personal|team> [port] [--reset] [--initdata <path>]  运行 Docker 容器"
     echo ""
     echo -e "${CYAN}Compose 操作:${NC}"
-    echo -e "  ${GREEN}up${NC}                   启动 Centag 容器"
+    echo -e "  ${GREEN}up${NC}                   启动 Centag 容器（默认 personal）"
     echo -e "  ${GREEN}down${NC}                 停止并清理容器"
     echo -e "  ${GREEN}logs${NC} [service]       查看容器日志"
     echo -e "  ${GREEN}status${NC}               查看容器状态"
@@ -3795,12 +3759,17 @@ _help_docker() {
     echo -e "  ${GREEN}pack${NC}                 打包镜像为 tar.gz"
     echo ""
     echo -e "${YELLOW}注意:${NC} docker compose 仅编排 centag 容器；中间件请用 stack 命令"
+    echo -e "${YELLOW}提示:${NC} 若修改 config/secrets/.env 后仍无法登录，可能是旧 SQLite 库已 seed，"
+    echo -e "       可执行 ./start.sh docker run personal --reset 清空旧数据重新初始化"
     echo ""
     echo -e "${CYAN}示例:${NC}"
     echo -e "  ./start.sh docker build minimal   # 构建 minimal 镜像"
     echo -e "  ./start.sh docker run personal     # 运行 personal 容器"
+    echo -e "  ./start.sh docker run personal --reset  # 重置本地数据并运行"
     echo -e "  ./start.sh docker up              # Compose 启动"
     echo -e "  ./start.sh docker logs            # 查看日志"
+    echo -e "  ./start.sh docker down            # 停止服务"
+    echo ""
 }
 
 _help_webui() {
@@ -4873,20 +4842,34 @@ main() {
                     local edition="${1:-}"
                     if [ -z "$edition" ]; then
                         print_error "请指定发行版: minimal, personal, 或 team"
-                        echo "用法: $0 docker run <minimal|personal|team> [port]"
+                        echo "用法: $0 docker run <minimal|personal|team> [port] [--reset] [--initdata <path>]"
                         exit 1
                     fi
-                    local port="${2:-20060}"
+                    shift
+                    local port="20060"
                     local initdata_path=""
-                    # 检查 --initdata 参数
-                    shift 2 || true
+                    local reset_data="false"
                     while [ $# -gt 0 ]; do
                         case "$1" in
-                            --initdata) initdata_path="$2"; shift 2 ;;
-                            *) shift ;;
+                            --initdata)
+                                initdata_path="$2"
+                                shift 2
+                                ;;
+                            --reset)
+                                reset_data="true"
+                                shift
+                                ;;
+                            *)
+                                if [[ "$1" =~ ^[0-9]+$ ]]; then
+                                    port="$1"
+                                else
+                                    print_warn "忽略未知参数: $1"
+                                fi
+                                shift
+                                ;;
                         esac
                     done
-                    _dist_docker_run "$edition" "$port" "$initdata_path"
+                    _dist_docker_run "$edition" "$port" "$initdata_path" "$reset_data"
                     ;;
                 # ── Docker Compose 操作（保留）──
                 up)
@@ -4918,8 +4901,8 @@ main() {
                     echo "用法: $0 docker <子命令> [参数]"
                     echo ""
                     echo "发行版操作:"
-                    echo "  $0 docker build <minimal|personal|team>              构建 Docker 镜像"
-                    echo "  $0 docker run   <minimal|personal|team> [port]       运行 Docker 容器"
+                    echo "  $0 docker build <minimal|personal|team>                   构建 Docker 镜像"
+                    echo "  $0 docker run   <minimal|personal|team> [port] [--reset]  运行 Docker 容器"
                     echo ""
                     echo "Compose 操作:"
                     echo "  $0 docker up|down|logs|status|clean|pack|debug|restart"
