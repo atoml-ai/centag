@@ -10,7 +10,7 @@ services:
       args:
         DIST_NAME: personal
         INCLUDE_FRONTEND: "true"
-    image: centag:latest
+    image: centag-personal:latest
     container_name: centag-cached-app
     restart: unless-stopped
     env_file:

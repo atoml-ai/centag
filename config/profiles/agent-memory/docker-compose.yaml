@@ -88,7 +88,7 @@ services:
       args:
         DIST_NAME: team
         INCLUDE_FRONTEND: "true"
-    image: centag:latest
+    image: centag-team:latest
     container_name: centag-agent-memory-app
     restart: unless-stopped
     env_file:

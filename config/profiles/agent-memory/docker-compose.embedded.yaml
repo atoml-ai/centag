@@ -94,8 +94,11 @@ services:
   centag:
     build:
       context: ../../../
-      dockerfile: deploy/docker/Dockerfile
-    image: centag:latest
+      dockerfile: deploy/docker/Dockerfile.dist
+      args:
+        DIST_NAME: personal
+        INCLUDE_FRONTEND: "true"
+    image: centag-personal:latest
     container_name: centag-agent-memory-app
     restart: unless-stopped
     env_file:
