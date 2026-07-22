@@ -12,18 +12,20 @@ Docker 镜像构建、`docker-compose.yaml`（**仅 `centag` 服务**）、调�
 
 | 文件 | 用途 |
 |------|------|
-| `Dockerfile` | 主镜像构建（合并前后端） |
-| `Dockerfile.backend` | 后端单独构建 |
-| `Dockerfile.frontend` | 前端单独构建 |
-| `docker-compose.yaml` | 仅启动 `centag` 容器 |
-| `docker-compose.prod.yaml` | 生产环境（预构建镜像 + 前端） |
-| `docker-compose.debug.yaml` | 本地调试 override（挂载 `bin/centag`） |
+| `Dockerfile.dist` | 统一镜像构建（personal / minimal / team 共用） |
+| `docker-compose.yaml` | 仅启动 `centag` 容器（默认 personal） |
+| `docker-compose.prod.yaml` | 生产/Drone 部署（预构建统一镜像 + extra_hosts） |
+| `docker-compose.debug.yaml` | 本地调试 override（挂载 `~/.centag/lib/<edition>`） |
 
 ## 常用命令
 
 ```bash
-# 启动应用容器（需 config/secrets/.env 中已配置 PG_HOST 等指向可达的数据库）
-./start.sh docker up
+# 构建并运行 personal 单容器（数据挂载到 var/docker-data/personal）
+./start.sh docker build personal
+./start.sh docker run personal
+
+# 若修改 .env 后登录失败，用 --reset 清空旧 SQLite/密码重新 seed
+./start.sh docker run personal --reset
 
 # 调试模式（macOS / Linux 自动选 override）
 ./start.sh docker debug
