@@ -183,3 +183,5 @@ deploy/stack/.git
 
 generate-protocol-report
 test_results.json
+protocol-test-report.html
+test_results.json
