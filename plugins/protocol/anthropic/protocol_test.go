@@ -2,10 +2,13 @@ package anthropic
 
 import (
 	"encoding/json"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
 	"centag/core/pkg/plugin"
+
+	"github.com/gin-gonic/gin"
 )
 
 func TestFormatStreamChunk_TextContent(t *testing.T) {
@@ -359,4 +362,414 @@ func containsJSONField(s, field, expectedValue string) bool {
 		}
 	}
 	return false
+}
+
+
+
+func TestHandleResponse_Success(t *testing.T) {
+	p := &Protocol{}
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+
+	resp := &plugin.ProxyResponse{
+		Model:        "claude-3-5-sonnet-20240620",
+		Content:      "Hello from Claude",
+		FinishReason: "stop",
+		TokensUsed:   15,
+	}
+
+	err := p.HandleResponse(c, resp)
+	if err != nil {
+		t.Fatalf("HandleResponse returned error: %v", err)
+	}
+
+	if w.Code != 200 {
+		t.Errorf("expected status 200, got %d", w.Code)
+	}
+
+	var body map[string]interface{}
+	json.Unmarshal(w.Body.Bytes(), &body)
+
+	if body["role"] != "assistant" {
+		t.Errorf("expected role assistant, got %v", body["role"])
+	}
+	if body["model"] != "claude-3-5-sonnet-20240620" {
+		t.Errorf("expected model claude-3-5-sonnet-20240620, got %v", body["model"])
+	}
+	if body["stop_reason"] != "end_turn" {
+		t.Errorf("expected stop_reason end_turn, got %v", body["stop_reason"])
+	}
+	content, _ := body["content"].([]interface{})
+	if len(content) != 1 {
+		t.Errorf("expected 1 content block, got %d", len(content))
+	}
+	if cb, ok := content[0].(map[string]interface{}); ok {
+		if cb["text"] != "Hello from Claude" {
+			t.Errorf("expected text Hello from Claude, got %v", cb["text"])
+		}
+	}
+	usage, _ := body["usage"].(map[string]interface{})
+	if outTokens, _ := usage["output_tokens"].(float64); int(outTokens) != 15 {
+		t.Errorf("expected output_tokens 15, got %v", usage["output_tokens"])
+	}
+}
+
+func TestHandleResponse_Error(t *testing.T) {
+	p := &Protocol{}
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+
+	resp := &plugin.ProxyResponse{
+		Error: &plugin.ErrorResponse{
+			Type:    "invalid_request_error",
+			Message: "model not found",
+		},
+	}
+
+	err := p.HandleResponse(c, resp)
+	if err != nil {
+		t.Fatalf("HandleResponse returned error: %v", err)
+	}
+
+	if w.Code != 500 {
+		t.Errorf("expected status 500, got %d", w.Code)
+	}
+
+	var body map[string]interface{}
+	json.Unmarshal(w.Body.Bytes(), &body)
+
+	if body["type"] != "error" {
+		t.Errorf("expected type error, got %v", body["type"])
+	}
+	errObj, _ := body["error"].(map[string]interface{})
+	if errObj["message"] != "model not found" {
+		t.Errorf("expected error message model not found, got %v", errObj["message"])
+	}
+}
+
+func TestHandleResponse_ErrorDefaultType(t *testing.T) {
+	p := &Protocol{}
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+
+	resp := &plugin.ProxyResponse{
+		Error: &plugin.ErrorResponse{
+			Message: "something went wrong",
+		},
+	}
+
+	p.HandleResponse(c, resp)
+	if w.Code != 500 {
+		t.Errorf("expected status 500, got %d", w.Code)
+	}
+
+	var body map[string]interface{}
+	json.Unmarshal(w.Body.Bytes(), &body)
+	errObj, _ := body["error"].(map[string]interface{})
+	if errObj["type"] != "invalid_request_error" {
+		t.Errorf("expected default type invalid_request_error, got %v", errObj["type"])
+	}
+}
+
+func TestHandleResponse_WithToolCalls(t *testing.T) {
+	p := &Protocol{}
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+
+	resp := &plugin.ProxyResponse{
+		Model:        "claude-3-5-sonnet",
+		Content:      "",
+		FinishReason: "tool_calls",
+		TokensUsed:   42,
+		ToolCalls: []plugin.ToolCall{
+			{
+				ID:   "toolu_01ABC123",
+				Type: "function",
+				Function: plugin.FunctionCall{
+					Name:      "get_weather",
+					Arguments: "{\"location\": \"Paris\"}",
+				},
+			},
+		},
+	}
+
+	err := p.HandleResponse(c, resp)
+	if err != nil {
+		t.Fatalf("HandleResponse returned error: %v", err)
+	}
+
+	if w.Code != 200 {
+		t.Errorf("expected status 200, got %d", w.Code)
+	}
+
+	var body map[string]interface{}
+	json.Unmarshal(w.Body.Bytes(), &body)
+	if body["stop_reason"] != "tool_use" {
+		t.Errorf("expected stop_reason tool_use, got %v", body["stop_reason"])
+	}
+	content, _ := body["content"].([]interface{})
+	if len(content) != 1 {
+		t.Errorf("expected 1 content block, got %d", len(content))
+	}
+	if cb, ok := content[0].(map[string]interface{}); ok {
+		if cb["type"] != "tool_use" {
+			t.Errorf("expected type tool_use, got %v", cb["type"])
+		}
+		if cb["name"] != "get_weather" {
+			t.Errorf("expected name get_weather, got %v", cb["name"])
+		}
+	}
+}
+
+func TestHandleResponse_StopSequence(t *testing.T) {
+	p := &Protocol{}
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+
+	stopSeq := "\n\nHuman:"
+	resp := &plugin.ProxyResponse{
+		Model:        "claude-3-haiku",
+		Content:      "done",
+		FinishReason: "stop",
+		Metadata: map[string]interface{}{
+			"stop_sequence": stopSeq,
+		},
+	}
+
+	p.HandleResponse(c, resp)
+	var body map[string]interface{}
+	json.Unmarshal(w.Body.Bytes(), &body)
+	if body["stop_sequence"] != stopSeq {
+		t.Errorf("expected stop_sequence, got %v", body["stop_sequence"])
+	}
+}
+
+func TestHandleResponse_CacheTokens(t *testing.T) {
+	p := &Protocol{}
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+
+	resp := &plugin.ProxyResponse{
+		Model:        "claude-3-5-sonnet",
+		Content:      "cached response",
+		FinishReason: "stop",
+		TokensUsed:   100,
+		Metadata: map[string]interface{}{
+			"prompt_tokens":                int(500),
+			"cache_creation_input_tokens": int(200),
+			"cache_read_input_tokens":     int(300),
+		},
+	}
+
+	p.HandleResponse(c, resp)
+	var body map[string]interface{}
+	json.Unmarshal(w.Body.Bytes(), &body)
+	usage, _ := body["usage"].(map[string]interface{})
+	if input, _ := usage["input_tokens"].(float64); int(input) != 500 {
+		t.Errorf("expected input_tokens 500, got %v", usage["input_tokens"])
+	}
+	if cacheCreate, _ := usage["cache_creation_input_tokens"].(float64); int(cacheCreate) != 200 {
+		t.Errorf("expected cache_creation_input_tokens 200, got %v", usage["cache_creation_input_tokens"])
+	}
+	if cacheRead, _ := usage["cache_read_input_tokens"].(float64); int(cacheRead) != 300 {
+		t.Errorf("expected cache_read_input_tokens 300, got %v", usage["cache_read_input_tokens"])
+	}
+}
+
+func TestHandleResponse_EmptyContentDefaultStopReason(t *testing.T) {
+	p := &Protocol{}
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+
+	resp := &plugin.ProxyResponse{
+		Model:   "claude-3-haiku",
+		Content: "",
+	}
+
+	p.HandleResponse(c, resp)
+	var body map[string]interface{}
+	json.Unmarshal(w.Body.Bytes(), &body)
+	content, _ := body["content"].([]interface{})
+	if len(content) != 1 {
+		t.Errorf("expected 1 empty content block, got %d", len(content))
+	}
+}
+
+func TestValidateRequest_Success(t *testing.T) {
+	p := &Protocol{}
+	req := &plugin.ProxyRequest{
+		Model:    "claude-3-5-sonnet",
+		Messages: []plugin.Message{{Role: "user", Content: "hello"}},
+	}
+	if err := p.ValidateRequest(req); err != nil {
+		t.Errorf("expected success, got error: %v", err)
+	}
+}
+
+func TestValidateRequest_EmptyModel(t *testing.T) {
+	p := &Protocol{}
+	req := &plugin.ProxyRequest{
+		Messages: []plugin.Message{{Role: "user", Content: "hello"}},
+	}
+	if err := p.ValidateRequest(req); err == nil {
+		t.Errorf("expected error for empty model")
+	}
+}
+
+func TestValidateRequest_EmptyMessages(t *testing.T) {
+	p := &Protocol{}
+	req := &plugin.ProxyRequest{
+		Model: "claude-3-5-sonnet",
+	}
+	if err := p.ValidateRequest(req); err == nil {
+		t.Errorf("expected error for empty messages")
+	}
+}
+
+// [v0.2.8 G3] tool_use_id 提取测试
+func TestToolUseID_Extraction(t *testing.T) {
+	// 模拟 Anthropic 消息：assistant 发出 tool_use，user 回复 tool_result
+	messages := []Message{
+		{
+			Role: "assistant",
+			Content: []ContentBlock{
+				{Type: "text", Text: "Let me check"},
+				{Type: "tool_use", ID: "toolu_01ABC123", Name: "get_weather", Input: map[string]interface{}{"location": "Paris"}},
+			},
+		},
+		{
+			Role: "user",
+			Content: []ContentBlock{
+				{Type: "tool_result", ToolUseID: "toolu_01ABC123", Text: "Sunny, 25°C"},
+			},
+		},
+	}
+
+	result := convertAnthropicMessages(messages)
+	if len(result) != 2 {
+		t.Fatalf("expected 2 messages, got %d", len(result))
+	}
+
+	// assistant 消息应包含 tool_calls
+	if len(result[0].ToolCalls) != 1 {
+		t.Fatalf("expected 1 tool call, got %d", len(result[0].ToolCalls))
+	}
+	if result[0].ToolCalls[0].ID != "toolu_01ABC123" {
+		t.Errorf("expected tool call ID toolu_01ABC123, got %s", result[0].ToolCalls[0].ID)
+	}
+
+	// user 消息的 ToolCallID 应正确提取自 tool_result.tool_use_id
+	if result[1].ToolCallID != "toolu_01ABC123" {
+		t.Errorf("expected ToolCallID toolu_01ABC123, got %s", result[1].ToolCallID)
+	}
+}
+
+// [v0.2.8 R04] thinking 流式事件测试
+func TestFormatStreamChunk_Thinking(t *testing.T) {
+	p := &Protocol{}
+
+	// 模拟一个包含 reasoning_content 的 chunk
+	chunk := &plugin.StreamChunk{
+		ReasoningContent: "Let me think about this...",
+		Content:          "",
+		Done:             false,
+	}
+
+	result := p.FormatStreamChunk("claude-3-5-sonnet-20241022", chunk, 0)
+	if result == "" {
+		t.Fatal("expected non-empty result for thinking chunk")
+	}
+
+	// 应包含 thinking 事件（index=1）
+	if !strings.Contains(result, "event: content_block_start") {
+		t.Error("thinking chunk should contain content_block_start event")
+	}
+	if !strings.Contains(result, `"thinking"`) {
+		t.Error("thinking chunk should contain thinking type")
+	}
+	if !strings.Contains(result, "thinking_delta") {
+		t.Error("thinking chunk should contain thinking_delta event")
+	}
+	if !strings.Contains(result, "Let me think about this...") {
+		t.Error("thinking chunk should contain the reasoning content")
+	}
+	if !strings.Contains(result, `"index":1`) {
+		t.Error("thinking chunk should use index=1 (separate from text index=0)")
+	}
+}
+
+// [v0.2.8 G1] RawBody 存储为 map 测试
+func TestParseRequest_RawBodyIsMap(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	reqJSON := `{
+		"model": "claude-3-5-sonnet-20241022",
+		"max_tokens": 1024,
+		"messages": [
+			{"role": "user", "content": [{"type": "text", "text": "Hello"}]}
+		],
+		"thinking": {"type": "enabled", "budget_tokens": 10000},
+		"custom_field": "should_be_preserved"
+	}`
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest("POST", "/v1/messages", strings.NewReader(reqJSON))
+	c.Request.Header.Set("Content-Type", "application/json")
+
+	p := &Protocol{}
+	proxyReq, err := p.ParseRequest(c)
+	if err != nil {
+		t.Fatalf("ParseRequest failed: %v", err)
+	}
+
+	// RawBody 应为 map[string]interface{}
+	rawBodyMap, ok := proxyReq.RawBody.(map[string]interface{})
+	if !ok {
+		t.Fatalf("RawBody should be map[string]interface{}, got %T", proxyReq.RawBody)
+	}
+
+	// 应保留原始字段
+	if rawBodyMap["model"] != "claude-3-5-sonnet-20241022" {
+		t.Errorf("RawBody should contain model field")
+	}
+	if rawBodyMap["custom_field"] != "should_be_preserved" {
+		t.Errorf("RawBody should preserve unknown fields for backend passthrough")
+	}
+}
+
+// [v0.2.8] thinking 配置解析测试
+func TestParseRequest_Thinking(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	reqJSON := `{
+		"model": "claude-3-5-sonnet-20241022",
+		"max_tokens": 4096,
+		"messages": [
+			{"role": "user", "content": [{"type": "text", "text": "Solve this math problem"}]}
+		],
+		"thinking": {"type": "enabled", "budget_tokens": 10000}
+	}`
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest("POST", "/v1/messages", strings.NewReader(reqJSON))
+	c.Request.Header.Set("Content-Type", "application/json")
+
+	p := &Protocol{}
+	proxyReq, err := p.ParseRequest(c)
+	if err != nil {
+		t.Fatalf("ParseRequest failed: %v", err)
+	}
+
+	// Reasoning 应被正确映射
+	if !proxyReq.Reasoning.Specified {
+		t.Error("Reasoning.Specified should be true when thinking is enabled")
+	}
+	if proxyReq.Reasoning.BudgetTokens == nil {
+		t.Fatal("Reasoning.BudgetTokens should not be nil")
+	}
+	if *proxyReq.Reasoning.BudgetTokens != 10000 {
+		t.Errorf("expected BudgetTokens 10000, got %d", *proxyReq.Reasoning.BudgetTokens)
+	}
 }
