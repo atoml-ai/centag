@@ -258,7 +258,7 @@ goarch_to_docker_platform() {
   esac
 }
 
-# 为镜像仓库名附加架构后缀（centag:latest -> centag-arm64:latest）
+# 为镜像仓库名附加架构后缀（centag-personal:latest -> centag-personal-arm64:latest）
 with_arch_suffix() {
   local image="$1"
   local arch="$2"
@@ -402,7 +402,8 @@ echo ""
 if [ "$MODE" = "docker" ]; then
   # ----- Docker 模式 -----
   DOCKER_PLATFORM="$(goarch_to_docker_platform "$GOARCH")"
-  DOCKER_IMAGE_BASE="centag:latest"
+  DIST_NAME="$(edition_to_dist "$EDITION")"
+  DOCKER_IMAGE_BASE="centag-${DIST_NAME}:latest"
   DOCKER_IMAGE_BASE="$(with_image_prefix "$DOCKER_IMAGE_BASE" "$IMAGE_PREFIX")"
   DOCKER_IMAGE_TAG="$(with_arch_suffix "$DOCKER_IMAGE_BASE" "$GOARCH")"
 
@@ -412,8 +413,10 @@ if [ "$MODE" = "docker" ]; then
     echo "[1/5] Docker 镜像 ${DOCKER_IMAGE_TAG} 不存在，正在构建..."
     echo "      平台: ${DOCKER_PLATFORM}"
     docker build --platform "${DOCKER_PLATFORM}" \
+      --build-arg DIST_NAME="${DIST_NAME}" \
+      --build-arg INCLUDE_FRONTEND="true" \
       -t "${DOCKER_IMAGE_TAG}" \
-      -f "$REPO_ROOT/deploy/docker/Dockerfile" "$REPO_ROOT"
+      -f "$REPO_ROOT/deploy/docker/Dockerfile.dist" "$REPO_ROOT"
     echo "[OK] 镜像构建完成"
   else
     echo "[1/5] Docker 镜像: ${DOCKER_IMAGE_TAG} (${IMAGE_ID})"
@@ -449,10 +452,6 @@ if [ "$MODE" = "docker" ]; then
         "${APP_DIR}/docker/docker-compose.yaml"
     fi
   fi
-  if [ "$EDITION" = "minimal" ]; then
-    echo "[WARN] Docker 模式当前 Dockerfile 基于 dist/personal；minimal 请优先使用 --mode native"
-  fi
-
   mkdir -p "${APP_DIR}/config"
   write_runtime_env "${APP_DIR}/config"
 
