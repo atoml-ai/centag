@@ -10,8 +10,7 @@ scripts/
 ├── db/                 # 数据库脚本
 │   ├── db-migrate.sh
 │   └── init-postgres.sh
-├── deploy/docker/             # Docker 脚本
-│   └── docker-run.sh
+├── deploy/docker/      # Docker 脚本
 ├── cert/               # 证书脚本
 │   ├── llm-proxy-ca.crt
 │   ├── linux-cert-download.sh
@@ -52,7 +51,14 @@ make frontend
 ### Docker
 
 ```bash
-./scripts/docker/docker-run.sh
+# 构建并启动 personal 版容器（默认）
+./start.sh docker up
+
+# 交互式启动容器
+./start.sh docker run <edition>
+
+# 重置本地数据库并重新 seed（解决密码不一致问题）
+./start.sh docker run <edition> --reset
 ```
 
 ### 证书
