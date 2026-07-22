@@ -46,9 +46,44 @@ func DefaultProxyConfig() ProxyConfig {
 		ModeFTemplateEnabled: envBool("LLM_PROXY_MODE_F_TEMPLATE_ENABLED", false),
 		ModeMTemplateEnabled: envBool("LLM_PROXY_MODE_M_TEMPLATE_ENABLED", false),
 		ModeCTemplateEnabled: envBool("LLM_PROXY_MODE_C_TEMPLATE_ENABLED", false),
-		ModePTemplateEnabled: envBool("LLM_PROXY_MODE_P_TEMPLATE_ENABLED", false),
+		ModePTemplateEnabled:  envBool("LLM_PROXY_MODE_P_TEMPLATE_ENABLED", false),
+		RetryableStatusCodes:  DefaultRetryableStatusCodes(),
+		RetryableErrorCodes:   DefaultRetryableErrorCodes(),
+		TimeoutRetryable:      boolPtr(true),
+		NetworkRetryable:      boolPtr(true),
+		CircuitBreaker:        DefaultCircuitBreakerSettings(),
 	}
 }
+
+// DefaultRetryableStatusCodes 返回默认应触发重试/降级的 HTTP 状态码。
+func DefaultRetryableStatusCodes() []int {
+	return []int{429, 500, 502, 503, 504}
+}
+
+// DefaultRetryableErrorCodes 返回默认应触发重试/降级的提供方错误码。
+func DefaultRetryableErrorCodes() []string {
+	return []string{
+		"rate_limit_error",
+		"server_error",
+		"timeout",
+		"insufficient_quota",
+		"overloaded",
+		"capacity_exceeded",
+	}
+}
+
+// DefaultCircuitBreakerSettings 返回默认熔断器参数。
+func DefaultCircuitBreakerSettings() *CircuitBreakerSettings {
+	return &CircuitBreakerSettings{
+		FailureThreshold: 3,
+		SuccessThreshold: 2,
+		TimeoutSec:       60,
+		WindowSec:        60,
+		RateLimitWeight:  2,
+	}
+}
+
+func boolPtr(v bool) *bool { return &v }
 
 // DefaultCacheConfig returns sensible cache defaults.
 func DefaultCacheConfig() CacheConfig {

@@ -45,6 +45,11 @@ func getBackendManager() BackendManager {
 	return backendManager
 }
 
+// GetBackendManager returns the global backend manager (exported for fallback policy store).
+func GetBackendManager() BackendManager {
+	return backendManager
+}
+
 // Set replaces the global runtime config.  Called by LoadFromDB.
 func Set(cfg *Config) {
 	mu.Lock()
@@ -224,6 +229,25 @@ type ProxyConfig struct {
 	PipelineConfig *PipelineConfig `json:"pipeline_config,omitempty"`
 	// FallbackConfig 降级模式配置
 	FallbackConfig *FallbackConfig `json:"fallback_config,omitempty"`
+	// RetryableStatusCodes 哪些 HTTP 状态码应触发重试/降级（热生效）
+	RetryableStatusCodes []int `json:"retryable_status_codes,omitempty"`
+	// RetryableErrorCodes 提供方返回的错误码列表（热生效）
+	RetryableErrorCodes []string `json:"retryable_error_codes,omitempty"`
+	// TimeoutRetryable 超时是否触发重试/降级（热生效）
+	TimeoutRetryable *bool `json:"timeout_retryable,omitempty"`
+	// NetworkRetryable 网络错误是否触发重试/降级（热生效）
+	NetworkRetryable *bool `json:"network_retryable,omitempty"`
+	// CircuitBreaker 熔断器配置（热生效）
+	CircuitBreaker *CircuitBreakerSettings `json:"circuit_breaker,omitempty"`
+}
+
+// CircuitBreakerSettings 熔断器可配置参数（热生效）。
+type CircuitBreakerSettings struct {
+	FailureThreshold int `json:"failure_threshold"` // 窗口内失败次数触发熔断（默认 3）
+	SuccessThreshold int `json:"success_threshold"` // 半开状态恢复所需成功次数（默认 2）
+	TimeoutSec       int `json:"timeout_sec"`        // 熔断持续秒数（默认 60）
+	WindowSec        int `json:"window_sec"`         // 滑动窗口秒数（默认 60）
+	RateLimitWeight  int `json:"rate_limit_weight"`  // 429 重试-after 权重（默认 2，即1次429计为2次失败）
 }
 
 // PipelineConfig 流水线模式配置
