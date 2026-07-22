@@ -15,6 +15,8 @@ FROM docker.m.daocloud.io/library/node:20-alpine AS frontend-builder
 
 ARG INCLUDE_FRONTEND=true
 
+ENV CENTAG_STATIC_DIR=/bin/server/static
+
 WORKDIR /apps
 
 RUN npm config set registry https://registry.npmmirror.com
@@ -52,6 +54,7 @@ WORKDIR /app
 # 先复制 go.mod 和 go.sum（利用缓存，只有依赖变化时才重新下载）
 COPY core/go.mod core/go.sum* ./core/
 COPY plugins/*/go.mod plugins/*/go.sum* ./plugins/
+COPY apps/wrap/go.mod apps/wrap/go.sum* ./apps/wrap/
 COPY dist/${DIST_NAME}/go.mod dist/${DIST_NAME}/go.sum* ./dist/${DIST_NAME}/
 
 # 使用 BuildKit cache mount 缓存 go mod download
@@ -63,6 +66,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 # 复制全部源码（保持目录结构，让 go.mod 的 replace 指令正确解析）
 COPY core/ ./core/
 COPY plugins/ ./plugins/
+COPY apps/wrap/ ./apps/wrap/
 COPY dist/${DIST_NAME}/ ./dist/${DIST_NAME}/
 
 # 在 dist 目录内下载依赖（使用 cache mount 加速）
@@ -71,12 +75,23 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     go mod download
 
 # 编译（使用 cache mount 加速构建缓存）
-# BUILD_TAGS 由 start.sh 通过 _get_dist_tags() 动态生成，不再硬编码
+# BUILD_TAGS 可由 start.sh 通过 _get_dist_tags() 注入；未注入时按 DIST_NAME 使用默认 tags。
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
+    TAGS="${BUILD_TAGS}"; \
+    if [ -z "$TAGS" ]; then \
+        case "${DIST_NAME}" in \
+            minimal) \
+                TAGS="minimal,protocol_openai,protocol_anthropic,backend_openai,backend_ollama,backend_anthropic" \
+                ;; \
+            personal|team) \
+                TAGS="protocol_openai,protocol_anthropic,protocol_gemini,protocol_openairesponses,backend_openai,backend_ollama,backend_anthropic,backend_gemini,backend_azure" \
+                ;; \
+        esac; \
+    fi; \
     cd dist/${DIST_NAME} && \
-    if [ -n "${BUILD_TAGS}" ]; then \
-        go build -tags "${BUILD_TAGS}" \
+    if [ -n "$TAGS" ]; then \
+        go build -tags "$TAGS" \
             -ldflags "-s -w -X 'main.Version=${VERSION}' -X 'main.BuildTime=${BUILD_TIME}'" \
             -o /app/bin/centag \
             main.go; \
@@ -86,6 +101,13 @@ RUN --mount=type=cache,target=/go/pkg/mod \
             -o /app/bin/centag \
             main.go; \
     fi
+
+# ============================================================
+# 默认 initdata build context：提供空占位 zip，避免 --build-context 未提供时
+# 去 Docker Hub 拉取名为 initdata 的镜像。start.sh 可通过 --build-context 覆盖。
+# ============================================================
+FROM scratch AS initdata
+COPY deploy/docker/initdata-empty/initdata.zip /initdata.zip
 
 # ============================================================
 # 阶段 3：运行时
@@ -157,4 +179,4 @@ EXPOSE 20060
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
     CMD curl -fsS http://localhost:20060/health || exit 1
 
-CMD ["./entrypoint.sh"]
+CMD ["./entrypoint.sh", "./bin/centag"]
