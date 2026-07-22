@@ -69,13 +69,8 @@ generate_secrets_file() {
     local admin_api_key
     local api_key_storage_secret
 
-    if [ "$use_same_password" = "true" ]; then
-        admin_password=$(generate_password 32)
-        print_info "管理员使用随机口令"
-    else
-        admin_password=$(generate_password 32)
-        print_info "管理员使用随机口令（独立）"
-    fi
+    admin_password="centag123"
+    print_info "管理员使用固定口令: centag123"
 
     admin_api_key=$(generate_api_key "llmproxy" 32)
     if command -v openssl >/dev/null 2>&1; then
