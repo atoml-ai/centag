@@ -1,76 +1,42 @@
 # ============================================================
-# Centag - 生产环境部署（CI/CD 使用预构建镜像）
+# Centag - 生产/Drone 部署（预构建统一镜像）
 # ============================================================
 # 使用方式：
-#   # Drone CI 自动注入环境变量，直接运行：
-#   docker compose -f docker-compose.prod.yaml up -d
+#   cd deploy/docker
+#   set -a && source ../../config/secrets/.env && set +a
+#   HOST_IP=192.168.1.5 docker compose -f docker-compose.prod.yaml up -d
 #
-#   # 本地手动部署，先导出变量再运行：
-#   set -a && source ./config/secrets/.env && set +a
-#   BACKEND_IMAGE=xxx FRONTEND_IMAGE=xxx docker compose -f docker-compose.prod.yaml up -d
-#
-# 此文件不依赖任何绝对路径，适用于所有环境。
-# 所有密钥通过环境变量注入（Drone Secrets 或本地 source .env）。
+# 所有密钥通过环境变量或 ../../config/secrets/.env 注入。
+# 中间件（PG/Redis/ES 等）由 deploy/stack 单独编排，此处仅通过 extra_hosts 解析域名。
 # ============================================================
 
 name: centag-prod
 
 services:
-
-  # ----------------------------------------------------------
-  # 后端 API 服务
-  # ----------------------------------------------------------
-  centag-backend:
-    image: ${BACKEND_IMAGE:-registry.atoml.net:20050/owner/centag-backend:latest}
-    container_name: centag-backend
+  centag:
+    image: ${CENTAG_IMAGE:-centag-personal:latest}
+    pull_policy: if_not_present
+    container_name: centag
     restart: unless-stopped
-    # 所有配置通过环境变量传入，无需挂载 .env 文件
-    # Drone: 从 Drone Secrets 注入；本地: source config/secrets/.env 后运行
-    environment:
-      # 宿主机IP配置（用于容器内访问宿主机中间件）
-      - HOST_IP=${HOST_IP:-192.168.1.5}
-      # PostgreSQL 配置（初始化存储 postgresql-main 所需）
-      # 注意：POSTGRES_HOST 不设置，让代码使用 HOST_IP 作为默认值
-      - POSTGRES_PORT=${POSTGRES_PORT:-5432}
-      - POSTGRES_USER=${POSTGRES_USER:-postgres}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-}
-      - POSTGRES_DB=${POSTGRES_DB:-centag}
-      # Redis 配置（默认禁用；prod 无 redis 容器，使用外部域名）
-      - REDIS_ENABLED=${REDIS_ENABLED:-false}
-      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
-      - REDIS_DB=${REDIS_DB:-0}
-      # Elasticsearch 配置（默认禁用；prod 无 es 容器，使用外部域名）
-      - ELASTICSEARCH_ENABLED=${ELASTICSEARCH_ENABLED:-false}
-      - ELASTICSEARCH_USERNAME=${ELASTICSEARCH_USERNAME:-elastic}
-      - ELASTICSEARCH_PASSWORD=${ELASTICSEARCH_PASSWORD:-}
-      # ChromaDB 配置
-      # 注意：不设置 CHROMADB_ADDR，让代码使用 HOST_IP 作为默认值
-      # Ollama 配置（默认禁用；prod 无 ollama 容器，使用外部域名）
-      - OLLAMA_ENABLED=${OLLAMA_ENABLED:-false}
-      - OLLAMA_DEFAULT_MODEL=${OLLAMA_DEFAULT_MODEL:-bge-m3}
-      - OLLAMA_API_KEY=${OLLAMA_API_KEY:-}
-      # 管理员初始账号（仅首次空库 seed 时生效）；API Key 请在 Web UI 中创建
-      - LLM_PROXY_ADMIN_USERNAME=${LLM_PROXY_ADMIN_USERNAME:-admin}
-      - LLM_PROXY_ADMIN_PASSWORD=${LLM_PROXY_ADMIN_PASSWORD:-}
-      # 服务配置
-      - SERVER_PORT=${SERVER_PORT:-20060}
-      - SERVER_HOST=${SERVER_HOST:-0.0.0.0}
-      - LOG_LEVEL=${LOG_LEVEL:-info}
-      - TZ=Asia/Shanghai
-    # 使用域名解析连接宿主机中间件：将各域名解析为 HOST_IP（Drone 注入或本地 source .env）
-    # 本地调试时在宿主机 /etc/hosts 把上述域名指到 127.0.0.1 即可
-    extra_hosts:
-      - "pg.atoml.net:${HOST_IP}"
-      - "es.atoml.net:${HOST_IP}"
-      - "redis.atoml.net:${HOST_IP}"
-      - "chromadb.atoml.net:${HOST_IP}"
-      - "ollama.atoml.net:${HOST_IP}"
+    env_file:
+      - ../../config/secrets/.env
+    ports:
+      - "${LLM_PROXY_SERVER_PORT:-20060}:20060"
+      - "${LLM_PROXY_SYSTEM_PROXY_PORT:-8081}:8081"
+    networks:
+      - centag-network
     volumes:
       - centag_storage:/app/storage
       - centag_logs:/app/logs
-    # 与主 Dockerfile 一致：entrypoint 对命名卷 chown 后以 llmproxy 运行，勿在此固定 user:1001
-    networks:
-      - centag-network
+      - ../../config/initdata:/app/config/initdata:ro
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+    extra_hosts:
+      - "pg.atoml.net:${HOST_IP:-host-gateway}"
+      - "es.atoml.net:${HOST_IP:-host-gateway}"
+      - "redis.atoml.net:${HOST_IP:-host-gateway}"
+      - "chromadb.atoml.net:${HOST_IP:-host-gateway}"
+      - "ollama.atoml.net:${HOST_IP:-host-gateway}"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:20060/health"]
       interval: 30s
@@ -78,36 +44,13 @@ services:
       retries: 3
       start_period: 15s
 
-  # ----------------------------------------------------------
-  # 前端 Nginx 服务
-  # nginx.frontend.conf 将 /api/ /v1/ 反向代理到 centag-backend:20060
-  # ----------------------------------------------------------
-  centag-frontend:
-    image: ${FRONTEND_IMAGE:-registry.atoml.net:20050/owner/centag-frontend:latest}
-    container_name: centag-frontend
-    restart: unless-stopped
-    ports:
-      - "${FRONTEND_PORT:-20060}:80"
-    networks:
-      - centag-network
-    depends_on:
-      centag-backend:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost/static/"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
-
-# ============================================================
-# 数据卷和网络配置
-# ============================================================
 volumes:
   centag_storage:
-    external: true
+    driver: local
   centag_logs:
-    external: true
+    driver: local
 
 networks:
   centag-network:
+    driver: bridge
+    name: centag-network
