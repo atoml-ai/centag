@@ -26,6 +26,10 @@ export function backendsNav(opts?: LeafOpts): NavItem {
   return withOpts({ id: 'backends', label: '后端', icon: 'Connection', path: '/backends' }, opts)
 }
 
+export function fallbackPolicyNav(opts?: LeafOpts): NavItem {
+  return withOpts({ id: 'fallback-policies', label: '降级策略', icon: 'Switch', path: '/fallback-policies' }, opts)
+}
+
 export function pipelinesNav(opts?: LeafOpts): NavItem {
   return withOpts({ id: 'pipelines', label: '策略', icon: 'Share', path: '/pipelines' }, opts)
 }
@@ -234,6 +238,9 @@ export function buildWorkerNav(caps: Capabilities): NavItem[] {
   }
   if (caps.systemConfig) {
     systemChildren.push(configNav())
+  }
+  if (caps.manageBackends) {
+    systemChildren.push(fallbackPolicyNav())
   }
   if (systemChildren.length) {
     moreChildren.push(

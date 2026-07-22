@@ -38,6 +38,7 @@ const AgentSetup = () => import('@/views/AgentSetup.vue')
 const AgentProviders = () => import('@/views/AgentProviders.vue')
 const StorageKVBrowser = () => import('@/views/StorageKVBrowser.vue')
 const Settings = () => import('@/views/Settings.vue')
+const FallbackPolicy = () => import('@/views/FallbackPolicy.vue')
 const routes = [
   // ── Public ────────────────────────────────────────────────────────────────
   {
@@ -51,6 +52,7 @@ const routes = [
   { path: '/', redirect: '/dashboard' },
   { path: '/dashboard', name: 'Dashboard', component: Dashboard, meta: { title: '概览' } },
   { path: '/backends', name: 'Backends', component: Backends, meta: { title: '后端管理' } },
+  { path: '/fallback-policies', name: 'FallbackPolicy', component: FallbackPolicy, meta: { title: '降级策略' } },
   { path: '/settings', name: 'Settings', component: Settings, meta: { title: '设置' } },
   { path: '/cache', name: 'Cache', component: Cache, meta: { title: '缓存管理' } },
   { path: '/evaluation', name: 'Evaluation', component: Evaluation, meta: { title: '缓存评估管理' } },

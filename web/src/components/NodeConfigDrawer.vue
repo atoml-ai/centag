@@ -745,6 +745,24 @@
         </div>
       </el-form-item>
 
+      <el-form-item label="降级策略">
+        <el-select
+          v-model="localNode.fallback_policy_id"
+          clearable
+          placeholder="继承流水线默认"
+          style="width: 100%"
+        >
+          <el-option label="继承流水线默认" value="" />
+          <el-option
+            v-for="policy in fallbackPolicies"
+            :key="policy.id"
+            :label="`${policy.name} (${policy.id})`"
+            :value="policy.id"
+          />
+        </el-select>
+        <div class="form-tip">为空时使用流水线全局默认策略；可单独指定此节点的降级策略</div>
+      </el-form-item>
+
       <!-- 执行条件 (tool_call_injector 使用专属条件字段) -->
       <el-form-item v-if="localNode.type !== 'tool_call_injector'" label="执行条件 (Condition)">
         <el-input 
@@ -2014,7 +2032,25 @@ watch(() => props.visible, (val) => {
   onDrawerOpened()
 }, { immediate: true })
 
+// 降级策略列表
+const fallbackPolicies = ref<any[]>([])
+const loadingFallbackPolicies = ref(false)
+
+async function loadFallbackPolicies() {
+  loadingFallbackPolicies.value = true
+  try {
+    const { getFallbackPolicies } = await import('../api/fallback')
+    const res = await getFallbackPolicies()
+    fallbackPolicies.value = Array.isArray(res) ? res : Array.isArray((res as any)?.data) ? (res as any).data : []
+  } catch (err) {
+    console.error('Failed to load fallback policies', err)
+  } finally {
+    loadingFallbackPolicies.value = false
+  }
+}
+
 onMounted(() => {
+  loadFallbackPolicies()
   if (props.visible) {
     onDrawerOpened()
   }
