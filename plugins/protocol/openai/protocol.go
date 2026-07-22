@@ -208,14 +208,26 @@ func (p *Protocol) ParseRequest(c *gin.Context) (*plugin.ProxyRequest, error) {
 	if openaiReq.ServiceTier != "" {
 		req.Metadata["service_tier"] = openaiReq.ServiceTier
 	}
+
+	// [v0.2.9 P2] Modalities / Audio / Logprobs / TopLogprobs / Metadata / Store 显式映射
+	if len(openaiReq.Modalities) > 0 {
+		req.Modalities = openaiReq.Modalities
+	}
+	if openaiReq.Audio != nil {
+		req.Metadata["audio"] = openaiReq.Audio
+	}
+	if openaiReq.Logprobs != nil {
+		req.Metadata["logprobs"] = *openaiReq.Logprobs
+	}
+	if openaiReq.TopLogprobs != nil {
+		req.Metadata["top_logprobs"] = *openaiReq.TopLogprobs
+	}
 	if openaiReq.Store != nil {
 		req.Metadata["store"] = *openaiReq.Store
 	}
 	if len(openaiReq.Metadata) > 0 {
 		req.Metadata["client_metadata"] = openaiReq.Metadata
 	}
-
-	// [G7] Modalities / Audio / Logprobs / TopLogprobs 为 P2 占位，本轮不映射，仅 RawBody 透传
 
 	// 收集请求头
 	for k, v := range c.Request.Header {
@@ -301,6 +313,12 @@ func (p *Protocol) HandleResponse(c *gin.Context, resp *plugin.ProxyResponse) er
 		usage.CompletionTokensDetails = details
 	}
 
+	// [v0.2.9 P2] logprobs：从后端响应提取，无则省略
+	var logprobs *ChoiceLogprobs
+	if lp, ok := resp.Metadata["logprobs"].(*ChoiceLogprobs); ok && lp != nil {
+		logprobs = lp
+	}
+
 	// 转换为 OpenAI 格式的响应
 	openaiResp := ChatCompletionResponse{
 		ID:      "chatcmpl-" + generateID(),
@@ -312,6 +330,7 @@ func (p *Protocol) HandleResponse(c *gin.Context, resp *plugin.ProxyResponse) er
 				Index:        0,
 				Message:      message,
 				FinishReason: finishReason,
+				Logprobs:     logprobs,
 			},
 		},
 		Usage: usage,
