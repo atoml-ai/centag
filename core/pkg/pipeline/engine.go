@@ -1417,10 +1417,40 @@ func (e *PipelineEngine) executeLayerNode(ctx context.Context, graph *ExecutionG
 	}
 	recordNodeCircuitOutcome(resolvedBackendID, err == nil, skippedCircuit)
 	if err != nil {
-		execNode.Status = StatusFailed
-		execNode.Error = err
+		// 尝试策略降级：节点级 → 流水线级
+		if policy := e.resolveFallbackPolicy(execNode.Config, pipeline); policy != nil {
+			fallbackOutput, fallbackErr := e.executePolicyFallback(ctx, execNode.Config, nodeInput, policy)
+			if fallbackErr == nil && fallbackOutput != nil {
+				output = fallbackOutput
+				execNode.Status = StatusSuccess
+				execNode.Output = output
+				e.logger.Info("node execution succeeded via fallback policy",
+					"node_id", nodeID,
+					"policy_id", policy.ID,
+				)
+				// 记录降级元数据
+				if output.Metadata == nil {
+					output.Metadata = make(map[string]interface{})
+				}
+				output.Metadata["fallback_policy_id"] = policy.ID
+				output.Metadata["fallback_used"] = true
+				output.Metadata["fallback_from_node"] = nodeID
+				output.Metadata["fallback_from_backend"] = resolvedBackendID
+			} else {
+				e.logger.Warn("fallback policy exhausted",
+					"node_id", nodeID,
+					"policy_id", policy.ID,
+					"error", fallbackErr,
+				)
+			}
+		}
 
-		if pipeline.GlobalConfig.BypassOnError {
+		// 如果降级未成功，继续原有错误处理
+		if output == nil {
+			execNode.Status = StatusFailed
+			execNode.Error = err
+
+			if pipeline.GlobalConfig.BypassOnError {
 			bypassReason := MaskSensitiveData(err.Error())
 			e.logger.Warn("node execution failed, bypass with fallback",
 				"node_id", nodeID,
@@ -1448,11 +1478,12 @@ func (e *PipelineEngine) executeLayerNode(ctx context.Context, graph *ExecutionG
 			}
 			e.logger.Warn("bypassing error with fallback output", "node_id", nodeID)
 		} else {
-			e.logger.Error("node execution failed",
-				"node_id", nodeID,
-				"error", err,
-			)
-			return fmt.Errorf("node %s execution failed: %w", nodeID, err)
+				e.logger.Error("node execution failed",
+					"node_id", nodeID,
+					"error", err,
+				)
+				return fmt.Errorf("node %s execution failed: %w", nodeID, err)
+			}
 		}
 	} else {
 		execNode.Status = StatusSuccess
@@ -1519,6 +1550,114 @@ func hasUsableBypassOutput(output *NodeOutput) bool {
 		return true
 	}
 	return false
+}
+
+// resolveFallbackPolicy 解析节点应使用的降级策略。
+// 优先级：节点级 FallbackPolicyID → 流水线级 FallbackPolicyID → 自动策略。
+func (e *PipelineEngine) resolveFallbackPolicy(nodeConfig PipelineNodeConfig, pipeline *AgentPatternPipeline) *config.GlobalFallbackPolicy {
+	store := config.GetFallbackPolicyStore()
+
+	// 1. 节点级策略
+	if nodeConfig.FallbackPolicyID != "" {
+		if p := store.GetEnabled(nodeConfig.FallbackPolicyID); p != nil {
+			return p
+		}
+	}
+
+	// 2. 流水线级策略
+	if pipeline.GlobalConfig.FallbackPolicyID != "" {
+		if p := store.GetEnabled(pipeline.GlobalConfig.FallbackPolicyID); p != nil {
+			return p
+		}
+	}
+
+	// 3. 流水线仍使用旧版 FallbackGroups 时，不走新策略
+	if len(pipeline.GlobalConfig.FallbackGroups) > 0 {
+		return nil
+	}
+
+	// 4. 自动策略（同模型跨后端）
+	model := nodeConfig.Config.Model
+	if model == "" {
+		model = "{{requested_model}}"
+	}
+	return store.BuildAutoPolicy(model)
+}
+
+// executePolicyFallback 执行策略降级：按优先级依次尝试备选 backend+model。
+func (e *PipelineEngine) executePolicyFallback(
+	ctx context.Context,
+	originalConfig PipelineNodeConfig,
+	input *NodeInput,
+	policy *config.GlobalFallbackPolicy,
+) (*NodeOutput, error) {
+	originalBackend := originalConfig.Config.Backend
+	originalModel := originalConfig.Config.Model
+
+	for _, rule := range policy.SortedRules() {
+		// 解析占位符 {{system.default_backend}} / {{requested_model}} 等
+		resolvedBackend, resolvedModel := ResolveVirtualVars(rule.BackendID, rule.Model)
+
+		// 对于 {{requested_model}}，使用客户端请求的模型
+		if rule.Model == "{{requested_model}}" {
+			if input != nil && input.Metadata != nil {
+				if m, ok := input.Metadata["model"].(string); ok && m != "" {
+					resolvedModel = m
+				}
+			}
+			if resolvedModel == "" {
+				resolvedModel = originalModel
+			}
+		}
+
+		// 跳过与原始配置相同的规则（解析后比较）
+		if resolvedBackend == originalBackend && resolvedModel == originalModel {
+			continue
+		}
+
+		// 跳过熔断中的后端
+		if isCircuitOpenForBackend(resolvedBackend) {
+			e.logger.Warn("fallback rule skipped: circuit breaker open",
+				"policy_id", policy.ID,
+				"backend_id", resolvedBackend,
+			)
+			continue
+		}
+
+		// 构建降级节点配置
+		fallbackConfig := originalConfig
+		fallbackConfig.Config.Backend = resolvedBackend
+		fallbackConfig.Config.Model = resolvedModel
+		fallbackConfig.FallbackPolicyID = "" // 防止递归降级
+
+		// 设置超时
+		if rule.TimeoutSec > 0 {
+			fallbackConfig.Timeout = rule.TimeoutSec
+		}
+
+		e.logger.Info("trying fallback rule",
+			"policy_id", policy.ID,
+			"backend_id", resolvedBackend,
+			"model", resolvedModel,
+			"priority", rule.Priority,
+		)
+
+		// 执行降级节点
+		output, err := e.executeNode(ctx, fallbackConfig, input)
+		if err != nil {
+			e.logger.Warn("fallback rule failed",
+				"policy_id", policy.ID,
+				"backend_id", resolvedBackend,
+				"model", resolvedModel,
+				"error", err,
+			)
+			continue
+		}
+
+		return output, nil
+	}
+
+	return nil, fmt.Errorf("all fallback rules exhausted for policy %s", policy.ID)
 }
 
 func (e *PipelineEngine) prepareNodeInput(config PipelineNodeConfig, execCtx *ExecutionContext) *NodeInput {
@@ -1888,11 +2027,29 @@ func (e *PipelineEngine) executeWithRetry(ctx context.Context, node PipelineNode
 		nodeLog.ErrorMessage = MaskSensitiveData(err.Error())
 		// 记录失败指标
 		GlobalPluginMetrics.RecordCall(nodeLog.Implementation, false, time.Duration(nodeLog.Duration)*time.Millisecond, err)
+
+		// 错误分类：判断是否应重试
+		errType, statusCode, providerErrCode := classifyNodeError(err)
+		retryable := config.IsRetryableError(errType, statusCode, providerErrCode)
+
+		if !retryable {
+			e.logger.Warn("node execution failed with non-retryable error, stopping",
+				"node_id", node.ID(),
+				"attempt", attempt,
+				"error_type", errType,
+				"status_code", statusCode,
+				"error", err,
+			)
+			break
+		}
+
 		if attempt < retryConfig.MaxAttempts {
 			e.logger.Warn("node execution failed, will retry",
 				"node_id", node.ID(),
 				"attempt", attempt,
 				"max_attempts", retryConfig.MaxAttempts,
+				"error_type", errType,
+				"status_code", statusCode,
 				"error", err,
 			)
 		} else {
@@ -1900,6 +2057,8 @@ func (e *PipelineEngine) executeWithRetry(ctx context.Context, node PipelineNode
 				"node_id", node.ID(),
 				"attempt", attempt,
 				"max_attempts", retryConfig.MaxAttempts,
+				"error_type", errType,
+				"status_code", statusCode,
 				"error", err,
 			)
 		}
@@ -1915,6 +2074,60 @@ func (e *PipelineEngine) executeWithRetry(ctx context.Context, node PipelineNode
 	}
 
 	return lastOutput, nil
+}
+
+// classifyNodeError 从节点执行错误中提取错误类型、HTTP 状态码、提供方错误码。
+// 返回值：(errorType, statusCode, providerErrorCode)
+//
+//	errorType: "http_status" | "timeout" | "network" | "provider_error" | "unknown"
+func classifyNodeError(err error) (string, int, string) {
+	if err == nil {
+		return "unknown", 0, ""
+	}
+	msg := err.Error()
+
+	// 超时错误
+	if strings.Contains(msg, "context deadline exceeded") ||
+		strings.Contains(msg, "timeout") ||
+		strings.Contains(msg, "i/o timeout") {
+		return "timeout", 0, ""
+	}
+
+	// 网络错误
+	if strings.Contains(msg, "connection refused") ||
+		strings.Contains(msg, "no such host") ||
+		strings.Contains(msg, "network") ||
+		strings.Contains(msg, "dial tcp") {
+		return "network", 0, ""
+	}
+
+	// HTTP 状态码错误（transparent_forward_node 格式："upstream returned %d: ..."）
+	if strings.Contains(msg, "upstream returned ") {
+		var code int
+		if _, scanErr := fmt.Sscanf(msg, "transparent_forward node %*q: upstream returned %d", &code); scanErr == nil {
+			return "http_status", code, ""
+		}
+	}
+
+	// OpenAI 插件格式："API error (status %d): ..."
+	if strings.Contains(msg, "API error (status ") {
+		var code int
+		if _, scanErr := fmt.Sscanf(msg, "API error (status %d)", &code); scanErr == nil {
+			return "http_status", code, ""
+		}
+	}
+
+	// 提供方 JSON 错误码（如 "rate_limit_error"）
+	for _, code := range []string{
+		"rate_limit_error", "server_error", "timeout", "insufficient_quota",
+		"overloaded", "capacity_exceeded", "error",
+	} {
+		if strings.Contains(msg, code) {
+			return "provider_error", 0, code
+		}
+	}
+
+	return "unknown", 0, ""
 }
 
 // executionContextKey 用于在context中存储ExecutionContext的key
