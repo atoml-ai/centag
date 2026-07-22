@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"centag/core/pkg/backend"
+	"centag/core/pkg/config"
 )
 
 // TransparentForwardNode forwards the original HTTP request to an upstream API unchanged.
@@ -119,6 +120,12 @@ func (n *TransparentForwardNode) Execute(ctx context.Context, input *NodeInput) 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("transparent_forward node %q: read response: %w", n.id, err)
+	}
+
+	// 对可重试的 HTTP 错误码返回 error，触发上层重试/降级逻辑。
+	// 不可重试的错误码（如 401/403）仍透传给客户端。
+	if config.IsRetryableStatusCode(resp.StatusCode) {
+		return nil, fmt.Errorf("transparent_forward node %q: upstream returned %d: %s", n.id, resp.StatusCode, truncateBody(respBody, 512))
 	}
 
 	contentType := resp.Header.Get("Content-Type")
@@ -462,4 +469,12 @@ func buildMinimalChatBody(content, model string) []byte {
 		return nil
 	}
 	return b
+}
+
+func truncateBody(b []byte, maxLen int) string {
+	s := string(b)
+	if len(s) > maxLen {
+		return s[:maxLen] + "..."
+	}
+	return s
 }

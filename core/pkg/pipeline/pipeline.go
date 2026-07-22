@@ -50,6 +50,8 @@ type PipelineNodeConfig struct {
 	NextNodes       []string               `json:"next_nodes,omitempty" yaml:"next_nodes,omitempty"`
 	DependsOn       []string               `json:"depends_on,omitempty" yaml:"depends_on,omitempty"`
 	RouteConfig     *RouteConfig           `json:"route_config,omitempty" yaml:"route_config,omitempty"`
+	// FallbackPolicyID 引用全局降级策略 ID（空=继承流水线全局默认）。
+	FallbackPolicyID string `json:"fallback_policy_id,omitempty" yaml:"fallback_policy_id,omitempty"`
 }
 
 // Normalize 将顶层 Backend/Model 归一化到 Config 中，确保 Config 是后端/模型信息的权威来源。
@@ -104,6 +106,8 @@ type GlobalPipelineConfig struct {
 	ParallelLimit   int              `json:"parallel_limit" yaml:"parallel_limit"`
 	LogLevel        string           `json:"log_level,omitempty" yaml:"log_level,omitempty"`
 	FallbackGroups  []FallbackGroup  `json:"fallback_groups,omitempty" yaml:"fallback_groups,omitempty"`
+	// FallbackPolicyID 引用全局降级策略 ID（优先于 FallbackGroups）。
+	FallbackPolicyID string `json:"fallback_policy_id,omitempty" yaml:"fallback_policy_id,omitempty"`
 	// SystemPrompt 流水线级别的默认 system_prompt，用于所有 generator 节点。
 	// 当节点自身的 config.system_prompt 为空时，回退到此值。
 	// 模板变量（如 {{.question}}）同样生效。
