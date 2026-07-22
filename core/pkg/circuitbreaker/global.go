@@ -82,3 +82,19 @@ func Reset(backendID string) {
 		cb.Reset()
 	}
 }
+
+// UpdateConfig 热更新全局熔断器配置（无需重启）。
+func UpdateConfig(config scheduler.CircuitBreakerConfig, rateLimitWeight int) {
+	if global == nil {
+		return
+	}
+	global.UpdateConfig(config, rateLimitWeight)
+}
+
+// RecordRateLimitFailure 记录429限流失败（自动应用加重系数）。
+func RecordRateLimitFailure(backendID string) {
+	if global == nil {
+		return
+	}
+	global.RecordRateLimitFailure(backendID)
+}
