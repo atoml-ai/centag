@@ -124,7 +124,10 @@ func (p *Protocol) ParseRequest(c *gin.Context) (*plugin.ProxyRequest, error) {
 		req.ToolChoice = anthropicReq.ToolChoice
 	}
 
-	// [G7] TopK 为 P2 占位，本轮不映射，仅 RawBody 透传
+	// [v0.2.9 P2] TopK 显式映射
+	if anthropicReq.TopK > 0 {
+		req.TopK = anthropicReq.TopK
+	}
 
 	for k, v := range c.Request.Header {
 		if len(v) > 0 {
@@ -438,6 +441,24 @@ type ContentBlock struct {
 	Name      string      `json:"name,omitempty"`
 	Input     interface{} `json:"input,omitempty"`
 	ToolUseID string      `json:"tool_use_id,omitempty"` // [v0.2.8 G3] tool_result 块引用 tool_use 的 id
+	Citations []Citation  `json:"citations,omitempty"`   // [v0.2.9 P2] 引用信息
+}
+
+// Citation 引用信息（P2）
+type Citation struct {
+	Type          string `json:"type"`                     // char_location | page_location | content_block_location
+	CitedText     string `json:"cited_text,omitempty"`
+	DocumentIndex int    `json:"document_index,omitempty"`
+	DocumentTitle string `json:"document_title,omitempty"`
+	// char_location 字段
+	StartCharIndex int `json:"start_char_index,omitempty"`
+	EndCharIndex   int `json:"end_char_index,omitempty"`
+	// page_location 字段
+	StartPageNumber int `json:"start_page_number,omitempty"`
+	EndPageNumber   int `json:"end_page_number,omitempty"`
+	// content_block_location 字段
+	StartBlockIndex int `json:"start_block_index,omitempty"`
+	EndBlockIndex   int `json:"end_block_index,omitempty"`
 }
 
 // Message 消息
@@ -528,10 +549,15 @@ func buildContentBlocks(resp *plugin.ProxyResponse) []ContentBlock {
 
 	// 文本内容
 	if resp.Content != "" {
-		blocks = append(blocks, ContentBlock{
+		textBlock := ContentBlock{
 			Type: "text",
 			Text: resp.Content,
-		})
+		}
+		// [v0.2.9 P2] citations：从后端响应提取，无则省略
+		if citations, ok := resp.Metadata["citations"].([]Citation); ok && len(citations) > 0 {
+			textBlock.Citations = citations
+		}
+		blocks = append(blocks, textBlock)
 	}
 
 	// 工具调用
