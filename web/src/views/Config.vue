@@ -50,6 +50,54 @@
               <div class="form-tip">代理请求的超时时间</div>
             </el-form-item>
 
+            <el-divider content-position="left">降级与重试</el-divider>
+            <el-form-item label="可重试状态码">
+              <el-select
+                v-model="config.proxy.retryable_status_codes"
+                multiple
+                filterable
+                allow-create
+                default-first-option
+                style="width: 400px"
+                placeholder="如 429, 500, 502, 503, 504"
+              >
+                <el-option v-for="code in [400,401,403,404,408,429,500,502,503,504]" :key="code" :label="code" :value="code" />
+              </el-select>
+              <div class="form-tip">上游返回这些状态码时触发重试/降级（热生效）</div>
+            </el-form-item>
+            <el-form-item label="超时触发降级">
+              <el-switch v-model="config.proxy.timeout_retryable" />
+              <div class="form-tip">上游超时时是否触发降级（热生效）</div>
+            </el-form-item>
+            <el-form-item label="网络错误降级">
+              <el-switch v-model="config.proxy.network_retryable" />
+              <div class="form-tip">网络连接失败时是否触发降级（热生效）</div>
+            </el-form-item>
+
+            <el-divider content-position="left">熔断器</el-divider>
+            <el-form-item label="失败阈值">
+              <el-input-number v-model="config.proxy.circuit_breaker.failure_threshold" :min="1" :max="20" style="width: 150px" />
+              <div class="form-tip">窗口内失败次数触发熔断（默认 3，热生效）</div>
+            </el-form-item>
+            <el-form-item label="恢复成功数">
+              <el-input-number v-model="config.proxy.circuit_breaker.success_threshold" :min="1" :max="10" style="width: 150px" />
+              <div class="form-tip">半开状态恢复所需成功次数（默认 2，热生效）</div>
+            </el-form-item>
+            <el-form-item label="熔断持续时间">
+              <el-input-number v-model="config.proxy.circuit_breaker.timeout_sec" :min="10" :max="300" style="width: 150px" />
+              <span class="unit">秒</span>
+              <div class="form-tip">熔断持续时间（默认 60s，热生效）</div>
+            </el-form-item>
+            <el-form-item label="滑动窗口">
+              <el-input-number v-model="config.proxy.circuit_breaker.window_sec" :min="10" :max="300" style="width: 150px" />
+              <span class="unit">秒</span>
+              <div class="form-tip">失败计数窗口大小（默认 60s，热生效）</div>
+            </el-form-item>
+            <el-form-item label="429 加重系数">
+              <el-input-number v-model="config.proxy.circuit_breaker.rate_limit_weight" :min="1" :max="10" style="width: 150px" />
+              <div class="form-tip">1 次 429 计为 N 次失败（默认 2，热生效）</div>
+            </el-form-item>
+
             <el-divider content-position="left">嵌入模型</el-divider>
             <el-form-item label="启用嵌入">
               <el-switch v-model="config.embedding.enabled" />
@@ -519,7 +567,17 @@ const config = ref<any>({
   proxy: {
     enabled: true,
     default_mode: 'transparent-proxy',
-    timeout: 30
+    timeout: 30,
+    retryable_status_codes: [429, 500, 502, 503, 504],
+    timeout_retryable: true,
+    network_retryable: true,
+    circuit_breaker: {
+      failure_threshold: 3,
+      success_threshold: 2,
+      timeout_sec: 60,
+      window_sec: 60,
+      rate_limit_weight: 2
+    }
   },
   system_proxy: {
     enabled: false,

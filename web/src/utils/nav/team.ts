@@ -2,6 +2,7 @@ import type { NavItem } from './types'
 import {
   backendsNav,
   pipelinesNav,
+  fallbackPolicyNav,
   costDashboardNav,
   dashboardNav,
   storageConfigNavGroup,
@@ -26,6 +27,7 @@ export const NAV_MENU_TEAM_ADMIN: NavItem[] = [
     [
       backendsNav({ label: '共用后端', requiresAdmin: true }),
       pipelinesNav({ label: '共用策略', requiresAdmin: true }),
+      fallbackPolicyNav({ requiresAdmin: true }),
       storageConfigNavGroup()
     ],
     '/backends'

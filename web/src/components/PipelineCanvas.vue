@@ -235,12 +235,33 @@
           </el-form-item>
 
           <el-divider>降级组配置 (Fallback Groups)</el-divider>
+          <!-- 全局降级策略 -->
+          <el-form-item label="默认降级策略">
+            <el-select
+              v-model="globalConfig.fallback_policy_id"
+              clearable
+              placeholder="自动（同模型跨后端）"
+              style="width: 100%"
+            >
+              <el-option label="自动（同模型跨后端）" value="" />
+              <el-option
+                v-for="policy in fallbackPolicies"
+                :key="policy.id"
+                :label="`${policy.name} (${policy.id})`"
+                :value="policy.id"
+              />
+            </el-select>
+            <div style="font-size: 12px; color: #666; margin-top: 4px">
+              流水线内未单独设置降级策略的节点将使用此策略（热生效）
+            </div>
+          </el-form-item>
+
           <el-alert type="info" :closable="false" style="margin-bottom: 16px">
             <template #default>
               <div style="font-size: 13px; line-height: 1.5">
-                <strong>降级组说明：</strong><br>
+                <strong>降级组说明（旧版兼容）：</strong><br>
                 配置主节点失败时的备用节点。当主节点执行失败时，系统会按顺序尝试备用节点。<br>
-                备用节点不需要配置 depends_on，引擎会自动处理降级逻辑。
+                建议使用上方的「默认降级策略」替代，更灵活且支持前端可配。
               </div>
             </template>
           </el-alert>
@@ -498,6 +519,7 @@ const globalConfig = ref({
   stream_mode: false,
   parallel_limit: 4,
   log_level: 'info',
+  fallback_policy_id: '',
   fallback_groups: [] as Array<{
     primary_node_id: string
     fallback_nodes: string[]
@@ -517,6 +539,23 @@ const globalConfig = ref({
     config?: Record<string, any>
   }>
 })
+
+// 降级策略列表
+const fallbackPolicies = ref<any[]>([])
+const loadingFallbackPolicies = ref(false)
+
+async function loadFallbackPolicies() {
+  loadingFallbackPolicies.value = true
+  try {
+    const { getFallbackPolicies } = await import('../api/fallback')
+    const res = await getFallbackPolicies()
+    fallbackPolicies.value = Array.isArray(res) ? res : Array.isArray((res as any)?.data) ? (res as any).data : []
+  } catch (err) {
+    console.error('Failed to load fallback policies', err)
+  } finally {
+    loadingFallbackPolicies.value = false
+  }
+}
 
 // 从 pipeline 加载基础信息与全局配置
 const loadPipelineInfo = () => {
@@ -539,6 +578,7 @@ const loadGlobalConfig = () => {
     stream_mode: gc.stream_mode ?? false,
     parallel_limit: gc.parallel_limit ?? 4,
     log_level: gc.log_level ?? 'info',
+    fallback_policy_id: gc.fallback_policy_id ?? '',
     fallback_groups: gc.fallback_groups || [],
     storage_config: gc.storage ? {
       enabled: gc.storage.enabled ?? false,
@@ -654,6 +694,7 @@ async function loadNodePlugins() {
 onMounted(() => {
   loadGlobalConfig()
   loadNodePlugins()
+  loadFallbackPolicies()
 })
 
 // 流水线切换或基础信息变更时重新加载（不仅 id，避免创建时名称/快捷码未同步）
