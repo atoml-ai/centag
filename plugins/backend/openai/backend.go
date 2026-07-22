@@ -248,7 +248,12 @@ func (b *Backend) CallModel(ctx context.Context, req *plugin.ProxyRequest) (*plu
 
 	// 检查响应状态
 	if resp.StatusCode != http.StatusOK {
-		circuitbreaker.RecordFailure(backendCfg.ID)
+		// 429 限流使用加重计数，加速熔断触发
+		if resp.StatusCode == http.StatusTooManyRequests {
+			circuitbreaker.RecordRateLimitFailure(backendCfg.ID)
+		} else {
+			circuitbreaker.RecordFailure(backendCfg.ID)
+		}
 		return nil, fmt.Errorf("API error (status %d): %s", resp.StatusCode, string(respBody))
 	}
 
@@ -384,7 +389,12 @@ func (b *Backend) CallModelStream(ctx context.Context, req *plugin.ProxyRequest)
 
 		// 检查响应状态
 		if resp.StatusCode != http.StatusOK {
-			circuitbreaker.RecordFailure(backendCfg.ID)
+			// 429 限流使用加重计数，加速熔断触发
+			if resp.StatusCode == http.StatusTooManyRequests {
+				circuitbreaker.RecordRateLimitFailure(backendCfg.ID)
+			} else {
+				circuitbreaker.RecordFailure(backendCfg.ID)
+			}
 			body, _ := io.ReadAll(resp.Body)
 			ch <- plugin.StreamChunk{Error: fmt.Errorf("API error (status %d): %s", resp.StatusCode, string(body))}
 			return
