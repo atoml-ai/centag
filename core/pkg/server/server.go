@@ -144,6 +144,12 @@ func New(cfg *config.Config) *Server {
 		logger.Warnf("Failed to load backend configs: %v", err)
 	}
 
+	// 加载全局降级策略（热生效，无需重启）
+	fallbackStore := config.GetFallbackPolicyStore()
+	if err := fallbackStore.Load(); err != nil {
+		logger.Warnf("Failed to load fallback policies: %v", err)
+	}
+
 	// 创建存储管理器
 	storageManager, err := storage.NewManager("")
 	if err != nil {
@@ -1457,6 +1463,19 @@ func (s *Server) setupRoutes() {
 			backends.PUT("/:id", s.backendHandler.UpdateBackend)
 			backends.DELETE("/:id", s.backendHandler.DeleteBackend)
 			backends.POST("/:id/probe", s.backendHandler.ProbeBackend)
+		}
+
+		// 全局降级策略管理
+		fallbackPolicies := v1Protected.Group("/fallback-policies")
+		{
+			adminWrite := s.teamAdminWriteOnly()
+			fallbackHandler := NewFallbackPolicyHandler()
+			fallbackPolicies.GET("", fallbackHandler.ListPolicies)
+			fallbackPolicies.GET("/:id", fallbackHandler.GetPolicy)
+			fallbackPolicies.POST("", adminWrite, fallbackHandler.CreatePolicy)
+			fallbackPolicies.PUT("/:id", adminWrite, fallbackHandler.UpdatePolicy)
+			fallbackPolicies.DELETE("/:id", adminWrite, fallbackHandler.DeletePolicy)
+			fallbackPolicies.POST("/:id/test", fallbackHandler.TestPolicy)
 		}
 
 		// 存储配置管理（team：写操作仅超管；personal/minimal 保持登录可写）

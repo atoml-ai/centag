@@ -507,6 +507,11 @@ func (h *ConfigHandler) SaveAllConfig(c *gin.Context) {
 			cfg.Cache.SaveOnlyMode)
 	}
 
+	// 2c. 熔断器配置热更新（无需重启）
+	if req.Proxy != nil && req.Proxy.CircuitBreaker != nil {
+		hotReloadCircuitBreaker()
+	}
+
 	// 3. 系统代理 (MITM) 启用状态热切换
 	if req.SystemProxy != nil && cfg.SystemProxy.Enabled != oldSystemProxyEnabled && h.mitmToggle != nil {
 		h.mitmToggle(cfg.SystemProxy.Enabled)
