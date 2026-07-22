@@ -129,6 +129,14 @@ func (p *Protocol) ParseRequest(c *gin.Context) (*plugin.ProxyRequest, error) {
 		req.TopK = anthropicReq.TopK
 	}
 
+	// [v0.2.9 P2] Container / OutputConfig → Metadata
+	if anthropicReq.Container != nil {
+		req.Metadata["container"] = anthropicReq.Container
+	}
+	if anthropicReq.OutputConfig != nil {
+		req.Metadata["output_config"] = anthropicReq.OutputConfig
+	}
+
 	for k, v := range c.Request.Header {
 		if len(v) > 0 {
 			req.Headers[k] = v[0]
@@ -190,6 +198,11 @@ func (p *Protocol) HandleResponse(c *gin.Context, resp *plugin.ProxyResponse) er
 	}
 	if ct, ok := resp.Metadata["cache_read_input_tokens"].(int); ok {
 		anthropicResp.Usage.CacheReadInputTokens = ct
+	}
+
+	// [v0.2.9 P2] container：从后端响应提取，无则省略
+	if container, ok := resp.Metadata["container"].(*ContainerInfo); ok && container != nil {
+		anthropicResp.Container = container
 	}
 
 	c.JSON(200, anthropicResp)
@@ -392,10 +405,14 @@ type MessagesRequest struct {
 	ToolChoice  interface{}      `json:"tool_choice,omitempty"`
 
 	// [v0.2.8 协议对齐] 新增字段
-	TopK          int             `json:"top_k,omitempty"` // P2 占位，本轮不映射
+	TopK          int             `json:"top_k,omitempty"`
 	Thinking      *ThinkingConfig `json:"thinking,omitempty"`
 	Metadata      *MetadataConfig `json:"metadata,omitempty"`
 	StreamOptions *StreamOptions  `json:"stream_options,omitempty"`
+
+	// [v0.2.9 P2] 新增字段
+	Container    *ContainerConfig `json:"container,omitempty"`
+	OutputConfig *OutputConfig    `json:"output_config,omitempty"`
 }
 
 // ThinkingConfig Anthropic 扩展思考配置
@@ -414,6 +431,26 @@ type StreamOptions struct {
 	IncludeUsage bool `json:"include_usage,omitempty"`
 }
 
+// ContainerConfig Anthropic 容器配置（P2）
+// 用于代码执行工具，指定容器环境
+type ContainerConfig struct {
+	ID        string `json:"id,omitempty"`
+	ExpiresAt string `json:"expires_at,omitempty"`
+}
+
+// OutputConfig Anthropic 输出配置（P2）
+// 配置模型输出格式
+type OutputConfig struct {
+	Effort string          `json:"effort,omitempty"` // low|medium|high|xhigh|max
+	Format *JSONOutputFormat `json:"format,omitempty"`
+}
+
+// JSONOutputFormat JSON 输出格式配置
+type JSONOutputFormat struct {
+	Type   string      `json:"type"` // json_schema
+	Schema interface{} `json:"schema,omitempty"`
+}
+
 // ToolDefinition 工具定义
 type ToolDefinition struct {
 	Name        string                 `json:"name"`
@@ -423,14 +460,22 @@ type ToolDefinition struct {
 
 // MessagesResponse Anthropic Messages API 响应
 type MessagesResponse struct {
-	ID           string         `json:"id"`
-	Type         string         `json:"type"`
-	Role         string         `json:"role"`
-	Content      []ContentBlock `json:"content"`
-	Model        string         `json:"model"`
-	StopReason   string         `json:"stop_reason"`
-	StopSequence string         `json:"stop_sequence,omitempty"` // [v0.2.8]
-	Usage        Usage          `json:"usage"`
+	ID           string           `json:"id"`
+	Type         string           `json:"type"`
+	Role         string           `json:"role"`
+	Content      []ContentBlock   `json:"content"`
+	Model        string           `json:"model"`
+	StopReason   string           `json:"stop_reason"`
+	StopSequence string           `json:"stop_sequence,omitempty"` // [v0.2.8]
+	Usage        Usage            `json:"usage"`
+	Container    *ContainerInfo   `json:"container,omitempty"` // [v0.2.9 P2]
+}
+
+// ContainerInfo 容器信息（P2）
+// 响应中返回容器使用信息
+type ContainerInfo struct {
+	ID        string `json:"id"`
+	ExpiresAt string `json:"expires_at"`
 }
 
 // ContentBlock 内容块
