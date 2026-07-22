@@ -673,7 +673,7 @@ func (h *CacheHandler) GenerateCacheKey(c *gin.Context) {
 
 	// 归一化 messages，与 /v1/chat/completions 代理使用的 convertMessagesToInterface 结果一致
 	messages := cache.NormalizeMessagesForKey(req.Messages)
-	key, err := h.proxyCache.GetRequestKey(req.Model, messages, req.Temperature, req.MaxTokens)
+	key, err := h.proxyCache.GetRequestKey(req.Model, messages, req.Temperature, req.MaxTokens, nil, nil, nil)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,

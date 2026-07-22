@@ -99,6 +99,54 @@ type ProxyRequest struct {
 
 	// 请求头 (用于认证和追踪)
 	Headers map[string]string `json:"-"`
+
+	// [v0.2.8 协议对齐] 以下为显式字段（协议插件 ParseRequest 映射，ModeDispatcher 拷贝）
+
+	// Tools 工具定义（function calling），与 UnifiedRequest.Tools 对齐
+	Tools []ToolDefinition `json:"tools,omitempty"`
+
+	// ToolChoice 工具选择策略（"auto"|"none"|"required"|对象形式）
+	ToolChoice interface{} `json:"tool_choice,omitempty"`
+
+	// ResponseFormat 响应格式（JSON Mode / JSON Schema）
+	ResponseFormat *ResponseFormatSpec `json:"response_format,omitempty"`
+
+	// Seed 随机种子
+	Seed *int `json:"seed,omitempty"`
+
+	// N 生成 choice 数量
+	N *int `json:"n,omitempty"`
+
+	// User 终端用户标识（追踪/计费）
+	User string `json:"user,omitempty"`
+
+	// ParallelToolCalls 是否并行工具调用
+	ParallelToolCalls *bool `json:"parallel_tool_calls,omitempty"`
+
+	// Modalities 输出模态（P2 占位，本轮不映射、不拷贝）
+	Modalities []string `json:"modalities,omitempty"`
+
+	// TopK Top-K 采样（P2 占位，Anthropic 使用，本轮不映射、不拷贝）
+	TopK int `json:"top_k,omitempty"`
+}
+
+// ToolDefinition 工具定义（function calling）
+type ToolDefinition struct {
+	Type     string      `json:"type"`
+	Function FunctionDef `json:"function"`
+}
+
+// FunctionDef 函数定义
+type FunctionDef struct {
+	Name        string      `json:"name"`
+	Description string      `json:"description,omitempty"`
+	Parameters  interface{} `json:"parameters,omitempty"`
+}
+
+// ResponseFormatSpec 响应格式规范（JSON Mode / JSON Schema）
+type ResponseFormatSpec struct {
+	Type       string      `json:"type"` // json_object | json_schema | text
+	JSONSchema interface{} `json:"json_schema,omitempty"`
 }
 
 // Message 消息
@@ -158,6 +206,8 @@ type ErrorResponse struct {
 	Message string `json:"message"`
 	Type    string `json:"type"`
 	Code    string `json:"code"`
+	// Param 触发错误的请求参数名（OpenAI 标准错误字段，无值时省略）
+	Param string `json:"param,omitempty"`
 }
 
 // ModelInfo 模型信息
