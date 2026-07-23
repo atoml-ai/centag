@@ -18,6 +18,7 @@
 |------|-------------|--------|------|
 | `direct-backend.yaml` | direct-backend | `#d` | 单 generator 直连 |
 | `transparent-proxy.yaml` | transparent-proxy | `#t` | 透明转发（`transparent_forward`） |
+| `raw-forward.yaml` | raw-forward | `#raw` | 原始 HTTP 转发（需 Target-URL / hostproxy） |
 | `smart-scheduling.yaml` | smart-scheduling | `#s` | builtin.scheduler |
 | `router-mode.yaml` | router-mode | `#r` | builtin.router |
 | `coding-agent.yaml` | coding-agent | — | Coding agent |
@@ -30,7 +31,6 @@
 | `aggregator-mode.yaml` | aggregator-mode | `#ag` | 多路生成 → 聚合 |
 | `fallback-mode.yaml` | fallback-mode | `#f` | 降级链 + 熔断 |
 | `pipeline-mode.yaml` | pipeline-mode | — | 通用流水线示例 |
-| `raw-forward.yaml` | raw-forward | — | Raw 转发 |
 | `cache-hit.yaml` | cache-hit | `#ch` | 精确缓存优先 |
 | `cache-mode.yaml` | cache-mode | — | 缓存模式 |
 | `transparent-proxy-redis-example.yaml` | — | — | Redis 缓存示例 |

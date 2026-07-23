@@ -1,14 +1,17 @@
-id: raw-forward
-name: 原始 HTTP 转发（高级）
-description: 高级能力：将原始 HTTP 请求透传到 X-Target-URL 或 hostproxy 的 X-Original-Host；标准聊天客户端请用透明/直连模式
+id: fixed-egress
+name: 跳板模式（固定出站）
+description: |
+  Centag 作为固定出站跳板：不做跨后端模型匹配，固定走系统默认后端/模型（或显式 X-Backend-ID），
+  服务端用后端 API Key 改写鉴权后转发。客户端只需注册 Centag，无需配置真实上游 Key。
+  与透明模式（#t）的区别：#t 会按客户端 model 选路；本模式不选路，只做出站 + Key 改写。
 version: "1.0"
-shortcut_code: '#raw'
+shortcut_code: '#j'
 nodes:
   - id: forward
     type: transparent_forward
     kind: proxy.transparent_forward
     implementation: builtin.transparent_forward
-    name: 原始转发
+    name: 固定出站转发
     backend: "{{system.default_backend}}"
     model: "{{system.default_model}}"
     config:
@@ -19,6 +22,9 @@ nodes:
         model: "system.default_model"
       custom_config:
         default_scheme: https
+        fixed_egress: true
+        redirect_policy: never
+        max_redirects: 5
     timeout: 120
     retry:
       max_attempts: 0
@@ -32,11 +38,12 @@ global_config:
   parallel_limit: 1
   log_level: info
 metadata:
-  aligned_proxy_mode: raw-forward
+  aligned_proxy_mode: fixed-egress
   features:
     - transparent_forward
-    - raw_passthrough
-    - requires_target_url
-  lastUpdated: '2026-07-14T00:00:00.000Z'
+    - fixed_egress
+    - key_rewrite
+    - no_model_match
+  lastUpdated: '2026-07-23T00:00:00.000Z'
   layoutVersion: '1.1'
   template_scope: mode-id-alignment
