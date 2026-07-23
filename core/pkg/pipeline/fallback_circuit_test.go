@@ -2,8 +2,99 @@ package pipeline
 
 import (
 	"context"
+	"strings"
 	"testing"
+
+	"centag/core/pkg/config"
 )
+
+func TestNodeBackendID_ResolvesVirtualVars(t *testing.T) {
+	prev := config.Get()
+	config.Set(&config.Config{
+		Proxy: config.ProxyConfig{
+			DefaultBackendID:  "default-be",
+			FallbackBackendID: "fallback-be",
+		},
+	})
+	defer config.Set(prev)
+
+	got := nodeBackendID(PipelineNodeConfig{Backend: "{{system.default_backend}}"}, NodeConfig{})
+	if got != "default-be" {
+		t.Fatalf("default backend = %q", got)
+	}
+	got = nodeBackendID(PipelineNodeConfig{}, NodeConfig{Backend: "{{system.fallback_backend}}"})
+	if got != "fallback-be" {
+		t.Fatalf("fallback backend = %q", got)
+	}
+}
+
+func TestExecuteStream_PrimaryCircuitOpen_RunsFallbackGroup(t *testing.T) {
+	IsCircuitOpen = func(backendID string) bool {
+		return backendID == "broken-backend"
+	}
+	defer func() { IsCircuitOpen = nil }()
+
+	mockClient := &testBackendClient{response: "from-fallback"}
+	mockBroker := &testCapabilityBroker{llmClient: mockClient}
+	nodeRegistry := NewNodeRegistry()
+	if err := RegisterBuiltinNodes(nodeRegistry); err != nil {
+		t.Fatalf("RegisterBuiltinNodes: %v", err)
+	}
+	pipelineRegistry := NewPipelineRegistry()
+	engine := NewPipelineEngine(nodeRegistry, pipelineRegistry, mockBroker, NewPipelineLogger(), nil)
+
+	pipeline := &AgentPatternPipeline{
+		ID:   "stream-fallback",
+		Name: "Stream Fallback",
+		Nodes: []PipelineNodeConfig{
+			{
+				ID:     "primary",
+				Type:   NodeTypeGenerator,
+				Kind:   "llm.generate",
+				Backend: "broken-backend",
+				Model:  "m",
+				Config: NodeConfig{Backend: "broken-backend", Model: "m", PromptTemplate: "{{input}}"},
+				NextNodes: []string{"fallback"},
+			},
+			{
+				ID:     "fallback",
+				Type:   NodeTypeGenerator,
+				Kind:   "llm.generate",
+				Backend: "healthy-backend",
+				Model:  "m",
+				Config: NodeConfig{Backend: "healthy-backend", Model: "m", PromptTemplate: "{{input}}"},
+				DependsOn: []string{"primary"},
+			},
+		},
+		GlobalConfig: GlobalPipelineConfig{
+			ParallelLimit: 1,
+			BypassOnError: true,
+			FallbackGroups: []FallbackGroup{
+				{PrimaryNodeID: "primary", FallbackNodes: []string{"fallback"}, MaxAttempts: 2},
+			},
+		},
+	}
+	if err := pipelineRegistry.Register(pipeline); err != nil {
+		t.Fatalf("Register: %v", err)
+	}
+
+	ch, err := engine.ExecuteStream(context.Background(), "stream-fallback", &PipelineInput{Content: "hello"})
+	if err != nil {
+		t.Fatalf("ExecuteStream: %v", err)
+	}
+	var got string
+	for res := range ch {
+		if res.Chunk != nil && res.Chunk.Error != nil {
+			t.Fatalf("stream error: %v", res.Chunk.Error)
+		}
+		if res.Output != nil {
+			got = res.Output.Content
+		}
+	}
+	if !strings.Contains(got, "from-fallback") {
+		t.Fatalf("content=%q, want from-fallback", got)
+	}
+}
 
 func TestFilterFallbackNodesByCircuit(t *testing.T) {
 	IsCircuitOpen = func(backendID string) bool {

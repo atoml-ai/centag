@@ -1,6 +1,10 @@
 package pipeline
 
-import "strings"
+import (
+	"strings"
+
+	"centag/core/pkg/config"
+)
 
 // IsCircuitOpen reports whether a backend's circuit breaker is open.
 // Wired from server startup to avoid an import cycle with the scheduler package.
@@ -11,10 +15,16 @@ var RecordCircuitOutcome func(backendID string, success bool)
 
 func nodeBackendID(config PipelineNodeConfig, nodeConfig NodeConfig) string {
 	// 正常路径使用归一化后的 Config.Backend；兼容未归一化输入时回退顶层 backend。
-	if backend := strings.TrimSpace(nodeConfig.Backend); backend != "" {
-		return backend
+	backend := strings.TrimSpace(nodeConfig.Backend)
+	if backend == "" {
+		backend = strings.TrimSpace(config.Backend)
 	}
-	return strings.TrimSpace(config.Backend)
+	if backend == "" {
+		return ""
+	}
+	// 熔断键必须用解析后的真实 backend ID，否则 {{system.default_backend}} 会与实际上游统计错位。
+	resolved, _ := ResolveVirtualVars(backend, "")
+	return strings.TrimSpace(resolved)
 }
 
 func isCircuitOpenForBackend(backendID string) bool {
@@ -26,6 +36,11 @@ func isCircuitOpenForBackend(backendID string) bool {
 
 func isCircuitBreakerSkipError(err error) bool {
 	return err != nil && strings.Contains(err.Error(), "circuit breaker open")
+}
+
+// isBillingQuotaError 余额/额度失败：应触发降级，但不计入熔断（否则同后端免费模型也被挡住）。
+func isBillingQuotaError(err error) bool {
+	return err != nil && config.IsBillingOrQuotaFailure(0, err.Error())
 }
 
 func recordNodeCircuitOutcome(backendID string, success bool, skippedDueToCircuit bool) {

@@ -39,6 +39,27 @@ func TestResolveVirtualVars_FallbackToBackendPreferredModel(t *testing.T) {
 	}
 }
 
+func TestResolveVirtualVars_FallbackPlaceholders(t *testing.T) {
+	prev := config.Get()
+	config.Set(&config.Config{
+		Proxy: config.ProxyConfig{
+			DefaultBackendID:  "default-be",
+			DefaultModel:      "default-model",
+			FallbackBackendID: "fallback-be",
+			FallbackModel:     "fallback-model",
+		},
+	})
+	defer config.Set(prev)
+
+	gotBackend, gotModel := ResolveVirtualVars("{{system.fallback_backend}}", "{{system.fallback_model}}")
+	if gotBackend != "fallback-be" {
+		t.Fatalf("backend=%q", gotBackend)
+	}
+	if gotModel != "fallback-model" {
+		t.Fatalf("model=%q", gotModel)
+	}
+}
+
 func TestApplyResolvedModelToRawBody(t *testing.T) {
 	raw := map[string]interface{}{"model": "{{system.default_model}}", "stream": false}
 	applyResolvedModelToRawBody(raw, "real-model")
