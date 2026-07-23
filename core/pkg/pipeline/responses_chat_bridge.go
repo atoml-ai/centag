@@ -67,9 +67,16 @@ func convertResponsesBodyToChatCompletions(body []byte) ([]byte, bool) {
 		}
 	}
 	if tools, ok := raw["tools"]; ok {
-		out["tools"] = normalizeResponsesTools(tools)
-	}
-	if tc, ok := raw["tool_choice"]; ok {
+		normalized := normalizeResponsesTools(tools)
+		if arr, ok := normalized.([]interface{}); ok && len(arr) == 0 {
+			// 全部为托管工具被丢弃时不要带空 tools，避免上游对 tools[0] 校验失败
+		} else {
+			out["tools"] = normalized
+			if tc, ok := raw["tool_choice"]; ok {
+				out["tool_choice"] = normalizeResponsesToolChoice(tc)
+			}
+		}
+	} else if tc, ok := raw["tool_choice"]; ok {
 		out["tool_choice"] = normalizeResponsesToolChoice(tc)
 	}
 	if maxOut, ok := raw["max_output_tokens"]; ok {
@@ -88,6 +95,9 @@ func convertResponsesBodyToChatCompletions(body []byte) ([]byte, bool) {
 // normalizeResponsesTools converts OpenCode/Responses flat tools
 // ({type,name,description,parameters}) into Chat Completions nested form
 // ({type:"function", function:{name,description,parameters}}).
+//
+// 非 function 托管工具（web_search / file_search 等）在 /chat/completions 上无效，
+// 原样透传会导致智谱等报「tools[0].function 不能为空」，因此直接丢弃。
 func normalizeResponsesTools(tools interface{}) interface{} {
 	arr, ok := tools.([]interface{})
 	if !ok {
@@ -97,49 +107,99 @@ func normalizeResponsesTools(tools interface{}) interface{} {
 	for _, t := range arr {
 		m, ok := t.(map[string]interface{})
 		if !ok {
-			out = append(out, t)
-			continue
-		}
-		if fn, ok := m["function"].(map[string]interface{}); ok && fn != nil {
-			// Already Chat-shaped.
-			out = append(out, m)
 			continue
 		}
 		typ, _ := m["type"].(string)
 		typ = strings.TrimSpace(typ)
-		// web_search / file_search 等 Responses 原生工具不能改写成 function，
-		// 原样透传（上游 chat 若不支持会自行报错，避免静默错类型）。
 		if typ != "" && typ != "function" {
-			out = append(out, m)
 			continue
 		}
-		name, _ := m["name"].(string)
-		name = strings.TrimSpace(name)
+
+		fn, _ := m["function"].(map[string]interface{})
+		name := ""
+		if fn != nil {
+			name = firstNonEmptyString(fn, "name")
+		}
 		if name == "" {
-			out = append(out, m)
+			name = firstNonEmptyString(m, "name")
+		}
+		if name == "" {
 			continue
 		}
 		if typ == "" {
 			typ = "function"
 		}
-		fn := map[string]interface{}{"name": name}
-		if d, ok := m["description"]; ok {
-			fn["description"] = d
+
+		normalizedFn := map[string]interface{}{"name": name}
+		if fn != nil {
+			for k, v := range fn {
+				if k == "name" {
+					continue
+				}
+				if v != nil && fmt.Sprint(v) != "" {
+					normalizedFn[k] = v
+				}
+			}
 		}
-		if p, ok := m["parameters"]; ok {
-			fn["parameters"] = p
-		} else if p, ok := m["input_schema"]; ok {
-			fn["parameters"] = p
+		if _, ok := normalizedFn["description"]; !ok {
+			if d, ok := m["description"]; ok {
+				normalizedFn["description"] = d
+			}
 		}
-		if s, ok := m["strict"]; ok {
-			fn["strict"] = s
+		if _, ok := normalizedFn["parameters"]; !ok {
+			if p, ok := m["parameters"]; ok {
+				normalizedFn["parameters"] = p
+			} else if p, ok := m["input_schema"]; ok {
+				normalizedFn["parameters"] = p
+			} else if p, ok := m["inputSchema"]; ok {
+				normalizedFn["parameters"] = p
+			}
+		}
+		if _, ok := normalizedFn["strict"]; !ok {
+			if s, ok := m["strict"]; ok {
+				normalizedFn["strict"] = s
+			}
 		}
 		out = append(out, map[string]interface{}{
 			"type":     typ,
-			"function": fn,
+			"function": normalizedFn,
 		})
 	}
 	return out
+}
+
+// sanitizeChatCompletionsTools 清洗已是 chat/completions 形态的 body 中的 tools，
+// 把 flat/hosted 工具改成智谱等上游可接受的 nested function 形态。
+func sanitizeChatCompletionsTools(body []byte) ([]byte, bool) {
+	if len(body) == 0 {
+		return body, false
+	}
+	var raw map[string]interface{}
+	if err := json.Unmarshal(body, &raw); err != nil || raw == nil {
+		return body, false
+	}
+	tools, hasTools := raw["tools"]
+	if !hasTools {
+		return body, false
+	}
+	normalized := normalizeResponsesTools(tools)
+	if arr, ok := normalized.([]interface{}); ok && len(arr) == 0 {
+		delete(raw, "tools")
+		delete(raw, "tool_choice")
+	} else {
+		raw["tools"] = normalized
+		if tc, ok := raw["tool_choice"]; ok {
+			raw["tool_choice"] = normalizeResponsesToolChoice(tc)
+		}
+	}
+	encoded, err := json.Marshal(raw)
+	if err != nil {
+		return body, false
+	}
+	if string(encoded) == string(body) {
+		return body, false
+	}
+	return encoded, true
 }
 
 // normalizeResponsesToolChoice maps Responses {type:"function", name} to

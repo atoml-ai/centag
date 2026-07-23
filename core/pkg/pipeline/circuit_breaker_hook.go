@@ -43,6 +43,29 @@ func isBillingQuotaError(err error) bool {
 	return err != nil && config.IsBillingOrQuotaFailure(0, err.Error())
 }
 
+// isModelNotFoundNodeError 模型不存在：同样触发降级且不计入熔断。
+func isModelNotFoundNodeError(err error) bool {
+	return err != nil && isUpstreamModelOrPlaceholderError(err.Error())
+}
+
+func isFixedEgressNodeConfig(cfg NodeConfig) bool {
+	if cfg.CustomConfig == nil {
+		return false
+	}
+	if s, ok := cfg.CustomConfig["route_policy"].(string); ok {
+		switch strings.TrimSpace(strings.ToLower(s)) {
+		case "fixed", "fixed_egress", "direct":
+			return true
+		case "match_model", "match-model", "loose":
+			return false
+		}
+	}
+	if v, ok := cfg.CustomConfig["fixed_egress"].(bool); ok {
+		return v
+	}
+	return false
+}
+
 func recordNodeCircuitOutcome(backendID string, success bool, skippedDueToCircuit bool) {
 	if backendID == "" || RecordCircuitOutcome == nil || skippedDueToCircuit {
 		return

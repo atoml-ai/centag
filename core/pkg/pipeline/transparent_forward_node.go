@@ -134,6 +134,11 @@ func (n *TransparentForwardNode) Execute(ctx context.Context, input *NodeInput) 
 			body = rewritten
 			responsesToChat = true
 		}
+		// 无论是否走了 Responses 全文转换，都清洗 tools：
+		// 已是 chat 形态但带 flat/hosted tools 时，智谱会报 tools[0].function 不能为空。
+		if sanitized, ok := sanitizeChatCompletionsTools(body); ok {
+			body = sanitized
+		}
 	}
 
 	req, err := http.NewRequestWithContext(ctx, method, targetURL, strings.NewReader(string(body)))
