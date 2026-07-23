@@ -90,16 +90,14 @@
           {{ egressConfig.route_policy === 'fixed' ? '固定出站时作为唯一出口。' : '按模型匹配未命中时，回落到此处的默认后端/模型。' }}
         </div>
 
-        <el-form-item label="System Prompt">
-          <div class="egress-prompt-header">
-            <el-switch
-              v-model="egressConfig.inject_system_prompt"
-              active-text="注入并覆盖客户端 system"
-              inactive-text="不注入（透传客户端）"
-            />
-          </div>
-          <template v-if="egressConfig.inject_system_prompt">
-            <div class="system-prompt-toolbar" style="margin-top: 10px">
+        <div class="egress-prompt-block">
+          <el-form-item label="是否注入系统提示词" class="egress-inject-item">
+            <el-switch v-model="egressConfig.inject_system_prompt" />
+          </el-form-item>
+
+          <div v-if="egressConfig.inject_system_prompt" class="egress-prompt-body">
+            <div class="egress-prompt-label">系统提示词内容</div>
+            <div class="system-prompt-toolbar">
               <el-select
                 v-model="selectedPromptPreset"
                 clearable
@@ -117,11 +115,10 @@
               type="textarea"
               :rows="6"
               :placeholder="getPromptPlaceholder(localNode.type)"
-              style="margin-top: 8px"
             />
-            <div class="help-text">开启注入后，下方文本会替换客户端 messages 中的 system 角色。</div>
-          </template>
-        </el-form-item>
+            <div class="help-text">开启后，此文本会替换客户端 messages 中的 system 角色。</div>
+          </div>
+        </div>
       </section>
 
       <!-- ═══════ 2b. LLM 节点核心（非出站） ═══════ -->
@@ -1974,10 +1971,37 @@ onMounted(() => {
   margin-bottom: 12px;
 }
 
-.egress-prompt-header {
+.egress-prompt-block {
+  margin-top: 4px;
+}
+
+.egress-inject-item {
+  margin-bottom: 8px;
+}
+
+.egress-prompt-body {
   display: flex;
-  align-items: center;
-  min-height: 32px;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 4px;
+  padding: 14px 14px 12px;
+  background: #fafbfc;
+  border: 1px solid #ebeef5;
+  border-radius: 8px;
+}
+
+.egress-prompt-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: #606266;
+}
+
+.egress-prompt-body .system-prompt-toolbar {
+  margin-bottom: 0;
+}
+
+.egress-prompt-body .help-text {
+  margin-top: 0;
 }
 
 .drawer-section-advanced {
