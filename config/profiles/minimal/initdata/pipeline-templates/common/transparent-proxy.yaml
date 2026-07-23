@@ -2,8 +2,9 @@ id: transparent-proxy
 name: 透明模式
 description: |
   尽可能原样透传客户端请求（不注入 system prompt）；按客户端 model 跨已启用后端松匹配，
-  未命中时回落系统默认后端与模型。与直连/跳板共用 transparent_forward，差异在开关：route_policy=match_model。
-version: "3.0"
+  未命中时回落系统默认后端与模型。余额/额度不足时：节点内先试 fallback_model，再走 FallbackGroup。
+  与直连/跳板共用 transparent_forward，差异在开关：route_policy=match_model。
+version: "3.1"
 shortcut_code: '#t'
 nodes:
   - id: forward
@@ -31,12 +32,48 @@ nodes:
       backoff_strategy: exponential
       initial_delay: 1000
       max_delay: 30000
+    next_nodes:
+      - forward_fallback
+  - id: forward_fallback
+    type: transparent_forward
+    kind: proxy.transparent_forward
+    implementation: builtin.transparent_forward
+    name: 透明降级转发
+    backend: "{{system.fallback_backend}}"
+    model: "{{system.fallback_model}}"
+    config:
+      backend: "{{system.fallback_backend}}"
+      model: "{{system.fallback_model}}"
+      template_vars:
+        backend: "system.fallback_backend"
+        model: "system.fallback_model"
+      custom_config:
+        default_scheme: https
+        # 降级节点固定走 fallback_model，避免 match_model 再次选中客户端付费模型
+        route_policy: fixed
+        inject_system_prompt: false
+        redirect_policy: never
+        max_redirects: 5
+        is_fallback: true
+    timeout: 90
+    retry:
+      max_attempts: 0
+      backoff_strategy: exponential
+      initial_delay: 1000
+      max_delay: 30000
+    depends_on:
+      - forward
 global_config:
-  timeout: 120
+  timeout: 180
   max_retries: 3
   bypass_on_error: true
   parallel_limit: 4
   log_level: info
+  fallback_groups:
+    - primary_node_id: forward
+      fallback_nodes:
+        - forward_fallback
+      max_attempts: 2
 metadata:
   aligned_proxy_mode: transparent-proxy
   features:
@@ -46,6 +83,7 @@ metadata:
     - client_model_prefer
     - loose_model_match
     - key_rewrite
+    - billing_fallback
   lastUpdated: '2026-07-23T00:00:00.000Z'
-  layoutVersion: '1.3'
+  layoutVersion: '1.4'
   template_scope: mode-id-alignment
