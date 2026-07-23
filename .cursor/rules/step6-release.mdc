@@ -1,5 +1,5 @@
 ---
-description: "工作流 Step 6 发版 — Cursor 交互入口。仅 AskQuestion 收参；业务见 docs/harness/skills/step6-release/。分层见根目录 AGENT.md。"
+description: "工作流 Step 6 全流程发版 — Cursor 交互入口。仅 AskQuestion 收参；业务见 docs/harness/skills/step6-release/。分层见根目录 AGENT.md。"
 globs: []
 alwaysApply: false
 ---
@@ -12,12 +12,13 @@ alwaysApply: false
 
 ## 硬性规则
 
-1. 固定选项必须调用工具 **`AskQuestion`**（禁止正文列 A/B/C）。
-2. **先检查 Gate 4**（读需求目录 `workflow_state.md` + `CR_报告.md`）；未通过则拒绝发版，引导 `step5-review`。
-3. 收齐参数并确认后，**加载 Step 6 正本执行**，不在此文件发明步骤。
+1. 固定选项必须调用 **`AskQuestion`**（禁止正文列 A/B/C）。
+2. **先检查 Gate 4**；未通过则拒绝发版，引导 `step5-review`。
+3. **先选发布渠道**，再选构建/投递细节；收齐后加载正本执行。
 4. AskQuestion 不可用时才允许极短文字提问。
-5. 当前范围仅 **personal + wrap**；用户要求 minimal/launcher 时说明「正本标明以后再说」，勿擅自发版。
-6. **仅版本分支可发布**（`vX` / `feature/vX` / `release/vX`）：非版本分支则引导切换；禁止建议 `CENTAG_RELEASE_ALLOW_ANY_BRANCH`（除非用户明确要求紧急绕过）。
+5. 当前组件范围仅 **personal**（含 `centag wrap`）；minimal/launcher 说明「见 procedure 注册表 🔜」。
+6. **仅版本分支可发布**；非版本分支引导切换；默认禁止 `CENTAG_RELEASE_ALLOW_ANY_BRANCH`。
+7. 鉴权失败：**提示登录命令并等待用户确认**，不编造 token。
 
 ## 触发词
 
@@ -25,42 +26,81 @@ alwaysApply: false
 
 ## 流程
 
-### 0. 静默探测
+### 0. 静默探测（必须，可不对用户逐条贴命令）
 
 ```bash
 git rev-parse --abbrev-ref HEAD
 VER="$(node -p "require('./apps/wrap-npm/package.json').version" 2>/dev/null || true)"
 bash scripts/release/require-release-branch.sh --version "${VER:-0.0.0}" 2>&1 || true
-gh auth status 2>&1 | head -20
-ls bin/release/*/centag-*.tar.gz 2>/dev/null | head -20
-echo "package.json version=${VER}"
-# 同时读取 docs/versions/<ver>/<需求>/workflow_state.md 与 CR_报告.md 核对 Gate 4
+gh auth status 2>&1 | head -5 || true
+npm whoami 2>&1 || true
+OUT="${CENTAG_INSTALL_ROOT:-$HOME/.centag}/var/release/${VER}"
+ls "${OUT}"/centag-personal-*.tar.gz 2>/dev/null | wc -l
+gh release view "v${VER}" --repo atoml-ai/centag 2>&1 | head -5 || true
+# 读 docs/versions/<ver>/<需求>/workflow_state.md + CR_报告.md
 ```
 
-### 1. Gate 4 拦截（无 UI 时也必须执行）
+向用户**摘要**：分支、版本、本地产物数、远端 Release、gh/npm 登录态。
 
-若 Gate 4 未 ✅ 或 CR 未「批准 — 可发版」→ **停止**，提示先完成 Step 5 人工确认。
+### 1. Gate 4 拦截
 
-### 2. AskQuestion — 发版参数
+Gate 4 未 ✅ 或 CR 未「批准 — 可发版」→ **停止**，引导 `step5-review`。
+
+### 2. AskQuestion — 第一轮：发什么（核心）
+
+| id | prompt | options | 说明 |
+|----|--------|---------|------|
+| `channels` | 本次要发布哪些渠道？ | GitHub Release（curl / install.sh） / npm（centag + centag-offline） / **全部（推荐顺序：GitHub → npm）** / 仅本地构建不上传 / GitHub Actions（推 tag 走 CI） | 对应 `CENTAG_RELEASE_CHANNELS`；可多选时用 `allow_multiple: true` |
+
+映射：
+
+| 选项 | `CENTAG_RELEASE_CHANNELS` |
+|------|---------------------------|
+| GitHub Release | `github` |
+| npm | `npm` |
+| 全部 | `github,npm` |
+| 仅本地构建 | `build-only` |
+| GitHub Actions | `ci` |
+
+### 3. AskQuestion — 第二轮：构建与 GitHub 投递
+
+仅当 channels 含 `github` 或 `npm`（非 build-only/ci-only）时询问：
 
 | id | prompt | options |
 |----|--------|---------|
-| `version` | 版本号（无 v 前缀） | 读自 package.json；其他（我会输入） |
-| `path` | 发版路径 | A 已有产物只上传 / B 脚本重建并上传 / C 推 tag 走 CI |
-| `draft` | 是否草稿 | 是（推荐）/ 否直接公开 |
-| `verify` | 发版后验收 | **仅检查 Release 资产（默认）** / 额外做本机 install 冒烟（用户点名） |
+| `version` | 版本号（无 v 前缀） | `<探测到的 package.json 版本>` / 其他（我会输入） |
+| `build` | 共用构建策略 | 复用本地产物（已有 tar.gz） / **重新构建（推荐）** / 跳过（CI 或仅上传） |
+| `github_mode` | GitHub 投递方式（选了 github 且非 ci） | 本地上传（Path A/B） / 推 tag 走 CI（Path C） |
+| `draft` | 新建 Release 是否草稿 | 是（推荐） / 否直接公开 |
+| `verify` | 发版后验收 | **仅检查各渠道产物（默认）** / 额外本机 install 冒烟 |
 
-### 3. 导出环境变量后交接正本
+`build-only` 或仅 `ci` 时可跳过 `github_mode` / `draft`（CI 按 workflow 配置）。
+
+### 4. 条件追问（第三轮，仅必要时）
+
+| 触发条件 | AskQuestion / 短文字 |
+|----------|---------------------|
+| channels 含 `github` 且 gh 未登录 | 「请在本机执行 `gh auth login` 或 `gh auth refresh`，完成后选：已登录 / 取消发版」 |
+| channels 含 `npm` 且 npm 未登录且无 token | 「请 `npm login` 或配置 `CENTAG_NPM_TOKEN` 环境变量，完成后选：已就绪 / 取消」 |
+| 仅 `npm` 且 GitHub Release 不存在 | 「在线版 centag 依赖 GitHub Release。改为发全部 / 仍只发 npm（仅 offline 可靠）/ 取消」 |
+| 版本与 package.json 不一致 | 确认以哪边为准 |
+
+### 5. 导出环境变量 → 交接正本
 
 ```bash
-export CENTAG_RELEASE_VERSION=...      # 无 v
-export CENTAG_RELEASE_PATH=A|B|C
+export CENTAG_RELEASE_VERSION=...           # 无 v
+export CENTAG_RELEASE_CHANNELS=github,npm   # 或 build-only / ci 等
+export CENTAG_RELEASE_BUILD=reuse|rebuild|skip
+export CENTAG_RELEASE_GITHUB_MODE=upload|ci
 export CENTAG_RELEASE_DRAFT=true|false
-export CENTAG_RELEASE_REPO=atoml-ai/centag   # 可选
-export CENTAG_INSTALL_REF=main               # 可选；未合入 main 时用当前分支
+export CENTAG_RELEASE_VERIFY=assets|smoke
+export CENTAG_RELEASE_REPO=atoml-ai/centag    # 可选
+export CENTAG_INSTALL_REF=v<version>        # 可选；默认 tag
+# 兼容旧会话：
+# export CENTAG_RELEASE_PATH=A|B|C
 ```
 
-然后 **打开并严格执行**：
+然后 **严格执行**：
 
-1. `docs/harness/skills/step6-release/SKILL.md`（门禁复核）
-2. `docs/harness/skills/step6-release/procedure.md`（构建/上传/验收）
+1. `docs/harness/skills/step6-release/SKILL.md`
+2. `docs/harness/skills/step6-release/procedure.md`

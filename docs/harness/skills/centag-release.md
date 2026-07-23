@@ -9,4 +9,5 @@
 | Cursor 交互入口 | `.cursor/rules/step6-release.mdc` |
 
 请使用触发词：`step6-release` / `发版`。  
+入口先选发布渠道（GitHub / npm / 全部 / CI / 仅构建），再按 `SKILL.md` 执行共用构建与分渠道发版。  
 兼容旧触发词 `centag release` 时，入口层应直接加载 `step6-release/SKILL.md`。

@@ -1,6 +1,6 @@
 {
   "name": "centag-wrap-offline",
-  "version": "0.2.8",
+  "version": "0.2.9",
   "private": true,
   "description": "Offline variant of centag-wrap: bundles the platform Go binaries so no network is needed at install. Prefer centag-wrap for normal use.",
   "type": "module",

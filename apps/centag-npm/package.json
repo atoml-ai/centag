@@ -1,15 +1,16 @@
 {
-  "name": "centag",
-  "version": "0.2.8",
+  "name": "@atomlai/centag",
+  "version": "0.2.9",
   "description": "Centag — LLM unified gateway. Installs the Go binary via postinstall from GitHub Releases.",
   "type": "module",
   "bin": {
-    "centag": "./bin/run.js"
+    "centag": "bin/run.js"
   },
   "files": [
     "bin/",
     "lib/",
     "static/",
+    "install.js",
     "README.md"
   ],
   "scripts": {
@@ -46,5 +47,8 @@
   "homepage": "https://github.com/atoml-ai/centag",
   "bugs": {
     "url": "https://github.com/atoml-ai/centag/issues"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

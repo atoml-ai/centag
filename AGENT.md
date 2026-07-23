@@ -57,6 +57,6 @@ docs/harness/skills/      各 Agent 规范目录
 | WebUI 浏览器自动化验收 | `docs/harness/skills/centag-ui-browser-test.md`（强制 Browser MCP） |
 | 工作流 Step 1–6 / 门禁 | `docs/harness/skills/step*/SKILL.md`、`quality-gate/SKILL.md`（Step 1 含强制开发风险评估；Step 6 发版） |
 | 核心操作 / 部署 | `centag-core.md` / `centag-deploy.md`（待补） |
-| GitHub Release 发版（Step 6） | `docs/harness/skills/step6-release/SKILL.md` + `procedure.md` |
+| GitHub Release 发版（Step 6） | `docs/harness/skills/step6-release/SKILL.md` + `procedure.md`（全流程：GitHub + npm + CI） |
 
 入口映射明细见 [docs/harness/skills/README.md](docs/harness/skills/README.md)。

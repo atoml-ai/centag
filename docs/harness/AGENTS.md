@@ -162,7 +162,7 @@ Step 1: 方案设计      Step 2: 任务规划     Step 3: SDD 编码      Step 
 | `step3-code` / 编码 / 开始写代码 | Step 3: SDD 编码实现 | 编码执行规范 | Gate 2 |
 | `step4-test` / 补测试 | Step 4: 单元测试补全 | 单元测试规范 | 无（同 Phase） |
 | `step5-review` / CR / 代码审查 | Step 5: CR 审查 | 审查规范 + Gate 4 人工确认 | Gate 3 |
-| `step6-release` / 发版 / release | Step 6: 发版 | Release 操作正本 | **Gate 4** |
+| `step6-release` / 发版 / release | Step 6: 全流程发版（GitHub + npm + CI） | `step6-release/` 正本 | **Gate 4** |
 
 ### 3.3 门禁链
 
@@ -354,7 +354,7 @@ CI 与脚本侧会做 **轻量卫生检查**（`scripts/check-harness-hygiene.sh
 | 编码实现 | `skills/step3-code/SKILL.md` |
 | 单元测试补全 | `skills/step4-test/SKILL.md` |
 | CR 审查 | `skills/step5-review/SKILL.md` |
-| 发版（Step 6） | `skills/step6-release/SKILL.md` + `procedure.md` |
+| 发版（Step 6） | `skills/step6-release/SKILL.md` + `procedure.md`（渠道：GitHub / npm / CI） |
 | 门禁检查 | `skills/quality-gate/SKILL.md` |
 | 核心操作（构建/运行/调试） | `skills/centag-core.md`（待补） |
 | 向导式部署 | `skills/centag-deploy.md`（待补） |

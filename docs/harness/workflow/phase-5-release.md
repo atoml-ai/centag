@@ -4,7 +4,14 @@
 
 ## 目标
 
-在 **Gate 4（CR 发版许可）** 通过后，于版本分支发布 GitHub Release（personal + wrap），并校验资产齐全；安装/部署由用户手动验收。
+在 **Gate 4（CR 发版许可）** 通过后，于版本分支完成用户所选渠道的发布与验收：
+
+- **GitHub Release** — `curl | bash scripts/install.sh`
+- **npm** — `centag` + `centag-offline`
+- **CI**（可选）— 推 tag / Actions
+- 未来渠道见 `step6-release/procedure.md` §渠道注册表
+
+安装/部署冒烟默认由用户手动完成。
 
 ## 前置门禁
 
@@ -20,26 +27,29 @@
 - [ ] `CR_报告.md`：结论为「批准 — 可发版」
 - [ ] 当前分支为版本分支：`bash scripts/release/require-release-branch.sh --version <ver>`
 
-### 2. 发版
+### 2. 收参 → 全流程发版
 
-按 `docs/harness/skills/step6-release/SKILL.md` 收参，执行 `step6-release/procedure.md`：
+按 `docs/harness/skills/step6-release/SKILL.md` + `.cursor/rules/step6-release.mdc`：
 
-- [ ] Path A / B / C 之一
+- [ ] **先选渠道**（GitHub / npm / 全部 / build-only / CI）
+- [ ] 共用构建（reuse / rebuild / skip，只跑一次）
+- [ ] **按序**发版：github → npm（依赖顺序）
+- [ ] 鉴权失败时提示 `gh auth` / `npm login`，等用户就绪再继续
 - [ ] 不擅自扩大组件（无 minimal/launcher）
-- [ ] 默认建议先草稿，确认后再 Publish
 
 ### 3. 验收 → Gate 5
 
-- [ ] Release 资产齐全（personal + wrap × 平台 + checksums）
-- [ ] **默认不做**本机 install 冒烟（用户手动部署）；仅用户点名时才跑
+- [ ] 各**已选渠道**验收通过（Release 资产 / npm version / CI 绿）
+- [ ] **默认不做**本机 install 冒烟（用户手动）；仅用户点名时才跑
 - [ ] 更新 `workflow_state`：Step 6 → ✅，Gate 5 → ✅
 
 ## 产出
 
-| 产物 | 说明 |
+| 产物 | 条件 |
 |------|------|
-| GitHub Release | `v<version>` 资产 |
-| workflow_state | Step 6 / Gate 5 |
+| GitHub Release | 渠道含 github 或 ci |
+| npm 包 | 渠道含 npm |
+| workflow_state | 始终 |
 
 ## 完成后
 

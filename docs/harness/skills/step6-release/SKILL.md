@@ -1,83 +1,182 @@
 ---
 name: step6-release
-description: "工作流 Step 6：发版 — GitHub Release 与资产校验（安装由用户手动）。触发场景：step6-release、发版、publish release"
+description: "工作流 Step 6：全流程发版 — GitHub Release（curl|install.sh）、npm、CI；共用构建后按渠道顺序执行。触发：step6-release、发版、publish release"
 ---
 
-# Step 6: 发版（GitHub Release）
+# Step 6: 全流程发版
 
-> 执行指南：`docs/harness/workflow/phase-5-release.md`  
-> 发版操作正本：`docs/harness/skills/step6-release/procedure.md`
+> 操作正本：`procedure.md`（渠道注册表、共用构建、分渠道命令、验收）  
+> 工作流指南：`docs/harness/workflow/phase-5-release.md`  
+> Cursor 收参：`.cursor/rules/step6-release.mdc`
 
 ## 触发词
 
-`step6-release` / `step6` / 发版 / release / 打 release / 发布 github release / publish release / 一键发版
+`step6-release` / `step6` / 发版 / release / 打 release / 发布 github release / publish release / 一键发版 / `centag release`
 
-## 前置门禁
+## 设计原则
 
-**Gate 4（CR 准出 / 发版许可）**：必须全部满足，否则**拒绝发版**并退回 `step5-review`：
+1. **一个 Skill 跑完**：Gate 4 → 选渠道 → 共用准备/构建 → **按依赖顺序**逐渠道发版 → 分渠道验收 → Gate 5。
+2. **先问渠道**：用户一开始就明确发哪些（GitHub / npm / 全部 / 仅构建不上传）；未来渠道在 `procedure.md` 注册表扩展。
+3. **共用步骤只跑一次**：版本分支门禁、鉴权探测、交叉编译与 tarball（见 procedure §共用构建）。
+4. **缺信息才问**：版本号、token、是否草稿、是否冒烟等；能静默探测的不重复问。
+5. **鉴权失败只提示、不编造**：给出具体登录命令，等用户完成后再继续。
+
+## 前置门禁（Gate 4）
+
+**未通过则拒绝发版**，退回 `step5-review`：
 
 | 检查项 | 要求 |
 |--------|------|
 | G4.1 | `CR_报告.md` 存在，Critical = 0 |
-| G4.5 | 标准产物齐全（技术方案 + 开发风险评估 + 任务计划 + 自测记录 + CR + 代码/测试） |
+| G4.5 | 标准产物齐全 |
 | G4.6 | 开发风险评估无开放 Critical |
-| **G4.7** | **人工已确认批准发版**：`workflow_state.md` 中 Gate 4 = ✅，且 CR 结论勾选「批准 — 可发版」 |
+| **G4.7** | `workflow_state.md` Gate 4 = ✅，且 CR 勾选「**批准 — 可发版**」 |
 
-> ⚠️ Gate 4 **不会**在 Step 5 写完 CR 后自动通过；必须经人工确认（AskQuestion）。  
-> 仅构建不上传（`build-artifacts.sh` / 不加 `--release`）不受本门禁约束，但仍建议在版本分支操作。
+> 仅 `build-artifacts.sh`（不上传）不受 Gate 4 约束，但仍建议在版本分支操作。
 
-## 相关上下文
+## 流水线总览
 
-- 版本分支门禁：`scripts/release/require-release-branch.sh`
-- 安装脚本：`scripts/install.sh`
-- npm 发布脚本：`scripts/publish-centag-npm.sh`
-- npm 包定义：`apps/centag-npm/`
-- 交互入口（Cursor）：`.cursor/rules/step6-release.mdc`
+```
+┌─────────────┐   ┌──────────────┐   ┌─────────────┐   ┌──────────────┐   ┌─────────┐
+│ 0 静默探测  │ → │ 1 收参(渠道) │ → │ 2 共用准备  │ → │ 3 共用构建  │ → │ 4 按序  │
+│ Gate4/分支  │   │ AskQuestion  │   │ 鉴权/分支   │   │ (可选/一次) │   │ 发渠道  │
+└─────────────┘   └──────────────┘   └─────────────┘   └─────────────┘   └────┬────┘
+                                                                               │
+                    ┌──────────────┐   ┌─────────────┐                         │
+                    │ 6 Gate5落盘  │ ← │ 5 分渠道验收│ ←───────────────────────┘
+                    └──────────────┘   └─────────────┘
+```
 
-## 执行流程
+## 发布渠道（当前）
 
-### 第一步：检查 Gate 4
+| 渠道 ID | 用户可见名 | 产物 / 消费方式 | 前置依赖 | 鉴权 |
+|---------|-----------|----------------|----------|------|
+| `github` | GitHub Release + `install.sh` | tar.gz + checksums；`curl \| bash scripts/install.sh` | 无 | `gh auth` |
+| `npm` | npm 包 | `centag`（在线 lazy-download）+ `centag-offline`（离线 bundled） | **在线版依赖** 对应版本 GitHub Release 已 publish | `npm login` 或 `CENTAG_NPM_TOKEN` |
+| `ci` | GitHub Actions | 推 `v*` tag 或 workflow_dispatch | 无（CI 内构建） | `git push` + Actions 权限 |
 
-1. 定位当前需求目录：`docs/versions/<版本>/<需求>/`
-2. 读取 `workflow_state.md`：Gate 4 必须为 ✅；Step 5 必须为 ✅
-3. 读取 `CR_报告.md`：结论必须为**批准 — 可发版**（或等价「批准」且备注可发版）
-4. 任一项不满足 → 输出缺失项，**中止**，提示先完成 `step5-review` 并确认 Gate 4
+**推荐组合与顺序**（写死依赖，Agent 自动排序）：
 
-### 第二步：收参（入口层）
+| 用户选择 | 实际执行顺序 |
+|----------|-------------|
+| 仅 `github` | `github` |
+| 仅 `npm` | 若 Release 不存在 → 先提示补 `github` 或改选「全部」 |
+| `github` + `npm` 或 `all` | `github` → `npm` |
+| `ci` | `ci`（本地可 skip 构建）；若同时选 `npm` 且 CI 含 npm job → 等 CI 完成再验收 npm |
+| `build-only` | 仅 §共用构建，不上传 |
 
-由 Cursor / 其它 Agent 入口用 AskQuestion 收集（见 `step6-release.mdc`）：
+未来渠道（fnOS 包、Docker Hub、短链 CDN 等）在 `procedure.md` §渠道注册表 增加一行即可，**不改** SKILL 主流程。
 
-| 参数 | 环境变量 | 说明 |
-|------|----------|------|
-| 版本号 | `CENTAG_RELEASE_VERSION` | 无 `v` 前缀 |
-| 发版路径 | `CENTAG_RELEASE_PATH` | A / B / C |
-| 发布渠道 | `CENTAG_RELEASE_CHANNEL` | `github` / `npm` / `all`（默认） |
-| 是否草稿 | `CENTAG_RELEASE_DRAFT` | 默认建议 `true` |
-| 仓库 | `CENTAG_RELEASE_REPO` | 可选 |
-| 安装脚本 ref | `CENTAG_INSTALL_REF` | 可选 |
+## 环境变量契约（入口层导出）
 
-### 第三步：执行发版正本
+| 变量 | 必需 | 说明 |
+|------|:----:|------|
+| `CENTAG_RELEASE_VERSION` | ✅ | 无 `v` 前缀，如 `0.2.8` |
+| `CENTAG_RELEASE_CHANNELS` | ✅ | 逗号分隔：`github` / `npm` / `ci` / `all` / `build-only` |
+| `CENTAG_RELEASE_BUILD` | ✅ | `reuse`（已有产物）/ `rebuild` / `skip`（CI 或仅上传） |
+| `CENTAG_RELEASE_GITHUB_MODE` | 含 github 时 | `upload`（Path A/B）/ `ci`（Path C，与 `ci` 渠道合并） |
+| `CENTAG_RELEASE_DRAFT` | 可选 | `true`（新建 Release 默认草稿）/ `false` |
+| `CENTAG_RELEASE_VERIFY` | 可选 | `assets`（默认）/ `smoke`（用户点名 install 冒烟） |
+| `CENTAG_RELEASE_REPO` | 可选 | 默认 `atoml-ai/centag` |
+| `CENTAG_INSTALL_REF` | 可选 | install.sh raw ref，默认 `v<version>` |
 
-打开并严格执行 `docs/harness/skills/step6-release/procedure.md`（含版本分支校验、Path A/B/C、验收）。
+兼容旧变量：`CENTAG_RELEASE_PATH=A|B|C` 映射为 `BUILD` + `GITHUB_MODE`（见 procedure §兼容映射）。
 
-### 第四步：发版验收与 Gate 5
+## Agent 执行步骤
 
-按 procedure「验收」完成 **Release 资产齐全**检查后（**默认不跑**安装冒烟）：
+### 0. 静默探测（必须）
 
-- 更新 `workflow_state.md`：Step 6 → ✅，Gate 5 → ✅（资产齐全即可）
-- 汇报 Release URL、资产摘要；安装/部署验收写「用户手动」
+```bash
+git rev-parse --abbrev-ref HEAD
+VER="$(node -p "require('./apps/wrap-npm/package.json').version" 2>/dev/null || true)"
+bash scripts/release/require-release-branch.sh --version "${VER:-0.0.0}" 2>&1 || true
+gh auth status 2>&1 | head -5 || true
+npm whoami 2>&1 || true
+RELEASE_OUT="${CENTAG_INSTALL_ROOT:-$HOME/.centag}/var/release/${VER}"
+ls "${RELEASE_OUT}"/centag-personal-*.tar.gz 2>/dev/null | wc -l
+gh release view "v${VER}" --repo atoml-ai/centag 2>&1 | head -5 || true
+# 读 docs/versions/<ver>/<需求>/workflow_state.md + CR_报告.md
+```
+
+探测结果**摘要给用户**（分支、版本、本地产物数、远端 Release 是否存在、gh/npm 登录态），再进入 AskQuestion。
+
+### 1. Gate 4 拦截
+
+不满足 → 列出缺失项，**中止**，引导 `step5-review`。
+
+### 2. 收参（入口 AskQuestion）
+
+见 `.cursor/rules/step6-release.mdc`。核心：**先选渠道（可多选）**，再选构建策略与 GitHub 投递方式。
+
+根据探测**条件追问**（第二轮 AskQuestion 或短文字，仅当需要）：
+
+| 条件 | 追问 |
+|------|------|
+| 选了 `npm` 且 gh/npm 未登录 | 提示 `npm login` 或导出 `CENTAG_NPM_TOKEN`，确认后继续 |
+| 选了 `github` 且 `gh auth` 失败 | 提示 `gh auth login` / `gh auth refresh`，确认后继续 |
+| 选了 `npm` 且 GitHub Release 不存在 | 建议改为 `all` 或先完成 `github` |
+| 选了 `ci` 且 tag 已存在 | 确认覆盖策略或改版本 |
+| 版本与 package.json 不一致 | 确认以哪边为准 |
+
+### 3. 共用准备
+
+1. `require-release-branch.sh --version <ver>`
+2. 按渠道检查鉴权（procedure §鉴权矩阵）
+3. 确定构建策略：reuse / rebuild / skip
+
+### 4. 共用构建（一次）
+
+仅当 `CENTAG_RELEASE_BUILD` ≠ `skip` 且（渠道含 `github` 或需本地上传 npm 离线包前需 tarball）时执行：
+
+```bash
+./scripts/release/build-artifacts.sh --version "${CENTAG_RELEASE_VERSION}" --components personal
+```
+
+`reuse`：产物目录已有 6 平台 personal + checksums → 跳过构建，仅 `ls` 确认。  
+`rebuild`：始终跑 `build-artifacts.sh`。  
+`skip`：Path C / 仅 npm 且走 `publish-centag-npm.sh` 自带构建时跳过共用构建（procedure 详述）。
+
+### 5. 按序发渠道
+
+严格按 procedure §执行顺序 与依赖表执行；**每完成一个渠道再进入下一个**；失败则停，汇报已完成部分。
+
+### 6. 分渠道验收
+
+- `github` → Release 资产齐全；草稿则提醒 Publish 后 curl 才可用
+- `npm` → `npm view centag version` 与 `centag-offline version`
+- `ci` → Actions run 成功 + Release job 绿
+- `verify=smoke` → 仅用户点名时跑 `install.sh` 冒烟
+
+### 7. Gate 5 与落盘
+
+- 更新 `docs/versions/<ver>/<需求>/workflow_state.md`：Step 6 ✅、Gate 5 ✅（已选渠道均验收通过）
+- 决策日志追加：渠道列表、构建策略、Release URL、npm 版本
+- 汇报：各渠道结果摘要；安装/部署 = 用户手动（除非 smoke）
 
 ## 产出
 
-| 产物 | 说明 |
+| 产物 | 条件 |
 |------|------|
-| GitHub Release `v<version>` | personal + 资产 + checksums |
-| npm `centag` | 在线版（postinstall lazy-download） |
-| npm `centag-offline` | 离线版（打包 6 平台二进制） |
-| `workflow_state.md` | Step 6 / Gate 5 状态 |
-| 可选：发版记录备注 | 可写在需求目录决策日志 |
+| GitHub Release `v<version>` | 渠道含 `github` 或 `ci` |
+| npm `centag` + `centag-offline` | 渠道含 `npm` |
+| `workflow_state.md` | 始终 |
+| 本地 `~/.centag/var/release/<version>/` | BUILD ≠ skip |
 
-## 完成后
+## 禁止
 
-- 确认 Gate 5 准出（Release 公开或按约定保留草稿 + 资产齐全）
-- 提示用户：自行安装/部署验收；合入 `main`（若尚未）、更新版本索引；**禁止**在非版本分支补传正式 Release
+- 非版本分支上传正式 Release（除非用户明确要求 `CENTAG_RELEASE_ALLOW_ANY_BRANCH=1`）
+- 擅自扩大组件（minimal / launcher / 独立 wrap tarball）
+- 发版过程中改业务代码
+- 编造 token 或跳过 Gate 4
+
+## 相关脚本
+
+| 脚本 | 用途 |
+|------|------|
+| `scripts/release/build-artifacts.sh` | **共用**交叉编译 + tarball |
+| `scripts/release/publish-binaries.sh` | GitHub 上传（`--release`） |
+| `scripts/publish-centag-npm.sh` | npm 打包发布 |
+| `scripts/install.sh` | 用户 curl 安装 |
+| `scripts/release/require-release-branch.sh` | 版本分支门禁 |
+
+细节命令见 **`procedure.md`**。
