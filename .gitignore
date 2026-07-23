@@ -134,6 +134,8 @@ LAYOUT_OPTIMIZATION.md
 # Test outputs
 test-results/
 coverage/
+coverage.out
+*.coverprofile
 
 # Pipeline test reports (auto-generated)
 docs/test-reports/
