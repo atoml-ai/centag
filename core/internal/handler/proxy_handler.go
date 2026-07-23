@@ -205,6 +205,8 @@ func (h *ProxyHandler) GetSetupStatus(c *gin.Context) {
 		"global_proxy_mode":         !sp.PACEnabled,
 		"mitm_proxy":                sp.PACProxyHost() + ":" + strconv.Itoa(sp.ListenPort),
 		"egress_api_key_configured": config.ResolveSystemProxyEgressAPIKey(&sp) != "",
+		// LAN 开启时 MITM 对非 loopback 客户端强制 Proxy-Authorization（wrap 注入）
+		"proxy_auth_required": sp.AllowLANClients,
 	}
 	c.JSON(200, status)
 }

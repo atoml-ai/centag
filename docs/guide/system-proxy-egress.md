@@ -14,10 +14,10 @@
 员工侧 **一条命令**（自动下 CA、设 `HTTPS_PROXY` + `NODE_EXTRA_CA_CERTS`、启动 Agent）：
 
 ```bash
-# 已安装 personal（GitHub Release / install.sh）
-centag wrap run --server http://<advertise_host>:20060 -- opencode
+# 已安装 personal（GitHub Release / install.sh）；局域网建议带 --token
+centag wrap run --server http://<advertise_host>:20060 --token llmproxy_xxxx -- opencode
 
-# 本机 Centag（无 --server）
+# 本机 Centag（无 --server；仅本机可不带 token）
 centag wrap run -- opencode
 ```
 
@@ -30,13 +30,23 @@ centag wrap env --server http://<advertise_host>:20060
 
 **不要**把 `HTTPS_PROXY` 写进 `~/.zshrc`。Agent **不需要**知道 Centag API Key（由服务端 MITM 注入）。
 
-鉴权（setup/status 401 时）：
+鉴权：
 
 ```bash
-export CENTAG_WRAP_TOKEN='ctg_xxxxxxxx'   # Centag WebUI → API Keys
+# WebUI → API Keys 创建个人 llmproxy_* Key（员工各自一把）
+# 推荐命令行传入（优先级高于环境变量）：
+centag wrap doctor --server http://<advertise>:20060 --token llmproxy_xxxxxxxx
+centag wrap run --server http://<advertise>:20060 --token llmproxy_xxxxxxxx -- opencode
+
+# 等价环境变量：
+export CENTAG_WRAP_TOKEN='llmproxy_xxxxxxxx'
 export CENTAG_API_BASE='http://127.0.0.1:20060'  # 可选
 centag wrap doctor
 ```
+
+- **仅本机 MITM（127.0.0.1）**：不强制代理鉴权；`--token` / `CENTAG_WRAP_TOKEN` 主要用于 setup/status。
+- **开启「允许局域网」后**：MITM 对非本机客户端强制 `Proxy-Authorization`。`centag wrap run/env` 会把 Token 写入 `HTTPS_PROXY` userinfo，第三方 Agent **不必**配置 Centag Key。
+- 未带 Token 的裸连 / 手写无凭证 `HTTPS_PROXY` 会收到 **407**。
 
 ---
 
@@ -88,8 +98,9 @@ centag wrap disable   # 远端模式不关服务器 MITM
 
 ```bash
 curl -fsSL -o ~/.centag/wrap/ca.crt http://<advertise>:20060/api/v1/proxy/ca.crt
-HTTPS_PROXY=http://<advertise>:8081 \
-HTTP_PROXY=http://<advertise>:8081 \
+# LAN 时必须在代理 URL 中带 Token（与 wrap 一致）；本机可省略 userinfo
+HTTPS_PROXY=http://:${CENTAG_WRAP_TOKEN}@<advertise>:8081 \
+HTTP_PROXY=http://:${CENTAG_WRAP_TOKEN}@<advertise>:8081 \
 NO_PROXY=localhost,127.0.0.1,::1 \
 NODE_EXTRA_CA_CERTS=$HOME/.centag/wrap/ca.crt \
 opencode
@@ -119,6 +130,7 @@ opencode
 ## 安全要点
 
 - 默认 MITM 仅 loopback；Team 须显式开 LAN。  
+- 开 LAN 后强制代理鉴权（个人 `CENTAG_WRAP_TOKEN`）；出口 Key 仍为服务端内部注入，不发给员工。  
 - 勿开全局系统代理；勿污染登录 shell 环境。  
 - 信任 CA 后白名单域名可被解密——仅可信内网。  
 

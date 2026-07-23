@@ -23,7 +23,7 @@
       </div>
       <div class="status-item" :class="egressConfigured ? 'ok' : 'warn'">
         <span class="status-label">出口 Key</span>
-        <span class="status-value">{{ egressConfigured ? '已配置' : '未配置' }}</span>
+        <span class="status-value">{{ egressConfigured ? '已自动就绪' : '未就绪' }}</span>
       </div>
       <div class="status-item">
         <span class="status-label">监听</span>
@@ -42,124 +42,76 @@
     <el-tabs v-model="mainTab" class="main-tabs">
       <!-- ========== Tab 1: 配置向导 ========== -->
       <el-tab-pane label="配置向导" name="wizard">
-        <el-alert
-          class="mb-md"
-          type="info"
-          :closable="false"
-          show-icon
-          title="按下列 4 步完成即可。多数 CLI（如 OpenCode）用第 3 步的 wrap run，不必改系统 PAC，也别把代理写进全局 shell。"
-        />
+        <p class="wizard-lead">
+          3 步：开 MITM（出口 Key 自动就绪）→ 自检 → 装客户端并用 <code>centag wrap run</code>。
+          勿把代理写进全局 shell。
+        </p>
         <el-alert
           v-if="setupStatus?.in_container"
-          class="mb-md"
+          class="mb-sm"
           type="warning"
           :closable="false"
           show-icon
-          title="当前 Centag 运行在 Docker：宿主机必须映射 8081，且容器内 MITM 监听 0.0.0.0。请用 ./start.sh docker run personal（已含 -p 8081:8081）重启后再测。"
+          title="Docker：宿主机须映射 8081，容器内 MITM 听 0.0.0.0。请用 ./start.sh docker run personal 重启。"
         />
 
-        <el-alert class="mb-md" type="success" :closable="false" show-icon>
-          <template #title>Key 策略（三层，不要混）</template>
-          <ul class="key-policy-list">
-            <li>
-              <strong>Centag 出口 Key（llmproxy_*）</strong>：只在本页「一键绑定」配置。
-              MITM 转发时自动注入；OpenCode / Agent <em>不要</em>填这个。
-            </li>
-            <li>
-              <strong>上游 Provider Key</strong>：在 Web「后端 / Provider」里配置（DeepSeek、百炼等真实密钥）。
-              Centag 用它去调大模型。personal 首启为空，必须先加至少一个。
-            </li>
-            <li>
-              <strong>Agent 里的 Key</strong>：可填任意占位或原厂 Token；走 wrap 时会被 MITM 换成出口 Key。
-              报「无效的 API key」通常是出口 Key 未绑定；报无后端则是 Provider 未配。
-            </li>
-          </ul>
-        </el-alert>
-
-        <el-steps :active="wizardProgress" align-center finish-status="success" class="mb-lg">
-          <el-step title="出口 Key" :description="egressConfigured ? '已就绪' : '待绑定'" />
+        <el-steps :active="wizardProgress" align-center finish-status="success" class="wizard-steps">
           <el-step title="启动 MITM" :description="status.enabled ? '运行中' : '未启动'" />
-          <el-step title="接入 Agent" description="复制命令运行" />
-          <el-step title="验证" description="确认正常" />
+          <el-step title="验证" description="自检就绪" />
+          <el-step title="接入客户端" description="安装并运行" />
         </el-steps>
 
-        <!-- 步骤 1 -->
+        <!-- 步骤 1：启动 MITM（出口 Key 随服务自动绑定） -->
         <el-card class="step-card" shadow="never">
           <div class="step-head">
             <span class="step-num">1</span>
             <div class="step-title-block">
-              <h3>绑定 Centag 出口 Key（仅服务端）</h3>
+              <h3>启动 MITM</h3>
               <p>
-                位置：本页。生成/绑定名为 system-proxy-egress 的 llmproxy_* Key，由 MITM 注入到
-                :20060。不要写进 OpenCode 配置。
+                MITM 与 Centag 一体：开启时服务端会<strong>自动创建/绑定</strong>内部出口 Key，并在转发到
+                :{{ apiPort }} 时注入。wrap 只设代理环境变量，不必也不应配置这把 Key。
               </p>
             </div>
-            <el-tag :type="egressConfigured ? 'success' : 'danger'" size="small">
-              {{ egressConfigured ? '正常：已配置' : '异常：未配置' }}
-            </el-tag>
+            <el-space wrap size="small">
+              <el-tag :type="status.enabled ? 'success' : 'info'" size="small">
+                MITM {{ status.enabled ? '运行中' : '未启动' }}
+              </el-tag>
+              <el-tag :type="egressConfigured ? 'success' : 'warning'" size="small">
+                出口 Key {{ egressConfigured ? '已自动就绪' : '待自动绑定' }}
+              </el-tag>
+            </el-space>
           </div>
-          <el-space wrap>
-            <el-button type="primary" :loading="ensuringEgress" @click="ensureEgressKey">
-              一键绑定出口 Key
-            </el-button>
-            <el-select
-              v-model="selectedEgressKeyId"
-              clearable
-              filterable
-              placeholder="或选择已有 Key"
-              style="width: 220px"
-              :loading="loadingKeys"
-            >
-              <el-option
-                v-for="k in apiKeyOptions"
-                :key="k.id"
-                :label="`${k.name} (${k.key_prefix}…)`"
-                :value="k.id"
+
+          <div class="switch-row">
+            <div class="switch-cell">
+              <span class="switch-label">MITM 服务</span>
+              <el-switch
+                v-model="status.enabled"
+                :loading="toggling"
+                @change="toggleProxy"
+                active-text="开"
+                inactive-text="关"
               />
-            </el-select>
-            <el-button :disabled="!selectedEgressKeyId" :loading="bindingEgress" @click="bindSelectedEgressKey">
-              绑定所选
-            </el-button>
-          </el-space>
-        </el-card>
-
-        <!-- 步骤 2 -->
-        <el-card class="step-card" shadow="never">
-          <div class="step-head">
-            <span class="step-num">2</span>
-            <div class="step-title-block">
-              <h3>启动 MITM 服务</h3>
-              <p>默认只监听本机 127.0.0.1。开启后即可被代理流量命中。</p>
+              <span class="form-hint">{{ listenDisplay }}</span>
             </div>
-            <el-tag :type="status.enabled ? 'success' : 'info'" size="small">
-              {{ status.enabled ? '正常：运行中' : '待启动' }}
-            </el-tag>
+            <div class="switch-cell">
+              <span class="switch-label">允许局域网</span>
+              <el-switch v-model="allowLanClients" :loading="savingLan" @change="onAllowLanChange" />
+              <span class="form-hint">关=仅本机 · 开=同网段可连</span>
+            </div>
           </div>
 
-          <div class="step-row">
-            <span class="step-row-label">MITM 服务</span>
-            <el-switch
-              v-model="status.enabled"
-              :loading="toggling"
-              @change="toggleProxy"
-              active-text="已开"
-              inactive-text="已关"
-            />
-            <span class="form-hint">监听 {{ listenDisplay }}</span>
-          </div>
-
-          <div class="step-row">
-            <span class="step-row-label">允许局域网访问</span>
-            <el-switch v-model="allowLanClients" :loading="savingLan" @change="onAllowLanChange" />
-            <span class="form-hint">
-              关闭 = 仅本机（127.0.0.1）；开启 = 监听 0.0.0.0，同网段其它设备可连
-            </span>
-          </div>
+          <p class="form-hint">
+            <strong>权限</strong>：仅本机时不强制代理鉴权。开启局域网后，非本机客户端必须通过
+            <code>Proxy-Authorization</code>（由 <code>centag wrap</code> 把
+            <code>CENTAG_WRAP_TOKEN</code> 写入 <code>HTTPS_PROXY</code>，第三方 Agent 无需填 Centag Key）。
+            出口 Key 仍由服务端自动注入，与员工 Token 分离。
+          </p>
 
           <template v-if="allowLanClients">
-            <el-form label-width="120px" class="lan-form">
+            <el-form label-width="110px" class="lan-form" size="small">
               <el-form-item label="本机局域网 IP" required>
-                <el-input v-model="advertiseHost" placeholder="如 192.168.1.50" style="max-width: 240px" />
+                <el-input v-model="advertiseHost" placeholder="如 192.168.1.50" style="max-width: 220px" />
                 <el-button class="ml-sm" :loading="detectingIP" @click="detectLanIP">探测</el-button>
                 <el-button type="primary" class="ml-sm" :loading="savingLan" @click="saveLanConfig">保存</el-button>
                 <div v-if="suggestedLanHosts.length" class="form-hint lan-suggest">
@@ -176,72 +128,76 @@
                 </div>
               </el-form-item>
               <el-form-item label="对外访问地址">
-                <el-input v-model="employeeServer" placeholder="http://192.168.1.50:20060" style="max-width: 320px" />
+                <el-input v-model="employeeServer" placeholder="http://192.168.1.50:20060" style="max-width: 300px" />
               </el-form-item>
             </el-form>
-            <el-alert type="warning" :closable="false" show-icon class="mb-sm">
-              必须填写本机局域网 IP 后再保存。仅在可信内网开启，并放行防火墙端口 {{ apiPort }} / {{ listenPort }}。
-            </el-alert>
+            <p class="form-hint">
+              仅可信内网开启；放行防火墙 {{ apiPort }} / {{ listenPort }}。
+              员工侧须：<code>export CENTAG_WRAP_TOKEN=llmproxy_…</code>（Web → API Keys），再用 wrap run。
+            </p>
           </template>
-        </el-card>
 
-        <!-- 步骤 3 -->
-        <el-card class="step-card" shadow="never">
-          <div class="step-head">
-            <span class="step-num">3</span>
-            <div class="step-title-block">
-              <h3>接入 Agent（推荐进程代理）</h3>
-              <p>一条命令自动处理 CA + HTTPS_PROXY，启动你的 Agent。多数 CLI 到这一步就够了。</p>
-            </div>
-            <el-tag type="success" size="small">推荐</el-tag>
-          </div>
-
-          <div class="cmd-block">
-            <code>{{ runCommand }}</code>
-            <el-button type="primary" size="small" @click="copyRunCmd">复制命令</el-button>
-          </div>
-
-          <el-collapse class="optional-collapse">
-            <el-collapse-item title="可选：系统 PAC（仅认系统代理的桌面客户端）" name="pac">
-              <p class="mb-sm form-hint">
-                OpenCode 等多数 CLI 不读系统 PAC。PAC URL：{{ apiPACURL }}
-              </p>
+          <el-collapse v-if="!egressConfigured || showEgressAdvanced" class="optional-collapse mt-sm">
+            <el-collapse-item title="出口 Key 未就绪？手动补绑（一般不需要）" name="egress">
               <el-space wrap>
-                <el-button @click="copyProxyctlCmd('enable')">复制：PAC 启用</el-button>
-                <el-button type="danger" plain @click="copyProxyctlCmd('disable')">复制：停用并恢复</el-button>
-                <el-button @click="copyEnvProxyCmd">复制：手写 HTTPS_PROXY</el-button>
+                <el-button type="primary" size="small" :loading="ensuringEgress" @click="ensureEgressKey()">
+                  立即自动绑定
+                </el-button>
+                <el-select
+                  v-model="selectedEgressKeyId"
+                  clearable
+                  filterable
+                  size="small"
+                  placeholder="或选择已有 Key"
+                  style="width: 200px"
+                  :loading="loadingKeys"
+                >
+                  <el-option
+                    v-for="k in apiKeyOptions"
+                    :key="k.id"
+                    :label="`${k.name} (${k.key_prefix}…)`"
+                    :value="k.id"
+                  />
+                </el-select>
+                <el-button
+                  size="small"
+                  :disabled="!selectedEgressKeyId"
+                  :loading="bindingEgress"
+                  @click="bindSelectedEgressKey"
+                >
+                  绑定所选
+                </el-button>
               </el-space>
             </el-collapse-item>
           </el-collapse>
         </el-card>
 
-        <!-- 步骤 4 -->
+        <!-- 步骤 2：验证 -->
         <el-card class="step-card" shadow="never">
           <div class="step-head">
-            <span class="step-num">4</span>
+            <span class="step-num">2</span>
             <div class="step-title-block">
-              <h3>验证是否正常</h3>
-              <p>下列全部满足即为配置成功。</p>
+              <h3>验证服务端就绪</h3>
+              <p>先确认本机出口可用，再装客户端接入。</p>
             </div>
           </div>
           <ul class="check-list">
-            <li :class="egressConfigured ? 'pass' : 'fail'">
-              出口 Key {{ egressConfigured ? '已配置' : '未配置' }}（否则 Agent 会看到「无效的 API key」）
-            </li>
             <li :class="status.enabled ? 'pass' : 'fail'">
               MITM {{ status.enabled ? '运行中' : '未启动' }}
             </li>
-            <li class="info">Web「后端 / Provider」至少有一个已启用且带有效上游 Key（否则 503 无可用后端）</li>
-            <li class="info">Agent 用 wrap run 启动后，请求出现在 Centag 日志</li>
-            <li class="info">证书报错 → 到「其它」页下载并信任 CA</li>
+            <li :class="egressConfigured ? 'pass' : 'fail'">
+              出口 Key {{ egressConfigured ? '已自动就绪' : '未就绪（开 MITM 后应自动绑定）' }}
+            </li>
+            <li class="info">「后端 / Provider」至少一个已启用（否则 503）</li>
+            <li class="info">证书报错 →「其它」页下载并信任 CA</li>
           </ul>
           <el-space wrap>
-            <el-button @click="copyProxyctlCmd('doctor')">复制：诊断命令</el-button>
-            <el-button type="primary" :loading="testing" @click="testProxy">立即测试</el-button>
+            <el-button size="small" @click="copyProxyctlCmd('doctor')">复制诊断命令</el-button>
+            <el-button type="primary" size="small" :loading="testing" @click="testProxy">立即测试</el-button>
           </el-space>
           <el-alert
             v-if="testResult"
-            class="mt-md"
+            class="mt-sm"
             :type="testResult.ok ? 'success' : 'error'"
             :closable="false"
             show-icon
@@ -253,10 +209,61 @@
               </li>
             </ul>
           </el-alert>
-          <p class="form-hint mt-md">
-            说明：页面测试检查 MITM/PAC/出口 Key/CA 是否就绪，不会从浏览器直连 openai.com（那会 CORS/超时）。
-            端到端连通请用上方「复制：诊断命令」或 wrap run 实测。
-          </p>
+          <p class="form-hint mt-sm">页面自检 MITM / PAC / 出口 Key / CA；端到端请用诊断命令或 wrap run。</p>
+        </el-card>
+
+        <!-- 步骤 3：接入客户端 -->
+        <el-card class="step-card" shadow="never">
+          <div class="step-head">
+            <span class="step-num">3</span>
+            <div class="step-title-block">
+              <h3>安装客户端并接入 Agent</h3>
+              <p>先安装含 <code>centag wrap</code> 的 personal CLI，再用一条命令启动 Agent。</p>
+            </div>
+            <el-tag type="success" size="small">推荐</el-tag>
+          </div>
+
+          <div class="sub-block">
+            <div class="sub-label">① 安装客户端（本机未装过时）</div>
+            <div class="cmd-block">
+              <code>{{ installCommand }}</code>
+              <el-button type="primary" size="small" @click="copyInstallCmd">复制</el-button>
+            </div>
+            <p class="form-hint">
+              装完执行 <code>. "$HOME/.centag/env"</code>，确认 <code>centag wrap --help</code> 可用。
+              开发机也可用仓库内 <code>./start.sh build personal</code>。
+            </p>
+          </div>
+
+          <div class="sub-block">
+            <div class="sub-label">② 局域网时先设员工 Token（本机可跳过）</div>
+            <div class="cmd-block">
+              <code>export CENTAG_WRAP_TOKEN='llmproxy_xxxx'   # Web → API Keys 创建</code>
+              <el-button size="small" @click="copyWrapTokenHint">复制说明</el-button>
+            </div>
+            <p v-if="setupStatus?.proxy_auth_required || allowLanClients" class="form-hint">
+              当前已开局域网：未设置 Token 时 wrap 会直接报错，裸连 MITM 会收到 407。
+            </p>
+          </div>
+
+          <div class="sub-block">
+            <div class="sub-label">③ 用 wrap 启动 Agent（自动 CA + HTTPS_PROXY；LAN 时自动带代理鉴权）</div>
+            <div class="cmd-block">
+              <code>{{ runCommand }}</code>
+              <el-button type="primary" size="small" @click="copyRunCmd">复制</el-button>
+            </div>
+          </div>
+
+          <el-collapse class="optional-collapse">
+            <el-collapse-item title="可选：系统 PAC / 手写环境变量" name="pac">
+              <p class="mb-sm form-hint">多数 CLI 不读系统 PAC。PAC：{{ apiPACURL }}</p>
+              <el-space wrap>
+                <el-button size="small" @click="copyProxyctlCmd('enable')">PAC 启用</el-button>
+                <el-button size="small" type="danger" plain @click="copyProxyctlCmd('disable')">停用恢复</el-button>
+                <el-button size="small" @click="copyEnvProxyCmd">手写 HTTPS_PROXY</el-button>
+              </el-space>
+            </el-collapse-item>
+          </el-collapse>
         </el-card>
       </el-tab-pane>
 
@@ -511,6 +518,8 @@ const detectingIP = ref(false)
 const ensuringEgress = ref(false)
 const bindingEgress = ref(false)
 const loadingKeys = ref(false)
+/** 出口 Key 已就绪时隐藏手动补绑；失败时可展开 */
+const showEgressAdvanced = ref(false)
 const mainTab = ref('wizard')
 const setupStatus = ref<ProxySetupStatus | null>(null)
 const allowLanClients = ref(false)
@@ -564,9 +573,9 @@ const listenDisplay = computed(() => {
 })
 
 const wizardProgress = computed(() => {
-  if (!egressConfigured.value) return 0
-  if (!status.value.enabled) return 1
-  return 3
+  if (!status.value.enabled) return 0
+  // MITM 就绪后停留在「验证」；自检通过再指向接入
+  return testResult.value?.ok ? 2 : 1
 })
 
 const apiPACURL = computed(() => {
@@ -574,9 +583,14 @@ const apiPACURL = computed(() => {
   return `http://127.0.0.1:${apiPort.value}/api/v1/proxy/pac`
 })
 
+const installCommand = computed(
+  () =>
+    'curl -fsSL https://raw.githubusercontent.com/atoml-ai/centag/v0.2.9/scripts/install.sh | bash && . "$HOME/.centag/env"'
+)
+
 const runCommand = computed(() => {
   if (allowLanClients.value) {
-    return `${wrapBin()} run --server ${employeeAPIBase()} -- opencode`
+    return `${wrapBin()} run --server ${employeeAPIBase()} --token llmproxy_xxxx -- opencode`
   }
   return `${wrapBin()} run -- opencode`
 })
@@ -628,6 +642,23 @@ function copyRunCmd() {
   copyCommand(runCommand.value)
 }
 
+function copyInstallCmd() {
+  copyCommand(installCommand.value)
+}
+
+function copyWrapTokenHint() {
+  copyCommand(
+    [
+      '# 推荐：命令行传入 Token（也可用环境变量 CENTAG_WRAP_TOKEN）',
+      `${wrapBin()} run --server ${employeeAPIBase()} --token llmproxy_xxxx -- opencode`,
+      '',
+      '# 或先 export 再 run：',
+      "export CENTAG_WRAP_TOKEN='llmproxy_xxxx'",
+      `${wrapBin()} run --server ${employeeAPIBase()} -- opencode`
+    ].join('\n')
+  )
+}
+
 async function loadAPIKeys() {
   loadingKeys.value = true
   try {
@@ -639,18 +670,27 @@ async function loadAPIKeys() {
   }
 }
 
-async function ensureEgressKey() {
+async function ensureEgressKey(opts?: { silent?: boolean }) {
   ensuringEgress.value = true
   try {
     const res = await ensureEgressAPIKey()
     if (res.configured) {
-      ElMessage.success(res.changed ? '出口 Key 已绑定（热生效）' : '出口 Key 已就绪')
+      showEgressAdvanced.value = false
+      if (!opts?.silent) {
+        ElMessage.success(res.changed ? '出口 Key 已自动绑定' : '出口 Key 已就绪')
+      }
     } else {
-      ElMessage.warning('出口 Key 仍未配置，请检查 API Key 存储密钥或手动绑定')
+      showEgressAdvanced.value = true
+      if (!opts?.silent) {
+        ElMessage.warning('出口 Key 仍未就绪，请展开下方手动补绑')
+      }
     }
-    await load()
+    await load({ skipAutoEgress: true })
   } catch (error: any) {
-    ElMessage.error('绑定失败: ' + (error.message || error))
+    showEgressAdvanced.value = true
+    if (!opts?.silent) {
+      ElMessage.error('自动绑定失败: ' + (error.message || error))
+    }
   } finally {
     ensuringEgress.value = false
   }
@@ -677,7 +717,7 @@ async function onAllowLanChange(val: boolean) {
   }
   try {
     await ElMessageBox.confirm(
-      '开启后 MITM 将对局域网可达（监听 0.0.0.0），请仅在可信内网使用。是否继续？',
+      '开启后 MITM 将对局域网可达（0.0.0.0），并对非本机客户端强制代理鉴权。员工须设置 CENTAG_WRAP_TOKEN 后用 centag wrap run。是否继续？',
       '允许局域网访问',
       { type: 'warning', confirmButtonText: '确认开启', cancelButtonText: '取消' }
     )
@@ -787,7 +827,7 @@ async function saveLanConfig() {
   }
 }
 
-const load = async () => {
+const load = async (opts?: { skipAutoEgress?: boolean }) => {
   loading.value = true
   try {
     const configData = await api.get('/api/v1/config')
@@ -818,6 +858,16 @@ const load = async () => {
       suggestedLanHosts.value = []
     }
     void loadAPIKeys()
+
+    // MITM 已开但出口 Key 未就绪时补一次自动绑定（与后端开启 MITM 时的 Ensure 对齐）
+    if (
+      !opts?.skipAutoEgress &&
+      status.value.enabled &&
+      !setupStatus.value?.egress_api_key_configured
+    ) {
+      void ensureEgressKey({ silent: true })
+    }
+    showEgressAdvanced.value = status.value.enabled && !setupStatus.value?.egress_api_key_configured
   } catch (error: any) {
     ElMessage.error('加载状态失败: ' + error.message)
   } finally {
@@ -862,7 +912,9 @@ const toggleProxy = async () => {
         advertise_host: allowLanClients.value ? advertiseHost.value : ''
       }
     })
-    ElMessage.success(status.value.enabled ? 'MITM 服务已启用' : 'MITM 服务已禁用')
+    ElMessage.success(
+      status.value.enabled ? 'MITM 已启用（出口 Key 将自动绑定）' : 'MITM 服务已禁用'
+    )
     await load()
   } catch (error: any) {
     ElMessage.error('操作失败: ' + error.message)
@@ -1042,7 +1094,7 @@ const testProxy = async () => {
     await load()
     lines.push({
       ok: !!status.value.enabled,
-      text: status.value.enabled ? 'MITM 服务运行中' : 'MITM 未启动（请先在步骤 2 开启）'
+      text: status.value.enabled ? 'MITM 服务运行中' : 'MITM 未启动（请先在步骤 1 开启）'
     })
     lines.push({
       ok: egressConfigured.value,
@@ -1125,16 +1177,41 @@ onMounted(() => {
 }
 
 .page-title {
-  font-size: 24px;
+  font-size: 20px;
   font-weight: 600;
-  margin: 0 0 8px 0;
+  margin: 0 0 4px 0;
   color: var(--el-text-color-primary);
 }
 
 .page-description {
-  font-size: 14px;
+  font-size: 12px;
   color: var(--el-text-color-secondary);
   margin: 0;
+  line-height: 1.4;
+}
+
+.wizard-lead {
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  line-height: 1.45;
+}
+
+.wizard-lead code {
+  font-size: 11px;
+}
+
+.wizard-steps {
+  margin-bottom: 12px;
+}
+
+.wizard-steps :deep(.el-step__title) {
+  font-size: 13px;
+  line-height: 1.3;
+}
+
+.wizard-steps :deep(.el-step__description) {
+  font-size: 11px;
 }
 
 .toolbar-actions {
@@ -1186,20 +1263,24 @@ onMounted(() => {
 }
 
 .step-card {
-  margin-bottom: 12px;
+  margin-bottom: 8px;
   border-radius: 8px;
+}
+
+.step-card :deep(.el-card__body) {
+  padding: 12px 14px;
 }
 
 .step-head {
   display: flex;
   align-items: flex-start;
-  gap: 12px;
-  margin-bottom: 16px;
+  gap: 10px;
+  margin-bottom: 10px;
 }
 
 .step-num {
-  width: 28px;
-  height: 28px;
+  width: 22px;
+  height: 22px;
   border-radius: 50%;
   background: var(--el-color-primary);
   color: #fff;
@@ -1207,6 +1288,7 @@ onMounted(() => {
   align-items: center;
   justify-content: center;
   font-weight: 700;
+  font-size: 12px;
   flex-shrink: 0;
 }
 
@@ -1216,50 +1298,72 @@ onMounted(() => {
 }
 
 .step-title-block h3 {
-  margin: 0 0 4px;
-  font-size: 16px;
+  margin: 0 0 2px;
+  font-size: 14px;
   font-weight: 600;
 }
 
 .step-title-block p {
   margin: 0;
-  font-size: 13px;
+  font-size: 12px;
+  line-height: 1.45;
   color: var(--el-text-color-secondary);
 }
 
-.step-row {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-bottom: 12px;
+.step-title-block code {
+  font-size: 11px;
 }
 
-.step-row-label {
-  width: 120px;
-  font-size: 14px;
+.switch-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 28px;
+  margin-bottom: 8px;
+}
+
+.switch-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 240px;
+}
+
+.switch-label {
+  font-size: 13px;
   color: var(--el-text-color-regular);
+  white-space: nowrap;
 }
 
 .lan-form {
-  margin-top: 8px;
+  margin-top: 4px;
+}
+
+.sub-block {
+  margin-bottom: 10px;
+}
+
+.sub-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--el-text-color-regular);
+  margin-bottom: 6px;
 }
 
 .cmd-block {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   flex-wrap: wrap;
-  padding: 12px 14px;
-  border-radius: 8px;
+  padding: 8px 10px;
+  border-radius: 6px;
   background: var(--el-fill-color-light);
-  margin-bottom: 12px;
+  margin-bottom: 6px;
 }
 
 .cmd-block code {
   flex: 1;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 13px;
+  font-size: 12px;
   word-break: break-all;
 }
 
@@ -1267,14 +1371,21 @@ onMounted(() => {
   border: none;
 }
 
+.optional-collapse :deep(.el-collapse-item__header) {
+  font-size: 12px;
+  height: 36px;
+  line-height: 36px;
+}
+
 .check-list {
-  margin: 0 0 16px;
-  padding-left: 20px;
+  margin: 0 0 10px;
+  padding-left: 18px;
 }
 
 .check-list li {
-  margin-bottom: 6px;
-  font-size: 14px;
+  margin-bottom: 3px;
+  font-size: 12px;
+  line-height: 1.4;
 }
 
 .check-list li.pass {
@@ -1306,19 +1417,19 @@ onMounted(() => {
 }
 
 .mt-md {
-  margin-top: 16px;
+  margin-top: 12px;
+}
+
+.mt-sm {
+  margin-top: 6px;
 }
 
 .mb-md {
-  margin-bottom: 16px;
-}
-
-.mb-lg {
-  margin-bottom: 24px;
+  margin-bottom: 12px;
 }
 
 .mb-sm {
-  margin-bottom: 8px;
+  margin-bottom: 6px;
 }
 
 .ml-sm {
@@ -1327,24 +1438,18 @@ onMounted(() => {
 
 .form-hint {
   color: var(--el-text-color-secondary);
-  font-size: 12px;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.form-hint code {
+  font-size: 11px;
 }
 
 .lan-suggest {
   width: 100%;
-  margin-top: 6px;
+  margin-top: 4px;
   margin-left: 0;
-}
-
-.key-policy-list {
-  margin: 8px 0 0;
-  padding-left: 18px;
-  font-size: 13px;
-  line-height: 1.55;
-}
-
-.key-policy-list li {
-  margin-bottom: 4px;
 }
 
 @media (max-width: 768px) {
@@ -1352,8 +1457,8 @@ onMounted(() => {
     flex-direction: column;
   }
 
-  .step-row-label {
-    width: 100%;
+  .switch-cell {
+    min-width: 100%;
   }
 }
 </style>

@@ -30,6 +30,9 @@ type Server struct {
 	targetDomains    map[string]bool // 需要代理的目标域名（热更新）
 	pathPatterns     []string        // 需要代理的路径模式（热更新）
 	backendAuthToken string          // Centag llmproxy_*；注入到转发请求（热更新）
+	// LAN：非 loopback 客户端必须通过 Proxy-Authorization
+	requireClientProxyAuthFlag bool
+	clientTokenValidator       ClientTokenValidator
 }
 
 // Config MITM服务器配置
@@ -43,6 +46,9 @@ type Config struct {
 	Domains          []string // 需要代理的域名列表
 	PathPatterns     []string // 需要代理的路径模式
 	BackendAuthToken string   // Centag API key injected when forwarding to BackendAddr
+	// RequireClientProxyAuth enables Proxy-Authorization for non-loopback peers (LAN).
+	RequireClientProxyAuth bool
+	ClientTokenValidator   ClientTokenValidator
 }
 
 // NewServer 创建MITM服务器
@@ -103,6 +109,7 @@ func NewServer(config *Config) (*Server, error) {
 	}
 	s.SetRoutingRules(config.Domains, config.PathPatterns)
 	s.SetBackendAuthToken(config.BackendAuthToken)
+	s.SetClientProxyAuth(config.RequireClientProxyAuth, config.ClientTokenValidator)
 	return s, nil
 }
 
@@ -113,6 +120,17 @@ func (s *Server) SetBackendAuthToken(token string) {
 	}
 	s.mu.Lock()
 	s.backendAuthToken = strings.TrimSpace(token)
+	s.mu.Unlock()
+}
+
+// SetClientProxyAuth hot-updates whether non-loopback clients must authenticate.
+func (s *Server) SetClientProxyAuth(required bool, validate ClientTokenValidator) {
+	if s == nil {
+		return
+	}
+	s.mu.Lock()
+	s.requireClientProxyAuthFlag = required
+	s.clientTokenValidator = validate
 	s.mu.Unlock()
 }
 
@@ -242,6 +260,11 @@ func (s *Server) Start() error {
 
 // ServeHTTP 实现http.Handler接口，根据方法分发请求
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	// LAN 强制：在 CONNECT / 明文代理入口统一校验（含非白名单隧道）
+	if !s.requireClientProxyAuth(w, r) {
+		return
+	}
+
 	// CONNECT方法用于建立HTTPS隧道
 	if r.Method == http.MethodConnect {
 		s.handleCONNECT(w, r)
