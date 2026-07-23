@@ -26,6 +26,22 @@ type BackendHealthStatus struct {
 	ModelsCount  int    `json:"models_count"`  // 获取到的模型数量
 }
 
+// BackendAccount 账户池中的单个凭证
+type BackendAccount struct {
+	ID        string `json:"id"`                  // 池内唯一，如 "key-1"
+	Label     string `json:"label,omitempty"`     // 显示名，如 "免费 Key A"
+	APIKey    string `json:"api_key,omitempty"`   // 明文仅写入；响应用 has_api_key
+	Enabled   bool   `json:"enabled"`             // 默认 true
+	Weight    int    `json:"weight,omitempty"`     // 加权轮询，默认 1
+	CreatedAt string `json:"created_at,omitempty"`
+}
+
+// AccountPoolConfig 账户池配置（非空时优先于 BackendConfig.APIKey）
+type AccountPoolConfig struct {
+	Strategy string           `json:"strategy"` // round_robin | least_usage | sticky_session
+	Accounts []BackendAccount `json:"accounts"`
+}
+
 // BackendConfig 后端服务配置
 // 注意：Weight 和 Priority 是调度策略参数，由 scheduler/preset 模块管理
 // 后端管理页面不展示和编辑这些字段，但内部存储需要保留
@@ -61,6 +77,9 @@ type BackendConfig struct {
 	// 故障转移：降级后端列表（按优先级排序）
 	FallbackBackends []string `json:"fallback_backends,omitempty"`
 
+	// 账户池：多凭证轮转（非空时优先于 APIKey）
+	AccountPool *AccountPoolConfig `json:"account_pool,omitempty"`
+
 	// 租户隔离（新增）
 	TenantID string `json:"tenant_id,omitempty"` // 空字符串表示系统默认后端，非空表示租户私有后端
 }
@@ -95,11 +114,22 @@ type BackendConfigResponse struct {
 	// 调度策略参数
 	Weight   int `json:"weight,omitempty"`
 	Priority int `json:"priority,omitempty"`
+
+	// 账户池信息（只读，用于 UI 展示）
+	AccountPoolSummary *AccountPoolSummary `json:"account_pool_summary,omitempty"`
+}
+
+// AccountPoolSummary 账户池摘要信息（用于 API 响应）
+type AccountPoolSummary struct {
+	TotalAccounts  int    `json:"total_accounts"`
+	EnabledAccounts int   `json:"enabled_accounts"`
+	Strategy       string `json:"strategy"`
+	HealthStatus   string `json:"health_status"` // healthy, partial, unhealthy
 }
 
 // ToResponse 将 BackendConfig 转换为 BackendConfigResponse（用于 API 响应）
 func (c *BackendConfig) ToResponse() *BackendConfigResponse {
-	return &BackendConfigResponse{
+	resp := &BackendConfigResponse{
 		ID:              c.ID,
 		Name:            c.Name,
 		Type:            c.Type,
@@ -121,6 +151,30 @@ func (c *BackendConfig) ToResponse() *BackendConfigResponse {
 		Weight:          c.Weight,
 		Priority:        c.Priority,
 	}
+
+	// 账户池摘要
+	if c.AccountPool != nil && len(c.AccountPool.Accounts) > 0 {
+		enabledCount := 0
+		for _, acc := range c.AccountPool.Accounts {
+			if acc.Enabled {
+				enabledCount++
+			}
+		}
+		healthStatus := "healthy"
+		if enabledCount == 0 {
+			healthStatus = "unhealthy"
+		} else if enabledCount < len(c.AccountPool.Accounts) {
+			healthStatus = "partial"
+		}
+		resp.AccountPoolSummary = &AccountPoolSummary{
+			TotalAccounts:   len(c.AccountPool.Accounts),
+			EnabledAccounts: enabledCount,
+			Strategy:        c.AccountPool.Strategy,
+			HealthStatus:    healthStatus,
+		}
+	}
+
+	return resp
 }
 
 // Manager 后端管理器

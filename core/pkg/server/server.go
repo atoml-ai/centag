@@ -1463,6 +1463,15 @@ func (s *Server) setupRoutes() {
 			backends.PUT("/:id", s.backendHandler.UpdateBackend)
 			backends.DELETE("/:id", s.backendHandler.DeleteBackend)
 			backends.POST("/:id/probe", s.backendHandler.ProbeBackend)
+
+			// 账户池 CRUD
+			backends.GET("/:id/accounts", s.backendHandler.ListBackendAccounts)
+			backends.GET("/:id/accounts/:accountId", s.backendHandler.GetBackendAccount)
+			backends.POST("/:id/accounts", s.backendHandler.CreateBackendAccount)
+			backends.PUT("/:id/accounts/:accountId", s.backendHandler.UpdateBackendAccount)
+			backends.DELETE("/:id/accounts/:accountId", s.backendHandler.DeleteBackendAccount)
+			backends.POST("/:id/accounts/:accountId/reset-breaker", s.backendHandler.ResetAccountBreaker)
+			backends.GET("/:id/accounts/stats", s.backendHandler.GetAccountPoolStats)
 		}
 
 		// 全局降级策略管理
@@ -1686,9 +1695,6 @@ func (s *Server) setupRoutes() {
 
 		agentProvAdmin := v1.Group("", auth.JWTMiddleware(), auth.AdminOnlyMiddleware()).Group("/agent-providers")
 		{
-			agentProvAdmin.POST("", s.agentProviderHandler.Create)
-			agentProvAdmin.PUT("/:id", s.agentProviderHandler.Update)
-			agentProvAdmin.DELETE("/:id", s.agentProviderHandler.Delete)
 			agentProvAdmin.POST("/:id/hot-swap", s.agentProviderHandler.HotSwap)
 		}
 	}

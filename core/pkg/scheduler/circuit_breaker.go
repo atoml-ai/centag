@@ -18,10 +18,12 @@ const (
 
 // CircuitBreakerConfig 熔断器配置
 type CircuitBreakerConfig struct {
-	FailureThreshold int           `json:"failure_threshold"` // 失败阈值
-	SuccessThreshold int           `json:"success_threshold"` // 成功阈值（半开状态）
-	Timeout          time.Duration `json:"timeout"`           // 熔断超时
-	WindowDuration   time.Duration `json:"window_duration"`   // 统计窗口
+	FailureThreshold    int           `json:"failure_threshold"`     // 失败阈值
+	SuccessThreshold    int           `json:"success_threshold"`     // 成功阈值（半开状态）
+	Timeout             time.Duration `json:"timeout"`               // 熔断超时
+	WindowDuration      time.Duration `json:"window_duration"`       // 统计窗口
+	ErrorRateThreshold  float64       `json:"error_rate_threshold"`  // [+] 错误率阈值（0=禁用，如 65 表示 65%）
+	MinRequestsInWindow int           `json:"min_requests_in_window"` // [+] 窗口内最小请求数（防止低流量误熔断）
 }
 
 // DefaultCircuitBreakerConfig 默认熔断器配置
@@ -41,6 +43,7 @@ type CircuitBreaker struct {
 	state            CircuitState
 	failures         []time.Time
 	successes        []time.Time
+	requests         []time.Time  // [+] 窗口内全部请求（含成功）
 	lastFailureTime  time.Time
 	lastStateChange  time.Time
 	config           CircuitBreakerConfig
@@ -94,6 +97,7 @@ func (cb *CircuitBreaker) RecordSuccess() {
 
 	now := time.Now()
 	cb.successes = append(cb.successes, now)
+	cb.requests = append(cb.requests, now) // [+] 记录到全部请求
 
 	if cb.state == StateHalfOpen {
 		// 半开状态：达到成功阈值则关闭
@@ -101,6 +105,7 @@ func (cb *CircuitBreaker) RecordSuccess() {
 			cb.changeState(StateClosed)
 			cb.failures = make([]time.Time, 0)
 			cb.successes = make([]time.Time, 0)
+			cb.requests = make([]time.Time, 0)
 		}
 	}
 }
@@ -112,6 +117,7 @@ func (cb *CircuitBreaker) RecordFailure() {
 
 	now := time.Now()
 	cb.failures = append(cb.failures, now)
+	cb.requests = append(cb.requests, now) // [+] 记录到全部请求
 	cb.lastFailureTime = now
 
 	if cb.state == StateHalfOpen {
@@ -119,8 +125,23 @@ func (cb *CircuitBreaker) RecordFailure() {
 		cb.changeState(StateOpen)
 		cb.successes = make([]time.Time, 0)
 	} else if cb.state == StateClosed {
-		// 正常状态：达到失败阈值则打开
-		if len(cb.failures) >= cb.config.FailureThreshold {
+		// [+] 支持 error_rate 与 failure_threshold OR 关系
+		shouldOpen := false
+
+		// 条件 1：失败次数达到阈值
+		if cb.config.FailureThreshold > 0 && len(cb.failures) >= cb.config.FailureThreshold {
+			shouldOpen = true
+		}
+
+		// 条件 2：错误率达到阈值（需满足最小请求数）
+		if cb.config.ErrorRateThreshold > 0 && len(cb.requests) >= cb.config.MinRequestsInWindow {
+			errorRate := float64(len(cb.failures)) / float64(len(cb.requests)) * 100
+			if errorRate >= cb.config.ErrorRateThreshold {
+				shouldOpen = true
+			}
+		}
+
+		if shouldOpen {
 			cb.changeState(StateOpen)
 		}
 	}
@@ -145,6 +166,23 @@ func (cb *CircuitBreaker) GetSuccessCount() int {
 	cb.mu.RLock()
 	defer cb.mu.RUnlock()
 	return len(cb.successes)
+}
+
+// GetRequestCount 获取窗口内请求总数
+func (cb *CircuitBreaker) GetRequestCount() int {
+	cb.mu.RLock()
+	defer cb.mu.RUnlock()
+	return len(cb.requests)
+}
+
+// GetErrorRate 获取错误率（百分比）
+func (cb *CircuitBreaker) GetErrorRate() float64 {
+	cb.mu.RLock()
+	defer cb.mu.RUnlock()
+	if len(cb.requests) == 0 {
+		return 0
+	}
+	return float64(len(cb.failures)) / float64(len(cb.requests)) * 100
 }
 
 // IsHealthy 检查是否健康
@@ -194,6 +232,15 @@ func (cb *CircuitBreaker) cleanupOldRecords(now time.Time) {
 		}
 	}
 	cb.successes = newSuccesses
+
+	// [+] 清理过期请求记录
+	newRequests := make([]time.Time, 0)
+	for _, t := range cb.requests {
+		if t.After(cutoff) {
+			newRequests = append(newRequests, t)
+		}
+	}
+	cb.requests = newRequests
 }
 
 // OnStateChange 注册状态变化回调
@@ -210,6 +257,7 @@ func (cb *CircuitBreaker) Reset() {
 	cb.state = StateClosed
 	cb.failures = make([]time.Time, 0)
 	cb.successes = make([]time.Time, 0)
+	cb.requests = make([]time.Time, 0) // [+] 重置请求记录
 	cb.lastStateChange = time.Now()
 }
 
@@ -225,6 +273,10 @@ type CircuitBreakerManager struct {
 func NewCircuitBreakerManager(config CircuitBreakerConfig) *CircuitBreakerManager {
 	if config.FailureThreshold == 0 {
 		config = DefaultCircuitBreakerConfig()
+	}
+	// [+] 设置默认最小请求数
+	if config.MinRequestsInWindow == 0 {
+		config.MinRequestsInWindow = 10
 	}
 	return &CircuitBreakerManager{
 		breakers:         make(map[string]*CircuitBreaker),
@@ -325,6 +377,7 @@ func (m *CircuitBreakerManager) RecordFailureWithWeight(backendID string, weight
 	now := time.Now()
 	for i := 0; i < weight; i++ {
 		cb.failures = append(cb.failures, now)
+		cb.requests = append(cb.requests, now) // [+] 记录到全部请求
 	}
 	cb.lastFailureTime = now
 
@@ -332,7 +385,23 @@ func (m *CircuitBreakerManager) RecordFailureWithWeight(backendID string, weight
 		cb.changeState(StateOpen)
 		cb.successes = make([]time.Time, 0)
 	} else if cb.state == StateClosed {
-		if len(cb.failures) >= cb.config.FailureThreshold {
+		// [+] 支持 error_rate 与 failure_threshold OR 关系
+		shouldOpen := false
+
+		// 条件 1：失败次数达到阈值
+		if cb.config.FailureThreshold > 0 && len(cb.failures) >= cb.config.FailureThreshold {
+			shouldOpen = true
+		}
+
+		// 条件 2：错误率达到阈值（需满足最小请求数）
+		if cb.config.ErrorRateThreshold > 0 && len(cb.requests) >= cb.config.MinRequestsInWindow {
+			errorRate := float64(len(cb.failures)) / float64(len(cb.requests)) * 100
+			if errorRate >= cb.config.ErrorRateThreshold {
+				shouldOpen = true
+			}
+		}
+
+		if shouldOpen {
 			cb.changeState(StateOpen)
 		}
 	}
