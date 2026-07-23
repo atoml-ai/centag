@@ -7,74 +7,139 @@
     direction="rtl"
     :before-close="handleClose"
   >
-    <el-form 
-      ref="formRef" 
-      :model="localNode" 
+    <el-form
+      ref="formRef"
+      :model="localNode"
       label-position="top"
       :rules="rules"
+      class="node-drawer-form"
     >
-      <!-- 基本信息 -->
-      <el-form-item label="节点ID" prop="id">
-        <el-input v-model="localNode.id" placeholder="唯一标识符" />
-      </el-form-item>
+      <!-- ═══════ 1. 基本信息 ═══════ -->
+      <section class="drawer-section">
+        <div class="section-title">基本信息</div>
+        <el-row :gutter="12">
+          <el-col :span="14">
+            <el-form-item label="节点名称" prop="name">
+              <el-input v-model="localNode.name" placeholder="显示名称" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="10">
+            <el-form-item label="节点类型" prop="type">
+              <el-select v-model="localNode.type" style="width: 100%" @change="onTypeChange">
+                <el-option label="出站转发" value="transparent_forward" />
+                <el-option label="生成器" value="generator" />
+                <el-option label="处理器" value="processor" />
+                <el-option label="审核器" value="reviewer" />
+                <el-option label="路由器" value="router" />
+                <el-option label="聚合器" value="aggregator" />
+                <el-option label="并行节点" value="parallel" />
+                <el-option label="缓存" value="cache" />
+                <el-option label="Token 计量" value="token_usage" />
+                <el-option label="工具调用注入" value="tool_call_injector" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <div class="type-desc">{{ getTypeDescription(localNode.type) }}</div>
+      </section>
 
-      <el-form-item label="节点名称" prop="name">
-        <el-input v-model="localNode.name" placeholder="显示名称" />
-      </el-form-item>
+      <!-- ═══════ 2. 出站转发核心 ═══════ -->
+      <section v-if="localNode.type === 'transparent_forward'" class="drawer-section">
+        <div class="section-title">出站策略</div>
+        <el-alert type="info" :closable="false" class="section-alert">
+          <template #default>
+            <span style="font-size: 13px; line-height: 1.55">
+              <strong>透明 #t</strong>＝按模型选路 + 不注入；
+              <strong>跳板 #j</strong>＝固定出站 + 不注入；
+              <strong>直连 #d</strong>＝固定出站 + 注入 System Prompt。
+            </span>
+          </template>
+        </el-alert>
 
-      <el-form-item label="节点类型" prop="type">
-        <el-select v-model="localNode.type" style="width: 100%" @change="onTypeChange">
-          <el-option label="出站转发 (Transparent Forward)" value="transparent_forward" />
-          <el-option label="生成器 (Generator)" value="generator" />
-          <el-option label="处理器 (Processor)" value="processor" />
-          <el-option label="审核器 (Reviewer)" value="reviewer" />
-          <el-option label="路由器 (Router)" value="router" />
-          <el-option label="聚合器 (Aggregator)" value="aggregator" />
-          <el-option label="并行节点 (Parallel)" value="parallel" />
-          <el-option label="缓存 (Cache)" value="cache" />
-          <el-option label="Token 计量 (Token Usage)" value="token_usage" />
-          <el-option label="工具调用注入 (Tool Call Injector)" value="tool_call_injector" />
-        </el-select>
-        <div class="type-desc">
-          {{ getTypeDescription(localNode.type) }}
-        </div>
-      </el-form-item>
-
-      <!-- 插件实现选择（仅对需要插件的节点类型显示） -->
-      <template v-if="needsPluginSelection(localNode.type)">
-        <el-divider>插件实现选择</el-divider>
-        <PluginSelector
-          v-model="localNode.implementation"
-          v-model:kind="localNode.kind"
-          :plugins="availablePlugins"
-          show-kind-selector
-          show-all-plugins
-          @view-all="openPluginManager"
-        />
-      </template>
-
-      <!-- LLM 配置 - 仅对需要大模型的节点显示 -->
-      <template v-if="needsLLM(localNode.type)">
-        <el-divider>大模型配置</el-divider>
-
-        <el-form-item label="后端服务" prop="backend">
-          <BackendSelector
-            v-model="localNode.backend"
-            placeholder="选择后端"
-            style="width: 100%"
-            @change="onBackendChange"
-          />
+        <el-form-item label="选路策略">
+          <el-radio-group v-model="egressConfig.route_policy">
+            <el-radio-button value="match_model">按模型匹配</el-radio-button>
+            <el-radio-button value="fixed">固定出站</el-radio-button>
+          </el-radio-group>
         </el-form-item>
 
-        <el-form-item label="模型名称" prop="model">
-          <ModelSelector
-            v-model="localNode.model"
-            :backend-id="localNode.backend"
-            placeholder="选择或输入模型"
-            :allow-create="true"
-            :default-first-option="true"
+        <el-form-item label="注入 System Prompt">
+          <el-switch v-model="egressConfig.inject_system_prompt" active-text="开启（直连）" inactive-text="关闭（透传）" />
+        </el-form-item>
+
+        <el-row :gutter="12">
+          <el-col :span="12">
+            <el-form-item label="后端服务" prop="backend">
+              <BackendSelector
+                v-model="localNode.backend"
+                placeholder="选择后端"
+                style="width: 100%"
+                @change="onBackendChange"
+              />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="模型" prop="model">
+              <ModelSelector
+                v-model="localNode.model"
+                :backend-id="localNode.backend"
+                placeholder="选择或输入模型"
+                :allow-create="true"
+                :default-first-option="true"
+              />
+            </el-form-item>
+          </el-col>
+        </el-row>
+
+        <el-form-item v-if="showPromptEditor" :label="getPromptLabel(localNode.type)">
+          <div class="system-prompt-toolbar">
+            <el-select
+              v-model="selectedPromptPreset"
+              clearable
+              placeholder="人格预设"
+              style="width: 160px"
+              @change="onPromptPresetChange"
+            >
+              <el-option v-for="p in systemPromptPresets" :key="p.id" :label="p.label" :value="p.id" />
+            </el-select>
+            <el-button size="small" @click="restoreDefaultSystemPrompt">恢复默认</el-button>
+          </div>
+          <el-input
+            ref="promptInputRef"
+            v-model="promptFieldValue"
+            type="textarea"
+            :rows="6"
+            :placeholder="getPromptPlaceholder(localNode.type)"
           />
         </el-form-item>
+      </section>
+
+      <!-- ═══════ 2b. LLM 节点核心（非出站） ═══════ -->
+      <section v-if="needsLLM(localNode.type) && localNode.type !== 'transparent_forward'" class="drawer-section">
+        <div class="section-title">模型与 Prompt</div>
+        <el-row :gutter="12">
+          <el-col :span="12">
+            <el-form-item label="后端服务" prop="backend">
+              <BackendSelector
+                v-model="localNode.backend"
+                placeholder="选择后端"
+                style="width: 100%"
+                @change="onBackendChange"
+              />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="模型" prop="model">
+              <ModelSelector
+                v-model="localNode.model"
+                :backend-id="localNode.backend"
+                placeholder="选择或输入模型"
+                :allow-create="true"
+                :default-first-option="true"
+              />
+            </el-form-item>
+          </el-col>
+        </el-row>
 
         <el-form-item v-if="showPromptEditor" :label="getPromptLabel(localNode.type)">
           <div v-if="usesSystemPrompt" class="system-prompt-toolbar">
@@ -85,12 +150,7 @@
               style="width: 160px"
               @change="onPromptPresetChange"
             >
-              <el-option
-                v-for="p in systemPromptPresets"
-                :key="p.id"
-                :label="p.label"
-                :value="p.id"
-              />
+              <el-option v-for="p in systemPromptPresets" :key="p.id" :label="p.label" :value="p.id" />
             </el-select>
             <el-button size="small" @click="restoreDefaultSystemPrompt">恢复默认</el-button>
           </div>
@@ -98,466 +158,46 @@
             ref="promptInputRef"
             v-model="promptFieldValue"
             type="textarea"
-            :rows="8"
+            :rows="6"
             :placeholder="getPromptPlaceholder(localNode.type)"
           />
-          <div v-if="localNode.type === 'generator'" class="help-text">
-            非空 system prompt 会覆盖客户端 system 消息。
-          </div>
-          <div v-if="localNode.type === 'transparent_forward'" class="help-text">
-            开启「注入 System Prompt」后生效：用网关人格替换客户端 system 消息（对应直连 #d）。
-          </div>
+          <div v-if="localNode.type === 'generator'" class="help-text">非空 system prompt 会覆盖客户端 system 消息。</div>
           <div v-if="localNode.type === 'aggregator'" class="help-text">
-            可选。用于指导 LLM 如何聚合多个上游节点的输出。留空将使用默认总结 prompt。可用变量：&#123;&#123;.combined_content&#125;&#125;（所有上游输出的拼接）
-          </div>
-
-          <!-- 可用变量面板 -->
-          <div class="var-panel">
-            <div class="var-panel-header">
-              <span class="var-panel-title">可用变量</span>
-              <span class="var-panel-hint">点击变量名插入到光标处</span>
-            </div>
-
-            <table class="var-table">
-              <colgroup>
-                <col style="width: 190px" />
-                <col />
-              </colgroup>
-              <thead>
-                <tr>
-                  <th>变量名（点击插入）</th>
-                  <th>说明</th>
-                </tr>
-              </thead>
-
-              <!-- 内置变量 -->
-              <tbody>
-                <tr class="var-section-row">
-                  <td colspan="2" class="var-section-label">📌 内置变量（开箱即用）</td>
-                </tr>
-                <tr v-for="v in builtinVars" :key="v.name">
-                  <td>
-                    <el-tag class="var-chip" type="primary" size="small" @click="insertVar(v.name)">
-                      {{ varLabel(v.name) }}
-                    </el-tag>
-                  </td>
-                  <td class="var-desc">{{ v.desc }}</td>
-                </tr>
-
-                <!-- 上游节点变量 -->
-                <template v-if="upstreamVars.length > 0">
-                  <tr class="var-section-row">
-                    <td colspan="2" class="var-section-label">🔗 上游节点（需在下方添加变量绑定后使用）</td>
-                  </tr>
-                  <tr v-for="v in upstreamVars" :key="v.name">
-                    <td>
-                      <el-tag class="var-chip" type="success" size="small" @click="insertVar(v.name)">
-                        {{ varLabel(v.name) }}
-                      </el-tag>
-                    </td>
-                    <td class="var-desc">{{ v.desc }}</td>
-                  </tr>
-                </template>
-
-                <!-- 执行上下文变量 -->
-                <tr class="var-section-row">
-                  <td colspan="2" class="var-section-label">⚙️ 执行上下文（需在下方添加变量绑定后使用）</td>
-                </tr>
-                <tr v-for="v in contextVars" :key="v.name">
-                  <td>
-                    <el-tag class="var-chip" type="warning" size="small" @click="insertVar(v.name)">
-                      {{ varLabel(v.name) }}
-                    </el-tag>
-                  </td>
-                  <td class="var-desc">{{ v.desc }}</td>
-                </tr>
-              </tbody>
-            </table>
+            可选。留空使用默认总结 prompt。可用 &#123;&#123;.combined_content&#125;&#125;
           </div>
         </el-form-item>
+      </section>
 
-        <!-- 自定义变量绑定（template_vars） -->
-        <el-form-item
-          v-if="localNode.type === 'reviewer' || localNode.type === 'processor'"
-          label="自定义变量绑定"
-        >
-          <div class="template-vars-editor">
-            <div class="template-vars-hint">
-              将数据路径绑定为自定义变量名，在 Prompt 中用 <code v-text="'{{.变量名}}'"></code> 引用
-            </div>
+      <!-- ═══════ 2c. 插件实现（处理器类常用） ═══════ -->
+      <section v-if="needsPluginSelection(localNode.type)" class="drawer-section">
+        <div class="section-title">插件实现</div>
+        <PluginSelector
+          v-model="localNode.implementation"
+          v-model:kind="localNode.kind"
+          :plugins="availablePlugins"
+          show-kind-selector
+          show-all-plugins
+          @view-all="openPluginManager"
+        />
+      </section>
 
-            <div
-              v-for="(binding, idx) in templateVarBindings"
-              :key="idx"
-              class="template-var-row"
-            >
-              <el-input
-                v-model="binding.key"
-                placeholder="变量名，如 my_answer"
-                size="small"
-                style="width: 140px; flex-shrink: 0"
-              />
-              <span class="var-eq">=</span>
-              <el-select
-                v-model="binding.source"
-                placeholder="数据来源"
-                size="small"
-                style="width: 130px; flex-shrink: 0"
-                @change="(v: string) => onSourceChange(binding, v)"
-              >
-                <el-option label="原始用户输入" value="input.content" />
-                <el-option label="当前时间戳" value="context.timestamp" />
-                <el-option label="用户 ID" value="context.user_id" />
-                <el-option label="会话 ID" value="context.session_id" />
-                <el-option
-                  v-for="n in upstreamNodeIds"
-                  :key="n + '_content'"
-                  :label="`节点 ${n} 的输出内容`"
-                  :value="`node.${n}.content`"
-                />
-                <el-option
-                  v-for="n in upstreamNodeIds"
-                  :key="n + '_score'"
-                  :label="`节点 ${n} 的评分`"
-                  :value="`node.${n}.score`"
-                />
-                <el-option
-                  v-for="n in upstreamNodeIds"
-                  :key="n + '_passed'"
-                  :label="`节点 ${n} 是否通过审核`"
-                  :value="`node.${n}.passed`"
-                />
-                <el-option
-                  v-for="n in upstreamNodeIds"
-                  :key="n + '_feedback'"
-                  :label="`节点 ${n} 的审核反馈`"
-                  :value="`node.${n}.feedback`"
-                />
-                <el-option label="自定义路径..." value="__custom__" />
-              </el-select>
-              <el-input
-                v-if="binding.source === '__custom__'"
-                v-model="binding.customPath"
-                placeholder="如 node.generator.metadata.tokens"
-                size="small"
-                style="flex: 1"
-              />
-              <el-button
-                type="danger"
-                text
-                size="small"
-                @click="removeVarBinding(idx)"
-              >
-                <el-icon><Delete /></el-icon>
-              </el-button>
-            </div>
-
-            <el-button size="small" @click="addVarBinding" style="margin-top: 6px">
-              <el-icon><Plus /></el-icon>
-              添加变量绑定
-            </el-button>
-          </div>
-        </el-form-item>
-      </template>
-
-      <!-- 出站转发策略（直连 #d / 透明 #t / 跳板 #j 共用节点） -->
-      <template v-if="localNode.type === 'transparent_forward'">
-        <el-divider>出站策略</el-divider>
-        <el-alert type="info" :closable="false" style="margin-bottom: 12px">
-          <template #default>
-            <div style="font-size: 13px; line-height: 1.6">
-              与预置模板对应：<strong>透明 #t</strong>＝按模型选路 + 不注入；
-              <strong>跳板 #j</strong>＝固定出站 + 不注入；
-              <strong>直连 #d</strong>＝固定出站 + 注入 System Prompt。
-            </div>
-          </template>
-        </el-alert>
-
-        <el-form-item label="选路策略">
-          <el-radio-group v-model="egressConfig.route_policy">
-            <el-radio-button value="match_model">按模型匹配（透明）</el-radio-button>
-            <el-radio-button value="fixed">固定出站（直连/跳板）</el-radio-button>
-          </el-radio-group>
-          <div class="help-text">
-            固定出站：只走上方选中的后端/模型（或系统默认）。按模型匹配：根据客户端 model 跨后端松匹配。
-          </div>
-        </el-form-item>
-
-        <el-form-item label="注入 System Prompt">
-          <el-switch v-model="egressConfig.inject_system_prompt" />
-          <div class="help-text">
-            开启后用下方网关 System Prompt 替换客户端 system（直连模式）。关闭则为透明/跳板透传。
-          </div>
-        </el-form-item>
-
-        <el-form-item label="重定向策略">
-          <el-select v-model="egressConfig.redirect_policy" style="width: 100%">
-            <el-option label="不跟随（never，默认）" value="never" />
-            <el-option label="始终跟随（always）" value="always" />
-            <el-option label="仅 GET/HEAD 跟随（smart）" value="smart" />
-          </el-select>
-        </el-form-item>
-
-        <el-form-item v-if="egressConfig.redirect_policy !== 'never'" label="最大重定向次数">
-          <el-input-number v-model="egressConfig.max_redirects" :min="1" :max="20" style="width: 100%" />
-        </el-form-item>
-
-        <el-form-item label="默认 URL Scheme">
-          <el-select v-model="egressConfig.default_scheme" style="width: 100%">
-            <el-option label="https" value="https" />
-            <el-option label="http" value="http" />
-          </el-select>
-        </el-form-item>
-      </template>
-
-      <!-- Token 计量节点配置 -->
-      <template v-if="localNode.type === 'token_usage'">
-        <el-divider>Token 计量配置</el-divider>
-
-        <el-alert type="info" :closable="false" style="margin-bottom: 12px">
-          <template #default>
-            <div style="font-size: 13px; line-height: 1.6">
-              内置插件 <code>builtin.token_usage</code>，必须依赖上游 <strong>生成器</strong> 或 <strong>透明转发</strong> 节点
-              （在「依赖节点」中选择），确保在 LLM 返回后再计量；勿将唯一生成器改成计量节点。
-            </div>
-          </template>
-        </el-alert>
-
-        <el-form-item label="操作类型">
-          <el-select v-model="localNode.config.customConfig.operation" style="width: 100%">
-            <el-option label="记录用量 (Record)" value="record" />
-            <el-option label="查询统计 (Query)" value="query" />
-            <el-option label="聚合统计 (Aggregate)" value="aggregate" />
-          </el-select>
-        </el-form-item>
-
-        <el-form-item label="存储类型">
-          <el-select v-model="localNode.config.customConfig.storage_type" style="width: 100%">
-            <el-option label="应用数据库 (推荐)" value="sqlite" />
-            <el-option label="PostgreSQL" value="postgresql" />
-            <el-option label="内存 (仅调试)" value="memory" />
-          </el-select>
-          <div class="help-text">桌面版使用 SQLite；团队部署可选 PostgreSQL。实际持久化走系统 token_usage 表。</div>
-        </el-form-item>
-
-        <el-form-item v-if="localNode.config.customConfig.operation === 'record'" label="记录字段">
-          <el-checkbox-group v-model="localNode.config.customConfig.record_fields">
-            <el-checkbox label="prompt_tokens">输入 Token</el-checkbox>
-            <el-checkbox label="completion_tokens">输出 Token</el-checkbox>
-            <el-checkbox label="total_tokens">总 Token</el-checkbox>
-            <el-checkbox label="model">模型</el-checkbox>
-            <el-checkbox label="backend_id">后端</el-checkbox>
-          </el-checkbox-group>
-        </el-form-item>
-      </template>
-
-      <!-- 缓存节点配置 -->
-      <template v-if="localNode.type === 'cache'">
-        <el-divider>缓存配置</el-divider>
-
-        <el-form-item label="操作类型" prop="config.customConfig.operation">
-          <el-select v-model="localNode.config.customConfig.operation" style="width: 100%">
-            <el-option label="读取缓存 (Read)" value="read" />
-            <el-option label="写入缓存 (Write)" value="write" />
-            <el-option label="删除缓存 (Delete)" value="delete" />
-          </el-select>
-          <div class="help-text">选择此节点执行的缓存操作</div>
-        </el-form-item>
-
-        <el-form-item label="缓存策略" prop="config.customConfig.strategy">
-          <el-select v-model="localNode.config.customConfig.strategy" style="width: 100%">
-            <el-option label="精确匹配 (Exact)" value="exact" />
-            <el-option label="语义匹配 (Semantic)" value="semantic" />
-            <el-option label="混合策略 (Hybrid)" value="hybrid" />
-          </el-select>
-          <div class="help-text">
-            精确匹配：基于内容哈希；语义匹配：基于向量相似度；混合：先精确后语义
-          </div>
-        </el-form-item>
-
-        <el-form-item label="读取存储后端" v-if="localNode.config.customConfig.operation === 'read' || localNode.config.customConfig.operation === 'delete'">
-          <el-select 
-            v-model="localNode.config.customConfig.read_storage_name" 
-            style="width: 100%" 
-            clearable
-            placeholder="选择读取存储（留空使用默认）"
-          >
-            <el-option 
-              v-for="s in availableStorages" 
-              :key="s.name" 
-              :label="`${s.name} (${s.type})`" 
-              :value="s.name"
-            />
-          </el-select>
-          <div class="help-text">
-            从此存储读取缓存。留空则使用默认缓存管理器。
-          </div>
-        </el-form-item>
-
-        <el-form-item label="写入存储后端" v-if="localNode.config.customConfig.operation === 'write' || localNode.config.customConfig.operation === 'delete'">
-          <el-select 
-            v-model="localNode.config.customConfig.write_storage_name" 
-            style="width: 100%" 
-            clearable
-            placeholder="选择写入存储（留空使用默认）"
-          >
-            <el-option 
-              v-for="s in availableStorages" 
-              :key="s.name" 
-              :label="`${s.name} (${s.type})`" 
-              :value="s.name"
-            />
-          </el-select>
-          <div class="help-text">
-            写入缓存到此存储。留空则使用默认缓存管理器。<br>
-            <strong>语义/混合策略</strong>：此存储也用于向量化缓存的向量存储，请确保所选存储支持向量检索（如 pgvector、Elasticsearch、Chroma）。
-          </div>
-        </el-form-item>
-
-        <el-form-item label="缓存键模板">
-          <el-input 
-            v-model="localNode.config.customConfig.key_template" 
-            :placeholder="'{{model}}:{{hash}}'"
-          />
-          <div class="help-text">
-            缓存键生成规则，支持变量：&#123;&#123;model&#125;&#125;（模型名）、&#123;&#123;hash&#125;&#125;（内容哈希）
-          </div>
-        </el-form-item>
-
-        <el-form-item v-if="localNode.config.customConfig.operation === 'write'" label="缓存 TTL（秒）">
-          <el-input-number 
-            v-model="localNode.config.customConfig.ttl" 
-            :min="60" 
-            :max="86400" 
-            style="width: 100%" 
-          />
-          <div class="help-text">缓存过期时间，单位秒。默认 3600（1小时）</div>
-        </el-form-item>
-
-        <el-alert type="info" :closable="false" style="margin-top: 12px">
-          <template #default>
-            <div style="font-size: 13px; line-height: 1.6">
-              <strong>💡 存储配置提示：</strong><br>
-              • 需要先在 <strong>后端策略 > 存储管理</strong> 中添加存储后端（如 PostgreSQL、Redis 等）<br>
-              • 读取操作只需要配置读取存储，写入操作只需要配置写入存储<br>
-              • 语义/混合策略需要存储后端支持向量检索（如 pgvector、Milvus）
-            </div>
-          </template>
-        </el-alert>
-
-        <!-- 语义缓存配置（语义/混合策略时显示） -->
-        <template v-if="isSemanticStrategy">
-          <el-divider>语义缓存配置</el-divider>
-
-          <el-alert type="warning" :closable="false" style="margin-bottom: 16px">
-            <template #default>
-              语义缓存需要存储后端支持向量检索（如 PostgreSQL + pgvector、Elasticsearch、Chroma）。
-              请确保所选存储后端已正确配置并支持向量操作。
-            </template>
-          </el-alert>
-
-          <el-form-item label="向量化模型服务 (Embedding)">
-            <BackendSelector
-              v-model="localNode.config.customConfig.embedding_backend_id"
-              placeholder="选择 Embedding 后端服务"
-              :filter="embeddingBackendFilter"
-              style="width: 100%"
-              @change="onEmbeddingBackendChange"
-            />
-            <div class="help-text">
-              用于将文本向量化的模型服务。仅显示已启用且支持向量化的后端。
-            </div>
-          </el-form-item>
-
-          <el-form-item label="向量化模型名称" v-if="localNode.config.customConfig.embedding_backend_id">
-            <el-select
-              v-model="localNode.config.customConfig.embedding_model"
-              style="width: 100%"
-              clearable
-              placeholder="选择或输入模型名称"
-              :allow-create="true"
-              :default-first-option="true"
-            >
-              <el-option
-                v-for="m in embeddingModels"
-                :key="m"
-                :label="m"
-                :value="m"
-              />
-            </el-select>
-            <div class="help-text">
-              指定用于向量化的模型名称。留空则使用后端默认模型。
-            </div>
-          </el-form-item>
-
-          <el-form-item label="语义阈值 (0-1)">
-            <el-input-number
-              v-model="localNode.config.customConfig.semantic_threshold"
-              :min="0"
-              :max="1"
-              :step="0.05"
-              :precision="2"
-              style="width: 100%"
-            />
-            <div class="help-text">
-              向量相似度阈值，范围 0-1。高于此值才认为匹配。推荐 0.85。
-            </div>
-          </el-form-item>
-
-          <el-form-item label="语义 Top K">
-            <el-input-number
-              v-model="localNode.config.customConfig.semantic_top_k"
-              :min="1"
-              :max="100"
-              style="width: 100%"
-            />
-            <div class="help-text">
-              语义搜索返回的候选结果数量。推荐 5。
-            </div>
-          </el-form-item>
-        </template>
-      </template>
-
-      <!-- 路由节点专用配置 —— 仅 router 类型显示 -->
-      <template v-if="localNode.type === 'router'">
-        <el-divider>路由配置 (Router Config)</el-divider>
-
+      <!-- ═══════ 2d. Router 核心 ═══════ -->
+      <section v-if="localNode.type === 'router'" class="drawer-section">
+        <div class="section-title">路由规则</div>
         <el-form-item label="路由策略">
           <el-select v-model="routerConfig.strategy" style="width: 100%">
-            <el-option label="关键词包含匹配 (keyword_contains)" value="keyword_contains" />
-            <el-option label="关键词前缀匹配 (keyword_prefix)" value="keyword_prefix" />
-            <el-option label="有序规则 (ordered)" value="ordered" />
-            <el-option label="正则匹配 (regex_only)" value="regex_only" />
-            <el-option label="关键字+轻量意图 (keyword_then_intent)" value="keyword_then_intent" />
-            <el-option label="LLM 意图分类 (llm_classify)" value="llm_classify" />
+            <el-option label="关键词包含匹配" value="keyword_contains" />
+            <el-option label="关键词前缀匹配" value="keyword_prefix" />
+            <el-option label="有序规则" value="ordered" />
+            <el-option label="正则匹配" value="regex_only" />
+            <el-option label="关键字+轻量意图" value="keyword_then_intent" />
+            <el-option label="LLM 意图分类" value="llm_classify" />
           </el-select>
-          <div class="help-text">
-            <span v-if="routerConfig.strategy === 'llm_classify'">
-              LLM 语义分类：会发起一次额外的 LLM 调用（约 500ms-2s 延迟），准确率高，能处理多样表达。
-            </span>
-            <span v-else-if="routerConfig.strategy === 'keyword_then_intent'">
-              先关键字/规则命中，未命中再轻量意图分类；小模型分类默认关闭。
-            </span>
-            <span v-else>
-              关键词/规则匹配：零成本、低延迟。llm_classify 适合复杂意图场景。
-            </span>
-          </div>
         </el-form-item>
-
         <el-form-item label="默认路由节点">
           <el-input v-model="routerConfig.defaultRoute" placeholder="例如: chat-generator" />
-          <div class="help-text">当输入未命中任何规则时，默认执行的分支节点 ID</div>
         </el-form-item>
-
         <el-form-item label="路由规则映射">
-          <div class="help-text" style="margin-bottom: 8px">
-            <span v-if="routerConfig.strategy === 'llm_classify'">
-              类别名 → 目标节点 ID。LLM 返回类别名（如 code）时，路由到对应节点。
-            </span>
-            <span v-else>
-              关键词 → 目标节点 ID。输入包含左侧关键词时，路由到右侧节点。
-            </span>
-          </div>
           <div
             v-for="(rule, idx) in routerConfig.routes"
             :key="idx"
@@ -565,317 +205,130 @@
           >
             <el-input
               v-model="rule.keyword"
-              :placeholder="routerConfig.strategy === 'llm_classify' ? '类别名，如 code' : '关键词，如 python'"
+              :placeholder="routerConfig.strategy === 'llm_classify' ? '类别名' : '关键词'"
               size="small"
               style="width: 180px; flex-shrink: 0"
             />
             <span class="var-eq">→</span>
-            <el-input
-              v-model="rule.target"
-              placeholder="目标节点 ID，如 code-generator"
-              size="small"
-              style="flex: 1"
-            />
-            <el-button
-              type="danger"
-              text
-              size="small"
-              @click="removeRouterRoute(idx)"
-            >
+            <el-input v-model="rule.target" placeholder="目标节点 ID" size="small" style="flex: 1" />
+            <el-button type="danger" text size="small" @click="removeRouterRoute(idx)">
               <el-icon><Delete /></el-icon>
             </el-button>
           </div>
           <el-button size="small" @click="addRouterRoute" style="margin-top: 6px">
             <el-icon><Plus /></el-icon>
-            添加路由规则
+            添加规则
           </el-button>
         </el-form-item>
+      </section>
 
-        <!-- llm_classify 专属配置 -->
-        <template v-if="routerConfig.strategy === 'llm_classify'">
-          <el-divider>LLM 分类配置</el-divider>
-
-          <el-form-item label="后端服务" prop="backend">
-            <BackendSelector
-              v-model="localNode.backend"
-              placeholder="选择用于意图分类的后端"
-              style="width: 100%"
-              @change="onBackendChange"
-            />
-            <div class="help-text">执行 LLM 意图分类时调用的后端服务（推荐使用轻量、低延迟模型）</div>
-          </el-form-item>
-
-          <el-form-item label="模型名称" prop="model">
-            <ModelSelector
-              v-model="localNode.model"
-              :backend-id="localNode.backend"
-              placeholder="选择或输入模型"
-              :allow-create="true"
-              :default-first-option="true"
-            />
-            <div class="help-text">执行意图分类的模型，如 glm-4-flash、qwen-turbo 等轻量模型</div>
-          </el-form-item>
-
-          <el-form-item label="分类 Prompt">
-            <el-input
-              v-model="routerConfig.classifyPrompt"
-              type="textarea"
-              :rows="6"
-              :placeholder="'留空使用默认 Prompt。可用变量：{{.input}}'"
-            />
-            <div class="help-text">
-              自定义 LLM 分类 Prompt（可选）。留空则使用内置默认分类 Prompt。
-              Prompt 中可通过 <code v-text="'{{.input}}'"></code> 引用用户原始输入。
-            </div>
-          </el-form-item>
-
-          <el-alert type="warning" :closable="false" style="margin-bottom: 12px">
-            <template #default>
-              <div>使用 llm_classify 需确保节点已配置 <strong>后端服务</strong> 和 <strong>模型</strong>，且 routes 非空。</div>
-              <div style="margin-top: 4px">每次请求会增加一次 LLM 调用（推荐使用轻量模型如 glm-4-flash）。</div>
-            </template>
-          </el-alert>
-        </template>
-      </template>
-
-      <!-- 插件自定义配置 (Custom Config) —— 通用，所有带插件的节点类型均显示 -->
-      <template v-if="needsPluginSelection(localNode.type)">
-        <el-divider>插件自定义配置 (Custom Config)</el-divider>
-
-        <!-- 针对 business.mem0 插件的快捷预设字段 -->
-        <template v-if="localNode.implementation === 'business.mem0'">
-          <el-form-item label="Mem0 API Key">
-            <el-input
-              v-model="mem0PresetConfig.api_key"
-              type="password"
-              show-password
-              placeholder="输入 Mem0 Admin API Key"
-            />
-            <div class="help-text">Mem0 服务的认证密钥，仅在当前节点生效</div>
-          </el-form-item>
-
-          <el-form-item label="Mem0 Base URL">
-            <el-input
-              v-model="mem0PresetConfig.base_url"
-              placeholder="http://localhost:20061"
-            />
-            <div class="help-text">Mem0 服务地址，留空使用默认值</div>
-          </el-form-item>
-
-          <el-form-item label="Namespace">
-            <el-input
-              v-model="mem0PresetConfig.namespace"
-              placeholder="default"
-            />
-            <div class="help-text">Mem0 命名空间，用于隔离不同业务的数据</div>
-          </el-form-item>
-
-          <el-form-item label="搜索模式">
-            <el-select v-model="mem0PresetConfig.search_mode" style="width: 100%">
-              <el-option label="语义搜索 (semantic)" value="semantic" />
-              <el-option label="关键词搜索 (keyword)" value="keyword" />
-              <el-option label="混合搜索 (hybrid)" value="hybrid" />
-            </el-select>
-            <div class="help-text">Mem0 记忆检索模式</div>
-          </el-form-item>
-
-          <el-divider style="margin: 12px 0">向量化配置（可选）</el-divider>
-          
-          <el-alert type="info" :closable="false" style="margin-bottom: 16px">
-            <template #default>
-              使用 Centag 内部 embedding 服务生成向量并传给 Mem0 服务端，避免依赖 Mem0 内部的 Google/OpenAI API key。
-              请确保所选存储后端已正确配置并支持向量操作。
-            </template>
-          </el-alert>
-
-          <el-form-item label="向量化后端">
-            <BackendSelector
-              v-model="mem0PresetConfig.embedding_backend_id"
-              placeholder="选择 Embedding 后端服务"
-              :filter="embeddingBackendFilter"
-              style="width: 100%"
-              @change="onMem0EmbeddingBackendChange"
-            />
-            <div class="help-text">
-              用于将文本向量化的模型服务。仅显示已启用且支持向量化的后端。
-            </div>
-          </el-form-item>
-
-          <el-form-item label="向量化模型" v-if="mem0PresetConfig.embedding_backend_id">
-            <el-select
-              v-model="mem0PresetConfig.embedding_model"
-              style="width: 100%"
-              clearable
-              placeholder="选择或输入模型名称"
-              :allow-create="true"
-              :default-first-option="true"
-            >
-              <el-option
-                v-for="m in embeddingModels"
-                :key="m"
-                :label="m"
-                :value="m"
-              />
-            </el-select>
-            <div class="help-text">
-              指定用于向量化的模型名称。留空则使用后端默认模型。
-            </div>
-          </el-form-item>
-        </template>
-
-        <!-- 通用动态 key-value 编辑器（所有插件节点均显示） -->
-        <el-form-item label="自定义参数">
-          <div class="custom-config-editor">
-            <div class="custom-config-hint">
-              配置插件所需的额外参数，如 API Key、URL、超时等。点击右侧按钮可添加预设字段。
-            </div>
-
-            <div
-              v-for="(item, idx) in customConfigItems"
-              :key="idx"
-              class="custom-config-row"
-            >
-              <el-input
-                v-model="item.key"
-                placeholder="参数名，如 api_key"
-                size="small"
-                style="width: 160px; flex-shrink: 0"
-              />
-              <span class="var-eq">=</span>
-              <el-input
-                v-model="item.value"
-                placeholder="参数值"
-                size="small"
-                style="flex: 1"
-                :type="isSecretKey(item.key) ? 'password' : 'text'"
-                :show-password="isSecretKey(item.key)"
-              />
-              <el-button
-                type="danger"
-                text
-                size="small"
-                @click="removeCustomConfigItem(idx)"
-              >
-                <el-icon><Delete /></el-icon>
-              </el-button>
-            </div>
-
-            <div class="custom-config-actions">
-              <el-button size="small" @click="addCustomConfigItem">
-                <el-icon><Plus /></el-icon>
-                添加参数
-              </el-button>
-              <el-button
-                v-if="localNode.implementation === 'business.mem0'"
-                size="small"
-                @click="fillMem0Defaults"
-              >
-                <el-icon><Plus /></el-icon>
-                填充 Mem0 默认值
-              </el-button>
-            </div>
-          </div>
-        </el-form-item>
-      </template>
-
-      <!-- 超时与重试 -->
-      <el-form-item label="超时（秒）">
-        <el-input-number v-model="localNode.timeout" :min="5" :max="300" style="width: 100%" />
-      </el-form-item>
-
-      <el-form-item label="重试配置">
-        <div class="retry-grid">
-          <el-input-number 
-            v-model="localNode.retry.max_attempts" 
-            :min="0" 
-            :max="10" 
-            placeholder="重试次数"
-          />
-          <el-select v-model="localNode.retry.backoff_strategy">
-            <el-option label="指数退避" value="exponential" />
-            <el-option label="线性退避" value="linear" />
-            <el-option label="固定延迟" value="fixed" />
-          </el-select>
-        </div>
-      </el-form-item>
-
-      <el-form-item label="降级策略">
-        <el-select
-          v-model="localNode.fallback_policy_id"
-          clearable
-          placeholder="继承流水线默认"
-          style="width: 100%"
+      <!-- ═══════ 2e. Cache 核心 ═══════ -->
+      <section v-if="localNode.type === 'cache'" class="drawer-section">
+        <div class="section-title">缓存</div>
+        <el-row :gutter="12">
+          <el-col :span="12">
+            <el-form-item label="操作">
+              <el-select v-model="localNode.config.customConfig.operation" style="width: 100%">
+                <el-option label="读取" value="read" />
+                <el-option label="写入" value="write" />
+                <el-option label="删除" value="delete" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="策略">
+              <el-select v-model="localNode.config.customConfig.strategy" style="width: 100%">
+                <el-option label="精确匹配" value="exact" />
+                <el-option label="语义匹配" value="semantic" />
+                <el-option label="混合策略" value="hybrid" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-form-item
+          v-if="localNode.config.customConfig.operation === 'read' || localNode.config.customConfig.operation === 'delete'"
+          label="读取存储"
         >
-          <el-option label="继承流水线默认" value="" />
-          <el-option
-            v-for="policy in fallbackPolicies"
-            :key="policy.id"
-            :label="`${policy.name} (${policy.id})`"
-            :value="policy.id"
-          />
-        </el-select>
-        <div class="form-tip">为空时使用流水线全局默认策略；可单独指定此节点的降级策略</div>
-      </el-form-item>
+          <el-select v-model="localNode.config.customConfig.read_storage_name" style="width: 100%" clearable placeholder="留空使用默认">
+            <el-option v-for="s in availableStorages" :key="s.name" :label="`${s.name} (${s.type})`" :value="s.name" />
+          </el-select>
+        </el-form-item>
+        <el-form-item
+          v-if="localNode.config.customConfig.operation === 'write' || localNode.config.customConfig.operation === 'delete'"
+          label="写入存储"
+        >
+          <el-select v-model="localNode.config.customConfig.write_storage_name" style="width: 100%" clearable placeholder="留空使用默认">
+            <el-option v-for="s in availableStorages" :key="s.name" :label="`${s.name} (${s.type})`" :value="s.name" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="缓存键模板">
+          <el-input v-model="localNode.config.customConfig.key_template" :placeholder="'{{model}}:{{hash}}'" />
+        </el-form-item>
+        <el-form-item v-if="localNode.config.customConfig.operation === 'write'" label="TTL（秒）">
+          <el-input-number v-model="localNode.config.customConfig.ttl" :min="60" :max="86400" style="width: 100%" />
+        </el-form-item>
+      </section>
 
-      <!-- 执行条件 (tool_call_injector 使用专属条件字段) -->
-      <el-form-item v-if="localNode.type !== 'tool_call_injector'" label="执行条件 (Condition)">
-        <el-input 
-          v-model="localNode.config.condition" 
-          :placeholder="conditionPlaceholder"
-          type="textarea"
-          :rows="2"
-        />
-        <div class="help-text">支持节点引用表达式，如 &#123;&#123;.node_id.metadata.field&#125;&#125; == false</div>
-      </el-form-item>
+      <!-- ═══════ 2f. Token 计量核心 ═══════ -->
+      <section v-if="localNode.type === 'token_usage'" class="drawer-section">
+        <div class="section-title">Token 计量</div>
+        <el-alert type="info" :closable="false" class="section-alert">
+          需依赖上游出站/生成节点；勿把唯一生成器改成计量节点。
+        </el-alert>
+        <el-row :gutter="12">
+          <el-col :span="12">
+            <el-form-item label="操作">
+              <el-select v-model="localNode.config.customConfig.operation" style="width: 100%">
+                <el-option label="记录用量" value="record" />
+                <el-option label="查询统计" value="query" />
+                <el-option label="聚合统计" value="aggregate" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="存储">
+              <el-select v-model="localNode.config.customConfig.storage_type" style="width: 100%">
+                <el-option label="应用数据库" value="sqlite" />
+                <el-option label="PostgreSQL" value="postgresql" />
+                <el-option label="内存（调试）" value="memory" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-form-item v-if="localNode.config.customConfig.operation === 'record'" label="记录字段">
+          <el-checkbox-group v-model="localNode.config.customConfig.record_fields">
+            <el-checkbox label="prompt_tokens">输入</el-checkbox>
+            <el-checkbox label="completion_tokens">输出</el-checkbox>
+            <el-checkbox label="total_tokens">总计</el-checkbox>
+            <el-checkbox label="model">模型</el-checkbox>
+            <el-checkbox label="backend_id">后端</el-checkbox>
+          </el-checkbox-group>
+        </el-form-item>
+      </section>
 
-      <!-- 工具调用注入配置 -->
-      <template v-if="localNode.type === 'tool_call_injector'">
-        <el-divider>工具调用注入配置</el-divider>
-
-        <el-form-item label="注入条件 (Condition)">
+      <!-- ═══════ 2g. 工具注入核心 ═══════ -->
+      <section v-if="localNode.type === 'tool_call_injector'" class="drawer-section">
+        <div class="section-title">工具调用注入</div>
+        <el-form-item label="注入条件">
           <el-input
             v-model="injectorCondition"
-            placeholder='例如: {{node.reviewer.score}} < 0.8 （留空则无条件注入）'
+            placeholder="留空则始终注入；支持模板变量"
             type="textarea"
             :rows="2"
           />
-          <div class="help-text">支持模板变量，满足条件时才注入工具调用。留空表示始终注入。</div>
         </el-form-item>
-
         <el-form-item label="工具调用列表">
           <div class="injector-tc-list">
-            <div
-              v-for="(tc, idx) in injectorToolCalls"
-              :key="idx"
-              class="injector-tc-item"
-            >
+            <div v-for="(tc, idx) in injectorToolCalls" :key="idx" class="injector-tc-item">
               <div class="injector-tc-header">
-                <span>工具调用 #{{ idx + 1 }}</span>
+                <span>工具 #{{ idx + 1 }}</span>
                 <el-button type="danger" text size="small" @click="removeInjectorToolCall(idx)">
                   <el-icon><Delete /></el-icon>
                 </el-button>
               </div>
-              <div class="injector-tc-body">
-                <el-input
-                  v-model="tc.id"
-                  placeholder="调用 ID，如 read_project"
-                  size="small"
-                  style="margin-bottom: 6px"
-                />
-                <el-input
-                  v-model="tc.functionName"
-                  placeholder="函数名，如 read_file"
-                  size="small"
-                  style="margin-bottom: 6px"
-                />
-                <el-input
-                  v-model="tc.arguments"
-                  placeholder='函数参数 (JSON)，如 {"path": "/workspace/README.md"}'
-                  type="textarea"
-                  :rows="3"
-                  size="small"
-                />
-              </div>
+              <el-input v-model="tc.id" placeholder="调用 ID" size="small" style="margin-bottom: 6px" />
+              <el-input v-model="tc.functionName" placeholder="函数名" size="small" style="margin-bottom: 6px" />
+              <el-input v-model="tc.arguments" placeholder='参数 JSON' type="textarea" :rows="2" size="small" />
             </div>
             <el-button size="small" @click="addInjectorToolCall" style="margin-top: 8px">
               <el-icon><Plus /></el-icon>
@@ -883,93 +336,374 @@
             </el-button>
           </div>
         </el-form-item>
-      </template>
+      </section>
 
-      <!-- 依赖与下游 -->
-      <el-row :gutter="12">
-        <el-col :span="12">
-          <el-form-item label="依赖节点 (Depends On)">
-            <el-select 
-              v-model="localNode.depends_on" 
-              multiple 
-              style="width: 100%"
-            >
-              <el-option 
-                v-for="n in otherNodes" 
-                :key="n" 
-                :label="n" 
-                :value="n"
-              />
-            </el-select>
-          </el-form-item>
-        </el-col>
-        <el-col :span="12">
-          <el-form-item label="下游节点 (Next)">
-            <el-select 
-              v-model="localNode.next_nodes" 
-              multiple 
-              style="width: 100%"
-            >
-              <el-option 
-                v-for="n in otherNodes" 
-                :key="n" 
-                :label="n" 
-                :value="n"
-              />
-            </el-select>
-          </el-form-item>
-        </el-col>
-      </el-row>
+      <!-- ═══════ 3. 高级选项（默认折叠） ═══════ -->
+      <section class="drawer-section drawer-section-advanced">
+        <el-collapse v-model="advancedPanels" class="advanced-collapse">
+          <el-collapse-item title="高级：节点标识与拓扑" name="topo">
+            <el-form-item label="节点 ID" prop="id">
+              <el-input v-model="localNode.id" placeholder="唯一标识符" />
+            </el-form-item>
+            <el-row :gutter="12">
+              <el-col :span="12">
+                <el-form-item label="依赖节点">
+                  <el-select v-model="localNode.depends_on" multiple style="width: 100%">
+                    <el-option v-for="n in otherNodes" :key="n" :label="n" :value="n" />
+                  </el-select>
+                </el-form-item>
+              </el-col>
+              <el-col :span="12">
+                <el-form-item label="下游节点">
+                  <el-select v-model="localNode.next_nodes" multiple style="width: 100%">
+                    <el-option v-for="n in otherNodes" :key="n" :label="n" :value="n" />
+                  </el-select>
+                </el-form-item>
+              </el-col>
+            </el-row>
+            <el-form-item v-if="localNode.type !== 'tool_call_injector'" label="执行条件">
+              <el-input v-model="localNode.config.condition" :placeholder="conditionPlaceholder" type="textarea" :rows="2" />
+            </el-form-item>
+          </el-collapse-item>
 
-      <!-- 路由配置 (仅对 generator 节点显示) -->
-      <el-divider v-if="localNode.type === 'generator'">路由配置 (RouteConfig)</el-divider>
-      <template v-if="localNode.type === 'generator'">
-        <el-alert type="info" :closable="false" style="margin-bottom: 16px">
-          <template #default>
-            <div style="font-size: 13px; line-height: 1.5">
-              <strong>路由配置说明：</strong><br>
-              当上游有 Router 节点时，配置此项可使本节点仅在特定路由值匹配时执行。<br>
-              例如：Router 节点根据关键词将请求路由到不同分支，各分支节点配置对应的 route_value。
+          <el-collapse-item title="高级：超时 / 重试 / 降级" name="reliability">
+            <el-form-item label="超时（秒）">
+              <el-input-number v-model="localNode.timeout" :min="5" :max="300" style="width: 100%" />
+            </el-form-item>
+            <el-form-item label="重试">
+              <div class="retry-grid">
+                <el-input-number v-model="localNode.retry.max_attempts" :min="0" :max="10" placeholder="次数" />
+                <el-select v-model="localNode.retry.backoff_strategy">
+                  <el-option label="指数退避" value="exponential" />
+                  <el-option label="线性退避" value="linear" />
+                  <el-option label="固定延迟" value="fixed" />
+                </el-select>
+              </div>
+            </el-form-item>
+            <el-form-item label="降级策略">
+              <el-select v-model="localNode.fallback_policy_id" clearable placeholder="继承流水线默认" style="width: 100%">
+                <el-option label="继承流水线默认" value="" />
+                <el-option
+                  v-for="policy in fallbackPolicies"
+                  :key="policy.id"
+                  :label="`${policy.name} (${policy.id})`"
+                  :value="policy.id"
+                />
+              </el-select>
+            </el-form-item>
+          </el-collapse-item>
+
+          <el-collapse-item
+            v-if="localNode.type === 'transparent_forward'"
+            title="高级：出站重定向"
+            name="egress_adv"
+          >
+            <el-form-item label="重定向策略">
+              <el-select v-model="egressConfig.redirect_policy" style="width: 100%">
+                <el-option label="不跟随（never）" value="never" />
+                <el-option label="始终跟随（always）" value="always" />
+                <el-option label="仅 GET/HEAD（smart）" value="smart" />
+              </el-select>
+            </el-form-item>
+            <el-form-item v-if="egressConfig.redirect_policy !== 'never'" label="最大重定向次数">
+              <el-input-number v-model="egressConfig.max_redirects" :min="1" :max="20" style="width: 100%" />
+            </el-form-item>
+            <el-form-item label="默认 URL Scheme">
+              <el-select v-model="egressConfig.default_scheme" style="width: 100%">
+                <el-option label="https" value="https" />
+                <el-option label="http" value="http" />
+              </el-select>
+            </el-form-item>
+          </el-collapse-item>
+
+          <el-collapse-item
+            v-if="showPromptEditor"
+            title="高级：Prompt 变量与绑定"
+            name="prompt_vars"
+          >
+            <div class="var-panel">
+              <div class="var-panel-header">
+                <span class="var-panel-title">可用变量</span>
+                <span class="var-panel-hint">点击插入到光标处</span>
+              </div>
+              <table class="var-table">
+                <colgroup>
+                  <col style="width: 190px" />
+                  <col />
+                </colgroup>
+                <thead>
+                  <tr>
+                    <th>变量名</th>
+                    <th>说明</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr class="var-section-row">
+                    <td colspan="2" class="var-section-label">内置变量</td>
+                  </tr>
+                  <tr v-for="v in builtinVars" :key="v.name">
+                    <td>
+                      <el-tag class="var-chip" type="primary" size="small" @click="insertVar(v.name)">
+                        {{ varLabel(v.name) }}
+                      </el-tag>
+                    </td>
+                    <td class="var-desc">{{ v.desc }}</td>
+                  </tr>
+                  <template v-if="upstreamVars.length > 0">
+                    <tr class="var-section-row">
+                      <td colspan="2" class="var-section-label">上游节点（需绑定）</td>
+                    </tr>
+                    <tr v-for="v in upstreamVars" :key="v.name">
+                      <td>
+                        <el-tag class="var-chip" type="success" size="small" @click="insertVar(v.name)">
+                          {{ varLabel(v.name) }}
+                        </el-tag>
+                      </td>
+                      <td class="var-desc">{{ v.desc }}</td>
+                    </tr>
+                  </template>
+                  <tr class="var-section-row">
+                    <td colspan="2" class="var-section-label">执行上下文（需绑定）</td>
+                  </tr>
+                  <tr v-for="v in contextVars" :key="v.name">
+                    <td>
+                      <el-tag class="var-chip" type="warning" size="small" @click="insertVar(v.name)">
+                        {{ varLabel(v.name) }}
+                      </el-tag>
+                    </td>
+                    <td class="var-desc">{{ v.desc }}</td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
-          </template>
-        </el-alert>
-        
-        <el-form-item label="启用路由配置">
-          <el-switch v-model="hasRouteConfig" />
-        </el-form-item>
 
-        <template v-if="hasRouteConfig">
-          <el-form-item label="上游路由节点 ID">
-            <el-select 
-              v-model="routeConfig.router_node_id" 
-              style="width: 100%"
-              placeholder="选择上游的 Router 节点"
+            <el-form-item
+              v-if="localNode.type === 'reviewer' || localNode.type === 'processor'"
+              label="自定义变量绑定"
+              style="margin-top: 12px"
             >
-              <el-option 
-                v-for="n in routerNodes" 
-                :key="n" 
-                :label="n" 
-                :value="n"
+              <div class="template-vars-editor">
+                <div
+                  v-for="(binding, idx) in templateVarBindings"
+                  :key="idx"
+                  class="template-var-row"
+                >
+                  <el-input v-model="binding.key" placeholder="变量名" size="small" style="width: 140px; flex-shrink: 0" />
+                  <span class="var-eq">=</span>
+                  <el-select
+                    v-model="binding.source"
+                    placeholder="来源"
+                    size="small"
+                    style="width: 130px; flex-shrink: 0"
+                    @change="(v: string) => onSourceChange(binding, v)"
+                  >
+                    <el-option label="原始用户输入" value="input.content" />
+                    <el-option label="当前时间戳" value="context.timestamp" />
+                    <el-option label="用户 ID" value="context.user_id" />
+                    <el-option label="会话 ID" value="context.session_id" />
+                    <el-option
+                      v-for="n in upstreamNodeIds"
+                      :key="n + '_content'"
+                      :label="`节点 ${n} 输出`"
+                      :value="`node.${n}.content`"
+                    />
+                    <el-option label="自定义路径..." value="__custom__" />
+                  </el-select>
+                  <el-input
+                    v-if="binding.source === '__custom__'"
+                    v-model="binding.customPath"
+                    placeholder="自定义路径"
+                    size="small"
+                    style="flex: 1"
+                  />
+                  <el-button type="danger" text size="small" @click="removeVarBinding(idx)">
+                    <el-icon><Delete /></el-icon>
+                  </el-button>
+                </div>
+                <el-button size="small" @click="addVarBinding" style="margin-top: 6px">
+                  <el-icon><Plus /></el-icon>
+                  添加绑定
+                </el-button>
+              </div>
+            </el-form-item>
+          </el-collapse-item>
+
+          <el-collapse-item
+            v-if="localNode.type === 'router' && routerConfig.strategy === 'llm_classify'"
+            title="高级：LLM 分类"
+            name="router_llm"
+          >
+            <el-form-item label="分类后端">
+              <BackendSelector v-model="localNode.backend" placeholder="轻量模型后端" style="width: 100%" @change="onBackendChange" />
+            </el-form-item>
+            <el-form-item label="分类模型">
+              <ModelSelector
+                v-model="localNode.model"
+                :backend-id="localNode.backend"
+                placeholder="如 glm-4-flash"
+                :allow-create="true"
+                :default-first-option="true"
               />
-            </el-select>
-            <div class="help-text">选择提供路由决策的上游 Router 节点</div>
-          </el-form-item>
+            </el-form-item>
+            <el-form-item label="分类 Prompt">
+              <el-input
+                v-model="routerConfig.classifyPrompt"
+                type="textarea"
+                :rows="5"
+                :placeholder="'留空使用默认。可用 {{.input}}'"
+              />
+            </el-form-item>
+          </el-collapse-item>
 
-          <el-form-item label="路由匹配值">
-            <el-input 
-              v-model="routeConfig.route_value" 
-              placeholder="例如: code, translate, chat"
-            />
-            <div class="help-text">当 Router 节点选择此值时，本节点才会执行</div>
-          </el-form-item>
+          <el-collapse-item
+            v-if="localNode.type === 'cache' && isSemanticStrategy"
+            title="高级：语义缓存"
+            name="cache_semantic"
+          >
+            <el-form-item label="Embedding 后端">
+              <BackendSelector
+                v-model="localNode.config.customConfig.embedding_backend_id"
+                placeholder="选择 Embedding 后端"
+                :filter="embeddingBackendFilter"
+                style="width: 100%"
+                @change="onEmbeddingBackendChange"
+              />
+            </el-form-item>
+            <el-form-item v-if="localNode.config.customConfig.embedding_backend_id" label="Embedding 模型">
+              <el-select
+                v-model="localNode.config.customConfig.embedding_model"
+                style="width: 100%"
+                clearable
+                placeholder="模型名"
+                :allow-create="true"
+                :default-first-option="true"
+              >
+                <el-option v-for="m in embeddingModels" :key="m" :label="m" :value="m" />
+              </el-select>
+            </el-form-item>
+            <el-form-item label="语义阈值">
+              <el-input-number
+                v-model="localNode.config.customConfig.semantic_threshold"
+                :min="0"
+                :max="1"
+                :step="0.05"
+                :precision="2"
+                style="width: 100%"
+              />
+            </el-form-item>
+            <el-form-item label="Top K">
+              <el-input-number v-model="localNode.config.customConfig.semantic_top_k" :min="1" :max="100" style="width: 100%" />
+            </el-form-item>
+          </el-collapse-item>
 
-          <el-form-item label="是否为默认分支">
-            <el-switch v-model="routeConfig.is_default" />
-            <div class="help-text">当没有分支匹配时，默认分支会被执行</div>
-          </el-form-item>
-        </template>
-      </template>
+          <el-collapse-item
+            v-if="needsPluginSelection(localNode.type)"
+            title="高级：插件自定义参数"
+            name="plugin_cc"
+          >
+            <template v-if="localNode.implementation === 'business.mem0'">
+              <el-form-item label="Mem0 API Key">
+                <el-input v-model="mem0PresetConfig.api_key" type="password" show-password />
+              </el-form-item>
+              <el-form-item label="Mem0 Base URL">
+                <el-input v-model="mem0PresetConfig.base_url" placeholder="http://localhost:20061" />
+              </el-form-item>
+              <el-form-item label="Namespace">
+                <el-input v-model="mem0PresetConfig.namespace" placeholder="default" />
+              </el-form-item>
+              <el-form-item label="搜索模式">
+                <el-select v-model="mem0PresetConfig.search_mode" style="width: 100%">
+                  <el-option label="语义" value="semantic" />
+                  <el-option label="关键词" value="keyword" />
+                  <el-option label="混合" value="hybrid" />
+                </el-select>
+              </el-form-item>
+              <el-form-item label="向量化后端">
+                <BackendSelector
+                  v-model="mem0PresetConfig.embedding_backend_id"
+                  placeholder="Embedding 后端"
+                  :filter="embeddingBackendFilter"
+                  style="width: 100%"
+                  @change="onMem0EmbeddingBackendChange"
+                />
+              </el-form-item>
+              <el-form-item v-if="mem0PresetConfig.embedding_backend_id" label="向量化模型">
+                <el-select
+                  v-model="mem0PresetConfig.embedding_model"
+                  style="width: 100%"
+                  clearable
+                  :allow-create="true"
+                  :default-first-option="true"
+                >
+                  <el-option v-for="m in embeddingModels" :key="m" :label="m" :value="m" />
+                </el-select>
+              </el-form-item>
+            </template>
+
+            <el-form-item label="自定义参数">
+              <div class="custom-config-editor">
+                <div
+                  v-for="(item, idx) in customConfigItems"
+                  :key="idx"
+                  class="custom-config-row"
+                >
+                  <el-input v-model="item.key" placeholder="参数名" size="small" style="width: 160px; flex-shrink: 0" />
+                  <span class="var-eq">=</span>
+                  <el-input
+                    v-model="item.value"
+                    placeholder="参数值"
+                    size="small"
+                    style="flex: 1"
+                    :type="isSecretKey(item.key) ? 'password' : 'text'"
+                    :show-password="isSecretKey(item.key)"
+                  />
+                  <el-button type="danger" text size="small" @click="removeCustomConfigItem(idx)">
+                    <el-icon><Delete /></el-icon>
+                  </el-button>
+                </div>
+                <div class="custom-config-actions">
+                  <el-button size="small" @click="addCustomConfigItem">
+                    <el-icon><Plus /></el-icon>
+                    添加参数
+                  </el-button>
+                  <el-button
+                    v-if="localNode.implementation === 'business.mem0'"
+                    size="small"
+                    @click="fillMem0Defaults"
+                  >
+                    填充 Mem0 默认值
+                  </el-button>
+                </div>
+              </div>
+            </el-form-item>
+          </el-collapse-item>
+
+          <el-collapse-item
+            v-if="localNode.type === 'generator'"
+            title="高级：分支路由 (RouteConfig)"
+            name="route_config"
+          >
+            <el-form-item label="启用路由配置">
+              <el-switch v-model="hasRouteConfig" />
+            </el-form-item>
+            <template v-if="hasRouteConfig">
+              <el-form-item label="上游 Router 节点">
+                <el-select v-model="routeConfig.router_node_id" style="width: 100%" placeholder="选择 Router">
+                  <el-option v-for="n in routerNodes" :key="n" :label="n" :value="n" />
+                </el-select>
+              </el-form-item>
+              <el-form-item label="路由匹配值">
+                <el-input v-model="routeConfig.route_value" placeholder="如 code / chat" />
+              </el-form-item>
+              <el-form-item label="默认分支">
+                <el-switch v-model="routeConfig.is_default" />
+              </el-form-item>
+            </template>
+          </el-collapse-item>
+        </el-collapse>
+      </section>
     </el-form>
+
 
     <template #footer>
       <div class="footer-buttons">
@@ -1107,6 +841,8 @@ const defaultEgressConfig = () => ({
   default_scheme: 'https',
 })
 const egressConfig = ref(defaultEgressConfig())
+/** 高级折叠面板：默认全部收起，聚焦常用配置 */
+const advancedPanels = ref<string[]>([])
 
 const loadEgressConfig = (node: any) => {
   const cc = node?.config?.custom_config || {}
@@ -2169,6 +1905,7 @@ watch(() => props.visible, (val) => {
     injectorToolCalls.value = []
     injectorCondition.value = ''
     egressConfig.value = defaultEgressConfig()
+    advancedPanels.value = []
     mem0PresetConfig.value = { api_key: '', base_url: '', namespace: 'default', search_mode: 'semantic', embedding_backend_id: '', embedding_model: '' }
     return
   }
@@ -2201,6 +1938,61 @@ onMounted(() => {
 </script>
 
 <style scoped>
+.node-drawer-form {
+  padding-bottom: 8px;
+}
+
+.drawer-section {
+  margin-bottom: 18px;
+  padding-bottom: 4px;
+}
+
+.drawer-section + .drawer-section {
+  border-top: 1px solid #ebeef5;
+  padding-top: 16px;
+}
+
+.section-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #303133;
+  margin-bottom: 12px;
+  letter-spacing: 0.02em;
+}
+
+.section-alert {
+  margin-bottom: 12px;
+}
+
+.drawer-section-advanced {
+  border-top: 1px solid #ebeef5;
+  padding-top: 8px;
+}
+
+.advanced-collapse {
+  border: none;
+  --el-collapse-header-height: 42px;
+}
+
+.advanced-collapse :deep(.el-collapse-item__header) {
+  font-size: 13px;
+  color: #606266;
+  background: #fafafa;
+  padding: 0 12px;
+  border-radius: 6px;
+  margin-bottom: 6px;
+  border: 1px solid #ebeef5;
+}
+
+.advanced-collapse :deep(.el-collapse-item__wrap) {
+  border: none;
+  background: transparent;
+}
+
+.advanced-collapse :deep(.el-collapse-item__content) {
+  padding: 8px 4px 12px;
+}
+
 .type-desc {
   font-size: 12px;
   color: #606266;
