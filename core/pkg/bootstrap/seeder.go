@@ -343,10 +343,10 @@ func buildDefaultPresetModes() string {
 			Mode:        "transparent-proxy",
 		},
 		{
-			ID:          "raw-forward",
-			Name:        "原始HTTP转发",
-			Description: "高级：HTTP 透传到 X-Target-URL / hostproxy",
-			Mode:        "raw-forward",
+			ID:          "fixed-egress",
+			Name:        "跳板模式",
+			Description: "固定出站跳板：走系统默认后端/模型，不做跨后端模型匹配",
+			Mode:        "fixed-egress",
 		},
 	}
 	data, _ := json.Marshal(modes)

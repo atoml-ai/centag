@@ -109,17 +109,17 @@ func TestPipelineDefaultsHandler_UpdateDefaults_DisallowedPipeline(t *testing.T)
 		},
 	}
 	registry := pipeline.NewPipelineRegistry()
-	// Register a pipeline that is disallowed as default (needs Target-URL)
+	// Register a pipeline that is disallowed as default (cache-only)
 	registry.Register(&pipeline.AgentPatternPipeline{
-		ID:   "raw-forward",
-		Name: "Raw Forward",
+		ID:   "cache-hit",
+		Name: "Cache Hit",
 	})
 
 	router := gin.New()
 	handler := NewPipelineDefaultsHandler(cfg, registry)
 	router.PUT("/pipeline/defaults", handler.UpdateDefaults)
 
-	reqBody := map[string]string{"default_pipeline_id": "raw-forward"}
+	reqBody := map[string]string{"default_pipeline_id": "cache-hit"}
 	body, _ := json.Marshal(reqBody)
 
 	w := httptest.NewRecorder()
@@ -146,7 +146,7 @@ func TestPipelineDefaultsHandler_isAllowedAsDefault(t *testing.T) {
 		{"aggregator-mode", true},
 		{"transparent-proxy", true},
 		{"transparent-fast", true},
-		{"raw-forward", false},
+		{"fixed-egress", true},
 		{"cache-hit", false},
 		{"cache-mode", false},
 	}

@@ -5,8 +5,8 @@ import (
 	"testing"
 )
 
-// TestModeTemplates_TransparentDirectRawContract 锁定透明/直连/#raw 模板语义契约。
-func TestModeTemplates_TransparentDirectRawContract(t *testing.T) {
+// TestModeTemplates_TransparentDirectFixedEgressContract 锁定透明/直连/#j 模板语义契约。
+func TestModeTemplates_TransparentDirectFixedEgressContract(t *testing.T) {
 	t.Setenv("PROJECT_ROOT", mustProjectRoot(t))
 
 	// v2.0 语义：transparent-proxy 使用 transparent_forward 节点（不再用 generator 节点），
@@ -29,15 +29,15 @@ func TestModeTemplates_TransparentDirectRawContract(t *testing.T) {
 		}
 	})
 
-	// direct-backend 使用 generator 节点并注入非空 system_prompt。
+	// direct-backend 使用 transparent_forward + 注入非空 system_prompt（inject_system_prompt=true）。
 	t.Run("direct-backend injects non-empty system_prompt", func(t *testing.T) {
 		tmpl := mustLoadPipelineTemplate(t, "direct-backend")
 		p := CreatePipelineFromTemplate(tmpl, nil)
 		if err := p.Validate(); err != nil {
 			t.Fatalf("Validate: %v", err)
 		}
-		if len(p.Nodes) == 0 || p.Nodes[0].Type != NodeTypeGenerator {
-			t.Fatalf("first node type = %v, want generator", p.Nodes[0].Type)
+		if len(p.Nodes) == 0 || p.Nodes[0].Type != NodeTypeTransparentForward {
+			t.Fatalf("first node type = %v, want transparent_forward", p.Nodes[0].Type)
 		}
 		sp := strings.TrimSpace(p.Nodes[0].Config.SystemPrompt)
 		if sp == "" {
@@ -51,9 +51,9 @@ func TestModeTemplates_TransparentDirectRawContract(t *testing.T) {
 		}
 	})
 
-	// raw-forward 始终使用 transparent_forward 节点（高级转发模式）。
-	t.Run("raw-forward uses transparent_forward node", func(t *testing.T) {
-		tmpl := mustLoadPipelineTemplate(t, "raw-forward")
+	// fixed-egress（#j）使用 transparent_forward + route_policy=fixed。
+	t.Run("fixed-egress uses transparent_forward with fixed route", func(t *testing.T) {
+		tmpl := mustLoadPipelineTemplate(t, "fixed-egress")
 		p := CreatePipelineFromTemplate(tmpl, nil)
 		if err := p.Validate(); err != nil {
 			t.Fatalf("Validate: %v", err)
@@ -61,8 +61,12 @@ func TestModeTemplates_TransparentDirectRawContract(t *testing.T) {
 		if len(p.Nodes) == 0 || p.Nodes[0].Type != NodeTypeTransparentForward {
 			t.Fatalf("first node type = %v, want transparent_forward", p.Nodes[0].Type)
 		}
-		if p.ShortcutCode != "#raw" {
-			t.Fatalf("shortcut = %q, want #raw", p.ShortcutCode)
+		if p.ShortcutCode != "#j" {
+			t.Fatalf("shortcut = %q, want #j", p.ShortcutCode)
+		}
+		routePolicy, _ := p.Nodes[0].Config.CustomConfig["route_policy"].(string)
+		if routePolicy != "fixed" {
+			t.Fatalf("route_policy = %q, want fixed", routePolicy)
 		}
 	})
 }

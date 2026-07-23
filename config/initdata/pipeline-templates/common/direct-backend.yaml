@@ -1,20 +1,21 @@
 id: direct-backend
 name: 直连后端
-description: 直连节点配置的后端与模型（变量 {{system.default_*}} 时用系统默认），并用网关 system prompt 替换客户端 system；不按客户端 model 跨后端选路
-version: "2.1"
+description: |
+  固定出站到系统默认（或钉死）后端，并注入网关 system prompt 替换客户端 system。
+  与透明/跳板共用 transparent_forward 出站节点，差异仅在开关：route_policy=fixed + inject_system_prompt=true。
+version: "3.0"
 shortcut_code: '#d'
 nodes:
-  - id: generate
-    type: generator
-    kind: llm.generate
-    implementation: builtin.generator
-    name: 直连生成
+  - id: forward
+    type: transparent_forward
+    kind: proxy.transparent_forward
+    implementation: builtin.transparent_forward
+    name: 直连出站
     backend: "{{system.default_backend}}"
     model: "{{system.default_model}}"
     config:
       backend: "{{system.default_backend}}"
       model: "{{system.default_model}}"
-      prompt_template: '{{input}}'
       system_prompt: |
         你是一个可靠助手，请直接、准确地回答用户的问题。
 
@@ -29,6 +30,12 @@ nodes:
       template_vars:
         backend: "system.default_backend"
         model: "system.default_model"
+      custom_config:
+        default_scheme: https
+        route_policy: fixed
+        inject_system_prompt: true
+        redirect_policy: never
+        max_redirects: 5
     timeout: 120
     retry:
       max_attempts: 0
@@ -44,7 +51,10 @@ global_config:
 metadata:
   aligned_proxy_mode: direct-backend
   features:
+    - transparent_forward
+    - fixed_egress
     - system_prompt_inject
-    - yaml_backend_model
-  lastUpdated: '2026-07-21T00:00:00.000Z'
-  layoutVersion: '1.1'
+    - key_rewrite
+  lastUpdated: '2026-07-23T00:00:00.000Z'
+  layoutVersion: '1.3'
+  template_scope: mode-id-alignment

@@ -648,7 +648,7 @@ func attachTransparentRequestMetadata(c *gin.Context, metadata map[string]interf
 	metadata["request_path"] = c.Request.URL.Path
 	metadata["request_method"] = c.Request.Method
 	// MITM 会把 Centag egress Key 写入 Authorization，原厂 Key 放在 X-Original-Authorization。
-	// 透明转发打 Centag 后端时用后端 Key；#raw 打回原厂时需要原厂 Key。
+	// 透明转发打 Centag 后端时用后端 Key；跳板/固定出站用后端 Key 改写鉴权。
 	if orig := strings.TrimSpace(c.GetHeader("X-Original-Authorization")); orig != "" {
 		metadata["forward_authorization"] = orig
 	} else if auth := strings.TrimSpace(c.GetHeader("Authorization")); auth != "" {
@@ -683,10 +683,13 @@ func shouldPassthroughTransparentResponse(mode ProxyMode, output *pipeline.Pipel
 			return v
 		}
 	}
-	if mode == ModeTransparentProxy {
+	// 无显式 metadata 时，仅透明/跳板默认按透传处理；直连若已设 raw_passthrough 则走上面的显式分支。
+	switch mode {
+	case ModeTransparentProxy, ModeTransparentFast, ModeFixedEgress:
 		return true
+	default:
+		return false
 	}
-	return false
 }
 
 func transparentPassthroughStatusAndType(output *pipeline.PipelineOutput) (int, string) {
@@ -1976,7 +1979,7 @@ func effectiveResponseModel(c *gin.Context, clientModel string, output *pipeline
 		pipelineID = c.GetHeader("X-Pipeline-ID")
 	}
 	switch pipelineID {
-	case "direct-backend", "transparent-proxy", "transparent-fast":
+	case "direct-backend", "transparent-proxy", "transparent-fast", "fixed-egress":
 		if cfg := config.Get(); cfg != nil {
 			if m := strings.TrimSpace(cfg.Proxy.DefaultModel); m != "" {
 				return m

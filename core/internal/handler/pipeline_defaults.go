@@ -142,9 +142,8 @@ func (h *PipelineDefaultsHandler) isValidPipelineID(pipelineID string) bool {
 // 依赖额外请求头或仅缓存读写的模式，不适合作为无头请求的系统默认
 func (h *PipelineDefaultsHandler) isAllowedAsDefault(pipelineID string) bool {
 	disallowedAsDefault := map[string]bool{
-		"raw-forward": true, // 需要 X-Target-URL / hostproxy
-		"cache-hit":   true, // 仅缓存读取
-		"cache-mode":  true, // 仅缓存写入
+		"cache-hit":  true, // 仅缓存读取
+		"cache-mode": true, // 仅缓存写入
 	}
 
 	return !disallowedAsDefault[pipelineID]

@@ -318,7 +318,7 @@ const getTypeLabel = (type: string) => {
     classify: '意图分类',
     transparent: '透明模式',
     'transparent-fast': '透明模式（快）',
-    'raw-forward': '原始HTTP转发',
+    'fixed-egress': '跳板模式',
     fallback: '降级容错'
   }
   return map[type] || type

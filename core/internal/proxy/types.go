@@ -19,8 +19,8 @@ const (
 	// ModeTransparentFast 透明模式（快）：与 ModeTransparentProxy 同语义
 	ModeTransparentFast ProxyMode = "transparent-fast"
 
-	// ModeRawForward 原始 HTTP 转发（高级）：依赖 X-Target-URL / hostproxy
-	ModeRawForward ProxyMode = "raw-forward"
+	// ModeFixedEgress 跳板模式（固定出站）：固定走默认后端/模型，不做跨后端模型匹配
+	ModeFixedEgress ProxyMode = "fixed-egress"
 
 	// ModeModelMatching 模型匹配调度模式 (使用小模型分析 + 路由决策)
 	ModeModelMatching ProxyMode = "model-matching"

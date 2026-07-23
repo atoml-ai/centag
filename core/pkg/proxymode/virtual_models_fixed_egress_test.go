@@ -2,14 +2,14 @@ package proxymode
 
 import "testing"
 
-func TestGetPipelineModel_RawAndTransparent(t *testing.T) {
+func TestGetPipelineModel_FixedEgressAndTransparent(t *testing.T) {
 	tests := []struct {
 		mode ExecutionMode
 		want string
 	}{
 		{ModeTransparentProxy, PipelineModelTransparentProxy},
 		{ModeTransparentFast, PipelineModelTransparentFast},
-		{ModeRawForward, PipelineModelRawForward},
+		{ModeFixedEgress, PipelineModelFixedEgress},
 		{ModeDirectBackend, PipelineModelDirectBackend},
 	}
 	for _, tt := range tests {

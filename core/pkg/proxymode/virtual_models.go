@@ -37,8 +37,8 @@ const (
 	// PipelineModelTransparentFast 透明模式（快）虚拟模型
 	PipelineModelTransparentFast = "pipeline.transparent-fast.auto"
 
-	// PipelineModelRawForward 原始 HTTP 转发虚拟模型
-	PipelineModelRawForward = "pipeline.raw-forward.auto"
+	// PipelineModelFixedEgress 跳板模式（固定出站）虚拟模型
+	PipelineModelFixedEgress = "pipeline.fixed-egress.auto"
 	
 	// PipelineModelPipeline 通用流水线虚拟模型
 	PipelineModelPipeline = "pipeline.custom.auto"
@@ -73,8 +73,8 @@ func GetPipelineModel(mode ExecutionMode) string {
 		return PipelineModelTransparentProxy
 	case ModeTransparentFast:
 		return PipelineModelTransparentFast
-	case ModeRawForward:
-		return PipelineModelRawForward
+	case ModeFixedEgress:
+		return PipelineModelFixedEgress
 	case ModePipeline:
 		return PipelineModelPipeline
 	case ModeCodingAgent:

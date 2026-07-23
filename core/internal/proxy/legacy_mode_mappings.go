@@ -18,7 +18,7 @@ var defaultModeMappings = []ModeToPipelineMapping{
 	{Mode: ModeDirectBackend, PipelineID: "direct-backend", Description: "直连后端（注入 system prompt）", Enabled: true},
 	{Mode: ModeTransparentProxy, PipelineID: "transparent-proxy", Description: "透明模式（不注入 system prompt）", Enabled: true},
 	{Mode: ModeTransparentFast, PipelineID: "transparent-fast", Description: "透明模式快（不注入 system prompt）", Enabled: true},
-	{Mode: ModeRawForward, PipelineID: "raw-forward", Description: "原始 HTTP 转发（需 Target-URL/hostproxy）", Enabled: true},
+	{Mode: ModeFixedEgress, PipelineID: "fixed-egress", Description: "跳板模式（固定出站）", Enabled: true},
 	{Mode: ModeFallback, PipelineID: "fallback-mode", Description: "降级容错流水线", Enabled: true},
 	{Mode: ModeModelMatching, PipelineID: "model-matching", Description: "模型匹配流水线", Enabled: true},
 	{Mode: ModeIntentClassification, PipelineID: "router-mode", Description: "意图分类流水线", Enabled: true},

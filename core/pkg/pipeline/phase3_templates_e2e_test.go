@@ -15,7 +15,7 @@ func TestPhase3Templates_Validate(t *testing.T) {
 		{"multilingual-support", "#cs", "cache_read"},
 		{"geo-routing-mode", "#geo", "geo_router"},
 		{"transparent-proxy", "#t", "forward"},
-		{"raw-forward", "#raw", "forward"},
+		{"fixed-egress", "#j", "forward"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.id, func(t *testing.T) {

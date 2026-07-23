@@ -27,8 +27,8 @@ func normalizeProxyMode(mode string) ProxyMode {
 		return ModeTransparentProxy
 	case "#tf", "transparent-fast":
 		return ModeTransparentFast
-	case "#raw", "raw", "raw-forward":
-		return ModeRawForward
+	case "#j", "fixed-egress":
+		return ModeFixedEgress
 	case "#m", "match", "model-matching":
 		return ModeModelMatching
 	case "#f", "fallback":

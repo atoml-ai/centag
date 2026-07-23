@@ -17,18 +17,18 @@ func TestApplyAgentProviderConfig_TenantOverride(t *testing.T) {
 	createdIDs := []string{"test-system-claude", "test-tenant-claude"}
 	t.Cleanup(func() {
 		for _, id := range createdIDs {
-			_ = mgr.Delete(id)
+			_ = mgr.Remove(id)
 		}
 	})
 
-	_ = mgr.Add(&agent.AgentProviderConfig{
+	_ = mgr.Upsert(&agent.AgentProviderConfig{
 		ID:         "test-system-claude",
 		AgentType:  "claude-code",
 		BackendID:  "system-be",
 		PipelineID: "system-pipe",
 		Enabled:    true,
 	})
-	_ = mgr.Add(&agent.AgentProviderConfig{
+	_ = mgr.Upsert(&agent.AgentProviderConfig{
 		ID:         "test-tenant-claude",
 		AgentType:  "claude-code",
 		BackendID:  "tenant-be",
@@ -60,11 +60,11 @@ func TestApplyAgentProviderConfig_ContextAgentTypeForOpenAIProtocol(t *testing.T
 	createdIDs := []string{"test-codex-provider"}
 	t.Cleanup(func() {
 		for _, id := range createdIDs {
-			_ = mgr.Delete(id)
+			_ = mgr.Remove(id)
 		}
 	})
 
-	_ = mgr.Add(&agent.AgentProviderConfig{
+	_ = mgr.Upsert(&agent.AgentProviderConfig{
 		ID:         "test-codex-provider",
 		AgentType:  "codex",
 		BackendID:  "codex-be",
@@ -95,11 +95,11 @@ func TestApplyAgentProviderConfig_ContextGeminiForOpenAIProtocol(t *testing.T) {
 	createdIDs := []string{"test-gemini-provider"}
 	t.Cleanup(func() {
 		for _, id := range createdIDs {
-			_ = mgr.Delete(id)
+			_ = mgr.Remove(id)
 		}
 	})
 
-	_ = mgr.Add(&agent.AgentProviderConfig{
+	_ = mgr.Upsert(&agent.AgentProviderConfig{
 		ID:         "test-gemini-provider",
 		AgentType:  "gemini-cli",
 		BackendID:  "gemini-be",

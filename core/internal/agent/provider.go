@@ -150,6 +150,14 @@ func (m *AgentProviderManager) Upsert(cfg *AgentProviderConfig) error {
 	return nil
 }
 
+// Remove 删除配置（测试清理 / 管理接口）
+func (m *AgentProviderManager) Remove(id string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	delete(m.providers, id)
+	return nil
+}
+
 // Get 获取单个配置
 func (m *AgentProviderManager) Get(id string) (*AgentProviderConfig, bool) {
 	m.mu.RLock()

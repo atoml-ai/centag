@@ -1,10 +1,10 @@
 version: '1.0'
 schema_version: centag.pipeline/v1alpha1
 id: transparent-proxy-redis-cache
-name: 缓存 + 原始转发示例（Redis）
-description: 示例模板：cache + transparent_forward；用户侧透明模式已改为无 system prompt 的 generator，缓存请用 cache-mode，HTTP 透传请用 raw-forward
+name: 缓存 + 跳板转发示例（Redis）
+description: 示例模板：cache + transparent_forward；用户侧透明模式已改为无 system prompt 的 generator，缓存请用 cache-mode，固定出站跳板请用 fixed-egress
 metadata:
-  aligned_proxy_mode: raw-forward
+  aligned_proxy_mode: fixed-egress
   lastUpdated: '2026-07-14T00:00:00.000Z'
   layoutVersion: '1.2'
   template_scope: example

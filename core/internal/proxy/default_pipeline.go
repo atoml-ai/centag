@@ -69,8 +69,8 @@ func PipelineIDToMode(pipelineID string) ProxyMode {
 		return ModeTransparentProxy
 	case "transparent-fast":
 		return ModeTransparentFast
-	case "raw-forward":
-		return ModeRawForward
+	case "fixed-egress":
+		return ModeFixedEgress
 	case "model-matching":
 		return ModeModelMatching
 	case "audit-mode":
@@ -148,8 +148,8 @@ func GetPipelineIDByMode(mode ProxyMode) string {
 		return "transparent-proxy"
 	case ModeTransparentFast:
 		return "transparent-fast"
-	case ModeRawForward:
-		return "raw-forward"
+	case ModeFixedEgress:
+		return "fixed-egress"
 	case ModeModelMatching:
 		return "model-matching"
 	case ModeAuditMode:

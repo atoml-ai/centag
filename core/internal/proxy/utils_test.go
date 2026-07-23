@@ -43,16 +43,16 @@ func TestDetectProxyModeLegacy(t *testing.T) {
 			expectedMode: ModeTransparentFast,
 		},
 		{
-			name:         "Raw forward shortcut #raw",
-			modeHeader:   "#raw",
+			name:         "Fixed egress shortcut #j",
+			modeHeader:   "#j",
 			modeParam:    "",
-			expectedMode: ModeRawForward,
+			expectedMode: ModeFixedEgress,
 		},
 		{
-			name:         "Raw forward full name",
-			modeHeader:   "raw-forward",
+			name:         "Fixed egress full name",
+			modeHeader:   "fixed-egress",
 			modeParam:    "",
-			expectedMode: ModeRawForward,
+			expectedMode: ModeFixedEgress,
 		},
 		{
 			name:         "Mode from parameter when header is empty",
@@ -293,8 +293,8 @@ func TestIsValidProxyMode(t *testing.T) {
 			expected: true,
 		},
 		{
-			name:     "Valid raw forward mode",
-			mode:     ModeRawForward,
+			name:     "Valid fixed egress mode",
+			mode:     ModeFixedEgress,
 			expected: true,
 		},
 		{
