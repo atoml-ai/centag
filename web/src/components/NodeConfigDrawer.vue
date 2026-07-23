@@ -48,11 +48,11 @@
         <div class="section-title">出站策略</div>
         <el-alert type="info" :closable="false" class="section-alert">
           <template #default>
-            <span style="font-size: 13px; line-height: 1.55">
-              <strong>透明 #t</strong>＝按模型选路 + 不注入；
-              <strong>跳板 #j</strong>＝固定出站 + 不注入；
-              <strong>直连 #d</strong>＝固定出站 + 注入 System Prompt。
-            </span>
+            <div style="font-size: 13px; line-height: 1.6">
+              <div><strong>出站</strong>：请求经 Centag 转发到上游大模型，并用后端配置的 API Key 鉴权（客户端只需连 Centag）。</div>
+              <div style="margin-top: 6px"><strong>按模型匹配</strong>：按客户端请求里的 model 名，在已启用后端中松匹配，命中则走该后端；未命中再用下方默认后端/模型。</div>
+              <div style="margin-top: 6px"><strong>固定出站</strong>：不做模型匹配，始终走下方选定的后端/模型（或系统默认）。</div>
+            </div>
           </template>
         </el-alert>
 
@@ -61,10 +61,6 @@
             <el-radio-button value="match_model">按模型匹配</el-radio-button>
             <el-radio-button value="fixed">固定出站</el-radio-button>
           </el-radio-group>
-        </el-form-item>
-
-        <el-form-item label="注入 System Prompt">
-          <el-switch v-model="egressConfig.inject_system_prompt" active-text="开启（直连）" inactive-text="关闭（透传）" />
         </el-form-item>
 
         <el-row :gutter="12">
@@ -90,27 +86,41 @@
             </el-form-item>
           </el-col>
         </el-row>
+        <div class="help-text" style="margin: -6px 0 12px">
+          {{ egressConfig.route_policy === 'fixed' ? '固定出站时作为唯一出口。' : '按模型匹配未命中时，回落到此处的默认后端/模型。' }}
+        </div>
 
-        <el-form-item v-if="showPromptEditor" :label="getPromptLabel(localNode.type)">
-          <div class="system-prompt-toolbar">
-            <el-select
-              v-model="selectedPromptPreset"
-              clearable
-              placeholder="人格预设"
-              style="width: 160px"
-              @change="onPromptPresetChange"
-            >
-              <el-option v-for="p in systemPromptPresets" :key="p.id" :label="p.label" :value="p.id" />
-            </el-select>
-            <el-button size="small" @click="restoreDefaultSystemPrompt">恢复默认</el-button>
+        <el-form-item label="System Prompt">
+          <div class="egress-prompt-header">
+            <el-switch
+              v-model="egressConfig.inject_system_prompt"
+              active-text="注入并覆盖客户端 system"
+              inactive-text="不注入（透传客户端）"
+            />
           </div>
-          <el-input
-            ref="promptInputRef"
-            v-model="promptFieldValue"
-            type="textarea"
-            :rows="6"
-            :placeholder="getPromptPlaceholder(localNode.type)"
-          />
+          <template v-if="egressConfig.inject_system_prompt">
+            <div class="system-prompt-toolbar" style="margin-top: 10px">
+              <el-select
+                v-model="selectedPromptPreset"
+                clearable
+                placeholder="人格预设"
+                style="width: 160px"
+                @change="onPromptPresetChange"
+              >
+                <el-option v-for="p in systemPromptPresets" :key="p.id" :label="p.label" :value="p.id" />
+              </el-select>
+              <el-button size="small" @click="restoreDefaultSystemPrompt">恢复默认</el-button>
+            </div>
+            <el-input
+              ref="promptInputRef"
+              v-model="promptFieldValue"
+              type="textarea"
+              :rows="6"
+              :placeholder="getPromptPlaceholder(localNode.type)"
+              style="margin-top: 8px"
+            />
+            <div class="help-text">开启注入后，下方文本会替换客户端 messages 中的 system 角色。</div>
+          </template>
         </el-form-item>
       </section>
 
@@ -1962,6 +1972,12 @@ onMounted(() => {
 
 .section-alert {
   margin-bottom: 12px;
+}
+
+.egress-prompt-header {
+  display: flex;
+  align-items: center;
+  min-height: 32px;
 }
 
 .drawer-section-advanced {
