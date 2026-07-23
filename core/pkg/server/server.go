@@ -1943,16 +1943,25 @@ func buildSystemProxyPACConfig(cfg *config.Config) *pac.Config {
 }
 
 func buildMITMConfig(cfg *config.Config, backendHost string) *mitm.Config {
+	requireProxyAuth := cfg.SystemProxy.AllowLANClients
+	var validator mitm.ClientTokenValidator
+	if requireProxyAuth {
+		validator = func(token string) error {
+			return auth.ValidateMITMProxyToken(context.Background(), token)
+		}
+	}
 	return &mitm.Config{
-		Addr:             cfg.SystemProxy.MITMListenAddr(),
-		BackendAddr:      fmt.Sprintf("%s:%d", backendHost, cfg.Server.Port),
-		CACertPath:       cfg.SystemProxy.CACertPath,
-		CAKeyPath:        cfg.SystemProxy.CAKeyPath,
-		CertDir:          cfg.SystemProxy.CertDir,
-		CertValidDays:    cfg.SystemProxy.CertValidDays,
-		Domains:          cfg.SystemProxy.Domains,
-		PathPatterns:     cfg.SystemProxy.PathPatterns,
-		BackendAuthToken: config.ResolveSystemProxyEgressAPIKey(&cfg.SystemProxy),
+		Addr:                   cfg.SystemProxy.MITMListenAddr(),
+		BackendAddr:            fmt.Sprintf("%s:%d", backendHost, cfg.Server.Port),
+		CACertPath:             cfg.SystemProxy.CACertPath,
+		CAKeyPath:              cfg.SystemProxy.CAKeyPath,
+		CertDir:                cfg.SystemProxy.CertDir,
+		CertValidDays:          cfg.SystemProxy.CertValidDays,
+		Domains:                cfg.SystemProxy.Domains,
+		PathPatterns:           cfg.SystemProxy.PathPatterns,
+		BackendAuthToken:       config.ResolveSystemProxyEgressAPIKey(&cfg.SystemProxy),
+		RequireClientProxyAuth: requireProxyAuth,
+		ClientTokenValidator:   validator,
 	}
 }
 

@@ -16,6 +16,8 @@ export interface ProxySetupStatus {
   global_proxy_mode: boolean
   mitm_proxy: string
   egress_api_key_configured?: boolean
+  /** LAN 开启时 MITM 对非本机客户端强制 Proxy-Authorization */
+  proxy_auth_required?: boolean
 }
 
 export interface EgressKeyEnsureResult {
