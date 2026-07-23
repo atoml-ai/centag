@@ -35,7 +35,6 @@ const NodePluginManager = () => import('@/views/pipeline/NodePluginManager.vue')
 const PipelineModes = () => import('@/views/PipelineModes.vue')
 const PluginRegistry = () => import('@/views/plugin/PluginRegistry.vue')
 const AgentSetup = () => import('@/views/AgentSetup.vue')
-const AgentProviders = () => import('@/views/AgentProviders.vue')
 const StorageKVBrowser = () => import('@/views/StorageKVBrowser.vue')
 const Settings = () => import('@/views/Settings.vue')
 const FallbackPolicy = () => import('@/views/FallbackPolicy.vue')
@@ -57,8 +56,8 @@ const routes = [
   { path: '/cache', name: 'Cache', component: Cache, meta: { title: '缓存管理' } },
   { path: '/evaluation', name: 'Evaluation', component: Evaluation, meta: { title: '缓存评估管理' } },
   { path: '/chat', name: 'Chat', component: Chat, meta: { title: 'AI 对话' } },
-  { path: '/agent-setup', name: 'AgentSetup', component: AgentSetup, meta: { title: 'Agent 快速接入' } },
-  { path: '/agent-providers', name: 'AgentProviders', component: AgentProviders, meta: { title: 'Agent 供应商管理' } },
+  { path: '/agent-setup', name: 'AgentSetup', component: AgentSetup, meta: { title: 'Agent 接入' } },
+  { path: '/agent-providers', redirect: '/agent-setup' },
   {
     path: '/proxy-modes',
     name: 'ProxyModes',

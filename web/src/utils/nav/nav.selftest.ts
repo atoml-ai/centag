@@ -48,22 +48,22 @@ function run() {
       name: 'personal worker',
       edition: 'personal',
       isAdmin: true,
-      mustHave: ['dashboard', 'usage', 'local-proxy', 'memory', 'more', 'storage-config', 'config-basic'],
-      mustNot: ['chat', 'backends', 'pipelines', 'personal-config', 'my-tenant']
+      mustHave: ['dashboard', 'usage', 'access', 'memory', 'more', 'storage-config', 'config-basic'],
+      mustNot: ['chat', 'backends', 'pipelines', 'personal-config', 'my-tenant', 'local-proxy']
     },
     {
       name: 'team_user worker',
       edition: 'team',
       isAdmin: false,
-      mustHave: ['dashboard', 'usage', 'local-proxy', 'memory', 'more', 'my-tenant'],
-      mustNot: ['chat', 'backends', 'pipelines', 'storage-config', 'config-basic', 'shared-resources']
+      mustHave: ['dashboard', 'usage', 'access', 'memory', 'more', 'my-tenant'],
+      mustNot: ['chat', 'backends', 'pipelines', 'storage-config', 'config-basic', 'shared-resources', 'local-proxy']
     },
     {
       name: 'team_admin ops',
       edition: 'team',
       isAdmin: true,
       mustHave: ['dashboard', 'shared-resources', 'backends', 'pipelines', 'storage-config', 'system-users'],
-      mustNot: ['chat', 'local-proxy', 'memory', 'usage']
+      mustNot: ['chat', 'access', 'memory', 'usage', 'local-proxy']
     },
     {
       name: 'minimal short',

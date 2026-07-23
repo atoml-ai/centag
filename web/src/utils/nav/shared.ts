@@ -171,13 +171,13 @@ export function usageNavGroup(): NavItem {
   )
 }
 
-/** 本机代理（上提为一等能力；页面仍复用三路由） */
-export function localProxyNavGroup(): NavItem {
+/** 接入：系统代理 + Agent 快速接入 */
+export function accessNavGroup(): NavItem {
   return navGroup(
-    'local-proxy',
-    '本机代理',
-    'Connection',
-    [systemProxyNav(), hostProxyNav(), clashRulesNav()],
+    'access',
+    '接入',
+    'Link',
+    [systemProxyNav(), agentSetupNav()],
     '/system-proxy'
   )
 }
@@ -202,27 +202,20 @@ export function buildWorkerNav(caps: Capabilities): NavItem[] {
   if (caps.usageBilling) {
     items.push(usageNavGroup())
   }
-  if (caps.localProxy) {
-    items.push(localProxyNavGroup())
+  if (caps.localProxy || caps.agentSetup) {
+    items.push(accessNavGroup())
   }
   if (caps.memoryQuery) {
     items.push(memoryNav())
   }
 
   const moreChildren: NavItem[] = []
-  if (caps.agentSetup) {
-    moreChildren.push(
-      navGroup(
-        'more-agent',
-        'Agent',
-        'Cpu',
-        [agentSetupNav(), agentProvidersNav()],
-        '/agent-setup'
-      )
-    )
-  }
   if (caps.storageConfig) {
     moreChildren.push(storageConfigNavGroup())
+  }
+  if (caps.localProxy) {
+    moreChildren.push(hostProxyNav())
+    moreChildren.push(clashRulesNav())
   }
   moreChildren.push(logsNav())
 
