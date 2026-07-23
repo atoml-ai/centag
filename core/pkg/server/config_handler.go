@@ -136,23 +136,23 @@ func (h *ConfigHandler) SaveAllConfig(c *gin.Context) {
 
 	// 4. 使用 BindJSON 解析其他标准字段
 	var req struct {
-		Server         *config.ServerConfig          `json:"server"`
-		Log            *config.LogConfig             `json:"log"`
-		Proxy          *config.ProxyConfig           `json:"proxy"`
-		Cache          *config.CacheConfig           `json:"cache"`
-		Redis          *config.RedisConfig           `json:"redis"`
-		Vector         *config.VectorConfig          `json:"vector"`
-		Embedding      *config.EmbeddingConfig       `json:"embedding"`
-		QASplit        *config.QASplitConfig         `json:"qa_split"`
-		QuestionSplit  *config.QuestionSplitConfig   `json:"question_split"`
-		Plugins        *config.PluginsConfig         `json:"plugins"`
-		SystemProxy    *config.SystemProxyConfig     `json:"system_proxy"`
-		HostProxy      *config.HostProxyConfig       `json:"host_proxy"`
-		Backends       []config.BackendConfig        `json:"backends"`
-		Storages       []config.StorageConfig        `json:"storages"`
-		DefaultStorage string                        `json:"default_storage"`
-		ModelMatching  *config.ModelMatchingConfig   `json:"model_matching"`
-		Scheduler      config.SchedulerConfig        `json:"scheduler"` // 值类型，非指针
+		Server         *config.ServerConfig        `json:"server"`
+		Log            *config.LogConfig           `json:"log"`
+		Proxy          *config.ProxyConfig         `json:"proxy"`
+		Cache          *config.CacheConfig         `json:"cache"`
+		Redis          *config.RedisConfig         `json:"redis"`
+		Vector         *config.VectorConfig        `json:"vector"`
+		Embedding      *config.EmbeddingConfig     `json:"embedding"`
+		QASplit        *config.QASplitConfig       `json:"qa_split"`
+		QuestionSplit  *config.QuestionSplitConfig `json:"question_split"`
+		Plugins        *config.PluginsConfig       `json:"plugins"`
+		SystemProxy    *config.SystemProxyConfig   `json:"system_proxy"`
+		HostProxy      *config.HostProxyConfig     `json:"host_proxy"`
+		Backends       []config.BackendConfig      `json:"backends"`
+		Storages       []config.StorageConfig      `json:"storages"`
+		DefaultStorage string                      `json:"default_storage"`
+		ModelMatching  *config.ModelMatchingConfig `json:"model_matching"`
+		Scheduler      config.SchedulerConfig      `json:"scheduler"` // 值类型，非指针
 	}
 
 	if !BindJSON(c, &req) {
@@ -185,7 +185,12 @@ func (h *ConfigHandler) SaveAllConfig(c *gin.Context) {
 		cfg.Log = *req.Log
 	}
 	if req.Proxy != nil {
-		cfg.Proxy = *req.Proxy
+		// 首页「响应追踪」等场景可能只传 proxy.response_trace_banner；避免整对象替换清零其它字段
+		if isProxyTraceBannerOnlyUpdate(rawData) {
+			cfg.Proxy.ResponseTraceBanner = req.Proxy.ResponseTraceBanner
+		} else {
+			cfg.Proxy = *req.Proxy
+		}
 	}
 	if req.Cache != nil {
 		cfg.Cache = *req.Cache
@@ -596,6 +601,30 @@ func (h *ConfigHandler) EnsureSystemProxyEgress(c *gin.Context) {
 
 type bindEgressRequest struct {
 	APIKeyID int64 `json:"api_key_id" binding:"required"`
+}
+
+// isProxyTraceBannerOnlyUpdate 判断 PUT /config 的 proxy 是否仅更新 response_trace_banner。
+func isProxyTraceBannerOnlyUpdate(rawData map[string]json.RawMessage) bool {
+	if rawData == nil {
+		return false
+	}
+	raw, ok := rawData["proxy"]
+	if !ok {
+		return false
+	}
+	var m map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &m); err != nil || len(m) == 0 {
+		return false
+	}
+	if _, has := m["response_trace_banner"]; !has {
+		return false
+	}
+	for k := range m {
+		if k != "response_trace_banner" {
+			return false
+		}
+	}
+	return true
 }
 
 // BindSystemProxyEgress handles POST /api/v1/proxy/egress-key/bind

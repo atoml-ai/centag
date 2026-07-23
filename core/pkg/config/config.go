@@ -70,27 +70,27 @@ func Get() *Config {
 // Config is the full runtime configuration.  All fields are JSON-serialisable
 // so they can be stored in / loaded from the database as JSON blobs.
 type Config struct {
-	Server         ServerConfig         `json:"server"`
-	Log            LogConfig            `json:"log"`
-	Proxy          ProxyConfig          `json:"proxy"`
-	Cache          CacheConfig          `json:"cache"`
-	Redis          RedisConfig          `json:"redis"`
-	Vector         VectorConfig         `json:"vector"`
-	Embedding      EmbeddingConfig      `json:"embedding"`
-	QASplit        QASplitConfig        `json:"qa_split"`
-	QuestionSplit  QuestionSplitConfig  `json:"question_split"`
-	Plugins        PluginsConfig        `json:"plugins"`
-	PluginSecurity PluginSecurityConfig `json:"plugin_security"` // 插件安全配置
-	SystemProxy    SystemProxyConfig    `json:"system_proxy"`
-	HostProxy      HostProxyConfig      `json:"host_proxy"`
-	Backends       []BackendConfig      `json:"backends"`
+	Server            ServerConfig         `json:"server"`
+	Log               LogConfig            `json:"log"`
+	Proxy             ProxyConfig          `json:"proxy"`
+	Cache             CacheConfig          `json:"cache"`
+	Redis             RedisConfig          `json:"redis"`
+	Vector            VectorConfig         `json:"vector"`
+	Embedding         EmbeddingConfig      `json:"embedding"`
+	QASplit           QASplitConfig        `json:"qa_split"`
+	QuestionSplit     QuestionSplitConfig  `json:"question_split"`
+	Plugins           PluginsConfig        `json:"plugins"`
+	PluginSecurity    PluginSecurityConfig `json:"plugin_security"` // 插件安全配置
+	SystemProxy       SystemProxyConfig    `json:"system_proxy"`
+	HostProxy         HostProxyConfig      `json:"host_proxy"`
+	Backends          []BackendConfig      `json:"backends"`
 	Storages          []StorageConfig      `json:"storages"`
 	DefaultStorage    string               `json:"default_storage"`
 	DataStores        []DataStoreConfig    `json:"data_stores"`
 	DefaultDataStores []string             `json:"default_data_stores"`
-	ModelMatching  ModelMatchingConfig  `json:"model_matching"`
-	CacheControl   CacheControlConfig   `json:"cache_control"`
-	Scheduler      SchedulerConfig      `json:"scheduler"`
+	ModelMatching     ModelMatchingConfig  `json:"model_matching"`
+	CacheControl      CacheControlConfig   `json:"cache_control"`
+	Scheduler         SchedulerConfig      `json:"scheduler"`
 }
 
 // ── sub-structures ────────────────────────────────────────────────────────────
@@ -106,11 +106,11 @@ type BackendHealthStatus struct {
 
 // BackendAccount 账户池中的单个凭证
 type BackendAccount struct {
-	ID        string `json:"id"`                  // 池内唯一，如 "key-1"
-	Label     string `json:"label,omitempty"`     // 显示名，如 "免费 Key A"
-	APIKey    string `json:"api_key,omitempty"`   // 明文仅写入；响应用 has_api_key
-	Enabled   bool   `json:"enabled"`             // 默认 true
-	Weight    int    `json:"weight,omitempty"`     // 加权轮询，默认 1
+	ID        string `json:"id"`                // 池内唯一，如 "key-1"
+	Label     string `json:"label,omitempty"`   // 显示名，如 "免费 Key A"
+	APIKey    string `json:"api_key,omitempty"` // 明文仅写入；响应用 has_api_key
+	Enabled   bool   `json:"enabled"`           // 默认 true
+	Weight    int    `json:"weight,omitempty"`  // 加权轮询，默认 1
 	CreatedAt string `json:"created_at,omitempty"`
 }
 
@@ -258,16 +258,18 @@ type ProxyConfig struct {
 	NetworkRetryable *bool `json:"network_retryable,omitempty"`
 	// CircuitBreaker 熔断器配置（热生效）
 	CircuitBreaker *CircuitBreakerSettings `json:"circuit_breaker,omitempty"`
+	// ResponseTraceBanner 开启后在返回正文前附加流水线 / 后端 / 模型 / 降级信息（热生效）
+	ResponseTraceBanner bool `json:"response_trace_banner"`
 }
 
 // CircuitBreakerSettings 熔断器可配置参数（热生效）。
 type CircuitBreakerSettings struct {
-	FailureThreshold    int     `json:"failure_threshold"`     // 窗口内失败次数触发熔断（默认 3）
-	SuccessThreshold    int     `json:"success_threshold"`     // 半开状态恢复所需成功次数（默认 2）
-	TimeoutSec          int     `json:"timeout_sec"`           // 熔断持续秒数（默认 60）
-	WindowSec           int     `json:"window_sec"`            // 滑动窗口秒数（默认 60）
-	RateLimitWeight     int     `json:"rate_limit_weight"`     // 429 重试-after 权重（默认 2，即1次429计为2次失败）
-	ErrorRateThreshold  float64 `json:"error_rate_threshold"`  // [+] 错误率阈值（0=禁用，如 65 表示 65%）
+	FailureThreshold    int     `json:"failure_threshold"`      // 窗口内失败次数触发熔断（默认 3）
+	SuccessThreshold    int     `json:"success_threshold"`      // 半开状态恢复所需成功次数（默认 2）
+	TimeoutSec          int     `json:"timeout_sec"`            // 熔断持续秒数（默认 60）
+	WindowSec           int     `json:"window_sec"`             // 滑动窗口秒数（默认 60）
+	RateLimitWeight     int     `json:"rate_limit_weight"`      // 429 重试-after 权重（默认 2，即1次429计为2次失败）
+	ErrorRateThreshold  float64 `json:"error_rate_threshold"`   // [+] 错误率阈值（0=禁用，如 65 表示 65%）
 	MinRequestsInWindow int     `json:"min_requests_in_window"` // [+] 窗口内最小请求数（防止低流量误熔断）
 }
 
@@ -522,8 +524,8 @@ type PluginsConfig struct {
 type SystemProxyConfig struct {
 	Enabled         bool     `json:"enabled"`
 	ListenPort      int      `json:"listen_port"`
-	ListenAddr      string   `json:"listen_addr"`      // host part only; default 127.0.0.1
-	AdvertiseHost   string   `json:"advertise_host"`   // PAC PROXY host when LAN enabled
+	ListenAddr      string   `json:"listen_addr"`    // host part only; default 127.0.0.1
+	AdvertiseHost   string   `json:"advertise_host"` // PAC PROXY host when LAN enabled
 	AllowLANClients bool     `json:"allow_lan_clients"`
 	PACEnabled      bool     `json:"pac_enabled"`
 	CACertPath      string   `json:"ca_cert_path"`

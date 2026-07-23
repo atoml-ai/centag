@@ -16,8 +16,9 @@ const minimalProxyConfigFile = "proxy-config.yaml"
 
 // ProxyConfigFile is the on-disk representation used by the minimal edition.
 type ProxyConfigFile struct {
-	DefaultBackendID string `yaml:"default_backend_id" json:"default_backend_id"`
-	DefaultModel     string `yaml:"default_model" json:"default_model"`
+	DefaultBackendID    string `yaml:"default_backend_id" json:"default_backend_id"`
+	DefaultModel        string `yaml:"default_model" json:"default_model"`
+	ResponseTraceBanner bool   `yaml:"response_trace_banner" json:"response_trace_banner"`
 }
 
 // ResolveDataDir returns the data directory used for file-based persistence.
@@ -86,6 +87,7 @@ func LoadProxyConfigFromFile(dataDir string, defaultCfg ProxyConfig) (ProxyConfi
 	if fileCfg.DefaultModel != "" {
 		cfg.DefaultModel = fileCfg.DefaultModel
 	}
+	cfg.ResponseTraceBanner = fileCfg.ResponseTraceBanner
 	return cfg, nil
 }
 
@@ -99,8 +101,9 @@ func SaveProxyConfigToFile(dataDir string, cfg ProxyConfig) error {
 	}
 
 	fileCfg := ProxyConfigFile{
-		DefaultBackendID: cfg.DefaultBackendID,
-		DefaultModel:     cfg.DefaultModel,
+		DefaultBackendID:    cfg.DefaultBackendID,
+		DefaultModel:        cfg.DefaultModel,
+		ResponseTraceBanner: cfg.ResponseTraceBanner,
 	}
 	data, err := yaml.Marshal(fileCfg)
 	if err != nil {

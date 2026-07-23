@@ -230,8 +230,9 @@ func (s *Server) handleGetProxyConfig(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"data": gin.H{
-			"default_backend_id": cfg.Proxy.DefaultBackendID,
-			"default_model":      cfg.Proxy.DefaultModel,
+			"default_backend_id":    cfg.Proxy.DefaultBackendID,
+			"default_model":         cfg.Proxy.DefaultModel,
+			"response_trace_banner": cfg.Proxy.ResponseTraceBanner,
 		},
 	})
 }
@@ -245,8 +246,9 @@ func (s *Server) handleSaveProxyConfig(c *gin.Context) {
 	}
 
 	var req struct {
-		DefaultBackendID *string `json:"default_backend_id"`
-		DefaultModel     *string `json:"default_model"`
+		DefaultBackendID    *string `json:"default_backend_id"`
+		DefaultModel        *string `json:"default_model"`
+		ResponseTraceBanner *bool   `json:"response_trace_banner"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": err.Error()})
@@ -258,6 +260,9 @@ func (s *Server) handleSaveProxyConfig(c *gin.Context) {
 	}
 	if req.DefaultModel != nil {
 		cfg.Proxy.DefaultModel = strings.TrimSpace(*req.DefaultModel)
+	}
+	if req.ResponseTraceBanner != nil {
+		cfg.Proxy.ResponseTraceBanner = *req.ResponseTraceBanner
 	}
 	// When default_model is empty but a default backend is set, auto-fill from that backend's preferred model.
 	if strings.TrimSpace(cfg.Proxy.DefaultModel) == "" && strings.TrimSpace(cfg.Proxy.DefaultBackendID) != "" {
@@ -274,14 +279,16 @@ func (s *Server) handleSaveProxyConfig(c *gin.Context) {
 		return
 	}
 
-	logger.Infof("[ProxyConfig] Updated default_backend_id=%q default_model=%q", cfg.Proxy.DefaultBackendID, cfg.Proxy.DefaultModel)
+	logger.Infof("[ProxyConfig] Updated default_backend_id=%q default_model=%q response_trace_banner=%v",
+		cfg.Proxy.DefaultBackendID, cfg.Proxy.DefaultModel, cfg.Proxy.ResponseTraceBanner)
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "proxy config saved",
 		"data": gin.H{
-			"default_backend_id": cfg.Proxy.DefaultBackendID,
-			"default_model":      cfg.Proxy.DefaultModel,
+			"default_backend_id":    cfg.Proxy.DefaultBackendID,
+			"default_model":         cfg.Proxy.DefaultModel,
+			"response_trace_banner": cfg.Proxy.ResponseTraceBanner,
 		},
 	})
 }
