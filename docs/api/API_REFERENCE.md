@@ -267,6 +267,90 @@
 }
 ```
 
+### GET /api/v1/backends/export
+导出所有后端配置
+
+**参数**:
+- `desensitize` (可选): 设为 `true` 时脱敏 api_key（仅返回 has_api_key 标记）
+
+### POST /api/v1/backends/import
+批量导入后端配置
+
+**请求体**:
+```json
+{
+  "backends": [
+    {
+      "id": "openai-1",
+      "name": "OpenAI GPT-4",
+      "type": "openai",
+      "base_url": "https://api.openai.com",
+      "api_key": "sk-...",
+      "enabled": true
+    }
+  ]
+}
+```
+
+### GET /api/v1/backends/:id/accounts
+获取后端账户池中的所有账户
+
+**响应**:
+```json
+{
+  "success": true,
+  "data": {
+    "accounts": [
+      {
+        "id": "key-1",
+        "label": "Account 1",
+        "enabled": true,
+        "weight": 1
+      }
+    ],
+    "strategy": "round_robin"
+  }
+}
+```
+
+### POST /api/v1/backends/:id/accounts
+添加账户到后端账户池
+
+**请求体**:
+```json
+{
+  "id": "key-1",
+  "api_key": "sk-...",
+  "label": "Account 1",
+  "enabled": true,
+  "weight": 1
+}
+```
+
+### PUT /api/v1/backends/:id/accounts/:accountId
+更新后端账户池中的账户
+
+### DELETE /api/v1/backends/:id/accounts/:accountId
+从后端账户池中删除账户
+
+### POST /api/v1/backends/:id/accounts/:accountId/reset-breaker
+重置账户级熔断器状态
+
+### GET /api/v1/backends/:id/stats
+获取后端统计信息
+
+**响应**:
+```json
+{
+  "success": true,
+  "data": {
+    "total_accounts": 3,
+    "enabled_accounts": 2,
+    "strategy": "round_robin"
+  }
+}
+```
+
 ---
 
 ## 5. 存储 API

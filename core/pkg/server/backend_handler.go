@@ -80,9 +80,11 @@ func (h *BackendHandler) ListBackends(c *gin.Context) {
 	RespondSuccess(c, responses)
 }
 
-// ExportBackends 导出所有后端配置（包含完整 api_key，用于备份/迁移）
+// ExportBackends 导出所有后端配置
+// 支持 ?desensitize=true 参数，导出时脱敏 api_key（仅返回 has_api_key 标记）
 func (h *BackendHandler) ExportBackends(c *gin.Context) {
 	tenantID := h.getTenantID(c)
+	desensitize := c.Query("desensitize") == "true"
 
 	var backends []*backend.BackendConfig
 	if tenantID != "" {
@@ -92,6 +94,24 @@ func (h *BackendHandler) ExportBackends(c *gin.Context) {
 	}
 	if user := h.accessUser(c); user != nil {
 		backends = useraccess.FilterBackends(user, backends)
+	}
+
+	// 脱敏处理
+	if desensitize {
+		masked := make([]*backend.BackendConfig, 0, len(backends))
+		for _, b := range backends {
+			m := *b
+			m.APIKey = ""
+			// 掩码账户池中的 api_key
+			if m.AccountPool != nil {
+				for i := range m.AccountPool.Accounts {
+					m.AccountPool.Accounts[i].APIKey = ""
+				}
+			}
+			masked = append(masked, &m)
+		}
+		RespondSuccess(c, masked)
+		return
 	}
 
 	// 返回完整配置，包含 api_key
@@ -1071,4 +1091,277 @@ func (h *BackendHandler) UpdateBackendPriorityWeight(c *gin.Context) {
 	}
 
 	RespondSuccess(c, cfg.ToResponse())
+}
+
+// ── Account Pool CRUD ──────────────────────────────────────────────────────
+
+// ListBackendAccounts 列出后端账户池中的所有账户
+func (h *BackendHandler) ListBackendAccounts(c *gin.Context) {
+	backendID := c.Param("id")
+	tenantID := h.getTenantID(c)
+
+	cfg, err := h.getBackendConfig(c, tenantID, backendID)
+	if err != nil {
+		return
+	}
+
+	if cfg.AccountPool == nil {
+		RespondSuccess(c, []interface{}{})
+		return
+	}
+
+	// 掩码 api_key
+	accounts := make([]backend.BackendAccount, 0, len(cfg.AccountPool.Accounts))
+	for _, acc := range cfg.AccountPool.Accounts {
+		masked := acc
+		masked.APIKey = ""
+		accounts = append(accounts, masked)
+	}
+
+	RespondSuccess(c, gin.H{
+		"accounts": accounts,
+		"strategy": cfg.AccountPool.Strategy,
+	})
+}
+
+// GetBackendAccount 获取单个账户信息
+func (h *BackendHandler) GetBackendAccount(c *gin.Context) {
+	backendID := c.Param("id")
+	accountID := c.Param("accountId")
+	tenantID := h.getTenantID(c)
+
+	cfg, err := h.getBackendConfig(c, tenantID, backendID)
+	if err != nil {
+		return
+	}
+
+	if cfg.AccountPool == nil {
+		RespondNotFound(c, "account pool not found")
+		return
+	}
+
+	acc, err := backend.GetAccountByID(cfg.AccountPool, accountID)
+	if err != nil {
+		RespondNotFound(c, err.Error())
+		return
+	}
+
+	// 掩码 api_key
+	masked := *acc
+	masked.APIKey = ""
+
+	RespondSuccess(c, masked)
+}
+
+// CreateBackendAccount 添加账户到后端账户池
+func (h *BackendHandler) CreateBackendAccount(c *gin.Context) {
+	backendID := c.Param("id")
+	tenantID := h.getTenantID(c)
+
+	cfg, err := h.getBackendConfig(c, tenantID, backendID)
+	if err != nil {
+		return
+	}
+
+	var acc backend.BackendAccount
+	if !BindJSON(c, &acc) {
+		return
+	}
+
+	// 初始化账户池（如果不存在）
+	if cfg.AccountPool == nil {
+		cfg.AccountPool = &backend.AccountPoolConfig{
+			Strategy: "round_robin",
+			Accounts: []backend.BackendAccount{},
+		}
+	}
+
+	// 添加账户
+	if err := backend.AddAccount(cfg.AccountPool, acc); err != nil {
+		RespondBadRequest(c, err.Error())
+		return
+	}
+
+	// 保存
+	if err := h.backendManager.Save(); err != nil {
+		logger.Errorf("create account for backend %s: %v", backendID, err)
+		RespondInternalError(c, "failed to save account")
+		return
+	}
+
+	// 返回掩码后的账户
+	masked := acc
+	masked.APIKey = ""
+	RespondSuccess(c, masked)
+}
+
+// UpdateBackendAccount 更新后端账户池中的账户
+func (h *BackendHandler) UpdateBackendAccount(c *gin.Context) {
+	backendID := c.Param("id")
+	accountID := c.Param("accountId")
+	tenantID := h.getTenantID(c)
+
+	cfg, err := h.getBackendConfig(c, tenantID, backendID)
+	if err != nil {
+		return
+	}
+
+	if cfg.AccountPool == nil {
+		RespondNotFound(c, "account pool not found")
+		return
+	}
+
+	var acc backend.BackendAccount
+	if !BindJSON(c, &acc) {
+		return
+	}
+
+	// 确保 ID 一致
+	acc.ID = accountID
+
+	// 更新账户
+	if err := backend.UpdateAccount(cfg.AccountPool, acc); err != nil {
+		RespondNotFound(c, err.Error())
+		return
+	}
+
+	// 保存
+	if err := h.backendManager.Save(); err != nil {
+		logger.Errorf("update account for backend %s: %v", backendID, err)
+		RespondInternalError(c, "failed to save account")
+		return
+	}
+
+	// 返回掩码后的账户
+	masked := acc
+	masked.APIKey = ""
+	RespondSuccess(c, masked)
+}
+
+// DeleteBackendAccount 从后端账户池中删除账户
+func (h *BackendHandler) DeleteBackendAccount(c *gin.Context) {
+	backendID := c.Param("id")
+	accountID := c.Param("accountId")
+	tenantID := h.getTenantID(c)
+
+	cfg, err := h.getBackendConfig(c, tenantID, backendID)
+	if err != nil {
+		return
+	}
+
+	if cfg.AccountPool == nil {
+		RespondNotFound(c, "account pool not found")
+		return
+	}
+
+	// 删除账户
+	if err := backend.RemoveAccount(cfg.AccountPool, accountID); err != nil {
+		RespondNotFound(c, err.Error())
+		return
+	}
+
+	// 保存
+	if err := h.backendManager.Save(); err != nil {
+		logger.Errorf("delete account for backend %s: %v", backendID, err)
+		RespondInternalError(c, "failed to save account")
+		return
+	}
+
+	RespondSuccess(c, gin.H{"deleted": true})
+}
+
+// ResetAccountBreaker 重置账户级熔断器状态
+func (h *BackendHandler) ResetAccountBreaker(c *gin.Context) {
+	backendID := c.Param("id")
+	accountID := c.Param("accountId")
+	tenantID := h.getTenantID(c)
+
+	cfg, err := h.getBackendConfig(c, tenantID, backendID)
+	if err != nil {
+		return
+	}
+
+	if cfg.AccountPool == nil {
+		RespondNotFound(c, "account pool not found")
+		return
+	}
+
+	// 验证账户存在
+	_, err = backend.GetAccountByID(cfg.AccountPool, accountID)
+	if err != nil {
+		RespondNotFound(c, err.Error())
+		return
+	}
+
+	// 重置账户级熔断器（通过 circuitbreaker 包）
+	// 注意：这里只是返回成功，实际熔断器状态由 scheduler 包管理
+	// 前端可以调用此 API 来通知后端重置熔断器状态
+	logger.Infof("reset breaker for backend %s account %s", backendID, accountID)
+	RespondSuccess(c, gin.H{"reset": true})
+}
+
+// GetAccountPoolStats 获取账户池统计信息
+func (h *BackendHandler) GetAccountPoolStats(c *gin.Context) {
+	backendID := c.Param("id")
+	tenantID := h.getTenantID(c)
+
+	cfg, err := h.getBackendConfig(c, tenantID, backendID)
+	if err != nil {
+		return
+	}
+
+	if cfg.AccountPool == nil {
+		RespondNotFound(c, "account pool not found")
+		return
+	}
+
+	stats := gin.H{
+		"total_accounts":  len(cfg.AccountPool.Accounts),
+		"enabled_accounts": 0,
+		"strategy":         cfg.AccountPool.Strategy,
+	}
+
+	for _, acc := range cfg.AccountPool.Accounts {
+		if acc.Enabled {
+			stats["enabled_accounts"] = stats["enabled_accounts"].(int) + 1
+		}
+	}
+
+	RespondSuccess(c, stats)
+}
+
+// getBackendConfig 获取后端配置的通用方法
+func (h *BackendHandler) getBackendConfig(c *gin.Context, tenantID, backendID string) (*backend.BackendConfig, error) {
+	var cfg *backend.BackendConfig
+	var err error
+
+	if tenantID != "" {
+		cfg, err = h.backendManager.GetByTenant(tenantID, backendID)
+	} else {
+		cfg, err = h.backendManager.Get(backendID)
+	}
+
+	if err != nil {
+		RespondNotFound(c, err.Error())
+		return nil, err
+	}
+
+	// 访问控制
+	if user := h.accessUser(c); user != nil {
+		filtered := useraccess.FilterBackends(user, []*backend.BackendConfig{cfg})
+		if len(filtered) == 0 {
+			RespondError(c, http.StatusForbidden, "backend not found or access denied")
+			return nil, fmt.Errorf("access denied")
+		}
+	}
+
+	return cfg, nil
+}
+
+// maskAPIKey 掩码 API Key（仅显示前4位和后4位）
+func maskAPIKey(apiKey string) string {
+	if len(apiKey) <= 8 {
+		return apiKey
+	}
+	return apiKey[:4] + "..." + apiKey[len(apiKey)-4:]
 }

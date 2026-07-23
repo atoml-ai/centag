@@ -104,6 +104,22 @@ type BackendHealthStatus struct {
 	ModelsCount  int    `json:"models_count,omitempty"`  // 获取到的模型数量
 }
 
+// BackendAccount 账户池中的单个凭证
+type BackendAccount struct {
+	ID        string `json:"id"`                  // 池内唯一，如 "key-1"
+	Label     string `json:"label,omitempty"`     // 显示名，如 "免费 Key A"
+	APIKey    string `json:"api_key,omitempty"`   // 明文仅写入；响应用 has_api_key
+	Enabled   bool   `json:"enabled"`             // 默认 true
+	Weight    int    `json:"weight,omitempty"`     // 加权轮询，默认 1
+	CreatedAt string `json:"created_at,omitempty"`
+}
+
+// AccountPoolConfig 账户池配置（非空时优先于 BackendConfig.APIKey）
+type AccountPoolConfig struct {
+	Strategy string           `json:"strategy"` // round_robin | least_usage | sticky_session
+	Accounts []BackendAccount `json:"accounts"`
+}
+
 // BackendConfig describes one LLM backend service.
 // Note: Weight and Priority are scheduling parameters managed by scheduler/preset modules.
 // Backend management module only handles basic configuration (name, type, URL, API key, etc.).
@@ -131,6 +147,9 @@ type BackendConfig struct {
 	// Scheduling parameters (managed by scheduler/preset modules, not shown in backend management UI)
 	Weight   int `json:"weight,omitempty"`   // Load balancing weight / strictness
 	Priority int `json:"priority,omitempty"` // Scheduling priority
+
+	// 账户池：多凭证轮转（非空时优先于 APIKey）
+	AccountPool *AccountPoolConfig `json:"account_pool,omitempty"`
 
 	// 租户隔离：空=系统共享后端，非空=租户私有
 	TenantID string `json:"tenant_id,omitempty"`
@@ -243,11 +262,23 @@ type ProxyConfig struct {
 
 // CircuitBreakerSettings 熔断器可配置参数（热生效）。
 type CircuitBreakerSettings struct {
-	FailureThreshold int `json:"failure_threshold"` // 窗口内失败次数触发熔断（默认 3）
-	SuccessThreshold int `json:"success_threshold"` // 半开状态恢复所需成功次数（默认 2）
-	TimeoutSec       int `json:"timeout_sec"`        // 熔断持续秒数（默认 60）
-	WindowSec        int `json:"window_sec"`         // 滑动窗口秒数（默认 60）
-	RateLimitWeight  int `json:"rate_limit_weight"`  // 429 重试-after 权重（默认 2，即1次429计为2次失败）
+	FailureThreshold    int     `json:"failure_threshold"`     // 窗口内失败次数触发熔断（默认 3）
+	SuccessThreshold    int     `json:"success_threshold"`     // 半开状态恢复所需成功次数（默认 2）
+	TimeoutSec          int     `json:"timeout_sec"`           // 熔断持续秒数（默认 60）
+	WindowSec           int     `json:"window_sec"`            // 滑动窗口秒数（默认 60）
+	RateLimitWeight     int     `json:"rate_limit_weight"`     // 429 重试-after 权重（默认 2，即1次429计为2次失败）
+	ErrorRateThreshold  float64 `json:"error_rate_threshold"`  // [+] 错误率阈值（0=禁用，如 65 表示 65%）
+	MinRequestsInWindow int     `json:"min_requests_in_window"` // [+] 窗口内最小请求数（防止低流量误熔断）
+}
+
+// RawForwardConfig Raw 转发优化配置
+type RawForwardConfig struct {
+	// RedirectPolicy 重定向策略：never=不跟随（默认），always=跟随，smart=仅 GET/HEAD
+	RedirectPolicy string `json:"redirect_policy"`
+	// MaxRedirects 最大重定向次数（默认 5）
+	MaxRedirects int `json:"max_redirects"`
+	// TimeoutSec 重定向超时秒数（默认 30）
+	TimeoutSec int `json:"timeout_sec"`
 }
 
 // PipelineConfig 流水线模式配置

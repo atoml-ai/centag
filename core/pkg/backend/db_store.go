@@ -82,6 +82,25 @@ func configBackendToBackend(c *config.BackendConfig) *BackendConfig {
 		}
 	}
 
+	var accountPool *AccountPoolConfig
+	if c.AccountPool != nil {
+		accounts := make([]BackendAccount, 0, len(c.AccountPool.Accounts))
+		for _, acc := range c.AccountPool.Accounts {
+			accounts = append(accounts, BackendAccount{
+				ID:        acc.ID,
+				Label:     acc.Label,
+				APIKey:    acc.APIKey,
+				Enabled:   acc.Enabled,
+				Weight:    acc.Weight,
+				CreatedAt: acc.CreatedAt,
+			})
+		}
+		accountPool = &AccountPoolConfig{
+			Strategy: c.AccountPool.Strategy,
+			Accounts: accounts,
+		}
+	}
+
 	return &BackendConfig{
 		ID:              c.ID,
 		Name:            c.Name,
@@ -102,6 +121,7 @@ func configBackendToBackend(c *config.BackendConfig) *BackendConfig {
 		UpdatedAt:       c.UpdatedAt,
 		Weight:          c.Weight,
 		Priority:        c.Priority,
+		AccountPool:     accountPool,
 		TenantID:        c.TenantID,
 	}
 }
@@ -131,6 +151,25 @@ func backendToConfigBackend(b *BackendConfig) config.BackendConfig {
 		}
 	}
 
+	var accountPool *config.AccountPoolConfig
+	if b.AccountPool != nil {
+		accounts := make([]config.BackendAccount, 0, len(b.AccountPool.Accounts))
+		for _, acc := range b.AccountPool.Accounts {
+			accounts = append(accounts, config.BackendAccount{
+				ID:        acc.ID,
+				Label:     acc.Label,
+				APIKey:    acc.APIKey,
+				Enabled:   acc.Enabled,
+				Weight:    acc.Weight,
+				CreatedAt: acc.CreatedAt,
+			})
+		}
+		accountPool = &config.AccountPoolConfig{
+			Strategy: b.AccountPool.Strategy,
+			Accounts: accounts,
+		}
+	}
+
 	return config.BackendConfig{
 		ID:              b.ID,
 		Name:            b.Name,
@@ -151,6 +190,7 @@ func backendToConfigBackend(b *BackendConfig) config.BackendConfig {
 		UpdatedAt:       b.UpdatedAt,
 		Weight:          b.Weight,
 		Priority:        b.Priority,
+		AccountPool:     accountPool,
 		TenantID:        b.TenantID,
 	}
 }
