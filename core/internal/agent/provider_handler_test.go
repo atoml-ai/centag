@@ -15,20 +15,20 @@ func TestAgentProviderHandler_GetByAgentType_TenantScoped(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	mgr := NewAgentProviderManager()
-	if err := mgr.Add(&AgentProviderConfig{
+	if err := mgr.Upsert(&AgentProviderConfig{
 		ID:        "system-claude",
 		AgentType: "claude-code",
 		Enabled:   true,
 	}); err != nil {
-		t.Fatalf("add system provider: %v", err)
+		t.Fatalf("upsert system provider: %v", err)
 	}
-	if err := mgr.Add(&AgentProviderConfig{
+	if err := mgr.Upsert(&AgentProviderConfig{
 		ID:        "tenant-claude",
 		AgentType: "claude-code",
 		TenantID:  "tenant-a",
 		Enabled:   true,
 	}); err != nil {
-		t.Fatalf("add tenant provider: %v", err)
+		t.Fatalf("upsert tenant provider: %v", err)
 	}
 
 	h := NewAgentProviderHandler(mgr)
