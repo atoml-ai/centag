@@ -26,6 +26,7 @@ type Backend struct {
 	currentBackend *backend.BackendConfig
 	client         *http.Client
 	mu             sync.RWMutex
+	accountSelector *backend.AccountPoolSelector
 }
 
 // NewBackend 创建 OpenAI 后端插件
@@ -33,9 +34,10 @@ func NewBackend() (plugin.Plugin, error) {
 	// 对于流式请求，不应设置 HTTP client Timeout，否则会导致长响应被截断
 	// 使用 0 表示不设置超时，依赖 context 来控制超时
 	return &Backend{
-		name:           "openai-backend",
-		status:         plugin.StatusStopped,
-		backendManager: backend.GetManager(),
+		name:            "openai-backend",
+		status:          plugin.StatusStopped,
+		backendManager:  backend.GetManager(),
+		accountSelector: backend.NewAccountPoolSelector(),
 		config: &plugin.BackendConfig{
 			BaseURL:    "https://api.openai.com/v1",
 			Timeout:    60,
@@ -218,107 +220,150 @@ func (b *Backend) CallModel(ctx context.Context, req *plugin.ProxyRequest) (*plu
 	} else {
 		url = buildOpenAIChatURL(baseURL)
 	}
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(reqBody))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
+
+	// 账户池：准备 session key
+	sessionKey := ""
+	if backend.HasAccountPool(backendCfg) {
+		sessionKey = backend.ExtractSessionKey(ctx, reqBody, "")
 	}
 
-	// 设置请求头
-	httpReq.Header.Set("Content-Type", "application/json")
-	apiKey := backend.NormalizeOpenAICompatibleAPIKey(backendCfg.APIKey)
-	if apiKey != "" {
-		httpReq.Header.Set("Authorization", "Bearer "+apiKey)
+	// 账户池 429 故障转移：最多重试 min(MaxRetries, len(accounts)-1) 次
+	maxAttempts := 1
+	if backend.HasAccountPool(backendCfg) && len(backendCfg.AccountPool.Accounts) > 1 {
+		maxAttempts = backendCfg.MaxRetries
+		if maxAttempts <= 0 {
+			maxAttempts = 3
+		}
+		if maxAttempts > len(backendCfg.AccountPool.Accounts) {
+			maxAttempts = len(backendCfg.AccountPool.Accounts)
+		}
 	}
 
-	// 发送请求
-	resp, err := b.client.Do(httpReq)
-	if err != nil {
-		// 记录失败到熔断器
-		circuitbreaker.RecordFailure(backendCfg.ID)
-		return nil, fmt.Errorf("failed to send request: %w", err)
-	}
-	defer resp.Body.Close()
+	var lastErr error
+	for attempt := 0; attempt < maxAttempts; attempt++ {
+		// 选择 API Key（账户池或单 Key）
+		apiKey := backend.NormalizeOpenAICompatibleAPIKey(backendCfg.APIKey)
+		currentAccountID := ""
+		if backend.HasAccountPool(backendCfg) {
+			result, selErr := b.accountSelector.SelectAccountForRequest(ctx, backendCfg.AccountPool, sessionKey)
+			if selErr != nil {
+				return nil, fmt.Errorf("account pool select: %w", selErr)
+			}
+			apiKey = backend.NormalizeOpenAICompatibleAPIKey(result.Key)
+			currentAccountID = result.Account.ID
+		}
 
-	// 读取响应
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		circuitbreaker.RecordFailure(backendCfg.ID)
-		return nil, fmt.Errorf("failed to read response: %w", err)
-	}
+		httpReq, reqErr := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(reqBody))
+		if reqErr != nil {
+			return nil, fmt.Errorf("failed to create request: %w", reqErr)
+		}
 
-	// 检查响应状态
-	if resp.StatusCode != http.StatusOK {
-		// 429 限流使用加重计数，加速熔断触发
-		if resp.StatusCode == http.StatusTooManyRequests {
-			circuitbreaker.RecordRateLimitFailure(backendCfg.ID)
-		} else {
+		// 设置请求头
+		httpReq.Header.Set("Content-Type", "application/json")
+		if apiKey != "" {
+			httpReq.Header.Set("Authorization", "Bearer "+apiKey)
+		}
+
+		// 发送请求
+		resp, doErr := b.client.Do(httpReq)
+		if doErr != nil {
 			circuitbreaker.RecordFailure(backendCfg.ID)
+			lastErr = fmt.Errorf("failed to send request: %w", doErr)
+			continue
 		}
-		return nil, fmt.Errorf("API error (status %d): %s", resp.StatusCode, string(respBody))
-	}
 
-	// 记录成功到熔断器
-	circuitbreaker.RecordSuccess(backendCfg.ID)
-
-	// 解析响应
-	var openaiResp ChatCompletionResponse
-	if err := json.Unmarshal(respBody, &openaiResp); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
-	}
-
-	// 转换为统一的 ProxyResponse
-	content := ""
-	reasoningContent := ""
-	finishReason := "stop"
-	var toolCalls []plugin.ToolCall
-
-	if len(openaiResp.Choices) > 0 {
-		originalContent := openaiResp.Choices[0].Message.Content.String()
-		finishReason = openaiResp.Choices[0].FinishReason
-		reasoningContent = openaiResp.Choices[0].Message.ReasoningContent
-
-		// 优先读取标准 OpenAI 格式的 message.tool_calls（DeepSeek/OpenAI 等标准后端走此路径）
-		if stdToolCalls := convertOpenAIToolCallsToPlugin(openaiResp.Choices[0].Message.ToolCalls); len(stdToolCalls) > 0 {
-			toolCalls = stdToolCalls
-			content = originalContent
-			finishReason = "tool_calls"
-			log.Printf("[OpenAI Backend] Read standard tool_calls from message: %d calls", len(toolCalls))
-		} else if parsedToolCalls, cleanedContent := normalizeToolCalls(originalContent); len(parsedToolCalls) > 0 {
-			// 规范化工具调用格式 (将各种非标准格式转换为OpenAI标准格式)
-			toolCalls = parsedToolCalls
-			content = cleanedContent
-			finishReason = "tool_calls"
-			log.Printf("[OpenAI Backend] Normalized tool calls to standard format: %d calls", len(toolCalls))
-		} else {
-			content = originalContent
+		// 读取响应
+		respBody, readErr := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if readErr != nil {
+			circuitbreaker.RecordFailure(backendCfg.ID)
+			lastErr = fmt.Errorf("failed to read response: %w", readErr)
+			continue
 		}
+
+		// 检查响应状态
+		if resp.StatusCode != http.StatusOK {
+			if resp.StatusCode == http.StatusTooManyRequests && backend.HasAccountPool(backendCfg) && attempt < maxAttempts-1 {
+				// 429 + 账户池：禁用当前账户，重试下一个
+				log.Printf("[OpenAI Backend] 429 rate limit on account %s, rotating to next (attempt %d/%d)", currentAccountID, attempt+1, maxAttempts)
+				b.accountSelector.DisableAccountTemporarily(backendCfg.AccountPool, currentAccountID)
+				circuitbreaker.RecordRateLimitFailure(backendCfg.ID)
+				lastErr = fmt.Errorf("API 429 on account %s", currentAccountID)
+				continue
+			}
+			if resp.StatusCode == http.StatusTooManyRequests {
+				circuitbreaker.RecordRateLimitFailure(backendCfg.ID)
+			} else {
+				circuitbreaker.RecordFailure(backendCfg.ID)
+			}
+			return nil, fmt.Errorf("API error (status %d): %s", resp.StatusCode, string(respBody))
+		}
+
+		// 记录成功到熔断器
+		circuitbreaker.RecordSuccess(backendCfg.ID)
+
+		// 解析响应
+		var openaiResp ChatCompletionResponse
+		if err := json.Unmarshal(respBody, &openaiResp); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal response: %w", err)
+		}
+
+		// 转换为统一的 ProxyResponse
+		content := ""
+		reasoningContent := ""
+		finishReason := "stop"
+		var toolCalls []plugin.ToolCall
+
+		if len(openaiResp.Choices) > 0 {
+			originalContent := openaiResp.Choices[0].Message.Content.String()
+			finishReason = openaiResp.Choices[0].FinishReason
+			reasoningContent = openaiResp.Choices[0].Message.ReasoningContent
+
+			// 优先读取标准 OpenAI 格式的 message.tool_calls（DeepSeek/OpenAI 等标准后端走此路径）
+			if stdToolCalls := convertOpenAIToolCallsToPlugin(openaiResp.Choices[0].Message.ToolCalls); len(stdToolCalls) > 0 {
+				toolCalls = stdToolCalls
+				content = originalContent
+				finishReason = "tool_calls"
+				log.Printf("[OpenAI Backend] Read standard tool_calls from message: %d calls", len(toolCalls))
+			} else if parsedToolCalls, cleanedContent := normalizeToolCalls(originalContent); len(parsedToolCalls) > 0 {
+				// 规范化工具调用格式 (将各种非标准格式转换为OpenAI标准格式)
+				toolCalls = parsedToolCalls
+				content = cleanedContent
+				finishReason = "tool_calls"
+				log.Printf("[OpenAI Backend] Normalized tool calls to standard format: %d calls", len(toolCalls))
+			} else {
+				content = originalContent
+			}
+		}
+
+		// 构建响应
+		proxyResp := &plugin.ProxyResponse{
+			Content:          content,
+			ReasoningContent: reasoningContent,
+			TokensUsed:       openaiResp.Usage.CompletionTokens,
+			FinishReason:     finishReason,
+			Model:            openaiResp.Model,
+			ToolCalls:    toolCalls,
+			Metadata: map[string]interface{}{
+				"prompt_tokens": openaiResp.Usage.PromptTokens,
+				"total_tokens":  openaiResp.Usage.TotalTokens,
+				"backend_id":    backendCfg.ID,
+				"backend_name":  backendCfg.Name,
+			},
+			RawBody: openaiResp,
+		}
+
+		// 如果有工具调用，更新 RawBody 中的响应以包含标准的 tool_calls 格式
+		if len(toolCalls) > 0 && len(openaiResp.Choices) > 0 {
+			openaiResp.Choices[0].Message.ToolCalls = convertToOpenAIToolCalls(toolCalls)
+			openaiResp.Choices[0].FinishReason = "tool_calls"
+			proxyResp.RawBody = openaiResp
+		}
+
+		return proxyResp, nil
 	}
 
-	// 构建响应
-	proxyResp := &plugin.ProxyResponse{
-		Content:          content,
-		ReasoningContent: reasoningContent,
-		TokensUsed:       openaiResp.Usage.CompletionTokens,
-		FinishReason:     finishReason,
-		Model:            openaiResp.Model,
-		ToolCalls:    toolCalls,
-		Metadata: map[string]interface{}{
-			"prompt_tokens": openaiResp.Usage.PromptTokens,
-			"total_tokens":  openaiResp.Usage.TotalTokens,
-			"backend_id":    backendCfg.ID,
-			"backend_name":  backendCfg.Name,
-		},
-		RawBody: openaiResp,
-	}
-
-	// 如果有工具调用，更新 RawBody 中的响应以包含标准的 tool_calls 格式
-	if len(toolCalls) > 0 && len(openaiResp.Choices) > 0 {
-		openaiResp.Choices[0].Message.ToolCalls = convertToOpenAIToolCalls(toolCalls)
-		openaiResp.Choices[0].FinishReason = "tool_calls"
-		proxyResp.RawBody = openaiResp
-	}
-
-	return proxyResp, nil
+	return nil, fmt.Errorf("all %d attempts exhausted: %w", maxAttempts, lastErr)
 }
 
 // CallModelStream 流式调用模型
@@ -364,6 +409,26 @@ func (b *Backend) CallModelStream(ctx context.Context, req *plugin.ProxyRequest)
 		} else {
 			url = buildOpenAIChatURL(baseURL)
 		}
+
+		// 账户池：准备 session key
+		sessionKey := ""
+		if backend.HasAccountPool(backendCfg) {
+			sessionKey = backend.ExtractSessionKey(ctx, reqBody, "")
+		}
+
+		// 选择 API Key（账户池或单 Key）
+		apiKey := backend.NormalizeOpenAICompatibleAPIKey(backendCfg.APIKey)
+		currentAccountID := ""
+		if backend.HasAccountPool(backendCfg) {
+			result, selErr := b.accountSelector.SelectAccountForRequest(ctx, backendCfg.AccountPool, sessionKey)
+			if selErr != nil {
+				ch <- plugin.StreamChunk{Error: fmt.Errorf("account pool select: %w", selErr)}
+				return
+			}
+			apiKey = backend.NormalizeOpenAICompatibleAPIKey(result.Key)
+			currentAccountID = result.Account.ID
+		}
+
 		httpReq, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(reqBody))
 		if err != nil {
 			ch <- plugin.StreamChunk{Error: fmt.Errorf("failed to create request: %w", err)}
@@ -373,7 +438,6 @@ func (b *Backend) CallModelStream(ctx context.Context, req *plugin.ProxyRequest)
 		// 设置请求头
 		httpReq.Header.Set("Content-Type", "application/json")
 		httpReq.Header.Set("Accept", "text/event-stream")
-		apiKey := backend.NormalizeOpenAICompatibleAPIKey(backendCfg.APIKey)
 		if apiKey != "" {
 			httpReq.Header.Set("Authorization", "Bearer "+apiKey)
 		}
@@ -389,7 +453,11 @@ func (b *Backend) CallModelStream(ctx context.Context, req *plugin.ProxyRequest)
 
 		// 检查响应状态
 		if resp.StatusCode != http.StatusOK {
-			// 429 限流使用加重计数，加速熔断触发
+			if resp.StatusCode == http.StatusTooManyRequests && backend.HasAccountPool(backendCfg) {
+				// 429 + 账户池：禁用当前账户，重试一次
+				log.Printf("[OpenAI Backend] 429 rate limit on stream account %s, disabling and failing over", currentAccountID)
+				b.accountSelector.DisableAccountTemporarily(backendCfg.AccountPool, currentAccountID)
+			}
 			if resp.StatusCode == http.StatusTooManyRequests {
 				circuitbreaker.RecordRateLimitFailure(backendCfg.ID)
 			} else {

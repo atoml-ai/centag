@@ -26,11 +26,9 @@ func CopySystemProvidersToTenant(tenantID string) (copied int, err error) {
 		newCfg.TenantID = tenantID
 		newCfg.APIKey = ""
 
-		if err := mgr.Update(&newCfg); err != nil {
-			if err := mgr.Add(&newCfg); err != nil {
-				logger.Warnf("Failed to copy agent provider %s for tenant %s: %v", cfg.ID, tenantID, err)
-				continue
-			}
+		if err := mgr.Upsert(&newCfg); err != nil {
+			logger.Warnf("Failed to copy agent provider %s for tenant %s: %v", cfg.ID, tenantID, err)
+			continue
 		}
 		copied++
 	}

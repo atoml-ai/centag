@@ -18,21 +18,23 @@ import (
 
 // Backend Anthropic 后端插件
 type Backend struct {
-	name           string
-	status         plugin.PluginStatus
-	config         *plugin.BackendConfig
-	backendManager *backend.Manager
-	currentBackend *backend.BackendConfig
-	client         *http.Client
-	mu             sync.RWMutex
+	name            string
+	status          plugin.PluginStatus
+	config          *plugin.BackendConfig
+	backendManager  *backend.Manager
+	currentBackend  *backend.BackendConfig
+	client          *http.Client
+	mu              sync.RWMutex
+	accountSelector *backend.AccountPoolSelector
 }
 
 // NewBackend 创建 Anthropic 后端插件
 func NewBackend() (plugin.Plugin, error) {
 	return &Backend{
-		name:           "anthropic-backend",
-		status:         plugin.StatusStopped,
-		backendManager: backend.GetManager(),
+		name:            "anthropic-backend",
+		status:          plugin.StatusStopped,
+		backendManager:  backend.GetManager(),
+		accountSelector: backend.NewAccountPoolSelector(),
 		config: &plugin.BackendConfig{
 			BaseURL:    "https://api.anthropic.com/v1",
 			Timeout:    60,
@@ -180,62 +182,106 @@ func (b *Backend) CallModel(ctx context.Context, req *plugin.ProxyRequest) (*plu
 
 	baseURL := strings.TrimSuffix(backendCfg.BaseURL, "/")
 	url := fmt.Sprintf("%s/messages", baseURL)
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(reqBody))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
+
+	// 账户池：准备 session key
+	sessionKey := ""
+	if backend.HasAccountPool(backendCfg) {
+		sessionKey = backend.ExtractSessionKey(ctx, reqBody, "")
 	}
 
-	httpReq.Header.Set("Content-Type", "application/json")
-	if backendCfg.APIKey != "" {
-		httpReq.Header.Set("x-api-key", backendCfg.APIKey)
-	}
-	httpReq.Header.Set("anthropic-version", "2023-06-01")
-
-	resp, err := b.client.Do(httpReq)
-	if err != nil {
-		return nil, fmt.Errorf("failed to send request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %w", err)
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("API error (status %d): %s", resp.StatusCode, string(respBody))
-	}
-
-	var anthropicResp MessagesResponse
-	if err := json.Unmarshal(respBody, &anthropicResp); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
-	}
-
-	content := ""
-	for _, block := range anthropicResp.Content {
-		if block.Type == "text" {
-			content += block.Text
+	// 账户池 429 故障转移
+	maxAttempts := 1
+	if backend.HasAccountPool(backendCfg) && len(backendCfg.AccountPool.Accounts) > 1 {
+		maxAttempts = backendCfg.MaxRetries
+		if maxAttempts <= 0 {
+			maxAttempts = 3
+		}
+		if maxAttempts > len(backendCfg.AccountPool.Accounts) {
+			maxAttempts = len(backendCfg.AccountPool.Accounts)
 		}
 	}
 
-	finishReason := anthropicResp.StopReason
-	if finishReason == "" {
-		finishReason = "stop"
+	var lastErr error
+	for attempt := 0; attempt < maxAttempts; attempt++ {
+		// 选择 API Key
+		apiKey := backendCfg.APIKey
+		currentAccountID := ""
+		if backend.HasAccountPool(backendCfg) {
+			result, selErr := b.accountSelector.SelectAccountForRequest(ctx, backendCfg.AccountPool, sessionKey)
+			if selErr != nil {
+				return nil, fmt.Errorf("account pool select: %w", selErr)
+			}
+			apiKey = result.Key
+			currentAccountID = result.Account.ID
+		}
+
+		httpReq, reqErr := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(reqBody))
+		if reqErr != nil {
+			return nil, fmt.Errorf("failed to create request: %w", reqErr)
+		}
+
+		httpReq.Header.Set("Content-Type", "application/json")
+		if apiKey != "" {
+			httpReq.Header.Set("x-api-key", apiKey)
+		}
+		httpReq.Header.Set("anthropic-version", "2023-06-01")
+
+		resp, doErr := b.client.Do(httpReq)
+		if doErr != nil {
+			lastErr = fmt.Errorf("failed to send request: %w", doErr)
+			continue
+		}
+
+		respBody, readErr := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if readErr != nil {
+			lastErr = fmt.Errorf("failed to read response: %w", readErr)
+			continue
+		}
+
+		if resp.StatusCode != http.StatusOK {
+			if resp.StatusCode == http.StatusTooManyRequests && backend.HasAccountPool(backendCfg) && attempt < maxAttempts-1 {
+				log.Printf("[Anthropic Backend] 429 rate limit on account %s, rotating to next (attempt %d/%d)", currentAccountID, attempt+1, maxAttempts)
+				b.accountSelector.DisableAccountTemporarily(backendCfg.AccountPool, currentAccountID)
+				lastErr = fmt.Errorf("API 429 on account %s", currentAccountID)
+				continue
+			}
+			return nil, fmt.Errorf("API error (status %d): %s", resp.StatusCode, string(respBody))
+		}
+
+		var anthropicResp MessagesResponse
+		if err := json.Unmarshal(respBody, &anthropicResp); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal response: %w", err)
+		}
+
+		content := ""
+		for _, block := range anthropicResp.Content {
+			if block.Type == "text" {
+				content += block.Text
+			}
+		}
+
+		finishReason := anthropicResp.StopReason
+		if finishReason == "" {
+			finishReason = "stop"
+		}
+
+		return &plugin.ProxyResponse{
+			Content:      content,
+			TokensUsed:   anthropicResp.Usage.OutputTokens,
+			FinishReason: finishReason,
+			Model:        anthropicResp.Model,
+			Metadata: map[string]interface{}{
+				"prompt_tokens": anthropicResp.Usage.InputTokens,
+				"total_tokens":  anthropicResp.Usage.InputTokens + anthropicResp.Usage.OutputTokens,
+				"backend_id":    backendCfg.ID,
+				"backend_name":  backendCfg.Name,
+			},
+			RawBody: anthropicResp,
+		}, nil
 	}
 
-	return &plugin.ProxyResponse{
-		Content:      content,
-		TokensUsed:   anthropicResp.Usage.OutputTokens,
-		FinishReason: finishReason,
-		Model:        anthropicResp.Model,
-		Metadata: map[string]interface{}{
-			"prompt_tokens": anthropicResp.Usage.InputTokens,
-			"total_tokens":  anthropicResp.Usage.InputTokens + anthropicResp.Usage.OutputTokens,
-			"backend_id":    backendCfg.ID,
-			"backend_name":  backendCfg.Name,
-		},
-		RawBody: anthropicResp,
-	}, nil
+	return nil, fmt.Errorf("all %d attempts exhausted: %w", maxAttempts, lastErr)
 }
 
 // CallModelStream 流式调用 Anthropic Messages API
@@ -276,6 +322,24 @@ func (b *Backend) CallModelStream(ctx context.Context, req *plugin.ProxyRequest)
 
 		baseURL := strings.TrimSuffix(backendCfg.BaseURL, "/")
 		url := fmt.Sprintf("%s/messages", baseURL)
+
+		// 账户池：选择 API Key
+		sessionKey := ""
+		if backend.HasAccountPool(backendCfg) {
+			sessionKey = backend.ExtractSessionKey(ctx, reqBody, "")
+		}
+		apiKey := backendCfg.APIKey
+		currentAccountID := ""
+		if backend.HasAccountPool(backendCfg) {
+			result, selErr := b.accountSelector.SelectAccountForRequest(ctx, backendCfg.AccountPool, sessionKey)
+			if selErr != nil {
+				ch <- plugin.StreamChunk{Error: fmt.Errorf("account pool select: %w", selErr)}
+				return
+			}
+			apiKey = result.Key
+			currentAccountID = result.Account.ID
+		}
+
 		httpReq, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(reqBody))
 		if err != nil {
 			ch <- plugin.StreamChunk{Error: fmt.Errorf("failed to create request: %w", err)}
@@ -284,8 +348,8 @@ func (b *Backend) CallModelStream(ctx context.Context, req *plugin.ProxyRequest)
 
 		httpReq.Header.Set("Content-Type", "application/json")
 		httpReq.Header.Set("Accept", "text/event-stream")
-		if backendCfg.APIKey != "" {
-			httpReq.Header.Set("x-api-key", backendCfg.APIKey)
+		if apiKey != "" {
+			httpReq.Header.Set("x-api-key", apiKey)
 		}
 		httpReq.Header.Set("anthropic-version", "2023-06-01")
 
@@ -297,6 +361,10 @@ func (b *Backend) CallModelStream(ctx context.Context, req *plugin.ProxyRequest)
 		defer resp.Body.Close()
 
 		if resp.StatusCode != http.StatusOK {
+			if resp.StatusCode == http.StatusTooManyRequests && backend.HasAccountPool(backendCfg) {
+				log.Printf("[Anthropic Backend] 429 rate limit on stream account %s, disabling", currentAccountID)
+				b.accountSelector.DisableAccountTemporarily(backendCfg.AccountPool, currentAccountID)
+			}
 			body, _ := io.ReadAll(resp.Body)
 			ch <- plugin.StreamChunk{Error: fmt.Errorf("API error (status %d): %s", resp.StatusCode, string(body))}
 			return

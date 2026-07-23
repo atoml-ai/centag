@@ -4,210 +4,294 @@
       <div>
         <h1 class="page-title">
           <el-icon><Link /></el-icon>
-          Agent 快速接入
+          Agent 接入
         </h1>
-        <p class="page-description">选择你的 Agent 工具，一键生成接入 Centag 的配置</p>
+        <p class="page-description">管理 Agent 工具的接入配置和供应商路由</p>
       </div>
     </div>
 
-    <!-- 选择 Agent -->
-    <div class="section-block">
-      <el-row :gutter="16">
-        <el-col
-          v-for="agent in agentTypes"
-          :key="agent.type"
-          :xs="24" :sm="12" :md="8"
-        >
-          <div
-            class="agent-card"
-            :class="{ active: selectedAgent === agent.type }"
-            @click="selectedAgent = agent.type; onAgentChange()"
-          >
-            <div class="agent-icon">
-              <el-icon :size="32">
-                <component :is="agentIcon(agent.type)" />
-              </el-icon>
-            </div>
-            <div class="agent-info">
-              <div class="agent-name">{{ agent.display_name }}</div>
-              <div class="agent-desc">{{ agent.description }}</div>
-            </div>
-          </div>
-        </el-col>
-      </el-row>
-    </div>
-
-    <!-- 选择流水线 + 配置 -->
-    <div v-if="selectedAgent" class="section-block">
-      <el-card class="config-card">
-        <div v-if="pipelines.length === 0 && !loadingPipelines" class="empty-backends">
-          <el-empty description="暂无可用流水线，请先在「流水线管理」中添加">
-            <el-button type="primary" @click="$router.push('/pipelines')">前往流水线管理</el-button>
-          </el-empty>
-        </div>
-        <div v-else>
-          <!-- 流水线选择 -->
-          <div v-loading="loadingPipelines" class="pipeline-section">
-            <h4 class="select-label">选择流水线（必选）</h4>
-            <el-select
-              v-model="selectedPipeline"
-              placeholder="请选择流水线"
-              filterable
-              style="width: 100%"
-              @change="onPipelineChange"
+    <el-tabs v-model="activeTab" class="setup-tabs">
+      <!-- Tab 1: 快速接入 -->
+      <el-tab-pane label="快速接入" name="setup">
+        <!-- 选择 Agent -->
+        <div class="section-block">
+          <el-row :gutter="16">
+            <el-col
+              v-for="agent in agentTypes"
+              :key="agent.type"
+              :xs="24" :sm="12" :md="8"
             >
-              <el-option
-                v-for="pipe in pipelines"
-                :key="pipe.id"
-                :label="pipe.name || pipe.id"
-                :value="pipe.id"
+              <div
+                class="agent-card"
+                :class="{ active: selectedAgent === agent.type }"
+                @click="selectedAgent = agent.type; onAgentChange()"
               >
-                <div class="pipeline-option">
-                  <span>{{ pipe.name || pipe.id }}</span>
-                  <span v-if="pipe.description" class="pipeline-desc">{{ pipe.description }}</span>
+                <div class="agent-icon">
+                  <el-icon :size="32">
+                    <component :is="agentIcon(agent.type)" />
+                  </el-icon>
                 </div>
-              </el-option>
-            </el-select>
-
-            <!-- 模型信息（只读 label） -->
-            <div v-if="displayModel" class="model-display">
-              <el-tag type="info" size="default">
-                <el-icon><Cpu /></el-icon>
-                模型: {{ displayModel }}
-              </el-tag>
-              <span v-if="selectedPipeline" class="model-hint">由流水线决定</span>
-            </div>
-          </div>
-
-          <!-- 生成配置按钮 -->
-          <div class="generate-section">
-            <el-button
-              type="primary"
-              size="large"
-              :loading="loadingConfig"
-              :disabled="loadingConfig || !selectedPipeline"
-              @click="generateConfig"
-            >
-              <el-icon class="el-icon--left"><DocumentCopy /></el-icon>
-              生成配置
-            </el-button>
-          </div>
+                <div class="agent-info">
+                  <div class="agent-name">{{ agent.display_name }}</div>
+                  <div class="agent-desc">{{ agent.description }}</div>
+                </div>
+              </div>
+            </el-col>
+          </el-row>
         </div>
 
-        <!-- 配置结果（内联展示） -->
-        <div v-if="configResult" class="config-result">
-          <el-divider content-position="center">
-            <el-icon><DocumentCopy /></el-icon>
-            配置结果
-          </el-divider>
-
-          <div class="config-header">
-            <h3>{{ configResult.description }}</h3>
-            <el-tag>路由: {{ configResult.backend_name }}</el-tag>
-          </div>
-
-          <!-- 一键写入 -->
-          <div v-if="configResult.commands" class="config-section">
-            <h4>一键配置</h4>
-            <el-button type="primary" :loading="writingConfig" @click="writeToConfig">
-              <el-icon class="el-icon--left"><Plus /></el-icon>
-              写入配置文件
-            </el-button>
-            <p class="write-hint" v-if="writeResult">
-              <span v-if="writeResult.success" style="color: #67c23a">✓ {{ writeResult.message }}</span>
-              <span v-else style="color: #f56c6c">✗ {{ writeResult.message }}</span>
-            </p>
-            <div v-if="writeResult?.success && writePreviewFiles.length" class="write-preview">
-              <h5>已写入配置关键片段（已脱敏）</h5>
-              <el-collapse>
-                <el-collapse-item
-                  v-for="file in writePreviewFiles"
-                  :key="file.path"
-                  :title="file.path"
+        <!-- 选择 Provider + 流水线 + 配置 -->
+        <div v-if="selectedAgent" class="section-block">
+          <el-card class="config-card">
+            <div v-if="pipelines.length === 0 && !loadingPipelines" class="empty-backends">
+              <el-empty description="暂无可用流水线，请先在「策略管理」中添加">
+                <el-button type="primary" @click="$router.push('/pipelines')">前往策略管理</el-button>
+              </el-empty>
+            </div>
+            <div v-else>
+              <!-- Provider 选择 -->
+              <div v-loading="loadingBackends" class="backend-section">
+                <h4 class="select-label">选择 Provider（可选）</h4>
+                <el-select
+                  v-model="selectedBackend"
+                  placeholder="自动选择默认 Provider"
+                  filterable
+                  clearable
+                  style="width: 100%"
+                  @change="onBackendChange"
                 >
-                  <div class="code-block">
-                    <pre><code>{{ file.preview }}</code></pre>
-                    <el-button class="copy-btn" :icon="DocumentCopy" @click="copyText(file.preview)" />
-                  </div>
-                </el-collapse-item>
-              </el-collapse>
+                  <el-option
+                    v-for="backend in backends"
+                    :key="backend.id"
+                    :label="backend.name || backend.id"
+                    :value="backend.id"
+                  >
+                    <div class="backend-option">
+                      <span class="backend-name">{{ backend.name || backend.id }}</span>
+                      <el-tag size="small" type="info">{{ backend.type }}</el-tag>
+                    </div>
+                  </el-option>
+                </el-select>
+                <div v-if="selectedBackend" class="backend-hint">
+                  <el-tag type="success" size="small">
+                    <el-icon><Connection /></el-icon>
+                    已选择: {{ getBackendName(selectedBackend) }}
+                  </el-tag>
+                </div>
+              </div>
+
+              <!-- 流水线选择 -->
+              <div v-loading="loadingPipelines" class="pipeline-section">
+                <h4 class="select-label">选择流水线（必选）</h4>
+                <el-select
+                  v-model="selectedPipeline"
+                  placeholder="请选择流水线"
+                  filterable
+                  style="width: 100%"
+                  @change="onPipelineChange"
+                >
+                  <el-option
+                    v-for="pipe in pipelines"
+                    :key="pipe.id"
+                    :label="pipe.name || pipe.id"
+                    :value="pipe.id"
+                  >
+                    <div class="pipeline-option">
+                      <span>{{ pipe.name || pipe.id }}</span>
+                      <span v-if="pipe.description" class="pipeline-desc">{{ pipe.description }}</span>
+                    </div>
+                  </el-option>
+                </el-select>
+
+                <!-- 模型信息 -->
+                <div v-if="displayModel" class="model-display">
+                  <el-tag type="info" size="default">
+                    <el-icon><Cpu /></el-icon>
+                    模型: {{ displayModel }}
+                  </el-tag>
+                  <span v-if="selectedPipeline" class="model-hint">由流水线决定</span>
+                </div>
+              </div>
+
+              <!-- 生成配置按钮 -->
+              <div class="generate-section">
+                <el-button
+                  type="primary"
+                  size="large"
+                  :loading="loadingConfig"
+                  :disabled="loadingConfig || !selectedPipeline"
+                  @click="generateConfig"
+                >
+                  <el-icon class="el-icon--left"><DocumentCopy /></el-icon>
+                  生成配置
+                </el-button>
+              </div>
             </div>
-          </div>
 
-          <!-- 团队版：平台命令 -->
-          <div v-if="!isDesktopEdition && configResult.commands" class="config-section">
-            <h4>配置命令</h4>
-            <el-tabs v-model="platformTab" type="border-card">
-              <el-tab-pane label="macOS" name="macos">
-                <div class="code-block">
-                  <pre><code>{{ configResult.commands.macos }}</code></pre>
-                  <el-button class="copy-btn" :icon="DocumentCopy" @click="copyText(configResult.commands.macos)" />
-                </div>
-              </el-tab-pane>
-              <el-tab-pane label="Linux" name="linux">
-                <div class="code-block">
-                  <pre><code>{{ configResult.commands.linux }}</code></pre>
-                  <el-button class="copy-btn" :icon="DocumentCopy" @click="copyText(configResult.commands.linux)" />
-                </div>
-              </el-tab-pane>
-              <el-tab-pane label="Windows" name="windows">
-                <div class="code-block">
-                  <pre><code>{{ configResult.commands.windows }}</code></pre>
-                  <el-button class="copy-btn" :icon="DocumentCopy" @click="copyText(configResult.commands.windows)" />
-                </div>
-              </el-tab-pane>
-            </el-tabs>
-          </div>
+            <!-- 配置结果 -->
+            <div v-if="configResult" class="config-result">
+              <el-divider content-position="center">
+                <el-icon><DocumentCopy /></el-icon>
+                配置结果
+              </el-divider>
 
-          <!-- 配置文件 -->
-          <div v-if="configResult.files && configResult.files.length" class="config-section">
-            <h4>配置文件</h4>
-            <el-collapse>
-              <el-collapse-item v-for="file in configResult.files" :key="file.path" :title="file.path">
+              <div class="config-header">
+                <h3>{{ configResult.description }}</h3>
+                <el-tag>路由: {{ configResult.backend_name }}</el-tag>
+              </div>
+
+              <!-- 一键写入 -->
+              <div v-if="configResult.commands" class="config-section">
+                <h4>一键配置</h4>
+                <el-button type="primary" :loading="writingConfig" @click="writeToConfig">
+                  <el-icon class="el-icon--left"><Plus /></el-icon>
+                  写入配置文件
+                </el-button>
+                <p class="write-hint" v-if="writeResult">
+                  <span v-if="writeResult.success" style="color: #67c23a">✓ {{ writeResult.message }}</span>
+                  <span v-else style="color: #f56c6c">✗ {{ writeResult.message }}</span>
+                </p>
+                <div v-if="writeResult?.success && writePreviewFiles.length" class="write-preview">
+                  <h5>已写入配置关键片段（已脱敏）</h5>
+                  <el-collapse>
+                    <el-collapse-item
+                      v-for="file in writePreviewFiles"
+                      :key="file.path"
+                      :title="file.path"
+                    >
+                      <div class="code-block">
+                        <pre><code>{{ file.preview }}</code></pre>
+                        <el-button class="copy-btn" :icon="DocumentCopy" @click="copyText(file.preview)" />
+                      </div>
+                    </el-collapse-item>
+                  </el-collapse>
+                </div>
+              </div>
+
+              <!-- 团队版：平台命令 -->
+              <div v-if="!isDesktopEdition && configResult.commands" class="config-section">
+                <h4>配置命令</h4>
+                <el-tabs v-model="platformTab" type="border-card">
+                  <el-tab-pane label="macOS" name="macos">
+                    <div class="code-block">
+                      <pre><code>{{ configResult.commands.macos }}</code></pre>
+                      <el-button class="copy-btn" :icon="DocumentCopy" @click="copyText(configResult.commands.macos)" />
+                    </div>
+                  </el-tab-pane>
+                  <el-tab-pane label="Linux" name="linux">
+                    <div class="code-block">
+                      <pre><code>{{ configResult.commands.linux }}</code></pre>
+                      <el-button class="copy-btn" :icon="DocumentCopy" @click="copyText(configResult.commands.linux)" />
+                    </div>
+                  </el-tab-pane>
+                  <el-tab-pane label="Windows" name="windows">
+                    <div class="code-block">
+                      <pre><code>{{ configResult.commands.windows }}</code></pre>
+                      <el-button class="copy-btn" :icon="DocumentCopy" @click="copyText(configResult.commands.windows)" />
+                    </div>
+                  </el-tab-pane>
+                </el-tabs>
+              </div>
+
+              <!-- 配置文件 -->
+              <div v-if="configResult.files && configResult.files.length" class="config-section">
+                <h4>配置文件</h4>
+                <el-collapse>
+                  <el-collapse-item v-for="file in configResult.files" :key="file.path" :title="file.path">
+                    <div class="code-block">
+                      <pre><code>{{ file.content }}</code></pre>
+                      <el-button class="copy-btn" :icon="DocumentCopy" @click="copyText(file.content)" />
+                    </div>
+                  </el-collapse-item>
+                </el-collapse>
+              </div>
+
+              <!-- 手动步骤 -->
+              <div v-if="configResult.steps && configResult.steps.length" class="config-section">
+                <h4>手动配置步骤</h4>
+                <el-timeline>
+                  <el-timeline-item v-for="(step, i) in configResult.steps" :key="i" :timestamp="step.title" placement="top">
+                    <p v-if="step.description">{{ step.description }}</p>
+                    <div v-if="step.code" class="code-block">
+                      <pre><code>{{ step.code }}</code></pre>
+                      <el-button class="copy-btn" :icon="DocumentCopy" @click="copyText(step.code)" />
+                    </div>
+                  </el-timeline-item>
+                </el-timeline>
+              </div>
+
+              <!-- 验证命令 -->
+              <div v-if="configResult.verify_cmd" class="config-section">
+                <h4>验证连通性</h4>
                 <div class="code-block">
-                  <pre><code>{{ file.content }}</code></pre>
-                  <el-button class="copy-btn" :icon="DocumentCopy" @click="copyText(file.content)" />
+                  <pre><code>{{ configResult.verify_cmd }}</code></pre>
+                  <el-button class="copy-btn" :icon="DocumentCopy" @click="copyText(configResult.verify_cmd)" />
                 </div>
-              </el-collapse-item>
-            </el-collapse>
-          </div>
-
-          <!-- 手动步骤 -->
-          <div v-if="configResult.steps && configResult.steps.length" class="config-section">
-            <h4>手动配置步骤</h4>
-            <el-timeline>
-              <el-timeline-item v-for="(step, i) in configResult.steps" :key="i" :timestamp="step.title" placement="top">
-                <p v-if="step.description">{{ step.description }}</p>
-                <div v-if="step.code" class="code-block">
-                  <pre><code>{{ step.code }}</code></pre>
-                  <el-button class="copy-btn" :icon="DocumentCopy" @click="copyText(step.code)" />
-                </div>
-              </el-timeline-item>
-            </el-timeline>
-          </div>
-
-          <!-- 验证命令 -->
-          <div v-if="configResult.verify_cmd" class="config-section">
-            <h4>验证连通性</h4>
-            <div class="code-block">
-              <pre><code>{{ configResult.verify_cmd }}</code></pre>
-              <el-button class="copy-btn" :icon="DocumentCopy" @click="copyText(configResult.verify_cmd)" />
+              </div>
             </div>
+          </el-card>
+
+          <div v-if="configResult" class="step-actions">
+            <el-button type="default" @click="resetWizard">
+              重新开始
+            </el-button>
           </div>
         </div>
-      </el-card>
+      </el-tab-pane>
 
-      <div v-if="configResult" class="step-actions">
-        <el-button type="default" @click="resetWizard">
-          重新开始
-        </el-button>
-      </div>
-    </div>
+      <!-- Tab 2: 供应商配置（仅管理员，只读视图） -->
+      <el-tab-pane label="供应商配置" name="providers" v-if="isAdmin">
+        <el-card>
+          <template #header>
+            <div class="card-header">
+              <span>内置供应商路由配置（系统预设，不可编辑）</span>
+            </div>
+          </template>
+
+          <el-table :data="providers" v-loading="loadingProviders" stripe>
+            <el-table-column prop="agent_type" label="Agent 类型" width="150" />
+            <el-table-column prop="display_name" label="显示名称" width="150" />
+            <el-table-column prop="backend_id" label="后端 ID" width="180">
+              <template #default="{ row }">
+                <el-tag v-if="row.backend_id" type="success">{{ row.backend_id }}</el-tag>
+                <span v-else class="text-muted">默认</span>
+              </template>
+            </el-table-column>
+            <el-table-column prop="pipeline_id" label="流水线 ID" width="180">
+              <template #default="{ row }">
+                <el-tag v-if="row.pipeline_id" type="warning">{{ row.pipeline_id }}</el-tag>
+                <span v-else class="text-muted">默认</span>
+              </template>
+            </el-table-column>
+            <el-table-column prop="model" label="模型覆盖" width="150">
+              <template #default="{ row }">
+                <span v-if="row.model">{{ row.model }}</span>
+                <span v-else class="text-muted">-</span>
+              </template>
+            </el-table-column>
+            <el-table-column prop="enabled" label="状态" width="80">
+              <template #default="{ row }">
+                <el-tag :type="row.enabled ? 'success' : 'info'" size="small">
+                  {{ row.enabled ? '启用' : '禁用' }}
+                </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="操作" width="120" fixed="right">
+              <template #default="{ row }">
+                <el-button size="small" type="primary" @click="handleHotSwap(row)">
+                  设为默认
+                </el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+        </el-card>
+      </el-tab-pane>
+    </el-tabs>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useRouter } from 'vue-router'
 import {
@@ -215,25 +299,35 @@ import {
   Monitor, ChatDotRound, DataLine, Connection, Cpu
 } from '@element-plus/icons-vue'
 import { isPersonalEdition } from '@/utils/edition'
+import { useAuthStore } from '@/stores/auth'
 import api from '@/api'
 
-// --- State ---
 const router = useRouter()
+const authStore = useAuthStore()
+const isAdmin = computed(() => authStore.isAdmin)
+
+// --- Tab ---
+const activeTab = ref('setup')
+
+// ===================== 快速接入 (Wizard) =====================
+
 const selectedAgent = ref('')
 const selectedPipeline = ref('')
+const selectedBackend = ref('')
 const pipelineModel = ref('')
 const loadingPipelines = ref(false)
+const loadingBackends = ref(false)
 const loadingConfig = ref(false)
 const writingConfig = ref(false)
 const platformTab = ref('macos')
 const agentTypes = ref<Array<{ type: string; display_name: string; description: string }>>([])
 const pipelines = ref<Array<{ id: string; name: string; description?: string; nodes?: any[] }>>([])
+const backends = ref<Array<{ id: string; name: string; type: string }>>([])
 const configResult = ref<any>(null)
 const writeResult = ref<{ success: boolean; message: string; written?: Array<{ path: string; content: string }> } | null>(null)
 
 const isDesktopEdition = computed(() => isPersonalEdition())
 
-// 用于展示的模型名：有流水线时仅显示 pipeline.<id>（具体模型由流水线决定）
 const displayModel = computed(() => {
   if (selectedPipeline.value) {
     return `pipeline.${selectedPipeline.value}`
@@ -251,7 +345,6 @@ const writePreviewFiles = computed(() => {
     }))
 })
 
-// --- Load agent types ---
 async function loadAgentTypes() {
   try {
     const res: any = await api.get('/api/v1/agent/types')
@@ -261,7 +354,20 @@ async function loadAgentTypes() {
   }
 }
 
-// --- Load pipelines ---
+async function loadBackends() {
+  loadingBackends.value = true
+  try {
+    const res: any = await api.get('/api/v1/backends')
+    const data = res?.data || res
+    backends.value = Array.isArray(data) ? data.filter((b: any) => b.enabled) : []
+  } catch (e: any) {
+    backends.value = []
+    console.warn('加载后端列表失败:', e.message)
+  } finally {
+    loadingBackends.value = false
+  }
+}
+
 async function loadPipelines() {
   loadingPipelines.value = true
   try {
@@ -276,10 +382,19 @@ async function loadPipelines() {
   }
 }
 
-// --- Extract model from pipeline ---
+function getBackendName(backendId: string): string {
+  const backend = backends.value.find(b => b.id === backendId)
+  return backend?.name || backendId
+}
+
+function onBackendChange() {
+  selectedPipeline.value = ''
+  pipelineModel.value = ''
+  loadPipelines()
+}
+
 function extractPipelineModel(pipe: any): string {
   if (!pipe?.nodes?.length) return ''
-  // 取第一个有 model 的节点
   for (const node of pipe.nodes) {
     const model = node?.config?.model || node?.model
     if (model) return model
@@ -287,7 +402,6 @@ function extractPipelineModel(pipe: any): string {
   return ''
 }
 
-// --- Pipeline changed ---
 function onPipelineChange(pipeId: string) {
   if (!pipeId) {
     pipelineModel.value = ''
@@ -297,12 +411,13 @@ function onPipelineChange(pipeId: string) {
   pipelineModel.value = pipe ? extractPipelineModel(pipe) : ''
 }
 
-// --- Agent changed ---
 function onAgentChange() {
   configResult.value = null
   writeResult.value = null
   selectedPipeline.value = ''
+  selectedBackend.value = ''
   pipelineModel.value = ''
+  loadBackends()
   loadPipelines()
 }
 
@@ -341,7 +456,6 @@ async function maybeHandleMissingProxyAPIKeyError(message: string): Promise<bool
   return true
 }
 
-// --- Generate config ---
 async function generateConfig() {
   if (!selectedAgent.value || !selectedPipeline.value) return
   loadingConfig.value = true
@@ -351,6 +465,7 @@ async function generateConfig() {
       agent_type: selectedAgent.value,
       pipeline_id: selectedPipeline.value,
     }
+    if (selectedBackend.value) payload.backend_id = selectedBackend.value
     if (!selectedPipeline.value && pipelineModel.value) payload.model = pipelineModel.value
     const res: any = await api.post('/api/v1/agent/configs/generate', payload)
     configResult.value = res
@@ -362,7 +477,6 @@ async function generateConfig() {
   }
 }
 
-// --- Write config to local files ---
 async function writeToConfig() {
   if (!selectedAgent.value || !selectedPipeline.value) return
   writingConfig.value = true
@@ -372,6 +486,7 @@ async function writeToConfig() {
       agent_type: selectedAgent.value,
       pipeline_id: selectedPipeline.value,
     }
+    if (selectedBackend.value) payload.backend_id = selectedBackend.value
     if (!selectedPipeline.value && pipelineModel.value) payload.model = pipelineModel.value
     const res: any = await api.post('/api/v1/agent/configs/write', payload)
     writeResult.value = res
@@ -389,7 +504,6 @@ async function writeToConfig() {
   }
 }
 
-// --- Copy to clipboard ---
 function copyText(text: string) {
   navigator.clipboard.writeText(text).then(() => {
     ElMessage.success('已复制到剪贴板')
@@ -398,13 +512,13 @@ function copyText(text: string) {
   })
 }
 
-// --- Agent icon mapping ---
 function agentIcon(type: string) {
   const map: Record<string, any> = {
     'claude-code': ChatDotRound,
     'claude-desktop': ChatDotRound,
     'codex': Monitor,
     'gemini-cli': DataLine,
+    'grok-build': Connection,
     'opencode': Connection,
     'openclaw': Connection,
     'hermes': Connection,
@@ -412,17 +526,63 @@ function agentIcon(type: string) {
   return map[type] || Connection
 }
 
-// --- Reset ---
 function resetWizard() {
   selectedAgent.value = ''
   selectedPipeline.value = ''
+  selectedBackend.value = ''
   pipelineModel.value = ''
   configResult.value = null
 }
 
-// --- Init ---
+// ===================== 供应商配置 (只读视图) =====================
+
+interface AgentProviderConfig {
+  id: string
+  agent_type: string
+  display_name: string
+  backend_id: string
+  pipeline_id: string
+  model: string
+  api_key: string
+  enabled: boolean
+  description: string
+}
+
+const loadingProviders = ref(false)
+const providers = ref<AgentProviderConfig[]>([])
+
+async function loadProviders() {
+  loadingProviders.value = true
+  try {
+    const res: any = await api.get('/api/v1/agent-providers')
+    providers.value = res.agent_providers || []
+  } catch (e: any) {
+    ElMessage.error('加载供应商配置失败：' + e.message)
+  } finally {
+    loadingProviders.value = false
+  }
+}
+
+async function handleHotSwap(provider: AgentProviderConfig) {
+  try {
+    await api.post(`/api/v1/agent-providers/${provider.id}/hotswap`, {
+      agent_type: provider.agent_type,
+      backend_id: provider.backend_id,
+    })
+    ElMessage.success(`已将 ${provider.display_name || provider.agent_type} 设为默认`)
+    loadProviders()
+  } catch (e: any) {
+    ElMessage.error('HotSwap 失败：' + e.message)
+  }
+}
+
+// ===================== Init =====================
+
 onMounted(() => {
   loadAgentTypes()
+  if (isAdmin.value) {
+    loadProviders()
+  }
 })
 </script>
 
@@ -448,6 +608,10 @@ onMounted(() => {
   color: #6b7280;
   font-size: 0.875rem;
   margin: 4px 0 0;
+}
+
+.setup-tabs {
+  margin-top: 8px;
 }
 
 .step-actions {
@@ -521,14 +685,15 @@ onMounted(() => {
   margin-top: 0;
 }
 
-.backend-radio-group {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+.backend-section {
+  margin-bottom: 20px;
 }
 
-.backend-radio {
-  height: auto !important;
+.backend-hint {
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .backend-option {
@@ -581,7 +746,7 @@ onMounted(() => {
   text-align: center;
 }
 
-/* Config result (inline) */
+/* Config result */
 .config-result {
   margin-top: 24px;
 }
@@ -659,5 +824,17 @@ onMounted(() => {
   margin: 0 0 8px;
   font-size: 0.85rem;
   color: #606266;
+}
+
+/* Provider table */
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.text-muted {
+  color: #909399;
+  font-size: 0.85rem;
 }
 </style>

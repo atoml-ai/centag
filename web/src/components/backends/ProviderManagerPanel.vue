@@ -102,6 +102,13 @@
           <div class="backend-stats">
             <span>权重 {{ b.weight ?? 1 }}</span>
             <span v-if="b.supported_models?.length">{{ b.supported_models.length }} 模型</span>
+            <span
+              v-if="b.account_pool_summary && b.account_pool_summary.total_accounts > 0"
+              class="account-pool-badge"
+              :class="'pool-' + b.account_pool_summary.health_status"
+            >
+              {{ b.account_pool_summary.enabled_accounts }}/{{ b.account_pool_summary.total_accounts }} Keys
+            </span>
           </div>
         </div>
 
@@ -806,6 +813,30 @@ defineExpose({ openCreate, reloadDefault })
   margin-top: 8px;
   font-size: 0.75rem;
   color: #9ca3af;
+}
+
+.account-pool-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.pool-healthy {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.pool-partial {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.pool-unhealthy {
+  background: #fee2e2;
+  color: #991b1b;
 }
 
 .backend-actions {

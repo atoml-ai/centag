@@ -8,17 +8,18 @@ const (
 	AgentClaudeDesktop AgentType = "claude-desktop"
 	AgentCodex         AgentType = "codex"
 	AgentGeminiCLI     AgentType = "gemini-cli"
+	AgentGrokBuild     AgentType = "grok-build"
 	AgentOpenCode      AgentType = "opencode"
 	AgentOpenClaw      AgentType = "openclaw"
 	AgentHermes        AgentType = "hermes"
 
 	// TUI Agent 类型（终端用户界面）
-	AgentCodingTUI     AgentType = "coding-tui"
-	AgentEducationTUI  AgentType = "education-tui"
+	AgentCodingTUI    AgentType = "coding-tui"
+	AgentEducationTUI AgentType = "education-tui"
 
 	// Web Agent 类型（浏览器自动化）
-	AgentCodingWeb     AgentType = "coding-web"
-	AgentEducationWeb  AgentType = "education-web"
+	AgentCodingWeb    AgentType = "coding-web"
+	AgentEducationWeb AgentType = "education-web"
 )
 
 // AgentCategory Agent 交互界面类别
@@ -162,6 +163,7 @@ func (r *TemplateRegistry) registerDefaults() {
 	r.Register(&ClaudeDesktopTemplate{})
 	r.Register(&CodexTemplate{})
 	r.Register(&GeminiTemplate{})
+	r.Register(&GrokBuildTemplate{})
 	r.Register(&OpenCodeTemplate{})
 	r.Register(&OpenClawTemplate{})
 	r.Register(&HermesTemplate{})

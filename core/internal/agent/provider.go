@@ -124,23 +124,7 @@ func (m *AgentProviderManager) Save() error {
 	return nil
 }
 
-// Add 添加配置
-func (m *AgentProviderManager) Add(cfg *AgentProviderConfig) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	if cfg.ID == "" {
-		cfg.ID = cfg.AgentType
-	}
-	if _, exists := m.providers[cfg.ID]; exists {
-		return fmt.Errorf("agent provider config already exists: %s", cfg.ID)
-	}
-
-	m.providers[cfg.ID] = cfg
-	return nil
-}
-
-// Update 更新配置
+// Update 更新配置（HotSwap 使用）
 func (m *AgentProviderManager) Update(cfg *AgentProviderConfig) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -153,16 +137,16 @@ func (m *AgentProviderManager) Update(cfg *AgentProviderConfig) error {
 	return nil
 }
 
-// Delete 删除配置
-func (m *AgentProviderManager) Delete(id string) error {
+// Upsert 插入或更新配置（内部使用：租户级配置复制）
+func (m *AgentProviderManager) Upsert(cfg *AgentProviderConfig) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if _, exists := m.providers[id]; !exists {
-		return fmt.Errorf("agent provider config not found: %s", id)
+	if cfg.ID == "" {
+		cfg.ID = cfg.AgentType
 	}
 
-	delete(m.providers, id)
+	m.providers[cfg.ID] = cfg
 	return nil
 }
 
@@ -289,6 +273,13 @@ func (m *AgentProviderManager) seedDefaultsLocked() {
 			DisplayName: "Gemini CLI",
 			Enabled:     true,
 			Description: "Google Gemini CLI 默认配置",
+		},
+		{
+			ID:          "grok-build",
+			AgentType:   "grok-build",
+			DisplayName: "Grok Build",
+			Enabled:     true,
+			Description: "xAI Grok Build 默认配置",
 		},
 		{
 			ID:          "opencode",
