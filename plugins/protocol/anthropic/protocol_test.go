@@ -773,3 +773,104 @@ func TestParseRequest_Thinking(t *testing.T) {
 		t.Errorf("expected BudgetTokens 10000, got %d", *proxyReq.Reasoning.BudgetTokens)
 	}
 }
+
+func TestNewProtocol(t *testing.T) {
+	p, err := NewProtocol()
+	if err != nil {
+		t.Fatalf("NewProtocol failed: %v", err)
+	}
+	if p == nil {
+		t.Fatal("expected non-nil protocol")
+	}
+}
+
+func TestProtocol_Name(t *testing.T) {
+	p, _ := NewProtocol()
+	if p.Name() != "anthropic-protocol" {
+		t.Errorf("expected anthropic-protocol, got %s", p.Name())
+	}
+}
+
+func TestProtocol_Type(t *testing.T) {
+	p, _ := NewProtocol()
+	if p.Type() != plugin.TypeProtocol {
+		t.Errorf("expected TypeProtocol, got %v", p.Type())
+	}
+}
+
+func TestProtocol_Version(t *testing.T) {
+	p, _ := NewProtocol()
+	if p.Version() != "1.0.0" {
+		t.Errorf("expected 1.0.0, got %s", p.Version())
+	}
+}
+
+func TestProtocol_Init(t *testing.T) {
+	p, _ := NewProtocol()
+	err := p.Init(nil)
+	if err != nil {
+		t.Fatalf("Init failed: %v", err)
+	}
+	if p.Status() != plugin.StatusStopped {
+		t.Errorf("expected StatusStopped after Init, got %v", p.Status())
+	}
+}
+
+func TestProtocol_Start(t *testing.T) {
+	p, _ := NewProtocol()
+	p.Init(nil)
+	err := p.Start(nil)
+	if err != nil {
+		t.Fatalf("Start failed: %v", err)
+	}
+	if p.Status() != plugin.StatusRunning {
+		t.Errorf("expected StatusRunning after Start, got %v", p.Status())
+	}
+}
+
+func TestProtocol_Stop(t *testing.T) {
+	p, _ := NewProtocol()
+	p.Init(nil)
+	p.Start(nil)
+	err := p.Stop(nil)
+	if err != nil {
+		t.Fatalf("Stop failed: %v", err)
+	}
+	if p.Status() != plugin.StatusStopped {
+		t.Errorf("expected StatusStopped after Stop, got %v", p.Status())
+	}
+}
+
+func TestProtocol_SupportStream(t *testing.T) {
+	p, err := NewProtocol()
+	if err != nil {
+		t.Fatalf("NewProtocol failed: %v", err)
+	}
+	proto := p.(*Protocol)
+	if !proto.SupportStream() {
+		t.Error("expected SupportStream to return true")
+	}
+}
+
+func TestProtocol_GetModels(t *testing.T) {
+	p, err := NewProtocol()
+	if err != nil {
+		t.Fatalf("NewProtocol failed: %v", err)
+	}
+	proto := p.(*Protocol)
+	models, err := proto.GetModels()
+	if err != nil {
+		t.Fatalf("GetModels failed: %v", err)
+	}
+	if len(models) == 0 {
+		t.Error("expected at least one model")
+	}
+	for _, m := range models {
+		if m.ID == "" {
+			t.Error("model ID should not be empty")
+		}
+		if m.Name == "" {
+			t.Error("model name should not be empty")
+		}
+	}
+}
