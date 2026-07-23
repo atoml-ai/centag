@@ -28,7 +28,7 @@ func TestPrepareProcessEnv_FromPAC(t *testing.T) {
 	defer srv.Close()
 
 	e := New()
-	pe, err := e.PrepareProcessEnv(srv.URL)
+	pe, err := e.PrepareProcessEnv(srv.URL, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -68,12 +68,60 @@ func TestPrepareProcessEnv_AllowsLoopbackWhenServerIsLocal(t *testing.T) {
 	defer srv.Close()
 
 	e := New()
-	pe, err := e.PrepareProcessEnv(srv.URL)
+	pe, err := e.PrepareProcessEnv(srv.URL, "")
 	if err != nil {
 		t.Fatalf("local server + loopback MITM should be allowed: %v", err)
 	}
 	if pe.MITM != "127.0.0.1:8081" {
 		t.Fatalf("mitm=%q", pe.MITM)
+	}
+}
+
+func TestPrepareProcessEnv_LANRequiresToken(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("CENTAG_WRAP_TOKEN", "")
+	ca := mustCA(t)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/v1/proxy/setup/status":
+			_, _ = w.Write([]byte(`{"mitm_proxy":"192.168.1.50:8081","allow_lan_clients":true,"proxy_auth_required":true}`))
+		case "/api/v1/proxy/ca.crt":
+			_, _ = w.Write(ca)
+		default:
+			w.WriteHeader(404)
+		}
+	}))
+	defer srv.Close()
+
+	e := New()
+	if _, err := e.PrepareProcessEnv(srv.URL, ""); err == nil {
+		t.Fatal("expected error without CENTAG_WRAP_TOKEN")
+	}
+
+	t.Setenv("CENTAG_WRAP_TOKEN", "llmproxy_test_key")
+	pe, err := e.PrepareProcessEnv(srv.URL, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(pe.Vars["HTTPS_PROXY"], "llmproxy_test_key") {
+		t.Fatalf("expected token in HTTPS_PROXY, got %q", pe.Vars["HTTPS_PROXY"])
+	}
+	if redactProxyURL(pe.Vars["HTTPS_PROXY"]) == pe.Vars["HTTPS_PROXY"] {
+		t.Fatal("redactProxyURL should hide token")
+	}
+
+	// CLI --token overrides env
+	t.Setenv("CENTAG_WRAP_TOKEN", "llmproxy_from_env")
+	pe, err = e.PrepareProcessEnv(srv.URL, "llmproxy_from_flag")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(pe.Vars["HTTPS_PROXY"], "llmproxy_from_flag") {
+		t.Fatalf("flag token should win, got %q", pe.Vars["HTTPS_PROXY"])
+	}
+	if strings.Contains(pe.Vars["HTTPS_PROXY"], "llmproxy_from_env") {
+		t.Fatal("env token should be overridden by --token")
 	}
 }
 
