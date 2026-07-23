@@ -1470,7 +1470,8 @@ func (e *PipelineEngine) executeLayerNode(ctx context.Context, graph *ExecutionG
 		)
 	}
 	// 余额/额度失败不记熔断，避免挡住同后端 fallback_model
-	skipCircuitRecord := skippedCircuit || isBillingQuotaError(err)
+	// 模型不存在 / 余额不足：应继续降级，但不计入熔断（否则同后端其它模型也被挡）。
+	skipCircuitRecord := skippedCircuit || isBillingQuotaError(err) || isModelNotFoundNodeError(err)
 	recordNodeCircuitOutcome(resolvedBackendID, err == nil, skipCircuitRecord)
 	if err != nil {
 		// 尝试策略降级：节点级 → 流水线级
@@ -1689,14 +1690,6 @@ func (e *PipelineEngine) executePolicyFallback(
 			)
 			return nil, false
 		}
-		if isCircuitOpenForBackend(resolvedBackend) {
-			e.logger.Warn("fallback rule skipped: circuit breaker open",
-				"policy_id", policy.ID,
-				"backend_id", resolvedBackend,
-			)
-			return nil, false
-		}
-
 		fallbackConfig := originalConfig
 		fallbackConfig.Config.Backend = resolvedBackend
 		fallbackConfig.Config.Model = resolvedModel
@@ -1713,12 +1706,19 @@ func (e *PipelineEngine) executePolicyFallback(
 		ruleInput := cloneNodeInputForFallback(input, resolvedModel)
 		output, err := e.executeNode(ctx, fallbackConfig, ruleInput)
 		if err != nil {
-			e.logger.Warn("fallback rule failed",
-				"policy_id", policy.ID,
-				"backend_id", resolvedBackend,
-				"model", resolvedModel,
-				"error", err,
-			)
+			if isCircuitBreakerSkipError(err) {
+				e.logger.Warn("fallback rule skipped: circuit breaker open",
+					"policy_id", policy.ID,
+					"backend_id", resolvedBackend,
+				)
+			} else {
+				e.logger.Warn("fallback rule failed",
+					"policy_id", policy.ID,
+					"backend_id", resolvedBackend,
+					"model", resolvedModel,
+					"error", err,
+				)
+			}
 			return nil, false
 		}
 		if !isUsableFallbackNodeOutput(output) {
@@ -2008,7 +2008,8 @@ func (e *PipelineEngine) executeNode(ctx context.Context, config PipelineNodeCon
 		applySchedulingOverrides(&nodeConfig, input, execCtx)
 	}
 
-	if backendID := nodeBackendID(config, nodeConfig); isCircuitOpenForBackend(backendID) {
+	// 固定出站（直连）不拦熔断：唯一后端被 open 后整条链路不可用，且半开探测也无从谈起。
+	if backendID := nodeBackendID(config, nodeConfig); isCircuitOpenForBackend(backendID) && !isFixedEgressNodeConfig(nodeConfig) {
 		return nil, fmt.Errorf("circuit breaker open for backend %s", backendID)
 	}
 

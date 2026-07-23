@@ -62,11 +62,13 @@ func wireCircuitBreaker(cbManager *scheduler.CircuitBreakerManager) {
 		return
 	}
 
+	// 必须用 Allow()：Open 超时后会转入 HalfOpen 并放行探测。
+	// 若用 IsOpen()，熔断期内永远 true，直连默认后端会被永久跳过。
 	pipeline.IsCircuitOpen = func(backendID string) bool {
 		if backendID == "" {
 			return false
 		}
-		return cbManager.IsOpen(backendID)
+		return !cbManager.Allow(backendID)
 	}
 
 	pipeline.RecordCircuitOutcome = func(backendID string, success bool) {

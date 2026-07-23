@@ -2,6 +2,7 @@ package server
 
 import (
 	"testing"
+	"time"
 
 	"centag/core/pkg/logger"
 	"centag/core/pkg/pipeline"
@@ -16,7 +17,7 @@ func TestWireCircuitBreaker(t *testing.T) {
 	cbManager := scheduler.NewCircuitBreakerManager(scheduler.CircuitBreakerConfig{
 		FailureThreshold: 1,
 		SuccessThreshold: 1,
-		Timeout:          scheduler.DefaultCircuitBreakerConfig().Timeout,
+		Timeout:          20 * time.Millisecond,
 		WindowDuration:   scheduler.DefaultCircuitBreakerConfig().WindowDuration,
 	})
 	wireCircuitBreaker(cbManager)
@@ -32,5 +33,10 @@ func TestWireCircuitBreaker(t *testing.T) {
 	pipeline.RecordCircuitOutcome("test-backend", false)
 	if !pipeline.IsCircuitOpen("test-backend") {
 		t.Fatal("expected circuit to open after recorded failure")
+	}
+	// Allow() 驱动半开：超时后 IsCircuitOpen 必须放行探测，不能永久挡住。
+	time.Sleep(40 * time.Millisecond)
+	if pipeline.IsCircuitOpen("test-backend") {
+		t.Fatal("expected half-open probe after timeout (IsCircuitOpen should use Allow)")
 	}
 }

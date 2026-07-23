@@ -129,27 +129,61 @@ func TestConvertResponsesBodyToChatCompletions_ToolsAndFunctionRoundTrip(t *test
 	}
 }
 
-func TestNormalizeResponsesTools_SkipsHostedTypes(t *testing.T) {
+func TestSanitizeChatCompletionsTools_RepairsFlatAndDropsHosted(t *testing.T) {
+	in := `{
+		"model":"glm-4-flash",
+		"messages":[{"role":"user","content":"hi"}],
+		"tools":[
+			{"type":"web_search"},
+			{"type":"function","name":"bash","description":"shell","parameters":{"type":"object"}},
+			{"type":"function","function":{}}
+		]
+	}`
+	out, ok := sanitizeChatCompletionsTools([]byte(in))
+	if !ok {
+		t.Fatal("expected sanitize change")
+	}
+	var raw map[string]interface{}
+	if err := json.Unmarshal(out, &raw); err != nil {
+		t.Fatal(err)
+	}
+	tools := raw["tools"].([]interface{})
+	if len(tools) != 1 {
+		t.Fatalf("tools=%v, want only bash (hosted dropped, empty function dropped)", tools)
+	}
+	fn := tools[0].(map[string]interface{})["function"].(map[string]interface{})
+	if fn["name"] != "bash" {
+		t.Fatalf("function=%v", fn)
+	}
+}
+
+func TestNormalizeResponsesTools_DropsHostedTypes(t *testing.T) {
 	tools := []interface{}{
 		map[string]interface{}{"type": "web_search"},
 		map[string]interface{}{
 			"type":        "function",
 			"name":        "bash",
 			"description": "shell",
-			"parameters":   map[string]interface{}{"type": "object"},
+			"parameters":  map[string]interface{}{"type": "object"},
+		},
+		map[string]interface{}{
+			"type":     "function",
+			"name":     "read",
+			"function": map[string]interface{}{}, // 空 function：需用顶层 name 回填
 		},
 	}
 	out := normalizeResponsesTools(tools).([]interface{})
 	if len(out) != 2 {
-		t.Fatalf("len=%d", len(out))
+		t.Fatalf("len=%d want 2 (hosted dropped), out=%v", len(out), out)
 	}
-	hosted := out[0].(map[string]interface{})
-	if hosted["type"] != "web_search" {
-		t.Fatalf("hosted rewritten: %v", hosted)
-	}
-	fnTool := out[1].(map[string]interface{})
-	if _, ok := fnTool["function"].(map[string]interface{}); !ok {
+	fnTool := out[0].(map[string]interface{})
+	fn := fnTool["function"].(map[string]interface{})
+	if fn["name"] != "bash" {
 		t.Fatalf("function tool not nested: %v", fnTool)
+	}
+	fn2 := out[1].(map[string]interface{})["function"].(map[string]interface{})
+	if fn2["name"] != "read" {
+		t.Fatalf("empty function should be repaired from top-level name: %v", out[1])
 	}
 }
 
