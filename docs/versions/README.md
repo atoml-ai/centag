@@ -20,7 +20,8 @@ docs/versions/
 | 版本 | 需求 | 分支 | 状态 |
 |------|------|------|------|
 | v0.2.8 | [协议对齐与 Models 接口增强](v0.2.8/protocol-alignment/) | `feature/v0.2.8` | Step 1–6 ✅；GitHub `v0.2.8` |
-| v0.2.9 | [npm 打包与安装文档](v0.2.9/npm-packaging/) | `feature/v0.2.9` | npm `@atomlai/centag@0.2.9` + GitHub `v0.2.9` |
+| v0.2.9 | [Provider/Agent 本地接入与账户池](v0.2.9/provider-agent-local/)（主） | `feature/v0.2.9` | Step 1 ✅；Gate 1 待人工确认 |
+| v0.2.9 | [npm 打包与安装文档](v0.2.9/npm-packaging/)（搭便车） | `feature/v0.2.9` | npm `@atomlai/centag@0.2.9` 已发 |
 | v0.2.7 | [商业化分层 Open Core](v0.2.7/commercialization-layered/) | `feature/v0.2.7` | 插件态方案；**E0/E1 ✅**（删 dist/team，team 构建进 pro）；E2/E3/E4 待做 |
 | v0.2.6 | [普通用户 WebUI 能力矩阵](v0.2.6/普通用户WebUI能力矩阵/)（含 [UI浏览器验收](v0.2.6/普通用户WebUI能力矩阵/UI测试流程.md)） | `feature/v0.2.6` | Step 1–5 ✅；Gate 3 ✅；**Gate 4 待人工确认** |
 | v0.2.5 | [本机系统代理出口](v0.2.5/本机系统代理出口/)（本机+远端/Team） | `feature/v0.2.5` | Step 5 CR 有条件批准；Gate 4 待人工确认手工自测 |
