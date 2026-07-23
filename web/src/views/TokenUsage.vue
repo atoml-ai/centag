@@ -26,7 +26,7 @@
               </el-radio-group>
             </div>
           </template>
-          <v-chart :option="dailyChartOption" style="height: 400px" autoresize />
+          <v-chart :option="dailyChartOption" style="height: 420px" autoresize />
         </el-card>
       </el-col>
     </el-row>
@@ -70,13 +70,22 @@ import { ElMessage } from 'element-plus'
 import * as echarts from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
 import { BarChart, LineChart, PieChart } from 'echarts/charts'
-import { GridComponent, TooltipComponent, LegendComponent } from 'echarts/components'
+import { GridComponent, TooltipComponent, LegendComponent, DataZoomComponent } from 'echarts/components'
 import VChart from 'vue-echarts'
 import * as tokenApi from '@/api/token-usage'
 import UsageMetricsSummary from '@/components/usage/UsageMetricsSummary.vue'
 import BillingRulesDialog from '@/components/dashboard/BillingRulesDialog.vue'
 
-echarts.use([CanvasRenderer, BarChart, LineChart, PieChart, GridComponent, TooltipComponent, LegendComponent])
+echarts.use([
+  CanvasRenderer,
+  BarChart,
+  LineChart,
+  PieChart,
+  GridComponent,
+  TooltipComponent,
+  LegendComponent,
+  DataZoomComponent
+])
 
 const route = useRoute()
 const router = useRouter()
@@ -99,52 +108,91 @@ const dailyStats = ref<any[]>([])
 const modelStats = ref<any[]>([])
 const backendStats = ref<any[]>([])
 
-const dailyChartOption = computed(() => ({
-  tooltip: {
-    trigger: 'axis',
-    axisPointer: { type: 'shadow' }
-  },
-  legend: {
-    data: ['输入 Token', '输出 Token', '总 Token']
-  },
-  grid: {
-    left: '3%',
-    right: '4%',
-    bottom: '3%',
-    containLabel: true
-  },
-  xAxis: {
-    type: 'category',
-    data: dailyStats.value.map((s) => s.date).reverse()
-  },
-  yAxis: {
-    type: 'value',
-    name: 'Token 数'
-  },
-  series: [
-    {
-      name: '输入 Token',
-      type: 'bar',
-      stack: 'total',
-      data: dailyStats.value.map((s) => s.prompt_tokens).reverse(),
-      itemStyle: { color: '#5470c6' }
+const dailyChartOption = computed(() => {
+  // API 多为新→旧；反转后旧→新（左→右）
+  const rows = [...dailyStats.value].reverse()
+  const n = rows.length
+  // 默认窗口：最多展示约 14 天，其余靠缩放查看
+  const windowSize = 14
+  const start = n > windowSize ? ((n - windowSize) / n) * 100 : 0
+  return {
+    tooltip: {
+      trigger: 'axis',
+      axisPointer: { type: 'shadow' }
     },
-    {
-      name: '输出 Token',
-      type: 'bar',
-      stack: 'total',
-      data: dailyStats.value.map((s) => s.comp_tokens).reverse(),
-      itemStyle: { color: '#91cc75' }
+    legend: {
+      orient: 'vertical',
+      left: 8,
+      top: 'middle',
+      data: ['输入 Token', '输出 Token', '总 Token']
     },
-    {
-      name: '总 Token',
-      type: 'line',
-      data: dailyStats.value.map((s) => s.total_tokens).reverse(),
-      itemStyle: { color: '#fac858' },
-      lineStyle: { width: 3 }
-    }
-  ]
-}))
+    grid: {
+      left: 120,
+      right: 28,
+      top: 28,
+      bottom: 72,
+      containLabel: true
+    },
+    dataZoom: [
+      {
+        type: 'inside',
+        xAxisIndex: 0,
+        filterMode: 'filter',
+        zoomOnMouseWheel: true,
+        moveOnMouseMove: true,
+        moveOnMouseWheel: false
+      },
+      {
+        type: 'slider',
+        xAxisIndex: 0,
+        height: 22,
+        bottom: 12,
+        start,
+        end: 100,
+        brushSelect: false
+      }
+    ],
+    xAxis: {
+      type: 'category',
+      data: rows.map((s) => s.date),
+      axisLabel: {
+        hideOverlap: true,
+        rotate: n > 14 ? 35 : 0
+      },
+      axisTick: { alignWithLabel: true }
+    },
+    yAxis: {
+      type: 'value',
+      name: 'Token 数'
+    },
+    series: [
+      {
+        name: '输入 Token',
+        type: 'bar',
+        stack: 'total',
+        data: rows.map((s) => s.prompt_tokens),
+        itemStyle: { color: '#5470c6' },
+        barMaxWidth: 28
+      },
+      {
+        name: '输出 Token',
+        type: 'bar',
+        stack: 'total',
+        data: rows.map((s) => s.comp_tokens),
+        itemStyle: { color: '#91cc75' },
+        barMaxWidth: 28
+      },
+      {
+        name: '总 Token',
+        type: 'line',
+        data: rows.map((s) => s.total_tokens),
+        itemStyle: { color: '#fac858' },
+        lineStyle: { width: 3 },
+        symbolSize: 6
+      }
+    ]
+  }
+})
 
 const modelChartOption = computed(() => ({
   tooltip: {
