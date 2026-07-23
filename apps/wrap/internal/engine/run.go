@@ -2,6 +2,7 @@ package engine
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -36,24 +37,32 @@ func ResolveAPIBase(server string) string {
 }
 
 // PrepareProcessEnv downloads CA and resolves MITM for process-level HTTPS_PROXY.
-// Does not modify system PAC or inject Centag API keys into the Agent.
-func (e *Engine) PrepareProcessEnv(server string) (*ProcessEnv, error) {
+// Does not inject Centag keys into the Agent LLM Authorization header.
+// When the server requires MITM proxy auth (LAN), embeds the wrap token in
+// HTTPS_PROXY userinfo so clients send Proxy-Authorization automatically.
+// tokenFlag comes from CLI --token; empty falls back to CENTAG_WRAP_TOKEN.
+func (e *Engine) PrepareProcessEnv(server, tokenFlag string) (*ProcessEnv, error) {
 	api := ResolveAPIBase(server)
 	client, err := remote.New(api)
 	if err != nil {
 		return nil, err
 	}
-	client.Token = os.Getenv("CENTAG_WRAP_TOKEN")
+	token := resolveWrapToken(tokenFlag)
+	client.Token = token
 
-	mitm, err := resolveMITM(client, api)
+	mitmHost, proxyAuthRequired, err := resolveMITM(client, api)
 	if err != nil {
 		return nil, err
 	}
 
 	// Remote team host must not advertise loopback MITM (employee ≠ server).
 	// Local --server http://127.0.0.1:20060 with MITM 127.0.0.1:8081 is OK.
-	if remote.RejectLoopbackMITMForRemote(api, mitm) {
-		return nil, fmt.Errorf("MITM still points to %s; admin must enable LAN egress (allow_lan_clients + advertise_host) so PAC/advertise is the team host", mitm)
+	if remote.RejectLoopbackMITMForRemote(api, mitmHost) {
+		return nil, fmt.Errorf("MITM still points to %s; admin must enable LAN egress (allow_lan_clients + advertise_host) so PAC/advertise is the team host", mitmHost)
+	}
+
+	if proxyAuthRequired && token == "" {
+		return nil, fmt.Errorf("LAN MITM requires proxy auth: pass --token <llmproxy_*> or export CENTAG_WRAP_TOKEN, then retry")
 	}
 
 	caPEM, err := client.DownloadCA()
@@ -65,7 +74,7 @@ func (e *Engine) PrepareProcessEnv(server string) (*ProcessEnv, error) {
 		return nil, err
 	}
 
-	proxyURL := "http://" + mitm
+	proxyURL := buildProxyURL(mitmHost, token, proxyAuthRequired)
 	vars := map[string]string{
 		"HTTPS_PROXY":         proxyURL,
 		"HTTP_PROXY":          proxyURL,
@@ -76,23 +85,46 @@ func (e *Engine) PrepareProcessEnv(server string) (*ProcessEnv, error) {
 		"NODE_EXTRA_CA_CERTS": caPath,
 		"SSL_CERT_FILE":       caPath,
 	}
-	return &ProcessEnv{APIBase: api, MITM: mitm, CAPath: caPath, Vars: vars}, nil
+	return &ProcessEnv{APIBase: api, MITM: mitmHost, CAPath: caPath, Vars: vars}, nil
 }
 
-func resolveMITM(client *remote.Client, api string) (string, error) {
+func buildProxyURL(mitmHost, token string, _ bool) string {
+	u := &url.URL{Scheme: "http", Host: mitmHost}
+	// Embed token as Basic password → clients send Proxy-Authorization on CONNECT.
+	// Local loopback MITM skips auth server-side; embedding is harmless if token set.
+	if token != "" {
+		u.User = url.UserPassword("", token)
+	}
+	return u.String()
+}
+
+func redactProxyURL(raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil || u.User == nil {
+		return raw
+	}
+	if _, has := u.User.Password(); has {
+		u.User = url.UserPassword("", "***")
+	} else if u.User.Username() != "" {
+		u.User = url.User("***")
+	}
+	return u.String()
+}
+
+func resolveMITM(client *remote.Client, api string) (mitmHost string, proxyAuthRequired bool, err error) {
 	if st, err := client.SetupStatus(); err == nil && strings.TrimSpace(st.MITMProxy) != "" {
-		return strings.TrimSpace(st.MITMProxy), nil
+		return strings.TrimSpace(st.MITMProxy), st.ProxyAuthRequired || st.AllowLANClients, nil
 	}
 	pac, err := client.FetchPAC()
 	if err != nil {
-		return "", fmt.Errorf("resolve MITM: setup/status unavailable and PAC fetch failed: %w", err)
+		return "", false, fmt.Errorf("resolve MITM: setup/status unavailable and PAC fetch failed: %w", err)
 	}
 	hostPort, err := remote.ParsePACProxyHostPort(pac)
 	if err != nil {
-		return "", fmt.Errorf("resolve MITM from PAC: %w", err)
+		return "", false, fmt.Errorf("resolve MITM from PAC: %w", err)
 	}
 	_ = api
-	return hostPort, nil
+	return hostPort, false, nil
 }
 
 func writeCAFile(pem []byte) (string, error) {
@@ -112,8 +144,8 @@ func writeCAFile(pem []byte) (string, error) {
 }
 
 // Env prints export lines for eval / debugging.
-func (e *Engine) Env(server string) error {
-	pe, err := e.PrepareProcessEnv(server)
+func (e *Engine) Env(server, token string) error {
+	pe, err := e.PrepareProcessEnv(server, token)
 	if err != nil {
 		return err
 	}
@@ -128,11 +160,11 @@ func (e *Engine) Env(server string) error {
 }
 
 // Run wraps argv with process proxy env and executes it (replaces current process via Wait).
-func (e *Engine) Run(server string, argv []string) error {
+func (e *Engine) Run(server, token string, argv []string) error {
 	if len(argv) == 0 {
-		return fmt.Errorf("run requires a command after -- (example: centag wrap run --server URL -- opencode)")
+		return fmt.Errorf("run requires a command after -- (example: centag wrap run --server URL --token KEY -- opencode)")
 	}
-	pe, err := e.PrepareProcessEnv(server)
+	pe, err := e.PrepareProcessEnv(server, token)
 	if err != nil {
 		return err
 	}
@@ -146,7 +178,7 @@ func (e *Engine) Run(server string, argv []string) error {
 	cmd.Stderr = os.Stderr
 	cmd.Env = mergeEnv(os.Environ(), pe.Vars)
 	fmt.Fprintf(os.Stderr, "wrap run: HTTPS_PROXY=%s NODE_EXTRA_CA_CERTS=%s → %v\n",
-		pe.Vars["HTTPS_PROXY"], pe.CAPath, argv)
+		redactProxyURL(pe.Vars["HTTPS_PROXY"]), pe.CAPath, argv)
 	if err := cmd.Run(); err != nil {
 		if ee, ok := err.(*exec.ExitError); ok {
 			os.Exit(ee.ExitCode())

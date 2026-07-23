@@ -48,9 +48,10 @@ cd apps/wrap && GOWORK=off go build -o centag-wrap .
 ### 进程代理启动 Agent（推荐）
 
 ```bash
-centag wrap run --server http://192.168.1.4:20060 -- opencode
+# 局域网：建议 --token（也可用环境变量 CENTAG_WRAP_TOKEN）
+centag wrap run --server http://192.168.1.4:20060 --token llmproxy_xxxx -- opencode
 centag wrap run -- opencode                      # 本机 Centag
-eval "$(centag wrap env --server http://192.168.1.4:20060)"
+eval "$(centag wrap env --server http://192.168.1.4:20060 --token llmproxy_xxxx)"
 ```
 
 开发机也可：`./start.sh run wrap run -- …`
@@ -58,12 +59,12 @@ eval "$(centag wrap env --server http://192.168.1.4:20060)"
 ### 系统 PAC（可选）
 
 ```bash
-centag wrap enable [--server URL]
-centag wrap doctor [--server URL]
+centag wrap enable [--server URL] [--token KEY]
+centag wrap doctor [--server URL] [--token KEY]
 centag wrap disable
 centag wrap status
 ```
 
-可选环境变量：`CENTAG_API_BASE`、`CENTAG_WRAP_TOKEN`。
+`--token` / `-t` 优先于环境变量 `CENTAG_WRAP_TOKEN`；另可选 `CENTAG_API_BASE`。
 
 文档：`docs/guide/system-proxy-egress.md`。

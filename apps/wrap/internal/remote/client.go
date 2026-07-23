@@ -12,17 +12,18 @@ import (
 
 // SetupStatus mirrors GET /api/v1/proxy/setup/status.
 type SetupStatus struct {
-	Mode               string `json:"mode"`
-	MITMEnabled        bool   `json:"mitm_enabled"`
-	ListenAddr         string `json:"listen_addr"`
-	ListenIsLoopback   bool   `json:"listen_is_loopback"`
-	AllowLANClients    bool   `json:"allow_lan_clients"`
-	AdvertiseHost      string `json:"advertise_host"`
-	PACEnabled         bool   `json:"pac_enabled"`
-	PACURL             string `json:"pac_url"`
-	CADownloadURL      string `json:"ca_download_url"`
+	Mode                string `json:"mode"`
+	MITMEnabled         bool   `json:"mitm_enabled"`
+	ListenAddr          string `json:"listen_addr"`
+	ListenIsLoopback    bool   `json:"listen_is_loopback"`
+	AllowLANClients     bool   `json:"allow_lan_clients"`
+	AdvertiseHost       string `json:"advertise_host"`
+	PACEnabled          bool   `json:"pac_enabled"`
+	PACURL              string `json:"pac_url"`
+	CADownloadURL       string `json:"ca_download_url"`
 	CAFingerprintSHA256 string `json:"ca_fingerprint_sha256"`
-	MITMProxy          string `json:"mitm_proxy"`
+	MITMProxy           string `json:"mitm_proxy"`
+	ProxyAuthRequired   bool   `json:"proxy_auth_required"`
 }
 
 type Client struct {

@@ -21,15 +21,24 @@ func New() *Engine {
 	return &Engine{OS: osproxy.New()}
 }
 
-func (e *Engine) Enable(server string) error {
-	server = strings.TrimSpace(server)
-	if server == "" {
-		return e.enableLocal()
+// resolveWrapToken prefers CLI --token, then CENTAG_WRAP_TOKEN env.
+func resolveWrapToken(flagToken string) string {
+	if t := strings.TrimSpace(flagToken); t != "" {
+		return t
 	}
-	return e.enableRemote(server)
+	return strings.TrimSpace(os.Getenv("CENTAG_WRAP_TOKEN"))
 }
 
-func (e *Engine) enableLocal() error {
+func (e *Engine) Enable(server, token string) error {
+	server = strings.TrimSpace(server)
+	token = resolveWrapToken(token)
+	if server == "" {
+		return e.enableLocal(token)
+	}
+	return e.enableRemote(server, token)
+}
+
+func (e *Engine) enableLocal(token string) error {
 	if snapshot.Exists() {
 		return fmt.Errorf("already enabled (snapshot exists); run disable first")
 	}
@@ -38,7 +47,7 @@ func (e *Engine) enableLocal() error {
 	if err != nil {
 		return err
 	}
-	client.Token = os.Getenv("CENTAG_WRAP_TOKEN")
+	client.Token = token
 
 	prev, err := e.OS.ReadProxy()
 	if err != nil {
@@ -102,7 +111,7 @@ func (e *Engine) enableLocal() error {
 	return nil
 }
 
-func (e *Engine) enableRemote(server string) error {
+func (e *Engine) enableRemote(server, token string) error {
 	if snapshot.Exists() {
 		return fmt.Errorf("already enabled (snapshot exists); run disable first")
 	}
@@ -110,7 +119,7 @@ func (e *Engine) enableRemote(server string) error {
 	if err != nil {
 		return err
 	}
-	client.Token = os.Getenv("CENTAG_WRAP_TOKEN")
+	client.Token = token
 
 	prev, err := e.OS.ReadProxy()
 	if err != nil {
@@ -223,7 +232,7 @@ func (e *Engine) Status() error {
 	return nil
 }
 
-func (e *Engine) Doctor(server string) error {
+func (e *Engine) Doctor(server, token string) error {
 	api := strings.TrimSpace(server)
 	if api == "" {
 		if snapshot.Exists() {
@@ -239,7 +248,7 @@ func (e *Engine) Doctor(server string) error {
 	if err != nil {
 		return err
 	}
-	client.Token = os.Getenv("CENTAG_WRAP_TOKEN")
+	client.Token = resolveWrapToken(token)
 
 	fmt.Printf("doctor api=%s\n", api)
 	pac, err := client.FetchPAC()
@@ -251,13 +260,17 @@ func (e *Engine) Doctor(server string) error {
 	if st, err := client.SetupStatus(); err != nil {
 		fmt.Printf("setup/status: %v\n", err)
 	} else {
-		fmt.Printf("mode=%s lan=%v advertise=%s loopback=%v\n",
-			st.Mode, st.AllowLANClients, st.AdvertiseHost, st.ListenIsLoopback)
+		fmt.Printf("mode=%s lan=%v advertise=%s loopback=%v proxy_auth=%v\n",
+			st.Mode, st.AllowLANClients, st.AdvertiseHost, st.ListenIsLoopback, st.ProxyAuthRequired || st.AllowLANClients)
 		if st.AllowLANClients {
 			if err := remote.ValidateRemoteReady(st, pac); err != nil {
 				return err
 			}
 			fmt.Println("remote readiness: ok")
+			if client.Token == "" {
+				return fmt.Errorf("LAN requires --token KEY or CENTAG_WRAP_TOKEN (llmproxy_* from WebUI → API Keys) for MITM Proxy-Authorization")
+			}
+			fmt.Println("wrap token: set (will be embedded in HTTPS_PROXY by wrap run)")
 		}
 	}
 	if _, err := client.DownloadCA(); err != nil {

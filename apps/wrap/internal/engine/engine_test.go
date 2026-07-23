@@ -128,7 +128,7 @@ func TestEnableRemote_SuccessAndDisableDoesNotNeedServer(t *testing.T) {
 		fp:        "abc123fingerprint",
 	}
 	e := &Engine{OS: mos}
-	if err := e.Enable(srv.URL); err != nil {
+	if err := e.Enable(srv.URL, ""); err != nil {
 		t.Fatalf("enable: %v", err)
 	}
 	if mos.writePACURL != "http://192.168.1.50:20060/api/v1/proxy/pac" {
@@ -173,7 +173,7 @@ func TestEnableRemote_RejectsLoopbackPAC(t *testing.T) {
 	defer srv.Close()
 
 	e := &Engine{OS: &mockOS{supported: true}}
-	err := e.Enable(srv.URL)
+	err := e.Enable(srv.URL, "")
 	if err == nil || !strings.Contains(err.Error(), "127.0.0.1") {
 		t.Fatalf("expected loopback PAC error, got %v", err)
 	}
@@ -198,7 +198,7 @@ func TestEnableRemote_RejectsWhenLANDisabled(t *testing.T) {
 	defer srv.Close()
 
 	e := &Engine{OS: &mockOS{supported: true}}
-	if err := e.Enable(srv.URL); err == nil || !strings.Contains(err.Error(), "allow_lan_clients") {
+	if err := e.Enable(srv.URL, ""); err == nil || !strings.Contains(err.Error(), "allow_lan_clients") {
 		t.Fatalf("got %v", err)
 	}
 }
@@ -207,7 +207,7 @@ func TestEnable_AlreadyEnabled(t *testing.T) {
 	testHome(t)
 	_ = snapshot.Save(&snapshot.Snapshot{ClientMode: "local"})
 	e := &Engine{OS: &mockOS{supported: true}}
-	if err := e.Enable(""); err == nil || !strings.Contains(err.Error(), "already enabled") {
+	if err := e.Enable("", ""); err == nil || !strings.Contains(err.Error(), "already enabled") {
 		t.Fatalf("got %v", err)
 	}
 }
@@ -235,7 +235,7 @@ func TestEnableLocal_Success(t *testing.T) {
 
 	mos := &mockOS{supported: true, fp: "localfp", proxy: snapshot.ProxyState{Mode: "off"}}
 	e := &Engine{OS: mos}
-	if err := e.Enable(""); err != nil {
+	if err := e.Enable("", ""); err != nil {
 		t.Fatal(err)
 	}
 	if mos.writePACURL != base+"/api/v1/proxy/pac" {
@@ -266,7 +266,7 @@ func TestEnableLocal_RollbackOnWritePACFail(t *testing.T) {
 	t.Setenv("CENTAG_API_BASE", srv.URL)
 	mos := &mockOS{supported: true, fp: "f", writeErr: fmt.Errorf("denied")}
 	e := &Engine{OS: mos}
-	if err := e.Enable(""); err == nil || !strings.Contains(err.Error(), "write PAC") {
+	if err := e.Enable("", ""); err == nil || !strings.Contains(err.Error(), "write PAC") {
 		t.Fatalf("got %v", err)
 	}
 	if snapshot.Exists() {
@@ -296,7 +296,7 @@ func TestEnableLocal_RollbackOnCAFail(t *testing.T) {
 
 	mos := &mockOS{supported: true, installErr: fmt.Errorf("no sudo"), proxy: snapshot.ProxyState{Mode: "off"}}
 	e := &Engine{OS: mos}
-	if err := e.Enable(""); err == nil || !strings.Contains(err.Error(), "install CA") {
+	if err := e.Enable("", ""); err == nil || !strings.Contains(err.Error(), "install CA") {
 		t.Fatalf("got %v", err)
 	}
 	if snapshot.Exists() {
@@ -306,6 +306,7 @@ func TestEnableLocal_RollbackOnCAFail(t *testing.T) {
 
 func TestDoctor_Pass(t *testing.T) {
 	testHome(t)
+	t.Setenv("CENTAG_WRAP_TOKEN", "llmproxy_doctor_test")
 	ca := mustCA(t)
 	var base string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -316,7 +317,7 @@ func TestDoctor_Pass(t *testing.T) {
 			_, _ = w.Write(ca)
 		case "/api/v1/proxy/setup/status":
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = fmt.Fprintf(w, `{"mode":"lan","allow_lan_clients":true,"advertise_host":"10.0.0.1","pac_url":"%s/api/v1/proxy/pac","listen_is_loopback":false}`, base)
+			_, _ = fmt.Fprintf(w, `{"mode":"lan","allow_lan_clients":true,"advertise_host":"10.0.0.1","pac_url":"%s/api/v1/proxy/pac","listen_is_loopback":false,"proxy_auth_required":true}`, base)
 		default:
 			http.NotFound(w, r)
 		}
@@ -325,7 +326,7 @@ func TestDoctor_Pass(t *testing.T) {
 	base = srv.URL
 
 	e := &Engine{OS: &mockOS{supported: true, detail: "mock-os"}}
-	if err := e.Doctor(srv.URL); err != nil {
+	if err := e.Doctor(srv.URL, ""); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -363,7 +364,7 @@ func TestEnableRemote_RollbackOnWritePACFail(t *testing.T) {
 
 	mos := &mockOS{supported: true, writeErr: fmt.Errorf("permission denied"), fp: "x"}
 	e := &Engine{OS: mos}
-	if err := e.Enable(srv.URL); err == nil {
+	if err := e.Enable(srv.URL, ""); err == nil {
 		t.Fatal("expected write PAC error")
 	}
 	if snapshot.Exists() {
@@ -381,6 +382,7 @@ func TestDisable_NoSnapshot(t *testing.T) {
 
 func TestDoctor_UsesSnapshotAPIBase(t *testing.T) {
 	testHome(t)
+	t.Setenv("CENTAG_WRAP_TOKEN", "llmproxy_doctor_test")
 	ca := mustCA(t)
 	var base string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -391,7 +393,7 @@ func TestDoctor_UsesSnapshotAPIBase(t *testing.T) {
 			_, _ = w.Write(ca)
 		case "/api/v1/proxy/setup/status":
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = fmt.Fprintf(w, `{"mode":"lan","allow_lan_clients":true,"advertise_host":"10.0.0.1","pac_url":"%s/pac","listen_is_loopback":false}`, base)
+			_, _ = fmt.Fprintf(w, `{"mode":"lan","allow_lan_clients":true,"advertise_host":"10.0.0.1","pac_url":"%s/pac","listen_is_loopback":false,"proxy_auth_required":true}`, base)
 		default:
 			http.NotFound(w, r)
 		}
@@ -400,7 +402,7 @@ func TestDoctor_UsesSnapshotAPIBase(t *testing.T) {
 	base = srv.URL
 	_ = snapshot.Save(&snapshot.Snapshot{ClientMode: "remote", Centag: snapshot.CentagRef{APIBase: srv.URL}})
 	e := &Engine{OS: &mockOS{supported: true}}
-	if err := e.Doctor(""); err != nil {
+	if err := e.Doctor("", ""); err != nil {
 		t.Fatal(err)
 	}
 }
