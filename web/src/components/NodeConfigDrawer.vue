@@ -24,6 +24,7 @@
 
       <el-form-item label="节点类型" prop="type">
         <el-select v-model="localNode.type" style="width: 100%" @change="onTypeChange">
+          <el-option label="出站转发 (Transparent Forward)" value="transparent_forward" />
           <el-option label="生成器 (Generator)" value="generator" />
           <el-option label="处理器 (Processor)" value="processor" />
           <el-option label="审核器 (Reviewer)" value="reviewer" />
@@ -75,8 +76,8 @@
           />
         </el-form-item>
 
-        <el-form-item v-if="localNode.type !== 'transparent_forward'" :label="getPromptLabel(localNode.type)">
-          <div v-if="localNode.type === 'generator'" class="system-prompt-toolbar">
+        <el-form-item v-if="showPromptEditor" :label="getPromptLabel(localNode.type)">
+          <div v-if="usesSystemPrompt" class="system-prompt-toolbar">
             <el-select
               v-model="selectedPromptPreset"
               clearable
@@ -101,7 +102,10 @@
             :placeholder="getPromptPlaceholder(localNode.type)"
           />
           <div v-if="localNode.type === 'generator'" class="help-text">
-            直连模式：非空 system prompt 会覆盖客户端 system 消息。透明模式请将此项留空。
+            非空 system prompt 会覆盖客户端 system 消息。
+          </div>
+          <div v-if="localNode.type === 'transparent_forward'" class="help-text">
+            开启「注入 System Prompt」后生效：用网关人格替换客户端 system 消息（对应直连 #d）。
           </div>
           <div v-if="localNode.type === 'aggregator'" class="help-text">
             可选。用于指导 LLM 如何聚合多个上游节点的输出。留空将使用默认总结 prompt。可用变量：&#123;&#123;.combined_content&#125;&#125;（所有上游输出的拼接）
@@ -253,6 +257,56 @@
               添加变量绑定
             </el-button>
           </div>
+        </el-form-item>
+      </template>
+
+      <!-- 出站转发策略（直连 #d / 透明 #t / 跳板 #j 共用节点） -->
+      <template v-if="localNode.type === 'transparent_forward'">
+        <el-divider>出站策略</el-divider>
+        <el-alert type="info" :closable="false" style="margin-bottom: 12px">
+          <template #default>
+            <div style="font-size: 13px; line-height: 1.6">
+              与预置模板对应：<strong>透明 #t</strong>＝按模型选路 + 不注入；
+              <strong>跳板 #j</strong>＝固定出站 + 不注入；
+              <strong>直连 #d</strong>＝固定出站 + 注入 System Prompt。
+            </div>
+          </template>
+        </el-alert>
+
+        <el-form-item label="选路策略">
+          <el-radio-group v-model="egressConfig.route_policy">
+            <el-radio-button value="match_model">按模型匹配（透明）</el-radio-button>
+            <el-radio-button value="fixed">固定出站（直连/跳板）</el-radio-button>
+          </el-radio-group>
+          <div class="help-text">
+            固定出站：只走上方选中的后端/模型（或系统默认）。按模型匹配：根据客户端 model 跨后端松匹配。
+          </div>
+        </el-form-item>
+
+        <el-form-item label="注入 System Prompt">
+          <el-switch v-model="egressConfig.inject_system_prompt" />
+          <div class="help-text">
+            开启后用下方网关 System Prompt 替换客户端 system（直连模式）。关闭则为透明/跳板透传。
+          </div>
+        </el-form-item>
+
+        <el-form-item label="重定向策略">
+          <el-select v-model="egressConfig.redirect_policy" style="width: 100%">
+            <el-option label="不跟随（never，默认）" value="never" />
+            <el-option label="始终跟随（always）" value="always" />
+            <el-option label="仅 GET/HEAD 跟随（smart）" value="smart" />
+          </el-select>
+        </el-form-item>
+
+        <el-form-item v-if="egressConfig.redirect_policy !== 'never'" label="最大重定向次数">
+          <el-input-number v-model="egressConfig.max_redirects" :min="1" :max="20" style="width: 100%" />
+        </el-form-item>
+
+        <el-form-item label="默认 URL Scheme">
+          <el-select v-model="egressConfig.default_scheme" style="width: 100%">
+            <el-option label="https" value="https" />
+            <el-option label="http" value="http" />
+          </el-select>
         </el-form-item>
       </template>
 
@@ -1044,6 +1098,56 @@ const buildRouterCustomConfig = (): Record<string, any> => {
   return result
 }
 
+// ─── 出站转发策略 (transparent_forward) ───────────────────────────────────
+const defaultEgressConfig = () => ({
+  route_policy: 'match_model' as 'match_model' | 'fixed',
+  inject_system_prompt: false,
+  redirect_policy: 'never',
+  max_redirects: 5,
+  default_scheme: 'https',
+})
+const egressConfig = ref(defaultEgressConfig())
+
+const loadEgressConfig = (node: any) => {
+  const cc = node?.config?.custom_config || {}
+  let route = String(cc.route_policy || '').trim()
+  if (!route) {
+    route = cc.fixed_egress === true ? 'fixed' : 'match_model'
+  }
+  if (route !== 'fixed' && route !== 'match_model') {
+    route = 'match_model'
+  }
+  egressConfig.value = {
+    route_policy: route as 'match_model' | 'fixed',
+    inject_system_prompt: cc.inject_system_prompt === true,
+    redirect_policy: String(cc.redirect_policy || 'never').trim() || 'never',
+    max_redirects: Number(cc.max_redirects) > 0 ? Number(cc.max_redirects) : 5,
+    default_scheme: String(cc.default_scheme || 'https').trim() || 'https',
+  }
+}
+
+const buildEgressCustomConfig = (): Record<string, any> => {
+  const prev = localNode.value.config?.custom_config || {}
+  const next: Record<string, any> = { ...prev }
+  next.route_policy = egressConfig.value.route_policy
+  next.inject_system_prompt = egressConfig.value.inject_system_prompt
+  next.redirect_policy = egressConfig.value.redirect_policy
+  next.max_redirects = egressConfig.value.max_redirects
+  next.default_scheme = egressConfig.value.default_scheme
+  if (egressConfig.value.route_policy === 'fixed') {
+    next.fixed_egress = true
+  } else {
+    delete next.fixed_egress
+  }
+  return next
+}
+
+const ensureTransparentForwardNodeFields = () => {
+  localNode.value.kind = 'proxy.transparent_forward'
+  localNode.value.implementation = 'builtin.transparent_forward'
+  localNode.value.config = localNode.value.config || {}
+}
+
 // ─── 插件自定义配置 (Custom Config) ────────────────────────────────────────
 
 // Embedding 后端筛选函数（用于 BackendSelector 的 filter prop）
@@ -1412,17 +1516,30 @@ const contextVars = [
   { name: 'pipeline_id',desc: '当前流水线的 ID。需绑定路径：context.pipeline_id' },
 ]
 
-// generator 节点绑 system_prompt，其他节点绑 prompt_template
+const usesSystemPrompt = computed(() =>
+  localNode.value.type === 'generator'
+  || (localNode.value.type === 'transparent_forward' && egressConfig.value.inject_system_prompt),
+)
+
+const showPromptEditor = computed(() => {
+  if (localNode.value.type === 'transparent_forward') {
+    return egressConfig.value.inject_system_prompt
+  }
+  // transparent_forward 以外：原逻辑（LLM 节点显示 prompt，但 transparent 已单独处理）
+  return localNode.value.type !== 'transparent_forward' && needsLLM(localNode.value.type)
+})
+
+// generator / 出站注入：绑 system_prompt；其他节点绑 prompt_template
 const promptFieldValue = computed({
   get: () => {
     if (!localNode.value.config) return ''
-    return localNode.value.type === 'generator'
+    return usesSystemPrompt.value
       ? (localNode.value.config.system_prompt ?? '')
       : (localNode.value.config.prompt_template ?? '')
   },
   set: (val: string) => {
     localNode.value.config = localNode.value.config || {}
-    if (localNode.value.type === 'generator') {
+    if (usesSystemPrompt.value) {
       localNode.value.config.system_prompt = val
     } else {
       localNode.value.config.prompt_template = val
@@ -1540,6 +1657,7 @@ const needsLLM = (type: string) => {
 const getPromptLabel = (type: string) => {
   const labels: Record<string, string> = {
     generator:  'System Prompt（可选）',
+    transparent_forward: 'System Prompt（注入时生效）',
     aggregator: '聚合 Prompt（可选）',
   }
   return labels[type] || 'Prompt 模板'
@@ -1548,6 +1666,7 @@ const getPromptLabel = (type: string) => {
 const getPromptPlaceholder = (type: string) => {
   const placeholders: Record<string, string> = {
     generator:  '可选。设置模型的角色或行为规范，如：你是一名专业的技术助手…',
+    transparent_forward: '开启注入后使用。网关人格会替换客户端 system 消息…',
     aggregator: '可选。输入指导 LLM 如何聚合多个上游输出的指令，如：请综合以下回答，生成一个更全面、结构更清晰的答案…',
   }
   return placeholders[type] || '在此编写 Prompt，点击下方变量名可快速插入'
@@ -1555,7 +1674,8 @@ const getPromptPlaceholder = (type: string) => {
 
 const getTypeDescription = (type: string) => {
   const desc: Record<string, string> = {
-    generator:  '生成初始内容，通常是第一个节点，调用 LLM 产生回答',
+    transparent_forward: '出站转发：直连/透明/跳板共用节点，用「出站策略」开关区分行为',
+    generator:  '生成初始内容（重组请求调用 LLM）；日常出站请优先用「出站转发」',
     processor:  '对内容进行优化、翻译、摘要等后处理操作',
     reviewer:   '对生成结果进行质量审核、打分，可配置评分标准',
     router:     '根据条件路由到不同分支节点',
@@ -1658,6 +1778,15 @@ const onTypeChange = (newType: string) => {
     localNode.value.config = localNode.value.config || {}
     // generator 节点只使用 system_prompt，不使用 prompt_template，清除旧值避免误解
     delete localNode.value.config.prompt_template
+  }
+  if (newType === 'transparent_forward') {
+    ensureTransparentForwardNodeFields()
+    delete localNode.value.config.prompt_template
+    if (!localNode.value.name || localNode.value.name === '新节点') {
+      localNode.value.name = '出站转发'
+    }
+    // 默认透明策略；用户可在「出站策略」改成直连/跳板
+    egressConfig.value = defaultEgressConfig()
   }
 }
 
@@ -1881,6 +2010,12 @@ const saveNode = async () => {
       localNode.value.config.custom_config = cc
     }
 
+    // 出站转发：写入 route_policy / inject_system_prompt 等开关
+    if (localNode.value.type === 'transparent_forward') {
+      ensureTransparentForwardNodeFields()
+      localNode.value.config.custom_config = buildEgressCustomConfig()
+    }
+
     // 消除双源字段歧义：将顶层 backend/model 同步到 config 内层，确保执行引擎和回填逻辑读取一致
     if (localNode.value.backend !== undefined) {
       localNode.value.config = localNode.value.config || {}
@@ -1998,6 +2133,13 @@ watch(() => props.node, (newNode) => {
     if (localNode.value.type === 'router') {
       loadRouterConfig(newNode)
     }
+    // 加载出站转发策略
+    if (localNode.value.type === 'transparent_forward') {
+      ensureTransparentForwardNodeFields()
+      loadEgressConfig(newNode)
+    } else {
+      egressConfig.value = defaultEgressConfig()
+    }
     // 加载插件自定义配置
     loadCustomConfig(newNode)
   }
@@ -2026,6 +2168,7 @@ watch(() => props.visible, (val) => {
     customConfigItems.value = []
     injectorToolCalls.value = []
     injectorCondition.value = ''
+    egressConfig.value = defaultEgressConfig()
     mem0PresetConfig.value = { api_key: '', base_url: '', namespace: 'default', search_mode: 'semantic', embedding_backend_id: '', embedding_model: '' }
     return
   }
