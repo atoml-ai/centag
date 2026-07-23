@@ -18,7 +18,11 @@ import (
 // to the backend selected by client model match or system defaults.
 type TransparentForwardNode struct {
 	BaseNode
-	DefaultScheme string
+	DefaultScheme  string
+	RedirectPolicy string // never, always, smart
+	MaxRedirects   int
+	// FixedEgress 固定出站跳板：不做跨后端模型匹配，固定默认/钉死后端 + Key 改写
+	FixedEgress bool
 }
 
 func NewTransparentForwardNode(config NodeConfig) (PipelineNode, error) {
@@ -29,11 +33,25 @@ func NewTransparentForwardNode(config NodeConfig) (PipelineNode, error) {
 			retryConfig: DefaultRetryConfig(),
 			permissions: []string{"network.outbound"},
 		},
-		DefaultScheme: "https",
+		DefaultScheme:  "https",
+		RedirectPolicy: "never", // 默认不跟随重定向
+		MaxRedirects:   5,
 	}
 	if config.CustomConfig != nil {
 		if s, ok := config.CustomConfig["default_scheme"].(string); ok && strings.TrimSpace(s) != "" {
 			node.DefaultScheme = strings.TrimSpace(s)
+		}
+		if s, ok := config.CustomConfig["redirect_policy"].(string); ok && strings.TrimSpace(s) != "" {
+			node.RedirectPolicy = strings.TrimSpace(s)
+		}
+		// 处理 max_redirects，支持 float64 和 int 类型
+		if v, ok := config.CustomConfig["max_redirects"].(float64); ok && v > 0 {
+			node.MaxRedirects = int(v)
+		} else if v, ok := config.CustomConfig["max_redirects"].(int); ok && v > 0 {
+			node.MaxRedirects = v
+		}
+		if v, ok := config.CustomConfig["fixed_egress"].(bool); ok {
+			node.FixedEgress = v
 		}
 	}
 	return node, nil
@@ -76,7 +94,7 @@ func (n *TransparentForwardNode) Execute(ctx context.Context, input *NodeInput) 
 	clientModel := extractJSONModel(body)
 	backendID, resolvedModel, body := n.resolveTransparentRoute(meta, body, clientModel)
 
-	targetURL, err := ResolveTransparentTargetURL(meta, backendID, requestPath, n.DefaultScheme)
+	targetURL, err := n.resolveTargetURL(meta, backendID, requestPath)
 	if err != nil {
 		return nil, fmt.Errorf("transparent_forward node %q: %w", n.id, err)
 	}
@@ -101,7 +119,7 @@ func (n *TransparentForwardNode) Execute(ctx context.Context, input *NodeInput) 
 	// 已解析到配置后端时，优先用后端 API Key 鉴权上游。
 	// 客户端 Authorization 是 Centag 网关鉴权（JWT / 网关 API Key），不能原样转发给上游，
 	// 否则会出现直连正常、透明模式 AuthError: Invalid API key。
-	// 无后端（如 raw-forward + X-Target-URL）时才透传 forward_authorization。
+	// 无托管后端（高级旁路绝对 URL）时才透传 forward_authorization。
 	if auth := resolveTransparentUpstreamAuth(backendID, meta); auth != "" {
 		req.Header.Set("Authorization", auth)
 	}
@@ -116,6 +134,25 @@ func (n *TransparentForwardNode) Execute(ctx context.Context, input *NodeInput) 
 		return nil, fmt.Errorf("transparent_forward node %q: upstream request failed: %w", n.id, err)
 	}
 	defer resp.Body.Close()
+
+	// [+] 处理 301/302 重定向
+	if (resp.StatusCode == 301 || resp.StatusCode == 302) && n.RedirectPolicy != "never" {
+		location := resp.Header.Get("Location")
+		if location != "" {
+			// smart 模式：仅 GET/HEAD 跟随
+			if n.RedirectPolicy == "smart" && method != http.MethodGet && method != http.MethodHead {
+				// 不跟随，直接透传
+			} else {
+				// 跟随重定向
+				resp.Body.Close()
+				resp, err = n.followRedirect(ctx, req, location, client, method, body)
+				if err != nil {
+					return nil, fmt.Errorf("transparent_forward node %q: redirect failed: %w", n.id, err)
+				}
+				defer resp.Body.Close()
+			}
+		}
+	}
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -148,6 +185,9 @@ func (n *TransparentForwardNode) Execute(ctx context.Context, input *NodeInput) 
 		"status_code":     resp.StatusCode,
 		"content_type":    contentType,
 		"forwarded":       true,
+	}
+	if n.FixedEgress {
+		outMeta["fixed_egress"] = true
 	}
 	if resolvedModel != "" {
 		outMeta["model"] = resolvedModel
@@ -187,7 +227,37 @@ func (n *TransparentForwardNode) Execute(ctx context.Context, input *NodeInput) 
 	}, nil
 }
 
+// resolveTargetURL 解析上游 URL。
+// 固定出站：优先托管后端；仅无后端时才允许显式 target_url 高级旁路（不用 original_host）。
+func (n *TransparentForwardNode) resolveTargetURL(meta map[string]interface{}, backendID, requestPath string) (string, error) {
+	if n.FixedEgress {
+		bid := strings.TrimSpace(backendID)
+		if bid == "" && meta != nil {
+			bid = strings.TrimSpace(stringMeta(meta, "backend_id"))
+		}
+		if bid != "" && ResolveBackendEndpoint != nil {
+			ep, err := ResolveBackendEndpoint(bid)
+			if err != nil {
+				return "", fmt.Errorf("resolve backend %q: %w", bid, err)
+			}
+			if ep != nil && strings.TrimSpace(ep.BaseURL) != "" {
+				base := strings.TrimRight(strings.TrimSpace(ep.BaseURL), "/")
+				return base + "/chat/completions", nil
+			}
+		}
+		if meta != nil {
+			if u := strings.TrimSpace(stringMeta(meta, "target_url")); u != "" {
+				return normalizeTargetURL(u, requestPath, n.DefaultScheme)
+			}
+		}
+		return "", fmt.Errorf("fixed egress: no default backend or target_url")
+	}
+	return ResolveTransparentTargetURL(meta, backendID, requestPath, n.DefaultScheme)
+}
+
 // resolveTransparentRoute picks backend/model:
+// FixedEgress: 固定默认/钉死后端 + 默认模型，不做跨后端模型匹配
+// 否则:
 // 1) explicit X-Backend-ID / metadata backend_id → match client model within that backend
 // 2) client model → loose/exact match across enabled backends
 // 3) miss / unspecified → system default backend, else first usable enabled backend
@@ -200,6 +270,14 @@ func (n *TransparentForwardNode) resolveTransparentRoute(
 	outBody = body
 
 	pinnedBackend := strings.TrimSpace(stringMeta(meta, "backend_id"))
+
+	if n.FixedEgress {
+		backendID = resolveFallbackBackendID(n.config.Backend, pinnedBackend)
+		if backendID != "" {
+			resolvedModel, outBody = applyFallbackModel(outBody, backendID, n.config.Model)
+		}
+		return backendID, resolvedModel, outBody
+	}
 
 	if !isUnspecifiedClientModel(clientModel) {
 		if pinnedBackend != "" {
@@ -477,4 +555,70 @@ func truncateBody(b []byte, maxLen int) string {
 		return s[:maxLen] + "..."
 	}
 	return s
+}
+
+// followRedirect 跟随重定向
+func (n *TransparentForwardNode) followRedirect(
+	ctx context.Context,
+	origReq *http.Request,
+	location string,
+	client HTTPClient,
+	method string,
+	body []byte,
+) (*http.Response, error) {
+	var lastResp *http.Response
+	redirectCount := 0
+
+	for redirectCount < n.MaxRedirects {
+		// 构建新的请求 URL
+		newURL := location
+		if !strings.HasPrefix(location, "http://") && !strings.HasPrefix(location, "https://") {
+			// 相对路径
+			baseURL := origReq.URL.String()
+			if idx := strings.LastIndex(baseURL, "/"); idx >= 0 {
+				newURL = baseURL[:idx+1] + location
+			}
+		}
+
+		// 创建新的请求
+		newReq, err := http.NewRequestWithContext(ctx, method, newURL, strings.NewReader(string(body)))
+		if err != nil {
+			return nil, fmt.Errorf("build redirect request: %w", err)
+		}
+
+		// 复制原始请求的头
+		for key, values := range origReq.Header {
+			for _, value := range values {
+				newReq.Header.Add(key, value)
+			}
+		}
+
+		// 发送请求
+		resp, err := client.Do(newReq)
+		if err != nil {
+			return nil, fmt.Errorf("redirect request failed: %w", err)
+		}
+
+		// 保存上一个响应
+		if lastResp != nil {
+			lastResp.Body.Close()
+		}
+		lastResp = resp
+
+		// 如果不是重定向，返回响应
+		if resp.StatusCode != 301 && resp.StatusCode != 302 {
+			return resp, nil
+		}
+
+		// 获取新的 Location
+		location = resp.Header.Get("Location")
+		if location == "" {
+			return resp, nil
+		}
+
+		redirectCount++
+	}
+
+	// 达到最大重定向次数，返回最后一个响应
+	return lastResp, nil
 }

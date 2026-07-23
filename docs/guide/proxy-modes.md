@@ -146,7 +146,7 @@ curl -X POST http://localhost:20060/v1/chat/completions \
 **Description**: HTTP body passthrough via `builtin.transparent_forward`. Requires `X-Target-URL` or hostproxy (`X-Original-Host`). **Not** for normal chat clients; cannot be system default.
 
 **Shortcut**: `#raw`  
-**Template**: `config/initdata/pipeline-templates/15-raw-forward.yaml`
+**Template**: `config/initdata/pipeline-templates/common/raw-forward.yaml`
 
 ```bash
 curl -X POST http://localhost:20060/v1/chat/completions \
