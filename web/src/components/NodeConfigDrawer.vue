@@ -91,8 +91,11 @@
         </div>
 
         <div class="egress-prompt-block">
-          <el-form-item label="是否注入系统提示词" class="egress-inject-item">
-            <el-switch v-model="egressConfig.inject_system_prompt" />
+          <el-form-item class="egress-inject-item" label-width="0">
+            <div class="egress-inject-row">
+              <span class="egress-inject-label">是否注入系统提示词</span>
+              <el-switch v-model="egressConfig.inject_system_prompt" />
+            </div>
           </el-form-item>
 
           <div v-if="egressConfig.inject_system_prompt" class="egress-prompt-body">
@@ -1977,6 +1980,19 @@ onMounted(() => {
 
 .egress-inject-item {
   margin-bottom: 8px;
+}
+
+.egress-inject-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.egress-inject-label {
+  font-size: 14px;
+  color: #606266;
+  line-height: 1;
+  white-space: nowrap;
 }
 
 .egress-prompt-body {
