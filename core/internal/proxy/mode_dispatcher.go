@@ -450,6 +450,7 @@ func (d *ModeDispatcher) writeResponse(
 		c.Header("X-Pipeline-Success", fmt.Sprintf("%v", output.ExecutionLog.Success))
 	}
 
+	pipeline.ApplyResponseTraceBanner(output, pipelineID)
 	setPipelineExecutionHeaders(c, output, pipelineID)
 	setPipelineOutputHeaders(c, output)
 
@@ -718,15 +719,18 @@ func looksLikeOpenAISSE(body string) bool {
 }
 
 // shouldRawWriteTransparentStream：流式路径下是否原样写出 Content。
-// 仅当节点声明 raw_passthrough，或 Content 已是上游 SSE 时才 bypass FormatChunk，
-// 避免 ModeTransparentProxy 下普通文本被误当成透传。
+// 显式 raw_passthrough=false / responses_to_chat 时必须走协议 FormatChunk
+// （OpenCode /v1/responses 不能收到 chat.completion.chunk，否则客户端一直转圈）。
 func shouldRawWriteTransparentStream(output *pipeline.PipelineOutput) bool {
 	if output == nil || strings.TrimSpace(output.Content) == "" {
 		return false
 	}
 	if output.Metadata != nil {
-		if v, ok := output.Metadata["raw_passthrough"].(bool); ok && v {
-			return true
+		if v, ok := output.Metadata["responses_to_chat"].(bool); ok && v {
+			return false
+		}
+		if v, ok := output.Metadata["raw_passthrough"].(bool); ok {
+			return v
 		}
 	}
 	return looksLikeOpenAISSE(output.Content)
@@ -886,6 +890,7 @@ func (d *ModeDispatcher) writeStreamResponse(
 	for result := range resultCh {
 		// 透明透传：上游响应（SSE 或 JSON）已在 Content 中，禁止再 FormatChunk 包一层。
 		if result.Output != nil {
+			pipeline.ApplyResponseTraceBanner(result.Output, c.GetHeader("X-Pipeline-ID"))
 			finalOutput = result.Output
 			if shouldRawWriteTransparentStream(result.Output) {
 				statusCode, contentType := transparentPassthroughStatusAndType(result.Output)
@@ -957,6 +962,7 @@ func (d *ModeDispatcher) writeStreamResponse(
 
 	// 透明透传兜底：仅 Output、无 chunk（streamEmitter 跳过 Adapt）时在此写出。
 	if finalOutput != nil && shouldRawWriteTransparentStream(finalOutput) && responseContent.Len() == 0 && !sseHeadersReady {
+		pipeline.ApplyResponseTraceBanner(finalOutput, c.GetHeader("X-Pipeline-ID"))
 		statusCode, contentType := transparentPassthroughStatusAndType(finalOutput)
 		c.Header("Content-Type", contentType)
 		c.Status(statusCode)
@@ -1077,12 +1083,12 @@ func (d *ModeDispatcher) finishStreamSideEffects(c *gin.Context, finalOutput *pi
 
 // nodeResultSummary 单个流水线节点的执行摘要。
 type nodeResultSummary struct {
-	NodeID    string `json:"node_id"`
-	NodeType  string `json:"type"`
-	Model     string `json:"model,omitempty"`
-	Success   bool   `json:"success"`
-	DurationMs int64 `json:"duration_ms"`
-	Tokens    int   `json:"tokens,omitempty"`
+	NodeID     string `json:"node_id"`
+	NodeType   string `json:"type"`
+	Model      string `json:"model,omitempty"`
+	Success    bool   `json:"success"`
+	DurationMs int64  `json:"duration_ms"`
+	Tokens     int    `json:"tokens,omitempty"`
 }
 
 // buildNodeResultsSummary 从 PipelineOutput 构建节点执行摘要列表。
@@ -1147,8 +1153,8 @@ func shouldInjectCentagMetaSSE(c *gin.Context) bool {
 func buildStreamCentagMeta(output *pipeline.PipelineOutput, pipelineID string, mode ProxyMode) map[string]interface{} {
 	meta := map[string]interface{}{
 		"_centag_meta": true,
-		"mode":            string(mode),
-		"pipeline_id":     pipelineID,
+		"mode":         string(mode),
+		"pipeline_id":  pipelineID,
 	}
 
 	if output.ExecutionLog != nil {
@@ -1426,9 +1432,9 @@ func (f *anthropicStreamFormatter) FormatChunk(model string, chunk *plugin.Strea
 			"type":  "content_block_start",
 			"index": blockIndex,
 			"content_block": map[string]interface{}{
-				"type": "tool_use",
-				"id":   tc.ID,
-				"name": tc.Function.Name,
+				"type":  "tool_use",
+				"id":    tc.ID,
+				"name":  tc.Function.Name,
 				"input": map[string]interface{}{},
 			},
 		}
@@ -1619,17 +1625,17 @@ func (f *geminiStreamFormatter) BuildUsage(finalOutput *pipeline.PipelineOutput)
 // 缺少 output_item/content_part 时，文本 delta 会被静默丢弃；缺少 function_call
 // 事件时 Agent 无法进入工具轮次。
 type responsesStreamFormatter struct {
-	seq            int
-	opened         bool
-	messageOpened  bool
-	messageOutIdx  int
-	responseID     string
-	itemID         string
-	model          string
-	created        int64
-	text           strings.Builder
-	nextOutputIdx  int
-	functionItems  []map[string]interface{}
+	seq           int
+	opened        bool
+	messageOpened bool
+	messageOutIdx int
+	responseID    string
+	itemID        string
+	model         string
+	created       int64
+	text          strings.Builder
+	nextOutputIdx int
+	functionItems []map[string]interface{}
 }
 
 func (f *responsesStreamFormatter) nextSeq() int {
@@ -2124,18 +2130,25 @@ func setPipelineOutputHeaders(c *gin.Context, output *pipeline.PipelineOutput) {
 		return
 	}
 	for metaKey, headerKey := range map[string]string{
-		"executor_backend":  "X-Executor-Backend",
-		"executor_model":    "X-Executor-Model",
-		"auditor_backend":   "X-Auditor-Backend",
-		"auditor_model":     "X-Auditor-Model",
-		"optimizer_backend": "X-Optimizer-Backend",
-		"optimizer_model":   "X-Optimizer-Model",
-		"cache_hit":         "X-Cache-Hit",
-		"cache_saved":       "X-Cache-Saved",
-		"target_base_url":   "X-Target-BaseURL",
-		"bypass":            "X-Pipeline-Bypass",
-		"bypass_node":       "X-Pipeline-Bypass-Node",
-		"bypass_reason":     "X-Pipeline-Bypass-Reason",
+		"executor_backend":      "X-Executor-Backend",
+		"executor_model":        "X-Executor-Model",
+		"auditor_backend":       "X-Auditor-Backend",
+		"auditor_model":         "X-Auditor-Model",
+		"optimizer_backend":     "X-Optimizer-Backend",
+		"optimizer_model":       "X-Optimizer-Model",
+		"cache_hit":             "X-Cache-Hit",
+		"cache_saved":           "X-Cache-Saved",
+		"target_base_url":       "X-Target-BaseURL",
+		"bypass":                "X-Pipeline-Bypass",
+		"bypass_node":           "X-Pipeline-Bypass-Node",
+		"bypass_reason":         "X-Pipeline-Bypass-Reason",
+		"fallback_used":         "X-Fallback-Used",
+		"fallback_from_model":   "X-Fallback-From-Model",
+		"fallback_to_model":     "X-Fallback-To-Model",
+		"fallback_notice":       "X-Fallback-Notice",
+		"response_trace_banner": "X-Response-Trace",
+		"pipeline_id":           "X-Pipeline-ID",
+		"backend_id":            "X-Backend-ID",
 	} {
 		if v, ok := output.Metadata[metaKey]; ok && fmt.Sprintf("%v", v) != "" {
 			c.Header(headerKey, fmt.Sprintf("%v", v))

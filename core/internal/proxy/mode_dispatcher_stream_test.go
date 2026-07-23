@@ -71,6 +71,71 @@ func TestWriteStreamResponse_IncludesFinishReason(t *testing.T) {
 	}
 }
 
+func TestShouldRawWriteTransparentStream_ResponsesToChatNeverRaw(t *testing.T) {
+	// 即使 Content 看起来像 chat SSE（历史降级前缀污染），responses_to_chat 也必须走 FormatChunk。
+	out := &pipeline.PipelineOutput{
+		Content: "data: {\"object\":\"chat.completion.chunk\",\"choices\":[{\"delta\":{\"content\":\"x\"}}]}\n\n",
+		Metadata: map[string]interface{}{
+			"raw_passthrough":   false,
+			"responses_to_chat": true,
+		},
+	}
+	if shouldRawWriteTransparentStream(out) {
+		t.Fatal("responses_to_chat must not raw-write chat.completion SSE")
+	}
+	out2 := &pipeline.PipelineOutput{
+		Content:  "plain answer",
+		Metadata: map[string]interface{}{"raw_passthrough": false},
+	}
+	if shouldRawWriteTransparentStream(out2) {
+		t.Fatal("explicit raw_passthrough=false must win over looksLikeSSE")
+	}
+}
+
+func TestWriteStreamResponse_ResponsesToChatUsesResponsesEvents(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	ch := make(chan pipeline.PipelineStreamResult, 2)
+	ch <- pipeline.PipelineStreamResult{
+		Chunk: &plugin.StreamChunk{Content: "你好，我是降级后的模型", Done: true},
+	}
+	ch <- pipeline.PipelineStreamResult{
+		Output: &pipeline.PipelineOutput{
+			Content: "你好，我是降级后的模型",
+			Metadata: map[string]interface{}{
+				"raw_passthrough":   false,
+				"responses_to_chat": true,
+				"status_code":       200,
+				"backend_id":        "opencode-zen",
+				"executor_model":    "deepseek-v4-flash-free",
+			},
+			ExecutionLog: &pipeline.ExecutionLog{Success: true},
+		},
+	}
+	close(ch)
+
+	dispatcher := NewModeDispatcher(&stubStreamPipelineEngine{}, nil, nil)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", nil)
+	c.Request.Header.Set("X-Pipeline-ID", "direct-backend")
+	c.Set("protocol_plugin", "responses-protocol")
+
+	if err := dispatcher.writeStreamResponse(c, ch, ModeDirectBackend, "gpt-5.6-luna"); err != nil {
+		t.Fatalf("writeStreamResponse: %v", err)
+	}
+	body := w.Body.String()
+	if strings.Contains(body, "chat.completion.chunk") {
+		t.Fatalf("must not emit chat.completion.chunk to /v1/responses client: %s", body)
+	}
+	if !strings.Contains(body, "response.output_text.delta") && !strings.Contains(body, "output_text.delta") {
+		t.Fatalf("want responses protocol deltas, got: %s", body)
+	}
+	if !strings.Contains(body, "你好，我是降级后的模型") {
+		t.Fatalf("missing answer text: %s", body)
+	}
+}
+
 func TestWriteStreamResponse_RawPassthroughSSENotDoubleWrapped(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 

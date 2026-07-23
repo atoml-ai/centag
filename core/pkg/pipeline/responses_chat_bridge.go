@@ -484,6 +484,7 @@ func anyToJSONString(v interface{}) string {
 // response (SSE or JSON), used after Responses→Chat rewrite.
 type chatCompletionExtract struct {
 	Text         string
+	Reasoning    string
 	ToolCalls    []ToolCall
 	FinishReason string
 }
@@ -527,12 +528,20 @@ func extractChatCompletionResultFromJSON(body []byte) chatCompletionExtract {
 		if c, ok := msg["content"].(string); ok {
 			out.Text = c
 		}
+		if r, ok := msg["reasoning_content"].(string); ok {
+			out.Reasoning = r
+		}
 		out.ToolCalls = parseChatToolCalls(msg["tool_calls"])
 	}
 	if out.Text == "" {
 		if delta, ok := first["delta"].(map[string]interface{}); ok {
 			if c, ok := delta["content"].(string); ok {
 				out.Text = c
+			}
+			if out.Reasoning == "" {
+				if r, ok := delta["reasoning_content"].(string); ok {
+					out.Reasoning = r
+				}
 			}
 			if len(out.ToolCalls) == 0 {
 				out.ToolCalls = parseChatToolCalls(delta["tool_calls"])
@@ -552,6 +561,7 @@ func extractChatCompletionResultFromJSON(body []byte) chatCompletionExtract {
 
 func extractChatCompletionResultFromSSE(body []byte) chatCompletionExtract {
 	var text strings.Builder
+	var reasoning strings.Builder
 	byIndex := map[int]*pendingToolCall{}
 	var order []int
 	finishReason := ""
@@ -584,11 +594,17 @@ func extractChatCompletionResultFromSSE(body []byte) chatCompletionExtract {
 			if c, ok := delta["content"].(string); ok && c != "" {
 				text.WriteString(c)
 			}
+			if r, ok := delta["reasoning_content"].(string); ok && r != "" {
+				reasoning.WriteString(r)
+			}
 			mergeStreamingToolCallDeltas(delta["tool_calls"], byIndex, &order)
 		}
 		if msg, ok := first["message"].(map[string]interface{}); ok && msg != nil {
 			if c, ok := msg["content"].(string); ok && c != "" {
 				text.WriteString(c)
+			}
+			if r, ok := msg["reasoning_content"].(string); ok && r != "" {
+				reasoning.WriteString(r)
 			}
 			for _, tc := range parseChatToolCalls(msg["tool_calls"]) {
 				idx := len(order)
@@ -626,6 +642,7 @@ func extractChatCompletionResultFromSSE(body []byte) chatCompletionExtract {
 	}
 	return chatCompletionExtract{
 		Text:         text.String(),
+		Reasoning:    reasoning.String(),
 		ToolCalls:    toolCalls,
 		FinishReason: finishReason,
 	}

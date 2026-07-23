@@ -11,15 +11,15 @@ import (
 
 	"centag/core/internal/agent"
 	"centag/core/internal/auth"
-	"centag/core/pkg/backend"
 	"centag/core/internal/cache"
+	"centag/core/internal/stats"
+	"centag/core/internal/tokenusage"
+	"centag/core/pkg/backend"
 	"centag/core/pkg/config"
 	"centag/core/pkg/logger"
 	"centag/core/pkg/metrics"
 	"centag/core/pkg/pipeline"
 	"centag/core/pkg/plugin"
-	"centag/core/internal/stats"
-	"centag/core/internal/tokenusage"
 	"centag/core/pkg/processor"
 
 	"github.com/gin-gonic/gin"
@@ -265,6 +265,12 @@ func (h *Handler) HandleChatCompletions(c *gin.Context) {
 			} else {
 				logRequestError(requestID, "[ModeDispatcher] stream failed",
 					zap.String("model", req.Model), zap.String("proxy_mode", string(proxyMode)), zap.Error(err))
+				// 流式路径可能已写出 SSE（含 FormatError）；再写 JSON 500 会触发
+				// "Headers were already written"，客户端则一直挂起。
+				if c.Writer.Written() {
+					h.recordCacheStats(req.Model, "BYPASS", false, c.Writer.Status(), time.Since(startTime))
+					return
+				}
 				if writeClassifiedBackendError(c, err) {
 					h.recordCacheStats(req.Model, "BYPASS", false, c.Writer.Status(), time.Since(startTime))
 					return

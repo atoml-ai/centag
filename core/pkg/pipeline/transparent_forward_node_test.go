@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"centag/core/pkg/backend"
+	"centag/core/pkg/config"
 )
 
 type mockHTTPClient struct {
@@ -481,6 +482,60 @@ func TestTransparentForwardNode_ResponsesToChatCompletions(t *testing.T) {
 	}
 }
 
+func TestTransparentForwardNode_ResponsesToChat_ReasoningOnlyStillDisablesPassthrough(t *testing.T) {
+	inner := &mockHTTPClient{
+		status: 200,
+		body: "data: {\"choices\":[{\"delta\":{\"content\":null,\"reasoning_content\":\"我是\"}}]}\n\n" +
+			"data: {\"choices\":[{\"delta\":{\"content\":null,\"reasoning_content\":\"免费模型\"}}]}\n\n" +
+			"data: [DONE]\n\n",
+	}
+	capturing := &capturingHTTPClient{inner: inner}
+	broker := &mockCapabilityBroker{httpClient: capturing}
+
+	prevEP := ResolveBackendEndpoint
+	t.Cleanup(func() { ResolveBackendEndpoint = prevEP })
+	ResolveBackendEndpoint = func(backendID string) (*BackendEndpoint, error) {
+		return &BackendEndpoint{BaseURL: "https://opencode.ai/zen/v1", APIKey: "sk"}, nil
+	}
+
+	node, err := NewTransparentForwardNode(NodeConfig{CustomConfig: map[string]interface{}{
+		"route_policy": "fixed",
+	}})
+	if err != nil {
+		t.Fatalf("NewTransparentForwardNode: %v", err)
+	}
+	tf := node.(*TransparentForwardNode)
+	tf.BaseNode.id = "forward"
+	tf.SetCapabilityBroker(broker)
+
+	out, err := tf.Execute(context.Background(), &NodeInput{
+		Metadata: map[string]interface{}{
+			"backend_id":   "opencode-zen",
+			"request_path": "/v1/responses",
+			"raw_request_body": `{
+				"model":"gpt-5.6-luna",
+				"stream":true,
+				"input":[{"role":"user","content":"你是谁"}]
+			}`,
+		},
+	})
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if out.Metadata["raw_passthrough"] != false {
+		t.Fatalf("raw_passthrough=%v, want false", out.Metadata["raw_passthrough"])
+	}
+	if out.Metadata["responses_to_chat"] != true {
+		t.Fatalf("responses_to_chat=%v", out.Metadata["responses_to_chat"])
+	}
+	if out.Content != "我是免费模型" {
+		t.Fatalf("content=%q, want reasoning fallback text", out.Content)
+	}
+	if strings.HasPrefix(strings.TrimSpace(out.Content), "data:") {
+		t.Fatalf("must not keep chat SSE body for responses clients: %q", out.Content)
+	}
+}
+
 func TestTransparentForwardNode_ResponsesToChatCompletions_ToolCalls(t *testing.T) {
 	inner := &mockHTTPClient{
 		status: 200,
@@ -549,9 +604,9 @@ func TestTransparentForwardNode_RoutePolicyAndInjectSwitches(t *testing.T) {
 	}
 
 	n2, err := NewTransparentForwardNode(NodeConfig{CustomConfig: map[string]interface{}{
-		"route_policy":          "match_model",
-		"fixed_egress":          true, // route_policy wins after bool
-		"inject_system_prompt":  true,
+		"route_policy":         "match_model",
+		"fixed_egress":         true, // route_policy wins after bool
+		"inject_system_prompt": true,
 	}})
 	if err != nil {
 		t.Fatal(err)
@@ -632,6 +687,74 @@ func TestTransparentForwardNode_InjectSystemPromptOnExecute(t *testing.T) {
 	}
 }
 
+func TestTransparentForwardNode_FixedEgressIgnoresPinnedBackendID(t *testing.T) {
+	prevCfg := config.Get()
+	config.Set(&config.Config{
+		Proxy: config.ProxyConfig{
+			DefaultBackendID: "opencode-zen",
+			DefaultModel:     "mimo-v2.5-free",
+		},
+	})
+	t.Cleanup(func() { config.Set(prevCfg) })
+
+	var hitBackend string
+	prevEP := ResolveBackendEndpoint
+	t.Cleanup(func() { ResolveBackendEndpoint = prevEP })
+	ResolveBackendEndpoint = func(backendID string) (*BackendEndpoint, error) {
+		hitBackend = backendID
+		return &BackendEndpoint{BaseURL: "https://opencode.ai/zen/v1", APIKey: "sk"}, nil
+	}
+
+	inner := &mockHTTPClient{status: 200, body: `{"id":"ok","choices":[{"message":{"content":"hi"}}]}`}
+	broker := &mockCapabilityBroker{httpClient: inner}
+
+	node, err := NewTransparentForwardNode(NodeConfig{
+		Backend: "{{system.default_backend}}",
+		Model:   "{{system.default_model}}",
+		CustomConfig: map[string]interface{}{
+			"route_policy": "fixed",
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	tf := node.(*TransparentForwardNode)
+	tf.BaseNode.id = "forward"
+	tf.SetCapabilityBroker(broker)
+
+	out, err := tf.Execute(context.Background(), &NodeInput{
+		Metadata: map[string]interface{}{
+			// Agent / 请求头误注入的后端，直连模式必须忽略
+			"backend_id":   "bigmodel-ai",
+			"request_path": "/v1/chat/completions",
+			"raw_request_body": `{
+				"model":"glm-5.1",
+				"stream":true,
+				"messages":[{"role":"user","content":"你好"}]
+			}`,
+		},
+	})
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if hitBackend != "opencode-zen" {
+		t.Fatalf("upstream backend=%q, want opencode-zen (ignore pinned bigmodel-ai)", hitBackend)
+	}
+	if out.Metadata["backend_id"] != "opencode-zen" {
+		t.Fatalf("metadata backend_id=%v", out.Metadata["backend_id"])
+	}
+	if out.Metadata["executor_model"] != "mimo-v2.5-free" && out.Metadata["model"] != "mimo-v2.5-free" {
+		t.Fatalf("model meta=%v", out.Metadata)
+	}
+}
+
+func TestIsUpstreamModelOrPlaceholderError_ZhBigModel(t *testing.T) {
+	body := `{"error":{"code":"1211","message":"模型不存在，请检查模型代码。"}}`
+	if !isUpstreamModelOrPlaceholderError(body) {
+		t.Fatal("expected Chinese model-not-found to be treated as model error")
+	}
+}
+
 func TestTransparentForwardNode_RedirectPolicyConfig(t *testing.T) {
 	node, err := NewTransparentForwardNode(NodeConfig{CustomConfig: map[string]interface{}{
 		"redirect_policy": "always",
@@ -651,5 +774,226 @@ func TestTransparentForwardNode_RedirectPolicyConfig(t *testing.T) {
 	dtf := def.(*TransparentForwardNode)
 	if dtf.RedirectPolicy != "never" || dtf.MaxRedirects != 5 {
 		t.Fatalf("defaults policy=%s max=%d", dtf.RedirectPolicy, dtf.MaxRedirects)
+	}
+}
+
+type sequenceHTTPClient struct {
+	calls  int
+	bodies []string
+	resps  []struct {
+		status int
+		body   string
+	}
+}
+
+func (s *sequenceHTTPClient) Do(req *http.Request) (*http.Response, error) {
+	if req.Body != nil {
+		b, _ := io.ReadAll(req.Body)
+		s.bodies = append(s.bodies, string(b))
+	}
+	idx := s.calls
+	s.calls++
+	if idx >= len(s.resps) {
+		idx = len(s.resps) - 1
+	}
+	r := s.resps[idx]
+	return &http.Response{
+		StatusCode: r.status,
+		Header:     http.Header{"Content-Type": []string{"application/json"}},
+		Body:       io.NopCloser(strings.NewReader(r.body)),
+	}, nil
+}
+
+func TestTransparentForwardNode_BillingFallbackRetriesFreeModel(t *testing.T) {
+	prevCfg := config.Get()
+	config.Set(&config.Config{
+		Proxy: config.ProxyConfig{
+			DefaultBackendID:  "zen",
+			DefaultModel:      "gpt-5.6-luna",
+			FallbackBackendID: "zen",
+			FallbackModel:     "mimo-v2.5-free",
+		},
+	})
+	t.Cleanup(func() { config.Set(prevCfg) })
+
+	prevEP := ResolveBackendEndpoint
+	t.Cleanup(func() { ResolveBackendEndpoint = prevEP })
+	ResolveBackendEndpoint = func(backendID string) (*BackendEndpoint, error) {
+		return &BackendEndpoint{BaseURL: "https://api.example.com/v1", APIKey: "sk-test"}, nil
+	}
+
+	seq := &sequenceHTTPClient{
+		resps: []struct {
+			status int
+			body   string
+		}{
+			{401, `{"error":{"type":"CreditsError","message":"Insufficient balance"}}`},
+			{200, `{"id":"ok","choices":[{"message":{"content":"free-ok"}}]}`},
+		},
+	}
+	broker := &mockCapabilityBroker{httpClient: seq}
+
+	node, err := NewTransparentForwardNode(NodeConfig{
+		Backend: "{{system.default_backend}}",
+		Model:   "{{system.default_model}}",
+		CustomConfig: map[string]interface{}{
+			"route_policy": "fixed",
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	tf := node.(*TransparentForwardNode)
+	tf.BaseNode.id = "forward"
+	tf.SetCapabilityBroker(broker)
+
+	out, err := tf.Execute(context.Background(), &NodeInput{
+		Metadata: map[string]interface{}{
+			"request_path":     "/v1/chat/completions",
+			"raw_request_body": `{"model":"gpt-5.6-luna","messages":[{"role":"user","content":"hi"}]}`,
+		},
+	})
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if seq.calls != 2 {
+		t.Fatalf("calls=%d want 2", seq.calls)
+	}
+	if !strings.Contains(seq.bodies[1], "mimo-v2.5-free") {
+		t.Fatalf("fallback body model missing: %s", seq.bodies[1])
+	}
+	if out.Metadata["billing_fallback_used"] != true {
+		t.Fatalf("metadata=%v", out.Metadata)
+	}
+}
+
+func TestBillingFallbackCandidates_IgnoresResolvedFreeWhenBodyStillPaid(t *testing.T) {
+	mgr := backend.NewManager()
+	_ = mgr.Add(&backend.BackendConfig{
+		ID:      "zen",
+		Name:    "Zen",
+		Type:    "openai",
+		Enabled: true,
+		SupportedModels: []backend.ModelMapping{
+			{RequestedModel: "deepseek-v4-flash-free", ActualModel: "deepseek-v4-flash-free"},
+			{RequestedModel: "gpt-5.6-luna", ActualModel: "gpt-5.6-luna"},
+		},
+	})
+	backend.SetManagerForTest(mgr)
+	t.Cleanup(func() { backend.SetManagerForTest(nil) })
+
+	// 模拟：resolvedModel 已是 free，但 body 仍是付费 —— free 不得进入 failed 集合
+	failed := map[string]bool{"gpt-5.6-luna": true}
+	cands := billingFallbackCandidates("zen", failed)
+	found := false
+	for _, c := range cands {
+		if c.model == "deepseek-v4-flash-free" && c.backendID == "zen" {
+			found = true
+		}
+		if strings.Contains(c.model, "{{") || strings.Contains(c.backendID, "{{") {
+			t.Fatalf("placeholder leaked into candidates: %#v", c)
+		}
+	}
+	if !found {
+		t.Fatalf("expected free-tier candidate, got %#v", cands)
+	}
+}
+
+func TestTransparentForwardNode_BillingFallbackPicksFreeTierWhenUnset(t *testing.T) {
+	prevCfg := config.Get()
+	config.Set(&config.Config{
+		Proxy: config.ProxyConfig{
+			DefaultBackendID: "zen",
+			DefaultModel:     "gpt-5.4-nano",
+			// FallbackModel 未配置：应从 SupportedModels 挑选 *-free
+		},
+	})
+	t.Cleanup(func() { config.Set(prevCfg) })
+
+	mgr := backend.NewManager()
+	_ = mgr.Add(&backend.BackendConfig{
+		ID:      "zen",
+		Name:    "Zen",
+		Type:    "openai",
+		Enabled: true,
+		SupportedModels: []backend.ModelMapping{
+			{RequestedModel: "gpt-5.4-nano", ActualModel: "gpt-5.4-nano"},
+			{RequestedModel: "mimo-v2.5-free", ActualModel: "mimo-v2.5-free"},
+		},
+	})
+	backend.SetManagerForTest(mgr)
+	t.Cleanup(func() { backend.SetManagerForTest(nil) })
+
+	prevEP := ResolveBackendEndpoint
+	t.Cleanup(func() { ResolveBackendEndpoint = prevEP })
+	ResolveBackendEndpoint = func(backendID string) (*BackendEndpoint, error) {
+		return &BackendEndpoint{BaseURL: "https://api.example.com/v1", APIKey: "sk-test"}, nil
+	}
+
+	seq := &sequenceHTTPClient{
+		resps: []struct {
+			status int
+			body   string
+		}{
+			{401, `{"error":{"type":"CreditsError","message":"Insufficient balance"}}`},
+			{200, `{"id":"ok"}`},
+		},
+	}
+	broker := &mockCapabilityBroker{httpClient: seq}
+	node, err := NewTransparentForwardNode(NodeConfig{
+		Backend: "zen",
+		Model:   "gpt-5.4-nano",
+		CustomConfig: map[string]interface{}{
+			"route_policy": "fixed",
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	tf := node.(*TransparentForwardNode)
+	tf.SetCapabilityBroker(broker)
+
+	out, err := tf.Execute(context.Background(), &NodeInput{
+		Metadata: map[string]interface{}{
+			"request_path":     "/v1/chat/completions",
+			"raw_request_body": `{"model":"gpt-5.4-nano","messages":[{"role":"user","content":"hi"}]}`,
+		},
+	})
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if !strings.Contains(seq.bodies[1], "mimo-v2.5-free") {
+		t.Fatalf("expected free-tier rewrite, body=%s", seq.bodies[1])
+	}
+	if out.Metadata["billing_fallback_used"] != true {
+		t.Fatal("expected billing_fallback_used")
+	}
+}
+
+func TestTransparentForwardNode_Plain401AuthStillPassthrough(t *testing.T) {
+	client := &mockHTTPClient{
+		status: 401,
+		body:   `{"error":"invalid_api_key"}`,
+	}
+	broker := &mockCapabilityBroker{httpClient: client}
+	node, err := NewTransparentForwardNode(NodeConfig{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	tf := node.(*TransparentForwardNode)
+	tf.SetCapabilityBroker(broker)
+
+	out, err := tf.Execute(context.Background(), &NodeInput{
+		Metadata: map[string]interface{}{
+			"target_url":       "https://api.example.com",
+			"request_path":     "/v1/chat/completions",
+			"raw_request_body": `{"model":"x","messages":[]}`,
+		},
+	})
+	if err != nil {
+		t.Fatalf("plain 401 should passthrough, got err=%v", err)
+	}
+	if out.Metadata["status_code"] != 401 {
+		t.Fatalf("status_code=%v", out.Metadata["status_code"])
 	}
 }

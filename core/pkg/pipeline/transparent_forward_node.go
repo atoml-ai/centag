@@ -184,13 +184,230 @@ func (n *TransparentForwardNode) Execute(ctx context.Context, input *NodeInput) 
 		return nil, fmt.Errorf("transparent_forward node %q: read response: %w", n.id, err)
 	}
 
+	bodyStr := string(respBody)
+
+	// 余额/额度不足：先尝试系统 fallback_model（同后端免费档或备用后端），再向上返回 error 供 FallbackGroups。
+	// 纯鉴权 401/403（无计费关键词）仍透传给客户端。
+	if config.IsBillingOrQuotaFailure(resp.StatusCode, bodyStr) {
+		if out, ok := n.retryWithSystemBillingFallback(ctx, client, method, meta, body, backendID, resolvedModel, clientModel, requestPath, responsesToChat); ok {
+			return out, nil
+		}
+		return nil, fmt.Errorf("transparent_forward node %q: upstream returned %d: %s", n.id, resp.StatusCode, truncateBody(respBody, 512))
+	}
+
 	// 对可重试的 HTTP 错误码返回 error，触发上层重试/降级逻辑。
-	// 不可重试的错误码（如 401/403）仍透传给客户端。
 	if config.IsRetryableStatusCode(resp.StatusCode) {
 		return nil, fmt.Errorf("transparent_forward node %q: upstream returned %d: %s", n.id, resp.StatusCode, truncateBody(respBody, 512))
 	}
 
-	contentType := resp.Header.Get("Content-Type")
+	// 模型不存在 / 占位符未解析等：必须返回 error，避免策略降级把错误 JSON 当成成功。
+	if resp.StatusCode >= 400 && isUpstreamModelOrPlaceholderError(bodyStr) {
+		return nil, fmt.Errorf("transparent_forward node %q: upstream returned %d: %s", n.id, resp.StatusCode, truncateBody(respBody, 512))
+	}
+
+	return n.buildTransparentOutput(targetURL, resp.StatusCode, resp.Header.Get("Content-Type"), respBody, backendID, resolvedModel, clientModel, responsesToChat, nil), nil
+}
+
+func isUpstreamModelOrPlaceholderError(body string) bool {
+	lower := strings.ToLower(body)
+	if strings.Contains(lower, "modelerror") ||
+		strings.Contains(lower, "model_not_found") ||
+		strings.Contains(lower, "is not supported") ||
+		strings.Contains(lower, "does not exist") ||
+		strings.Contains(body, "模型不存在") ||
+		strings.Contains(body, "模型代码") ||
+		strings.Contains(lower, `"code":"1211"`) ||
+		strings.Contains(lower, `"code": 1211`) {
+		return true
+	}
+	// 字面量占位符被当成模型名发给上游
+	return strings.Contains(body, "{{requested_model}}") ||
+		strings.Contains(body, "{{system.fallback_model}}") ||
+		strings.Contains(body, "{{system.default_model}}")
+}
+
+// retryWithSystemBillingFallback 在余额/额度失败时按候选链再打：配置的 fallback_* → 同后端免费档模型。
+func (n *TransparentForwardNode) retryWithSystemBillingFallback(
+	ctx context.Context,
+	client HTTPClient,
+	method string,
+	meta map[string]interface{},
+	body []byte,
+	primaryBackend, primaryModel, clientModel, requestPath string,
+	responsesToChat bool,
+) (*NodeOutput, bool) {
+	// 只把「实际发出去的 model」标为失败。resolvedModel 可能已是免费档，但 body 仍是付费名。
+	failedModels := map[string]bool{}
+	bodyModel := extractJSONModel(body)
+	for _, m := range []string{bodyModel, clientModel} {
+		if t := strings.TrimSpace(m); t != "" {
+			failedModels[strings.ToLower(t)] = true
+		}
+	}
+	if t := strings.TrimSpace(primaryModel); t != "" && strings.EqualFold(t, bodyModel) {
+		failedModels[strings.ToLower(t)] = true
+	}
+	cands := billingFallbackCandidates(primaryBackend, failedModels)
+	if len(cands) == 0 {
+		return nil, false
+	}
+	for _, cand := range cands {
+		out, ok := n.doBillingFallbackAttempt(ctx, client, method, meta, body, primaryBackend, primaryModel, clientModel, requestPath, responsesToChat, cand.backendID, cand.model)
+		if ok {
+			return out, true
+		}
+	}
+	return nil, false
+}
+
+type billingFallbackCandidate struct {
+	backendID string
+	model     string
+}
+
+func billingFallbackCandidates(primaryBackend string, failedModels map[string]bool) []billingFallbackCandidate {
+	primaryBackend = strings.TrimSpace(primaryBackend)
+	fbBackend, fbModel := ResolveVirtualVars("{{system.fallback_backend}}", "{{system.fallback_model}}")
+	fbBackend = strings.TrimSpace(fbBackend)
+	fbModel = strings.TrimSpace(fbModel)
+	if fbBackend == "" {
+		fbBackend = primaryBackend
+	}
+
+	seen := map[string]bool{}
+	var out []billingFallbackCandidate
+	add := func(be, model string) {
+		be = strings.TrimSpace(be)
+		model = strings.TrimSpace(model)
+		if be == "" || model == "" || strings.Contains(be, "{{") || strings.Contains(model, "{{") {
+			return
+		}
+		if failedModels[strings.ToLower(model)] {
+			return
+		}
+		key := strings.ToLower(be) + "\x00" + strings.ToLower(model)
+		if seen[key] {
+			return
+		}
+		seen[key] = true
+		out = append(out, billingFallbackCandidate{backendID: be, model: model})
+	}
+
+	add(fbBackend, fbModel)
+	add(primaryBackend, pickFreeTierModel(primaryBackend))
+	if fbBackend != "" && !strings.EqualFold(fbBackend, primaryBackend) && !strings.Contains(fbBackend, "{{") {
+		add(fbBackend, pickFreeTierModel(fbBackend))
+	}
+	return out
+}
+
+func pickFreeTierModel(backendID string) string {
+	backendID = strings.TrimSpace(backendID)
+	if backendID == "" {
+		return ""
+	}
+	mgr := backend.GetManager()
+	if mgr == nil {
+		return ""
+	}
+	b, err := mgr.Get(backendID)
+	if err != nil || b == nil {
+		return ""
+	}
+	for _, m := range b.SupportedModels {
+		for _, name := range []string{m.ActualModel, m.RequestedModel} {
+			if backend.ModelHasFreeTier(name) {
+				if actual := strings.TrimSpace(m.ActualModel); actual != "" {
+					return actual
+				}
+				return strings.TrimSpace(m.RequestedModel)
+			}
+		}
+	}
+	return ""
+}
+
+func (n *TransparentForwardNode) doBillingFallbackAttempt(
+	ctx context.Context,
+	client HTTPClient,
+	method string,
+	meta map[string]interface{},
+	body []byte,
+	primaryBackend, primaryModel, clientModel, requestPath string,
+	responsesToChat bool,
+	fbBackend, fbModel string,
+) (*NodeOutput, bool) {
+	retryBody := body
+	if rewritten, ok := rewriteTransparentBodyModel(body, fbModel); ok {
+		retryBody = rewritten
+	} else if !strings.EqualFold(extractJSONModel(body), fbModel) {
+		return nil, false
+	}
+
+	targetURL, err := n.resolveTargetURL(meta, fbBackend, requestPath)
+	if err != nil || strings.TrimSpace(targetURL) == "" {
+		return nil, false
+	}
+	attemptResponsesToChat := responsesToChat
+	if strings.Contains(targetURL, "/chat/completions") {
+		if rewritten, ok := convertResponsesBodyToChatCompletions(retryBody); ok {
+			retryBody = rewritten
+			attemptResponsesToChat = true
+		}
+	}
+
+	req, err := http.NewRequestWithContext(ctx, method, targetURL, strings.NewReader(string(retryBody)))
+	if err != nil {
+		return nil, false
+	}
+	req.Header.Set("Content-Type", "application/json")
+	if auth := resolveTransparentUpstreamAuth(fbBackend, meta); auth != "" {
+		req.Header.Set("Authorization", auth)
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, false
+	}
+	defer resp.Body.Close()
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, false
+	}
+	if config.IsBillingOrQuotaFailure(resp.StatusCode, string(respBody)) || config.IsRetryableStatusCode(resp.StatusCode) || resp.StatusCode >= 400 {
+		return nil, false
+	}
+
+	fromModel := strings.TrimSpace(primaryModel)
+	if bodyModel := extractJSONModel(body); bodyModel != "" {
+		fromModel = bodyModel
+	} else if strings.TrimSpace(clientModel) != "" {
+		fromModel = strings.TrimSpace(clientModel)
+	}
+	extra := map[string]interface{}{
+		"billing_fallback_used":         true,
+		"billing_fallback_from_model":   fromModel,
+		"billing_fallback_to_model":     fbModel,
+		"billing_fallback_backend":      fbBackend,
+		"billing_fallback_from_backend": primaryBackend,
+		"fallback_from_model":           fromModel,
+		"fallback_to_model":             fbModel,
+		"fallback_used":                 true,
+	}
+	out := n.buildTransparentOutput(targetURL, resp.StatusCode, resp.Header.Get("Content-Type"), respBody, fbBackend, fbModel, clientModel, attemptResponsesToChat, extra)
+	AnnotateFallbackNotice(out)
+	return out, true
+}
+
+func (n *TransparentForwardNode) buildTransparentOutput(
+	targetURL string,
+	statusCode int,
+	contentType string,
+	respBody []byte,
+	backendID, resolvedModel, clientModel string,
+	responsesToChat bool,
+	extraMeta map[string]interface{},
+) *NodeOutput {
 	if contentType == "" {
 		contentType = "application/json"
 	}
@@ -207,7 +424,7 @@ func (n *TransparentForwardNode) Execute(ctx context.Context, input *NodeInput) 
 		"raw_passthrough": true,
 		"target_url":      targetURL,
 		"target_base_url": baseURL,
-		"status_code":     resp.StatusCode,
+		"status_code":     statusCode,
 		"content_type":    contentType,
 		"forwarded":       true,
 	}
@@ -230,32 +447,40 @@ func (n *TransparentForwardNode) Execute(ctx context.Context, input *NodeInput) 
 	if backendID != "" {
 		outMeta["backend_id"] = backendID
 	}
+	for k, v := range extraMeta {
+		outMeta[k] = v
+	}
 
 	content := string(respBody)
 	var toolCalls []ToolCall
 	finishReason := ""
-	// After Responses→Chat rewrite, upstream returns chat.completion(.chunk) SSE/JSON.
-	// OpenCode expects Responses SSE — flatten text/tool_calls and let the protocol
-	// formatter rebuild the Responses envelope (disable raw passthrough).
-	if responsesToChat && resp.StatusCode < 400 {
+	reasoning := ""
+	if responsesToChat && statusCode < 400 {
+		// 无论是否抽到正文，都必须关闭透传：否则 chat.completion SSE 会原样打给
+		// /v1/responses 客户端，OpenCode 等不到 response.* 事件会一直转圈。
 		extracted := extractChatCompletionResult(respBody)
-		if extracted.Text != "" || len(extracted.ToolCalls) > 0 {
-			content = extracted.Text
-			toolCalls = extracted.ToolCalls
-			finishReason = extracted.FinishReason
-			outMeta["raw_passthrough"] = false
-			outMeta["responses_to_chat"] = true
-			contentType = "text/plain"
-			outMeta["content_type"] = contentType
+		content = extracted.Text
+		reasoning = extracted.Reasoning
+		toolCalls = extracted.ToolCalls
+		finishReason = extracted.FinishReason
+		outMeta["raw_passthrough"] = false
+		outMeta["responses_to_chat"] = true
+		contentType = "text/plain"
+		outMeta["content_type"] = contentType
+		// 部分模型（如 deepseek）流式主要走 reasoning_content；正文为空时用推理文本兜底，避免空回复。
+		if strings.TrimSpace(content) == "" && strings.TrimSpace(reasoning) != "" {
+			content = reasoning
+			reasoning = ""
 		}
 	}
 
 	return &NodeOutput{
-		Content:      content,
-		Metadata:     outMeta,
-		ToolCalls:    toolCalls,
-		FinishReason: finishReason,
-	}, nil
+		Content:          content,
+		Metadata:         outMeta,
+		ToolCalls:        toolCalls,
+		FinishReason:     finishReason,
+		ReasoningContent: reasoning,
+	}
 }
 
 // resolveTargetURL 解析上游 URL。
@@ -303,7 +528,9 @@ func (n *TransparentForwardNode) resolveTransparentRoute(
 	pinnedBackend := strings.TrimSpace(stringMeta(meta, "backend_id"))
 
 	if n.FixedEgress {
-		backendID = resolveFallbackBackendID(n.config.Backend, pinnedBackend)
+		// 直连固定出站：只用节点 / 系统默认后端与模型，忽略请求头或 Agent 注入的 X-Backend-ID。
+		// 否则会出现「默认 opencode-zen + mimo-v2.5-free，却打到 bigmodel-ai → 模型不存在」。
+		backendID = resolveFallbackBackendID(n.config.Backend, "")
 		if backendID != "" {
 			resolvedModel, outBody = applyFallbackModel(outBody, backendID, n.config.Model)
 		}
@@ -346,11 +573,11 @@ func resolveFallbackBackendID(nodeBackend, pinnedBackend string) string {
 		strings.TrimSpace(nodeBackend),
 	}
 	for _, c := range candidates {
-		if c == "" || c == "{{system.default_backend}}" {
-			resolved, _ := ResolveVirtualVars("{{system.default_backend}}", "")
+		if c == "" || strings.Contains(c, "{{system.") {
+			resolved, _ := ResolveVirtualVars(c, "")
 			c = strings.TrimSpace(resolved)
 		}
-		if c != "" && c != "{{system.default_backend}}" {
+		if c != "" && !strings.Contains(c, "{{system.") {
 			return c
 		}
 	}
@@ -387,11 +614,33 @@ func applyFallbackModel(body []byte, backendID, nodeModel string) (resolved stri
 		}
 	}
 	if resolved != "" {
-		if rewritten, ok := rewriteTransparentBodyModel(out, resolved); ok {
-			out = rewritten
-		}
+		out = forceBodyModel(out, resolved)
 	}
 	return resolved, out
+}
+
+// forceBodyModel 确保 JSON body 的 model 字段被改写；rewrite 失败时强制写入。
+func forceBodyModel(body []byte, model string) []byte {
+	model = strings.TrimSpace(model)
+	if model == "" || len(body) == 0 {
+		return body
+	}
+	if rewritten, ok := rewriteTransparentBodyModel(body, model); ok {
+		return rewritten
+	}
+	if strings.EqualFold(extractJSONModel(body), model) {
+		return body
+	}
+	var raw map[string]interface{}
+	if err := json.Unmarshal(body, &raw); err != nil || raw == nil {
+		return body
+	}
+	raw["model"] = model
+	encoded, err := json.Marshal(raw)
+	if err != nil {
+		return body
+	}
+	return encoded
 }
 
 func matchClientModelAcrossBackends(clientModel string) (*backend.BackendConfig, *backend.ModelMapping) {

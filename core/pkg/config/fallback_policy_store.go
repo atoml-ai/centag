@@ -75,8 +75,58 @@ func (s *FallbackPolicyStore) Load() error {
 		return s.saveLocked()
 	}
 
+	// 内置策略规则由代码维护：覆盖同 ID 旧规则（例如仍含 {{requested_model}} 的过期配置）
+	if s.mergeBuiltinPoliciesLocked() {
+		logger.Info("FallbackPolicyStore: builtin policies refreshed from code defaults")
+		return s.saveLocked()
+	}
+
 	logger.Infof("FallbackPolicyStore: loaded %d policies", len(policies))
 	return nil
+}
+
+// mergeBuiltinPoliciesLocked 用代码内默认规则刷新内置策略，保留用户对 Enabled 的选择。
+func (s *FallbackPolicyStore) mergeBuiltinPoliciesLocked() bool {
+	defaults := builtinFallbackPolicies()
+	changed := false
+	for id, def := range defaults {
+		existing := s.policies[id]
+		if existing == nil {
+			cp := *def
+			s.policies[id] = &cp
+			changed = true
+			continue
+		}
+		if !fallbackRulesEqual(existing.Rules, def.Rules) ||
+			existing.Strategy != def.Strategy ||
+			existing.Name != def.Name ||
+			existing.Description != def.Description {
+			enabled := existing.Enabled
+			cp := *def
+			cp.Enabled = enabled
+			cp.CreatedAt = existing.CreatedAt
+			cp.UpdatedAt = time.Now()
+			s.policies[id] = &cp
+			changed = true
+		}
+	}
+	return changed
+}
+
+func fallbackRulesEqual(a, b []FallbackRule) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i].Priority != b[i].Priority ||
+			a[i].BackendID != b[i].BackendID ||
+			a[i].Model != b[i].Model ||
+			a[i].TimeoutSec != b[i].TimeoutSec ||
+			a[i].MaxRetries != b[i].MaxRetries {
+			return false
+		}
+	}
+	return true
 }
 
 // Save 持久化所有策略到数据库。
@@ -196,86 +246,85 @@ func (s *FallbackPolicyStore) saveLocked() error {
 	return scs.Set(ctx, KeyFallbackPolicies, string(data))
 }
 
+func builtinFallbackPolicies() map[string]*GlobalFallbackPolicy {
+	now := time.Now()
+	return map[string]*GlobalFallbackPolicy{
+		"same-model-cross-backend": {
+			ID:          "same-model-cross-backend",
+			Name:        "同模型跨后端降级",
+			Description: "当主后端返回 429/5xx 错误时，按优先级切换到其他后端，模型名保持不变",
+			Strategy:    StrategySameModelDifferentBackend,
+			Rules: []FallbackRule{
+				{Priority: 1, BackendID: "{{system.default_backend}}", Model: "{{requested_model}}"},
+			},
+			Enabled:   true,
+			CreatedAt: now,
+			UpdatedAt: now,
+		},
+		"same-backend-cross-model": {
+			ID:          "same-backend-cross-model",
+			Name:        "同后端跨模型降级",
+			Description: "主模型失败（含余额不足）时优先 system.fallback_model，再试 fallback_backend",
+			Strategy:    StrategySameBackendDifferentModel,
+			Rules: []FallbackRule{
+				{Priority: 1, BackendID: "{{system.default_backend}}", Model: "{{system.fallback_model}}"},
+				{Priority: 2, BackendID: "{{system.fallback_backend}}", Model: "{{system.fallback_model}}"},
+				{Priority: 3, BackendID: "{{system.default_backend}}", Model: "{{system.default_model}}"},
+			},
+			Enabled:   true,
+			CreatedAt: now,
+			UpdatedAt: now,
+		},
+		"openai-series": {
+			ID:          "openai-series",
+			Name:        "OpenAI 系列降级",
+			Description: "GPT-4o → GPT-4o-mini → GPT-3.5-turbo 逐级降级",
+			Strategy:    StrategySameBackendDifferentModel,
+			Rules: []FallbackRule{
+				{Priority: 1, BackendID: "openai", Model: "gpt-4o"},
+				{Priority: 2, BackendID: "openai", Model: "gpt-4o-mini"},
+				{Priority: 3, BackendID: "openai", Model: "gpt-3.5-turbo"},
+			},
+			Enabled:   false,
+			CreatedAt: now,
+			UpdatedAt: now,
+		},
+		"claude-series": {
+			ID:          "claude-series",
+			Name:        "Claude 系列降级",
+			Description: "Claude Sonnet → Claude Haiku 逐级降级",
+			Strategy:    StrategySameBackendDifferentModel,
+			Rules: []FallbackRule{
+				{Priority: 1, BackendID: "anthropic", Model: "claude-sonnet-4-20250514"},
+				{Priority: 2, BackendID: "anthropic", Model: "claude-3-5-haiku-20241022"},
+			},
+			Enabled:   false,
+			CreatedAt: now,
+			UpdatedAt: now,
+		},
+		"local-fallback": {
+			ID:          "local-fallback",
+			Name:        "本地 Ollama 兜底",
+			Description: "远程后端全部不可用时，降级到本地 Ollama 模型",
+			Strategy:    StrategyCustomChain,
+			Rules: []FallbackRule{
+				{Priority: 1, BackendID: "{{system.default_backend}}", Model: "{{requested_model}}"},
+				{Priority: 2, BackendID: "ollama-local", Model: "llama3.1:latest"},
+			},
+			Enabled:   false,
+			CreatedAt: now,
+			UpdatedAt: now,
+		},
+	}
+}
+
 // initDefaultPolicies 初始化默认降级策略（在持有写锁时调用）。
 func (s *FallbackPolicyStore) initDefaultPolicies() {
-	now := time.Now()
 	s.policies = make(map[string]*GlobalFallbackPolicy)
-
-	// 策略1：同模型跨后端（429/5xx 时自动切换后端）
-	s.policies["same-model-cross-backend"] = &GlobalFallbackPolicy{
-		ID:          "same-model-cross-backend",
-		Name:        "同模型跨后端降级",
-		Description: "当主后端返回 429/5xx 错误时，按优先级切换到其他后端，模型名保持不变",
-		Strategy:    StrategySameModelDifferentBackend,
-		Rules: []FallbackRule{
-			{Priority: 1, BackendID: "{{system.default_backend}}", Model: "{{requested_model}}"},
-		},
-		Enabled:   true,
-		CreatedAt: now,
-		UpdatedAt: now,
+	for id, p := range builtinFallbackPolicies() {
+		cp := *p
+		s.policies[id] = &cp
 	}
-
-	// 策略2：同后端跨模型（主模型不可用时降级到同后端其他模型）
-	s.policies["same-backend-cross-model"] = &GlobalFallbackPolicy{
-		ID:          "same-backend-cross-model",
-		Name:        "同后端跨模型降级",
-		Description: "当主模型不可用时，降级到同一后端的其他模型",
-		Strategy:    StrategySameBackendDifferentModel,
-		Rules: []FallbackRule{
-			{Priority: 1, BackendID: "{{system.default_backend}}", Model: "{{requested_model}}"},
-			{Priority: 2, BackendID: "{{system.default_backend}}", Model: "{{system.default_model}}"},
-		},
-		Enabled:   true,
-		CreatedAt: now,
-		UpdatedAt: now,
-	}
-
-	// 策略3：OpenAI 系列降级（GPT-4o → GPT-4o-mini → GPT-3.5-turbo）
-	s.policies["openai-series"] = &GlobalFallbackPolicy{
-		ID:          "openai-series",
-		Name:        "OpenAI 系列降级",
-		Description: "GPT-4o → GPT-4o-mini → GPT-3.5-turbo 逐级降级",
-		Strategy:    StrategySameBackendDifferentModel,
-		Rules: []FallbackRule{
-			{Priority: 1, BackendID: "openai", Model: "gpt-4o"},
-			{Priority: 2, BackendID: "openai", Model: "gpt-4o-mini"},
-			{Priority: 3, BackendID: "openai", Model: "gpt-3.5-turbo"},
-		},
-		Enabled:   false, // 默认禁用，用户按需启用
-		CreatedAt: now,
-		UpdatedAt: now,
-	}
-
-	// 策略4：Claude 系列降级
-	s.policies["claude-series"] = &GlobalFallbackPolicy{
-		ID:          "claude-series",
-		Name:        "Claude 系列降级",
-		Description: "Claude Sonnet → Claude Haiku 逐级降级",
-		Strategy:    StrategySameBackendDifferentModel,
-		Rules: []FallbackRule{
-			{Priority: 1, BackendID: "anthropic", Model: "claude-sonnet-4-20250514"},
-			{Priority: 2, BackendID: "anthropic", Model: "claude-3-5-haiku-20241022"},
-		},
-		Enabled:   false,
-		CreatedAt: now,
-		UpdatedAt: now,
-	}
-
-	// 策略5：本地兜底（远程全部失败时降级到本地 Ollama）
-	s.policies["local-fallback"] = &GlobalFallbackPolicy{
-		ID:          "local-fallback",
-		Name:        "本地 Ollama 兜底",
-		Description: "远程后端全部不可用时，降级到本地 Ollama 模型",
-		Strategy:    StrategyCustomChain,
-		Rules: []FallbackRule{
-			{Priority: 1, BackendID: "{{system.default_backend}}", Model: "{{requested_model}}"},
-			{Priority: 2, BackendID: "ollama-local", Model: "llama3.1:latest"},
-		},
-		Enabled:   false,
-		CreatedAt: now,
-		UpdatedAt: now,
-	}
-
 	logger.Infof("FallbackPolicyStore: initialized %d default policies", len(s.policies))
 }
 

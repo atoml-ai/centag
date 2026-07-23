@@ -67,6 +67,9 @@ func DefaultRetryableErrorCodes() []string {
 		"server_error",
 		"timeout",
 		"insufficient_quota",
+		"insufficient_credits",
+		"CreditsError",
+		"not_enough_balance",
 		"overloaded",
 		"capacity_exceeded",
 	}
