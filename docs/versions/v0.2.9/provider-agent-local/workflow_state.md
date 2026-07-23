@@ -64,4 +64,5 @@
 | 2026-07-23 | 账户池挂在 BackendConfig，复用 per-backend 熔断器 | 最小侵入；与现有 FallbackBackends 互补 | AI |
 | 2026-07-23 | Provider 预设扩充至 40+，对齐 cc-switch 常用列表 | 降低个人用户配置门槛 | AI |
 | 2026-07-23 | 新增 G6（Raw 流水线优化）、G7（前端可配置性与入口优化） | 用户要求：raw 流水线只做转发 + 前端入口按使用频率调整 | 用户 |
+| 2026-07-23 | **G6 改向**：取消 raw-forward，改为 fixed-egress（`#j` 跳板）；`#d/#t/#j` 共用 `transparent_forward` 开关 | 产品确认 raw 无独立场景；三条出站流水线统一节点 | 用户 |
 | 2026-07-23 | Agent Setup 提升为一级菜单，置于本机代理之后 | 使用频率高于存储/系统配置，用户快速访问 | AI |

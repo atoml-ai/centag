@@ -325,8 +325,8 @@ func (s *Server) forwardToBackend(w http.ResponseWriter, r *http.Request) error 
 		req.Header.Set("X-Forwarded-For", r.RemoteAddr)
 		req.Header.Set("X-Real-IP", getClientIP(r))
 		req.Header.Set("X-Proxy-Type", "host-hijack")
-		// 触发 Centag #raw 原始转发流水线（按 X-Original-Host 解析上游）
-		req.Header.Set(proxy.HeaderCentagResolvedMode, "raw-forward")
+		// 触发 Centag #j 跳板模式（固定出站）流水线
+		req.Header.Set(proxy.HeaderCentagResolvedMode, "fixed-egress")
 	}
 
 	// 自定义ModifyResponse修改响应

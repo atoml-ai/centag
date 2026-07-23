@@ -24,9 +24,9 @@ const (
 	// 对应: PresetMode=transparent-fast, ProxyMode=#tf (type=transparent-fast)
 	ModeTransparentFast ExecutionMode = "transparent-fast"
 
-	// ModeRawForward 原始 HTTP 转发（高级）：X-Target-URL / hostproxy
-	// 对应: PresetMode=raw-forward, ProxyMode=#raw
-	ModeRawForward ExecutionMode = "raw-forward"
+	// ModeFixedEgress 跳板模式（固定出站）：固定走默认后端/模型，不做跨后端模型匹配
+	// 对应: PresetMode=fixed-egress, ProxyMode=#j
+	ModeFixedEgress ExecutionMode = "fixed-egress"
 
 	// ModeSystemScheduling 系统调度模式
 	// 对应: PresetMode=system-scheduling, ProxyMode=#s (type=schedule)
@@ -135,7 +135,7 @@ var ModeKey = map[string]ExecutionMode{
 	"#p":       ModePipeline,
 	"#t":       ModeTransparentProxy,
 	"#tf":      ModeTransparentFast,
-	"#raw":     ModeRawForward,
+	"#j":       ModeFixedEgress,
 	"#f":       ModeFallback,
 	"#a":       ModeAuditMode,
 	"#o":       ModeOptimizeMode,
@@ -183,8 +183,7 @@ var ModeType = map[string]ExecutionMode{
 	"transparent":           ModeTransparentProxy,
 	"transparent-proxy":     ModeTransparentProxy,
 	"transparent-fast":      ModeTransparentFast,
-	"raw-forward":           ModeRawForward,
-	"raw":                   ModeRawForward,
+	"fixed-egress":          ModeFixedEgress,
 	"fallback":              ModeFallback,
 	"fallback-mode":         ModeFallback,
 	"audit":                 ModeAuditMode,
@@ -224,8 +223,8 @@ func (m ExecutionMode) String() string {
 		return "透明模式"
 	case ModeTransparentFast:
 		return "透明模式（快）"
-	case ModeRawForward:
-		return "原始HTTP转发"
+	case ModeFixedEgress:
+		return "跳板模式"
 	case ModeSystemScheduling:
 		return "系统调度"
 	case ModeModelMatching:
@@ -280,8 +279,8 @@ func (m ExecutionMode) Description() string {
 		return "直连已配置后端，不注入网关 system prompt，原样保留客户端 messages"
 	case ModeTransparentFast:
 		return "与透明模式相同：不注入 system prompt 的 generator 直连"
-	case ModeRawForward:
-		return "高级：HTTP 原样转发到 X-Target-URL 或 hostproxy 上游"
+	case ModeFixedEgress:
+		return "固定出站跳板：走系统默认后端/模型（或显式 X-Backend-ID），不做跨后端模型匹配"
 	case ModeSystemScheduling:
 		return "根据负载和权重自动选择后端"
 	case ModeModelMatching:
@@ -344,8 +343,8 @@ func (m ExecutionMode) GetType() string {
 		return "transparent"
 	case ModeTransparentFast:
 		return "transparent-fast"
-	case ModeRawForward:
-		return "raw-forward"
+	case ModeFixedEgress:
+		return "fixed-egress"
 	case ModeFallback:
 		return "fallback"
 	case ModeAuditMode:
@@ -376,7 +375,7 @@ func (m ExecutionMode) GetType() string {
 // IsValid 检查模式是否有效
 func (m ExecutionMode) IsValid() bool {
 	switch m {
-	case ModeDirectBackend, ModeTransparentProxy, ModeTransparentFast, ModeRawForward, ModeSystemScheduling,
+	case ModeDirectBackend, ModeTransparentProxy, ModeTransparentFast, ModeFixedEgress, ModeSystemScheduling,
 		ModeModelMatching, ModeIntentClassification, ModePipeline, ModeFallback,
 		ModeAuditMode, ModeOptimizeMode, ModeAggregator, ModeRouter, ModeTranslate,
 		ModeCacheHit, ModeCacheMode, ModeCustom, ModeMem0, ModeCodingAgent:
@@ -419,7 +418,7 @@ func AllModes() []ExecutionMode {
 		ModeDirectBackend,
 		ModeTransparentProxy,
 		ModeTransparentFast,
-		ModeRawForward,
+		ModeFixedEgress,
 		ModeSystemScheduling,
 		ModeModelMatching,
 		ModeIntentClassification,

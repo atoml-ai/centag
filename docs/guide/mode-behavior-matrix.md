@@ -16,7 +16,7 @@
 | direct-backend | #d | 直连后端（注入 system prompt） | `ModeDirectBackend` | direct-backend | **pipeline-only** ✅ |
 | transparent-proxy | #t | 透明模式（不注入 system prompt） | `ModeTransparentProxy` | transparent-proxy | **pipeline-only** ✅ |
 | transparent-fast | #tf | 透明模式（快，同 #t） | `ModeTransparentFast` | transparent-fast | **pipeline-only** ✅ |
-| raw-forward | #raw | 原始 HTTP 转发（高级） | `ModeRawForward` | raw-forward | **pipeline-only** ✅ |
+| fixed-egress | #j | 跳板模式（固定出站） | `ModeFixedEgress` | fixed-egress | **pipeline-only** ✅ |
 | model-matching | #m | 模型匹配 | `ModeModelMatching` | model-matching | **pipeline-only** ✅ |
 | intent-classification | #c | 意图分类（已合并→router-mode） | `ModeIntentClassification` | router-mode | **pipeline-only** ✅（等同于#r） |
 | audit-mode | #a | 审核模式 | `ModeAuditMode` | audit-mode | **pipeline-only** ✅ |
@@ -41,7 +41,7 @@
 | #s (智能调度) | 无 | 无 | 直接透传 | 根据关键词选择路径 |
 | #d (直连后端) | 无 | 可选 `X-Backend-*` | 注入网关 system prompt | 覆盖客户端 system |
 | #t / #tf (透明) | 无 | 无（不需要 Target-URL） | 不注入 system prompt | 保留客户端 messages |
-| #raw (原始转发) | 无 | `X-Target-URL` / hostproxy | HTTP 原样透传 | 非聊天默认 |
+| #j (跳板模式) | 无 | 可选 `X-Backend-ID` | 固定出站，不注入 system | 不做跨后端模型匹配 |
 | #m (模型匹配) | 无 | 无 | 直接透传 | 路由决策前预处理 |
 | #c (意图分类) | 无 | 无 | 直接透传 | 分类决策前预处理 |
 | #a (审核) | 无 | `X-Auditor-Backend-ID` | 构建审核 Prompt | executor → auditor 两阶段 |
@@ -62,7 +62,7 @@
 | #s | 1-3 | 分支选择 → 生成 | 支持分支并发 | 条件依赖 |
 | #d | 1 | 直接生成 | 无 | 无 |
 | #t / #tf | 1 | generator（无 system prompt） | 无 | 无 |
-| #raw | 1 | transparent_forward | 无 | 需 Target-URL |
+| #j | 1 | transparent_forward（route_policy=fixed） | 无 | 固定默认后端 |
 | #m | 1+N | 路由 → 条件分支生成 | 支持分支并发 | 依赖路由器 |
 | #c | 1+N | 分类 → 条件分支处理 | 支持分支并发 | 依赖分类器 |
 | #a | 2 | 生成 → 审核 | 串行 | executor → auditor |
@@ -91,7 +91,7 @@
 | #s | `X-Proxy-Mode: smart-scheduling` | `X-Smart-Scheduling-Mode-Path: pipeline-template` | 无 | `req.Stream` 驱动 |
 | #d | `X-Proxy-Mode: direct-backend` | `X-Direct-Backend-Mode-Path: pipeline-template` | 无 | `req.Stream` 驱动 |
 | #t / #tf | `X-Proxy-Mode: transparent-proxy` | `X-Transparent-Proxy-Mode-Path: pipeline-template` | 无 | `req.Stream` 驱动 |
-| #raw | `X-Proxy-Mode: raw-forward` | `X-Raw-Forward-Mode-Path: pipeline-template` | 无 | `req.Stream` 驱动 |
+| #j | `X-Proxy-Mode: fixed-egress` | `X-Fixed-Egress-Mode-Path: pipeline-template` | 无 | `req.Stream` 驱动 |
 | #m | `X-Proxy-Mode: model-matching` | `X-Model-Matching-Mode-Path: pipeline-template` | `selected_model` | `req.Stream` 驱动 |
 | #c | `X-Proxy-Mode: intent-classification` | `X-Intent-Classification-Mode-Path: pipeline-template` | `intent`, `confidence` | `req.Stream` 驱动 |
 | #a | `X-Proxy-Mode: audit-mode` | `X-Audit-Mode-Path: pipeline-template` | `audit_feedback` | `req.Stream` 驱动 |
@@ -112,7 +112,7 @@
 | #s | 降级到默认路径 | 默认路径兜底 | 错误透传 | 自动切换 |
 | #d | 返回错误 | 超时返回错误 | 错误透传 | 无 |
 | #t / #tf | 返回错误 | 超时返回错误 | 错误透传 | 无 |
-| #raw | 返回错误 | 超时返回错误 | 错误透传 | 无 |
+| #j | 返回错误 | 超时返回错误 | 错误透传 | 无 |
 | #m | 返回错误 | 默认路由兜底 | 错误透传 | 自动切换默认 |
 | #c | 返回错误 | 默认处理器兜底 | 错误透传 | 自动切换默认 |
 | #a | 跳过审核返回原结果 | 跳过审核返回原结果 | 温和失败 | bypass_on_error |
@@ -156,7 +156,7 @@
 |------|-------------|-------------|
 | #d | X-Backend-Name | X-Backend-ID |
 | #t / #tf | （同直连路径，可选后端头） | 无 Target-URL |
-| #raw | X-Target-URL / hostproxy | - |
+| #j | （可选）X-Backend-ID | - |
 | #f | X-Primary-Backend-ID | X-Fallback-Backend-ID |
 | #a | X-Auditor-Backend-ID | X-Audit-Threshold |
 | #o | X-Optimizer-Backend-ID | X-BypassOnTimeout |

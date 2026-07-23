@@ -139,20 +139,19 @@ curl -X POST http://localhost:20060/v1/chat/completions \
   }'
 ```
 
-**Breaking change (v2.1)**: `#t` is no longer HTTP raw forward. Caching belongs to `cache-mode`. For raw HTTP passthrough see **Raw Forward** below.
+**Breaking change (v2.1)**: `#t` is no longer HTTP raw forward. Caching belongs to `cache-mode`. For fixed-egress jump board see **Jump Board** below.
 
-### 3b. Raw Forward Mode (`#raw`) — advanced
+### 3b. Jump Board Mode (`#j` / fixed-egress)
 
-**Description**: HTTP body passthrough via `builtin.transparent_forward`. Requires `X-Target-URL` or hostproxy (`X-Original-Host`). **Not** for normal chat clients; cannot be system default.
+**Description**: Centag acts as a fixed-egress jump board via `builtin.transparent_forward` with `route_policy=fixed`. Uses the system default backend/model (or explicit `X-Backend-ID`); no cross-backend model matching; does not inject system prompt. (Formerly `raw-forward` / `#raw` — retired.)
 
-**Shortcut**: `#raw`  
-**Template**: `config/initdata/pipeline-templates/common/raw-forward.yaml`
+**Shortcut**: `#j`  
+**Template**: `config/initdata/pipeline-templates/common/fixed-egress.yaml`
 
 ```bash
 curl -X POST http://localhost:20060/v1/chat/completions \
   -H "Content-Type: application/json" \
-  -H "X-Proxy-Mode: raw-forward" \
-  -H "X-Target-URL: https://api.openai.com/v1/chat/completions" \
+  -H "X-Proxy-Mode: fixed-egress" \
   -d '{"model":"gpt-4","messages":[{"role":"user","content":"Hello"}]}'
 ```
 
@@ -524,7 +523,7 @@ curl -X POST http://localhost:20060/v1/chat/completions \
 ```yaml
 proxy:
   enabled: true
-  default_mode: "transparent-proxy"  # 初始化默认；可选 direct-backend / smart-scheduling / raw-forward(不可作系统默认) 等
+  default_mode: "transparent-proxy"  # 初始化默认；可选 direct-backend / smart-scheduling / fixed-egress 等
   allow_header_override: true  # Allow overriding via X-Proxy-Mode header
 ```
 
@@ -544,10 +543,10 @@ cache_control:
 
 | Header | Description | Values | Required |
 |---------|-------------|---------|----------|
-| `X-Proxy-Mode` | Proxy mode selection | `transparent-proxy`, `direct-backend`, `smart-scheduling`, `raw-forward`, … | No（默认 `transparent-proxy`） |
-| `X-Backend-ID` | Backend ID for direct/transparent | Backend ID string | Optional |
+| `X-Proxy-Mode` | Proxy mode selection | `transparent-proxy`, `direct-backend`, `smart-scheduling`, `fixed-egress`, … | No（默认 `transparent-proxy`） |
+| `X-Backend-ID` | Backend ID for direct/transparent/fixed-egress | Backend ID string | Optional |
 | `X-Backend-Name` | Backend name for direct/transparent | Backend name string | Optional |
-| `X-Target-URL` | Target URL for **raw-forward** (`#raw`) | Valid HTTP/HTTPS URL | Only for raw-forward / hostproxy |
+| `X-Target-URL` | Optional target override for transparent_forward | Valid HTTP/HTTPS URL | Optional (hostproxy / advanced) |
 | `X-Cache-Read` | Cache read control | `enable`, `disable`, `true`, `false`, `1`, `0` | No (default: config) |
 | `X-Cache-Write` | Cache write control | `enable`, `disable`, `true`, `false`, `1`, `0` | No (default: config) |
 
@@ -637,13 +636,12 @@ curl -X POST http://localhost:20060/v1/chat/completions \
   }'
 ```
 
-### Example 4b: Raw forward (advanced HTTP passthrough)
+### Example 4b: Jump board / fixed-egress (`#j`)
 
 ```bash
 curl -X POST http://localhost:20060/v1/chat/completions \
   -H "Content-Type: application/json" \
-  -H "X-Proxy-Mode: raw-forward" \
-  -H "X-Target-URL: https://api.custom-llm.com/v1/chat/completions" \
+  -H "X-Proxy-Mode: fixed-egress" \
   -d '{
     "model": "custom-model",
     "messages": [
@@ -826,7 +824,7 @@ curl -X POST http://localhost:20060/v1/chat/completions \
 
 1. **Use Transparent mode** as the default for standard OpenAI-compatible clients（不注入 system prompt）
 2. **Use Direct Backend** when the gateway should inject a managed system prompt / persona
-3. **Use Raw Forward (`#raw`)** only for advanced HTTP passthrough（需 Target-URL / hostproxy）
+3. **Use Jump Board (`#j` / fixed-egress)** when you need fixed egress without cross-backend model matching
 4. **Enable Cache** for frequently repeated queries（`cache-mode`，勿与透明模式混淆）
 5. **Disable Cache Write** for unique or sensitive requests
 6. **Monitor Cache Hit Rates** to optimize performance
@@ -848,12 +846,12 @@ If cache is not being used:
 - Verify `X-Cache-Read` header is not set to `disable`
 - Check cache storage configuration (Redis, ChromaDB, etc.)
 
-### Raw Forward Not Working
+### Jump Board / Fixed Egress Not Working
 
-If `#raw` / `raw-forward` passthrough fails:
-- Ensure `X-Target-URL` header is present（或走 hostproxy 注入的 `X-Original-Host`）
-- Verify URL format (must start with http:// or https://)
-- Standard chat clients should use `transparent-proxy` / `direct-backend` instead
+If `#j` / `fixed-egress` fails:
+- Ensure a system default backend/model is configured（或显式 `X-Backend-ID`）
+- Confirm the `fixed-egress` pipeline template is loaded
+- For model matching / client-model routing use `transparent-proxy` instead
 
 ## Related Documentation
 

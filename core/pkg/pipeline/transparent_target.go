@@ -10,7 +10,7 @@ import (
 // Priority:
 //  1. explicit target_url
 //  2. configured Centag backend (system-proxy / transparent-proxy 主路径：勿打回原厂 Host)
-//  3. original_host + path（#raw / Host 劫持真透传）
+//  3. original_host + path（hostproxy Host 劫持透传）
 //
 // MITM 会带 X-Original-Host=opencode.ai 等；若优先 original_host，会用 Centag Key 打回 Zen
 // 导致 AuthError: Invalid API key，并绕过「走 Centag 后端」的出口策略。

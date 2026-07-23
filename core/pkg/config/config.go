@@ -271,16 +271,6 @@ type CircuitBreakerSettings struct {
 	MinRequestsInWindow int     `json:"min_requests_in_window"` // [+] 窗口内最小请求数（防止低流量误熔断）
 }
 
-// RawForwardConfig Raw 转发优化配置
-type RawForwardConfig struct {
-	// RedirectPolicy 重定向策略：never=不跟随（默认），always=跟随，smart=仅 GET/HEAD
-	RedirectPolicy string `json:"redirect_policy"`
-	// MaxRedirects 最大重定向次数（默认 5）
-	MaxRedirects int `json:"max_redirects"`
-	// TimeoutSec 重定向超时秒数（默认 30）
-	TimeoutSec int `json:"timeout_sec"`
-}
-
 // PipelineConfig 流水线模式配置
 type PipelineConfig struct {
 	DefaultPipeline string `json:"default_pipeline"` // 默认流水线ID

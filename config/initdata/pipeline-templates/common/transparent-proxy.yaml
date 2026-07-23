@@ -1,7 +1,9 @@
 id: transparent-proxy
 name: 透明模式
-description: 尽可能原样透传客户端请求（不注入 system prompt）；若请求指定了 model，则跨已启用后端按模型名松匹配（如 mino2.5 ≈ mino2.5 free）并优先走该后端；未指定或未命中时回落系统默认后端与模型
-version: "2.1"
+description: |
+  尽可能原样透传客户端请求（不注入 system prompt）；按客户端 model 跨已启用后端松匹配，
+  未命中时回落系统默认后端与模型。与直连/跳板共用 transparent_forward，差异在开关：route_policy=match_model。
+version: "3.0"
 shortcut_code: '#t'
 nodes:
   - id: forward
@@ -19,6 +21,10 @@ nodes:
         model: "system.default_model"
       custom_config:
         default_scheme: https
+        route_policy: match_model
+        inject_system_prompt: false
+        redirect_policy: never
+        max_redirects: 5
     timeout: 120
     retry:
       max_attempts: 0
@@ -39,6 +45,7 @@ metadata:
     - transparent_forward
     - client_model_prefer
     - loose_model_match
-  lastUpdated: '2026-07-21T00:00:00.000Z'
-  layoutVersion: '1.2'
+    - key_rewrite
+  lastUpdated: '2026-07-23T00:00:00.000Z'
+  layoutVersion: '1.3'
   template_scope: mode-id-alignment

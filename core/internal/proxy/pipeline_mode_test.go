@@ -16,20 +16,20 @@ func TestDefaultModeMappings_DiagnosticsOnly(t *testing.T) {
 	if len(defaultModeMappings) == 0 {
 		t.Fatal("expected diagnostic defaultModeMappings entries")
 	}
-	foundRaw := false
+	foundFixed := false
 	for _, mapping := range defaultModeMappings {
 		if mapping.PipelineID == "" {
 			t.Errorf("diagnostic mapping %s has empty PipelineID", mapping.Mode)
 		}
-		if mapping.Mode == ModeRawForward {
-			foundRaw = true
-			if mapping.PipelineID != "raw-forward" {
-				t.Errorf("ModeRawForward pipeline = %q, want raw-forward", mapping.PipelineID)
+		if mapping.Mode == ModeFixedEgress {
+			foundFixed = true
+			if mapping.PipelineID != "fixed-egress" {
+				t.Errorf("ModeFixedEgress pipeline = %q, want fixed-egress", mapping.PipelineID)
 			}
 		}
 	}
-	if !foundRaw {
-		t.Fatal("expected ModeRawForward in defaultModeMappings")
+	if !foundFixed {
+		t.Fatal("expected ModeFixedEgress in defaultModeMappings")
 	}
 }
 

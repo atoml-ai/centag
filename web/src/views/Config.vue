@@ -42,7 +42,7 @@
                 <el-option label="智能调度" value="smart-scheduling" />
                 <el-option label="透明模式（不注入 system prompt）" value="transparent-proxy" />
               </el-select>
-              <div class="form-tip">与 API / X-Proxy-Mode 一致：direct-backend、smart-scheduling、transparent-proxy；HTTP 透传请用 raw-forward</div>
+              <div class="form-tip">与 API / X-Proxy-Mode 一致：direct-backend、smart-scheduling、transparent-proxy；固定出站跳板请用 fixed-egress（#j）</div>
             </el-form-item>
             <el-form-item label="代理超时">
               <el-input-number v-model="config.proxy.timeout" :min="1" :max="300" style="width: 200px" />

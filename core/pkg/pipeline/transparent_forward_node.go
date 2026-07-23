@@ -12,17 +12,17 @@ import (
 	"centag/core/pkg/config"
 )
 
-// TransparentForwardNode forwards the original HTTP request to an upstream API unchanged.
-// Unlike GeneratorNode, it does NOT re-assemble the request body (no prompt_template/system_prompt).
-// The client's raw JSON (including extended fields like thinking, tool_choice, etc.) is forwarded as-is
-// to the backend selected by client model match or system defaults.
+// TransparentForwardNode 是直连/透明/跳板三条流水线共用的出站节点。
+// 通过 custom_config 开关区分行为（route_policy / inject_system_prompt），而非多套实现。
 type TransparentForwardNode struct {
 	BaseNode
 	DefaultScheme  string
 	RedirectPolicy string // never, always, smart
 	MaxRedirects   int
-	// FixedEgress 固定出站跳板：不做跨后端模型匹配，固定默认/钉死后端 + Key 改写
+	// FixedEgress 固定出站：不做跨后端模型匹配（route_policy=fixed / fixed_egress=true）
 	FixedEgress bool
+	// InjectSystemPrompt 注入网关 system_prompt，替换客户端 system（直连 #d）
+	InjectSystemPrompt bool
 }
 
 func NewTransparentForwardNode(config NodeConfig) (PipelineNode, error) {
@@ -52,6 +52,17 @@ func NewTransparentForwardNode(config NodeConfig) (PipelineNode, error) {
 		}
 		if v, ok := config.CustomConfig["fixed_egress"].(bool); ok {
 			node.FixedEgress = v
+		}
+		if s, ok := config.CustomConfig["route_policy"].(string); ok {
+			switch strings.ToLower(strings.TrimSpace(s)) {
+			case "fixed":
+				node.FixedEgress = true
+			case "match_model", "model_match":
+				node.FixedEgress = false
+			}
+		}
+		if v, ok := config.CustomConfig["inject_system_prompt"].(bool); ok {
+			node.InjectSystemPrompt = v
 		}
 	}
 	return node, nil
@@ -89,6 +100,20 @@ func (n *TransparentForwardNode) Execute(ctx context.Context, input *NodeInput) 
 	}
 	if len(body) == 0 {
 		return nil, fmt.Errorf("transparent_forward node %q: empty request body", n.id)
+	}
+
+	if n.InjectSystemPrompt {
+		systemPrompt := strings.TrimSpace(n.config.SystemPrompt)
+		if systemPrompt == "" {
+			if execCtx, ok := ctx.Value(executionContextKey{}).(*ExecutionContext); ok && execCtx != nil && execCtx.pipeline != nil {
+				systemPrompt = strings.TrimSpace(execCtx.pipeline.GlobalConfig.SystemPrompt)
+			}
+		}
+		if systemPrompt != "" {
+			if rewritten, ok := injectSystemPromptIntoChatBody(body, systemPrompt); ok {
+				body = rewritten
+			}
+		}
 	}
 
 	clientModel := extractJSONModel(body)
@@ -188,6 +213,12 @@ func (n *TransparentForwardNode) Execute(ctx context.Context, input *NodeInput) 
 	}
 	if n.FixedEgress {
 		outMeta["fixed_egress"] = true
+		outMeta["route_policy"] = "fixed"
+	} else {
+		outMeta["route_policy"] = "match_model"
+	}
+	if n.InjectSystemPrompt {
+		outMeta["inject_system_prompt"] = true
 	}
 	if resolvedModel != "" {
 		outMeta["model"] = resolvedModel
@@ -521,6 +552,40 @@ func resolveTransparentUpstreamAuth(backendID string, meta map[string]interface{
 		}
 	}
 	return strings.TrimSpace(stringMeta(meta, "forward_authorization"))
+}
+
+// injectSystemPromptIntoChatBody 用网关 system_prompt 替换客户端 messages 中的 system 角色。
+func injectSystemPromptIntoChatBody(body []byte, systemPrompt string) ([]byte, bool) {
+	systemPrompt = strings.TrimSpace(systemPrompt)
+	if systemPrompt == "" || len(body) == 0 {
+		return body, false
+	}
+	var raw map[string]interface{}
+	if err := json.Unmarshal(body, &raw); err != nil {
+		return body, false
+	}
+	msgs, _ := raw["messages"].([]interface{})
+	filtered := make([]interface{}, 0, len(msgs)+1)
+	filtered = append(filtered, map[string]interface{}{
+		"role":    "system",
+		"content": systemPrompt,
+	})
+	for _, m := range msgs {
+		mm, ok := m.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		if role, _ := mm["role"].(string); strings.EqualFold(strings.TrimSpace(role), "system") {
+			continue
+		}
+		filtered = append(filtered, mm)
+	}
+	raw["messages"] = filtered
+	out, err := json.Marshal(raw)
+	if err != nil {
+		return body, false
+	}
+	return out, true
 }
 
 // buildMinimalChatBody 在无 raw_request_body（WebUI 测试场景）时，

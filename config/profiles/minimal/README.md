@@ -75,7 +75,7 @@ Profile 内置（`initdata/pipeline-templates/common/`，渠道打包自包含�
 
 - `01-direct-backend.yaml` - 直连模式
 - `14-transparent-proxy.yaml` - 透明模式（系统默认）
-- `raw-forward.yaml` - 原始 HTTP 转发（`#raw`，需 Target-URL / hostproxy）
+- `fixed-egress.yaml` - 跳板模式（`#j`，固定出站）
 - `router-mode.yaml` - 路由模式（`#r` / `X-Pipeline-ID: router-mode`）
 - `smart-scheduling.yaml` - 智能调度（`#s`，依赖 ScheduleBackend hook）
 

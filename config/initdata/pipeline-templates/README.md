@@ -16,9 +16,9 @@
 
 | 文件 | pipeline_id | 快捷码 | 说明 |
 |------|-------------|--------|------|
-| `direct-backend.yaml` | direct-backend | `#d` | 单 generator 直连 |
-| `transparent-proxy.yaml` | transparent-proxy | `#t` | 透明转发（`transparent_forward`） |
-| `raw-forward.yaml` | raw-forward | `#raw` | 原始 HTTP 转发（需 Target-URL / hostproxy） |
+| `direct-backend.yaml` | direct-backend | `#d` | 直连（共用 `transparent_forward`：fixed + 注入 system） |
+| `transparent-proxy.yaml` | transparent-proxy | `#t` | 透明（共用节点：按 model 选路） |
+| `fixed-egress.yaml` | fixed-egress | `#j` | 跳板（共用节点：固定出站、不注入） |
 | `smart-scheduling.yaml` | smart-scheduling | `#s` | builtin.scheduler |
 | `router-mode.yaml` | router-mode | `#r` | builtin.router |
 | `coding-agent.yaml` | coding-agent | — | Coding agent |
