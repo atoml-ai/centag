@@ -1,11 +1,10 @@
 {
-  "name": "centag-offline",
-  "version": "0.2.8",
-  "private": true,
-  "description": "Offline variant of centag: bundles platform Go binaries so no network is needed at install. Prefer centag for normal use.",
+  "name": "@atomlai/centag-offline",
+  "version": "0.2.9",
+  "description": "Offline variant of @atomlai/centag: bundles platform Go binaries so no network is needed at install. Prefer @atomlai/centag for normal use.",
   "type": "module",
   "bin": {
-    "centag": "./bin/run.js"
+    "centag": "bin/run.js"
   },
   "files": [
     "bin/",
@@ -20,5 +19,8 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/atoml-ai/centag.git"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

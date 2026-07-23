@@ -147,7 +147,7 @@ mv "${OFFLINE_STAGE}/${OFFLINE_TGZ}" "${OUT_ROOT}/${OFFLINE_TGZ}"
 rm -rf "${OFFLINE_STAGE}"
 
 echo "==> artifacts:"
-ls -lh "${OUT_ROOT}"/centag*.tgz
+ls -lh "${OUT_ROOT}"/*.tgz 2>/dev/null || echo "(no .tgz in ${OUT_ROOT})"
 
 # --- 7. Publish -------------------------------------------------------------
 if [[ "${DRY_RUN:-}" == "1" ]]; then
@@ -163,9 +163,15 @@ publish_centag() {
   cp -R "${NPM_DIR}/static" "${stage}/static"
   cp "${NPM_DIR}/README.md" "${stage}/README.md"
   cp "${NPM_DIR}/package.json" "${stage}/package.json"
+  cp "${NPM_DIR}/install.js" "${stage}/install.js"
   cp "${NPM_DIR}/.npmignore" "${stage}/.npmignore"
   rm -rf "${stage}/bin/vendor"
-  ( cd "${stage}" && npm publish --access public )
+  if [[ -n "${CENTAG_NPM_TOKEN:-}" ]]; then
+    ( cd "${stage}" && npm publish --access public \
+      --//registry.npmjs.org/:_authToken="${CENTAG_NPM_TOKEN}" )
+  else
+    ( cd "${stage}" && npm publish --access public )
+  fi
   rm -rf "${stage}"
 }
 
@@ -177,7 +183,12 @@ publish_centag_offline() {
   cp "${NPM_DIR}/README.md" "${stage}/README.md"
   cp "${NPM_DIR}/package.offline.json" "${stage}/package.json"
   # Do NOT copy .npmignore — offline variant must include bin/vendor/ and static/
-  ( cd "${stage}" && npm publish --access public )
+  if [[ -n "${CENTAG_NPM_TOKEN:-}" ]]; then
+    ( cd "${stage}" && npm publish --access public \
+      --//registry.npmjs.org/:_authToken="${CENTAG_NPM_TOKEN}" )
+  else
+    ( cd "${stage}" && npm publish --access public )
+  fi
   rm -rf "${stage}"
 }
 

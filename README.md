@@ -26,29 +26,34 @@ centag/
 └── go.work
 ```
 
-## 一键安装（`install.sh`）
+## 安装
+
+> **普通用户推荐**：无需 Node.js，用下方 **一键安装（`install.sh`）** 即可。  
+> **已有 Node.js 工具链**：见 [npm 安装](#npm-安装可选) 或 `apps/centag-npm/README.md`。
+
+### 一键安装（`install.sh`，推荐）
 
 默认安装 **personal CLI + wrap** 到 `~/.centag/bin`（并尝试写入 PATH）。需已发布的 GitHub Release 资产。
 
 ```bash
-# 推荐：按 Release tag 拉取安装脚本（与发版 tag 一致，例如 v0.2.7）
-curl -fsSL https://raw.githubusercontent.com/atoml-ai/centag/v0.2.7/scripts/install.sh | bash
+# 推荐：按 Release tag 拉取安装脚本（与发版 tag 一致，例如 v0.2.9）
+curl -fsSL https://raw.githubusercontent.com/atoml-ai/centag/v0.2.9/scripts/install.sh | bash
 
 # 指定版本（脚本仍从 tag/分支取，二进制从对应 Release 下载）
-curl -fsSL https://raw.githubusercontent.com/atoml-ai/centag/v0.2.7/scripts/install.sh | bash -s -- --version 0.2.7
+curl -fsSL https://raw.githubusercontent.com/atoml-ai/centag/v0.2.9/scripts/install.sh | bash -s -- --version 0.2.9
 
 # 只装 personal 或只装 wrap
-curl -fsSL https://raw.githubusercontent.com/atoml-ai/centag/v0.2.7/scripts/install.sh | bash -s -- --only personal
-curl -fsSL https://raw.githubusercontent.com/atoml-ai/centag/v0.2.7/scripts/install.sh | bash -s -- --only wrap
+curl -fsSL https://raw.githubusercontent.com/atoml-ai/centag/v0.2.9/scripts/install.sh | bash -s -- --only personal
+curl -fsSL https://raw.githubusercontent.com/atoml-ai/centag/v0.2.9/scripts/install.sh | bash -s -- --only wrap
 
 # 等价写法（位置参数）
-curl -fsSL https://raw.githubusercontent.com/atoml-ai/centag/v0.2.7/scripts/install.sh | bash -s -- wrap
+curl -fsSL https://raw.githubusercontent.com/atoml-ai/centag/v0.2.9/scripts/install.sh | bash -s -- wrap
 
 # 无可用 Release 时：克隆源码构建（需 Go / Node）
-curl -fsSL https://raw.githubusercontent.com/atoml-ai/centag/v0.2.7/scripts/install.sh | bash -s -- --from-source
+curl -fsSL https://raw.githubusercontent.com/atoml-ai/centag/v0.2.9/scripts/install.sh | bash -s -- --from-source
 
 # 自定义安装目录、不改 shell rc
-curl -fsSL https://raw.githubusercontent.com/atoml-ai/centag/v0.2.7/scripts/install.sh | bash -s -- \
+curl -fsSL https://raw.githubusercontent.com/atoml-ai/centag/v0.2.9/scripts/install.sh | bash -s -- \
   --prefix "$HOME/.centag" --no-modify-path
 ```
 
@@ -61,7 +66,46 @@ centag wrap run -- opencode   # 进程代理（不起网关）
 centag wrap doctor
 ```
 
-脚本说明见 `scripts/install.sh --help`。发版流程见 [docs/harness/skills/step6-release/SKILL.md](docs/harness/skills/step6-release/SKILL.md)（触发词：`step6-release` / 发版；须先过 Step 5 Gate 4）。
+脚本说明见 `scripts/install.sh --help`。
+
+### npm 安装（可选）
+
+适合已使用 Node.js / npm 的开发者；**不是**普通用户的首选路径。
+
+| 包 | 说明 |
+|----|------|
+| `@atomlai/centag` | 在线版：小包，安装时从 GitHub Release 下载当前平台二进制 |
+| `@atomlai/centag-offline` | 离线版：大包，内置二进制，适合内网 |
+
+```bash
+# 全局安装（需本机 npm 全局目录可写）
+npm install -g @atomlai/centag
+
+# 无需 -g、不改全局目录（推荐 npm 用户先试这个）
+npx --yes @atomlai/centag version
+
+# 内网 / 离线
+npm install -g @atomlai/centag-offline
+```
+
+**`npm install -g` 报 `EACCES`？** npm **不会**自动弹出密码框，只会直接失败。macOS 上 Node 官方安装包把全局目录放在 `/usr/local`（root 所有），与 OpenCode 等 CLI 相同。
+
+若坚持全局安装，**加 `sudo` 后终端会提示输入本机登录密码**：
+
+```bash
+sudo npm install -g @atomlai/centag
+```
+
+> 之后 `npm update -g` 若再报权限错，同样需加 `sudo`。长期频繁用 npm 全局包，可改 prefix 到用户目录（见 `apps/centag-npm/README.md` §故障排除）。
+
+其它方式：
+
+1. **`npx @atomlai/centag`**（不装全局，无权限问题）
+2. **改用上文 `install.sh`**（无需 Node，装到 `~/.centag/`）
+
+详见 [apps/centag-npm/README.md](apps/centag-npm/README.md)。
+
+发版流程见 [docs/harness/skills/step6-release/SKILL.md](docs/harness/skills/step6-release/SKILL.md)（触发词：`step6-release` / 发版；须先过 Step 5 Gate 4）。
 
 ## 快速开始（开发机）
 
