@@ -23,6 +23,14 @@ export interface Capabilities {
   navChatPage: boolean
   localProxy: boolean
   storageConfig: boolean
+  /** 更多：主机代理 + Clash（高级；主推仍是接入→系统代理） */
+  navHostProxyTools: boolean
+  /** 存储配置内：数据存储管理 */
+  navDataStores: boolean
+  /** 存储配置内：缓存评估 */
+  navEvaluation: boolean
+  /** 系统组：降级策略 */
+  navFallbackPolicy: boolean
   memoryQuery: boolean
   /** 记忆同步/重建等写运维（personal；非 team_user） */
   memoryFull: boolean
@@ -52,6 +60,10 @@ const WORKER_CAPS: Omit<Capabilities, 'role'> = {
   navChatPage: false,
   localProxy: true,
   storageConfig: true,
+  navHostProxyTools: true,
+  navDataStores: true,
+  navEvaluation: true,
+  navFallbackPolicy: true,
   memoryQuery: true,
   memoryFull: true,
   usageBilling: true,
@@ -62,6 +74,17 @@ const WORKER_CAPS: Omit<Capabilities, 'role'> = {
   liteHome: true
 }
 
+/** personal 发布面：暂隐未成熟 / 非主推入口（能力位 false，后续可逐项开放） */
+const PERSONAL_NAV_PREVIEW_OFF = {
+  memoryQuery: false,
+  memoryFull: false,
+  navHostProxyTools: false,
+  navDataStores: false,
+  navEvaluation: false,
+  // 降级策略牵涉主流程，先开放便于联调与后续调整
+  navFallbackPolicy: true
+} as const
+
 export function getCapabilities(edition: Edition, isAdmin = false): Capabilities {
   const role = resolveCapabilityRole(edition, isAdmin)
 
@@ -71,6 +94,10 @@ export function getCapabilities(edition: Edition, isAdmin = false): Capabilities
       ...WORKER_CAPS,
       localProxy: false,
       storageConfig: false,
+      navHostProxyTools: false,
+      navDataStores: false,
+      navEvaluation: false,
+      navFallbackPolicy: false,
       memoryQuery: false,
       memoryFull: false,
       agentSetup: false,
@@ -79,7 +106,7 @@ export function getCapabilities(edition: Edition, isAdmin = false): Capabilities
   }
 
   if (role === 'personal') {
-    return { role, ...WORKER_CAPS }
+    return { role, ...WORKER_CAPS, ...PERSONAL_NAV_PREVIEW_OFF }
   }
 
   if (role === 'team_user') {
@@ -87,6 +114,10 @@ export function getCapabilities(edition: Edition, isAdmin = false): Capabilities
       role,
       ...WORKER_CAPS,
       storageConfig: false,
+      navHostProxyTools: false, // 本机代理工具不适合团队共享面
+      navDataStores: false,
+      navEvaluation: false,
+      navFallbackPolicy: false,
       memoryFull: false,
       systemConfig: false,
       myTenant: true
@@ -106,6 +137,10 @@ export function getCapabilities(edition: Edition, isAdmin = false): Capabilities
     navChatPage: false,
     localProxy: false,
     storageConfig: true,
+    navHostProxyTools: false,
+    navDataStores: true,
+    navEvaluation: true,
+    navFallbackPolicy: true,
     memoryQuery: false,
     memoryFull: false,
     usageBilling: false,

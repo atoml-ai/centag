@@ -49,6 +49,14 @@ function run() {
     resolveCapabilityRouteRedirect('/pipelines', personalCaps, 'personal') === '/dashboard',
     'personal: pipeline list → dashboard'
   )
+  assert(
+    resolveCapabilityRouteRedirect('/memory', personalCaps, 'personal') === '/dashboard',
+    'personal: memory blocked until feature matures'
+  )
+  assert(
+    resolveEditionRouteRedirect('/memory', 'minimal', false) === '/dashboard',
+    'edition: minimal memory blocked'
+  )
 
   assert(
     resolveEditionRouteRedirect('/pipelines/abc', 'team', false) === null,
