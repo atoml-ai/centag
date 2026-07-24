@@ -126,9 +126,19 @@ func (ctx *ExecutionContext) GetExecutionLog() *ExecutionLog {
 	ctx.mu.RUnlock()
 
 	endTime := time.Now()
+	// 同一 node_id 可能先失败再被策略降级成功：以该节点最后一条日志为准。
+	lastByNode := make(map[string]NodeExecutionLog, len(nodeLogs))
+	order := make([]string, 0, len(nodeLogs))
+	for _, log := range nodeLogs {
+		if _, seen := lastByNode[log.NodeID]; !seen {
+			order = append(order, log.NodeID)
+		}
+		lastByNode[log.NodeID] = log
+	}
 	success := true
 	var errMsg string
-	for _, log := range nodeLogs {
+	for _, id := range order {
+		log := lastByNode[id]
 		if !log.Success {
 			success = false
 			errMsg = log.ErrorMessage
@@ -571,6 +581,11 @@ func (e *PipelineEngine) Execute(ctx context.Context, pipelineID string, input *
 // ExecutePipelineDefinition 直接执行流水线定义（无需预先注册到注册表）。
 // 用于前端画布的"测试"场景：流水线尚在编辑中、未保存到后端。
 func (e *PipelineEngine) ExecutePipelineDefinition(ctx context.Context, pipeline *AgentPatternPipeline, input *PipelineInput) (*PipelineOutput, error) {
+	if pipeline != nil {
+		for i := range pipeline.Nodes {
+			pipeline.Nodes[i].Normalize()
+		}
+	}
 	if err := pipeline.Validate(); err != nil {
 		return nil, fmt.Errorf("invalid pipeline: %w", err)
 	}
@@ -1500,6 +1515,13 @@ func (e *PipelineEngine) executeLayerNode(ctx context.Context, graph *ExecutionG
 					output.Metadata["fallback_to_model"] = to
 				}
 				AnnotateFallbackNotice(output)
+				// 补一条成功日志，避免总览 success 仍被首轮失败 attempt 拉成 false
+				execCtx.AddNodeLog(NodeExecutionLog{
+					NodeID:       nodeID,
+					NodeType:     execNode.Config.Type,
+					Success:      true,
+					ErrorMessage: "",
+				})
 			} else {
 				e.logger.Warn("fallback policy exhausted",
 					"node_id", nodeID,
@@ -1736,6 +1758,11 @@ func (e *PipelineEngine) executePolicyFallback(
 
 	for _, rule := range policy.SortedRules() {
 		resolvedBackend, resolvedModel := resolveFallbackRuleTarget(rule, input, origBackendResolved, origModelResolved)
+		// 同后端跨模型：规则里即使写了 system.default_backend，也钉死在失败节点的实际后端。
+		// 否则直连钉死 opencode-zen 时，会误跳到系统默认 bigmodel-ai。
+		if policy.Strategy == config.StrategySameBackendDifferentModel && origBackendResolved != "" {
+			resolvedBackend = origBackendResolved
+		}
 		if strings.TrimSpace(resolvedBackend) == "" || strings.TrimSpace(resolvedModel) == "" {
 			e.logger.Warn("fallback rule skipped: unresolved placeholder",
 				"policy_id", policy.ID,

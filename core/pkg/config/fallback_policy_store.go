@@ -264,12 +264,12 @@ func builtinFallbackPolicies() map[string]*GlobalFallbackPolicy {
 		"same-backend-cross-model": {
 			ID:          "same-backend-cross-model",
 			Name:        "同后端跨模型降级",
-			Description: "主模型失败（含余额不足）时优先 system.fallback_model，再试 fallback_backend",
+			Description: "主模型失败时在同一失败后端上换模型：优先 system.fallback_model / 免费档，再试 system.default_model",
 			Strategy:    StrategySameBackendDifferentModel,
 			Rules: []FallbackRule{
-				{Priority: 1, BackendID: "{{system.default_backend}}", Model: "{{system.fallback_model}}"},
-				{Priority: 2, BackendID: "{{system.fallback_backend}}", Model: "{{system.fallback_model}}"},
-				{Priority: 3, BackendID: "{{system.default_backend}}", Model: "{{system.default_model}}"},
+				// backend_id 占位会被引擎钉死为失败节点的实际后端（见 executePolicyFallback）
+				{Priority: 1, BackendID: "{{failed_backend}}", Model: "{{system.fallback_model}}"},
+				{Priority: 2, BackendID: "{{failed_backend}}", Model: "{{system.default_model}}"},
 			},
 			Enabled:   true,
 			CreatedAt: now,
