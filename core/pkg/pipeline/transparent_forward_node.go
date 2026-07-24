@@ -10,6 +10,7 @@ import (
 
 	"centag/core/pkg/backend"
 	"centag/core/pkg/config"
+	"centag/core/pkg/logger"
 )
 
 // TransparentForwardNode 是直连/透明/跳板三条流水线共用的出站节点。
@@ -102,6 +103,38 @@ func (n *TransparentForwardNode) Execute(ctx context.Context, input *NodeInput) 
 		return nil, fmt.Errorf("transparent_forward node %q: empty request body", n.id)
 	}
 
+	clientModel := extractJSONModel(body)
+	backendID, resolvedModel, body := n.resolveTransparentRoute(meta, body, clientModel)
+
+	targetURL, err := n.resolveTargetURL(meta, backendID, requestPath)
+	if err != nil {
+		return nil, fmt.Errorf("transparent_forward node %q: %w", n.id, err)
+	}
+
+	// Responses clients (OpenCode / Codex) POST {input:...} to /v1/responses, but
+	// configured backends are reached at /chat/completions which expects messages.
+	// 必须先于 inject_system_prompt：否则 inject 会在 Responses 体上凭空写入 messages=[system]，
+	// 导致 looksLikeResponsesBody 误判为已是 chat，responses_to_chat 桥接失败，
+	// 上游 chat SSE（含 centag-fallback-notice）会原样打给 /v1/responses 客户端。
+	responsesToChat := false
+	if strings.Contains(targetURL, "/chat/completions") {
+		if rewritten, ok := convertResponsesBodyToChatCompletions(body); ok {
+			body = rewritten
+			responsesToChat = true
+		}
+		// 客户端走 /v1/responses 时，即使 body 已是 chat 形态，响应也必须走 FormatChunk，
+		// 不能 raw 透传 chat.completion.chunk。
+		if !responsesToChat && isResponsesAPIPath(requestPath) {
+			responsesToChat = true
+		}
+		// 无论是否走了 Responses 全文转换，都清洗 tools：
+		// 已是 chat 形态但带 flat/hosted tools 时，智谱会报 tools[0].function 不能为空。
+		if sanitized, ok := sanitizeChatCompletionsTools(body); ok {
+			body = sanitized
+		}
+	}
+
+	// 直连注入 gateway system：仅在 chat messages 形态上替换；须在 Responses→Chat 之后。
 	if n.InjectSystemPrompt {
 		systemPrompt := strings.TrimSpace(n.config.SystemPrompt)
 		if systemPrompt == "" {
@@ -113,31 +146,6 @@ func (n *TransparentForwardNode) Execute(ctx context.Context, input *NodeInput) 
 			if rewritten, ok := injectSystemPromptIntoChatBody(body, systemPrompt); ok {
 				body = rewritten
 			}
-		}
-	}
-
-	clientModel := extractJSONModel(body)
-	backendID, resolvedModel, body := n.resolveTransparentRoute(meta, body, clientModel)
-
-	targetURL, err := n.resolveTargetURL(meta, backendID, requestPath)
-	if err != nil {
-		return nil, fmt.Errorf("transparent_forward node %q: %w", n.id, err)
-	}
-
-	// Responses clients (OpenCode / Codex) POST {input:...} to /v1/responses, but
-	// configured backends are reached at /chat/completions which expects messages.
-	// Rewrite before upstream call; otherwise providers (e.g. BigModel) return
-	// "输入不能为空" while Centag logs still show a non-empty messages_preview.
-	responsesToChat := false
-	if strings.Contains(targetURL, "/chat/completions") {
-		if rewritten, ok := convertResponsesBodyToChatCompletions(body); ok {
-			body = rewritten
-			responsesToChat = true
-		}
-		// 无论是否走了 Responses 全文转换，都清洗 tools：
-		// 已是 chat 形态但带 flat/hosted tools 时，智谱会报 tools[0].function 不能为空。
-		if sanitized, ok := sanitizeChatCompletionsTools(body); ok {
-			body = sanitized
 		}
 	}
 
@@ -153,6 +161,14 @@ func (n *TransparentForwardNode) Execute(ctx context.Context, input *NodeInput) 
 	if auth := resolveTransparentUpstreamAuth(backendID, meta); auth != "" {
 		req.Header.Set("Authorization", auth)
 	}
+
+	logger.Info("transparent_forward outbound",
+		logger.GetField("node_id", n.id),
+		logger.GetField("backend_id", backendID),
+		logger.GetField("model", resolvedModel),
+		logger.GetField("fixed_egress", n.FixedEgress),
+		logger.GetField("target_url", targetURL),
+	)
 
 	client, err := n.getHTTPClient(ctx)
 	if err != nil {
@@ -197,20 +213,23 @@ func (n *TransparentForwardNode) Execute(ctx context.Context, input *NodeInput) 
 		if out, ok := n.retryWithSystemBillingFallback(ctx, client, method, meta, body, backendID, resolvedModel, clientModel, requestPath, responsesToChat); ok {
 			return out, nil
 		}
-		return nil, fmt.Errorf("transparent_forward node %q: upstream returned %d: %s", n.id, resp.StatusCode, truncateBody(respBody, 512))
+		return nil, fmt.Errorf("transparent_forward node %q: backend=%s model=%s url=%s upstream returned %d: %s",
+			n.id, backendID, resolvedModel, targetURL, resp.StatusCode, truncateBody(respBody, 512))
 	}
 
 	// 对可重试的 HTTP 错误码返回 error，触发上层重试/降级逻辑。
 	if config.IsRetryableStatusCode(resp.StatusCode) {
-		return nil, fmt.Errorf("transparent_forward node %q: upstream returned %d: %s", n.id, resp.StatusCode, truncateBody(respBody, 512))
+		return nil, fmt.Errorf("transparent_forward node %q: backend=%s model=%s url=%s upstream returned %d: %s",
+			n.id, backendID, resolvedModel, targetURL, resp.StatusCode, truncateBody(respBody, 512))
 	}
 
 	// 模型不存在 / 占位符未解析等：必须返回 error，避免策略降级把错误 JSON 当成成功。
 	if resp.StatusCode >= 400 && isUpstreamModelOrPlaceholderError(bodyStr) {
-		return nil, fmt.Errorf("transparent_forward node %q: upstream returned %d: %s", n.id, resp.StatusCode, truncateBody(respBody, 512))
+		return nil, fmt.Errorf("transparent_forward node %q: backend=%s model=%s url=%s upstream returned %d: %s",
+			n.id, backendID, resolvedModel, targetURL, resp.StatusCode, truncateBody(respBody, 512))
 	}
 
-	return n.buildTransparentOutput(targetURL, resp.StatusCode, resp.Header.Get("Content-Type"), respBody, backendID, resolvedModel, clientModel, responsesToChat, nil), nil
+	return n.buildTransparentOutput(targetURL, resp.StatusCode, resp.Header.Get("Content-Type"), respBody, backendID, resolvedModel, clientModel, requestPath, responsesToChat, nil), nil
 }
 
 func isUpstreamModelOrPlaceholderError(body string) bool {
@@ -399,7 +418,7 @@ func (n *TransparentForwardNode) doBillingFallbackAttempt(
 		"fallback_to_model":             fbModel,
 		"fallback_used":                 true,
 	}
-	out := n.buildTransparentOutput(targetURL, resp.StatusCode, resp.Header.Get("Content-Type"), respBody, fbBackend, fbModel, clientModel, attemptResponsesToChat, extra)
+	out := n.buildTransparentOutput(targetURL, resp.StatusCode, resp.Header.Get("Content-Type"), respBody, fbBackend, fbModel, clientModel, requestPath, attemptResponsesToChat, extra)
 	AnnotateFallbackNotice(out)
 	return out, true
 }
@@ -409,7 +428,7 @@ func (n *TransparentForwardNode) buildTransparentOutput(
 	statusCode int,
 	contentType string,
 	respBody []byte,
-	backendID, resolvedModel, clientModel string,
+	backendID, resolvedModel, clientModel, requestPath string,
 	responsesToChat bool,
 	extraMeta map[string]interface{},
 ) *NodeOutput {
@@ -432,6 +451,9 @@ func (n *TransparentForwardNode) buildTransparentOutput(
 		"status_code":     statusCode,
 		"content_type":    contentType,
 		"forwarded":       true,
+	}
+	if rp := strings.TrimSpace(requestPath); rp != "" {
+		outMeta["request_path"] = rp
 	}
 	if n.FixedEgress {
 		outMeta["fixed_egress"] = true
@@ -533,9 +555,14 @@ func (n *TransparentForwardNode) resolveTransparentRoute(
 	pinnedBackend := strings.TrimSpace(stringMeta(meta, "backend_id"))
 
 	if n.FixedEgress {
-		// 直连固定出站：只用节点 / 系统默认后端与模型，忽略请求头或 Agent 注入的 X-Backend-ID。
-		// 否则会出现「默认 opencode-zen + mimo-v2.5-free，却打到 bigmodel-ai → 模型不存在」。
-		backendID = resolveFallbackBackendID(n.config.Backend, "")
+		// 直连固定出站：只用节点配置的后端与模型，忽略请求头或 Agent 注入的 X-Backend-ID。
+		// 具体 ID（非 {{system.*}}）绝不回落到「第一个可用后端 / 系统默认」，避免钉死 zen 却打到 bigmodel。
+		rawBackend := strings.TrimSpace(n.config.Backend)
+		if rawBackend != "" && !strings.Contains(rawBackend, "{{") {
+			backendID = rawBackend
+		} else {
+			backendID = resolveFallbackBackendID(rawBackend, "")
+		}
 		if backendID != "" {
 			resolvedModel, outBody = applyFallbackModel(outBody, backendID, n.config.Model)
 		}
@@ -808,17 +835,34 @@ func resolveTransparentUpstreamAuth(backendID string, meta map[string]interface{
 	return strings.TrimSpace(stringMeta(meta, "forward_authorization"))
 }
 
+// isResponsesAPIPath 判断请求路径是否为 OpenAI Responses API（/v1/responses 等）。
+func isResponsesAPIPath(path string) bool {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return false
+	}
+	path = strings.TrimRight(path, "/")
+	return strings.HasSuffix(path, "/responses")
+}
+
 // injectSystemPromptIntoChatBody 用网关 system_prompt 替换客户端 messages 中的 system 角色。
+// 不对 Responses 形态（input、无可用 messages）动手，避免污染后续转换判定。
 func injectSystemPromptIntoChatBody(body []byte, systemPrompt string) ([]byte, bool) {
 	systemPrompt = strings.TrimSpace(systemPrompt)
 	if systemPrompt == "" || len(body) == 0 {
+		return body, false
+	}
+	if looksLikeResponsesBody(body) {
 		return body, false
 	}
 	var raw map[string]interface{}
 	if err := json.Unmarshal(body, &raw); err != nil {
 		return body, false
 	}
-	msgs, _ := raw["messages"].([]interface{})
+	msgs, ok := raw["messages"].([]interface{})
+	if !ok {
+		return body, false
+	}
 	filtered := make([]interface{}, 0, len(msgs)+1)
 	filtered = append(filtered, map[string]interface{}{
 		"role":    "system",
