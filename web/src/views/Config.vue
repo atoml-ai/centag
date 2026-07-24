@@ -35,7 +35,9 @@
             <el-divider content-position="left">响应行为</el-divider>
             <el-form-item label="响应追踪">
               <el-switch v-model="config.proxy.response_trace_banner" />
-              <div class="form-tip">开启后在 AI 回复前附加流水线、后端、模型与降级信息（热生效）</div>
+              <div class="form-tip">
+                开启后在回复前附加单行流程：req → 流水线:节点链 → 后端/模型 → resp（热生效）
+              </div>
             </el-form-item>
 
             <el-divider content-position="left">相关入口</el-divider>

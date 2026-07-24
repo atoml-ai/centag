@@ -12,7 +12,7 @@ func ResponseTraceBannerEnabled() bool {
 	return cfg != nil && cfg.Proxy.ResponseTraceBanner
 }
 
-// ApplyResponseTraceBanner 在开关打开时，于返回正文最前附加流水线/后端/模型/降级信息。
+// ApplyResponseTraceBanner 在开关打开时，于返回正文最前附加简洁请求→响应流程追踪。
 func ApplyResponseTraceBanner(out *PipelineOutput, pipelineID string) {
 	if out == nil || !ResponseTraceBannerEnabled() {
 		return
@@ -45,7 +45,8 @@ func ApplyResponseTraceBanner(out *PipelineOutput, pipelineID string) {
 		to = model
 	}
 
-	banner := buildResponseTraceBanner(pipelineID, backendID, model, from, to, isFallbackOutput(out.Metadata))
+	nodePath := nodePathFromExecLog(out.ExecutionLog)
+	banner := buildResponseTraceBanner(pipelineID, nodePath, backendID, model, from, to, isFallbackOutput(out.Metadata))
 	out.Metadata["response_trace_banner"] = strings.TrimSpace(banner)
 	out.Metadata["response_trace_applied"] = true
 
@@ -73,42 +74,81 @@ func ApplyResponseTraceBanner(out *PipelineOutput, pipelineID string) {
 	out.Content = banner + out.Content
 }
 
-func buildResponseTraceBanner(pipelineID, backendID, model, from, to string, fallback bool) string {
+// buildResponseTraceBanner 单行流程：req → 流水线:节点链 → 后端/模型 → resp
+// 例：
+//
+//	[Centag] req → transparent-proxy:generate → opencode-zen/deepseek-v4 → resp
+//	[Centag] req → translate-mode:generate→translate → openai/gpt-4o → resp
+//	[Centag] req → transparent-proxy:generate → opencode-zen/gpt-5.6→deepseek-v4 → resp
+func buildResponseTraceBanner(pipelineID, nodePath, backendID, model, from, to string, fallback bool) string {
 	var b strings.Builder
-	b.WriteString("[Centag 响应追踪]\n")
-	if pipelineID != "" {
-		b.WriteString("流水线: ")
-		b.WriteString(pipelineID)
-		b.WriteByte('\n')
+	b.WriteString("[Centag] req → ")
+
+	pipe := strings.TrimSpace(pipelineID)
+	if pipe == "" {
+		pipe = "?"
 	}
-	if backendID != "" {
-		b.WriteString("后端: ")
-		b.WriteString(backendID)
-		b.WriteByte('\n')
+	b.WriteString(pipe)
+	if np := strings.TrimSpace(nodePath); np != "" {
+		b.WriteByte(':')
+		b.WriteString(np)
 	}
-	if model != "" {
-		b.WriteString("模型: ")
-		b.WriteString(model)
-		b.WriteByte('\n')
-	}
-	if fallback {
-		switch {
-		case from != "" && to != "" && !strings.EqualFold(from, to):
-			b.WriteString("降级: ")
-			b.WriteString(from)
-			b.WriteString(" → ")
-			b.WriteString(to)
-			b.WriteByte('\n')
-		case to != "":
-			b.WriteString("降级: 已切换至 ")
-			b.WriteString(to)
-			b.WriteByte('\n')
-		default:
-			b.WriteString("降级: 是\n")
-		}
-	}
-	b.WriteByte('\n')
+
+	b.WriteString(" → ")
+	b.WriteString(formatTraceEgress(backendID, model, from, to, fallback))
+	b.WriteString(" → resp\n")
+	b.WriteString("--------------------\n")
 	return b.String()
+}
+
+func formatTraceEgress(backendID, model, from, to string, fallback bool) string {
+	be := strings.TrimSpace(backendID)
+	m := strings.TrimSpace(model)
+	f := strings.TrimSpace(from)
+	t := strings.TrimSpace(to)
+	if t == "" {
+		t = m
+	}
+
+	var right string
+	switch {
+	case fallback && f != "" && t != "" && !strings.EqualFold(f, t):
+		right = f + "→" + t
+	case t != "":
+		right = t
+	case m != "":
+		right = m
+	}
+
+	switch {
+	case be != "" && right != "":
+		return be + "/" + right
+	case be != "":
+		return be
+	case right != "":
+		return right
+	default:
+		return "?"
+	}
+}
+
+// nodePathFromExecLog 从执行日志提取节点流程（按时间序，合并连续同名节点）。
+func nodePathFromExecLog(log *ExecutionLog) string {
+	if log == nil || len(log.NodeLogs) == 0 {
+		return ""
+	}
+	parts := make([]string, 0, len(log.NodeLogs))
+	for _, nl := range log.NodeLogs {
+		id := strings.TrimSpace(nl.NodeID)
+		if id == "" {
+			continue
+		}
+		if len(parts) > 0 && parts[len(parts)-1] == id {
+			continue
+		}
+		parts = append(parts, id)
+	}
+	return strings.Join(parts, "→")
 }
 
 func stripLegacyFallbackNoticePrefix(content string) string {

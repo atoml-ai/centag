@@ -79,29 +79,53 @@ func TestApplyResponseTraceBanner_OnWithFallback(t *testing.T) {
 			"billing_fallback_from_model": "gpt-5.6-luna",
 			"billing_fallback_to_model":   "deepseek-v4-flash-free",
 		},
+		ExecutionLog: &ExecutionLog{
+			PipelineID: "transparent-proxy",
+			NodeLogs: []NodeExecutionLog{
+				{NodeID: "generate", Success: true},
+			},
+		},
 	}
 	ApplyResponseTraceBanner(out, "transparent-proxy")
-	if !strings.HasPrefix(out.Content, "[Centag 响应追踪]") {
-		t.Fatalf("missing banner prefix: %q", out.Content)
-	}
-	if !strings.Contains(out.Content, "流水线: transparent-proxy") {
-		t.Fatalf("missing pipeline: %q", out.Content)
-	}
-	if !strings.Contains(out.Content, "后端: opencode-zen") {
-		t.Fatalf("missing backend: %q", out.Content)
-	}
-	if !strings.Contains(out.Content, "模型: deepseek-v4-flash-free") {
-		t.Fatalf("missing model: %q", out.Content)
-	}
-	if !strings.Contains(out.Content, "降级: gpt-5.6-luna → deepseek-v4-flash-free") {
-		t.Fatalf("missing fallback line: %q", out.Content)
+	wantPrefix := "[Centag] req → transparent-proxy:generate → opencode-zen/gpt-5.6-luna→deepseek-v4-flash-free → resp"
+	if !strings.HasPrefix(out.Content, wantPrefix) {
+		t.Fatalf("banner mismatch:\n want prefix %q\n got %q", wantPrefix, out.Content)
 	}
 	if !strings.Contains(out.Content, "hello") {
 		t.Fatal("original content lost")
 	}
 	ApplyResponseTraceBanner(out, "transparent-proxy")
-	if strings.Count(out.Content, "[Centag 响应追踪]") != 1 {
+	if strings.Count(out.Content, "[Centag] req →") != 1 {
 		t.Fatalf("banner applied twice: %q", out.Content)
+	}
+}
+
+func TestBuildResponseTraceBanner_NodeChain(t *testing.T) {
+	got := buildResponseTraceBanner(
+		"translate-mode",
+		"generate→translate",
+		"openai",
+		"gpt-4o",
+		"",
+		"",
+		false,
+	)
+	want := "[Centag] req → translate-mode:generate→translate → openai/gpt-4o → resp\n--------------------\n"
+	if got != want {
+		t.Fatalf("got %q want %q", got, want)
+	}
+}
+
+func TestNodePathFromExecLog(t *testing.T) {
+	path := nodePathFromExecLog(&ExecutionLog{
+		NodeLogs: []NodeExecutionLog{
+			{NodeID: "generate", Success: true},
+			{NodeID: "generate", Success: true}, // consecutive dedupe
+			{NodeID: "translate", Success: true},
+		},
+	})
+	if path != "generate→translate" {
+		t.Fatalf("got %q", path)
 	}
 }
 
