@@ -1,36 +1,50 @@
-import { ref, onMounted } from 'vue'
-import { getPipelineDefaults, getPipelines } from '@/api/pipeline'
+import { ref, watch } from 'vue'
+import { getPipelineDefaults, getPipelines, parsePipelinesResponse } from '@/api/pipeline'
 import { useAuthStore } from '@/stores/auth'
+import { storeToRefs } from 'pinia'
 
+/** 读取当前默认流水线（鉴权就绪后加载，避免 StatusBar 早于 restoreSession） */
 export function useActivePipeline(options?: { enabled?: boolean }) {
   const authStore = useAuthStore()
+  const { isAuthenticated } = storeToRefs(authStore)
   const enabled = options?.enabled ?? true
 
   const pipelineId = ref('')
   const pipelineName = ref('')
+  let loading = false
 
   async function loadActivePipeline() {
-    if (!authStore.isAuthenticated) return
+    if (!enabled || !isAuthenticated.value || loading) return
+    loading = true
     try {
       const [defaultsRes, pipelinesRes] = await Promise.all([
         getPipelineDefaults(),
         getPipelines()
       ])
-      const defaults = defaultsRes?.data ?? defaultsRes
-      const id = defaults?.default_pipeline_id || ''
+      const defaults =
+        (defaultsRes as { data?: { default_pipeline_id?: string } })?.data ?? defaultsRes
+      const id = String(
+        (defaults as { default_pipeline_id?: string })?.default_pipeline_id || ''
+      ).trim()
       pipelineId.value = id
-      const list = Array.isArray(pipelinesRes) ? pipelinesRes : pipelinesRes?.data || []
-      const found = list.find((p: { id: string; name?: string }) => p.id === id)
+      const list = parsePipelinesResponse(pipelinesRes)
+      const found = list.find((p) => p.id === id)
       pipelineName.value = found?.name || id || '未设置'
     } catch (error) {
       console.error('Failed to load active pipeline:', error)
-      pipelineName.value = pipelineId.value || '未设置'
+      if (!pipelineName.value) pipelineName.value = '未设置'
+    } finally {
+      loading = false
     }
   }
 
-  onMounted(() => {
-    if (enabled) loadActivePipeline()
-  })
+  watch(
+    isAuthenticated,
+    (ok) => {
+      if (ok) void loadActivePipeline()
+    },
+    { immediate: true }
+  )
 
   return {
     pipelineId,
