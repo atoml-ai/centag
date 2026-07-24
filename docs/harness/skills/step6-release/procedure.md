@@ -2,7 +2,8 @@
 
 > **入口**：`SKILL.md`（编排） + 本文件（命令与渠道细节）  
 > **交互**：`.cursor/rules/step6-release.mdc`（AskQuestion 收参）  
-> **分层**：根目录 `AGENT.md`
+> **分层**：根目录 `AGENT.md`  
+> **本地打包入口**：`./start.sh package <form> <os> [arch]`（形态 × 系统 × 架构）
 
 ---
 
@@ -12,14 +13,55 @@
 
 | ID | 状态 | 用户说明 | 命令 / 入口 | 依赖 | 鉴权 | 验收 |
 |----|:----:|---------|-------------|------|------|------|
-| `github` | ✅ | GitHub Release；用户 `curl …/install.sh \| bash` | `publish-binaries.sh --release` 或 `gh release upload` | — | `gh` | `gh release view` |
-| `npm` | ✅ | `npm i -g centag` / `centag-offline` | `publish-centag-npm.sh` | 在线版需 **已 publish** 的 GitHub Release | `npm` / `CENTAG_NPM_TOKEN` | `npm view` |
+| `github` | ✅ | GitHub Release；`install.sh` | `build-github-artifacts.sh` → `publish-binaries.sh --release` | desktop 需原生 runner | `gh` | `gh release view` |
+| `npm` | ✅ | `npm i -g centag` / `centag-offline`（**全平台 CLI**） | `publish-centag-npm.sh` | 在线版需 **已 publish** 的 GitHub Release | `npm` / `CENTAG_NPM_TOKEN` | `npm view` |
 | `ci` | ✅ | 推 tag，Actions 构建上传 | `git tag` + `git push` / workflow_dispatch | — | git remote | Actions 绿 + Release 资产 |
-| `build-only` | ✅ | 只构建不上传（验证包） | `build-artifacts.sh` | — | — | 本地目录 + checksums |
-| `fnos` | 🔜 | NAS fnOS 包 | `scripts/packaging/` | github 或 build | TBD | TBD |
-| `docker` | 🔜 | 容器镜像 | TBD | build | registry login | TBD |
+| `build-only` | ✅ | 只构建不上传 | `./start.sh package …` 或 `build-github-artifacts.sh` | — | — | 本地目录 + checksums |
+| `fnos` | 🔜 | 飞牛包（系统 = fnos） | `./start.sh package cli fnos …` | — | TBD | TBD |
+| `docker` | 🔜 | 容器（系统 = docker / Linux CLI） | `./start.sh package cli docker` | — | TBD | TBD |
 
-**暂不发布**：独立 `centag-wrap` tarball、`minimal`、`launcher`（进程代理用 `centag wrap`）。
+**暂不发布**：独立 `centag-wrap` tarball、`minimal`（进程代理用 `centag wrap`）。
+
+### 1.1 概念：形态 × 系统 × 架构
+
+| 维度 | 取值 | 说明 |
+|------|------|------|
+| **form（形态）** | `cli` / `desktop` | 同一维度：命令行包 vs 桌面包（桌面含托盘壳；不再单独叫 tray） |
+| **os（系统）** | `macos` / `linux` / `windows` / `fnos` / `docker` | 目标环境；fnos/docker 也是系统 |
+| **arch（架构）** | `amd64` / `arm64` / `host` / `all` | 可省略 |
+
+本地统一命令：
+
+```bash
+./start.sh package <form> <os> [arch] [选项...]
+./start.sh package list
+```
+
+### 1.2 渠道产物矩阵（强制）
+
+| 渠道 | macOS | Windows | Linux |
+|------|-------|---------|-------|
+| **GitHub / install.sh** | **desktop**（dmg + zip） | **desktop**（zip） | **cli** tarball |
+| **npm** | cli | cli | cli |
+
+本地开发 `./start.sh debug` **始终 cli**，与发版渠道无关。
+
+### 1.3 产物命名（互不覆盖）
+
+同版本目录 `~/.centag/var/release/<version>/` 可并存；构建**只替换本形态本平台文件**，不清空整个目录。
+
+| 形态 | 文件名 |
+|------|--------|
+| cli | `centag-cli-<edition>-<goos>-<goarch>.tar.gz` |
+| desktop | `centag-desktop-<edition>-macos-<arch>.{dmg,zip}` / `centag-desktop-<edition>-windows-<arch>.zip` |
+| 校验 | `checksums.txt`（合并目录内全部上述资产） |
+
+示例（personal）：
+
+- `centag-cli-personal-linux-amd64.tar.gz`
+- `centag-cli-personal-linux-arm64.tar.gz`
+- `centag-desktop-personal-macos-amd64.dmg` / `.zip`
+- `centag-desktop-personal-windows-amd64.zip`
 
 ---
 
@@ -27,13 +69,15 @@
 
 | 项目 | 真源 |
 |------|------|
-| 默认组件 | `personal`（含 `centag wrap`） |
-| 默认平台 | darwin/linux/windows × amd64/arm64（6 包） |
+| GitHub 默认 SKU | `personal`（含 `centag wrap` 子命令） |
+| GitHub 产物 | `cli(linux)×2` + `desktop(macos|windows)`（见 §4.3） |
+| npm 产物 | personal **cli** × 6 平台（交叉编译） |
 | 版本号（未指定时） | `apps/wrap-npm/package.json` → `version` |
 | npm 包版本 | `apps/centag-npm/package.json`（须与 Release 对齐） |
 | 本地产物目录 | `${CENTAG_INSTALL_ROOT:-~/.centag}/var/release/<version>/` |
 | 默认仓库 | `atoml-ai/centag`（`CENTAG_RELEASE_REPO` 覆盖） |
-| 一键安装 | `scripts/install.sh` |
+| 一键安装 | `scripts/install.sh`（按 OS 选 desktop zip 或 linux cli tar） |
+| 本地打包入口 | `./start.sh package` → `scripts/packaging/package.sh` |
 
 ### 版本分支门禁
 
@@ -94,7 +138,8 @@ echo "branch=${BR} version=${VER}"
 bash scripts/release/require-release-branch.sh --version "${VER:-0.0.0}" 2>&1 || true
 echo "--- gh ---"; gh auth status 2>&1 | head -3 || true
 echo "--- npm ---"; npm whoami 2>&1 || true
-echo "--- local artifacts ---"; ls "${OUT}"/centag-personal-*.tar.gz 2>/dev/null | wc -l | xargs echo "tarball_count="
+echo "--- local artifacts ---"
+ls "${OUT}"/centag-cli-*.tar.gz "${OUT}"/centag-desktop-* 2>/dev/null | wc -l | xargs echo "asset_count="
 echo "--- remote release ---"; gh release view "v${VER}" --repo atoml-ai/centag --json isDraft,assets 2>&1 | head -3 || true
 ```
 
@@ -108,33 +153,53 @@ echo "--- remote release ---"; gh release view "v${VER}" --repo atoml-ai/centag 
 
 **Agent 行为**：鉴权失败 → **停止该渠道**，给出命令；用户确认已登录后 **从该渠道重试**，不必重跑已完成渠道。
 
-### 4.3 共用构建（只跑一次）
+### 4.3 共用构建（GitHub 渠道）
 
-产物：`centag-personal-<goos>-<goarch>.tar.gz` × 6 + `checksums.txt`。
+GitHub / `install.sh` 需要的资产（本机只能打出 **当前 OS 的 desktop + linux cli**；完整矩阵走 CI）：
+
+| 资产 | 说明 |
+|------|------|
+| `centag-cli-personal-linux-amd64.tar.gz` | Linux CLI |
+| `centag-cli-personal-linux-arm64.tar.gz` | Linux CLI |
+| `centag-desktop-personal-macos-<arch>.zip` / `.dmg` | macOS desktop（本机/macos runner） |
+| `centag-desktop-personal-windows-<arch>.zip` | Windows desktop（windows runner） |
+| `checksums.txt` | 上述资产 SHA-256（合并写入，不清空其它形态文件） |
+
+等价本地命令（与脚本封装一致）：
+
+```bash
+# 推荐封装（一次：本机 desktop + linux cli）
+./scripts/release/build-github-artifacts.sh --version "${CENTAG_RELEASE_VERSION}"
+
+# 或分条（形态×系统）：
+./start.sh package desktop macos --version "${CENTAG_RELEASE_VERSION}" --skip-frontend   # 仅 darwin
+./start.sh package desktop windows --version "${CENTAG_RELEASE_VERSION}" --skip-frontend # 仅 windows
+./start.sh package cli linux all --version "${CENTAG_RELEASE_VERSION}" --skip-frontend
+```
 
 ```bash
 RELEASE_OUT="${CENTAG_INSTALL_ROOT:-$HOME/.centag}/var/release/${CENTAG_RELEASE_VERSION}"
 
-# reuse：已有完整产物则跳过
+# reuse：至少已有 linux cli ×2 + checksums（desktop 由 CI/本机补齐）
 if [[ "${CENTAG_RELEASE_BUILD}" == "reuse" ]]; then
-  count="$(find "${RELEASE_OUT}" -maxdepth 1 -name 'centag-personal-*.tar.gz' 2>/dev/null | wc -l | tr -d ' ')"
-  [[ "$count" -ge 6 ]] && [[ -f "${RELEASE_OUT}/checksums.txt" ]] && echo "reuse OK" && exit 0
+  count="$(find "${RELEASE_OUT}" -maxdepth 1 -name 'centag-cli-*-linux-*.tar.gz' 2>/dev/null | wc -l | tr -d ' ')"
+  [[ "$count" -ge 2 ]] && [[ -f "${RELEASE_OUT}/checksums.txt" ]] && echo "reuse OK" && exit 0
   echo "reuse 不可用：产物不足，改为 rebuild"
 fi
 
-# rebuild（默认）
-./scripts/release/build-artifacts.sh \
-  --version "${CENTAG_RELEASE_VERSION}" \
-  --components personal
+# rebuild（默认）— GitHub 形态
+./scripts/release/build-github-artifacts.sh \
+  --version "${CENTAG_RELEASE_VERSION}"
 ```
 
 | `CENTAG_RELEASE_BUILD` | 行为 |
 |------------------------|------|
-| `reuse` | 有 6 tarball + checksums → 跳过；否则 fallback rebuild |
-| `rebuild` | 始终 `build-artifacts.sh` |
-| `skip` | 不跑共用构建（CI 发版，或仅 npm 且接受脚本内二次编译） |
+| `reuse` | linux cli ×2 + checksums → 跳过；否则 fallback rebuild |
+| `rebuild` | 始终 `build-github-artifacts.sh` |
+| `skip` | 不跑共用构建（CI 发版，或仅 npm） |
 
-> **说明**：`publish-centag-npm.sh` 会为 npm vendor 目录**再次交叉编译**。选 `github`+`npm` 时仍先共用构建供 GitHub；npm 步骤暂无法消除二次编译（脚本层待优化）。Agent **不得**为省事先 npm 后 github（在线包依赖 Release）。
+> **说明**：npm 渠道**仍**交叉编译全平台 CLI（与 GitHub desktop 包无关）。Agent **不得**为省事先 npm 后 github（在线包依赖 Release）。  
+> **desktop 不可交叉编译**（CGO/systray）；完整 Win+mac desktop 依赖 CI 原生 runner。
 
 ---
 
@@ -169,10 +234,11 @@ REPO="${CENTAG_RELEASE_REPO:-atoml-ai/centag}"
 
 if gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1; then
   gh release upload "$TAG" --repo "$REPO" --clobber \
-    "${RELEASE_OUT}"/centag-personal-*.tar.gz \
+    "${RELEASE_OUT}"/centag-cli-*-linux-*.tar.gz \
+    "${RELEASE_OUT}"/centag-desktop-*.dmg \
+    "${RELEASE_OUT}"/centag-desktop-*.zip \
     "${RELEASE_OUT}/checksums.txt"
 else
-  # 新建：脚本写 notes；默认 --draft（见下「草稿」）
   ./scripts/release/publish-binaries.sh --version "${CENTAG_RELEASE_VERSION}" --release
 fi
 ```
@@ -191,7 +257,7 @@ fi
 | Release **不存在**，`DRAFT=false` | 创建后 `gh release edit … --draft=false` |
 | Release **已存在** | 上传 **不会**改 draft 状态；用户选草稿但已公开 → **告知**并继续上传资产 |
 
-Release notes 真源：`scripts/release/publish-binaries.sh` 内 `NOTES`（英文）。已存在 Release 且 notes 过期 → `gh release edit … --notes-file …` 单独处理。
+Release notes 真源：`scripts/release/publish-binaries.sh` 内 `NOTES`。已存在 Release 且 notes 过期 → `gh release edit … --notes-file …` 单独处理。
 
 #### 用户安装命令（汇报用）
 
@@ -208,20 +274,14 @@ curl -fsSL "https://raw.githubusercontent.com/${CENTAG_RELEASE_REPO:-atoml-ai/ce
 
 - 在线版 `centag`：`download.js` 从 GitHub Release 拉二进制 → **必须先有已 publish 的 Release**（或用户仅发 offline 且接受限制）。
 - 鉴权：`CENTAG_NPM_TOKEN` 或 `npm whoami`。
+- npm 包内始终是 **cli** 形态（6 平台交叉编译），不打包 desktop。
 
 ```bash
-# 仅打包（不 publish）— 调试
 DRY_RUN=1 ./scripts/publish-centag-npm.sh
-
-# 发布（不重复建 GitHub Release）
 CENTAG_NPM_TOKEN="${CENTAG_NPM_TOKEN:-}" ./scripts/publish-centag-npm.sh
-
-# 若尚未发 GitHub 且用户选 all — 应先完成 §5.2，再跑本命令
-# 禁止：CENTAG_NPM_TOKEN=… ./scripts/publish-centag-npm.sh --release
-#       （--release 会再次调 publish-binaries，与共用构建重复；仅在「仅 npm 且要顺带建 Release」时用）
 ```
 
-版本须与 `apps/centag-npm/package.json` 一致；发版前 Agent 应核对与 `CENTAG_RELEASE_VERSION` 相同，不一致则 **AskQuestion** 确认以哪边为准或先改 package.json。
+版本须与 `apps/centag-npm/package.json` 一致；与 `CENTAG_RELEASE_VERSION` 不一致则 **AskQuestion** 确认。
 
 ### 5.4 `ci` — GitHub Actions
 
@@ -232,14 +292,21 @@ git checkout "feature/v${CENTAG_RELEASE_VERSION}"   # 或 v / release 前缀
 git pull
 bash scripts/release/require-release-branch.sh --version "${CENTAG_RELEASE_VERSION}"
 
-# 新 tag
 git tag "v${CENTAG_RELEASE_VERSION}"
 git push origin "v${CENTAG_RELEASE_VERSION}"
 ```
 
 或：GitHub → Actions → **release** → 选版本分支 → Run workflow。
 
-CI 含 `npm-publish` job 时，选 `ci`+`npm` 可只在 CI 发 npm；本地跳过 §5.3。验收见 §6.3。
+CI jobs（`.github/workflows/release.yml`）：
+
+| Job | Runner | 产出 |
+|-----|--------|------|
+| `github-linux-cli` | ubuntu | `centag-cli-*-linux-*.tar.gz` |
+| `github-macos-desktop` | macos-14 | `centag-desktop-*-macos-*` |
+| `github-windows-desktop` | windows-latest | `centag-desktop-*-windows-*` |
+| `publish` | ubuntu | 汇总上传 GitHub Release |
+| `npm-publish` | ubuntu | 全平台 cli → npm |
 
 **注意**：workflow `run: |` 内禁止顶格 heredoc。
 
@@ -256,7 +323,14 @@ gh release view "v${CENTAG_RELEASE_VERSION}" \
   --jq '{name,isDraft,assets:[.assets[].name]}'
 ```
 
-期望：`centag-personal-*` × 6 + `checksums.txt`。  
+期望：
+
+- `centag-cli-personal-linux-amd64.tar.gz` / `…-arm64.tar.gz`
+- `centag-desktop-personal-macos-<arch>.zip`（及可选 `.dmg`）
+- `centag-desktop-personal-windows-<arch>.zip`
+- `checksums.txt`
+
+完整矩阵通常由 CI 凑齐。  
 **Draft** → 提醒：匿名 `curl` 下载不可用，需 Publish。
 
 ### 6.2 npm
@@ -307,7 +381,7 @@ test -x "$PREFIX/bin/centag" || test -x "$PREFIX/bin/centag-personal"
 12. [ ] 更新 `workflow_state.md` Step 6 / Gate 5 + 决策日志
 13. [ ] 汇报各渠道 URL/版本；安装 = 用户手动（除非 smoke）
 
-**禁止**：发版中改业务代码；非版本分支正式 Release；擅自加 minimal/launcher。
+**禁止**：发版中改业务代码；非版本分支正式 Release；擅自加 minimal/独立 wrap。
 
 ---
 
@@ -323,6 +397,8 @@ test -x "$PREFIX/bin/centag" || test -x "$PREFIX/bin/centag-personal"
 | `publish-centag-npm` 版本不符 | 对齐 `apps/centag-npm/package.json` |
 | CI tag not on version branch | 在版本分支重打 tag |
 | install.sh 404 on main | 用 tag raw URL 或先合 main |
+| desktop 交叉编译失败 | 必须在目标 OS 本机或 CI runner 构建 |
+| 构建后其它形态包消失 | 已修复：禁止清空整个 `release/<ver>/`；检查是否仍用旧脚本 |
 
 ---
 
@@ -330,11 +406,14 @@ test -x "$PREFIX/bin/centag" || test -x "$PREFIX/bin/centag-personal"
 
 | 文件 | 职责 |
 |------|------|
-| `scripts/release/build-artifacts.sh` | 共用构建 |
-| `scripts/release/publish-binaries.sh` | GitHub Release |
-| `scripts/publish-centag-npm.sh` | npm |
-| `scripts/install.sh` | curl 安装 |
+| `scripts/packaging/package.sh` | 本地统一入口：`package <cli\|desktop> <os> [arch]` |
+| `scripts/release/build-github-artifacts.sh` | GitHub 渠道：linux cli + 本机 desktop |
+| `scripts/release/package-desktop.sh` | 本机 desktop（dmg/zip） |
+| `scripts/release/build-artifacts.sh` | cli 交叉编译（可与 desktop 共存） |
+| `scripts/release/publish-binaries.sh` | GitHub Release 上传 |
+| `scripts/publish-centag-npm.sh` | npm（全平台 cli） |
+| `scripts/install.sh` | curl 安装（按 OS 选 desktop/cli） |
 | `scripts/release/require-release-branch.sh` | 分支门禁 |
-| `.github/workflows/release.yml` | CI |
+| `.github/workflows/release.yml` | CI（desktop 原生 runner + linux cli + npm cli） |
 | `apps/centag-npm/` | npm 包定义 |
 | `apps/wrap-npm/package.json` | 版本参考 |

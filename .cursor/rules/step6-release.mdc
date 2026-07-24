@@ -35,12 +35,12 @@ bash scripts/release/require-release-branch.sh --version "${VER:-0.0.0}" 2>&1 ||
 gh auth status 2>&1 | head -5 || true
 npm whoami 2>&1 || true
 OUT="${CENTAG_INSTALL_ROOT:-$HOME/.centag}/var/release/${VER}"
-ls "${OUT}"/centag-personal-*.tar.gz 2>/dev/null | wc -l
+ls "${OUT}"/centag-cli-*.tar.gz "${OUT}"/centag-desktop-* 2>/dev/null | wc -l
 gh release view "v${VER}" --repo atoml-ai/centag 2>&1 | head -5 || true
 # 读 docs/versions/<ver>/<需求>/workflow_state.md + CR_报告.md
 ```
 
-向用户**摘要**：分支、版本、本地产物数、远端 Release、gh/npm 登录态。
+向用户**摘要**：分支、版本、本地产物数（`centag-cli-*` / `centag-desktop-*`）、远端 Release、gh/npm 登录态。
 
 ### 1. Gate 4 拦截
 
@@ -69,7 +69,7 @@ Gate 4 未 ✅ 或 CR 未「批准 — 可发版」→ **停止**，引导 `step
 | id | prompt | options |
 |----|--------|---------|
 | `version` | 版本号（无 v 前缀） | `<探测到的 package.json 版本>` / 其他（我会输入） |
-| `build` | 共用构建策略 | 复用本地产物（已有 tar.gz） / **重新构建（推荐）** / 跳过（CI 或仅上传） |
+| `build` | 共用构建策略 | 复用本地产物（已有 `centag-cli-*` / `centag-desktop-*`） / **重新构建（推荐）** / 跳过（CI 或仅上传） |
 | `github_mode` | GitHub 投递方式（选了 github 且非 ci） | 本地上传（Path A/B） / 推 tag 走 CI（Path C） |
 | `draft` | 新建 Release 是否草稿 | 是（推荐） / 否直接公开 |
 | `verify` | 发版后验收 | **仅检查各渠道产物（默认）** / 额外本机 install 冒烟 |

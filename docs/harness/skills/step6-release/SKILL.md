@@ -32,7 +32,7 @@ description: "工作流 Step 6：全流程发版 — GitHub Release（curl|insta
 | G4.6 | 开发风险评估无开放 Critical |
 | **G4.7** | `workflow_state.md` Gate 4 = ✅，且 CR 勾选「**批准 — 可发版**」 |
 
-> 仅 `build-artifacts.sh`（不上传）不受 Gate 4 约束，但仍建议在版本分支操作。
+> 仅 `build-github-artifacts.sh` / `build-artifacts.sh`（不上传）不受 Gate 4 约束，但仍建议在版本分支操作。
 
 ## 流水线总览
 
@@ -51,9 +51,9 @@ description: "工作流 Step 6：全流程发版 — GitHub Release（curl|insta
 
 | 渠道 ID | 用户可见名 | 产物 / 消费方式 | 前置依赖 | 鉴权 |
 |---------|-----------|----------------|----------|------|
-| `github` | GitHub Release + `install.sh` | tar.gz + checksums；`curl \| bash scripts/install.sh` | 无 | `gh auth` |
-| `npm` | npm 包 | `centag`（在线 lazy-download）+ `centag-offline`（离线 bundled） | **在线版依赖** 对应版本 GitHub Release 已 publish | `npm login` 或 `CENTAG_NPM_TOKEN` |
-| `ci` | GitHub Actions | 推 `v*` tag 或 workflow_dispatch | 无（CI 内构建） | `git push` + Actions 权限 |
+| `github` | GitHub Release + `install.sh` | **desktop**(macOS/Windows) + **cli**(Linux) + checksums；`curl \| bash scripts/install.sh` | desktop 需原生 OS | `gh auth` |
+| `npm` | npm 包 | 全平台 **cli**；`centag`（在线 lazy-download）+ `centag-offline` | **在线版依赖** 对应版本 GitHub Release 已 publish | `npm login` 或 `CENTAG_NPM_TOKEN` |
+| `ci` | GitHub Actions | 推 `v*` tag 或 workflow_dispatch（desktop 分 runner + linux cli） | 无（CI 内构建） | `git push` + Actions 权限 |
 
 **推荐组合与顺序**（写死依赖，Agent 自动排序）：
 
@@ -93,12 +93,14 @@ bash scripts/release/require-release-branch.sh --version "${VER:-0.0.0}" 2>&1 ||
 gh auth status 2>&1 | head -5 || true
 npm whoami 2>&1 || true
 RELEASE_OUT="${CENTAG_INSTALL_ROOT:-$HOME/.centag}/var/release/${VER}"
-ls "${RELEASE_OUT}"/centag-personal-*.tar.gz 2>/dev/null | wc -l
+ls "${RELEASE_OUT}"/centag-cli-*.tar.gz "${RELEASE_OUT}"/centag-desktop-* 2>/dev/null | wc -l
 gh release view "v${VER}" --repo atoml-ai/centag 2>&1 | head -5 || true
 # 读 docs/versions/<ver>/<需求>/workflow_state.md + CR_报告.md
 ```
 
 探测结果**摘要给用户**（分支、版本、本地产物数、远端 Release 是否存在、gh/npm 登录态），再进入 AskQuestion。
+
+**渠道产物**：GitHub/`install.sh` = macOS&Windows **desktop** + Linux **cli**；npm = **全平台 cli**。本地打包：`./start.sh package <cli|desktop> <os> [arch]`（见 procedure §1.1）。
 
 ### 1. Gate 4 拦截
 
@@ -124,17 +126,17 @@ gh release view "v${VER}" --repo atoml-ai/centag 2>&1 | head -5 || true
 2. 按渠道检查鉴权（procedure §鉴权矩阵）
 3. 确定构建策略：reuse / rebuild / skip
 
-### 4. 共用构建（一次）
+### 4. 共用构建（一次，GitHub 形态）
 
-仅当 `CENTAG_RELEASE_BUILD` ≠ `skip` 且（渠道含 `github` 或需本地上传 npm 离线包前需 tarball）时执行：
+仅当 `CENTAG_RELEASE_BUILD` ≠ `skip` 且渠道含 `github`（或需本地验 GitHub 包）时执行：
 
 ```bash
-./scripts/release/build-artifacts.sh --version "${CENTAG_RELEASE_VERSION}" --components personal
+./scripts/release/build-github-artifacts.sh --version "${CENTAG_RELEASE_VERSION}"
 ```
 
-`reuse`：产物目录已有 6 平台 personal + checksums → 跳过构建，仅 `ls` 确认。  
-`rebuild`：始终跑 `build-artifacts.sh`。  
-`skip`：Path C / 仅 npm 且走 `publish-centag-npm.sh` 自带构建时跳过共用构建（procedure 详述）。
+`reuse`：已有 linux CLI ×2 + checksums → 跳过。  
+`rebuild`：始终跑 `build-github-artifacts.sh`（本机桌面 + linux CLI；完整 Win/mac 矩阵靠 CI）。  
+`skip`：Path C / 仅 npm（npm 自带全平台 CLI 编译）时跳过。
 
 ### 5. 按序发渠道
 
@@ -173,10 +175,13 @@ gh release view "v${VER}" --repo atoml-ai/centag 2>&1 | head -5 || true
 
 | 脚本 | 用途 |
 |------|------|
-| `scripts/release/build-artifacts.sh` | **共用**交叉编译 + tarball |
+| `./start.sh package <form> <os> [arch]` | 本地统一打包（`cli`/`desktop` × os × arch） |
+| `scripts/release/build-github-artifacts.sh` | GitHub 渠道：linux cli + 本机 desktop |
+| `scripts/release/package-desktop.sh` | 本机 desktop（dmg/zip） |
+| `scripts/release/build-artifacts.sh` | cli 交叉编译（可与 desktop 共存同一 OUT_DIR） |
 | `scripts/release/publish-binaries.sh` | GitHub 上传（`--release`） |
-| `scripts/publish-centag-npm.sh` | npm 打包发布 |
-| `scripts/install.sh` | 用户 curl 安装 |
+| `scripts/publish-centag-npm.sh` | npm 打包发布（全平台 cli） |
+| `scripts/install.sh` | 用户 curl 安装（按 OS 选 desktop/cli） |
 | `scripts/release/require-release-branch.sh` | 版本分支门禁 |
 
 细节命令见 **`procedure.md`**。

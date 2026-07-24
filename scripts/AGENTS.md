@@ -15,21 +15,23 @@
 | `docker/` | Docker 辅助脚本 |
 | `ollama/` | Ollama 相关脚本 |
 | `ops/` | 运维脚本 |
-| `packaging/` | 第三方系统/渠道打包统一入口（fnOS 等） |
+| `packaging/` | 部署包统一入口（形态 cli/desktop × 系统 macos/linux/windows/fnos/docker） |
 | `test/` | 测试脚本 |
 
 ## 核心脚本
 
 | 脚本 | 用途 |
 |------|------|
-| `install.sh` | 一键安装（`curl \| bash`；默认 personal，含 `centag wrap`） |
-| `release/build-artifacts.sh` | 交叉编译 Release 产物（tar.gz + checksums） |
+| `install.sh` | 一键安装（`curl \| bash`；macOS/Windows→tray 桌面，Linux→CLI） |
+| `release/build-github-artifacts.sh` | GitHub 渠道产物（linux CLI + 本机 tray） |
+| `release/package-desktop.sh` | 本机 tray 桌面包（dmg/zip） |
+| `release/build-artifacts.sh` | 纯 CLI 交叉编译（npm / linux 段） |
 | `release/publish-binaries.sh` | 构建并上传 GitHub Release |
 | `release/require-release-branch.sh` | 发版门禁：仅版本分支（`vX` / `feature/vX` / `release/vX`） |
 | `release/require-release-branch_test.sh` | 上述门禁的表驱动 shell 测试 |
 | `check-harness-hygiene.sh` | Harness 卫生检查（Centag 布局） |
 | `ci-go-packages.sh` | CI 包列表生成 |
-| `packaging/package.sh` | 渠道打包调度（参数见根目录 `packaging.env`） |
+| `packaging/package.sh` | 部署包调度：`package <cli\|desktop> <os> [arch]`（见 `packaging.env`） |
 | `log_analyzer.py` | 日志分析 |
 
 ## 约束

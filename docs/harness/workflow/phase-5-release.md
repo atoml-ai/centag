@@ -6,10 +6,10 @@
 
 在 **Gate 4（CR 发版许可）** 通过后，于版本分支完成用户所选渠道的发布与验收：
 
-- **GitHub Release** — `curl | bash scripts/install.sh`
-- **npm** — `centag` + `centag-offline`
-- **CI**（可选）— 推 tag / Actions
-- 未来渠道见 `step6-release/procedure.md` §渠道注册表
+- **GitHub Release** — desktop(macOS/Windows) + cli(Linux)；`curl | bash scripts/install.sh`
+- **npm** — 全平台 cli：`centag` + `centag-offline`
+- **CI**（可选）— 推 tag / Actions（desktop 原生 runner）
+- 本地打包：`./start.sh package <cli|desktop> <os> [arch]`；未来渠道见 `step6-release/procedure.md` §渠道注册表
 
 安装/部署冒烟默认由用户手动完成。
 

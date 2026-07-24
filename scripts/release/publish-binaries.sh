@@ -1,5 +1,12 @@
 #!/usr/bin/env bash
-# Build release artifacts and draft/publish a GitHub Release for install.sh.
+# Build GitHub Release artifacts (install.sh channel) and draft/publish.
+#
+# GitHub product form:
+#   linux   → personal CLI tarball
+#   darwin  → tray desktop (.zip + .dmg)
+#   windows → tray desktop (.zip)
+#
+# npm channel is separate and still publishes CLI for all platforms.
 #
 # Usage:
 #   ./scripts/release/publish-binaries.sh --version 0.2.7
@@ -11,6 +18,7 @@
 #   DRY_RUN=1            build only, skip gh release
 #   CENTAG_RELEASE_REPO  default atoml-ai/centag
 #   CENTAG_RELEASE_ALLOW_ANY_BRANCH=1  emergency bypass of version-branch gate (on --release)
+#   CENTAG_RELEASE_GITHUB_DESKTOP=0    skip host tray package (linux CLI only)
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -21,18 +29,21 @@ fail() { echo "error: $*" >&2; exit 1; }
 
 VERSION=""
 DO_RELEASE=0
-COMPONENTS="personal"
 EXTRA_BUILD_ARGS=()
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --version) VERSION="${2:-}"; shift 2 ;;
     --release) DO_RELEASE=1; shift ;;
-    --components) COMPONENTS="${2:-}"; shift 2 ;;
-    --platforms) EXTRA_BUILD_ARGS+=(--platforms "$2"); shift 2 ;;
     --skip-frontend) EXTRA_BUILD_ARGS+=(--skip-frontend); shift ;;
+    --no-desktop) EXTRA_BUILD_ARGS+=(--no-desktop); shift ;;
+    # legacy flags kept for callers; GitHub channel ignores CLI component matrix
+    --components|--platforms)
+      log "warn: ignoring $1 for GitHub channel (use build-artifacts.sh / npm for CLI matrices)"
+      shift 2
+      ;;
     -h|--help)
-      sed -n '2,18p' "$0"
+      sed -n '2,22p' "$0"
       exit 0
       ;;
     *) fail "unknown arg: $1" ;;
@@ -43,14 +54,12 @@ BUILD_ARGS=()
 if [[ -n "$VERSION" ]]; then
   BUILD_ARGS+=(--version "$VERSION")
 fi
-BUILD_ARGS+=(--components "$COMPONENTS")
-# macOS bash 3.2 + set -u: empty array expansion is "unbound"
 if [[ ${#EXTRA_BUILD_ARGS[@]} -gt 0 ]]; then
   BUILD_ARGS+=("${EXTRA_BUILD_ARGS[@]}")
 fi
 
-# build-artifacts prints OUT_DIR on the last stdout line; npm/vite may also write stdout.
-OUT_DIR="$(bash "${ROOT}/scripts/release/build-artifacts.sh" "${BUILD_ARGS[@]}" | tail -n 1)"
+# build-github-artifacts prints OUT_DIR on the last stdout line
+OUT_DIR="$(bash "${ROOT}/scripts/release/build-github-artifacts.sh" "${BUILD_ARGS[@]}" | tail -n 1)"
 OUT_DIR="${OUT_DIR//$'\r'/}"
 [[ -d "$OUT_DIR" ]] || fail "build output missing: ${OUT_DIR:-<empty>}"
 
@@ -71,7 +80,6 @@ if [[ "$DO_RELEASE" != "1" ]]; then
   exit 0
 fi
 
-# Upload only from the version branch matching this release (build-only elsewhere is OK).
 bash "${ROOT}/scripts/release/require-release-branch.sh" --version "${VERSION}"
 
 command -v gh >/dev/null 2>&1 || fail "gh is required for --release"
@@ -79,7 +87,15 @@ command -v gh >/dev/null 2>&1 || fail "gh is required for --release"
 ASSETS=()
 while IFS= read -r f; do
   ASSETS+=("$f")
-done < <(find "$OUT_DIR" -maxdepth 1 \( -name 'centag-*.tar.gz' -o -name 'checksums.txt' \) | sort)
+done < <(find "$OUT_DIR" -maxdepth 1 -type f \( \
+  -name 'centag-cli-*-linux-*.tar.gz' -o \
+  -name 'centag-desktop-*.dmg' -o \
+  -name 'centag-desktop-*.zip' -o \
+  -name 'centag-personal-linux-*.tar.gz' -o \
+  -name 'Centag-*.dmg' -o \
+  -name 'Centag-*.zip' -o \
+  -name 'checksums.txt' \
+\) | sort)
 [[ ${#ASSETS[@]} -gt 0 ]] || fail "no assets to upload in ${OUT_DIR}"
 
 NOTES="$(cat <<EOF
@@ -88,62 +104,24 @@ NOTES="$(cat <<EOF
 ### Install
 
 \`\`\`bash
-# pin version (recommended — no GitHub API lookup)
+# Linux / curl installer (desktop OS → desktop; Linux → CLI)
 curl -fsSL https://raw.githubusercontent.com/${REPO}/${TAG}/scripts/install.sh | bash -s ${VERSION} && . "\$HOME/.centag/env"
 \`\`\`
 
-Default install root: \`~/.centag\`. Chain \`. ~/.centag/env\` so PATH applies in this shell.  
-Release ships **personal** only (\`centag wrap\` is a subcommand — no separate wrap tarball).
-
-### Default login (first run)
-
-- Username: \`admin\`
-- Password: \`centag123\`  
-  (override with \`LLM_PROXY_ADMIN_PASSWORD\` before first start)
-
-### Wrap / process proxy (API key)
-
-Process proxy is built into the personal binary (\`centag wrap …\` does **not** start the gateway):
-
 \`\`\`bash
-centag wrap doctor
-centag wrap run -- opencode
-centag wrap run --server http://host:20060 -- opencode
+# npm — CLI for all platforms
+npm install -g centag
 \`\`\`
 
-When the server requires login, set a **gateway API key** (not the upstream LLM provider key):
-
-| Variable | Required | Meaning |
-|----------|----------|---------|
-| \`CENTAG_WRAP_TOKEN\` | When setup/status returns 401 | Centag WebUI → API Keys (Bearer token) |
-| \`CENTAG_API_BASE\` | Optional | Gateway base URL (default \`http://127.0.0.1:20060\`) |
-
-\`\`\`bash
-export CENTAG_WRAP_TOKEN='ctg_xxxxxxxx'
-export CENTAG_API_BASE='http://127.0.0.1:20060'   # optional
-centag wrap doctor
-centag wrap run -- opencode
-\`\`\`
-
-Notes:
-- Without a token, PAC/CA may still work; \`doctor\` can PASS while authenticated setup APIs return HTTP 401.
-- Do **not** put the upstream LLM vendor key in \`CENTAG_WRAP_TOKEN\` — egress keys are injected by Centag MITM on the server.
-
-### Uninstall
-
-There is no dedicated uninstall command yet. Remove manually:
-
-\`\`\`bash
-centag wrap disable 2>/dev/null || true
-pkill -f 'centag-personal|/\\.centag/bin/centag' 2>/dev/null || true
-rm -rf "\${HOME}/.centag"
-# Also remove the PATH line from your shell rc (~/.zshrc / ~/.bashrc, etc.) if present:
-#   export PATH="\$HOME/.centag/bin:\$PATH"
-\`\`\`
+Default install root: \`~/.centag\`.  
+**GitHub / install.sh**: macOS & Windows → desktop; Linux → CLI.  
+**npm**: CLI on all platforms.
 
 ### Artifacts
 
-- \`centag-personal-<goos>-<goarch>.tar.gz\` — personal CLI + WebUI static (\`centag\` / \`centag wrap\`)
+- \`centag-desktop-personal-macos-<arch>.dmg\` / \`.zip\` — macOS desktop
+- \`centag-desktop-personal-windows-<arch>.zip\` — Windows desktop
+- \`centag-cli-personal-linux-<arch>.tar.gz\` — Linux CLI
 - \`checksums.txt\` — SHA-256 sums
 EOF
 )"
