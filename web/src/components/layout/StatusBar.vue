@@ -8,31 +8,57 @@
       <span class="status-sep">·</span>
       <span class="status-item">版本 <span class="mono">{{ status.version || '--' }}</span></span>
       <span class="status-sep">·</span>
-      <span class="status-item">运行时长 {{ status.uptime || '--' }}</span>
+      <span class="status-item">运行时长 {{ formatUptime(status.uptime) }}</span>
       <span class="status-sep">·</span>
       <span class="status-item">启动于 {{ status.start_time || '--' }}</span>
 
-      <span v-if="cacheItems.length" class="status-sep status-sep-group">|</span>
-      <span
-        v-for="item in cacheItems"
-        :key="item.key"
-        class="status-item status-cache-item"
-        :title="`查看${item.label}`"
-        @click="router.push('/cache')"
-      >
-        <el-icon :size="12" :class="item.iconClass"><component :is="item.icon" /></el-icon>
-        <span>{{ item.label }}</span>
-        <span class="mono" :style="item.valueStyle">{{ item.value }}</span>
-      </span>
       <span class="status-sep status-sep-group">|</span>
       <span
-        class="status-item status-pipeline-item"
+        class="status-item status-clickable"
+        :title="backendId ? `后端 ID: ${backendId}` : '未设置默认后端'"
+        @click="router.push('/dashboard')"
+      >
+        <el-icon :size="12"><Cpu /></el-icon>
+        <span>后端</span>
+        <span class="mono truncate">{{ backendName || '未设置' }}</span>
+      </span>
+      <span
+        class="status-item status-clickable"
+        :title="model ? `默认模型: ${model}` : '未设置默认模型'"
+        @click="router.push('/dashboard')"
+      >
+        <el-icon :size="12"><Coin /></el-icon>
+        <span>模型</span>
+        <span class="mono truncate">{{ model || '未设置' }}</span>
+      </span>
+      <span
+        class="status-item status-clickable"
         :title="pipelineId ? `流水线 ID: ${pipelineId}` : '未设置默认流水线'"
         @click="router.push('/dashboard')"
       >
         <el-icon :size="12"><Share /></el-icon>
         <span>流水线</span>
-        <span class="mono pipeline-name">{{ pipelineName }}</span>
+        <span class="mono truncate">{{ pipelineName || '未设置' }}</span>
+      </span>
+
+      <span class="status-sep status-sep-group">|</span>
+      <span
+        class="status-item status-clickable"
+        title="查看用量与计费"
+        @click="goUsage"
+      >
+        <el-icon :size="12"><Money /></el-icon>
+        <span>总费用</span>
+        <span class="mono">{{ costText }}</span>
+      </span>
+      <span
+        class="status-item status-clickable"
+        title="查看 Token 用量"
+        @click="goUsage"
+      >
+        <el-icon :size="12"><DataLine /></el-icon>
+        <span>总 Token</span>
+        <span class="mono">{{ tokensText }}</span>
       </span>
     </div>
     <div class="status-right">
@@ -54,59 +80,25 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { Collection, CircleCheck, CircleClose, Coin, Share, Monitor } from '@element-plus/icons-vue'
+import { Cpu, Coin, Share, Money, DataLine, Monitor } from '@element-plus/icons-vue'
 import { getStatus } from '@/api'
-import { useCacheStats } from '@/composables/useCacheStats'
+import { formatUptime } from '@/utils/format'
 import { useActivePipeline } from '@/composables/useActivePipeline'
+import { useDefaultProxySettings } from '@/composables/useDefaultProxySettings'
+import { useUsageTotals } from '@/composables/useUsageTotals'
 import { useLogPanel } from '@/composables/useLogPanel'
 import { useEdition } from '@/composables/useEdition'
+import { useAuthStore } from '@/stores/auth'
 
 const router = useRouter()
+const authStore = useAuthStore()
+const { isMinimal, isTeam } = useEdition()
 const status = ref<any>({})
 const { visible: logPanelVisible, toggle: toggleLogPanel } = useLogPanel()
-const { isMinimal } = useEdition()
 
-const { cacheStats, hitRate, hitRateColor, formatNumber } = useCacheStats({
-  enabled: !isMinimal.value
-})
-const { pipelineId, pipelineName } = useActivePipeline({
-  enabled: true
-})
-
-const cacheItems = computed(() => {
-  if (isMinimal.value) return []
-  return [
-    {
-      key: 'total',
-      label: '缓存',
-      value: formatNumber(cacheStats.value.total),
-      icon: Collection,
-      iconClass: 'cache-icon-total'
-    },
-    {
-      key: 'hits',
-      label: '命中',
-      value: formatNumber(cacheStats.value.hits),
-      icon: CircleCheck,
-      iconClass: 'cache-icon-hits'
-    },
-    {
-      key: 'misses',
-      label: '未中',
-      value: formatNumber(cacheStats.value.misses),
-      icon: CircleClose,
-      iconClass: 'cache-icon-misses'
-    },
-    {
-      key: 'rate',
-      label: '命中率',
-      value: `${hitRate.value}%`,
-      icon: Coin,
-      iconClass: 'cache-icon-rate',
-      valueStyle: { color: hitRateColor.value }
-    }
-  ]
-})
+const { pipelineId, pipelineName } = useActivePipeline({ enabled: true })
+const { backendId, backendName, model } = useDefaultProxySettings({ enabled: true })
+const { costText, tokensText } = useUsageTotals({ enabled: true })
 
 const statusClass = computed(() => {
   return status.value.status === 'healthy' ? 'status-healthy' : 'status-error'
@@ -115,6 +107,19 @@ const statusClass = computed(() => {
 const statusText = computed(() => {
   return status.value.status === 'healthy' ? '运行中' : '异常'
 })
+
+function goUsage() {
+  if (isMinimal.value) {
+    router.push('/dashboard')
+    return
+  }
+  // team 超管无 /token-usage，走成本看板
+  if (isTeam.value && authStore.isAdmin) {
+    router.push('/cost')
+    return
+  }
+  router.push('/token-usage')
+}
 
 async function loadStatus() {
   try {
@@ -191,39 +196,21 @@ onMounted(() => {
   background: #f56c6c;
 }
 
-.status-cache-item,
-.status-pipeline-item {
+.status-clickable {
   cursor: pointer;
   transition: color 0.15s ease;
 }
 
-.status-cache-item:hover,
-.status-pipeline-item:hover {
+.status-clickable:hover {
   color: #606266;
-}
-
-.cache-icon-total {
-  color: #67c23a;
-}
-
-.cache-icon-hits {
-  color: #409eff;
-}
-
-.cache-icon-misses {
-  color: #f56c6c;
-}
-
-.cache-icon-rate {
-  color: #e6a23c;
 }
 
 .mono {
   font-family: 'SF Mono', 'Fira Code', monospace;
 }
 
-.pipeline-name {
-  max-width: 160px;
+.truncate {
+  max-width: 140px;
   overflow: hidden;
   text-overflow: ellipsis;
 }
