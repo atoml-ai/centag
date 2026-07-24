@@ -1,0 +1,16 @@
+{
+  "title": "Default Pipeline Config",
+  "subtitle": "Configure the default pipeline used when no mode is specified in the request",
+  "systemDefaultPipeline": "System Default Pipeline",
+  "selectDefaultPipeline": "Select default pipeline",
+  "allowUserOverride": "Allow User Override",
+  "allowUserOverrideDesc": "When enabled, users can set their own default pipeline in Profile",
+  "saveConfig": "Save Config",
+  "reset": "Reset",
+  "currentEffectiveConfig": "Current Effective Config",
+  "defaultPipeline": "Default Pipeline",
+  "yes": "Yes",
+  "no": "No",
+  "configSaved": "Config saved",
+  "saveFailed": "Save failed"
+}

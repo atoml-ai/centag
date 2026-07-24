@@ -1,0 +1,89 @@
+{
+  "title": "클라우드 메모리 관리",
+  "subtitle": "에이전트 메모리 클라우드 스토리지 관리, 시맨틱 검색 및 버전 관리 지원",
+  "stats": {
+    "title": "메모리 통계",
+    "vectorEntries": "벡터 항목",
+    "memoryFiles": "메모리 파일",
+    "indexQueueLength": "인덱스 대기열 길이",
+    "processed": "처리 완료",
+    "failed": "실패",
+    "dropped": "드롭",
+    "recentError": "최근 오류:"
+  },
+  "currentAgent": "현재 에이전트",
+  "selectAgent": "에이전트 선택",
+  "actions": {
+    "syncToCloud": "클라우드에 동기화",
+    "pullFromCloud": "클라우드에서 가져오기",
+    "rebuildIndex": "인덱스 재구성"
+  },
+  "search": {
+    "placeholder": "메모리 내용 검색...",
+    "searchBtn": "검색"
+  },
+  "tabs": {
+    "files": "파일 목록",
+    "results": "검색 결과",
+    "versions": "버전 기록"
+  },
+  "fileList": {
+    "title": "메모리 파일",
+    "searchResults": "검색 결과",
+    "name": "파일명",
+    "size": "크기",
+    "modified": "수정 시간",
+    "actions": "작업",
+    "view": "보기",
+    "delete": "삭제",
+    "newFile": "새 파일",
+    "similarity": "유사도:"
+  },
+  "versionHistory": {
+    "selectFile": "파일 선택",
+    "versionId": "버전 ID",
+    "createdAt": "생성 시간",
+    "lines": "줄 수",
+    "size": "크기",
+    "restore": "복원",
+    "noVersions": "버전 기록 없음",
+    "selectFileFirst": "먼저 파일을 선택하세요"
+  },
+  "dialog": {
+    "editFile": "파일 편집",
+    "newFile": "새 파일",
+    "filename": "파일명",
+    "filenamePlaceholder": "memory/xxx.md",
+    "content": "내용",
+    "contentPlaceholder": "메모리 내용...",
+    "cancel": "취소",
+    "save": "저장",
+    "close": "닫기"
+  },
+  "message": {
+    "loginRequired": "먼저 로그인하세요",
+    "searchFailed": "검색 실패",
+    "syncSuccess": "동기화 성공, {count}개 파일",
+    "syncFailed": "동기화 실패",
+    "pullSuccess": "가져오기 성공, {count}개 파일",
+    "pullFailed": "가져오기 실패",
+    "indexSuccess": "인덱스 재구성 성공, {count}개 벡터",
+    "indexFailed": "인덱스 재구성 실패",
+    "readFileFailed": "파일 읽기 실패",
+    "filenameRequired": "파일명을 입력하세요",
+    "saveSuccess": "저장 성공",
+    "saveFailed": "저장 실패",
+    "deleteConfirm": "{name}을(를) 삭제하시겠습니까?",
+    "deleteTitle": "경고",
+    "deleteConfirmBtn": "확인",
+    "deleteCancelBtn": "취소",
+    "deleteSuccess": "삭제 성공",
+    "deleteFailed": "삭제 실패",
+    "restoreConfirm": "버전 {versionId}으로 복원하시겠습니까?",
+    "restoreTitle": "확인",
+    "restoreConfirmBtn": "확인",
+    "restoreCancelBtn": "취소",
+    "restoreSuccess": "복원 성공",
+    "restoreFailed": "복원 실패"
+  }
+}

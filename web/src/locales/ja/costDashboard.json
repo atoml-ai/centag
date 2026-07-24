@@ -1,0 +1,22 @@
+{
+  "title": "コストダッシュボード",
+  "dateSeparator": "から",
+  "startDate": "開始日",
+  "endDate": "終了日",
+  "byModel": "モデル別",
+  "byBackend": "バックエンド別",
+  "byTenant": "テナント別",
+  "byDepartment": "部門別",
+  "byDate": "日付別",
+  "usd": "USD",
+  "cny": "人民元",
+  "usdLabel": "ドル",
+  "cnyLabel": "人民元",
+  "totalCost": "合計コスト",
+  "totalToken": "合計トークン",
+  "cacheSavings": "キャッシュ節約",
+  "estimated": "推定",
+  "costDistribution": "コスト分布",
+  "cost": "コスト",
+  "loadFailed": "コストデータの読み込みに失敗しました"
+}

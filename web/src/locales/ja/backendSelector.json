@@ -1,0 +1,10 @@
+{
+  "placeholder": "バックエンドを選択",
+  "disabled": "無効",
+  "local": "ローカル",
+  "emptyDescAll": "バックエンドが設定されていません",
+  "emptyDescEnabled": "有効なバックエンドがありません",
+  "goConfig": "バックエンド設定へ",
+  "loadFailed": "バックエンドリストの読み込みに失敗しました：{msg}",
+  "navigateHint": "バックエンド管理ページで設定してください"
+}

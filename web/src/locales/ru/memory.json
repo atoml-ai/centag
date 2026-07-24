@@ -1,0 +1,89 @@
+{
+  "title": "Управление облачной памятью",
+  "subtitle": "Управление облачным хранилищем памяти агента с семантическим поиском и контролем версий",
+  "stats": {
+    "title": "Статистика памяти",
+    "vectorEntries": "Векторные записи",
+    "memoryFiles": "Файлы памяти",
+    "indexQueueLength": "Длина очереди индекса",
+    "processed": "Обработано",
+    "failed": "Ошибки",
+    "dropped": "Пропущено",
+    "recentError": "Последняя ошибка:"
+  },
+  "currentAgent": "Текущий агент",
+  "selectAgent": "Выберите агента",
+  "actions": {
+    "syncToCloud": "Синхронизировать в облако",
+    "pullFromCloud": "Получить из облака",
+    "rebuildIndex": "Пересоздать индекс"
+  },
+  "search": {
+    "placeholder": "Поиск содержимого памяти...",
+    "searchBtn": "Поиск"
+  },
+  "tabs": {
+    "files": "Список файлов",
+    "results": "Результаты поиска",
+    "versions": "История версий"
+  },
+  "fileList": {
+    "title": "Файлы памяти",
+    "searchResults": "Результаты поиска",
+    "name": "Имя файла",
+    "size": "Размер",
+    "modified": "Изменён",
+    "actions": "Действия",
+    "view": "Просмотр",
+    "delete": "Удалить",
+    "newFile": "Новый файл",
+    "similarity": "Сходство:"
+  },
+  "versionHistory": {
+    "selectFile": "Выберите файл",
+    "versionId": "ID версии",
+    "createdAt": "Создано",
+    "lines": "Строки",
+    "size": "Размер",
+    "restore": "Восстановить",
+    "noVersions": "Нет записей версий",
+    "selectFileFirst": "Сначала выберите файл"
+  },
+  "dialog": {
+    "editFile": "Редактировать файл",
+    "newFile": "Новый файл",
+    "filename": "Имя файла",
+    "filenamePlaceholder": "memory/xxx.md",
+    "content": "Содержимое",
+    "contentPlaceholder": "Содержимое памяти...",
+    "cancel": "Отмена",
+    "save": "Сохранить",
+    "close": "Закрыть"
+  },
+  "message": {
+    "loginRequired": "Сначала войдите в систему",
+    "searchFailed": "Ошибка поиска",
+    "syncSuccess": "Синхронизация успешна, {count} файлов",
+    "syncFailed": "Ошибка синхронизации",
+    "pullSuccess": "Получение успешно, {count} файлов",
+    "pullFailed": "Ошибка получения",
+    "indexSuccess": "Индекс пересоздан, {count} векторов",
+    "indexFailed": "Ошибка пересоздания индекса",
+    "readFileFailed": "Ошибка чтения файла",
+    "filenameRequired": "Введите имя файла",
+    "saveSuccess": "Сохранено успешно",
+    "saveFailed": "Ошибка сохранения",
+    "deleteConfirm": "Удалить {name}?",
+    "deleteTitle": "Предупреждение",
+    "deleteConfirmBtn": "Подтвердить",
+    "deleteCancelBtn": "Отмена",
+    "deleteSuccess": "Удалено успешно",
+    "deleteFailed": "Ошибка удаления",
+    "restoreConfirm": "Восстановить версию {versionId}?",
+    "restoreTitle": "Подтверждение",
+    "restoreConfirmBtn": "Подтвердить",
+    "restoreCancelBtn": "Отмена",
+    "restoreSuccess": "Восстановлено успешно",
+    "restoreFailed": "Ошибка восстановления"
+  }
+}

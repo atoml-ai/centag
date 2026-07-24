@@ -1,0 +1,19 @@
+{
+  "title": "설정",
+  "language": "언어",
+  "languageUpdated": "언어가 업데이트되었습니다",
+  "serviceInfo": "서비스 정보",
+  "version": "버전",
+  "edition": "에디션",
+  "uptime": "가동 시간",
+  "apiAddress": "API 주소",
+  "changePassword": "관리자 비밀번호 변경",
+  "oldPassword": "현재 비밀번호",
+  "newPassword": "새 비밀번호",
+  "confirmPassword": "비밀번호 확인",
+  "fillAllFields": "모든 항목을 입력해 주세요",
+  "passwordMinLength": "비밀번호는 6자 이상이어야 합니다",
+  "passwordMismatch": "새 비밀번호가 일치하지 않습니다",
+  "passwordUpdated": "비밀번호가 업데이트되었습니다",
+  "updateFailed": "업데이트에 실패했습니다"
+}

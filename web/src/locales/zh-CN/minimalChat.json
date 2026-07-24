@@ -1,0 +1,8 @@
+{
+  "title": "AI 对话测试",
+  "selectPipeline": "选择流水线",
+  "selectPipelineHint": "选择流水线后发送消息测试后端",
+  "inputMessage": "输入消息...",
+  "requestFailed": "请求失败",
+  "streamReadFailed": "无法读取响应流"
+}

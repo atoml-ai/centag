@@ -1,0 +1,6 @@
+{
+  "cache": "Cache",
+  "hits": "Hits",
+  "misses": "Misses",
+  "hitRate": "Hit Rate"
+}

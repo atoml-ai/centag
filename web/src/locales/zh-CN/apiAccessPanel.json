@@ -1,0 +1,6 @@
+{
+  "copy": "复制",
+  "endpointLabel": "接口地址",
+  "copySuccess": "已复制 {label}",
+  "copyFailed": "复制失败，请手动复制"
+}

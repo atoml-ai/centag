@@ -1,0 +1,89 @@
+{
+  "pageTitle": "代理模式配置",
+  "pageDescription": "配置代理模式关键字，用户可通过请求头、请求体或内容前缀指定代理策略",
+  "keywordFormatHint": "关键字格式：# + 单字母（如 #d, #s, #m）",
+  "refresh": "刷新",
+  "addMode": "添加模式",
+  "table": {
+    "keyword": "关键字",
+    "name": "名称",
+    "type": "类型",
+    "description": "描述",
+    "enabled": "启用",
+    "sortOrder": "排序",
+    "actions": "操作"
+  },
+  "actions": {
+    "edit": "编辑",
+    "delete": "删除"
+  },
+  "emptyState": "暂无代理模式配置",
+  "usageExamples": {
+    "title": "使用示例",
+    "headerMethod": "请求头方式",
+    "headerDesc": "在请求头中添加自定义字段指定模式",
+    "bodyExtension": "请求体扩展",
+    "bodyDesc": "在 JSON 请求体中添加 centag 字段",
+    "contentPrefix": "内容前缀方式",
+    "contentDesc": "在消息内容开头添加模式关键字，系统会自动解析并移除",
+    "apiSession": "API 会话方式",
+    "apiDesc": "通过 API 设置会话级代理模式，有效期内的所有请求都使用该模式"
+  },
+  "formDialog": {
+    "addTitle": "添加代理模式",
+    "editTitle": "编辑代理模式",
+    "keywordLabel": "关键字",
+    "keywordPlaceholder": "#d",
+    "keywordTip": "格式：# + 单字母（如 #d, #s, #m），创建后不可修改",
+    "nameLabel": "名称",
+    "namePlaceholder": "如：指定后端",
+    "typeLabel": "类型",
+    "typePlaceholder": "选择模式类型",
+    "descriptionLabel": "描述",
+    "descriptionPlaceholder": "描述该模式的用途和行为",
+    "enabledLabel": "启用状态",
+    "enabledTip": "禁用后该关键字将不再生效",
+    "sortOrderLabel": "排序",
+    "sortOrderTip": "数字越小越靠前",
+    "cancel": "取消",
+    "save": "保存"
+  },
+  "typeOptions": {
+    "direct": "指定后端 (direct)",
+    "schedule": "智能调度 (schedule)",
+    "match": "模型匹配 (match)",
+    "classify": "意图分类 (classify)",
+    "transparent": "透明模式 (transparent)",
+    "fallback": "降级容错 (fallback)"
+  },
+  "typeLabels": {
+    "direct": "直连后端",
+    "schedule": "智能调度",
+    "match": "模型匹配",
+    "classify": "意图分类",
+    "transparent": "透明模式",
+    "transparent-fast": "透明模式（快）",
+    "fixed-egress": "跳板模式",
+    "fallback": "降级容错"
+  },
+  "validation": {
+    "keywordRequired": "请输入关键字",
+    "keywordPattern": "格式：# + 单字母（如 #d, #s）",
+    "nameRequired": "请输入名称",
+    "typeRequired": "请选择类型"
+  },
+  "confirm": {
+    "deleteTitle": "确认删除",
+    "deleteMessage": "确定要删除模式 \"{name}\" 吗？"
+  },
+  "message": {
+    "createSuccess": "创建成功",
+    "updateSuccess": "更新成功",
+    "deleteSuccess": "删除成功",
+    "enabled": "已启用",
+    "disabled": "已禁用",
+    "loadFailed": "加载失败",
+    "operationFailed": "操作失败",
+    "saveFailed": "保存失败"
+  }
+}

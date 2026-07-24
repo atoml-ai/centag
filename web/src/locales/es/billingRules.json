@@ -1,0 +1,5 @@
+{
+  "title": "Reglas de facturación",
+  "subtitle": "Configurar precios de modelos e importar/exportar (YAML, predeterminado USD). Solo administradores.",
+  "openDialog": "Abrir reglas de facturación"
+}

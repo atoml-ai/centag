@@ -1,0 +1,21 @@
+{
+  "title": "플러그인 구현 선택",
+  "viewAll": "모든 플러그인 보기",
+  "kindLabel": "플러그인 유형 (Kind)",
+  "kindPlaceholder": "플러그인 유형 선택",
+  "kindHelp": "플러그인 유형 (예: llm.generate, content.transform, quality.review)",
+  "implLabel": "플러그인 구현",
+  "implPlaceholder": "플러그인 구현 선택",
+  "pluginInfo": "플러그인 정보:",
+  "version": "버전: {version}",
+  "permissions": "권한 요구사항:",
+  "compatible": "✅ 현재 Centag 버전과 호환 가능 (최소 버전: {version})",
+  "incompatible": "⚠️ 현재 Centag 버전이 최소 요구사항보다 낮음 (필요: {version})",
+  "permLlmCall": "LLM 백엔드 호출 (텍스트 생성)",
+  "permStorageRead": "스토리지 읽기 (캐시, KV 저장소)",
+  "permStorageWrite": "스토리지 쓰기 (캐시, KV 저장소)",
+  "permMemoryRead": "메모리 읽기 (Mem0, 에이전트 메모리)",
+  "permMemoryWrite": "메모리 쓰기 (Mem0, 에이전트 메모리)",
+  "permNetworkOutbound": "아웃바운드 HTTP 요청 보내기",
+  "permSystemAdmin": "시스템 관리 권한"
+}

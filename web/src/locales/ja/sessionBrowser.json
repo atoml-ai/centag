@@ -1,0 +1,26 @@
+{
+  "compactTitle": "最近の会話",
+  "refresh": "更新",
+  "noSessions": "セッションがありません。AI との会話を開始してください",
+  "categoryGeneral": "一般",
+  "messagesCount": "{count} メッセージ",
+  "messagesDetail": "メッセージ詳細",
+  "collapse": "折りたたむ",
+  "loading": "読み込み中…",
+  "noMessages": "このセッションにメッセージはありません（作成されたばかりか、リクエストが未完了の可能性があります）",
+  "loadMessagesFailed": "メッセージの読み込みに失敗したか空です。更新してやり直してください",
+  "pageTitle": "セッション記録",
+  "pageSubtitle": "記録された会話セッションとメッセージを表示（エディション別保存：ファイル / SQLite / PG）",
+  "allCategories": "すべてのカテゴリ",
+  "sessionList": "セッションリスト",
+  "totalCount": "合計 {count}",
+  "noSessionsFull": "セッションがありません",
+  "messagesTitle": "メッセージ",
+  "selectSessionHint": "左のセッションを選択してメッセージを表示",
+  "roleUser": "ユーザー",
+  "roleAssistant": "アシスタント",
+  "roleSystem": "システム",
+  "emptyContent": "（空）",
+  "loadSessionsFailed": "セッションの読み込みに失敗しました"
+}
+

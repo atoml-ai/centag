@@ -1,0 +1,11 @@
+{
+  "admin": "관리자",
+  "user": "일반 사용자",
+  "profile": "프로필",
+  "systemConfig": "시스템 설정",
+  "logout": "로그아웃",
+  "logoutConfirm": "로그아웃 하시겠습니까?",
+  "logoutTitle": "로그아웃",
+  "confirm": "로그아웃",
+  "cancel": "취소"
+}

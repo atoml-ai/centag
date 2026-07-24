@@ -1,0 +1,19 @@
+{
+  "title": "Settings",
+  "language": "Language",
+  "languageUpdated": "Language updated",
+  "serviceInfo": "Service Info",
+  "version": "Version",
+  "edition": "Edition",
+  "uptime": "Uptime",
+  "apiAddress": "API Address",
+  "changePassword": "Change Admin Password",
+  "oldPassword": "Old Password",
+  "newPassword": "New Password",
+  "confirmPassword": "Confirm Password",
+  "fillAllFields": "Please fill in all fields",
+  "passwordMinLength": "Password must be at least 6 characters",
+  "passwordMismatch": "The two new passwords do not match",
+  "passwordUpdated": "Password updated",
+  "updateFailed": "Update failed"
+}

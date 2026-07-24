@@ -1,0 +1,26 @@
+{
+  "compactTitle": "Recent Conversations",
+  "refresh": "Refresh",
+  "noSessions": "No sessions yet, start an AI conversation first",
+  "categoryGeneral": "general",
+  "messagesCount": "{count} messages",
+  "messagesDetail": "Message Details",
+  "collapse": "Collapse",
+  "loading": "Loading…",
+  "noMessages": "This session has no messages (possibly just created, request not completed)",
+  "loadMessagesFailed": "Message loading failed or empty, please refresh and retry",
+  "pageTitle": "Session Records",
+  "pageSubtitle": "Browse recorded conversation sessions and messages (stored per edition: File / SQLite / PG)",
+  "allCategories": "All Categories",
+  "sessionList": "Session List",
+  "totalCount": "{count} total",
+  "noSessionsFull": "No sessions",
+  "messagesTitle": "Messages",
+  "selectSessionHint": "Select a session on the left to view messages",
+  "roleUser": "User",
+  "roleAssistant": "Assistant",
+  "roleSystem": "System",
+  "emptyContent": "(empty)",
+  "loadSessionsFailed": "Failed to load sessions"
+}
+

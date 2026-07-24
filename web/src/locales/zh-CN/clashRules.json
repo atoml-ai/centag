@@ -1,0 +1,82 @@
+{
+  "pageTitle": "Clash 订阅管理",
+  "pageDescription": "为每条规则生成独立订阅链接，填入 Clash / Mihomo 客户端即可自动拉取代理规则",
+  "newRule": "新建规则",
+  "subscriptionDescription": "订阅链接无需鉴权，任何人持有链接均可下载对应规则。如需撤销，请重新生成令牌。未自定义内容的规则将自动下发系统默认 rule.yaml。",
+  "emptyState": "暂无订阅规则，点击「新建规则」创建第一条",
+  "customRule": "自定义规则",
+  "systemDefault": "系统默认",
+  "actions": {
+    "rename": "重命名",
+    "editContent": "编辑规则内容",
+    "restoreDefault": "恢复系统默认",
+    "regenerateToken": "重新生成令牌",
+    "delete": "删除"
+  },
+  "subscriptionLink": "订阅链接",
+  "copyLink": "复制链接",
+  "token": "令牌",
+  "updatedAt": "更新时间",
+  "editContentBtn": "编辑内容",
+  "createDialog": {
+    "title": "新建订阅规则",
+    "nameLabel": "规则名称",
+    "namePlaceholder": "给这条规则起个名字，方便识别",
+    "initialContent": "初始内容",
+    "useDefault": "使用系统默认 rule.yaml",
+    "editLater": "稍后手动编辑",
+    "cancel": "取消",
+    "create": "创建"
+  },
+  "renameDialog": {
+    "title": "重命名规则",
+    "nameLabel": "规则名称",
+    "namePlaceholder": "规则名称",
+    "cancel": "取消",
+    "save": "保存"
+  },
+  "editContentDialog": {
+    "title": "编辑规则内容 — {name}",
+    "editorHint": "编辑 Clash 兼容的 YAML 规则。当前显示的是系统默认规则，修改后保存即变为您的自定义规则。",
+    "loadingText": "正在加载默认规则...",
+    "placeholder": "正在加载默认规则内容...",
+    "restoreDefault": "恢复系统默认",
+    "cancel": "取消",
+    "save": "保存"
+  },
+  "tokenDialog": {
+    "title": "令牌已重新生成",
+    "warning": "旧订阅链接已失效！请在 Clash 中更新为以下新链接。",
+    "copy": "复制",
+    "close": "已更新，关闭"
+  },
+  "confirm": {
+    "reset": "确定将「{name}」的规则内容恢复为系统默认 rule.yaml？自定义内容将被清除。",
+    "resetTitle": "恢复确认",
+    "resetButton": "恢复",
+    "resetFromEditor": "确定清除自定义内容，恢复为系统默认 rule.yaml？",
+    "regenToken": "重新生成令牌后，「{name}」的旧订阅链接将立即失效，需要在 Clash 中更新链接。确定继续？",
+    "regenTokenTitle": "重新生成令牌",
+    "regenTokenButton": "生成",
+    "delete": "确定删除规则「{name}」？对应的订阅链接将同时失效。",
+    "deleteTitle": "删除确认",
+    "deleteButton": "删除",
+    "cancel": "取消"
+  },
+  "message": {
+    "copySuccess": "链接已复制",
+    "copyFailed": "复制失败，请手动复制",
+    "created": "规则已创建",
+    "renamed": "已重命名",
+    "contentSaved": "规则内容已保存",
+    "defaultRestored": "已恢复系统默认",
+    "deleted": "规则已删除",
+    "loadFailed": "获取规则列表失败",
+    "defaultLoadFailed": "默认规则加载失败，请手动粘贴内容",
+    "saveFailed": "保存失败",
+    "operationFailed": "操作失败"
+  },
+  "validation": {
+    "nameRequired": "请输入规则名称"
+  }
+}

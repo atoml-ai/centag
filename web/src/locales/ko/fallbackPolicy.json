@@ -1,0 +1,70 @@
+{
+  "pageTitle": "폴백 정책 관리",
+  "pageDescription": "글로벌 폴백 정책을 구성합니다. 동일 모델 크로스 백엔드, 동일 백엔드 크로스 모델, 사용자 정의 체인을 지원합니다",
+  "newPolicy": "새 정책",
+  "emptyState": "폴백 정책이 없습니다",
+  "table": {
+    "id": "정책 ID",
+    "name": "정책 이름",
+    "type": "정책 유형",
+    "ruleCount": "규칙 수",
+    "status": "상태",
+    "actions": "작업"
+  },
+  "actions": {
+    "edit": "편집",
+    "test": "테스트",
+    "delete": "삭제"
+  },
+  "testResultDialog": {
+    "title": "폴백 경로 미리보기",
+    "policyId": "정책 ID",
+    "policyType": "정책 유형",
+    "priority": "우선순위",
+    "backend": "백엔드",
+    "model": "모델",
+    "timeout": "타임아웃(s)"
+  },
+  "formDialog": {
+    "editTitle": "폴백 정책 편집",
+    "addTitle": "새 폴백 정책",
+    "idLabel": "정책 ID",
+    "idPlaceholder": "예: gpt4o-fallback",
+    "nameLabel": "정책 이름",
+    "namePlaceholder": "예: GPT-4o 멀티 백엔드 폴백",
+    "descriptionLabel": "설명",
+    "typeLabel": "정책 유형",
+    "enabledLabel": "활성화",
+    "rulesLabel": "폴백 규칙",
+    "priorityPlaceholder": "우선순위",
+    "backendPlaceholder": "백엔드 ID",
+    "modelPlaceholder": "모델명 (또는 {{requested_model}})",
+    "timeoutPlaceholder": "타임아웃(s)",
+    "addRule": "규칙 추가",
+    "cancel": "취소",
+    "save": "저장"
+  },
+  "strategyOptions": {
+    "same_model_different_backend": "동일 모델, 크로스 백엔드",
+    "same_backend_different_model": "동일 백엔드, 크로스 모델",
+    "custom_chain": "사용자 정의 체인"
+  },
+  "embeddedDesc": "글로벌 폴백 정책을 구성합니다. 동일 모델 크로스 백엔드, 동일 백엔드 크로스 모델, 사용자 정의 체인을 지원합니다",
+  "confirm": {
+    "deleteTitle": "이 정책을 삭제하시겠습니까?"
+  },
+  "validation": {
+    "fillRequired": "정책 ID와 이름을 입력하세요"
+  },
+  "message": {
+    "created": "정책이 생성되었습니다",
+    "updated": "정책이 업데이트되었습니다",
+    "deleted": "정책이 삭제되었습니다",
+    "statusUpdated": "상태가 업데이트되었습니다",
+    "loadFailed": "폴백 정책을 불러오지 못했습니다",
+    "saveFailed": "저장 실패",
+    "deleteFailed": "삭제 실패",
+    "updateFailed": "업데이트 실패",
+    "testFailed": "테스트 실패"
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "title": "Token Usage",
+  "subtitle": "Token usage, cost summary and billing rules.",
+  "titleBilling": "Token Usage & Billing",
+  "titleUsage": "Token Usage",
+  "hintBilling": "Token usage, cost summary and billing rules entry. Home page 'Usage & Conversations' is a simpler view.",
+  "hintUsage": "Token usage and cost summary. Billing rules are configured by admin.",
+  "dailyTrend": "Daily Usage Trend",
+  "last7Days": "7 Days",
+  "last30Days": "30 Days",
+  "last90Days": "90 Days",
+  "modelTop5": "Model Usage TOP5",
+  "backendTop5": "Backend Usage TOP5",
+  "refresh": "Refresh",
+  "inputToken": "Input Token",
+  "outputToken": "Output Token",
+  "totalToken": "Total Token",
+  "tokenCount": "Token Count",
+  "modelUsage": "Model Usage",
+  "loadDailyTrendFailed": "Failed to load daily trend",
+  "loadModelStatsFailed": "Failed to load model statistics",
+  "loadBackendStatsFailed": "Failed to load backend statistics"
+}

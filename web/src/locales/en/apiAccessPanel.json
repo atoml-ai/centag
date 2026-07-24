@@ -1,0 +1,6 @@
+{
+  "copy": "Copy",
+  "endpointLabel": "API Endpoint",
+  "copySuccess": "Copied {label}",
+  "copyFailed": "Copy failed, please copy manually"
+}

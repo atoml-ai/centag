@@ -1,9 +1,8 @@
 import dayjs from 'dayjs'
 import relativeTime from 'dayjs/plugin/relativeTime'
-import 'dayjs/locale/zh-cn'
+// Locale is applied via setDayjsLocale() in App.vue / locale store (i18n/dayjs.ts).
 
 dayjs.extend(relativeTime)
-dayjs.locale('zh-cn')
 
 /**
  * 格式化日期时间

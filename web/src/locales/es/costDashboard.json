@@ -1,0 +1,22 @@
+{
+  "title": "Panel de costes",
+  "dateSeparator": "a",
+  "startDate": "Fecha de inicio",
+  "endDate": "Fecha de fin",
+  "byModel": "Por modelo",
+  "byBackend": "Por backend",
+  "byTenant": "Por inquilino",
+  "byDepartment": "Por departamento",
+  "byDate": "Por fecha",
+  "usd": "USD",
+  "cny": "Yuan",
+  "usdLabel": "Dólar",
+  "cnyLabel": "Yuan",
+  "totalCost": "Coste total",
+  "totalToken": "Tokens totales",
+  "cacheSavings": "Ahorro de caché",
+  "estimated": "estimado",
+  "costDistribution": "Distribución de costes",
+  "cost": "Coste",
+  "loadFailed": "Error al cargar los datos de costes"
+}

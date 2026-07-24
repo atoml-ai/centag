@@ -1,0 +1,11 @@
+{
+  "admin": "Administrador",
+  "user": "Usuario normal",
+  "profile": "Perfil",
+  "systemConfig": "Configuración del sistema",
+  "logout": "Cerrar sesión",
+  "logoutConfirm": "¿Está seguro de cerrar sesión?",
+  "logoutTitle": "Cerrar sesión",
+  "confirm": "Cerrar sesión",
+  "cancel": "Cancelar"
+}

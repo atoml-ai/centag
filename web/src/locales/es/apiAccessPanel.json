@@ -1,0 +1,6 @@
+{
+  "copy": "Copiar",
+  "endpointLabel": "Endpoint de API",
+  "copySuccess": "Copiado {label}",
+  "copyFailed": "Error al copiar, cópielo manualmente"
+}

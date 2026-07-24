@@ -1,0 +1,6 @@
+{
+  "cache": "Caché",
+  "hits": "Aciertos",
+  "misses": "Fallos",
+  "hitRate": "Tasa de aciertos"
+}

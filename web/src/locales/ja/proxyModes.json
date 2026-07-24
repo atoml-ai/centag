@@ -1,0 +1,89 @@
+{
+  "pageTitle": "プロキシモード設定",
+  "pageDescription": "プロキシモードのキーワードを設定します。リクエストヘッダー、ボディ、またはコンテンツプレフィックスでプロキシ戦略を指定できます",
+  "keywordFormatHint": "キーワード形式：# + 半角英字（例：#d, #s, #m）",
+  "refresh": "更新",
+  "addMode": "モードを追加",
+  "table": {
+    "keyword": "キーワード",
+    "name": "名前",
+    "type": "タイプ",
+    "description": "説明",
+    "enabled": "有効",
+    "sortOrder": "並べ替え",
+    "actions": "操作"
+  },
+  "actions": {
+    "edit": "編集",
+    "delete": "削除"
+  },
+  "emptyState": "プロキシモードの設定がありません",
+  "usageExamples": {
+    "title": "使用例",
+    "headerMethod": "リクエストヘッダー方式",
+    "headerDesc": "リクエストヘッダーにカスタムフィールドを追加してモードを指定",
+    "bodyExtension": "ボディ拡張",
+    "bodyDesc": "JSON リクエストボディに centag フィールドを追加",
+    "contentPrefix": "コンテンツプレフィックス方式",
+    "contentDesc": "メッセージ内容の先頭にモードキーワードを追加。システムが自動的に解析して除去します",
+    "apiSession": "API セッション方式",
+    "apiDesc": "API を通じてセッションレベルのプロキシモードを設定。有効期間中のすべてのリクエストに適用されます"
+  },
+  "formDialog": {
+    "addTitle": "プロキシモードを追加",
+    "editTitle": "プロキシモードを編集",
+    "keywordLabel": "キーワード",
+    "keywordPlaceholder": "#d",
+    "keywordTip": "形式：# + 半角英字（例：#d, #s, #m）。作成後は変更できません",
+    "nameLabel": "名前",
+    "namePlaceholder": "例：バックエンド指定",
+    "typeLabel": "タイプ",
+    "typePlaceholder": "モードタイプを選択",
+    "descriptionLabel": "説明",
+    "descriptionPlaceholder": "このモードの用途と動作を説明",
+    "enabledLabel": "有効状態",
+    "enabledTip": "無効にするとこのキーワードは効力を持ちません",
+    "sortOrderLabel": "並べ替え",
+    "sortOrderTip": "数字が小さいほど前に表示",
+    "cancel": "キャンセル",
+    "save": "保存"
+  },
+  "typeOptions": {
+    "direct": "バックエンド指定 (direct)",
+    "schedule": "スマートスケジューリング (schedule)",
+    "match": "モデルマッチング (match)",
+    "classify": "意図分類 (classify)",
+    "transparent": "透過モード (transparent)",
+    "fallback": "フォールバック (fallback)"
+  },
+  "typeLabels": {
+    "direct": "直結バックエンド",
+    "schedule": "スマートスケジューリング",
+    "match": "モデルマッチング",
+    "classify": "意図分類",
+    "transparent": "透過モード",
+    "transparent-fast": "透過モード（高速）",
+    "fixed-egress": "ジャンプモード",
+    "fallback": "フォールバック"
+  },
+  "validation": {
+    "keywordRequired": "キーワードを入力してください",
+    "keywordPattern": "形式：# + 半角英字（例：#d, #s）",
+    "nameRequired": "名前を入力してください",
+    "typeRequired": "タイプを選択してください"
+  },
+  "confirm": {
+    "deleteTitle": "削除確認",
+    "deleteMessage": "モード「{name}」を削除しますか？"
+  },
+  "message": {
+    "createSuccess": "作成しました",
+    "updateSuccess": "更新しました",
+    "deleteSuccess": "削除しました",
+    "enabled": "有効化しました",
+    "disabled": "無効化しました",
+    "loadFailed": "読み込みに失敗しました",
+    "operationFailed": "操作に失敗しました",
+    "saveFailed": "保存に失敗しました"
+  }
+}

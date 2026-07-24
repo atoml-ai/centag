@@ -1,0 +1,89 @@
+{
+  "title": "Gestión de Memoria en la Nube",
+  "subtitle": "Administrar el almacenamiento en la nube de la memoria del Agente, con búsqueda semántica y control de versiones",
+  "stats": {
+    "title": "Estadísticas de Memoria",
+    "vectorEntries": "Entradas Vectoriales",
+    "memoryFiles": "Archivos de Memoria",
+    "indexQueueLength": "Longitud de Cola del Índice",
+    "processed": "Procesados",
+    "failed": "Fallidos",
+    "dropped": "Descartados",
+    "recentError": "Error Reciente:"
+  },
+  "currentAgent": "Agente Actual",
+  "selectAgent": "Seleccionar Agente",
+  "actions": {
+    "syncToCloud": "Sincronizar a la Nube",
+    "pullFromCloud": "Obtener de la Nube",
+    "rebuildIndex": "Reconstruir Índice"
+  },
+  "search": {
+    "placeholder": "Buscar contenido de memoria...",
+    "searchBtn": "Buscar"
+  },
+  "tabs": {
+    "files": "Lista de Archivos",
+    "results": "Resultados de Búsqueda",
+    "versions": "Historial de Versiones"
+  },
+  "fileList": {
+    "title": "Archivos de Memoria",
+    "searchResults": "Resultados de Búsqueda",
+    "name": "Nombre del Archivo",
+    "size": "Tamaño",
+    "modified": "Modificado",
+    "actions": "Acciones",
+    "view": "Ver",
+    "delete": "Eliminar",
+    "newFile": "Nuevo Archivo",
+    "similarity": "Similitud:"
+  },
+  "versionHistory": {
+    "selectFile": "Seleccionar Archivo",
+    "versionId": "ID de Versión",
+    "createdAt": "Creado En",
+    "lines": "Líneas",
+    "size": "Tamaño",
+    "restore": "Restaurar",
+    "noVersions": "Sin registros de versiones",
+    "selectFileFirst": "Seleccione un archivo primero"
+  },
+  "dialog": {
+    "editFile": "Editar Archivo",
+    "newFile": "Nuevo Archivo",
+    "filename": "Nombre del Archivo",
+    "filenamePlaceholder": "memory/xxx.md",
+    "content": "Contenido",
+    "contentPlaceholder": "Contenido de memoria...",
+    "cancel": "Cancelar",
+    "save": "Guardar",
+    "close": "Cerrar"
+  },
+  "message": {
+    "loginRequired": "Inicie sesión primero",
+    "searchFailed": "Error en la búsqueda",
+    "syncSuccess": "Sincronizado exitosamente, {count} archivos",
+    "syncFailed": "Error de sincronización",
+    "pullSuccess": "Obtenido exitosamente, {count} archivos",
+    "pullFailed": "Error al obtener",
+    "indexSuccess": "Índice reconstruido exitosamente, {count} vectores",
+    "indexFailed": "Error al reconstruir índice",
+    "readFileFailed": "Error al leer archivo",
+    "filenameRequired": "Ingrese el nombre del archivo",
+    "saveSuccess": "Guardado exitosamente",
+    "saveFailed": "Error al guardar",
+    "deleteConfirm": "¿Eliminar {name}?",
+    "deleteTitle": "Advertencia",
+    "deleteConfirmBtn": "Confirmar",
+    "deleteCancelBtn": "Cancelar",
+    "deleteSuccess": "Eliminado exitosamente",
+    "deleteFailed": "Error al eliminar",
+    "restoreConfirm": "¿Restaurar versión {versionId}?",
+    "restoreTitle": "Confirmar",
+    "restoreConfirmBtn": "Confirmar",
+    "restoreCancelBtn": "Cancelar",
+    "restoreSuccess": "Restaurado exitosamente",
+    "restoreFailed": "Error al restaurar"
+  }
+}

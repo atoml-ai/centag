@@ -1,0 +1,16 @@
+{
+  "title": "默认流水线配置",
+  "subtitle": "配置系统默认使用的流水线，当请求未指定模式时将使用此流水线",
+  "systemDefaultPipeline": "系统默认流水线",
+  "selectDefaultPipeline": "选择默认流水线",
+  "allowUserOverride": "允许用户覆盖",
+  "allowUserOverrideDesc": "启用后，用户可以在个人中心设置自己的默认流水线",
+  "saveConfig": "保存配置",
+  "reset": "重置",
+  "currentEffectiveConfig": "当前生效配置",
+  "defaultPipeline": "默认流水线",
+  "yes": "是",
+  "no": "否",
+  "configSaved": "配置已保存",
+  "saveFailed": "保存失败"
+}

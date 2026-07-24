@@ -1,0 +1,59 @@
+{
+  "dialogTitle": "计费规则",
+  "description": "按后端 + 模型配置单价（美元 / 1M tokens）。导入导出 YAML 默认 USD；显示可选人民币（仅换算，不改正本）。",
+  "refresh": "刷新",
+  "importYaml": "导入 YAML",
+  "export": "导出",
+  "addRule": "新增规则",
+  "usdLabel": "美元",
+  "cnyLabel": "人民币",
+  "emptyText": "暂无规则，请导入或新增",
+  "table": {
+    "name": "名称",
+    "backend": "后端",
+    "model": "模型",
+    "inputPrice": "输入价({unit})",
+    "outputPrice": "输出价({unit})",
+    "priority": "优先级",
+    "enabled": "启用",
+    "enabledYes": "是",
+    "enabledNo": "否",
+    "actions": "操作",
+    "edit": "编辑",
+    "delete": "删除"
+  },
+  "form": {
+    "editTitle": "编辑规则",
+    "createTitle": "新增规则",
+    "name": "名称",
+    "backendId": "后端 ID",
+    "backendPlaceholder": "如 ppinfra，或 *",
+    "model": "模型",
+    "modelPlaceholder": "如 deepseek-v3.2，或 *",
+    "inputPrice": "输入价 $/1M",
+    "outputPrice": "输出价 $/1M",
+    "priority": "优先级",
+    "enabled": "启用",
+    "cancel": "取消",
+    "save": "保存"
+  },
+  "importDialog": {
+    "title": "导入 YAML",
+    "placeholder": "粘贴 pricing YAML",
+    "cancel": "取消",
+    "importReplace": "导入（替换全部）"
+  },
+  "confirmDelete": "删除规则「{name}」？",
+  "confirmDeleteTitle": "确认",
+  "message": {
+    "loadFailed": "加载失败",
+    "fillRequired": "请填写后端与模型",
+    "saveSuccess": "已保存",
+    "saveFailed": "保存失败",
+    "deleteSuccess": "已删除",
+    "importSuccess": "已导入 {count} 条",
+    "importEmptyWarning": "请粘贴 YAML",
+    "importFailed": "导入失败",
+    "exportFailed": "导出失败"
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "dialogTitle": "Security Settings",
+  "tabPassword": "Login Password",
+  "oldPassword": "Old Password",
+  "newPassword": "New Password",
+  "confirmPassword": "Confirm Password",
+  "updatePassword": "Update Password",
+  "tabApiKeys": "API Access Keys",
+  "close": "Close",
+  "message": {
+    "fillComplete": "Please fill in all fields",
+    "passwordTooShort": "New password must be at least 6 characters",
+    "passwordMismatch": "Passwords do not match",
+    "passwordUpdated": "Password updated",
+    "updateFailed": "Update failed"
+  }
+}

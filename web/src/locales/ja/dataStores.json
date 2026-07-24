@@ -1,0 +1,92 @@
+{
+  "pageTitle": "データストア管理",
+  "pageDescription": "ナレッジベース/データストアインターフェースを設定し、基底ストレージを関連付けてデフォルトストレージを管理",
+  "searchPlaceholder": "データストアを検索...",
+  "filterPlaceholder": "タイプフィルター",
+  "filterOptions": {
+    "all": "すべて",
+    "knowledgeBase": "ナレッジベース",
+    "vector": "ベクトルストア",
+    "document": "ドキュメントストア",
+    "kv": "Key-Value",
+    "search": "全文検索",
+    "graph": "グラフデータベース",
+    "custom": "カスタム"
+  },
+  "refresh": "更新",
+  "healthCheck": "ヘルスチェック",
+  "addDataStore": "データストアを追加",
+  "table": {
+    "name": "名前",
+    "type": "タイプ",
+    "linkedStorage": "関連ストレージ",
+    "enabledStatus": "状態",
+    "isDefault": "デフォルト",
+    "yes": "はい",
+    "healthStatus": "ヘルス",
+    "notChecked": "未チェック",
+    "healthy": "正常",
+    "unhealthy": "異常",
+    "unknownError": "不明なエラー",
+    "actions": "操作"
+  },
+  "actions": {
+    "disable": "無効化",
+    "enable": "有効化",
+    "setDefault": "デフォルトに設定",
+    "removeDefault": "デフォルトを解除",
+    "test": "テスト",
+    "edit": "編集",
+    "delete": "削除"
+  },
+  "emptyState": "データストアの設定がありません",
+  "formDialog": {
+    "addTitle": "データストアを追加",
+    "editTitle": "データストアを編集",
+    "nameLabel": "名前",
+    "namePlaceholder": "データストア名を入力してください",
+    "typeLabel": "タイプ",
+    "typePlaceholder": "タイプを選択してください",
+    "linkedStorageLabel": "関連ストレージ",
+    "linkedStoragePlaceholder": "基底ストレージバックエンドを選択",
+    "linkedStorageTip": "「ストレージ管理」で事前に設定したバックエンドを選択してください",
+    "extraConfigLabel": "追加設定",
+    "extraConfigPlaceholder": "{\"key\": \"value\"}",
+    "extraConfigTip": "JSON形式のオプション設定パラメータ",
+    "descriptionLabel": "説明",
+    "descriptionPlaceholder": "オプション。このデータストアの用途を説明",
+    "enabledLabel": "有効状態",
+    "defaultLabel": "デフォルトに設定",
+    "testConnection": "接続テスト",
+    "cancel": "キャンセル",
+    "save": "保存"
+  },
+  "validation": {
+    "nameRequired": "データストア名を入力してください",
+    "typeRequired": "タイプを選択してください",
+    "storageRequired": "関連ストレージを選択してください"
+  },
+  "confirm": {
+    "deleteTitle": "削除確認",
+    "deleteMessage": "データストア「{name}」を削除しますか？"
+  },
+  "message": {
+    "addSuccess": "追加しました",
+    "updateSuccess": "更新しました",
+    "deleteSuccess": "削除しました",
+    "enabled": "有効化しました",
+    "disabled": "無効化しました",
+    "setDefaultSuccess": "「{name}」をデフォルトデータストアに設定しました",
+    "removeDefaultSuccess": "「{name}」のデフォルトを解除しました",
+    "testSuccess": "「{name}」の接続テストに成功しました",
+    "testFailed": "接続テスト失敗: {error}",
+    "loadFailed": "読み込みに失敗しました",
+    "operationFailed": "操作に失敗しました: {error}",
+    "saveFailed": "保存に失敗しました: {error}",
+    "deleteFailed": "削除に失敗しました: {error}",
+    "setDefaultFailed": "保存は成功しましたが、デフォルト設定に失敗しました: {error}",
+    "invalidJson": "追加設定は有効なJSON形式でなければなりません",
+    "fillRequired": "まず必須情報を入力してください",
+    "unknownError": "不明なエラー"
+  }
+}

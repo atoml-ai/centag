@@ -1,0 +1,21 @@
+{
+  "username": "ユーザー名",
+  "password": "パスワード",
+  "confirmPassword": "パスワード確認",
+  "loginButton": "ログイン",
+  "setupButton": "設定して入力",
+  "passwordPlaceholder": "ログイントークン（6文字以上）",
+  "setupPasswordPlaceholder": "ログイントークンを設定（6文字以上）",
+  "adminPasswordPlaceholder": "管理パスワードを設定（6文字以上）",
+  "adminLoginPlaceholder": "管理パスワード（6文字以上）",
+  "firstTimeTitle": "初回：ログイントークンを設定してください",
+  "firstTimeAdminTitle": "初回：管理パスワードを設定してください",
+  "resetHint": "リセットするには data/admin.password.hash を削除して再起動してください",
+  "subtitle": "LLMプロキシサービス管理プラットフォーム",
+  "pleaseEnterPassword": "パスワードを入力してください",
+  "pleaseEnterUsername": "ユーザー名を入力してください",
+  "pleaseConfirmPassword": "パスワードを確認してください",
+  "passwordMismatch": "パスワードが一致しません",
+  "passwordMinLength": "パスワードは6文字以上必要です",
+  "operationFailed": "操作失敗"
+}

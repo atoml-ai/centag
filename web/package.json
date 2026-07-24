@@ -19,7 +19,8 @@
     "test:edition-routes": "npx --yes tsx src/utils/edition.route.selftest.ts",
     "test:nav": "npx --yes tsx src/utils/nav/nav.selftest.ts",
     "test:dashboard-sections": "npx --yes tsx src/utils/dashboard-sections.selftest.ts",
-    "test:ui-caps": "npm run test:capabilities && npm run test:edition-routes && npm run test:nav && npm run test:dashboard-sections"
+    "test:i18n": "npx --yes tsx src/i18n/i18n.selftest.ts",
+    "test:ui-caps": "npm run test:capabilities && npm run test:edition-routes && npm run test:nav && npm run test:dashboard-sections && npm run test:i18n"
   },
   "dependencies": {
     "@element-plus/icons-vue": "^2.3.1",
@@ -38,6 +39,7 @@
     "pinia": "^2.1.7",
     "vue": "^3.4.38",
     "vue-echarts": "^8.0.1",
+    "vue-i18n": "^10.0.3",
     "vue-router": "^4.3.0"
   },
   "devDependencies": {

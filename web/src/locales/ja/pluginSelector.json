@@ -1,0 +1,21 @@
+{
+  "title": "プラグイン実装選択",
+  "viewAll": "全プラグインを表示",
+  "kindLabel": "プラグインタイプ (Kind)",
+  "kindPlaceholder": "プラグインタイプを選択",
+  "kindHelp": "プラグインタイプ（例：llm.generate、content.transform、quality.review）",
+  "implLabel": "プラグイン実装",
+  "implPlaceholder": "プラグイン実装を選択",
+  "pluginInfo": "プラグイン情報：",
+  "version": "バージョン：{version}",
+  "permissions": "権限要件：",
+  "compatible": "✅ 現在の Centag バージョンと互換性あり（最小バージョン：{version}）",
+  "incompatible": "⚠️ 現在の Centag バージョンが最小要件を下回っています（必要：{version}）",
+  "permLlmCall": "LLM バックエンドを呼び出す（テキスト生成）",
+  "permStorageRead": "ストレージを読み取る（キャッシュ、KV ストア）",
+  "permStorageWrite": "ストレージに書き込む（キャッシュ、KV ストア）",
+  "permMemoryRead": "メモリを読み取る（Mem0、エージェントメモリ）",
+  "permMemoryWrite": "メモリに書き込む（Mem0、エージェントメモリ）",
+  "permNetworkOutbound": "送信 HTTP リクエストを実行",
+  "permSystemAdmin": "システム管理権限"
+}

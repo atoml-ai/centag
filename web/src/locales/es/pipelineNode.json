@@ -1,0 +1,17 @@
+{
+  "unnamedNode": "Nodo sin nombre",
+  "notConfigured": "No configurado",
+  "condition": "Condición: {condition}",
+  "deleteConfirmTitle": "Confirmar",
+  "deleteConfirmMessage": "¿Está seguro de eliminar este nodo?",
+  "typeGenerator": "Generador",
+  "typeProcessor": "Procesador",
+  "typeReviewer": "Revisor",
+  "typeRouter": "Enrutador",
+  "typeAggregator": "Agregador",
+  "typeParallel": "Paralelo",
+  "typeCache": "Caché",
+  "typeTokenUsage": "Uso de tokens",
+  "typeTransparentForward": "Reenvío",
+  "typeToolCallInjector": "Inyector"
+}

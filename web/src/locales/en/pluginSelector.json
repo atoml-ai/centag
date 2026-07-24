@@ -1,0 +1,21 @@
+{
+  "title": "Plugin Implementation Selection",
+  "viewAll": "Browse All Plugins",
+  "kindLabel": "Plugin Type (Kind)",
+  "kindPlaceholder": "Select plugin type",
+  "kindHelp": "Plugin type, e.g. llm.generate, content.transform, quality.review",
+  "implLabel": "Plugin Implementation",
+  "implPlaceholder": "Select plugin implementation",
+  "pluginInfo": "Plugin Info:",
+  "version": "Version: {version}",
+  "permissions": "Permission Requirements:",
+  "compatible": "Compatible with current Centag (min version: {version})",
+  "incompatible": "Current Centag version below minimum requirement (needs: {version})",
+  "permLlmCall": "Call LLM backend (text generation)",
+  "permStorageRead": "Read storage (cache, KV store)",
+  "permStorageWrite": "Write storage (cache, KV store)",
+  "permMemoryRead": "Read memory (Mem0, agent memory)",
+  "permMemoryWrite": "Write memory (Mem0, agent memory)",
+  "permNetworkOutbound": "Make outbound HTTP requests",
+  "permSystemAdmin": "System admin permissions"
+}

@@ -1,0 +1,22 @@
+{
+  "title": "Панель затрат",
+  "dateSeparator": "по",
+  "startDate": "Дата начала",
+  "endDate": "Дата окончания",
+  "byModel": "По модели",
+  "byBackend": "По бэкенду",
+  "byTenant": "По тенанту",
+  "byDepartment": "По отделу",
+  "byDate": "По дате",
+  "usd": "USD",
+  "cny": "Юань",
+  "usdLabel": "Доллар",
+  "cnyLabel": "Юань",
+  "totalCost": "Общая стоимость",
+  "totalToken": "Всего токенов",
+  "cacheSavings": "Экономия кэша",
+  "estimated": "оценка",
+  "costDistribution": "Распределение затрат",
+  "cost": "Стоимость",
+  "loadFailed": "Не удалось загрузить данные о затратах"
+}

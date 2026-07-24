@@ -1,0 +1,6 @@
+{
+  "copy": "복사",
+  "endpointLabel": "API 엔드포인트",
+  "copySuccess": "{label} 복사됨",
+  "copyFailed": "복사 실패, 수동으로 복사해주세요"
+}

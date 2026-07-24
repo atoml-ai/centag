@@ -1,0 +1,8 @@
+{
+  "title": "Prueba de chat con IA",
+  "selectPipeline": "Seleccionar pipeline",
+  "selectPipelineHint": "Seleccione un pipeline y envíe un mensaje para probar el backend",
+  "inputMessage": "Ingrese mensaje...",
+  "requestFailed": "Error en la solicitud",
+  "streamReadFailed": "Error al leer el flujo de respuesta"
+}

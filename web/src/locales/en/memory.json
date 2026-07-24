@@ -1,0 +1,89 @@
+{
+  "title": "Cloud Memory Management",
+  "subtitle": "Manage Agent memory cloud storage, with semantic search and version control",
+  "stats": {
+    "title": "Memory Statistics",
+    "vectorEntries": "Vector Entries",
+    "memoryFiles": "Memory Files",
+    "indexQueueLength": "Index Queue Length",
+    "processed": "Processed",
+    "failed": "Failed",
+    "dropped": "Dropped",
+    "recentError": "Recent Error:"
+  },
+  "currentAgent": "Current Agent",
+  "selectAgent": "Select Agent",
+  "actions": {
+    "syncToCloud": "Sync to Cloud",
+    "pullFromCloud": "Pull from Cloud",
+    "rebuildIndex": "Rebuild Index"
+  },
+  "search": {
+    "placeholder": "Search memory content...",
+    "searchBtn": "Search"
+  },
+  "tabs": {
+    "files": "File List",
+    "results": "Search Results",
+    "versions": "Version History"
+  },
+  "fileList": {
+    "title": "Memory Files",
+    "searchResults": "Search Results",
+    "name": "Filename",
+    "size": "Size",
+    "modified": "Modified",
+    "actions": "Actions",
+    "view": "View",
+    "delete": "Delete",
+    "newFile": "New File",
+    "similarity": "Similarity:"
+  },
+  "versionHistory": {
+    "selectFile": "Select File",
+    "versionId": "Version ID",
+    "createdAt": "Created At",
+    "lines": "Lines",
+    "size": "Size",
+    "restore": "Restore",
+    "noVersions": "No version records",
+    "selectFileFirst": "Please select a file first"
+  },
+  "dialog": {
+    "editFile": "Edit File",
+    "newFile": "New File",
+    "filename": "Filename",
+    "filenamePlaceholder": "memory/xxx.md",
+    "content": "Content",
+    "contentPlaceholder": "Memory content...",
+    "cancel": "Cancel",
+    "save": "Save",
+    "close": "Close"
+  },
+  "message": {
+    "loginRequired": "Please login first",
+    "searchFailed": "Search failed",
+    "syncSuccess": "Synced successfully, {count} files",
+    "syncFailed": "Sync failed",
+    "pullSuccess": "Pulled successfully, {count} files",
+    "pullFailed": "Pull failed",
+    "indexSuccess": "Index rebuilt successfully, {count} vectors",
+    "indexFailed": "Index rebuild failed",
+    "readFileFailed": "Failed to read file",
+    "filenameRequired": "Please enter filename",
+    "saveSuccess": "Saved successfully",
+    "saveFailed": "Save failed",
+    "deleteConfirm": "Are you sure to delete {name}?",
+    "deleteTitle": "Warning",
+    "deleteConfirmBtn": "Confirm",
+    "deleteCancelBtn": "Cancel",
+    "deleteSuccess": "Deleted successfully",
+    "deleteFailed": "Delete failed",
+    "restoreConfirm": "Are you sure to restore version {versionId}?",
+    "restoreTitle": "Confirm",
+    "restoreConfirmBtn": "Confirm",
+    "restoreCancelBtn": "Cancel",
+    "restoreSuccess": "Restored successfully",
+    "restoreFailed": "Restore failed"
+  }
+}

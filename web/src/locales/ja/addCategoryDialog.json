@@ -1,0 +1,22 @@
+{
+  "title": "カテゴリを追加",
+  "alert": "実行ノードを作成し、ルーティングキーワードを書き込み、オプションでキャパビリティスロットに追加します。",
+  "labelField": "カテゴリ名",
+  "labelPlaceholder": "例：法務相談",
+  "nodeIdField": "ノード ID",
+  "nodeIdPlaceholder": "名前から自動生成",
+  "keywordField": "トリガーキーワード",
+  "keywordPlaceholder": "入力して Enter で追加（複数可）",
+  "routerField": "ルーターノード",
+  "routerPlaceholder": "ルーターを選択",
+  "defaultBranch": "デフォルトブランチ",
+  "recommendedTags": "推奨タグ",
+  "tagsPlaceholder": "任意",
+  "initialPrompt": "初期プロンプト",
+  "promptPlaceholder": "任意。ノードの system_prompt に書き込みます",
+  "cancel": "キャンセル",
+  "submit": "キャンバスに追加",
+  "pipelineNotLoaded": "パイプラインが読み込まれていません",
+  "addSuccess": "カテゴリを追加しました。パイプラインを保存後、「モデル設定」でバインドできます。",
+  "addFailed": "追加に失敗しました"
+}

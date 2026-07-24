@@ -1,0 +1,17 @@
+{
+  "dialogTitle": "Configuración de seguridad",
+  "tabPassword": "Contraseña de inicio",
+  "oldPassword": "Contraseña actual",
+  "newPassword": "Nueva contraseña",
+  "confirmPassword": "Confirmar contraseña",
+  "updatePassword": "Actualizar contraseña",
+  "tabApiKeys": "Claves de acceso API",
+  "close": "Cerrar",
+  "message": {
+    "fillComplete": "Complete todos los campos",
+    "passwordTooShort": "La nueva contraseña debe tener al menos 6 caracteres",
+    "passwordMismatch": "Las contraseñas no coinciden",
+    "passwordUpdated": "Contraseña actualizada",
+    "updateFailed": "Error al actualizar"
+  }
+}

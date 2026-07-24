@@ -1,0 +1,92 @@
+{
+  "pageTitle": "Data Store Management",
+  "pageDescription": "Configure knowledge base / data store interfaces, link underlying storage and manage default storage",
+  "searchPlaceholder": "Search data stores...",
+  "filterPlaceholder": "Type filter",
+  "filterOptions": {
+    "all": "All",
+    "knowledgeBase": "Knowledge Base",
+    "vector": "Vector Store",
+    "document": "Document Store",
+    "kv": "Key-Value",
+    "search": "Full-text Search",
+    "graph": "Graph Database",
+    "custom": "Custom"
+  },
+  "refresh": "Refresh",
+  "healthCheck": "Health Check",
+  "addDataStore": "Add Data Store",
+  "table": {
+    "name": "Name",
+    "type": "Type",
+    "linkedStorage": "Linked Storage",
+    "enabledStatus": "Status",
+    "isDefault": "Default",
+    "yes": "Yes",
+    "healthStatus": "Health",
+    "notChecked": "Not Checked",
+    "healthy": "Healthy",
+    "unhealthy": "Unhealthy",
+    "unknownError": "Unknown error",
+    "actions": "Actions"
+  },
+  "actions": {
+    "disable": "Disable",
+    "enable": "Enable",
+    "setDefault": "Set as Default",
+    "removeDefault": "Remove Default",
+    "test": "Test",
+    "edit": "Edit",
+    "delete": "Delete"
+  },
+  "emptyState": "No data store configurations",
+  "formDialog": {
+    "addTitle": "Add Data Store",
+    "editTitle": "Edit Data Store",
+    "nameLabel": "Name",
+    "namePlaceholder": "Enter data store name",
+    "typeLabel": "Type",
+    "typePlaceholder": "Select type",
+    "linkedStorageLabel": "Linked Storage",
+    "linkedStoragePlaceholder": "Select storage backend",
+    "linkedStorageTip": "Select a backend previously configured in 'Storage Management'",
+    "extraConfigLabel": "Extra Config",
+    "extraConfigPlaceholder": "{\"key\": \"value\"}",
+    "extraConfigTip": "JSON format optional configuration parameters",
+    "descriptionLabel": "Description",
+    "descriptionPlaceholder": "Optional, describe the purpose of this data store",
+    "enabledLabel": "Enabled",
+    "defaultLabel": "Set as Default",
+    "testConnection": "Test Connection",
+    "cancel": "Cancel",
+    "save": "Save"
+  },
+  "validation": {
+    "nameRequired": "Please enter a data store name",
+    "typeRequired": "Please select a type",
+    "storageRequired": "Please select linked storage"
+  },
+  "confirm": {
+    "deleteTitle": "Confirm Delete",
+    "deleteMessage": "Are you sure you want to delete data store \"{name}\"?"
+  },
+  "message": {
+    "addSuccess": "Added successfully",
+    "updateSuccess": "Updated successfully",
+    "deleteSuccess": "Deleted successfully",
+    "enabled": "Enabled",
+    "disabled": "Disabled",
+    "setDefaultSuccess": "\"{name}\" set as default data store",
+    "removeDefaultSuccess": "Default removed from \"{name}\"",
+    "testSuccess": "Connection test successful for \"{name}\"",
+    "testFailed": "Connection test failed: {error}",
+    "loadFailed": "Load failed",
+    "operationFailed": "Operation failed: {error}",
+    "saveFailed": "Save failed: {error}",
+    "deleteFailed": "Delete failed: {error}",
+    "setDefaultFailed": "Saved but failed to set as default: {error}",
+    "invalidJson": "Extra config must be valid JSON format",
+    "fillRequired": "Please fill in required information first",
+    "unknownError": "Unknown error"
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "title": "Выбор реализации плагина",
+  "viewAll": "Просмотреть все плагины",
+  "kindLabel": "Тип плагина (Kind)",
+  "kindPlaceholder": "Выберите тип плагина",
+  "kindHelp": "Тип плагина, например llm.generate, content.transform, quality.review",
+  "implLabel": "Реализация плагина",
+  "implPlaceholder": "Выберите реализацию плагина",
+  "pluginInfo": "Информация о плагине:",
+  "version": "Версия: {version}",
+  "permissions": "Требования к разрешениям:",
+  "compatible": "✅ Совместимо с текущей версией Centag (мин. версия: {version})",
+  "incompatible": "⚠️ Текущая версия Centag ниже минимальных требований (требуется: {version})",
+  "permLlmCall": "Вызов LLM бэкенда (генерация текста)",
+  "permStorageRead": "Чтение хранилища (кэш, KV-хранилище)",
+  "permStorageWrite": "Запись в хранилище (кэш, KV-хранилище)",
+  "permMemoryRead": "Чтение памяти (Mem0, память агента)",
+  "permMemoryWrite": "Запись в память (Mem0, память агента)",
+  "permNetworkOutbound": "Исходящие HTTP-запросы",
+  "permSystemAdmin": "Права системного администратора"
+}

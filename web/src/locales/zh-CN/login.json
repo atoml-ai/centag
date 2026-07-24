@@ -1,0 +1,21 @@
+{
+  "username": "用户名",
+  "password": "密码",
+  "confirmPassword": "确认密码",
+  "loginButton": "登 录",
+  "setupButton": "设 置 并 进 入",
+  "passwordPlaceholder": "登录令牌（至少 6 位）",
+  "setupPasswordPlaceholder": "设置登录令牌（至少 6 位）",
+  "adminPasswordPlaceholder": "设置管理密码（至少 6 位）",
+  "adminLoginPlaceholder": "管理密码（至少 6 位）",
+  "firstTimeTitle": "首次使用：请设置登录令牌",
+  "firstTimeAdminTitle": "首次使用：请设置管理密码",
+  "resetHint": "忘记令牌可删除 data/admin.password.hash 后重启重设",
+  "subtitle": "大模型代理服务管理平台",
+  "pleaseEnterPassword": "请输入密码",
+  "pleaseEnterUsername": "请输入用户名",
+  "pleaseConfirmPassword": "请确认密码",
+  "passwordMismatch": "两次密码不一致",
+  "passwordMinLength": "密码至少 6 位",
+  "operationFailed": "操作失败"
+}

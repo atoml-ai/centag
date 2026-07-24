@@ -1,0 +1,22 @@
+{
+  "title": "新增分类",
+  "alert": "将同时创建执行节点、写入路由关键词，并可选加入能力槽。",
+  "labelField": "分类名称",
+  "labelPlaceholder": "如：法务咨询",
+  "nodeIdField": "节点 ID",
+  "nodeIdPlaceholder": "默认由名称生成",
+  "keywordField": "触发关键词",
+  "keywordPlaceholder": "输入后回车添加，可多个",
+  "routerField": "路由节点",
+  "routerPlaceholder": "选择 router",
+  "defaultBranch": "默认分支",
+  "recommendedTags": "推荐标签",
+  "tagsPlaceholder": "可选",
+  "initialPrompt": "初始 Prompt",
+  "promptPlaceholder": "可选，写入节点 system_prompt",
+  "cancel": "取消",
+  "submit": "添加到画布",
+  "pipelineNotLoaded": "流水线未加载",
+  "addSuccess": "已添加分类，请保存流水线后可在「配置模型」中绑定",
+  "addFailed": "添加失败"
+}

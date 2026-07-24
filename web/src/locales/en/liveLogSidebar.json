@@ -1,0 +1,21 @@
+{
+  "title": "Live Log Console",
+  "categoryLabel": "Category:",
+  "categoryAll": "All",
+  "categoryLlm": "LLM Access",
+  "categoryPipeline": "Pipeline",
+  "categorySystem": "System",
+  "levelLabel": "Level:",
+  "levelAll": "All",
+  "autoScroll": "Auto Scroll",
+  "pauseLive": "Pause live tracking",
+  "startLive": "Start live tracking",
+  "pause": "⏸ Pause",
+  "follow": "▶ Follow",
+  "clear": "Clear",
+  "clearTitle": "Clear current display",
+  "close": "Close log panel",
+  "linesCount": "{count} lines · {bytes}",
+  "paused": "Paused · ",
+  "resume": "Resume tracking"
+}

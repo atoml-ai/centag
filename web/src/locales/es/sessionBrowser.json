@@ -1,0 +1,26 @@
+{
+  "compactTitle": "Conversaciones recientes",
+  "refresh": "Actualizar",
+  "noSessions": "No hay sesiones. Inicie una conversación con IA primero",
+  "categoryGeneral": "general",
+  "messagesCount": "{count} mensajes",
+  "messagesDetail": "Detalles del mensaje",
+  "collapse": "Colapsar",
+  "loading": "Cargando…",
+  "noMessages": "Esta sesión no tiene mensajes (posiblemente recién creada, solicitud no completada)",
+  "loadMessagesFailed": "Error al cargar mensajes o vacío. Actualice e intente de nuevo",
+  "pageTitle": "Registros de sesión",
+  "pageSubtitle": "Explore las sesiones de conversación y mensajes registrados (almacenados por edición: Archivo / SQLite / PG)",
+  "allCategories": "Todas las categorías",
+  "sessionList": "Lista de sesiones",
+  "totalCount": "{count} en total",
+  "noSessionsFull": "Sin sesiones",
+  "messagesTitle": "Mensajes",
+  "selectSessionHint": "Seleccione una sesión a la izquierda para ver mensajes",
+  "roleUser": "Usuario",
+  "roleAssistant": "Asistente",
+  "roleSystem": "Sistema",
+  "emptyContent": "(vacío)",
+  "loadSessionsFailed": "Error al cargar las sesiones"
+}
+

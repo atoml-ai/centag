@@ -1,0 +1,21 @@
+{
+  "title": "Консоль живых логов",
+  "categoryLabel": "Категория:",
+  "categoryAll": "Все",
+  "categoryLlm": "LLM доступ",
+  "categoryPipeline": "Конвейер",
+  "categorySystem": "Система",
+  "levelLabel": "Уровень:",
+  "levelAll": "Все",
+  "autoScroll": "Автопрокрутка",
+  "pauseLive": "Приостановить отслеживание",
+  "startLive": "Запустить отслеживание",
+  "pause": "⏸ Пауза",
+  "follow": "▶ Следить",
+  "clear": "Очистить",
+  "clearTitle": "Очистить текущее отображение",
+  "close": "Закрыть панель логов",
+  "linesCount": "{count} строк · {bytes}",
+  "paused": "Приостановлено · ",
+  "resume": "Возобновить отслеживание"
+}

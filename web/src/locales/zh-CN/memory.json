@@ -1,0 +1,89 @@
+{
+  "title": "云记忆管理",
+  "subtitle": "管理 Agent 记忆云端存储，支持语义搜索与版本控制",
+  "stats": {
+    "title": "记忆统计",
+    "vectorEntries": "向量条目",
+    "memoryFiles": "记忆文件",
+    "indexQueueLength": "索引队列长度",
+    "processed": "已处理",
+    "failed": "失败",
+    "dropped": "丢弃",
+    "recentError": "最近错误："
+  },
+  "currentAgent": "当前 Agent",
+  "selectAgent": "选择 Agent",
+  "actions": {
+    "syncToCloud": "同步到云端",
+    "pullFromCloud": "从云端拉取",
+    "rebuildIndex": "重建索引"
+  },
+  "search": {
+    "placeholder": "搜索记忆内容...",
+    "searchBtn": "搜索"
+  },
+  "tabs": {
+    "files": "文件列表",
+    "results": "搜索结果",
+    "versions": "版本历史"
+  },
+  "fileList": {
+    "title": "记忆文件",
+    "searchResults": "搜索结果",
+    "name": "文件名",
+    "size": "大小",
+    "modified": "修改时间",
+    "actions": "操作",
+    "view": "查看",
+    "delete": "删除",
+    "newFile": "新建文件",
+    "similarity": "相似度:"
+  },
+  "versionHistory": {
+    "selectFile": "选择文件",
+    "versionId": "版本 ID",
+    "createdAt": "创建时间",
+    "lines": "行数",
+    "size": "大小",
+    "restore": "恢复",
+    "noVersions": "暂无版本记录",
+    "selectFileFirst": "请先选择文件"
+  },
+  "dialog": {
+    "editFile": "编辑文件",
+    "newFile": "新建文件",
+    "filename": "文件名",
+    "filenamePlaceholder": "memory/xxx.md",
+    "content": "内容",
+    "contentPlaceholder": "记忆内容...",
+    "cancel": "取消",
+    "save": "保存",
+    "close": "关闭"
+  },
+  "message": {
+    "loginRequired": "请先登录后再搜索",
+    "searchFailed": "搜索失败",
+    "syncSuccess": "同步成功，{count} 个文件",
+    "syncFailed": "同步失败",
+    "pullSuccess": "拉取成功，{count} 个文件",
+    "pullFailed": "拉取失败",
+    "indexSuccess": "索引重建成功，{count} 个向量",
+    "indexFailed": "索引重建失败",
+    "readFileFailed": "读取文件失败",
+    "filenameRequired": "请输入文件名",
+    "saveSuccess": "保存成功",
+    "saveFailed": "保存失败",
+    "deleteConfirm": "确定要删除 {name} 吗？",
+    "deleteTitle": "警告",
+    "deleteConfirmBtn": "确定",
+    "deleteCancelBtn": "取消",
+    "deleteSuccess": "删除成功",
+    "deleteFailed": "删除失败",
+    "restoreConfirm": "确定要恢复到版本 {versionId} 吗？",
+    "restoreTitle": "确认",
+    "restoreConfirmBtn": "确定",
+    "restoreCancelBtn": "取消",
+    "restoreSuccess": "恢复成功",
+    "restoreFailed": "恢复失败"
+  }
+}

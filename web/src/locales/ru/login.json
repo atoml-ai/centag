@@ -1,0 +1,21 @@
+{
+  "username": "Имя пользователя",
+  "password": "Пароль",
+  "confirmPassword": "Подтвердите пароль",
+  "loginButton": "Войти",
+  "setupButton": "Настроить и войти",
+  "passwordPlaceholder": "Токен входа (минимум 6 символов)",
+  "setupPasswordPlaceholder": "Установить токен входа (минимум 6 символов)",
+  "adminPasswordPlaceholder": "Установить пароль администратора (минимум 6 символов)",
+  "adminLoginPlaceholder": "Пароль администратора (минимум 6 символов)",
+  "firstTimeTitle": "Первый раз: пожалуйста, установите токен входа",
+  "firstTimeAdminTitle": "Первый раз: пожалуйста, установите пароль администратора",
+  "resetHint": "Для сброса удалите data/admin.password.hash и перезапустите",
+  "subtitle": "Платформа управления LLM прокси-сервисом",
+  "pleaseEnterPassword": "Введите пароль",
+  "pleaseEnterUsername": "Введите имя пользователя",
+  "pleaseConfirmPassword": "Подтвердите пароль",
+  "passwordMismatch": "Пароли не совпадают",
+  "passwordMinLength": "Пароль должен содержать минимум 6 символов",
+  "operationFailed": "Операция не удалась"
+}

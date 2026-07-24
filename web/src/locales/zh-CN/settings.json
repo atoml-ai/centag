@@ -1,0 +1,19 @@
+{
+  "title": "配置",
+  "language": "语言",
+  "languageUpdated": "语言已更新",
+  "serviceInfo": "服务信息",
+  "version": "版本",
+  "edition": "发行版",
+  "uptime": "运行时长",
+  "apiAddress": "API 地址",
+  "changePassword": "修改管理密码",
+  "oldPassword": "原密码",
+  "newPassword": "新密码",
+  "confirmPassword": "确认密码",
+  "fillAllFields": "请填写完整",
+  "passwordMinLength": "新密码至少 6 位",
+  "passwordMismatch": "两次输入的新密码不一致",
+  "passwordUpdated": "密码已更新",
+  "updateFailed": "修改失败"
+}

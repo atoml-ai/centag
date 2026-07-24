@@ -1,0 +1,89 @@
+{
+  "pageTitle": "Proxy Mode Configuration",
+  "pageDescription": "Configure proxy mode keywords. Users can specify proxy strategies via request headers, body, or content prefix",
+  "keywordFormatHint": "Keyword format: # + single letter (e.g. #d, #s, #m)",
+  "refresh": "Refresh",
+  "addMode": "Add Mode",
+  "table": {
+    "keyword": "Keyword",
+    "name": "Name",
+    "type": "Type",
+    "description": "Description",
+    "enabled": "Enabled",
+    "sortOrder": "Sort",
+    "actions": "Actions"
+  },
+  "actions": {
+    "edit": "Edit",
+    "delete": "Delete"
+  },
+  "emptyState": "No proxy mode configurations",
+  "usageExamples": {
+    "title": "Usage Examples",
+    "headerMethod": "Request Header",
+    "headerDesc": "Add a custom field in the request header to specify the mode",
+    "bodyExtension": "Body Extension",
+    "bodyDesc": "Add a centag field in the JSON request body",
+    "contentPrefix": "Content Prefix",
+    "contentDesc": "Add a mode keyword at the beginning of the message content. The system will automatically parse and remove it",
+    "apiSession": "API Session",
+    "apiDesc": "Set session-level proxy mode via API. All requests within the validity period will use this mode"
+  },
+  "formDialog": {
+    "addTitle": "Add Proxy Mode",
+    "editTitle": "Edit Proxy Mode",
+    "keywordLabel": "Keyword",
+    "keywordPlaceholder": "#d",
+    "keywordTip": "Format: # + single letter (e.g. #d, #s, #m). Cannot be changed after creation",
+    "nameLabel": "Name",
+    "namePlaceholder": "e.g. Specify Backend",
+    "typeLabel": "Type",
+    "typePlaceholder": "Select mode type",
+    "descriptionLabel": "Description",
+    "descriptionPlaceholder": "Describe the purpose and behavior of this mode",
+    "enabledLabel": "Enabled",
+    "enabledTip": "When disabled, this keyword will no longer take effect",
+    "sortOrderLabel": "Sort Order",
+    "sortOrderTip": "Smaller numbers appear first",
+    "cancel": "Cancel",
+    "save": "Save"
+  },
+  "typeOptions": {
+    "direct": "Direct Backend (direct)",
+    "schedule": "Smart Scheduling (schedule)",
+    "match": "Model Matching (match)",
+    "classify": "Intent Classification (classify)",
+    "transparent": "Transparent Mode (transparent)",
+    "fallback": "Fallback (fallback)"
+  },
+  "typeLabels": {
+    "direct": "Direct Backend",
+    "schedule": "Smart Scheduling",
+    "match": "Model Matching",
+    "classify": "Intent Classification",
+    "transparent": "Transparent Mode",
+    "transparent-fast": "Transparent (Fast)",
+    "fixed-egress": "Jump Mode",
+    "fallback": "Fallback"
+  },
+  "validation": {
+    "keywordRequired": "Please enter a keyword",
+    "keywordPattern": "Format: # + single letter (e.g. #d, #s)",
+    "nameRequired": "Please enter a name",
+    "typeRequired": "Please select a type"
+  },
+  "confirm": {
+    "deleteTitle": "Confirm Delete",
+    "deleteMessage": "Are you sure you want to delete mode \"{name}\"?"
+  },
+  "message": {
+    "createSuccess": "Created successfully",
+    "updateSuccess": "Updated successfully",
+    "deleteSuccess": "Deleted successfully",
+    "enabled": "Enabled",
+    "disabled": "Disabled",
+    "loadFailed": "Load failed",
+    "operationFailed": "Operation failed",
+    "saveFailed": "Save failed"
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "title": "設定",
+  "language": "言語",
+  "languageUpdated": "言語が更新されました",
+  "serviceInfo": "サービス情報",
+  "version": "バージョン",
+  "edition": "エディション",
+  "uptime": "稼働時間",
+  "apiAddress": "API アドレス",
+  "changePassword": "管理パスワードの変更",
+  "oldPassword": "現在のパスワード",
+  "newPassword": "新しいパスワード",
+  "confirmPassword": "パスワードの確認",
+  "fillAllFields": "すべての項目を入力してください",
+  "passwordMinLength": "パスワードは6文字以上にしてください",
+  "passwordMismatch": "新しいパスワードが一致しません",
+  "passwordUpdated": "パスワードが更新されました",
+  "updateFailed": "更新に失敗しました"
+}

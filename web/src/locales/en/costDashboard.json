@@ -1,0 +1,22 @@
+{
+  "title": "Cost Dashboard",
+  "dateSeparator": "to",
+  "startDate": "Start Date",
+  "endDate": "End Date",
+  "byModel": "By Model",
+  "byBackend": "By Backend",
+  "byTenant": "By Tenant",
+  "byDepartment": "By Department",
+  "byDate": "By Date",
+  "usd": "USD",
+  "cny": "CNY",
+  "usdLabel": "USD",
+  "cnyLabel": "Chinese Yuan",
+  "totalCost": "Total Cost",
+  "totalToken": "Total Token",
+  "cacheSavings": "Cache Savings",
+  "estimated": "estimated",
+  "costDistribution": "Cost Distribution",
+  "cost": "Cost",
+  "loadFailed": "Failed to load cost data"
+}

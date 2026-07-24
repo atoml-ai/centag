@@ -1,0 +1,17 @@
+{
+  "dialogTitle": "Настройки безопасности",
+  "tabPassword": "Пароль входа",
+  "oldPassword": "Старый пароль",
+  "newPassword": "Новый пароль",
+  "confirmPassword": "Подтвердите пароль",
+  "updatePassword": "Обновить пароль",
+  "tabApiKeys": "Ключи доступа API",
+  "close": "Закрыть",
+  "message": {
+    "fillComplete": "Заполните все поля",
+    "passwordTooShort": "Новый пароль должен содержать не менее 6 символов",
+    "passwordMismatch": "Пароли не совпадают",
+    "passwordUpdated": "Пароль обновлён",
+    "updateFailed": "Ошибка обновления"
+  }
+}

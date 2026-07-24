@@ -1,0 +1,59 @@
+{
+  "dialogTitle": "Billing Rules",
+  "description": "Configure unit prices by backend + model (USD / 1M tokens). Import/export YAML defaults to USD; display can be switched to CNY (conversion only, does not modify source).",
+  "refresh": "Refresh",
+  "importYaml": "Import YAML",
+  "export": "Export",
+  "addRule": "Add Rule",
+  "usdLabel": "USD",
+  "cnyLabel": "CNY",
+  "emptyText": "No rules yet. Import or add new.",
+  "table": {
+    "name": "Name",
+    "backend": "Backend",
+    "model": "Model",
+    "inputPrice": "Input Price ({unit})",
+    "outputPrice": "Output Price ({unit})",
+    "priority": "Priority",
+    "enabled": "Enabled",
+    "enabledYes": "Yes",
+    "enabledNo": "No",
+    "actions": "Actions",
+    "edit": "Edit",
+    "delete": "Delete"
+  },
+  "form": {
+    "editTitle": "Edit Rule",
+    "createTitle": "Add Rule",
+    "name": "Name",
+    "backendId": "Backend ID",
+    "backendPlaceholder": "e.g. ppinfra, or *",
+    "model": "Model",
+    "modelPlaceholder": "e.g. deepseek-v3.2, or *",
+    "inputPrice": "Input Price $/1M",
+    "outputPrice": "Output Price $/1M",
+    "priority": "Priority",
+    "enabled": "Enabled",
+    "cancel": "Cancel",
+    "save": "Save"
+  },
+  "importDialog": {
+    "title": "Import YAML",
+    "placeholder": "Paste pricing YAML",
+    "cancel": "Cancel",
+    "importReplace": "Import (Replace All)"
+  },
+  "confirmDelete": "Delete rule \"{name}\"?",
+  "confirmDeleteTitle": "Confirm",
+  "message": {
+    "loadFailed": "Load failed",
+    "fillRequired": "Please fill in backend and model",
+    "saveSuccess": "Saved",
+    "saveFailed": "Save failed",
+    "deleteSuccess": "Deleted",
+    "importSuccess": "{count} rule(s) imported",
+    "importEmptyWarning": "Please paste YAML content",
+    "importFailed": "Import failed",
+    "exportFailed": "Export failed"
+  }
+}

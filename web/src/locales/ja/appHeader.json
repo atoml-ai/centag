@@ -1,0 +1,11 @@
+{
+  "admin": "管理者",
+  "user": "一般ユーザー",
+  "profile": "プロフィール",
+  "systemConfig": "システム設定",
+  "logout": "ログアウト",
+  "logoutConfirm": "ログアウトしてもよろしいですか？",
+  "logoutTitle": "ログアウト",
+  "confirm": "ログアウト",
+  "cancel": "キャンセル"
+}

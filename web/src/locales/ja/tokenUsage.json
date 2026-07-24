@@ -1,0 +1,23 @@
+{
+  "title": "トークン使用量",
+  "subtitle": "トークン使用量、コスト要約と請求ルール。",
+  "titleBilling": "トークン使用量と請求",
+  "titleUsage": "トークン使用量",
+  "hintBilling": "トークン使用量、コスト要約と請求ルール。ホームページの「使用量と会話」はシンプルなビューです。",
+  "hintUsage": "トークン使用量とコスト要約。請求ルールは管理者が設定します。",
+  "dailyTrend": "日別使用傾向",
+  "last7Days": "7 日",
+  "last30Days": "30 日",
+  "last90Days": "90 日",
+  "modelTop5": "モデル使用 TOP5",
+  "backendTop5": "バックエンド使用 TOP5",
+  "refresh": "更新",
+  "inputToken": "入力トークン",
+  "outputToken": "出力トークン",
+  "totalToken": "合計トークン",
+  "tokenCount": "トークン数",
+  "modelUsage": "モデル使用",
+  "loadDailyTrendFailed": "日別傾向の読み込みに失敗しました",
+  "loadModelStatsFailed": "モデル統計の読み込みに失敗しました",
+  "loadBackendStatsFailed": "バックエンド統計の読み込みに失敗しました"
+}
