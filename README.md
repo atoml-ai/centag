@@ -1,157 +1,116 @@
 # Centag
 
-LLM 统一网关：协议适配、后端路由、流水线/钩子/插件、token 计量与计费。核心无内置 business 插件树；可选桌面启动器见 `apps/launcher/`（菜单/托盘 + 浏览器，非 Wails）。
+[English](README.md) | [简体中文](README.zh-CN.md) | [日本語](README.ja.md) | [한국어](README.ko.md) | [Русский](README.ru.md) | [Español](README.es.md)
 
-**许可证**：核心仓库以 [MIT](LICENSE) 开源。开源发行版仅 **`minimal` / `personal`**（完整独立构建，不依赖其它仓库）。**Team 商业版**仅在私有仓 [`centag-pro`](https://github.com/atoml-ai/centag-pro) 构建（`./scripts/build-team.sh`）；本仓已删除 `dist/team`，**不再提供** `./start.sh build team` 转调入口。
+**One-click local proxy access** for coding Agents, **unified management** of backends and API keys, plus **configurable proxy actions** per scenario (switching, failover, pipelines)—no more configuring every tool separately.
 
-**分支约定**：`centag-pro` 必须与本仓**同名分支**开发（例如本仓 `feature/v0.2.7` ↔ pro `feature/v0.2.7`），见 [dist/README.md](dist/README.md)。
+For individual developers: install Centag → connect Agents via wrap or config → manage backends and policies in the Web UI.
 
-## 目录结构
+## Install
 
-```
-centag/
-├── cmd/centag/          # 本地开发入口
-├── core/                # Go 核心库
-├── plugins/             # protocol / backend / database / storage
-├── dist/                # minimal | personal 发行版入口（Team 在 centag-pro）
-├── web/                 # Vue 管理端
-├── apps/launcher/       # 可选：桌面启动器（与核心解耦）
-├── config/              # profiles / initdata / secrets
-├── deploy/              # Docker / stack / fnos
-├── scripts/             # 运维与校验脚本
-├── sdk/                 # 外部插件 SDK
-├── docs/
-├── bin/                 # 本地构建产物（勿提交）
-├── Makefile / start.sh
-└── go.work
-```
+Pick one method. After install, run `centag` and open **http://localhost:20060**.
 
-## 安装
-
-> **普通用户推荐**：无需 Node.js，用下方 **一键安装（`install.sh`）** 即可。  
-> **已有 Node.js 工具链**：见 [npm 安装](#npm-安装可选) 或 `apps/centag-npm/README.md`。
-
-### 一键安装（`install.sh`，推荐）
-
-默认安装 **personal CLI + wrap** 到 `~/.centag/bin`（并尝试写入 PATH）。需已发布的 GitHub Release 资产。
+### Option 1: One-line script (recommended, no Node.js)
 
 ```bash
-# 推荐：按 Release tag 拉取安装脚本（与发版 tag 一致，例如 v0.2.9）
-curl -fsSL https://raw.githubusercontent.com/atoml-ai/centag/v0.2.9/scripts/install.sh | bash
-
-# 指定版本（脚本仍从 tag/分支取，二进制从对应 Release 下载）
-curl -fsSL https://raw.githubusercontent.com/atoml-ai/centag/v0.2.9/scripts/install.sh | bash -s -- --version 0.2.9
-
-# 只装 personal 或只装 wrap
-curl -fsSL https://raw.githubusercontent.com/atoml-ai/centag/v0.2.9/scripts/install.sh | bash -s -- --only personal
-curl -fsSL https://raw.githubusercontent.com/atoml-ai/centag/v0.2.9/scripts/install.sh | bash -s -- --only wrap
-
-# 等价写法（位置参数）
-curl -fsSL https://raw.githubusercontent.com/atoml-ai/centag/v0.2.9/scripts/install.sh | bash -s -- wrap
-
-# 无可用 Release 时：克隆源码构建（需 Go / Node）
-curl -fsSL https://raw.githubusercontent.com/atoml-ai/centag/v0.2.9/scripts/install.sh | bash -s -- --from-source
-
-# 自定义安装目录、不改 shell rc
-curl -fsSL https://raw.githubusercontent.com/atoml-ai/centag/v0.2.9/scripts/install.sh | bash -s -- \
-  --prefix "$HOME/.centag" --no-modify-path
+curl -fsSL https://raw.githubusercontent.com/atoml-ai/centag/main/scripts/install.sh | bash
 ```
 
-安装后常用命令：
+Installs to `~/.centag/` by default and tries to update your PATH. Then use `centag` / `centag wrap`.
+
+### Option 2: npm (if you already use Node.js)
 
 ```bash
-centag                 # 启动 personal（默认端口 20060）
-centag-personal        # 直接跑二进制
-centag wrap run -- opencode   # 进程代理（不起网关）
-centag wrap doctor
-```
-
-脚本说明见 `scripts/install.sh --help`。
-
-### npm 安装（可选）
-
-适合已使用 Node.js / npm 的开发者；**不是**普通用户的首选路径。
-
-| 包 | 说明 |
-|----|------|
-| `@atomlai/centag` | 在线版：小包，安装时从 GitHub Release 下载当前平台二进制 |
-| `@atomlai/centag-offline` | 离线版：大包，内置二进制，适合内网 |
-
-```bash
-# 全局安装（需本机 npm 全局目录可写）
+# Global install (online package; downloads the binary from GitHub Releases)
 npm install -g @atomlai/centag
 
-# 无需 -g、不改全局目录（推荐 npm 用户先试这个）
-npx --yes @atomlai/centag version
+# Or try without changing global npm paths
+npx --yes @atomlai/centag
 
-# 内网 / 离线
+# Offline / air-gapped package
 npm install -g @atomlai/centag-offline
 ```
 
-**`npm install -g` 报 `EACCES`？** npm **不会**自动弹出密码框，只会直接失败。macOS 上 Node 官方安装包把全局目录放在 `/usr/local`（root 所有），与 OpenCode 等 CLI 相同。
+If `npm install -g` hits a permission error, use `npx` or the script above. Details: [apps/centag-npm/README.md](apps/centag-npm/README.md).
 
-若坚持全局安装，**加 `sudo` 后终端会提示输入本机登录密码**：
-
-```bash
-sudo npm install -g @atomlai/centag
-```
-
-> 之后 `npm update -g` 若再报权限错，同样需加 `sudo`。长期频繁用 npm 全局包，可改 prefix 到用户目录（见 `apps/centag-npm/README.md` §故障排除）。
-
-其它方式：
-
-1. **`npx @atomlai/centag`**（不装全局，无权限问题）
-2. **改用上文 `install.sh`**（无需 Node，装到 `~/.centag/`）
-
-详见 [apps/centag-npm/README.md](apps/centag-npm/README.md)。
-
-发版流程见 [docs/harness/skills/step6-release/SKILL.md](docs/harness/skills/step6-release/SKILL.md)（触发词：`step6-release` / 发版；须先过 Step 5 Gate 4）。
-
-## 快速开始（开发机）
+### Option 3: Docker (from source)
 
 ```bash
-# 密钥模板 → 本地 secrets（勿提交）
-cp config/secrets/.env.example config/secrets/.env
-
-make build          # 后端 → ~/.centag/lib/personal/centag-personal
-make frontend       # 前端 → ~/.centag/lib/personal/static
-make run            # 或 ./start.sh run be
+git clone https://github.com/atoml-ai/centag.git
+cd centag
+cp config/secrets/.env.example config/secrets/.env   # edit secrets as needed
+./start.sh docker up                                 # default: personal container
 ```
 
-管理界面：http://localhost:20060
+Admin UI is still http://localhost:20060. Stop with `./start.sh docker down`.
 
-精简模式（无 DB、单密码管理台）：
+---
+
+## After install: connect an Agent
+
+Goal: keep using your Agent as usual, while traffic goes through Centag (shared backends, failover, metering).
+
+1. **Open the Web UI** → add and enable at least one backend (API key or local compatible endpoint).
+2. **Agent Setup** (Web menu) — wizard to generate/write configs for common tools; or
+3. **Process proxy (recommended — minimal Agent config changes)**:
 
 ```bash
-./start.sh debug minimal
+# With Centag already running locally, launch an Agent via wrap
+centag wrap run -- opencode
+# Replace opencode with your Agent launch command
+
+# Health check
+centag wrap doctor
 ```
 
-## 发行版
+Note: `centag wrap` does **not** start the gateway; it only routes the Agent process into a running Centag. Full guide: [system proxy egress](docs/guide/system-proxy-egress.md).
 
-| 发行版 | 说明 |
-|--------|------|
-| minimal | 轻量，无 DB（开源） |
-| personal | 个人全功能，默认 SQLite（开源） |
-| team | **商业 SKU**，在 [`centag-pro`](https://github.com/atoml-ai/centag-pro) 构建 |
+---
 
-```bash
-./start.sh build personal
-# Team：cd ../centag-pro && ./scripts/build-team.sh
-./start.sh docker build personal
-```
+## Why Centag?
 
-见 [dist/README.md](dist/README.md)、[docs/guide/dist-profiles.md](docs/guide/dist-profiles.md)、[docs/guide/external-business-plugins.md](docs/guide/external-business-plugins.md)。
+| What you need | What Centag does |
+|---------------|------------------|
+| **Switch backends quickly** | Manage many backends in one place; enable/switch in the Web UI without rewiring every Agent |
+| **Auto failover + API key pools** | Rotate multiple keys; fail over when a key is rate-limited or down |
+| **Pipelines for each scenario** | Configurable modes (passthrough, direct, scheduling, review, …); change scenario = change policy |
+| **Usage & billing metrics** | Track tokens/cost so personal usage stays visible |
 
-可选桌面启动器（默认 lite 无 CGO；`--launcher-tray` 为托盘版）：
+In short: **one gateway for backends and policies; Agents just write code.**
 
-```bash
-./start.sh build personal                   # 普通个人版服务
-./start.sh build personal --launcher        # 个人版 + lite 启动器
-./start.sh build personal --launcher-tray   # 个人版 + 托盘启动器（CGO）
-./start.sh run personal --launcher
-./start.sh build minimal --launcher         # team 不支持 --launcher
-```
+## Capabilities
 
-详见 [apps/launcher/README.md](apps/launcher/README.md)。
+1. **Backends / models + API key pools**  
+   Configure backends and models in the Web UI; pool and rotate **multiple API keys** per backend when limited or failing.
 
-环境变量使用 `CENTAG_*`（以及运行时 `LLM_PROXY_*`）。
+2. **Visual pipeline editor**  
+   Customize proxy behavior on a canvas (forward, schedule, review, …); switch policies by scenario without changing Agent code.
+
+3. **`centag wrap` — non-invasive third-party Agents**  
+   Launch Agents with wrap and import traffic into Centag **without changing the Agent’s own settings**.
+
+4. **Direct Agent config file setup**  
+   Point the Agent’s API Base / Key at Centag like a normal LLM gateway (the Web “Agent Setup” wizard can help write configs).
+
+Pick either path: wrap for fewer config edits, or config files for a standard OpenAI-compatible endpoint.
+
+## Screenshots
+
+| Dashboard | Agent Setup |
+|-----------|-------------|
+| ![Dashboard](docs/assets/readme/dashboard.png) | ![Agent Setup](docs/assets/readme/agent-setup.png) |
+
+## Documentation
+
+- [Docs index](docs/README.md)
+- [Environment variables](docs/guide/environment-variables.md)
+- [Local proxy / wrap](docs/guide/system-proxy-egress.md)
+- [API reference](docs/api/API_REFERENCE.md)
+
+## Feedback & support
+
+Questions or suggestions: open a [GitHub Issue](https://github.com/atoml-ai/centag/issues), or email **centag@atoml.com**.
+
+## License
+
+MIT License (open-source editions: `minimal` / `personal`)
