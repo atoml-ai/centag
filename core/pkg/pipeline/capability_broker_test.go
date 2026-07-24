@@ -306,3 +306,23 @@ func TestSplitPermissionEdgeCases(t *testing.T) {
 		t.Errorf("Expected ['', ''], got %v", parts)
 	}
 }
+
+func TestGatewayEgressTransportDisablesEnvProxy(t *testing.T) {
+	tr, ok := gatewayEgressTransport(true).(*http.Transport)
+	if !ok {
+		t.Fatalf("expected *http.Transport")
+	}
+	if tr.Proxy != nil {
+		t.Fatal("gateway egress must not use ProxyFromEnvironment (Proxy must be nil)")
+	}
+	trInsecure, ok := gatewayEgressTransport(false).(*http.Transport)
+	if !ok {
+		t.Fatalf("expected *http.Transport for insecure")
+	}
+	if trInsecure.Proxy != nil {
+		t.Fatalf("insecure egress must also disable Proxy")
+	}
+	if trInsecure.TLSClientConfig == nil || !trInsecure.TLSClientConfig.InsecureSkipVerify {
+		t.Fatalf("expected InsecureSkipVerify when tlsVerify=false")
+	}
+}

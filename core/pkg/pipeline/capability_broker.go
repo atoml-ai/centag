@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -488,7 +489,18 @@ func (c *controlledHTTPClient) Do(req *http.Request) (*http.Response, error) {
 	// 创建 HTTP 客户端。
 	// 优先使用请求 Context 的 deadline（节点 timeout，如 transparent_forward=120s），
 	// 避免全局 Proxy.Timeout=30s 在读 SSE/长响应体时提前打断。
-	client := &http.Client{}
+	//
+	// 关键禁环境代理（HTTP_PROXY/HTTPS_PROXY）：网关自身出站若再走本机 MITM，
+	// 会把 opencode.ai 请求环回 Centag，最终落到其它后端（如智谱 1211），表现为
+	// 「默认可用模型总是被降级」。
+	client := &http.Client{
+		Transport: gatewayEgressTransport(c.tlsVerify),
+		// 与 transparent_forward.redirect_policy=never 对齐：禁止自动跟随 3xx，
+		// 避免误跳到其它厂商域名后把错误体当成原上游响应。
+		CheckRedirect: func(*http.Request, []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
 	if deadline, ok := req.Context().Deadline(); ok {
 		d := time.Until(deadline)
 		if d < time.Second {
@@ -497,13 +509,6 @@ func (c *controlledHTTPClient) Do(req *http.Request) (*http.Response, error) {
 		client.Timeout = d + time.Second
 	} else if c.timeout > 0 {
 		client.Timeout = time.Duration(c.timeout) * time.Second
-	}
-
-	// 设置 TLS 策略
-	if !c.tlsVerify {
-		client.Transport = &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-		}
 	}
 
 	// 发送请求
@@ -519,6 +524,38 @@ func (c *controlledHTTPClient) Do(req *http.Request) (*http.Response, error) {
 	}
 
 	return resp, nil
+}
+
+// gatewayEgressTransport 构建网关出站 Transport：直连上游，不继承进程环境代理。
+func gatewayEgressTransport(tlsVerify bool) http.RoundTripper {
+	// 基于 DefaultTransport 拷贝拨号等默认值，但清空 Proxy。
+	base, _ := http.DefaultTransport.(*http.Transport)
+	var tr *http.Transport
+	if base != nil {
+		tr = base.Clone()
+	} else {
+		tr = &http.Transport{
+			Proxy: nil,
+			DialContext: (&net.Dialer{
+				Timeout:   30 * time.Second,
+				KeepAlive: 30 * time.Second,
+			}).DialContext,
+			ForceAttemptHTTP2:     true,
+			MaxIdleConns:          100,
+			IdleConnTimeout:       90 * time.Second,
+			TLSHandshakeTimeout:   10 * time.Second,
+			ExpectContinueTimeout: 1 * time.Second,
+		}
+	}
+	tr.Proxy = nil
+	if !tlsVerify {
+		if tr.TLSClientConfig == nil {
+			tr.TLSClientConfig = &tls.Config{}
+		}
+		tr.TLSClientConfig = tr.TLSClientConfig.Clone()
+		tr.TLSClientConfig.InsecureSkipVerify = true
+	}
+	return tr
 }
 
 // defaultPermissionChecker 默认权限检查器
