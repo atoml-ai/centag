@@ -14,13 +14,12 @@
 #   Piped bash is a child process; it cannot change your interactive shell PATH.
 #   Chain: … | bash && . ~/.centag/env
 #
-# Default (no args): personal from GitHub Release (install.sh channel).
+# Default (no args): personal CLI from GitHub Release (all OS, including Win/mac).
 # Asset convention (tag v<version>):
-#   Linux:   centag-cli-personal-linux-<arch>.tar.gz
-#   macOS:   centag-desktop-personal-macos-<arch>.zip  (.dmg also on Release)
-#   Windows: centag-desktop-personal-windows-<arch>.zip
+#   CLI (default): centag-cli-personal-<goos>-<goarch>.tar.gz
+#   Desktop (opt): centag-desktop-personal-macos-<arch>.{zip,dmg} / …-windows-<arch>.zip
 #   checksums.txt
-# npm channel is separate (CLI on all platforms).
+# Use --desktop on darwin/windows to install the tray desktop package instead.
 # Optional/legacy: wrap tarball / old centag-personal-* / Centag-* names still tried.
 #
 # Ordinary installs download Release assets only. Source builds require --from-source.
@@ -58,6 +57,7 @@ Options:
   --only <personal|wrap>        Same as positional component
   --with <a,b>                  Explicit list (comma-separated)
   -v, --version <ver>           Pin version (or pass as 2nd positional: personal 0.2.7)
+  --desktop                     Win/mac: install tray desktop zip (default is CLI)
   --from-source                 Explicitly clone + build (NOT used automatically)
   --prefix <dir>                Install root (default: ~/.centag)
   --bin-dir <dir>               PATH directory (default: <prefix>/bin)
@@ -80,6 +80,7 @@ fail() { log "${RED}error:${NC} $*" >&2; exit 1; }
 requested_version="${VERSION:-${CENTAG_VERSION:-}}"
 from_source=false
 no_modify_path=false
+install_desktop=false
 only_component=""
 with_components=""
 positional_component=""
@@ -96,6 +97,7 @@ while [[ $# -gt 0 ]]; do
     --with)
       [[ -n "${2:-}" ]] || fail "--with requires a comma-separated list"
       with_components="$2"; shift 2 ;;
+    --desktop) install_desktop=true; shift ;;
     --from-source) from_source=true; shift ;;
     --prefix)
       [[ -n "${2:-}" ]] || fail "--prefix requires a directory"
@@ -244,11 +246,15 @@ asset_name() {
   local component="$1"
   case "$component" in
     personal)
-      case "$GOOS" in
-        darwin) echo "centag-desktop-personal-macos-${GOARCH}.zip" ;;
-        windows) echo "centag-desktop-personal-windows-${GOARCH}.zip" ;;
-        *) echo "centag-cli-personal-${PLATFORM_KEY}.tar.gz" ;;
-      esac
+      if [[ "$install_desktop" == true ]]; then
+        case "$GOOS" in
+          darwin) echo "centag-desktop-personal-macos-${GOARCH}.zip" ;;
+          windows) echo "centag-desktop-personal-windows-${GOARCH}.zip" ;;
+          *) fail "--desktop is only supported on macOS / Windows (got ${GOOS})" ;;
+        esac
+      else
+        echo "centag-cli-personal-${PLATFORM_KEY}.tar.gz"
+      fi
       ;;
     *)
       echo "centag-${component}-${PLATFORM_KEY}.tar.gz"
@@ -261,17 +267,14 @@ asset_name_fallbacks() {
   local component="$1"
   case "$component" in
     personal)
-      case "$GOOS" in
-        darwin)
-          echo "Centag-${VERSION}-macos-${GOARCH}.zip"
-          ;;
-        windows)
-          echo "Centag-${VERSION}-windows-${GOARCH}.zip"
-          ;;
-        *)
-          echo "centag-personal-${PLATFORM_KEY}.tar.gz"
-          ;;
-      esac
+      if [[ "$install_desktop" == true ]]; then
+        case "$GOOS" in
+          darwin) echo "Centag-${VERSION}-macos-${GOARCH}.zip" ;;
+          windows) echo "Centag-${VERSION}-windows-${GOARCH}.zip" ;;
+        esac
+      else
+        echo "centag-personal-${PLATFORM_KEY}.tar.gz"
+      fi
       ;;
   esac
 }
@@ -489,8 +492,8 @@ install_component_from_archive() {
 
   mkdir -p "$BIN_DIR" "$LIB_DIR"
 
-  # Desktop zip (macOS / Windows) for personal.
-  if [[ "$component" == "personal" && ( "$GOOS" == "darwin" || "$GOOS" == "windows" ) ]]; then
+  # Optional tray desktop zip (macOS / Windows) when --desktop.
+  if [[ "$component" == "personal" && "$install_desktop" == true ]]; then
     install_personal_desktop_zip "$asset" "$tmp"
     rm -rf "$tmp"
     return 0
@@ -765,31 +768,28 @@ print_next_steps() {
   echo "  # or open a new terminal"
   echo ""
   if [[ "$has_personal" == true ]]; then
-    case "$GOOS" in
-      darwin|windows)
-        log "${MUTED}# Start tray desktop (no args). CLI / wrap still work with args:${NC}"
-        echo "  centag"
-        if [[ "$GOOS" == "darwin" ]]; then
-          echo "  open \"${INSTALL_ROOT}/Centag.app\""
-          echo "  # also installed to ~/Applications/Centag.app"
-        else
-          echo "  # or double-click ${INSTALL_ROOT}/Centag/Centag.exe"
-        fi
-        echo "  centag wrap doctor"
-        echo ""
-        ;;
-      *)
-        log "${MUTED}# Start the gateway CLI (http://127.0.0.1:20060):${NC}"
-        echo "  centag"
-        echo "  # absolute path (works before sourcing PATH):"
-        echo "  ${BIN_DIR}/centag"
-        echo ""
-        log "${MUTED}# Process proxy for third-party CLIs (subcommand; does not start the gateway):${NC}"
-        echo "  centag wrap doctor"
-        echo "  centag wrap run -- opencode"
-        echo ""
-        ;;
-    esac
+    if [[ "$install_desktop" == true && ( "$GOOS" == "darwin" || "$GOOS" == "windows" ) ]]; then
+      log "${MUTED}# Start tray desktop (no args). CLI / wrap still work with args:${NC}"
+      echo "  centag"
+      if [[ "$GOOS" == "darwin" ]]; then
+        echo "  open \"${INSTALL_ROOT}/Centag.app\""
+        echo "  # also installed to ~/Applications/Centag.app"
+      else
+        echo "  # or double-click ${INSTALL_ROOT}/Centag/Centag.exe"
+      fi
+      echo "  centag wrap doctor"
+      echo ""
+    else
+      log "${MUTED}# Start the gateway CLI (http://127.0.0.1:20060):${NC}"
+      echo "  centag"
+      echo "  # absolute path (works before sourcing PATH):"
+      echo "  ${BIN_DIR}/centag"
+      echo ""
+      log "${MUTED}# Process proxy for third-party CLIs (subcommand; does not start the gateway):${NC}"
+      echo "  centag wrap doctor"
+      echo "  centag wrap run -- opencode"
+      echo ""
+    fi
   fi
   if [[ "$has_wrap" == true ]]; then
     log "${MUTED}# Legacy standalone wrap binary (prefer: centag wrap …):${NC}"

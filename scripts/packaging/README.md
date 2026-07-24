@@ -60,11 +60,10 @@
 
 不是单独「github 形态」，而是组合：
 
-- `desktop` + `macos`
-- `desktop` + `windows`
-- `cli` + `linux`
+- `cli` × 全平台（darwin/linux/windows × amd64/arm64）— **install.sh 默认**
+- `desktop` + `macos` / `windows` — 可选（`install.sh --desktop`）
 
-由 CI 分 runner 构建后汇总；本机可只打当前系统的 desktop + 交叉 `cli linux`。
+由 CI：`github-cli`（ubuntu 交叉）+ 原生 runner 打 desktop 后汇总。
 
 ## 默认参数（fnos）
 

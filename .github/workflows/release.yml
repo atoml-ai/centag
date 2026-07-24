@@ -46,8 +46,8 @@ jobs:
       - name: Require version branch
         run: bash scripts/release/require-release-branch.sh --ci --version "${{ steps.ver.outputs.version }}"
 
-  # GitHub / install.sh: Linux CLI (cross-compile on ubuntu).
-  github-linux-cli:
+  # GitHub: full-matrix CLI (cross-compile on ubuntu).
+  github-cli:
     needs: [guard-branch]
     runs-on: ubuntu-latest
     env:
@@ -65,21 +65,21 @@ jobs:
           cache: npm
           cache-dependency-path: web/package-lock.json
 
-      - name: Build Linux CLI
+      - name: Build CLI (all platforms)
         run: |
           bash scripts/release/build-artifacts.sh \
             --version "${{ needs.guard-branch.outputs.version }}" \
             --components personal \
-            --platforms linux-amd64,linux-arm64
+            --platforms darwin-amd64,darwin-arm64,linux-amd64,linux-arm64,windows-amd64,windows-arm64
 
-      - name: Upload Linux artifacts
+      - name: Upload CLI artifacts
         uses: actions/upload-artifact@v5
         with:
-          name: github-linux-${{ needs.guard-branch.outputs.version }}
+          name: github-cli-${{ needs.guard-branch.outputs.version }}
           path: .centag/var/release/${{ needs.guard-branch.outputs.version }}/
           if-no-files-found: error
 
-  # GitHub / install.sh: macOS tray desktop (native CGO).
+  # GitHub: macOS tray desktop (native CGO; optional via install.sh --desktop).
   github-macos-desktop:
     needs: [guard-branch]
     runs-on: macos-14
@@ -112,7 +112,7 @@ jobs:
           path: .centag/var/release/${{ needs.guard-branch.outputs.version }}/
           if-no-files-found: error
 
-  # GitHub / install.sh: Windows tray desktop (native CGO).
+  # GitHub: Windows tray desktop (native CGO; optional via install.sh --desktop).
   github-windows-desktop:
     needs: [guard-branch]
     runs-on: windows-latest
@@ -151,7 +151,7 @@ jobs:
           if-no-files-found: error
 
   publish:
-    needs: [guard-branch, github-linux-cli, github-macos-desktop, github-windows-desktop]
+    needs: [guard-branch, github-cli, github-macos-desktop, github-windows-desktop]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -173,18 +173,18 @@ jobs:
           OUT="release-assets/${V}"
           mkdir -p "$OUT"
           find release-staging -type f \( \
-            -name 'centag-cli-*-linux-*.tar.gz' -o \
+            -name 'centag-cli-*.tar.gz' -o \
             -name 'centag-desktop-*.dmg' -o \
             -name 'centag-desktop-*.zip' -o \
-            -name 'centag-personal-linux-*.tar.gz' -o \
+            -name 'centag-personal-*.tar.gz' -o \
             -name 'Centag-*.dmg' -o \
             -name 'Centag-*.zip' \
           \) -exec cp -f {} "$OUT/" \;
           : > "$OUT/checksums.txt"
           (
             cd "$OUT"
-            for f in centag-cli-*-linux-*.tar.gz centag-desktop-*.dmg centag-desktop-*.zip \
-                     centag-personal-linux-*.tar.gz Centag-*.dmg Centag-*.zip; do
+            for f in centag-cli-*.tar.gz centag-desktop-*.dmg centag-desktop-*.zip \
+                     centag-personal-*.tar.gz Centag-*.dmg Centag-*.zip; do
               [[ -f "$f" ]] || continue
               printf '%s  %s\n' "$(sha256sum "$f" | awk '{print $1}')" "$f" >> checksums.txt
             done
@@ -215,8 +215,11 @@ jobs:
             echo "### Install"
             echo ""
             echo '```bash'
-            echo "# GitHub / install.sh — macOS&Windows tray desktop; Linux CLI"
+            echo "# GitHub / install.sh — CLI on all platforms (default)"
             echo "curl -fsSL https://raw.githubusercontent.com/${REPO}/${TAG}/scripts/install.sh | bash -s ${V} && . \"\$HOME/.centag/env\""
+            echo ""
+            echo "# Win/mac tray desktop (optional)"
+            echo "curl -fsSL https://raw.githubusercontent.com/${REPO}/${TAG}/scripts/install.sh | bash -s -- --desktop ${V}"
             echo ""
             echo "# npm — CLI on all platforms"
             echo "npm install -g centag"
@@ -224,9 +227,9 @@ jobs:
             echo ""
             echo "### Artifacts"
             echo ""
+            echo "- \`centag-cli-personal-<goos>-<goarch>.tar.gz\` — CLI (install.sh default)"
             echo "- \`centag-desktop-personal-macos-<arch>.dmg\` / \`.zip\` — macOS desktop"
             echo "- \`centag-desktop-personal-windows-<arch>.zip\` — Windows desktop"
-            echo "- \`centag-cli-personal-linux-<arch>.tar.gz\` — Linux CLI"
             echo "- \`checksums.txt\` — SHA-256 sums"
           } > "$NOTES_FILE"
 
@@ -234,7 +237,7 @@ jobs:
           while IFS= read -r f; do
             UPLOAD+=("$f")
           done < <(find "$OUT" -maxdepth 1 -type f \( \
-            -name 'centag-cli-*-linux-*.tar.gz' -o \
+            -name 'centag-cli-*.tar.gz' -o \
             -name 'centag-desktop-*.dmg' -o \
             -name 'centag-desktop-*.zip' -o \
             -name 'checksums.txt' \
