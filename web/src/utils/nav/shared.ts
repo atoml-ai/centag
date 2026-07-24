@@ -196,34 +196,27 @@ export function storageConfigNavGroup(options?: {
 }
 
 /**
- * Personal / Team User 同源导航（由 capabilities 裁剪节点）。
- * 无独立「对话」；无侧栏后端/策略列表（主入口在首页）。
- * 记忆与部分高级入口挂在「更多」下，由 capability 控制显隐（便于后续逐项开放）。
+ * 「更多」实验入口收纳区（存储/记忆/本机高级代理/日志等）。
+ * personal：条目收齐后整体不挂顶栏（navMoreMenu=false），系统配置改走用户菜单。
  */
-export function buildWorkerNav(caps: Capabilities): NavItem[] {
-  const items: NavItem[] = [dashboardNav('首页')]
-
-  if (caps.usageBilling) {
-    items.push(usageNavGroup())
-  }
-  if (caps.localProxy || caps.agentSetup) {
-    items.push(accessNavGroup())
-  }
-
+export function buildMoreNavChildren(caps: Capabilities): NavItem[] {
   const moreChildren: NavItem[] = []
+
+  // personal：把未成熟入口也收纳进 more 结构，便于日后整体开放顶栏「更多」
+  const stashExperimental = caps.role === 'personal'
+
   if (caps.storageConfig) {
     moreChildren.push(
       storageConfigNavGroup({
-        includeDataStores: caps.navDataStores,
-        includeEvaluation: caps.navEvaluation
+        includeDataStores: caps.navDataStores || stashExperimental,
+        includeEvaluation: caps.navEvaluation || stashExperimental
       })
     )
   }
-  // 记忆：放在「更多」内；personal 等通过 memoryQuery=false 暂隐
-  if (caps.memoryQuery) {
+  if (caps.memoryQuery || stashExperimental) {
     moreChildren.push(memoryNav())
   }
-  if (caps.navHostProxyTools) {
+  if (caps.navHostProxyTools || stashExperimental) {
     moreChildren.push(hostProxyNav())
     moreChildren.push(clashRulesNav())
   }
@@ -239,9 +232,11 @@ export function buildWorkerNav(caps: Capabilities): NavItem[] {
       requiresTeam: true
     })
   }
-  if (caps.systemConfig) {
+  // 系统配置：personal 走右上角用户菜单，不进「更多」
+  if (caps.systemConfig && caps.role !== 'personal') {
     systemChildren.push(configNav())
   }
+  // 独立降级导航仅 team_admin 等仍可能使用；personal 已并入系统配置韧性页
   if (caps.navFallbackPolicy) {
     systemChildren.push(fallbackPolicyNav())
   }
@@ -251,8 +246,28 @@ export function buildWorkerNav(caps: Capabilities): NavItem[] {
     )
   }
 
-  if (moreChildren.length) {
-    items.push(navGroup('more', '更多', 'MoreFilled', moreChildren, moreChildren[0]?.path))
+  return moreChildren
+}
+
+/**
+ * Personal / Team User 同源导航（由 capabilities 裁剪节点）。
+ * 无独立「对话」；无侧栏后端/策略列表（主入口在首页）。
+ */
+export function buildWorkerNav(caps: Capabilities): NavItem[] {
+  const items: NavItem[] = [dashboardNav('首页')]
+
+  if (caps.usageBilling) {
+    items.push(usageNavGroup())
+  }
+  if (caps.localProxy || caps.agentSetup) {
+    items.push(accessNavGroup())
+  }
+
+  if (caps.navMoreMenu) {
+    const moreChildren = buildMoreNavChildren(caps)
+    if (moreChildren.length) {
+      items.push(navGroup('more', '更多', 'MoreFilled', moreChildren, moreChildren[0]?.path))
+    }
   }
 
   return items
@@ -282,8 +297,8 @@ export function personalAppGroup(): NavItem {
 
 /** @deprecated */
 export function personalMoreGroup(options?: { teamUser?: boolean }): NavItem {
-  // 兼容旧调用：拼一个近似 more（与当前 personal / team_user 裁剪策略对齐）
-  return buildWorkerNav({
+  // 兼容旧调用：直接拼 more 子树（不依赖顶栏是否展示）
+  const children = buildMoreNavChildren({
     role: options?.teamUser ? 'team_user' : 'personal',
     manageBackends: true,
     managePipelines: true,
@@ -295,10 +310,11 @@ export function personalMoreGroup(options?: { teamUser?: boolean }): NavItem {
     navChatPage: false,
     localProxy: true,
     storageConfig: !options?.teamUser,
+    navMoreMenu: true,
     navHostProxyTools: false,
     navDataStores: false,
     navEvaluation: false,
-    navFallbackPolicy: !options?.teamUser,
+    navFallbackPolicy: false,
     memoryQuery: !!options?.teamUser,
     memoryFull: false,
     usageBilling: true,
@@ -307,7 +323,8 @@ export function personalMoreGroup(options?: { teamUser?: boolean }): NavItem {
     myTenant: !!options?.teamUser,
     userAdmin: false,
     liteHome: true
-  }).find((i) => i.id === 'more')!
+  })
+  return navGroup('more', '更多', 'MoreFilled', children, children[0]?.path)
 }
 
 /** 代理策略：后端 + 流水线；团队版含节点插件且仅管理员可见 */

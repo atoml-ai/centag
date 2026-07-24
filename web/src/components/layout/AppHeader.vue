@@ -109,6 +109,9 @@
             <el-dropdown-item command="profile">
               <el-icon><User /></el-icon>个人中心
             </el-dropdown-item>
+            <el-dropdown-item v-if="showSystemConfig" command="config">
+              <el-icon><Setting /></el-icon>系统设置
+            </el-dropdown-item>
             <el-dropdown-item divided command="logout">
               <el-icon><SwitchButton /></el-icon>退出登录
             </el-dropdown-item>
@@ -126,13 +129,17 @@ import { useAuthStore } from '@/stores/auth'
 import { useNavigation } from '@/composables/useNavigation'
 import { useEdition } from '@/composables/useEdition'
 import type { NavItem } from '@/utils/nav'
-import { Refresh, ArrowDown, ArrowRight, User, SwitchButton } from '@element-plus/icons-vue'
+import { getCapabilities } from '@/utils/capabilities'
+import { Refresh, ArrowDown, ArrowRight, User, SwitchButton, Setting } from '@element-plus/icons-vue'
 import CentagMark from '@/components/icons/CentagMark.vue'
 import { ElMessageBox } from 'element-plus'
 
 const router = useRouter()
 const authStore = useAuthStore()
-const { isMinimal } = useEdition()
+const { isMinimal, edition } = useEdition()
+const showSystemConfig = computed(
+  () => getCapabilities(edition.value, authStore.isAdmin).systemConfig
+)
 const {
   visibleNavItems,
   currentNav,
@@ -177,6 +184,8 @@ const handleRefresh = () => {
 async function handleUserCommand(cmd: string) {
   if (cmd === 'profile') {
     router.push('/profile')
+  } else if (cmd === 'config') {
+    router.push('/config')
   } else if (cmd === 'logout') {
     try {
       await ElMessageBox.confirm('确定要退出登录吗？', '退出登录', {

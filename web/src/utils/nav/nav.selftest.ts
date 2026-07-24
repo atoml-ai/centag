@@ -5,7 +5,7 @@
  * Uses relative imports so tsx can run without Vite path aliases.
  */
 import { getCapabilities } from '../capabilities'
-import { buildWorkerNav } from './shared'
+import { buildMoreNavChildren, buildWorkerNav } from './shared'
 import { NAV_MENU_TEAM_ADMIN } from './team'
 import { NAV_MENU_MINIMAL } from './minimal'
 import type { NavItem } from './types'
@@ -48,18 +48,8 @@ function run() {
       name: 'personal worker',
       edition: 'personal',
       isAdmin: true,
-      mustHave: [
-        'dashboard',
-        'usage',
-        'access',
-        'more',
-        'storage-config',
-        'cache',
-        'storage',
-        'logs',
-        'config-basic',
-        'fallback-policies'
-      ],
+      // 顶栏仅首页/用量/接入；更多整体隐藏；系统配置走用户菜单
+      mustHave: ['dashboard', 'usage', 'access'],
       mustNot: [
         'chat',
         'backends',
@@ -67,11 +57,16 @@ function run() {
         'personal-config',
         'my-tenant',
         'local-proxy',
+        'more',
+        'config-basic',
+        'fallback-policies',
         'memory',
         'host-proxy',
         'clash-rules',
         'data-stores',
-        'evaluation'
+        'evaluation',
+        'logs',
+        'storage-config'
       ]
     },
     {
@@ -88,7 +83,8 @@ function run() {
         'shared-resources',
         'local-proxy',
         'host-proxy',
-        'clash-rules'
+        'clash-rules',
+        'fallback-policies'
       ]
     },
     {
@@ -117,21 +113,23 @@ function run() {
     }
   }
 
+  // personal 顶栏不再含 more；与 team_user 顶栏不必完全一致
   const personalTop = getNavMenu('personal', true).map((n) => n.id)
-  const userTop = getNavMenu('team', false).map((n) => n.id)
   assert(
-    JSON.stringify(personalTop) === JSON.stringify(userTop),
-    'personal and team_user top-level nav ids must match'
+    JSON.stringify(personalTop) === JSON.stringify(['dashboard', 'usage', 'access']),
+    'personal top-level nav should be dashboard/usage/access'
   )
 
-  assert(
-    !getNavMenu('personal', true).some((n) => n.id === 'memory'),
-    'personal: memory not top-level'
+  // personal 更多结构仍收纳实验入口（虽不挂顶栏）
+  const personalMoreIds = new Set(
+    flattenNavMenu(buildMoreNavChildren(getCapabilities('personal', true))).map((n) => n.id)
   )
-  assert(
-    !idsOf('personal', true).has('memory'),
-    'personal: memory hidden until feature matures'
-  )
+  for (const id of ['storage-config', 'memory', 'host-proxy', 'clash-rules', 'logs', 'data-stores', 'evaluation']) {
+    assert(personalMoreIds.has(id), `personal more stash missing ${id}`)
+  }
+  assert(!personalMoreIds.has('config-basic'), 'personal more stash must not include system config')
+  assert(!personalMoreIds.has('fallback-policies'), 'personal more stash must not include fallback nav')
+
   assert(
     !getNavMenu('team', false).some((n) => n.id === 'memory'),
     'team_user: memory not top-level (lives under more)'

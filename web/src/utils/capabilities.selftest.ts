@@ -38,12 +38,11 @@ function run() {
         navPipelinesPage: false,
         pipelineTestChat: true,
         storageConfig: true,
+        navMoreMenu: false,
         memoryFull: false,
         memoryQuery: false,
-        navHostProxyTools: false,
-        navDataStores: false,
-        navEvaluation: false,
-        navFallbackPolicy: true,
+        navFallbackPolicy: false,
+        systemConfig: true,
         localProxy: true,
         liteHome: true,
         myTenant: false
@@ -58,6 +57,7 @@ function run() {
         navBackendsPage: false,
         pipelineTestChat: true,
         storageConfig: false,
+        navMoreMenu: true,
         memoryQuery: true,
         memoryFull: false,
         navHostProxyTools: false,
@@ -80,8 +80,6 @@ function run() {
         storageConfig: true,
         localProxy: false,
         memoryQuery: false,
-        navDataStores: true,
-        navEvaluation: true,
         navFallbackPolicy: true,
         usageBilling: false,
         userAdmin: true,
@@ -96,9 +94,9 @@ function run() {
         pipelineTestChat: true,
         navChatPage: false,
         storageConfig: false,
+        navMoreMenu: false,
         localProxy: false,
         memoryQuery: false,
-        navHostProxyTools: false,
         liteHome: true,
         manageBackends: true,
         managePipelines: true
@@ -126,4 +124,3 @@ function run() {
 }
 
 run()
-
