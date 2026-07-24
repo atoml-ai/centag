@@ -157,6 +157,17 @@ func TestSanitizeChatCompletionsTools_RepairsFlatAndDropsHosted(t *testing.T) {
 	}
 }
 
+func TestSanitizeChatCompletionsTools_PreservesBytesWhenAlreadyNested(t *testing.T) {
+	in := `{"model":"gpt-4","messages":[{"role":"user","content":"hi"}],"tools":[{"type":"function","function":{"name":"get_weather"}}],"tool_choice":"auto","stream":true}`
+	out, ok := sanitizeChatCompletionsTools([]byte(in))
+	if ok {
+		t.Fatalf("already-nested tools must not rewrite body, got: %s", string(out))
+	}
+	if string(out) != in {
+		t.Fatalf("body bytes changed:\n got:  %s\n want: %s", string(out), in)
+	}
+}
+
 func TestNormalizeResponsesTools_DropsHostedTypes(t *testing.T) {
 	tools := []interface{}{
 		map[string]interface{}{"type": "web_search"},
