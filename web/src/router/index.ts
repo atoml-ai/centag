@@ -36,7 +36,6 @@ const PipelineModes = () => import('@/views/PipelineModes.vue')
 const PluginRegistry = () => import('@/views/plugin/PluginRegistry.vue')
 const AgentSetup = () => import('@/views/AgentSetup.vue')
 const StorageKVBrowser = () => import('@/views/StorageKVBrowser.vue')
-const FallbackPolicy = () => import('@/views/FallbackPolicy.vue')
 const routes = [
   // ── Public ────────────────────────────────────────────────────────────────
   {
@@ -50,7 +49,11 @@ const routes = [
   { path: '/', redirect: '/dashboard' },
   { path: '/dashboard', name: 'Dashboard', component: Dashboard, meta: { title: '概览' } },
   { path: '/backends', name: 'Backends', component: Backends, meta: { title: '后端管理' } },
-  { path: '/fallback-policies', name: 'FallbackPolicy', component: FallbackPolicy, meta: { title: '降级策略' } },
+  // 降级策略已并入系统配置 → 韧性 → 降级策略
+  {
+    path: '/fallback-policies',
+    redirect: { path: '/config', query: { tab: 'resilience', sub: 'fallback' } }
+  },
   // 旧 Minimal 设置页已废弃：改密/服务信息并入个人中心与首页
   { path: '/settings', redirect: '/profile' },
   { path: '/cache', name: 'Cache', component: Cache, meta: { title: '缓存管理' } },
