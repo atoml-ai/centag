@@ -51,7 +51,7 @@ description: "工作流 Step 6：全流程发版 — GitHub Release（curl|insta
 
 | 渠道 ID | 用户可见名 | 产物 / 消费方式 | 前置依赖 | 鉴权 |
 |---------|-----------|----------------|----------|------|
-| `github` | GitHub Release + `install.sh` | **desktop**(macOS/Windows) + **cli**(Linux) + checksums；`curl \| bash scripts/install.sh` | desktop 需原生 OS | `gh auth` |
+| `github` | GitHub Release + `install.sh` | **cli** 全平台（默认安装）+ **desktop**(Win/mac，`--desktop`) + checksums | desktop 需原生 OS | `gh auth` |
 | `npm` | npm 包 | 全平台 **cli**；`centag`（在线 lazy-download）+ `centag-offline` | **在线版依赖** 对应版本 GitHub Release 已 publish | `npm login` 或 `CENTAG_NPM_TOKEN` |
 | `ci` | GitHub Actions | 推 `v*` tag 或 workflow_dispatch（desktop 分 runner + linux cli） | 无（CI 内构建） | `git push` + Actions 权限 |
 
@@ -100,7 +100,7 @@ gh release view "v${VER}" --repo atoml-ai/centag 2>&1 | head -5 || true
 
 探测结果**摘要给用户**（分支、版本、本地产物数、远端 Release 是否存在、gh/npm 登录态），再进入 AskQuestion。
 
-**渠道产物**：GitHub/`install.sh` = macOS&Windows **desktop** + Linux **cli**；npm = **全平台 cli**。本地打包：`./start.sh package <cli|desktop> <os> [arch]`（见 procedure §1.1）。
+**渠道产物**：GitHub/`install.sh` = **全平台 cli**（默认）+ Win/mac **desktop**（`--desktop`）；npm = **全平台 cli**。本地打包：`./start.sh package <cli|desktop> <os> [arch]`（见 procedure §1.1）。
 
 ### 1. Gate 4 拦截
 
@@ -134,8 +134,8 @@ gh release view "v${VER}" --repo atoml-ai/centag 2>&1 | head -5 || true
 ./scripts/release/build-github-artifacts.sh --version "${CENTAG_RELEASE_VERSION}"
 ```
 
-`reuse`：已有 linux CLI ×2 + checksums → 跳过。  
-`rebuild`：始终跑 `build-github-artifacts.sh`（本机桌面 + linux CLI；完整 Win/mac 矩阵靠 CI）。  
+`reuse`：已有 cli ×6 + checksums → 跳过。  
+`rebuild`：始终跑 `build-github-artifacts.sh`（全平台 CLI + 本机 desktop；完整 Win/mac desktop 靠 CI）。  
 `skip`：Path C / 仅 npm（npm 自带全平台 CLI 编译）时跳过。
 
 ### 5. 按序发渠道
@@ -176,7 +176,7 @@ gh release view "v${VER}" --repo atoml-ai/centag 2>&1 | head -5 || true
 | 脚本 | 用途 |
 |------|------|
 | `./start.sh package <form> <os> [arch]` | 本地统一打包（`cli`/`desktop` × os × arch） |
-| `scripts/release/build-github-artifacts.sh` | GitHub 渠道：linux cli + 本机 desktop |
+| `scripts/release/build-github-artifacts.sh` | GitHub 渠道：全平台 cli + 本机 desktop |
 | `scripts/release/package-desktop.sh` | 本机 desktop（dmg/zip） |
 | `scripts/release/build-artifacts.sh` | cli 交叉编译（可与 desktop 共存同一 OUT_DIR） |
 | `scripts/release/publish-binaries.sh` | GitHub 上传（`--release`） |

@@ -2,9 +2,8 @@
 # Build GitHub Release artifacts (install.sh channel) and draft/publish.
 #
 # GitHub product form:
-#   linux   → personal CLI tarball
-#   darwin  → tray desktop (.zip + .dmg)
-#   windows → tray desktop (.zip)
+#   CLI (all platforms) — install.sh default
+#   desktop (macOS/Windows) — optional via install.sh --desktop; native host build
 #
 # npm channel is separate and still publishes CLI for all platforms.
 #
@@ -18,7 +17,7 @@
 #   DRY_RUN=1            build only, skip gh release
 #   CENTAG_RELEASE_REPO  default atoml-ai/centag
 #   CENTAG_RELEASE_ALLOW_ANY_BRANCH=1  emergency bypass of version-branch gate (on --release)
-#   CENTAG_RELEASE_GITHUB_DESKTOP=0    skip host tray package (linux CLI only)
+#   CENTAG_RELEASE_GITHUB_DESKTOP=0    skip host desktop package
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -37,9 +36,8 @@ while [[ $# -gt 0 ]]; do
     --release) DO_RELEASE=1; shift ;;
     --skip-frontend) EXTRA_BUILD_ARGS+=(--skip-frontend); shift ;;
     --no-desktop) EXTRA_BUILD_ARGS+=(--no-desktop); shift ;;
-    # legacy flags kept for callers; GitHub channel ignores CLI component matrix
     --components|--platforms)
-      log "warn: ignoring $1 for GitHub channel (use build-artifacts.sh / npm for CLI matrices)"
+      log "warn: ignoring $1 for GitHub channel (CLI matrix is fixed in build-github-artifacts.sh)"
       shift 2
       ;;
     -h|--help)
@@ -88,10 +86,10 @@ ASSETS=()
 while IFS= read -r f; do
   ASSETS+=("$f")
 done < <(find "$OUT_DIR" -maxdepth 1 -type f \( \
-  -name 'centag-cli-*-linux-*.tar.gz' -o \
+  -name 'centag-cli-*.tar.gz' -o \
   -name 'centag-desktop-*.dmg' -o \
   -name 'centag-desktop-*.zip' -o \
-  -name 'centag-personal-linux-*.tar.gz' -o \
+  -name 'centag-personal-*.tar.gz' -o \
   -name 'Centag-*.dmg' -o \
   -name 'Centag-*.zip' -o \
   -name 'checksums.txt' \
@@ -104,8 +102,13 @@ NOTES="$(cat <<EOF
 ### Install
 
 \`\`\`bash
-# Linux / curl installer (desktop OS → desktop; Linux → CLI)
+# CLI on all platforms (default)
 curl -fsSL https://raw.githubusercontent.com/${REPO}/${TAG}/scripts/install.sh | bash -s ${VERSION} && . "\$HOME/.centag/env"
+\`\`\`
+
+\`\`\`bash
+# Win/mac tray desktop (optional)
+curl -fsSL https://raw.githubusercontent.com/${REPO}/${TAG}/scripts/install.sh | bash -s -- --desktop ${VERSION}
 \`\`\`
 
 \`\`\`bash
@@ -114,14 +117,14 @@ npm install -g centag
 \`\`\`
 
 Default install root: \`~/.centag\`.  
-**GitHub / install.sh**: macOS & Windows → desktop; Linux → CLI.  
+**GitHub / install.sh**: CLI by default on every OS; \`--desktop\` for tray on Win/mac.  
 **npm**: CLI on all platforms.
 
 ### Artifacts
 
+- \`centag-cli-personal-<goos>-<goarch>.tar.gz\` — CLI (install.sh default)
 - \`centag-desktop-personal-macos-<arch>.dmg\` / \`.zip\` — macOS desktop
 - \`centag-desktop-personal-windows-<arch>.zip\` — Windows desktop
-- \`centag-cli-personal-linux-<arch>.tar.gz\` — Linux CLI
 - \`checksums.txt\` — SHA-256 sums
 EOF
 )"

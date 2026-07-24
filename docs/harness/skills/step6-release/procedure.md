@@ -41,9 +41,11 @@
 
 | 渠道 | macOS | Windows | Linux |
 |------|-------|---------|-------|
-| **GitHub / install.sh** | **desktop**（dmg + zip） | **desktop**（zip） | **cli** tarball |
+| **GitHub / install.sh（默认）** | **cli** | **cli** | **cli** |
+| **GitHub（额外上传）** | desktop（dmg + zip） | desktop（zip） | — |
 | **npm** | cli | cli | cli |
 
+`install.sh` 默认装 CLI；Win/mac 用 `--desktop` 装托盘桌面包。  
 本地开发 `./start.sh debug` **始终 cli**，与发版渠道无关。
 
 ### 1.3 产物命名（互不覆盖）
@@ -70,13 +72,13 @@
 | 项目 | 真源 |
 |------|------|
 | GitHub 默认 SKU | `personal`（含 `centag wrap` 子命令） |
-| GitHub 产物 | `cli(linux)×2` + `desktop(macos|windows)`（见 §4.3） |
+| GitHub 产物 | `cli` 全平台（6）+ `desktop(macos|windows)`（见 §4.3） |
 | npm 产物 | personal **cli** × 6 平台（交叉编译） |
 | 版本号（未指定时） | `apps/wrap-npm/package.json` → `version` |
 | npm 包版本 | `apps/centag-npm/package.json`（须与 Release 对齐） |
 | 本地产物目录 | `${CENTAG_INSTALL_ROOT:-~/.centag}/var/release/<version>/` |
 | 默认仓库 | `atoml-ai/centag`（`CENTAG_RELEASE_REPO` 覆盖） |
-| 一键安装 | `scripts/install.sh`（按 OS 选 desktop zip 或 linux cli tar） |
+| 一键安装 | `scripts/install.sh`（默认 CLI；`--desktop` 装 Win/mac 桌面） |
 | 本地打包入口 | `./start.sh package` → `scripts/packaging/package.sh` |
 
 ### 版本分支门禁
@@ -155,35 +157,34 @@ echo "--- remote release ---"; gh release view "v${VER}" --repo atoml-ai/centag 
 
 ### 4.3 共用构建（GitHub 渠道）
 
-GitHub / `install.sh` 需要的资产（本机只能打出 **当前 OS 的 desktop + linux cli**；完整矩阵走 CI）：
+GitHub / `install.sh` 需要的资产（本机可交叉编译 **全平台 CLI** + 当前 OS **desktop**；完整 desktop 矩阵走 CI）：
 
 | 资产 | 说明 |
 |------|------|
-| `centag-cli-personal-linux-amd64.tar.gz` | Linux CLI |
-| `centag-cli-personal-linux-arm64.tar.gz` | Linux CLI |
-| `centag-desktop-personal-macos-<arch>.zip` / `.dmg` | macOS desktop（本机/macos runner） |
-| `centag-desktop-personal-windows-<arch>.zip` | Windows desktop（windows runner） |
+| `centag-cli-personal-{darwin,linux,windows}-{amd64,arm64}.tar.gz` | 全平台 CLI（install.sh 默认） |
+| `centag-desktop-personal-macos-<arch>.zip` / `.dmg` | macOS desktop（本机/macos runner；`--desktop`） |
+| `centag-desktop-personal-windows-<arch>.zip` | Windows desktop（windows runner；`--desktop`） |
 | `checksums.txt` | 上述资产 SHA-256（合并写入，不清空其它形态文件） |
 
 等价本地命令（与脚本封装一致）：
 
 ```bash
-# 推荐封装（一次：本机 desktop + linux cli）
+# 推荐封装（一次：全平台 CLI + 本机 desktop）
 ./scripts/release/build-github-artifacts.sh --version "${CENTAG_RELEASE_VERSION}"
 
 # 或分条（形态×系统）：
+./start.sh package cli all all --version "${CENTAG_RELEASE_VERSION}" --skip-frontend
 ./start.sh package desktop macos --version "${CENTAG_RELEASE_VERSION}" --skip-frontend   # 仅 darwin
 ./start.sh package desktop windows --version "${CENTAG_RELEASE_VERSION}" --skip-frontend # 仅 windows
-./start.sh package cli linux all --version "${CENTAG_RELEASE_VERSION}" --skip-frontend
 ```
 
 ```bash
 RELEASE_OUT="${CENTAG_INSTALL_ROOT:-$HOME/.centag}/var/release/${CENTAG_RELEASE_VERSION}"
 
-# reuse：至少已有 linux cli ×2 + checksums（desktop 由 CI/本机补齐）
+# reuse：至少已有 cli ×6 + checksums（desktop 由 CI/本机补齐）
 if [[ "${CENTAG_RELEASE_BUILD}" == "reuse" ]]; then
-  count="$(find "${RELEASE_OUT}" -maxdepth 1 -name 'centag-cli-*-linux-*.tar.gz' 2>/dev/null | wc -l | tr -d ' ')"
-  [[ "$count" -ge 2 ]] && [[ -f "${RELEASE_OUT}/checksums.txt" ]] && echo "reuse OK" && exit 0
+  count="$(find "${RELEASE_OUT}" -maxdepth 1 -name 'centag-cli-*.tar.gz' 2>/dev/null | wc -l | tr -d ' ')"
+  [[ "$count" -ge 6 ]] && [[ -f "${RELEASE_OUT}/checksums.txt" ]] && echo "reuse OK" && exit 0
   echo "reuse 不可用：产物不足，改为 rebuild"
 fi
 
@@ -194,11 +195,11 @@ fi
 
 | `CENTAG_RELEASE_BUILD` | 行为 |
 |------------------------|------|
-| `reuse` | linux cli ×2 + checksums → 跳过；否则 fallback rebuild |
+| `reuse` | cli ×6 + checksums → 跳过；否则 fallback rebuild |
 | `rebuild` | 始终 `build-github-artifacts.sh` |
 | `skip` | 不跑共用构建（CI 发版，或仅 npm） |
 
-> **说明**：npm 渠道**仍**交叉编译全平台 CLI（与 GitHub desktop 包无关）。Agent **不得**为省事先 npm 后 github（在线包依赖 Release）。  
+> **说明**：npm 渠道**仍**交叉编译全平台 CLI。Agent **不得**为省事先 npm 后 github（在线包依赖 Release）。  
 > **desktop 不可交叉编译**（CGO/systray）；完整 Win+mac desktop 依赖 CI 原生 runner。
 
 ---
@@ -234,7 +235,7 @@ REPO="${CENTAG_RELEASE_REPO:-atoml-ai/centag}"
 
 if gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1; then
   gh release upload "$TAG" --repo "$REPO" --clobber \
-    "${RELEASE_OUT}"/centag-cli-*-linux-*.tar.gz \
+    "${RELEASE_OUT}"/centag-cli-*.tar.gz \
     "${RELEASE_OUT}"/centag-desktop-*.dmg \
     "${RELEASE_OUT}"/centag-desktop-*.zip \
     "${RELEASE_OUT}/checksums.txt"
@@ -302,7 +303,7 @@ CI jobs（`.github/workflows/release.yml`）：
 
 | Job | Runner | 产出 |
 |-----|--------|------|
-| `github-linux-cli` | ubuntu | `centag-cli-*-linux-*.tar.gz` |
+| `github-cli` | ubuntu | `centag-cli-*` 全平台（6） |
 | `github-macos-desktop` | macos-14 | `centag-desktop-*-macos-*` |
 | `github-windows-desktop` | windows-latest | `centag-desktop-*-windows-*` |
 | `publish` | ubuntu | 汇总上传 GitHub Release |
@@ -325,7 +326,7 @@ gh release view "v${CENTAG_RELEASE_VERSION}" \
 
 期望：
 
-- `centag-cli-personal-linux-amd64.tar.gz` / `…-arm64.tar.gz`
+- `centag-cli-personal-{darwin,linux,windows}-{amd64,arm64}.tar.gz`（×6）
 - `centag-desktop-personal-macos-<arch>.zip`（及可选 `.dmg`）
 - `centag-desktop-personal-windows-<arch>.zip`
 - `checksums.txt`

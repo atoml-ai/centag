@@ -1,17 +1,19 @@
 #!/usr/bin/env bash
 # Build GitHub Release assets for install.sh (channel: github).
 #
-# Strategy (product form):
-#   linux   → personal CLI tarball (cross-compile OK)
-#   darwin  → tray desktop (Centag.app + .zip + .dmg) — host/native only
-#   windows → tray desktop (Centag.zip) — host/native only
+# Strategy:
+#   CLI (all platforms, cross-compile OK):
+#     centag-cli-personal-{darwin,linux,windows}-{amd64,arm64}.tar.gz
+#   Desktop (host/native CGO only; optional):
+#     centag-desktop-personal-macos-<arch>.{dmg,zip}
+#     centag-desktop-personal-windows-<arch>.zip
 #
-# npm channel is separate and still ships CLI for all platforms
-# (see scripts/publish-centag-npm.sh / release.yml npm-publish).
+# install.sh defaults to CLI on every OS; use --desktop for tray packages.
+# npm channel is separate (also full-matrix CLI).
 #
 # Usage:
 #   ./scripts/release/build-github-artifacts.sh [--version 0.2.9] [--skip-frontend]
-#   CENTAG_RELEASE_GITHUB_DESKTOP=0  # linux CLI only (skip host desktop)
+#   CENTAG_RELEASE_GITHUB_DESKTOP=0  # CLI only (skip host desktop)
 #
 # Output: ~/.centag/var/release/<version>/
 set -euo pipefail
@@ -27,15 +29,15 @@ fail() { echo "error: $*" >&2; exit 1; }
 VERSION=""
 SKIP_FRONTEND=0
 BUILD_DESKTOP="${CENTAG_RELEASE_GITHUB_DESKTOP:-1}"
-EXTRA=()
+CLI_PLATFORMS="${CENTAG_RELEASE_GITHUB_CLI_PLATFORMS:-darwin-amd64,darwin-arm64,linux-amd64,linux-arm64,windows-amd64,windows-arm64}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --version) VERSION="${2:-}"; shift 2 ;;
-    --skip-frontend) SKIP_FRONTEND=1; EXTRA+=(--skip-frontend); shift ;;
+    --skip-frontend) SKIP_FRONTEND=1; shift ;;
     --no-desktop) BUILD_DESKTOP=0; shift ;;
     -h|--help)
-      sed -n '2,18p' "$0"
+      sed -n '2,20p' "$0"
       exit 0
       ;;
     *) fail "unknown arg: $1" ;;
@@ -50,16 +52,16 @@ fi
 command -v go >/dev/null 2>&1 || fail "go is required"
 HOST_GOOS="$(go env GOOS)"
 
-log "GitHub artifacts: linux CLI + host desktop (GOOS=${HOST_GOOS})"
+log "GitHub artifacts: full CLI matrix + host desktop (GOOS=${HOST_GOOS})"
 
-# 1) Linux CLI (both arches) — shared with historical asset naming for install.sh
-LINUX_ARGS=("${VER_ARGS[@]}" --components personal --platforms linux-amd64,linux-arm64)
+# 1) CLI — all platforms (install.sh default)
+CLI_ARGS=("${VER_ARGS[@]}" --components personal --platforms "${CLI_PLATFORMS}")
 if [[ "$SKIP_FRONTEND" == "1" ]]; then
-  LINUX_ARGS+=(--skip-frontend)
+  CLI_ARGS+=(--skip-frontend)
 fi
-bash "${ROOT}/scripts/release/build-artifacts.sh" "${LINUX_ARGS[@]}" >/dev/null
+bash "${ROOT}/scripts/release/build-artifacts.sh" "${CLI_ARGS[@]}" >/dev/null
 
-# Resolve OUT_DIR / version after linux build
+# Resolve OUT_DIR / version after CLI build
 if [[ -z "$VERSION" ]]; then
   if [[ -f "${ROOT}/apps/wrap-npm/package.json" ]] && command -v node >/dev/null 2>&1; then
     VERSION="$(node -p "require('${ROOT}/apps/wrap-npm/package.json').version")"
@@ -68,19 +70,17 @@ fi
 [[ -n "$VERSION" ]] || fail "version required"
 VERSION="${VERSION#v}"
 OUT_DIR="${CENTAG_RELEASE_DIR}/${VERSION}"
-[[ -d "$OUT_DIR" ]] || fail "release dir missing after linux build: $OUT_DIR"
+[[ -d "$OUT_DIR" ]] || fail "release dir missing after CLI build: $OUT_DIR"
 
-# 2) Host desktop tray package (darwin/windows only)
+# 2) Host desktop tray package (darwin/windows only; optional)
 if [[ "$BUILD_DESKTOP" == "1" ]]; then
   case "$HOST_GOOS" in
     darwin|windows)
-      DESK_ARGS=("${VER_ARGS[@]}" --edition personal)
-      # Frontend already built by build-artifacts above into CENTAG_STATIC_DIR
-      DESK_ARGS+=(--skip-frontend)
+      DESK_ARGS=("${VER_ARGS[@]}" --edition personal --skip-frontend)
       bash "${ROOT}/scripts/release/package-desktop.sh" "${DESK_ARGS[@]}" >/dev/null
       ;;
     linux)
-      log "host is linux: skipping desktop tray (CI should build darwin/windows on native runners)"
+      log "host is linux: skipping desktop (CI builds darwin/windows on native runners)"
       ;;
     *)
       log "warn: unsupported host GOOS=${HOST_GOOS}; desktop skipped"
@@ -106,10 +106,10 @@ while IFS= read -r path; do
   base="$(basename "$path")"
   printf '%s  %s\n' "$(sha256_of "$path")" "$base" >> "${OUT_DIR}/checksums.txt"
 done < <(find "$OUT_DIR" -maxdepth 1 -type f \( \
-  -name 'centag-cli-*-linux-*.tar.gz' -o \
+  -name 'centag-cli-*.tar.gz' -o \
   -name 'centag-desktop-*.dmg' -o \
   -name 'centag-desktop-*.zip' -o \
-  -name 'centag-personal-linux-*.tar.gz' -o \
+  -name 'centag-personal-*.tar.gz' -o \
   -name 'Centag-*.dmg' -o \
   -name 'Centag-*.zip' \
 \) | sort)
