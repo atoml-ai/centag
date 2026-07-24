@@ -4,17 +4,17 @@
       <div>
         <h1 class="page-title">
           <el-icon><Link /></el-icon>
-          Agent 接入
+          {{ $t('agentSetup.title') }}
         </h1>
-        <p class="page-description">将 Agent 工具接入 Centag 代理：选择流水线、写入配置并验证生效</p>
+        <p class="page-description">{{ $t('agentSetup.subtitle') }}</p>
       </div>
     </div>
 
     <el-tabs v-model="activeTab" class="setup-tabs">
       <!-- Tab 1: 快速接入 -->
-      <el-tab-pane label="快速接入" name="setup">
+      <el-tab-pane :label="$t('agentSetup.quickSetup')" name="setup">
         <div class="section-block">
-          <p class="section-hint">点击下方 Agent，通过向导接入 Centag 代理（只需选择流水线，后端由流水线内部指定）。</p>
+          <p class="section-hint">{{ $t('agentSetup.quickSetupHint') }}</p>
           <el-row :gutter="16">
             <el-col
               v-for="agent in agentTypes"
@@ -33,7 +33,7 @@
                 </div>
                 <div class="agent-actions" @click.stop>
                   <el-button type="primary" link @click="openWizard(agent)">
-                    接入代理
+                    {{ $t('agentSetup.connectProxy') }}
                   </el-button>
                   <el-button
                     type="info"
@@ -41,7 +41,7 @@
                     :loading="restoringAgent === agent.type"
                     @click="restoreDefaults(agent)"
                   >
-                    恢复默认
+                    {{ $t('agentSetup.restoreDefault') }}
                   </el-button>
                 </div>
               </div>
@@ -51,46 +51,46 @@
       </el-tab-pane>
 
       <!-- Tab 2: 供应商配置（仅管理员，只读视图） -->
-      <el-tab-pane label="供应商配置" name="providers" v-if="isAdmin">
+      <el-tab-pane :label="$t('agentSetup.providerConfig')" name="providers" v-if="isAdmin">
         <el-card>
           <template #header>
             <div class="card-header">
-              <span>内置供应商路由配置（系统预设，不可编辑）</span>
+              <span>{{ $t('agentSetup.builtinProviderRoute') }}</span>
             </div>
           </template>
 
           <el-table :data="providers" v-loading="loadingProviders" stripe>
-            <el-table-column prop="agent_type" label="Agent 类型" width="150" />
-            <el-table-column prop="display_name" label="显示名称" width="150" />
-            <el-table-column prop="backend_id" label="后端 ID" width="180">
+            <el-table-column prop="agent_type" :label="$t('agentSetup.agentType')" width="150" />
+            <el-table-column prop="display_name" :label="$t('agentSetup.displayName')" width="150" />
+            <el-table-column prop="backend_id" :label="$t('agentSetup.backendId')" width="180">
               <template #default="{ row }">
                 <el-tag v-if="row.backend_id" type="success">{{ row.backend_id }}</el-tag>
-                <span v-else class="text-muted">默认</span>
+                <span v-else class="text-muted">{{ $t('agentSetup.default') }}</span>
               </template>
             </el-table-column>
-            <el-table-column prop="pipeline_id" label="流水线 ID" width="180">
+            <el-table-column prop="pipeline_id" :label="$t('agentSetup.pipelineId')" width="180">
               <template #default="{ row }">
                 <el-tag v-if="row.pipeline_id" type="warning">{{ row.pipeline_id }}</el-tag>
-                <span v-else class="text-muted">默认</span>
+                <span v-else class="text-muted">{{ $t('agentSetup.default') }}</span>
               </template>
             </el-table-column>
-            <el-table-column prop="model" label="模型覆盖" width="150">
+            <el-table-column prop="model" :label="$t('agentSetup.modelOverride')" width="150">
               <template #default="{ row }">
                 <span v-if="row.model">{{ row.model }}</span>
                 <span v-else class="text-muted">-</span>
               </template>
             </el-table-column>
-            <el-table-column prop="enabled" label="状态" width="80">
+            <el-table-column prop="enabled" :label="$t('agentSetup.status')" width="80">
               <template #default="{ row }">
                 <el-tag :type="row.enabled ? 'success' : 'info'" size="small">
-                  {{ row.enabled ? '启用' : '禁用' }}
+                  {{ row.enabled ? $t('agentSetup.enabled') : $t('agentSetup.disabled') }}
                 </el-tag>
               </template>
             </el-table-column>
-            <el-table-column label="操作" width="120" fixed="right">
+            <el-table-column :label="$t('agentSetup.actions')" width="120" fixed="right">
               <template #default="{ row }">
                 <el-button size="small" type="primary" @click="handleHotSwap(row)">
-                  设为默认
+                  {{ $t('agentSetup.setDefault') }}
                 </el-button>
               </template>
             </el-table-column>
@@ -110,15 +110,15 @@
       @closed="resetWizard"
     >
       <el-steps :active="wizardStep" finish-status="success" align-center class="wizard-steps">
-        <el-step title="选择流水线" description="决定路由与模型" />
-        <el-step title="写入配置" description="应用到 Agent" />
-        <el-step title="验证生效" description="确认代理可用" />
+        <el-step :title="$t('agentSetup.selectPipeline')" :description="$t('agentSetup.decideRouteAndModel')" />
+        <el-step :title="$t('agentSetup.writeConfig')" :description="$t('agentSetup.applyToAgent')" />
+        <el-step :title="$t('agentSetup.verify')" :description="$t('agentSetup.confirmProxyAvailable')" />
       </el-steps>
 
       <!-- Step 1: 选择流水线 -->
       <div v-show="wizardStep === 0" class="wizard-step" v-loading="loadingPipelines">
         <el-alert type="info" :closable="false" show-icon class="step-alert">
-          只需选择流水线。后端与模型由流水线内部节点决定，无需在此单独配置。
+          {{ $t('agentSetup.selectPipelineHint') }}
         </el-alert>
 
         <el-alert
@@ -128,11 +128,11 @@
           show-icon
           class="step-alert"
         >
-          <template #title>尚未配置可用的 Centag API Key</template>
-          接入时会自动把当前账号下可解密的 <code>llmproxy_*</code> 密钥写入 Agent 配置。
-          请先到个人中心创建 API Key，否则无法生成/写入配置。
+          <template #title>{{ $t('agentSetup.noApiKey') }}</template>
+          {{ $t('agentSetup.apiKeyAutoWrite') }}
+          {{ $t('agentSetup.apiKeyCreateFirst') }}
           <div class="alert-actions">
-            <el-button type="warning" size="small" @click="goProfileForAPIKey">前往创建 API Key</el-button>
+            <el-button type="warning" size="small" @click="goProfileForAPIKey">{{ $t('agentSetup.goToCreateApiKey') }}</el-button>
           </div>
         </el-alert>
         <el-alert
@@ -142,19 +142,19 @@
           show-icon
           class="step-alert"
         >
-          已检测到可用 API Key；下一步生成配置时会自动填入（不会在界面明文展示完整密钥）。
+          {{ $t('agentSetup.apiKeyDetected') }}
         </el-alert>
 
         <div v-if="pipelines.length === 0 && !loadingPipelines" class="empty-pipelines">
-          <el-empty description="暂无可用流水线，请先在「策略管理」中添加">
-            <el-button type="primary" @click="goPipelines">前往策略管理</el-button>
+          <el-empty :description="$t('agentSetup.noPipeline')">
+            <el-button type="primary" @click="goPipelines">{{ $t('agentSetup.goToPolicy') }}</el-button>
           </el-empty>
         </div>
         <div v-else>
-          <h4 class="select-label">选择流水线（必选）</h4>
+          <h4 class="select-label">{{ $t('agentSetup.selectPipelineLabel') }}</h4>
           <el-select
             v-model="selectedPipeline"
-            placeholder="请选择流水线"
+            :placeholder="$t('agentSetup.selectPipelinePlaceholder')"
             filterable
             style="width: 100%"
             @change="onPipelineChange"
@@ -173,12 +173,12 @@
           </el-select>
 
           <div v-if="selectedPipeline" class="pipeline-summary">
-            <el-tag type="success" size="default">流水线: {{ selectedPipelineName }}</el-tag>
+            <el-tag type="success" size="default">{{ $t('agentSetup.pipeline') }} {{ selectedPipelineName }}</el-tag>
             <el-tag type="info" size="default">
               <el-icon><Cpu /></el-icon>
-              模型路由: centag/{{ selectedPipeline }}
+              {{ $t('agentSetup.modelRoute') }} centag/{{ selectedPipeline }}
             </el-tag>
-            <span v-if="pipelineModel" class="model-hint">流水线内模型示意: {{ pipelineModel }}</span>
+            <span v-if="pipelineModel" class="model-hint">{{ $t('agentSetup.pipelineModelHint') }} {{ pipelineModel }}</span>
           </div>
         </div>
       </div>
@@ -186,22 +186,22 @@
       <!-- Step 2: 写入配置 -->
       <div v-show="wizardStep === 1" class="wizard-step" v-loading="loadingConfig">
         <el-alert type="info" :closable="false" show-icon class="step-alert">
-          将 Centag 代理地址与当前账号的 API Key 写入 {{ currentAgentName }}。
-          密钥来自「个人中心 → API Keys」中可解密的 <code>llmproxy_*</code> 密钥（服务端注入，界面预览已脱敏）。
+          {{ $t('agentSetup.writeConfigHint', { agent: currentAgentName }) }}
+          {{ $t('agentSetup.writeConfigKeySource') }}
         </el-alert>
 
         <div v-if="configResult" class="config-result">
           <div class="config-header">
             <h3>{{ configResult.description }}</h3>
-            <el-tag>路由: {{ configResult.backend_name }}</el-tag>
+            <el-tag>{{ $t('agentSetup.route') }} {{ configResult.backend_name }}</el-tag>
           </div>
 
           <!-- 一键写入 -->
           <div class="config-section">
-            <h4>一键配置</h4>
+            <h4>{{ $t('agentSetup.oneClickConfig') }}</h4>
             <el-button type="primary" :loading="writingConfig" @click="writeToConfig">
               <el-icon class="el-icon--left"><Plus /></el-icon>
-              写入配置文件
+              {{ $t('agentSetup.writeConfigFile') }}
             </el-button>
             <p class="write-hint" v-if="writeResult">
               <span v-if="writeResult.success" style="color: #67c23a">✓ {{ writeResult.message }}</span>
@@ -211,7 +211,7 @@
 
           <!-- 写入成功：只展示已写入预览，避免与「配置预览」重复 -->
           <div v-if="writeSucceeded && writePreviewFiles.length" class="config-section">
-            <h4>已写入配置（已脱敏）</h4>
+            <h4>{{ $t('agentSetup.configWritten') }}</h4>
             <el-collapse>
               <el-collapse-item
                 v-for="file in writePreviewFiles"
@@ -229,8 +229,8 @@
           <!-- 未写入成功时：展示配置预览（脱敏）；团队版另提供命令作为备选 -->
           <template v-if="!writeSucceeded">
             <div v-if="sanitizedConfigFiles.length" class="config-section">
-              <h4>配置预览（已脱敏）</h4>
-              <p class="section-subhint">确认无误后点击上方「写入配置文件」；团队版也可复制下方命令自行写入。</p>
+              <h4>{{ $t('agentSetup.configPreview') }}</h4>
+              <p class="section-subhint">{{ $t('agentSetup.configPreviewHint') }}</p>
               <el-collapse>
                 <el-collapse-item
                   v-for="file in sanitizedConfigFiles"
@@ -246,7 +246,7 @@
             </div>
 
             <div v-if="!isDesktopEdition && configResult.commands" class="config-section">
-              <h4>配置命令（含密钥，请妥善保管）</h4>
+              <h4>{{ $t('agentSetup.configCommand') }}</h4>
               <el-tabs v-model="platformTab" type="border-card">
                 <el-tab-pane label="macOS" name="macos">
                   <div class="code-block">
@@ -270,24 +270,24 @@
             </div>
           </template>
         </div>
-        <el-empty v-else-if="!loadingConfig" description="配置生成失败，请返回上一步重试" />
+        <el-empty v-else-if="!loadingConfig" :description="$t('agentSetup.configGenFailed')" />
       </div>
 
       <!-- Step 3: 验证生效 -->
       <div v-show="wizardStep === 2" class="wizard-step">
         <el-result
           icon="success"
-          title="配置已就绪"
-          :sub-title="`请按下列方式验证 ${currentAgentName} 是否已走 Centag 代理`"
+          :title="$t('agentSetup.configReady')"
+          :sub-title="$t('agentSetup.verifyHint', { agent: currentAgentName })"
         />
 
         <el-alert type="success" :closable="false" show-icon class="step-alert">
-          验证通过后，该 Agent 的请求将经 Centag，并按所选流水线路由到其内部配置的后端与模型。
+          {{ $t('agentSetup.verifySuccessHint') }}
         </el-alert>
 
         <div v-if="configResult?.verify_cmd" class="config-section">
-          <h4>验证命令</h4>
-          <p class="verify-desc">在终端执行以下命令，确认能连通 Centag 并返回模型响应（需本机已安装对应 Agent CLI）：</p>
+          <h4>{{ $t('agentSetup.verifyCommand') }}</h4>
+          <p class="verify-desc">{{ $t('agentSetup.verifyCommandHint') }}</p>
           <div class="code-block">
             <pre><code>{{ configResult.verify_cmd }}</code></pre>
             <el-button class="copy-btn" :icon="DocumentCopy" @click="copyText(configResult.verify_cmd)" />
@@ -295,22 +295,22 @@
         </div>
 
         <div class="config-section">
-          <h4>验证清单</h4>
+          <h4>{{ $t('agentSetup.verifyChecklist') }}</h4>
           <ol class="verify-checklist">
-            <li>重启或重新打开 {{ currentAgentName }}，确保加载了最新配置。</li>
-            <li>发起一次简单对话或补全请求（例如询问当前模型）。</li>
-            <li>在 Centag「请求日志 / 仪表盘」中确认出现对应请求，且流水线为 <code>{{ selectedPipeline }}</code>。</li>
-            <li>若失败：检查 API Key 是否有效、Centag 服务是否运行、Agent 配置中的 Base URL 是否指向本机 Centag。</li>
+            <li>{{ $t('agentSetup.verifyChecklistStep1', { agent: currentAgentName }) }}</li>
+            <li>{{ $t('agentSetup.verifyChecklistStep2') }}</li>
+            <li>{{ $t('agentSetup.verifyChecklistStep3', { pipeline: selectedPipeline }) }}</li>
+            <li>{{ $t('agentSetup.verifyChecklistStep4') }}</li>
           </ol>
         </div>
       </div>
 
       <template #footer>
         <div class="wizard-footer">
-          <el-button @click="wizardVisible = false">取消</el-button>
+          <el-button @click="wizardVisible = false">{{ $t('agentSetup.cancel') }}</el-button>
           <div class="wizard-footer-right">
             <el-button :disabled="wizardStep === 0 || loadingConfig || writingConfig" @click="prevStep">
-              上一步
+              {{ $t('agentSetup.prevStep') }}
             </el-button>
             <el-button
               v-if="wizardStep < 2"
@@ -319,10 +319,10 @@
               :disabled="!canGoNext"
               @click="nextStep"
             >
-              下一步
+              {{ $t('agentSetup.nextStep') }}
             </el-button>
             <el-button v-else type="primary" @click="wizardVisible = false">
-              完成
+              {{ $t('agentSetup.finish') }}
             </el-button>
           </div>
         </div>
@@ -333,6 +333,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useRouter } from 'vue-router'
 import {
@@ -344,6 +345,7 @@ import { useAuthStore } from '@/stores/auth'
 import { listAPIKeys } from '@/api/user'
 import api from '@/api'
 
+const { t } = useI18n()
 const router = useRouter()
 const authStore = useAuthStore()
 const isAdmin = computed(() => authStore.isAdmin)
@@ -376,8 +378,8 @@ const hasEnabledAPIKey = ref<boolean | null>(null)
 const isDesktopEdition = computed(() => isPersonalEdition())
 
 const wizardTitle = computed(() => {
-  if (!selectedAgentDisplay.value) return '接入 Centag 代理'
-  return `接入 Centag 代理 — ${selectedAgentDisplay.value}`
+  if (!selectedAgentDisplay.value) return t('agentSetup.connectCentagProxy')
+  return `${t('agentSetup.connectCentagProxy')} — ${selectedAgentDisplay.value}`
 })
 
 const currentAgentName = computed(() => selectedAgentDisplay.value || selectedAgent.value || 'Agent')
@@ -422,14 +424,14 @@ async function loadAgentTypes() {
     const res: any = await api.get('/api/v1/agent/types')
     agentTypes.value = res.agent_types || []
   } catch (e: any) {
-    ElMessage.error('加载 Agent 类型失败：' + e.message)
+    ElMessage.error(t('agentSetup.loadAgentTypeFailed') + e.message)
   }
 }
 
 function pickDefaultPipelineID(list: Array<{ id: string; name: string }>): string {
   const byID = list.find(p => p.id === DEFAULT_PIPELINE_ID)
   if (byID) return byID.id
-  const byName = list.find(p => p.name === '透明模式' || /transparent/i.test(p.id))
+  const byName = list.find(p => p.name === 'transparent' || /transparent/i.test(p.id))
   return byName?.id || ''
 }
 
@@ -448,7 +450,7 @@ async function loadPipelines() {
     }
   } catch (e: any) {
     pipelines.value = []
-    console.warn('加载流水线列表失败:', e.message)
+    console.warn(t('agentSetup.loadPipelineFailed'), e.message)
   } finally {
     loadingPipelines.value = false
   }
@@ -460,7 +462,7 @@ async function checkAPIKeys() {
     hasEnabledAPIKey.value = Array.isArray(keys) && keys.some(k => k.enabled)
   } catch (e: any) {
     hasEnabledAPIKey.value = null
-    console.warn('检测 API Key 失败:', e.message)
+    console.warn(t('agentSetup.detectApiKeyFailed'), e.message)
   }
 }
 
@@ -472,11 +474,11 @@ function goProfileForAPIKey() {
 async function restoreDefaults(agent: { type: string; display_name: string }) {
   try {
     await ElMessageBox.confirm(
-      `将恢复 ${agent.display_name} 的本地配置为接入 Centag 之前的状态。\n若写入前有备份则还原备份；若配置由 Centag 新建则删除对应文件。`,
-      '恢复默认配置',
+      t('agentSetup.restoreConfirm', { name: agent.display_name }),
+      t('agentSetup.restoreDefaultConfig'),
       {
-        confirmButtonText: '恢复默认',
-        cancelButtonText: '取消',
+        confirmButtonText: t('agentSetup.restoreDefault'),
+        cancelButtonText: t('agentSetup.cancel'),
         type: 'warning',
       }
     )
@@ -490,12 +492,12 @@ async function restoreDefaults(agent: { type: string; display_name: string }) {
       agent_type: agent.type,
     })
     if (res?.success) {
-      ElMessage.success(res.message || '已恢复默认配置')
+      ElMessage.success(res.message || t('agentSetup.restoreSuccess'))
     } else {
-      ElMessage.error(res?.message || '恢复失败')
+      ElMessage.error(res?.message || t('agentSetup.restoreFailed'))
     }
   } catch (e: any) {
-    ElMessage.error('恢复默认失败：' + e.message)
+    ElMessage.error(t('agentSetup.restoreFailed') + e.message)
   } finally {
     restoringAgent.value = ''
   }
@@ -583,18 +585,18 @@ function buildSanitizedConfigPreview(content: string): string {
 }
 
 function isMissingProxyAPIKeyError(message: string): boolean {
-  return message.includes('未找到可用于 Agent 接入的 Centag API Key')
+  return message.includes(t('agentSetup.noApiKeyForAgent'))
 }
 
 async function maybeHandleMissingProxyAPIKeyError(message: string): Promise<boolean> {
   if (!isMissingProxyAPIKeyError(message)) return false
   try {
     await ElMessageBox.confirm(
-      '当前账号没有可用的 Centag API Key（llmproxy_*），请先到个人中心创建后再重试。',
-      '缺少 Centag API Key',
+      t('agentSetup.noApiKeyHint'),
+      t('agentSetup.missingApiKey'),
       {
-        confirmButtonText: '前往个人中心',
-        cancelButtonText: '稍后',
+        confirmButtonText: t('agentSetup.goToProfile'),
+        cancelButtonText: t('agentSetup.later'),
         type: 'warning',
       }
     )
@@ -620,7 +622,7 @@ async function generateConfig(): Promise<boolean> {
     return true
   } catch (e: any) {
     if (await maybeHandleMissingProxyAPIKeyError(e.message)) return false
-    ElMessage.error('生成配置失败：' + e.message)
+    ElMessage.error(t('agentSetup.genConfigFailed') + e.message)
     return false
   } finally {
     loadingConfig.value = false
@@ -638,14 +640,14 @@ async function writeToConfig() {
     })
     writeResult.value = res
     if (res.success) {
-      ElMessage.success('配置写入成功')
+      ElMessage.success(t('agentSetup.configWriteSuccess'))
     } else {
-      ElMessage.error('配置写入失败：' + res.message)
+      ElMessage.error(t('agentSetup.configWriteFailed') + res.message)
     }
   } catch (e: any) {
     writeResult.value = { success: false, message: e.message }
     if (await maybeHandleMissingProxyAPIKeyError(e.message)) return
-    ElMessage.error('写入请求失败：' + e.message)
+    ElMessage.error(t('agentSetup.writeRequestFailed') + e.message)
   } finally {
     writingConfig.value = false
   }
@@ -653,9 +655,9 @@ async function writeToConfig() {
 
 function copyText(text: string) {
   navigator.clipboard.writeText(text).then(() => {
-    ElMessage.success('已复制到剪贴板')
+    ElMessage.success(t('agentSetup.copiedToClipboard'))
   }).catch(() => {
-    ElMessage.error('复制失败，请手动选择')
+    ElMessage.error(t('agentSetup.copyFailed'))
   })
 }
 
@@ -696,7 +698,7 @@ async function loadProviders() {
     const res: any = await api.get('/api/v1/agent-providers')
     providers.value = res.agent_providers || []
   } catch (e: any) {
-    ElMessage.error('加载供应商配置失败：' + e.message)
+    ElMessage.error(t('agentSetup.loadProviderFailed') + e.message)
   } finally {
     loadingProviders.value = false
   }
@@ -708,10 +710,10 @@ async function handleHotSwap(provider: AgentProviderConfig) {
       agent_type: provider.agent_type,
       backend_id: provider.backend_id,
     })
-    ElMessage.success(`已将 ${provider.display_name || provider.agent_type} 设为默认`)
+    ElMessage.success(t('agentSetup.setDefaultSuccess', { name: provider.display_name || provider.agent_type }))
     loadProviders()
   } catch (e: any) {
-    ElMessage.error('HotSwap 失败：' + e.message)
+    ElMessage.error(t('agentSetup.hotSwapFailed') + e.message)
   }
 }
 

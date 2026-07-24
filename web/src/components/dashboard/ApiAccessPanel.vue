@@ -22,7 +22,7 @@
       <code class="access-url" :title="selectedUrl">{{ selectedUrl }}</code>
       <el-button size="small" type="primary" @click="copySelected">
         <el-icon><CopyDocument /></el-icon>
-        复制
+        {{ t('apiAccessPanel.copy') }}
       </el-button>
     </div>
   </div>
@@ -30,9 +30,12 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
 import { CopyDocument } from '@element-plus/icons-vue'
 import { API_ENDPOINTS, buildEndpointUrl, type ApiEndpoint } from '@/utils/apiBaseUrl'
+
+const { t } = useI18n()
 
 const OPENAI_CHAT_PATH = '/v1/chat/completions'
 
@@ -71,12 +74,12 @@ const selectedUrl = computed(() =>
 )
 
 async function copySelected() {
-  const label = selectedEndpoint.value?.label || '接口地址'
+  const label = selectedEndpoint.value?.label || t('apiAccessPanel.endpointLabel')
   try {
     await navigator.clipboard.writeText(selectedUrl.value)
-    ElMessage.success(`已复制 ${label}`)
+    ElMessage.success(t('apiAccessPanel.copySuccess', { label }))
   } catch {
-    ElMessage.error('复制失败，请手动复制')
+    ElMessage.error(t('apiAccessPanel.copyFailed'))
   }
 }
 </script>

@@ -1,8 +1,8 @@
 <template>
   <div class="memory">
     <div class="header">
-      <h1 class="page-title">云记忆管理</h1>
-      <p class="page-description">管理 Agent 记忆云端存储，支持语义搜索与版本控制</p>
+      <h1 class="page-title">{{ t('memory.title') }}</h1>
+      <p class="page-description">{{ t('memory.subtitle') }}</p>
     </div>
 
     <div class="content-wrapper full-width">
@@ -13,40 +13,40 @@
             <!-- 记忆统计 -->
             <el-card class="stats-card">
               <template #header>
-                <span class="card-title">记忆统计</span>
+                <span class="card-title">{{ t('memory.stats.title') }}</span>
               </template>
               <div class="stats-content">
                 <div class="stat-item-large">
                   <span class="stat-number">{{ memoryStats.vector_count || 0 }}</span>
-                  <span class="stat-label">向量条目</span>
+                  <span class="stat-label">{{ t('memory.stats.vectorEntries') }}</span>
                 </div>
                 <div class="stat-item-large">
                   <span class="stat-number">{{ memoryStats.indexed_files?.length || 0 }}</span>
-                  <span class="stat-label">记忆文件</span>
+                  <span class="stat-label">{{ t('memory.stats.memoryFiles') }}</span>
                 </div>
                 <div v-if="memoryStats.index_queue_enabled" class="queue-stats">
                   <div class="queue-row">
-                    <span class="queue-label">索引队列长度</span>
+                    <span class="queue-label">{{ t('memory.stats.indexQueueLength') }}</span>
                     <el-tag size="small" type="info">{{ memoryStats.index_queue_length || 0 }}</el-tag>
                   </div>
                   <div class="queue-row">
-                    <span class="queue-label">已处理</span>
+                    <span class="queue-label">{{ t('memory.stats.processed') }}</span>
                     <el-tag size="small" type="success">{{ memoryStats.index_tasks_processed || 0 }}</el-tag>
                   </div>
                   <div class="queue-row">
-                    <span class="queue-label">失败</span>
+                    <span class="queue-label">{{ t('memory.stats.failed') }}</span>
                     <el-tag size="small" :type="(memoryStats.index_tasks_failed || 0) > 0 ? 'danger' : 'success'">
                       {{ memoryStats.index_tasks_failed || 0 }}
                     </el-tag>
                   </div>
                   <div class="queue-row">
-                    <span class="queue-label">丢弃</span>
+                    <span class="queue-label">{{ t('memory.stats.dropped') }}</span>
                     <el-tag size="small" :type="(memoryStats.index_tasks_dropped || 0) > 0 ? 'warning' : 'info'">
                       {{ memoryStats.index_tasks_dropped || 0 }}
                     </el-tag>
                   </div>
                   <div v-if="memoryStats.index_last_error" class="queue-error">
-                    最近错误：{{ memoryStats.index_last_error }}
+                    {{ t('memory.stats.recentError') }} {{ memoryStats.index_last_error }}
                   </div>
                 </div>
               </div>
@@ -55,9 +55,9 @@
             <!-- 当前 Agent -->
             <el-card class="info-card">
               <template #header>
-                <span class="card-title">当前 Agent</span>
+                <span class="card-title">{{ t('memory.currentAgent') }}</span>
               </template>
-              <el-select v-model="currentAgent" placeholder="选择 Agent" @change="handleAgentChange">
+              <el-select v-model="currentAgent" :placeholder="t('memory.selectAgent')" @change="handleAgentChange">
                 <el-option label="main" value="main" />
                 <el-option v-for="agent in agentList" :key="agent" :label="agent" :value="agent" />
               </el-select>
@@ -67,15 +67,15 @@
             <el-card v-if="memoryFull" class="actions-card">
               <el-button :loading="syncing" @click="handleSync" style="width: 100%">
                 <el-icon><Upload /></el-icon>
-                同步到云端
+                {{ t('memory.actions.syncToCloud') }}
               </el-button>
               <el-button :loading="pulling" @click="handlePull" style="width: 100%; margin-left: 0; margin-top: 8px">
                 <el-icon><Download /></el-icon>
-                从云端拉取
+                {{ t('memory.actions.pullFromCloud') }}
               </el-button>
               <el-button :loading="indexing" @click="handleBuildIndex" style="width: 100%; margin-left: 0; margin-top: 8px">
                 <el-icon><Search /></el-icon>
-                重建索引
+                {{ t('memory.actions.rebuildIndex') }}
               </el-button>
             </el-card>
           </div>
@@ -89,7 +89,7 @@
               <el-col :span="18">
                 <el-input
                   v-model="searchQuery"
-                  placeholder="搜索记忆内容..."
+                  :placeholder="t('memory.search.placeholder')"
                   @keyup.enter="handleSearch"
                 >
                   <template #prefix>
@@ -99,7 +99,7 @@
               </el-col>
               <el-col :span="6">
                 <el-button type="primary" :loading="searching" @click="handleSearch" style="width: 100%">
-                  搜索
+                  {{ t('memory.search.searchBtn') }}
                 </el-button>
               </el-col>
             </el-row>
@@ -109,7 +109,7 @@
           <el-card class="list-card">
             <template #header>
               <div class="card-header">
-                <span class="card-title">{{ searchQuery ? '搜索结果' : '记忆文件' }}</span>
+                <span class="card-title">{{ searchQuery ? t('memory.fileList.searchResults') : t('memory.fileList.title') }}</span>
                 <el-button
                   v-if="memoryFull"
                   type="primary"
@@ -117,79 +117,79 @@
                   @click="showAddDialog = true"
                 >
                   <el-icon><Plus /></el-icon>
-                  新建文件
+                  {{ t('memory.fileList.newFile') }}
                 </el-button>
               </div>
             </template>
 
             <!-- 标签页 -->
             <el-tabs v-model="activeTab" @tab-change="handleTabChange">
-              <el-tab-pane label="文件列表" name="files">
+              <el-tab-pane :label="t('memory.tabs.files')" name="files">
                 <div v-if="loading" class="loading-wrapper">
                   <el-skeleton :rows="10" animated />
                 </div>
                 <el-table v-else :data="fileList" stripe style="width: 100%">
-                  <el-table-column prop="name" label="文件名" min-width="200">
+                  <el-table-column prop="name" :label="t('memory.fileList.name')" min-width="200">
                     <template #default="{ row }">
                       <el-link type="primary" @click="handleViewFile(row)">{{ row.name }}</el-link>
                     </template>
                   </el-table-column>
-                  <el-table-column prop="size" label="大小" width="100">
+                  <el-table-column prop="size" :label="t('memory.fileList.size')" width="100">
                     <template #default="{ row }">
                       {{ formatSize(row.size) }}
                     </template>
                   </el-table-column>
-                  <el-table-column prop="modified" label="修改时间" width="180">
+                  <el-table-column prop="modified" :label="t('memory.fileList.modified')" width="180">
                     <template #default="{ row }">
                       {{ formatTime(row.modified) }}
                     </template>
                   </el-table-column>
-                  <el-table-column label="操作" width="180" fixed="right">
+                  <el-table-column :label="t('memory.fileList.actions')" width="180" fixed="right">
                     <template #default="{ row }">
                       <el-button-group>
-                        <el-button size="small" @click="handleViewFile(row)">查看</el-button>
-                        <el-button size="small" type="danger" @click="handleDeleteFile(row)">删除</el-button>
+                        <el-button size="small" @click="handleViewFile(row)">{{ t('memory.fileList.view') }}</el-button>
+                        <el-button size="small" type="danger" @click="handleDeleteFile(row)">{{ t('memory.fileList.delete') }}</el-button>
                       </el-button-group>
                     </template>
                   </el-table-column>
                 </el-table>
               </el-tab-pane>
 
-              <el-tab-pane label="搜索结果" name="results" v-if="searchResults.length > 0">
+              <el-tab-pane :label="t('memory.tabs.results')" name="results" v-if="searchResults.length > 0">
                 <div v-for="(result, index) in searchResults" :key="index" class="search-result-item">
                   <div class="result-header">
                     <span class="result-path">{{ result.path }}</span>
-                    <el-tag size="small" type="success">相似度: {{ (result.score * 100).toFixed(1) }}%</el-tag>
+                    <el-tag size="small" type="success">{{ t('memory.fileList.similarity') }} {{ (result.score * 100).toFixed(1) }}%</el-tag>
                   </div>
                   <div class="result-content">{{ result.content }}</div>
                 </div>
               </el-tab-pane>
 
-              <el-tab-pane label="版本历史" name="versions">
-                <el-select v-model="versionFilePath" placeholder="选择文件" @change="loadVersions" style="width: 300px; margin-bottom: 16px;">
+              <el-tab-pane :label="t('memory.tabs.versions')" name="versions">
+                <el-select v-model="versionFilePath" :placeholder="t('memory.versionHistory.selectFile')" @change="loadVersions" style="width: 300px; margin-bottom: 16px;">
                   <el-option v-for="file in fileList" :key="file.name" :label="file.name" :value="file.name" />
                 </el-select>
                 <el-table v-if="versionList.length > 0" :data="versionList" stripe>
-                  <el-table-column prop="version_id" label="版本 ID" width="200" />
-                  <el-table-column prop="created_at" label="创建时间" width="180">
+                  <el-table-column prop="version_id" :label="t('memory.versionHistory.versionId')" width="200" />
+                  <el-table-column prop="created_at" :label="t('memory.versionHistory.createdAt')" width="180">
                     <template #default="{ row }">
                       {{ formatTime(row.created_at) }}
                     </template>
                   </el-table-column>
-                  <el-table-column prop="lines" label="行数" width="80" />
-                  <el-table-column prop="size" label="大小" width="100">
+                  <el-table-column prop="lines" :label="t('memory.versionHistory.lines')" width="80" />
+                  <el-table-column prop="size" :label="t('memory.versionHistory.size')" width="100">
                     <template #default="{ row }">
                       {{ formatSize(row.size) }}
                     </template>
                   </el-table-column>
-                  <el-table-column label="操作" width="120">
+                  <el-table-column :label="t('memory.versionHistory.restore')" width="120">
                     <template #default="{ row }">
-                      <el-button size="small" @click="handleRestoreVersion(row)">恢复</el-button>
+                      <el-button size="small" @click="handleRestoreVersion(row)">{{ t('memory.versionHistory.restore') }}</el-button>
                     </template>
                   </el-table-column>
                 </el-table>
-                <el-empty v-else-if="versionFilePath" description="暂无版本记录" />
-                <el-empty v-else description="请先选择文件" />
+                <el-empty v-else-if="versionFilePath" :description="t('memory.versionHistory.noVersions')" />
+                <el-empty v-else :description="t('memory.versionHistory.selectFileFirst')" />
               </el-tab-pane>
             </el-tabs>
           </el-card>
@@ -198,18 +198,18 @@
     </div>
 
     <!-- 新建/编辑文件对话框 -->
-    <el-dialog v-model="showAddDialog" :title="editingFile ? '编辑文件' : '新建文件'" width="600px">
+    <el-dialog v-model="showAddDialog" :title="editingFile ? t('memory.dialog.editFile') : t('memory.dialog.newFile')" width="600px">
       <el-form :model="fileForm" label-width="80px">
-        <el-form-item label="文件名">
-          <el-input v-model="fileForm.path" placeholder="memory/xxx.md" :disabled="!!editingFile" />
+        <el-form-item :label="t('memory.dialog.filename')">
+          <el-input v-model="fileForm.path" :placeholder="t('memory.dialog.filenamePlaceholder')" :disabled="!!editingFile" />
         </el-form-item>
-        <el-form-item label="内容">
-          <el-input v-model="fileForm.content" type="textarea" :rows="15" placeholder="记忆内容..." />
+        <el-form-item :label="t('memory.dialog.content')">
+          <el-input v-model="fileForm.content" type="textarea" :rows="15" :placeholder="t('memory.dialog.contentPlaceholder')" />
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="showAddDialog = false">取消</el-button>
-        <el-button type="primary" :loading="saving" @click="handleSaveFile">保存</el-button>
+        <el-button @click="showAddDialog = false">{{ t('memory.dialog.cancel') }}</el-button>
+        <el-button type="primary" :loading="saving" @click="handleSaveFile">{{ t('memory.dialog.save') }}</el-button>
       </template>
     </el-dialog>
 
@@ -217,8 +217,8 @@
     <el-dialog v-model="showViewDialog" :title="viewingFile?.name" width="800px">
       <pre class="file-content">{{ viewingFile?.content }}</pre>
       <template #footer>
-        <el-button @click="showViewDialog = false">关闭</el-button>
-        <el-button v-if="memoryFull" type="primary" @click="handleEditFile">编辑</el-button>
+        <el-button @click="showViewDialog = false">{{ t('memory.dialog.close') }}</el-button>
+        <el-button v-if="memoryFull" type="primary" @click="handleEditFile">{{ t('storage.action.edit') }}</el-button>
       </template>
     </el-dialog>
   </div>
@@ -226,11 +226,14 @@
 
 <script setup>
 import { ref, onMounted, computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Search, Upload, Download, Plus } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import { useEdition } from '@/composables/useEdition'
 import { getCapabilities } from '@/utils/capabilities'
+
+const { t } = useI18n()
 
 const authStore = useAuthStore()
 const { edition } = useEdition()
@@ -246,7 +249,6 @@ function memoryAuthHeaders(json = false) {
   return h
 }
 
-// 状态变量
 const loading = ref(false)
 const searching = ref(false)
 const syncing = ref(false)
@@ -274,17 +276,14 @@ const fileForm = ref({
   content: ''
 })
 
-// API 基础 URL
 const apiBase = ref('')
 
-// 初始化：必须先拿到 stats（含 indexed_files），再建文件列表。OpenClaw 常只写 memory/*.md，无 MEMORY.md 时旧逻辑会因 get 404 清空列表。
 onMounted(async () => {
   const baseUrl = import.meta.env.VITE_API_BASE_URL || ''
   apiBase.value = baseUrl
   await loadFileList()
 })
 
-// 获取记忆统计
 async function loadMemoryStats() {
   try {
     const response = await fetch(`${apiBase.value}/api/v1/memory/stats?agent_id=${currentAgent.value}`, {
@@ -297,7 +296,6 @@ async function loadMemoryStats() {
   }
 }
 
-// 文件列表完全以 stats.indexed_files 为准（含 memory/ 下 .md），不依赖根目录 MEMORY.md 是否存在
 async function loadFileList() {
   loading.value = true
   try {
@@ -320,11 +318,10 @@ async function loadFileList() {
   }
 }
 
-// 搜索记忆
 async function handleSearch() {
   if (!searchQuery.value) return
   if (!authStore.accessToken) {
-    ElMessage.warning('请先登录后再搜索')
+    ElMessage.warning(t('memory.message.loginRequired'))
     return
   }
 
@@ -342,19 +339,18 @@ async function handleSearch() {
     const data = await response.json()
     if (!response.ok) {
       searchResults.value = []
-      ElMessage.error(data.error || `搜索失败（HTTP ${response.status}）`)
+      ElMessage.error(data.error || t('memory.message.searchFailed'))
       return
     }
     searchResults.value = data.results || []
     activeTab.value = 'results'
   } catch (error) {
-    ElMessage.error('搜索失败')
+    ElMessage.error(t('memory.message.searchFailed'))
   } finally {
     searching.value = false
   }
 }
 
-// 同步到云端
 async function handleSync() {
   syncing.value = true
   try {
@@ -367,19 +363,18 @@ async function handleSync() {
     })
     const data = await response.json()
     if (data.success) {
-      ElMessage.success(`同步成功，${data.files_synced} 个文件`)
+      ElMessage.success(t('memory.message.syncSuccess', { count: data.files_synced }))
       await loadFileList()
     } else {
-      ElMessage.error(data.error || '同步失败')
+      ElMessage.error(data.error || t('memory.message.syncFailed'))
     }
   } catch (error) {
-    ElMessage.error('同步失败')
+    ElMessage.error(t('memory.message.syncFailed'))
   } finally {
     syncing.value = false
   }
 }
 
-// 从云端拉取
 async function handlePull() {
   pulling.value = true
   try {
@@ -392,18 +387,17 @@ async function handlePull() {
     })
     const data = await response.json()
     if (data.success) {
-      ElMessage.success(`拉取成功，${data.files_pulled} 个文件`)
+      ElMessage.success(t('memory.message.pullSuccess', { count: data.files_pulled }))
     } else {
-      ElMessage.error(data.error || '拉取失败')
+      ElMessage.error(data.error || t('memory.message.pullFailed'))
     }
   } catch (error) {
-    ElMessage.error('拉取失败')
+    ElMessage.error(t('memory.message.pullFailed'))
   } finally {
     pulling.value = false
   }
 }
 
-// 重建索引
 async function handleBuildIndex() {
   indexing.value = true
   try {
@@ -416,19 +410,18 @@ async function handleBuildIndex() {
     })
     const data = await response.json()
     if (data.success) {
-      ElMessage.success(`索引重建成功，${data.vector_count} 个向量`)
+      ElMessage.success(t('memory.message.indexSuccess', { count: data.vector_count }))
       await loadFileList()
     } else {
-      ElMessage.error(data.error || '索引重建失败')
+      ElMessage.error(data.error || t('memory.message.indexFailed'))
     }
   } catch (error) {
-    ElMessage.error('索引重建失败')
+    ElMessage.error(t('memory.message.indexFailed'))
   } finally {
     indexing.value = false
   }
 }
 
-// 查看文件
 async function handleViewFile(row) {
   try {
     const response = await fetch(`${apiBase.value}/api/v1/memory/get?agent_id=${currentAgent.value}&path=${row.name}`, {
@@ -443,11 +436,10 @@ async function handleViewFile(row) {
       showViewDialog.value = true
     }
   } catch (error) {
-    ElMessage.error('读取文件失败')
+    ElMessage.error(t('memory.message.readFileFailed'))
   }
 }
 
-// 编辑文件
 function handleEditFile() {
   if (viewingFile.value) {
     fileForm.value = {
@@ -460,10 +452,9 @@ function handleEditFile() {
   }
 }
 
-// 保存文件
 async function handleSaveFile() {
   if (!fileForm.value.path) {
-    ElMessage.warning('请输入文件名')
+    ElMessage.warning(t('memory.message.filenameRequired'))
     return
   }
 
@@ -480,27 +471,26 @@ async function handleSaveFile() {
     })
     const data = await response.json()
     if (data.success) {
-      ElMessage.success('保存成功')
+      ElMessage.success(t('memory.message.saveSuccess'))
       showAddDialog.value = false
       fileForm.value = { path: '', content: '' }
       editingFile.value = null
       await loadFileList()
     } else {
-      ElMessage.error(data.error || '保存失败')
+      ElMessage.error(data.error || t('memory.message.saveFailed'))
     }
   } catch (error) {
-    ElMessage.error('保存失败')
+    ElMessage.error(t('memory.message.saveFailed'))
   } finally {
     saving.value = false
   }
 }
 
-// 删除文件
 async function handleDeleteFile(row) {
   try {
-    await ElMessageBox.confirm(`确定要删除 ${row.name} 吗？`, '警告', {
-      confirmButtonText: '确定',
-      cancelButtonText: '取消',
+    await ElMessageBox.confirm(t('memory.message.deleteConfirm', { name: row.name }), t('memory.message.deleteTitle'), {
+      confirmButtonText: t('memory.message.deleteConfirmBtn'),
+      cancelButtonText: t('memory.message.deleteCancelBtn'),
       type: 'warning'
     })
 
@@ -510,19 +500,18 @@ async function handleDeleteFile(row) {
     })
     const data = await response.json()
     if (data.success) {
-      ElMessage.success('删除成功')
+      ElMessage.success(t('memory.message.deleteSuccess'))
       await loadFileList()
     } else {
-      ElMessage.error(data.error || '删除失败')
+      ElMessage.error(data.error || t('memory.message.deleteFailed'))
     }
   } catch (error) {
     if (error !== 'cancel') {
-      ElMessage.error('删除失败')
+      ElMessage.error(t('memory.message.deleteFailed'))
     }
   }
 }
 
-// 加载版本历史
 async function loadVersions() {
   if (!versionFilePath.value) return
 
@@ -538,12 +527,11 @@ async function loadVersions() {
   }
 }
 
-// 恢复版本
 async function handleRestoreVersion(row) {
   try {
-    await ElMessageBox.confirm(`确定要恢复到版本 ${row.version_id} 吗？`, '确认', {
-      confirmButtonText: '确定',
-      cancelButtonText: '取消'
+    await ElMessageBox.confirm(t('memory.message.restoreConfirm', { versionId: row.version_id }), t('memory.message.restoreTitle'), {
+      confirmButtonText: t('memory.message.restoreConfirmBtn'),
+      cancelButtonText: t('memory.message.restoreCancelBtn')
     })
 
     const response = await fetch(`${apiBase.value}/api/v1/memory/restore`, {
@@ -557,19 +545,18 @@ async function handleRestoreVersion(row) {
     })
     const data = await response.json()
     if (data.success) {
-      ElMessage.success('恢复成功')
+      ElMessage.success(t('memory.message.restoreSuccess'))
       await loadFileList()
     } else {
-      ElMessage.error(data.error || '恢复失败')
+      ElMessage.error(data.error || t('memory.message.restoreFailed'))
     }
   } catch (error) {
     if (error !== 'cancel') {
-      ElMessage.error('恢复失败')
+      ElMessage.error(t('memory.message.restoreFailed'))
     }
   }
 }
 
-// 切换 Agent
 async function handleAgentChange() {
   searchQuery.value = ''
   searchResults.value = []
@@ -578,7 +565,6 @@ async function handleAgentChange() {
   await loadFileList()
 }
 
-// 切换标签页
 function handleTabChange(tab) {
   if (tab === 'versions' && !versionList.value.length && fileList.value.length > 0) {
     versionFilePath.value = fileList.value[0].name
@@ -586,7 +572,6 @@ function handleTabChange(tab) {
   }
 }
 
-// 工具函数
 function formatSize(bytes) {
   if (!bytes) return '0 B'
   const k = 1024

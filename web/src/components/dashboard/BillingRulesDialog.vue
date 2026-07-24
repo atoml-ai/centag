@@ -1,7 +1,7 @@
 <template>
   <el-drawer
     v-model="visible"
-    title="计费规则"
+    :title="t('billingRulesDialog.dialogTitle')"
     direction="rtl"
     size="50%"
     destroy-on-close
@@ -10,16 +10,16 @@
   >
     <div class="billing-rules-body">
       <p class="sub">
-        按后端 + 模型配置单价（美元 / 1M tokens）。导入导出 YAML 默认 USD；显示可选人民币（仅换算，不改正本）。
+        {{ t('billingRulesDialog.description') }}
       </p>
       <div class="actions">
-        <el-button size="small" @click="load">刷新</el-button>
-        <el-button size="small" @click="openImport">导入 YAML</el-button>
-        <el-button size="small" @click="doExport">导出</el-button>
-        <el-button size="small" type="primary" @click="openCreate">新增规则</el-button>
+        <el-button size="small" @click="load">{{ t('billingRulesDialog.refresh') }}</el-button>
+        <el-button size="small" @click="openImport">{{ t('billingRulesDialog.importYaml') }}</el-button>
+        <el-button size="small" @click="doExport">{{ t('billingRulesDialog.export') }}</el-button>
+        <el-button size="small" type="primary" @click="openCreate">{{ t('billingRulesDialog.addRule') }}</el-button>
         <el-radio-group v-model="displayCurrency" size="small" @change="onDisplayCurrencyChange">
-          <el-radio-button value="USD">美元</el-radio-button>
-          <el-radio-button value="CNY">人民币</el-radio-button>
+          <el-radio-button value="USD">{{ t('billingRulesDialog.usdLabel') }}</el-radio-button>
+          <el-radio-button value="CNY">{{ t('billingRulesDialog.cnyLabel') }}</el-radio-button>
         </el-radio-group>
       </div>
 
@@ -28,67 +28,67 @@
         :data="rules"
         stripe
         size="small"
-        empty-text="暂无规则，请导入或新增"
+        :empty-text="t('billingRulesDialog.emptyText')"
         class="rules-table"
         height="100%"
       >
-        <el-table-column prop="name" label="名称" min-width="120" />
-        <el-table-column prop="backend_id" label="后端" width="120" />
-        <el-table-column prop="model" label="模型" width="140" />
-        <el-table-column :label="`输入价(${priceUnit})`" width="110">
+        <el-table-column prop="name" :label="t('billingRulesDialog.table.name')" min-width="120" />
+        <el-table-column prop="backend_id" :label="t('billingRulesDialog.table.backend')" width="120" />
+        <el-table-column prop="model" :label="t('billingRulesDialog.table.model')" width="140" />
+        <el-table-column :label="t('billingRulesDialog.table.inputPrice', { unit: priceUnit })" width="110">
           <template #default="{ row }">{{ formatPrice(row.input_price_per_m) }}</template>
         </el-table-column>
-        <el-table-column :label="`输出价(${priceUnit})`" width="110">
+        <el-table-column :label="t('billingRulesDialog.table.outputPrice', { unit: priceUnit })" width="110">
           <template #default="{ row }">{{ formatPrice(row.output_price_per_m) }}</template>
         </el-table-column>
-        <el-table-column prop="priority" label="优先级" width="70" />
-        <el-table-column label="启用" width="70">
+        <el-table-column prop="priority" :label="t('billingRulesDialog.table.priority')" width="70" />
+        <el-table-column :label="t('billingRulesDialog.table.enabled')" width="70">
           <template #default="{ row }">
             <el-tag :type="row.enabled ? 'success' : 'info'" size="small">
-              {{ row.enabled ? '是' : '否' }}
+              {{ row.enabled ? t('billingRulesDialog.table.enabledYes') : t('billingRulesDialog.table.enabledNo') }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="130" fixed="right">
+        <el-table-column :label="t('billingRulesDialog.table.actions')" width="130" fixed="right">
           <template #default="{ row }">
-            <el-button link type="primary" @click="openEdit(row)">编辑</el-button>
-            <el-button link type="danger" @click="remove(row)">删除</el-button>
+            <el-button link type="primary" @click="openEdit(row)">{{ t('billingRulesDialog.table.edit') }}</el-button>
+            <el-button link type="danger" @click="remove(row)">{{ t('billingRulesDialog.table.delete') }}</el-button>
           </template>
         </el-table-column>
       </el-table>
     </div>
 
-    <el-dialog v-model="formVisible" :title="editingId ? '编辑规则' : '新增规则'" width="520px" append-to-body>
+    <el-dialog v-model="formVisible" :title="editingId ? t('billingRulesDialog.form.editTitle') : t('billingRulesDialog.form.createTitle')" width="520px" append-to-body>
       <el-form :model="form" label-width="110px">
-        <el-form-item label="名称"><el-input v-model="form.name" /></el-form-item>
-        <el-form-item label="后端 ID">
-          <el-input v-model="form.backend_id" placeholder="如 ppinfra，或 *" />
+        <el-form-item :label="t('billingRulesDialog.form.name')"><el-input v-model="form.name" /></el-form-item>
+        <el-form-item :label="t('billingRulesDialog.form.backendId')">
+          <el-input v-model="form.backend_id" :placeholder="t('billingRulesDialog.form.backendPlaceholder')" />
         </el-form-item>
-        <el-form-item label="模型">
-          <el-input v-model="form.model" placeholder="如 deepseek-v3.2，或 *" />
+        <el-form-item :label="t('billingRulesDialog.form.model')">
+          <el-input v-model="form.model" :placeholder="t('billingRulesDialog.form.modelPlaceholder')" />
         </el-form-item>
-        <el-form-item label="输入价 $/1M">
+        <el-form-item :label="t('billingRulesDialog.form.inputPrice')">
           <el-input-number v-model="form.input_price_per_m" :min="0" :step="0.01" :precision="4" />
         </el-form-item>
-        <el-form-item label="输出价 $/1M">
+        <el-form-item :label="t('billingRulesDialog.form.outputPrice')">
           <el-input-number v-model="form.output_price_per_m" :min="0" :step="0.01" :precision="4" />
         </el-form-item>
-        <el-form-item label="优先级">
+        <el-form-item :label="t('billingRulesDialog.form.priority')">
           <el-input-number v-model="form.priority" :step="1" />
         </el-form-item>
-        <el-form-item label="启用"><el-switch v-model="form.enabled" /></el-form-item>
+        <el-form-item :label="t('billingRulesDialog.form.enabled')"><el-switch v-model="form.enabled" /></el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="formVisible = false">取消</el-button>
-        <el-button type="primary" :loading="saving" @click="save">保存</el-button>
+        <el-button @click="formVisible = false">{{ t('billingRulesDialog.form.cancel') }}</el-button>
+        <el-button type="primary" :loading="saving" @click="save">{{ t('billingRulesDialog.form.save') }}</el-button>
       </template>
     </el-dialog>
 
-    <el-dialog v-model="importVisible" title="导入 YAML" width="640px" append-to-body>
-      <el-input v-model="importText" type="textarea" :rows="14" placeholder="粘贴 pricing YAML" />
+    <el-dialog v-model="importVisible" :title="t('billingRulesDialog.importDialog.title')" width="640px" append-to-body>
+      <el-input v-model="importText" type="textarea" :rows="14" :placeholder="t('billingRulesDialog.importDialog.placeholder')" />
       <template #footer>
-        <el-button @click="importVisible = false">取消</el-button>
-        <el-button type="primary" :loading="saving" @click="doImport">导入（替换全部）</el-button>
+        <el-button @click="importVisible = false">{{ t('billingRulesDialog.importDialog.cancel') }}</el-button>
+        <el-button type="primary" :loading="saving" @click="doImport">{{ t('billingRulesDialog.importDialog.importReplace') }}</el-button>
       </template>
     </el-dialog>
   </el-drawer>
@@ -96,6 +96,7 @@
 
 <script setup lang="ts">
 import { computed, reactive, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import * as billingApi from '@/api/billing'
 import type { PricingRule } from '@/api/billing'
@@ -109,6 +110,8 @@ import {
 
 const visible = defineModel<boolean>({ default: false })
 const emit = defineEmits<{ saved: [] }>()
+
+const { t } = useI18n()
 
 const loading = ref(false)
 const saving = ref(false)
@@ -170,7 +173,7 @@ async function load() {
     const data = await billingApi.listPricingRules()
     rules.value = Array.isArray(data) ? data : []
   } catch (e: unknown) {
-    ElMessage.error(e instanceof Error ? e.message : '加载失败')
+    ElMessage.error(e instanceof Error ? e.message : t('billingRulesDialog.message.loadFailed'))
   } finally {
     loading.value = false
   }
@@ -190,7 +193,7 @@ function openEdit(row: PricingRule) {
 
 async function save() {
   if (!form.backend_id || !form.model) {
-    ElMessage.warning('请填写后端与模型')
+    ElMessage.warning(t('billingRulesDialog.message.fillRequired'))
     return
   }
   saving.value = true
@@ -200,12 +203,12 @@ async function save() {
     } else {
       await billingApi.createPricingRule({ ...form })
     }
-    ElMessage.success('已保存')
+    ElMessage.success(t('billingRulesDialog.message.saveSuccess'))
     formVisible.value = false
     await load()
     emit('saved')
   } catch (e: unknown) {
-    ElMessage.error(e instanceof Error ? e.message : '保存失败')
+    ElMessage.error(e instanceof Error ? e.message : t('billingRulesDialog.message.saveFailed'))
   } finally {
     saving.value = false
   }
@@ -214,9 +217,9 @@ async function save() {
 async function remove(row: PricingRule) {
   if (row.id == null) return
   try {
-    await ElMessageBox.confirm(`删除规则「${row.name || row.id}」？`, '确认')
+    await ElMessageBox.confirm(t('billingRulesDialog.confirmDelete', { name: row.name || row.id }), t('billingRulesDialog.confirmDeleteTitle'))
     await billingApi.deletePricingRule(row.id)
-    ElMessage.success('已删除')
+    ElMessage.success(t('billingRulesDialog.message.deleteSuccess'))
     await load()
     emit('saved')
   } catch {
@@ -231,18 +234,18 @@ function openImport() {
 
 async function doImport() {
   if (!importText.value.trim()) {
-    ElMessage.warning('请粘贴 YAML')
+    ElMessage.warning(t('billingRulesDialog.message.importEmptyWarning'))
     return
   }
   saving.value = true
   try {
     const res = await billingApi.importPricingRules(importText.value)
-    ElMessage.success(`已导入 ${res?.imported ?? 0} 条`)
+    ElMessage.success(t('billingRulesDialog.message.importSuccess', { count: res?.imported ?? 0 }))
     importVisible.value = false
     await load()
     emit('saved')
   } catch (e: unknown) {
-    ElMessage.error(e instanceof Error ? e.message : '导入失败')
+    ElMessage.error(e instanceof Error ? e.message : t('billingRulesDialog.message.importFailed'))
   } finally {
     saving.value = false
   }
@@ -259,7 +262,7 @@ async function doExport() {
     a.click()
     URL.revokeObjectURL(url)
   } catch (e: unknown) {
-    ElMessage.error(e instanceof Error ? e.message : '导出失败')
+    ElMessage.error(e instanceof Error ? e.message : t('billingRulesDialog.message.exportFailed'))
   }
 }
 </script>

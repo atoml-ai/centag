@@ -1,23 +1,23 @@
 <template>
   <div class="cost-dashboard">
     <div class="usage-header">
-      <h2>成本看板</h2>
+      <h2>{{ $t('costDashboard.title') }}</h2>
       <div class="header-actions">
         <el-date-picker
           v-model="dateRange"
           type="daterange"
-          range-separator="至"
-          start-placeholder="开始日期"
-          end-placeholder="结束日期"
+          :range-separator="$t('costDashboard.dateSeparator')"
+          :start-placeholder="$t('costDashboard.startDate')"
+          :end-placeholder="$t('costDashboard.endDate')"
           value-format="YYYY-MM-DD"
           @change="loadSummary"
         />
         <el-select v-model="groupBy" style="width: 140px; margin-left: 12px" @change="loadSummary">
-          <el-option label="按模型" value="model" />
-          <el-option label="按后端" value="backend" />
-          <el-option label="按租户" value="tenant" />
-          <el-option label="按部门" value="dept" />
-          <el-option label="按日期" value="date" />
+          <el-option :label="$t('costDashboard.byModel')" value="model" />
+          <el-option :label="$t('costDashboard.byBackend')" value="backend" />
+          <el-option :label="$t('costDashboard.byTenant')" value="tenant" />
+          <el-option :label="$t('costDashboard.byDepartment')" value="dept" />
+          <el-option :label="$t('costDashboard.byDate')" value="date" />
         </el-select>
         <el-radio-group
           v-model="displayCurrency"
@@ -25,8 +25,8 @@
           style="margin-left: 12px"
           @change="onDisplayCurrencyChange"
         >
-          <el-radio-button value="USD">美元</el-radio-button>
-          <el-radio-button value="CNY">人民币</el-radio-button>
+          <el-radio-button value="USD">{{ $t('costDashboard.usd') }}</el-radio-button>
+          <el-radio-button value="CNY">{{ $t('costDashboard.cny') }}</el-radio-button>
         </el-radio-group>
       </div>
     </div>
@@ -35,26 +35,26 @@
       <el-card class="stat-card" shadow="hover">
         <div class="stat-content">
           <div class="stat-value">{{ currencySymbol }}{{ formatCost(summary.total_cost_usd) }}</div>
-          <div class="stat-label">总成本 ({{ displayCurrency }})</div>
+          <div class="stat-label">{{ $t('costDashboard.totalCost') }} ({{ displayCurrency }})</div>
         </div>
       </el-card>
       <el-card class="stat-card" shadow="hover">
         <div class="stat-content">
           <div class="stat-value">{{ formatNumber(summary.total_tokens) }}</div>
-          <div class="stat-label">总 Token</div>
+          <div class="stat-label">{{ $t('costDashboard.totalToken') }}</div>
         </div>
       </el-card>
       <el-card v-if="cacheSavedTracked" class="stat-card" shadow="hover">
         <div class="stat-content">
           <div class="stat-value">{{ currencySymbol }}{{ formatCost(summary.cache_saved_usd) }}</div>
-          <div class="stat-label">缓存节省 ({{ displayCurrency }}，估算)</div>
+          <div class="stat-label">{{ $t('costDashboard.cacheSavings') }} ({{ displayCurrency }}，{{ $t('costDashboard.estimated') }})</div>
         </div>
       </el-card>
     </div>
 
     <el-card class="chart-card">
       <template #header>
-        <span>成本分布</span>
+        <span>{{ $t('costDashboard.costDistribution') }}</span>
       </template>
       <v-chart :option="chartOption" style="height: 380px" autoresize />
     </el-card>
@@ -63,6 +63,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
 import * as echarts from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
@@ -80,6 +81,8 @@ import {
 } from '@/utils/billing-currency'
 
 echarts.use([CanvasRenderer, BarChart, LineChart, GridComponent, TooltipComponent, LegendComponent])
+
+const { t } = useI18n()
 
 const dateRange = ref<[string, string] | null>(null)
 const groupBy = ref<'model' | 'backend' | 'tenant' | 'date' | 'dept'>('model')
@@ -99,7 +102,7 @@ const summary = ref<costApi.CostSummary>({
 const usdToCny = computed(() => summary.value.usd_to_cny || 7.2)
 const cacheSavedTracked = computed(() => (summary.value.cache_saved_usd || 0) > 0)
 const currencySymbol = computed(() => symbolOf(displayCurrency.value))
-const costLegend = computed(() => `成本 (${displayCurrency.value})`)
+const costLegend = computed(() => `${t('costDashboard.cost')} (${displayCurrency.value})`)
 
 const chartOption = computed(() => {
   const groups = summary.value.groups || []
@@ -156,7 +159,7 @@ async function loadSummary() {
     }
     summary.value = await costApi.getCostSummary(params)
   } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : '加载成本数据失败'
+    const msg = e instanceof Error ? e.message : t('costDashboard.loadFailed')
     ElMessage.error(msg)
   }
 }

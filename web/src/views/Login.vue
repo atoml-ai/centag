@@ -19,7 +19,7 @@
         <el-form-item v-if="!isSetup && !hideUsername" prop="username">
           <el-input
             v-model="form.username"
-            placeholder="用户名"
+            :placeholder="$t('login.username')"
             size="large"
             :prefix-icon="User"
             autocomplete="username"
@@ -44,7 +44,7 @@
           <el-input
             v-model="form.confirm"
             type="password"
-            placeholder="确认密码"
+            :placeholder="$t('login.confirmPassword')"
             size="large"
             :prefix-icon="Lock"
             show-password
@@ -61,7 +61,7 @@
             :loading="authStore.loading || bootLoading"
             @click="handleSubmit"
           >
-            {{ isSetup ? '设 置 并 进 入' : '登 录' }}
+            {{ isSetup ? t('login.setupButton') : t('login.loginButton') }}
           </el-button>
         </el-form-item>
       </el-form>
@@ -72,6 +72,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
 import { User, Lock } from '@element-plus/icons-vue'
 import CentagMark from '@/components/icons/CentagMark.vue'
@@ -80,6 +81,7 @@ import { useAuthStore } from '@/stores/auth'
 import { getBootstrapStatus } from '@/api/auth'
 import { isMinimalEdition } from '@/utils/edition'
 
+const { t } = useI18n()
 const router = useRouter()
 const route = useRoute()
 const authStore = useAuthStore()
@@ -92,31 +94,31 @@ const form = reactive({ username: 'admin', password: '', confirm: '' })
 const hideUsername = computed(() => isMinimalEdition() || isSetup.value)
 const passwordPlaceholder = computed(() => {
   if (isSetup.value) {
-    return isMinimalEdition() ? '设置登录令牌（至少 6 位）' : '设置管理密码（至少 6 位）'
+    return isMinimalEdition() ? t('login.setupPasswordPlaceholder') : t('login.adminPasswordPlaceholder')
   }
-  return isMinimalEdition() ? '登录令牌' : '密码'
+  return isMinimalEdition() ? t('login.passwordPlaceholder') : t('login.password')
 })
 const subtitle = computed(() => {
-  if (isSetup.value) return isMinimalEdition() ? '首次使用：请设置登录令牌' : '首次使用：请设置管理密码'
+  if (isSetup.value) return isMinimalEdition() ? t('login.firstTimeTitle') : t('login.firstTimeAdminTitle')
   if (isMinimalEdition()) {
-    return '忘记令牌可删除 data/admin.password.hash 后重启重设'
+    return t('login.resetHint')
   }
-  return '大模型代理服务管理平台'
+  return t('login.subtitle')
 })
 
 const rules = computed<FormRules>(() => {
   const base: FormRules = {
-    password: [{ required: true, message: '请输入密码', trigger: 'blur' }]
+    password: [{ required: true, message: t('login.pleaseEnterPassword'), trigger: 'blur' }]
   }
   if (!hideUsername.value) {
-    base.username = [{ required: true, message: '请输入用户名', trigger: 'blur' }]
+    base.username = [{ required: true, message: t('login.pleaseEnterUsername'), trigger: 'blur' }]
   }
   if (isSetup.value) {
     base.confirm = [
-      { required: true, message: '请确认密码', trigger: 'blur' },
+      { required: true, message: t('login.pleaseConfirmPassword'), trigger: 'blur' },
       {
         validator: (_r, v, cb) => {
-          if (v !== form.password) cb(new Error('两次密码不一致'))
+          if (v !== form.password) cb(new Error(t('login.passwordMismatch')))
           else cb()
         },
         trigger: 'blur'
@@ -145,7 +147,7 @@ async function handleSubmit() {
     await formRef.value.validate()
     if (isSetup.value) {
       if (form.password.length < 6) {
-        ElMessage.warning('密码至少 6 位')
+        ElMessage.warning(t('login.passwordMinLength'))
         return
       }
       await authStore.setup(form.password)
@@ -156,7 +158,7 @@ async function handleSubmit() {
     router.push(redirect)
   } catch (err: any) {
     if (err?.message) {
-      ElMessage.error(err.message || '操作失败')
+      ElMessage.error(err.message || t('login.operationFailed'))
     }
   }
 }

@@ -5,7 +5,7 @@
         <el-icon :size="20"><Collection /></el-icon>
       </div>
       <div class="stat-content">
-        <div class="stat-label">缓存</div>
+        <div class="stat-label">{{ t('cacheStats.cache') }}</div>
         <div class="stat-value">{{ formatNumber(cacheStats.total) }}</div>
       </div>
     </div>
@@ -14,7 +14,7 @@
         <el-icon :size="20"><CircleCheck /></el-icon>
       </div>
       <div class="stat-content">
-        <div class="stat-label">命中</div>
+        <div class="stat-label">{{ t('cacheStats.hits') }}</div>
         <div class="stat-value">{{ formatNumber(cacheStats.hits) }}</div>
       </div>
     </div>
@@ -23,7 +23,7 @@
         <el-icon :size="20"><CircleClose /></el-icon>
       </div>
       <div class="stat-content">
-        <div class="stat-label">未中</div>
+        <div class="stat-label">{{ t('cacheStats.misses') }}</div>
         <div class="stat-value">{{ formatNumber(cacheStats.misses) }}</div>
       </div>
     </div>
@@ -32,7 +32,7 @@
         <el-icon :size="20"><Coin /></el-icon>
       </div>
       <div class="stat-content">
-        <div class="stat-label">命中率</div>
+        <div class="stat-label">{{ t('cacheStats.hitRate') }}</div>
         <div class="stat-value" :style="{ color: hitRateColor }">{{ hitRate }}%</div>
       </div>
     </div>
@@ -41,9 +41,12 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { Collection, CircleCheck, CircleClose, Coin } from '@element-plus/icons-vue'
 import { getCacheStats, getCacheList } from '@/api'
 import { useAuthStore } from '@/stores/auth'
+
+const { t } = useI18n()
 
 const cacheStats = ref({
   total: 0,

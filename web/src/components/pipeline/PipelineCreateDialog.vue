@@ -1,14 +1,14 @@
 <template>
   <el-dialog
     :model-value="modelValue"
-    title="创建流水线"
+    :title="t('pipelineCreateDialog.title')"
     width="560px"
     :close-on-click-modal="false"
     @update:model-value="emit('update:modelValue', $event)"
     @closed="resetForm"
   >
     <el-alert type="info" :closable="false" show-icon style="margin-bottom: 16px">
-      填写流水线基础信息后即可进入可视化画布配置节点。ID 创建后不可修改。
+      {{ t('pipelineCreateDialog.alert') }}
     </el-alert>
 
     <el-form
@@ -18,38 +18,38 @@
       label-width="90px"
       @submit.prevent
     >
-      <el-form-item label="ID" prop="id">
+      <el-form-item :label="t('pipelineCreateDialog.idLabel')" prop="id">
         <el-input
           v-model="form.id"
-          placeholder="例如 my-pipeline"
+          :placeholder="t('pipelineCreateDialog.idPlaceholder')"
           autocomplete="off"
         />
-        <div class="form-tip">仅支持字母、数字、下划线和连字符</div>
+        <div class="form-tip">{{ t('pipelineCreateDialog.idTip') }}</div>
       </el-form-item>
-      <el-form-item label="名称" prop="name">
-        <el-input v-model="form.name" placeholder="请输入流水线名称" />
+      <el-form-item :label="t('pipelineCreateDialog.nameLabel')" prop="name">
+        <el-input v-model="form.name" :placeholder="t('pipelineCreateDialog.namePlaceholder')" />
       </el-form-item>
-      <el-form-item label="描述">
+      <el-form-item :label="t('pipelineCreateDialog.descLabel')">
         <el-input
           v-model="form.description"
           type="textarea"
           :rows="3"
-          placeholder="简要描述该流水线的用途（可选）"
+          :placeholder="t('pipelineCreateDialog.descPlaceholder')"
         />
       </el-form-item>
-      <el-form-item label="版本" prop="version">
-        <el-input v-model="form.version" placeholder="1.0" />
+      <el-form-item :label="t('pipelineCreateDialog.versionLabel')" prop="version">
+        <el-input v-model="form.version" :placeholder="t('pipelineCreateDialog.versionPlaceholder')" />
       </el-form-item>
-      <el-form-item label="快捷码" prop="shortcut_code">
-        <el-input v-model="form.shortcut_code" placeholder="#myflow（可选）" />
-        <div class="form-tip">用于聊天中快速切换，需以 # 开头</div>
+      <el-form-item :label="t('pipelineCreateDialog.shortcutLabel')" prop="shortcut_code">
+        <el-input v-model="form.shortcut_code" :placeholder="t('pipelineCreateDialog.shortcutPlaceholder')" />
+        <div class="form-tip">{{ t('pipelineCreateDialog.shortcutTip') }}</div>
       </el-form-item>
     </el-form>
 
     <template #footer>
-      <el-button @click="emit('update:modelValue', false)">取消</el-button>
+      <el-button @click="emit('update:modelValue', false)">{{ t('pipelineCreateDialog.cancel') }}</el-button>
       <el-button type="primary" :loading="submitting" @click="handleConfirm">
-        下一步：配置节点
+        {{ t('pipelineCreateDialog.next') }}
       </el-button>
     </template>
   </el-dialog>
@@ -57,7 +57,10 @@
 
 <script setup lang="ts">
 import { ref, reactive, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import type { FormInstance, FormRules } from 'element-plus'
+
+const { t } = useI18n()
 
 export interface PipelineCreateInfo {
   id: string
@@ -94,16 +97,16 @@ const idPattern = /^[a-zA-Z0-9_-]+$/
 
 const rules: FormRules = {
   id: [
-    { required: true, message: '请输入流水线 ID', trigger: 'blur' },
+    { required: true, message: t('pipelineCreateDialog.idRequired'), trigger: 'blur' },
     {
       validator: (_rule, value, callback) => {
         const id = (value || '').trim()
         if (!idPattern.test(id)) {
-          callback(new Error('ID 仅支持字母、数字、下划线和连字符'))
+          callback(new Error(t('pipelineCreateDialog.idPatternError')))
           return
         }
         if (props.existingIds?.includes(id)) {
-          callback(new Error('该 ID 已存在，请更换'))
+          callback(new Error(t('pipelineCreateDialog.idExistsError')))
           return
         }
         callback()
@@ -111,14 +114,14 @@ const rules: FormRules = {
       trigger: 'blur'
     }
   ],
-  name: [{ required: true, message: '请输入流水线名称', trigger: 'blur' }],
-  version: [{ required: true, message: '请输入版本号', trigger: 'blur' }],
+  name: [{ required: true, message: t('pipelineCreateDialog.nameRequired'), trigger: 'blur' }],
+  version: [{ required: true, message: t('pipelineCreateDialog.versionRequired'), trigger: 'blur' }],
   shortcut_code: [
     {
       validator: (_rule, value, callback) => {
         const code = (value || '').trim()
         if (code && !code.startsWith('#')) {
-          callback(new Error('快捷码必须以 # 开头'))
+          callback(new Error(t('pipelineCreateDialog.shortcutPatternError')))
           return
         }
         callback()

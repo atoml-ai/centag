@@ -1,21 +1,19 @@
 <template>
   <div class="profile-page">
     <div class="page-header" style="margin-bottom:var(--spacing-lg)">
-      <h1 class="page-title">个人中心</h1>
-      <p class="page-description">管理您的账号信息与 API 访问密钥</p>
+      <h1 class="page-title">{{ $t('profile.title') }}</h1>
+      <p class="page-description">{{ $t('profile.subtitle') }}</p>
     </div>
 
     <el-row :gutter="24">
-      <!-- 左侧：基本信息 + 修改密码 -->
       <el-col :xs="24" :lg="9">
-        <!-- 基本信息 -->
         <el-card shadow="never" class="p-card">
           <template #header>
             <div class="p-hd">
               <span class="p-icon p-icon--info"><el-icon><User /></el-icon></span>
               <div>
-                <div class="p-hd-title">基本信息</div>
-                <div class="p-hd-sub">个人资料与联系方式</div>
+                <div class="p-hd-title">{{ $t('profile.basicInfo') }}</div>
+                <div class="p-hd-sub">{{ $t('profile.basicInfoDesc') }}</div>
               </div>
             </div>
           </template>
@@ -27,7 +25,7 @@
               <div class="p-hero-meta">
                 <span class="p-hero-uname">@{{ authStore.user?.username }}</span>
                 <el-tag :type="authStore.isAdmin ? 'danger' : 'primary'" size="small" effect="light">
-                  {{ authStore.isAdmin ? '管理员' : '普通用户' }}
+                  {{ authStore.isAdmin ? $t('profile.admin') : $t('profile.regularUser') }}
                 </el-tag>
               </div>
             </div>
@@ -36,119 +34,116 @@
           <el-divider style="margin:20px 0" />
 
           <el-form :model="profileForm" label-width="90px">
-            <el-form-item label="用户名">
+            <el-form-item :label="$t('profile.username')">
               <el-input v-model="profileForm.username" disabled>
                 <template #suffix><el-icon style="color:var(--el-text-color-secondary)"><Lock /></el-icon></template>
               </el-input>
             </el-form-item>
-            <el-form-item label="显示名称">
-              <el-input v-model="profileForm.display_name" placeholder="显示在界面上的名称" />
+            <el-form-item :label="$t('profile.displayName')">
+              <el-input v-model="profileForm.display_name" :placeholder="$t('profile.displayNamePlaceholder')" />
             </el-form-item>
-            <el-form-item label="邮箱">
-              <el-input v-model="profileForm.email" placeholder="联系邮箱（可选）" />
+            <el-form-item :label="$t('profile.email')">
+              <el-input v-model="profileForm.email" :placeholder="$t('profile.emailPlaceholder')" />
             </el-form-item>
             <el-form-item>
-              <el-button type="primary" :loading="savingProfile" @click="saveProfile">保存信息</el-button>
+              <el-button type="primary" :loading="savingProfile" @click="saveProfile">{{ $t('profile.saveInfo') }}</el-button>
             </el-form-item>
           </el-form>
         </el-card>
 
-        <!-- 修改密码 -->
         <el-card shadow="never" class="p-card" style="margin-top:20px">
           <template #header>
             <div class="p-hd">
               <span class="p-icon p-icon--pwd"><el-icon><Lock /></el-icon></span>
               <div>
-                <div class="p-hd-title">修改密码</div>
-                <div class="p-hd-sub">定期更换密码可提升账号安全性</div>
+                <div class="p-hd-title">{{ $t('profile.changePassword') }}</div>
+                <div class="p-hd-sub">{{ $t('profile.changePasswordDesc') }}</div>
               </div>
             </div>
           </template>
 
           <el-form :model="pwdForm" :rules="pwdRules" ref="pwdFormRef" label-width="90px">
-            <el-form-item label="当前密码" prop="old_password">
-              <el-input v-model="pwdForm.old_password" type="password" show-password placeholder="请输入当前密码" />
+            <el-form-item :label="$t('profile.currentPassword')" prop="old_password">
+              <el-input v-model="pwdForm.old_password" type="password" show-password :placeholder="$t('profile.currentPasswordPlaceholder')" />
             </el-form-item>
-            <el-form-item label="新密码" prop="new_password">
-              <el-input v-model="pwdForm.new_password" type="password" show-password placeholder="至少 6 位" />
+            <el-form-item :label="$t('profile.newPassword')" prop="new_password">
+              <el-input v-model="pwdForm.new_password" type="password" show-password :placeholder="$t('profile.newPasswordPlaceholder')" />
             </el-form-item>
-            <el-form-item label="确认密码" prop="confirm_password">
-              <el-input v-model="pwdForm.confirm_password" type="password" show-password placeholder="再次输入新密码" />
+            <el-form-item :label="$t('profile.confirmPassword')" prop="confirm_password">
+              <el-input v-model="pwdForm.confirm_password" type="password" show-password :placeholder="$t('profile.confirmPasswordPlaceholder')" />
             </el-form-item>
             <el-form-item>
-              <el-button type="warning" :loading="changingPwd" @click="changePassword">修改密码</el-button>
+              <el-button type="warning" :loading="changingPwd" @click="changePassword">{{ $t('profile.updatePassword') }}</el-button>
             </el-form-item>
           </el-form>
         </el-card>
 
-        <!-- 租户信息 -->
         <el-card shadow="never" class="p-card" style="margin-top:20px">
           <template #header>
             <div class="p-hd">
               <span class="p-icon p-icon--tenant"><el-icon><OfficeBuilding /></el-icon></span>
               <div>
-                <div class="p-hd-title">资源统计</div>
-                <div class="p-hd-sub">用量统计与配额信息</div>
+                <div class="p-hd-title">{{ $t('profile.resourceStats') }}</div>
+                <div class="p-hd-sub">{{ $t('profile.resourceStatsDesc') }}</div>
               </div>
               <el-tag v-if="tenant" :type="tenant.status === 'active' ? 'success' : 'warning'" size="small" style="margin-left:auto">
-                {{ tenant.status === 'active' ? '活跃' : tenant.status === 'suspended' ? '暂停' : tenant.status }}
+                {{ tenant.status === 'active' ? $t('profile.active') : tenant.status === 'suspended' ? $t('profile.paused') : tenant.status }}
               </el-tag>
             </div>
           </template>
 
           <el-skeleton v-if="tenantLoading" :rows="4" animated />
-          
+
           <template v-else-if="tenant">
             <el-descriptions :column="1" size="small" border>
-              <el-descriptions-item label="租户 ID">
+              <el-descriptions-item :label="$t('profile.tenantId')">
                 <code style="font-size:12px">{{ tenant.id }}</code>
               </el-descriptions-item>
-              <el-descriptions-item label="租户名称">{{ tenant.name }}</el-descriptions-item>
-              <el-descriptions-item label="今日请求">
+              <el-descriptions-item :label="$t('profile.tenantName')">{{ tenant.name }}</el-descriptions-item>
+              <el-descriptions-item :label="$t('profile.todayRequests')">
                 <span class="stat-value">{{ tenant.used_today_requests || 0 }}</span>
                 <span v-if="tenant.daily_request_limit" class="stat-limit"> / {{ tenant.daily_request_limit }}</span>
               </el-descriptions-item>
-              <el-descriptions-item label="今日 Token">
+              <el-descriptions-item :label="$t('profile.todayTokens')">
                 <span class="stat-value">{{ tenant.used_today_tokens || 0 }}</span>
                 <span v-if="tenant.daily_token_limit" class="stat-limit"> / {{ tenant.daily_token_limit }}</span>
               </el-descriptions-item>
             </el-descriptions>
           </template>
 
-          <el-empty v-else description="暂无租户信息" :image-size="60" />
+          <el-empty v-else :description="$t('profile.noTenantInfo')" :image-size="60" />
         </el-card>
       </el-col>
 
-      <!-- 右侧：API Key 管理 -->
       <el-col :xs="24" :lg="15">
         <el-card shadow="never" class="p-card">
           <template #header>
             <div class="p-hd">
               <span class="p-icon p-icon--key"><el-icon><Key /></el-icon></span>
               <div>
-                <div class="p-hd-title">API Key 管理</div>
-                <div class="p-hd-sub">生成密钥用于访问代理接口</div>
+                <div class="p-hd-title">{{ $t('profile.apiKeyManagement') }}</div>
+                <div class="p-hd-sub">{{ $t('profile.apiKeyManagementDesc') }}</div>
               </div>
               <el-button type="primary" size="small" @click="showCreateDialog = true" style="margin-left:auto">
-                <el-icon><Plus /></el-icon>新建密钥
+                <el-icon><Plus /></el-icon>{{ $t('profile.createKey') }}
               </el-button>
             </div>
           </template>
 
           <el-alert type="info" :closable="false" show-icon style="margin-bottom:16px;border-radius:6px">
-            <template #title>点击密钥旁的复制按钮或操作菜单中的「查看完整密钥」，可在对话框中复制完整 API Key。桌面版与网页版行为一致。</template>
+            <template #title>{{ $t('profile.apiKeyHint') }}</template>
           </el-alert>
 
-          <el-table :data="apiKeys" v-loading="loadingKeys" empty-text="暂无 API Key，点击「新建密钥」创建" stripe size="large">
-            <el-table-column label="名称" prop="name" min-width="110">
+          <el-table :data="apiKeys" v-loading="loadingKeys" :empty-text="$t('profile.noApiKeys')" stripe size="large">
+            <el-table-column :label="$t('profile.name')" prop="name" min-width="110">
               <template #default="{ row }"><span style="font-weight:500">{{ row.name }}</span></template>
             </el-table-column>
-            <el-table-column label="密钥" min-width="220">
+            <el-table-column :label="$t('profile.key')" min-width="220">
               <template #default="{ row }">
                 <div class="key-cell">
                   <code class="masked-key">{{ row.masked_key }}</code>
                   <el-tooltip
-                    :content="row.reveal_available ? '查看并复制完整密钥' : '完整密钥仅创建时可见，请新建密钥'"
+                    :content="row.reveal_available ? $t('profile.viewFullKey') : $t('profile.fullKeyHint')"
                     placement="top"
                   >
                     <el-button
@@ -162,26 +157,26 @@
                 </div>
               </template>
             </el-table-column>
-            <el-table-column label="状态" width="80" align="center">
+            <el-table-column :label="$t('profile.status')" width="80" align="center">
               <template #default="{ row }">
                 <el-tag :type="row.enabled ? 'success' : 'info'" size="small" effect="plain">
-                  {{ row.enabled ? '启用' : '禁用' }}
+                  {{ row.enabled ? $t('profile.enabled') : $t('profile.disabled') }}
                 </el-tag>
               </template>
             </el-table-column>
-            <el-table-column label="过期时间" min-width="130">
+            <el-table-column :label="$t('profile.expiresAt')" min-width="130">
               <template #default="{ row }">
                 <span v-if="row.expires_at">{{ row.expires_at }}</span>
-                <span v-else class="text-muted">永不过期</span>
+                <span v-else class="text-muted">{{ $t('profile.neverExpires') }}</span>
               </template>
             </el-table-column>
-            <el-table-column label="最近使用" min-width="130">
+            <el-table-column :label="$t('profile.lastUsed')" min-width="130">
               <template #default="{ row }">
                 <span v-if="row.last_used_at">{{ row.last_used_at }}</span>
-                <span v-else class="text-muted">从未使用</span>
+                <span v-else class="text-muted">{{ $t('profile.neverUsed') }}</span>
               </template>
             </el-table-column>
-            <el-table-column label="操作" width="130" align="center" fixed="right">
+            <el-table-column :label="$t('profile.actions')" width="130" align="center" fixed="right">
               <template #default="{ row }">
                 <el-button
                   v-if="row.reveal_available"
@@ -190,7 +185,7 @@
                   size="small"
                   @click="handleCopyAPIKey(row)"
                 >
-                  复制
+                  {{ $t('profile.copyKey') }}
                 </el-button>
                 <el-dropdown trigger="click">
                   <el-button type="primary" link>
@@ -199,14 +194,14 @@
                   <template #dropdown>
                     <el-dropdown-menu>
                       <el-dropdown-item v-if="row.reveal_available" @click="viewFullKey(row)">
-                        <el-icon><View /></el-icon>查看完整密钥
+                        <el-icon><View /></el-icon>{{ $t('profile.viewFullKeyAction') }}
                       </el-dropdown-item>
                       <el-dropdown-item @click="toggleKey(row)">
                         <el-icon><Edit /></el-icon>
-                        {{ row.enabled ? '禁用密钥' : '启用密钥' }}
+                        {{ row.enabled ? $t('profile.disableKey') : $t('profile.enableKey') }}
                       </el-dropdown-item>
                       <el-dropdown-item divided @click="deleteKey(row)">
-                        <el-icon><Delete /></el-icon>删除密钥
+                        <el-icon><Delete /></el-icon>{{ $t('profile.deleteKey') }}
                       </el-dropdown-item>
                     </el-dropdown-menu>
                   </template>
@@ -218,53 +213,51 @@
       </el-col>
     </el-row>
 
-    <!-- 创建 API Key 对话框 -->
-    <el-dialog v-model="showCreateDialog" title="新建 API Key" width="440px" :close-on-click-modal="false" destroy-on-close>
+    <el-dialog v-model="showCreateDialog" :title="$t('profile.createApiKey')" width="440px" :close-on-click-modal="false" destroy-on-close>
       <el-form :model="createKeyForm" :rules="createKeyRules" ref="createKeyFormRef" label-width="80px">
-        <el-form-item label="名称" prop="name">
-          <el-input v-model="createKeyForm.name" placeholder="为这个密钥起个名字，方便识别" />
+        <el-form-item :label="$t('profile.name')" prop="name">
+          <el-input v-model="createKeyForm.name" :placeholder="$t('profile.keyNamePlaceholder')" />
         </el-form-item>
-        <el-form-item label="有效期">
+        <el-form-item :label="$t('profile.validity')">
           <el-select v-model="createKeyForm.expires_in" style="width:100%">
-            <el-option label="永不过期" :value="0" />
-            <el-option label="7 天" :value="7" />
-            <el-option label="30 天" :value="30" />
-            <el-option label="90 天" :value="90" />
-            <el-option label="180 天" :value="180" />
-            <el-option label="1 年" :value="365" />
+            <el-option :label="$t('profile.neverExpires')" :value="0" />
+            <el-option :label="$t('profile.days7')" :value="7" />
+            <el-option :label="$t('profile.days30')" :value="30" />
+            <el-option :label="$t('profile.days90')" :value="90" />
+            <el-option :label="$t('profile.days180')" :value="180" />
+            <el-option :label="$t('profile.year1')" :value="365" />
           </el-select>
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="showCreateDialog = false">取消</el-button>
-        <el-button type="primary" :loading="creatingKey" @click="createAPIKey">创建密钥</el-button>
+        <el-button @click="showCreateDialog = false">{{ $t('profile.cancel') }}</el-button>
+        <el-button type="primary" :loading="creatingKey" @click="createAPIKey">{{ $t('profile.createKeyButton') }}</el-button>
       </template>
     </el-dialog>
 
-    <!-- 新 Key 展示（仅一次） -->
-    <el-dialog v-model="showKeyDialog" title="密钥创建成功" width="540px" :close-on-click-modal="false" :close-on-press-escape="false" :show-close="false">
+    <el-dialog v-model="showKeyDialog" :title="$t('profile.keyCreated')" width="540px" :close-on-click-modal="false" :close-on-press-escape="false" :show-close="false">
       <el-alert type="warning" :closable="false" show-icon style="margin-bottom:16px;border-radius:6px">
-        <template #title>请保存此密钥。默认可在列表中再次查看/复制完整内容；仅当服务端开启「仅创建时展示」（LLM_PROXY_API_KEY_REVEAL_ONCE）时例外。</template>
+        <template #title>{{ $t('profile.keyCreatedHint') }}</template>
       </el-alert>
       <div class="new-key-box">
         <code class="new-key">{{ newFullKey }}</code>
-        <el-button type="primary" plain size="small" @click="copyKey"><el-icon><CopyDocument /></el-icon>复制</el-button>
+        <el-button type="primary" plain size="small" @click="copyKey"><el-icon><CopyDocument /></el-icon>{{ $t('profile.copyKey') }}</el-button>
       </div>
       <template #footer>
-        <el-button type="primary" @click="showKeyDialog = false">我已保存，关闭</el-button>
+        <el-button type="primary" @click="showKeyDialog = false">{{ $t('profile.savedAndClose') }}</el-button>
       </template>
     </el-dialog>
 
-    <el-dialog v-model="showRevealDialog" title="完整 API Key" width="540px" :close-on-click-modal="false" destroy-on-close>
+    <el-dialog v-model="showRevealDialog" :title="$t('profile.fullApiKey')" width="540px" :close-on-click-modal="false" destroy-on-close>
       <el-skeleton v-if="revealLoading" :rows="2" animated />
       <div v-else class="new-key-box">
         <code class="new-key">{{ revealedFullKey }}</code>
         <el-button type="primary" plain size="small" @click="copyRevealedKey">
-          <el-icon><CopyDocument /></el-icon>复制
+          <el-icon><CopyDocument /></el-icon>{{ $t('profile.copyKey') }}
         </el-button>
       </div>
       <template #footer>
-        <el-button type="primary" @click="showRevealDialog = false">关闭</el-button>
+        <el-button type="primary" @click="showRevealDialog = false">{{ $t('profile.cancel') }}</el-button>
       </template>
     </el-dialog>
   </div>
@@ -272,6 +265,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { User, Lock, Key, Plus, CopyDocument, MoreFilled, Edit, Delete, View } from '@element-plus/icons-vue'
 import type { FormInstance, FormRules } from 'element-plus'
@@ -288,6 +282,8 @@ import {
   type TenantQuota
 } from '@/api/tenant'
 
+const { t } = useI18n()
+
 const authStore = useAuthStore()
 
 const avatarText = computed(() => authStore.displayName.charAt(0).toUpperCase() || 'U')
@@ -298,11 +294,9 @@ const avatarStyle = computed(() => ({
   color: '#fff', fontWeight: '700', fontSize: '24px'
 }))
 
-// ── Profile ────────────────────────────────────────────────────────────────────
 const profileForm = reactive({ username: '', display_name: '', email: '' })
 const savingProfile = ref(false)
 
-// ── Tenant Info ────────────────────────────────────────────────────────────────
 const tenantLoading = ref(false)
 const tenant = ref<(Tenant & TenantQuota) | null>(null)
 const quota = ref<TenantQuota | null>(null)
@@ -336,8 +330,8 @@ async function writeClipboard(text: string): Promise<boolean> {
 }
 
 const copyText = async (text: string) => {
-  if (await writeClipboard(text)) ElMessage.success('已复制')
-  else ElMessage.warning('复制失败，请手动复制对话框中的密钥')
+  if (await writeClipboard(text)) ElMessage.success(t('profile.copied'))
+  else ElMessage.warning(t('profile.copyFailed'))
 }
 
 const loadTenantInfo = async () => {
@@ -366,7 +360,7 @@ onMounted(async () => {
     profileForm.username = u.username
     profileForm.display_name = u.display_name
     profileForm.email = u.email
-  } catch (e: any) { ElMessage.error(e.message || '获取用户信息失败') }
+  } catch (e: any) { ElMessage.error(e.message || t('profile.loadUserInfoFailed')) }
   loadAPIKeys()
   loadTenantInfo()
 })
@@ -376,21 +370,20 @@ async function saveProfile() {
   try {
     const updated = await updateProfile({ display_name: profileForm.display_name, email: profileForm.email })
     authStore.updateUser(updated)
-    ElMessage.success('个人信息已保存')
-  } catch (e: any) { ElMessage.error(e.message || '保存失败') }
+    ElMessage.success(t('profile.infoSaved'))
+  } catch (e: any) { ElMessage.error(e.message || t('profile.saveFailed')) }
   finally { savingProfile.value = false }
 }
 
-// ── Password ──────────────────────────────────────────────────────────────────
 const pwdFormRef = ref<FormInstance>()
 const pwdForm = reactive({ old_password: '', new_password: '', confirm_password: '' })
 const changingPwd = ref(false)
 const pwdRules: FormRules = {
-  old_password: [{ required: true, message: '请输入当前密码', trigger: 'blur' }],
-  new_password: [{ required: true, message: '请输入新密码', trigger: 'blur' }, { min: 6, message: '密码至少 6 位', trigger: 'blur' }],
+  old_password: [{ required: true, message: t('profile.enterCurrentPassword'), trigger: 'blur' }],
+  new_password: [{ required: true, message: t('profile.enterNewPassword'), trigger: 'blur' }, { min: 6, message: t('profile.passwordMinLength'), trigger: 'blur' }],
   confirm_password: [
-    { required: true, message: '请再次输入新密码', trigger: 'blur' },
-    { validator: (_: any, v: string, cb: Function) => { v !== pwdForm.new_password ? cb(new Error('两次密码不一致')) : cb() }, trigger: 'blur' }
+    { required: true, message: t('profile.confirmNewPassword'), trigger: 'blur' },
+    { validator: (_: any, v: string, cb: Function) => { v !== pwdForm.new_password ? cb(new Error(t('profile.passwordMismatch'))) : cb() }, trigger: 'blur' }
   ]
 }
 async function changePassword() {
@@ -399,27 +392,26 @@ async function changePassword() {
     await pwdFormRef.value.validate()
     changingPwd.value = true
     await apiChangePassword({ old_password: pwdForm.old_password, new_password: pwdForm.new_password })
-    ElMessage.success('密码修改成功，即将重新登录…')
+    ElMessage.success(t('profile.passwordChanged'))
     pwdForm.old_password = ''; pwdForm.new_password = ''; pwdForm.confirm_password = ''
     setTimeout(() => authStore.logout(), 1800)
   } catch (e: any) { if (e?.message) ElMessage.error(e.message) }
   finally { changingPwd.value = false }
 }
 
-// ── API Keys ──────────────────────────────────────────────────────────────────
 const apiKeys = ref<APIKey[]>([])
 const loadingKeys = ref(false)
 async function loadAPIKeys() {
   loadingKeys.value = true
   try { apiKeys.value = await listAPIKeys() }
-  catch (e: any) { ElMessage.error(e.message || '获取失败') }
+  catch (e: any) { ElMessage.error(e.message || t('profile.operationFailed')) }
   finally { loadingKeys.value = false }
 }
 
 const showCreateDialog = ref(false)
 const createKeyFormRef = ref<FormInstance>()
 const createKeyForm = reactive({ name: '', expires_in: 0 })
-const createKeyRules: FormRules = { name: [{ required: true, message: '请输入密钥名称', trigger: 'blur' }] }
+const createKeyRules: FormRules = { name: [{ required: true, message: t('profile.enterKeyName'), trigger: 'blur' }] }
 const creatingKey = ref(false)
 const showKeyDialog = ref(false)
 const newFullKey = ref('')
@@ -444,16 +436,16 @@ async function createAPIKey() {
 async function toggleKey(key: APIKey) {
   try {
     await updateAPIKey(key.id, { enabled: !key.enabled })
-    ElMessage.success(`密钥已${key.enabled ? '禁用' : '启用'}`)
+    ElMessage.success(t('profile.keyDisabledEnabled'))
     loadAPIKeys()
-  } catch (e: any) { ElMessage.error(e.message || '操作失败') }
+  } catch (e: any) { ElMessage.error(e.message || t('profile.operationFailed')) }
 }
 
 async function deleteKey(key: APIKey) {
   try {
-    await ElMessageBox.confirm(`确定删除密钥「${key.name}」？`, '删除确认', { confirmButtonText: '删除', cancelButtonText: '取消', type: 'warning' })
+    await ElMessageBox.confirm(t('profile.confirmDelete', { name: key.name }), t('profile.deleteConfirm'), { confirmButtonText: t('profile.deleteKey'), cancelButtonText: t('profile.cancel'), type: 'warning' })
     await apiDeleteAPIKey(key.id)
-    ElMessage.success('密钥已删除'); loadAPIKeys()
+    ElMessage.success(t('profile.keyDeleted')); loadAPIKeys()
   } catch (e: any) { if (e !== 'cancel' && e?.message) ElMessage.error(e.message) }
 }
 
@@ -471,11 +463,11 @@ async function revealFullKey(row: APIKey, autoCopy: boolean) {
       revealedFullKey.value = d.full_key
       if (autoCopy) await copyText(d.full_key)
     } else {
-      ElMessage.warning('无法展示完整密钥（可能创建于「仅创建时展示」模式，或存储密钥已变更；请新建密钥）')
+      ElMessage.warning(t('profile.cannotViewFullKey'))
       showRevealDialog.value = false
     }
   } catch (e: any) {
-    ElMessage.error(e.message || '获取失败')
+    ElMessage.error(e.message || t('profile.operationFailed'))
     showRevealDialog.value = false
   } finally {
     revealLoading.value = false
@@ -484,7 +476,7 @@ async function revealFullKey(row: APIKey, autoCopy: boolean) {
 
 async function handleCopyAPIKey(row: APIKey) {
   if (!row.reveal_available) {
-    ElMessage.warning('此密钥无法再次查看完整内容，请新建密钥并在创建对话框中立即保存')
+    ElMessage.warning(t('profile.keyViewWarning'))
     return
   }
   await revealFullKey(row, true)
@@ -502,7 +494,6 @@ async function copyRevealedKey() {
 <style scoped>
 .p-card { width: 100%; }
 
-/* Section header in cards */
 .p-hd {
   display: flex;
   align-items: center;
@@ -528,7 +519,6 @@ async function copyRevealedKey() {
 .p-hd-title { font-size: .9375rem; font-weight: 600; color: var(--el-text-color-primary); }
 .p-hd-sub   { font-size: .8125rem; color: var(--el-text-color-secondary); margin-top: 2px; }
 
-/* User hero */
 .p-hero {
   display: flex;
   align-items: center;
@@ -538,7 +528,6 @@ async function copyRevealedKey() {
 .p-hero-meta { display: flex; align-items: center; gap: 8px; }
 .p-hero-uname { font-size: .8125rem; color: var(--el-text-color-secondary); }
 
-/* API Key table */
 .key-cell {
   display: flex;
   align-items: center;
@@ -561,7 +550,6 @@ async function copyRevealedKey() {
   opacity: 1;
 }
 
-/* New key */
 .new-key-box {
   display: flex;
   align-items: flex-start;
@@ -580,7 +568,6 @@ async function copyRevealedKey() {
   line-height: 1.6;
 }
 
-/* Tenant stats */
 .stat-mini {
   text-align: center;
   padding: 8px;

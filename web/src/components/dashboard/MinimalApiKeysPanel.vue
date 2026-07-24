@@ -2,25 +2,24 @@
   <div class="minimal-api-keys">
     <div class="panel-head">
       <div class="head-left">
-        <span class="title">API 访问密钥</span>
+        <span class="title">{{ t('minimalApiKeysPanel.title') }}</span>
         <el-tag size="small" :type="keyStatus.auth_required ? 'warning' : 'success'">
-          {{ keyStatus.auth_required ? '已启用鉴权' : '开放访问' }}
+          {{ keyStatus.auth_required ? t('minimalApiKeysPanel.authEnabled') : t('minimalApiKeysPanel.openAccess') }}
         </el-tag>
       </div>
-      <el-button type="primary" size="small" :loading="creating" @click="createKey">创建密钥</el-button>
+      <el-button type="primary" size="small" :loading="creating" @click="createKey">{{ t('minimalApiKeysPanel.createKey') }}</el-button>
     </div>
     <p class="hint">
-      未配置时 <code>/v1</code> 开放；配置后须携带
-      <code>Authorization: Bearer &lt;key&gt;</code>。列表仅脱敏显示，点击复制可拿到完整密钥。
+      {{ t('minimalApiKeysPanel.hint') }}
     </p>
-    <el-table :data="keys" size="small" empty-text="暂无密钥">
-      <el-table-column prop="name" label="名称" min-width="100" />
-      <el-table-column label="密钥" min-width="180">
+    <el-table :data="keys" size="small" :empty-text="t('minimalApiKeysPanel.noKeys')">
+      <el-table-column prop="name" :label="t('minimalApiKeysPanel.nameColumn')" min-width="100" />
+      <el-table-column :label="t('minimalApiKeysPanel.keyColumn')" min-width="180">
         <template #default="{ row }">
           <code class="mono">{{ displayKey(row) }}</code>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="130" fixed="right">
+      <el-table-column :label="t('minimalApiKeysPanel.actionsColumn')" width="130" fixed="right">
         <template #default="{ row }">
           <el-button
             type="primary"
@@ -28,8 +27,8 @@
             size="small"
             :disabled="!row.api_key"
             @click="copyKey(row.api_key)"
-          >复制</el-button>
-          <el-button type="danger" link size="small" @click="deleteKey(row)">删除</el-button>
+          >{{ t('minimalApiKeysPanel.copy') }}</el-button>
+          <el-button type="danger" link size="small" @click="deleteKey(row)">{{ t('minimalApiKeysPanel.delete') }}</el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -39,7 +38,10 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { useI18n } from 'vue-i18n'
 import api from '@/api'
+
+const { t } = useI18n()
 
 const keys = ref<any[]>([])
 const keyStatus = ref<{ auth_required?: boolean }>({})
@@ -74,9 +76,9 @@ async function refresh() {
 async function createKey() {
   let name = 'default'
   try {
-    const { value } = await ElMessageBox.prompt('为密钥起个名字（可选）', '创建 API Key', {
-      confirmButtonText: '创建',
-      cancelButtonText: '取消',
+    const { value } = await ElMessageBox.prompt(t('minimalApiKeysPanel.promptMessage'), t('minimalApiKeysPanel.promptTitle'), {
+      confirmButtonText: t('minimalApiKeysPanel.promptConfirm'),
+      cancelButtonText: t('minimalApiKeysPanel.promptCancel'),
       inputValue: 'default',
       inputPlaceholder: 'default'
     })
@@ -87,10 +89,10 @@ async function createKey() {
   creating.value = true
   try {
     await api.post('/api/v1/settings/api-keys', { name })
-    ElMessage.success('密钥已创建，可点击复制')
+    ElMessage.success(t('minimalApiKeysPanel.createSuccess'))
     await refresh()
   } catch (e: any) {
-    ElMessage.error(e?.message || '创建失败')
+    ElMessage.error(e?.message || t('minimalApiKeysPanel.createFailed'))
   } finally {
     creating.value = false
   }
@@ -98,29 +100,29 @@ async function createKey() {
 
 async function deleteKey(row: { id: string; name?: string }) {
   try {
-    await ElMessageBox.confirm(`确定删除密钥「${row.name || row.id}」？`, '删除确认', { type: 'warning' })
+    await ElMessageBox.confirm(t('minimalApiKeysPanel.deleteConfirm', { name: row.name || row.id }), t('minimalApiKeysPanel.deleteConfirmTitle'), { type: 'warning' })
   } catch {
     return
   }
   try {
     await api.delete(`/api/v1/settings/api-keys/${row.id}`)
-    ElMessage.success('已删除')
+    ElMessage.success(t('minimalApiKeysPanel.deleteSuccess'))
     await refresh()
   } catch (e: any) {
-    ElMessage.error(e?.message || '删除失败')
+    ElMessage.error(e?.message || t('minimalApiKeysPanel.deleteFailed'))
   }
 }
 
 async function copyKey(key: string) {
   if (!key) {
-    ElMessage.warning('旧密钥未保存明文，请删除后重新创建')
+    ElMessage.warning(t('minimalApiKeysPanel.copyNoPlaintext'))
     return
   }
   try {
     await navigator.clipboard.writeText(key)
-    ElMessage.success('已复制完整密钥')
+    ElMessage.success(t('minimalApiKeysPanel.copySuccess'))
   } catch {
-    ElMessage.warning('复制失败，请手动选中复制')
+    ElMessage.warning(t('minimalApiKeysPanel.copyFailed'))
   }
 }
 

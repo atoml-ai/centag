@@ -2,7 +2,7 @@
   <el-drawer
     :model-value="visible"
     @update:model-value="emit('update:visible', $event)"
-    :title="node?.name || '节点配置'"
+    :title="node?.name || t('nodeConfig.title')"
     size="960px"
     direction="rtl"
     :before-close="handleClose"
@@ -14,28 +14,28 @@
       :rules="rules"
       class="node-drawer-form"
     >
-      <!-- ═══════ 1. 基本信息 ═══════ -->
+      <!-- ═══════ 1. Basic Info ═══════ -->
       <section class="drawer-section">
-        <div class="section-title">基本信息</div>
+        <div class="section-title">{{ t('nodeConfig.sectionBasic') }}</div>
         <el-row :gutter="12">
           <el-col :span="14">
-            <el-form-item label="节点名称" prop="name">
-              <el-input v-model="localNode.name" placeholder="显示名称" />
+            <el-form-item :label="t('nodeConfig.nodeName')" prop="name">
+              <el-input v-model="localNode.name" :placeholder="t('nodeConfig.nodeNamePlaceholder')" />
             </el-form-item>
           </el-col>
           <el-col :span="10">
-            <el-form-item label="节点类型" prop="type">
+            <el-form-item :label="t('nodeConfig.nodeType')" prop="type">
               <el-select v-model="localNode.type" style="width: 100%" @change="onTypeChange">
-                <el-option label="出站转发" value="transparent_forward" />
-                <el-option label="生成器" value="generator" />
-                <el-option label="处理器" value="processor" />
-                <el-option label="审核器" value="reviewer" />
-                <el-option label="路由器" value="router" />
-                <el-option label="聚合器" value="aggregator" />
-                <el-option label="并行节点" value="parallel" />
-                <el-option label="缓存" value="cache" />
-                <el-option label="Token 计量" value="token_usage" />
-                <el-option label="工具调用注入" value="tool_call_injector" />
+                <el-option :label="t('nodeConfig.typeTransparentForward')" value="transparent_forward" />
+                <el-option :label="t('nodeConfig.typeGenerator')" value="generator" />
+                <el-option :label="t('nodeConfig.typeProcessor')" value="processor" />
+                <el-option :label="t('nodeConfig.typeReviewer')" value="reviewer" />
+                <el-option :label="t('nodeConfig.typeRouter')" value="router" />
+                <el-option :label="t('nodeConfig.typeAggregator')" value="aggregator" />
+                <el-option :label="t('nodeConfig.typeParallel')" value="parallel" />
+                <el-option :label="t('nodeConfig.typeCache')" value="cache" />
+                <el-option :label="t('nodeConfig.typeTokenUsage')" value="token_usage" />
+                <el-option :label="t('nodeConfig.typeToolCallInjector')" value="tool_call_injector" />
               </el-select>
             </el-form-item>
           </el-col>
@@ -43,43 +43,43 @@
         <div class="type-desc">{{ getTypeDescription(localNode.type) }}</div>
       </section>
 
-      <!-- ═══════ 2. 出站转发核心 ═══════ -->
+      <!-- ═══════ 2. Outbound Forward ═══════ -->
       <section v-if="localNode.type === 'transparent_forward'" class="drawer-section">
-        <div class="section-title">出站策略</div>
+        <div class="section-title">{{ t('nodeConfig.sectionEgress') }}</div>
         <el-alert type="info" :closable="false" class="section-alert">
           <template #default>
             <div style="font-size: 13px; line-height: 1.6">
-              <div><strong>出站</strong>：请求经 Centag 转发到上游大模型，并用后端配置的 API Key 鉴权（客户端只需连 Centag）。</div>
-              <div style="margin-top: 6px"><strong>按模型匹配</strong>：按客户端请求里的 model 名，在已启用后端中松匹配，命中则走该后端；未命中再用下方默认后端/模型。</div>
-              <div style="margin-top: 6px"><strong>固定出站</strong>：不做模型匹配，始终走下方选定的后端/模型（或系统默认）。</div>
+              <div v-html="t('nodeConfig.egressDescOutbound')" />
+              <div style="margin-top: 6px" v-html="t('nodeConfig.egressDescMatchModel')" />
+              <div style="margin-top: 6px" v-html="t('nodeConfig.egressDescFixed')" />
             </div>
           </template>
         </el-alert>
 
-        <el-form-item label="选路策略">
+        <el-form-item :label="t('nodeConfig.routePolicy')">
           <el-radio-group v-model="egressConfig.route_policy">
-            <el-radio-button value="match_model">按模型匹配</el-radio-button>
-            <el-radio-button value="fixed">固定出站</el-radio-button>
+            <el-radio-button value="match_model">{{ t('nodeConfig.routePolicyMatchModel') }}</el-radio-button>
+            <el-radio-button value="fixed">{{ t('nodeConfig.routePolicyFixed') }}</el-radio-button>
           </el-radio-group>
         </el-form-item>
 
         <el-row :gutter="12">
           <el-col :span="12">
-            <el-form-item label="后端服务" prop="backend">
+            <el-form-item :label="t('nodeConfig.backend')" prop="backend">
               <BackendSelector
                 v-model="localNode.backend"
-                placeholder="选择后端"
+                :placeholder="t('nodeConfig.backendPlaceholder')"
                 style="width: 100%"
                 @change="onBackendChange"
               />
             </el-form-item>
           </el-col>
           <el-col :span="12">
-            <el-form-item label="模型" prop="model">
+            <el-form-item :label="t('nodeConfig.model')" prop="model">
               <ModelSelector
                 v-model="localNode.model"
                 :backend-id="localNode.backend"
-                placeholder="选择或输入模型"
+                :placeholder="t('nodeConfig.modelPlaceholder')"
                 :allow-create="true"
                 :default-first-option="true"
               />
@@ -87,30 +87,30 @@
           </el-col>
         </el-row>
         <div class="help-text" style="margin: -6px 0 12px">
-          {{ egressConfig.route_policy === 'fixed' ? '固定出站时作为唯一出口。' : '按模型匹配未命中时，回落到此处的默认后端/模型。' }}
+          {{ egressConfig.route_policy === 'fixed' ? t('nodeConfig.fixedEgressHelp') : t('nodeConfig.matchModelFallbackHelp') }}
         </div>
 
         <div class="egress-prompt-block">
           <el-form-item class="egress-inject-item" label-width="0">
             <div class="egress-inject-row">
-              <span class="egress-inject-label">是否注入系统提示词</span>
+              <span class="egress-inject-label">{{ t('nodeConfig.injectSystemPrompt') }}</span>
               <el-switch v-model="egressConfig.inject_system_prompt" />
             </div>
           </el-form-item>
 
           <div v-if="egressConfig.inject_system_prompt" class="egress-prompt-body">
-            <div class="egress-prompt-label">系统提示词内容</div>
+            <div class="egress-prompt-label">{{ t('nodeConfig.systemPromptContent') }}</div>
             <div class="system-prompt-toolbar">
               <el-select
                 v-model="selectedPromptPreset"
                 clearable
-                placeholder="人格预设"
+                :placeholder="t('nodeConfig.personalityPreset')"
                 style="width: 160px"
                 @change="onPromptPresetChange"
               >
                 <el-option v-for="p in systemPromptPresets" :key="p.id" :label="p.label" :value="p.id" />
               </el-select>
-              <el-button size="small" @click="restoreDefaultSystemPrompt">恢复默认</el-button>
+              <el-button size="small" @click="restoreDefaultSystemPrompt">{{ t('nodeConfig.restoreDefault') }}</el-button>
             </div>
             <el-input
               ref="promptInputRef"
@@ -119,31 +119,31 @@
               :rows="6"
               :placeholder="getPromptPlaceholder(localNode.type)"
             />
-            <div class="help-text">开启后，此文本会替换客户端 messages 中的 system 角色。</div>
+            <div class="help-text">{{ t('nodeConfig.systemPromptHelp') }}</div>
           </div>
         </div>
       </section>
 
-      <!-- ═══════ 2b. LLM 节点核心（非出站） ═══════ -->
+      <!-- ═══════ 2b. LLM Node (non-outbound) ═══════ -->
       <section v-if="needsLLM(localNode.type) && localNode.type !== 'transparent_forward'" class="drawer-section">
-        <div class="section-title">模型与 Prompt</div>
+        <div class="section-title">{{ t('nodeConfig.sectionModelPrompt') }}</div>
         <el-row :gutter="12">
           <el-col :span="12">
-            <el-form-item label="后端服务" prop="backend">
+            <el-form-item :label="t('nodeConfig.backend')" prop="backend">
               <BackendSelector
                 v-model="localNode.backend"
-                placeholder="选择后端"
+                :placeholder="t('nodeConfig.backendPlaceholder')"
                 style="width: 100%"
                 @change="onBackendChange"
               />
             </el-form-item>
           </el-col>
           <el-col :span="12">
-            <el-form-item label="模型" prop="model">
+            <el-form-item :label="t('nodeConfig.model')" prop="model">
               <ModelSelector
                 v-model="localNode.model"
                 :backend-id="localNode.backend"
-                placeholder="选择或输入模型"
+                :placeholder="t('nodeConfig.modelPlaceholder')"
                 :allow-create="true"
                 :default-first-option="true"
               />
@@ -156,13 +156,13 @@
             <el-select
               v-model="selectedPromptPreset"
               clearable
-              placeholder="人格预设"
+              :placeholder="t('nodeConfig.personalityPreset')"
               style="width: 160px"
               @change="onPromptPresetChange"
             >
               <el-option v-for="p in systemPromptPresets" :key="p.id" :label="p.label" :value="p.id" />
             </el-select>
-            <el-button size="small" @click="restoreDefaultSystemPrompt">恢复默认</el-button>
+            <el-button size="small" @click="restoreDefaultSystemPrompt">{{ t('nodeConfig.restoreDefault') }}</el-button>
           </div>
           <el-input
             ref="promptInputRef"
@@ -171,16 +171,16 @@
             :rows="6"
             :placeholder="getPromptPlaceholder(localNode.type)"
           />
-          <div v-if="localNode.type === 'generator'" class="help-text">非空 system prompt 会覆盖客户端 system 消息。</div>
+          <div v-if="localNode.type === 'generator'" class="help-text">{{ t('nodeConfig.generatorPromptHelp') }}</div>
           <div v-if="localNode.type === 'aggregator'" class="help-text">
-            可选。留空使用默认总结 prompt。可用 &#123;&#123;.combined_content&#125;&#125;
+            {{ t('nodeConfig.aggregatorPromptHelp') }}
           </div>
         </el-form-item>
       </section>
 
-      <!-- ═══════ 2c. 插件实现（处理器类常用） ═══════ -->
+      <!-- ═══════ 2c. Plugin Implementation ═══════ -->
       <section v-if="needsPluginSelection(localNode.type)" class="drawer-section">
-        <div class="section-title">插件实现</div>
+        <div class="section-title">{{ t('nodeConfig.sectionPlugin') }}</div>
         <PluginSelector
           v-model="localNode.implementation"
           v-model:kind="localNode.kind"
@@ -191,23 +191,23 @@
         />
       </section>
 
-      <!-- ═══════ 2d. Router 核心 ═══════ -->
+      <!-- ═══════ 2d. Router Core ═══════ -->
       <section v-if="localNode.type === 'router'" class="drawer-section">
-        <div class="section-title">路由规则</div>
-        <el-form-item label="路由策略">
+        <div class="section-title">{{ t('nodeConfig.sectionRouter') }}</div>
+        <el-form-item :label="t('nodeConfig.routerStrategy')">
           <el-select v-model="routerConfig.strategy" style="width: 100%">
-            <el-option label="关键词包含匹配" value="keyword_contains" />
-            <el-option label="关键词前缀匹配" value="keyword_prefix" />
-            <el-option label="有序规则" value="ordered" />
-            <el-option label="正则匹配" value="regex_only" />
-            <el-option label="关键字+轻量意图" value="keyword_then_intent" />
-            <el-option label="LLM 意图分类" value="llm_classify" />
+            <el-option :label="t('nodeConfig.strategyKeywordContains')" value="keyword_contains" />
+            <el-option :label="t('nodeConfig.strategyKeywordPrefix')" value="keyword_prefix" />
+            <el-option :label="t('nodeConfig.strategyOrdered')" value="ordered" />
+            <el-option :label="t('nodeConfig.strategyRegex')" value="regex_only" />
+            <el-option :label="t('nodeConfig.strategyKeywordThenIntent')" value="keyword_then_intent" />
+            <el-option :label="t('nodeConfig.strategyLlmClassify')" value="llm_classify" />
           </el-select>
         </el-form-item>
-        <el-form-item label="默认路由节点">
-          <el-input v-model="routerConfig.defaultRoute" placeholder="例如: chat-generator" />
+        <el-form-item :label="t('nodeConfig.defaultRouteNode')">
+          <el-input v-model="routerConfig.defaultRoute" :placeholder="t('nodeConfig.defaultRoutePlaceholder')" />
         </el-form-item>
-        <el-form-item label="路由规则映射">
+        <el-form-item :label="t('nodeConfig.routeRuleMapping')">
           <div
             v-for="(rule, idx) in routerConfig.routes"
             :key="idx"
@@ -215,184 +215,184 @@
           >
             <el-input
               v-model="rule.keyword"
-              :placeholder="routerConfig.strategy === 'llm_classify' ? '类别名' : '关键词'"
+              :placeholder="routerConfig.strategy === 'llm_classify' ? t('nodeConfig.keywordPlaceholderCategory') : t('nodeConfig.keywordPlaceholderKeyword')"
               size="small"
               style="width: 180px; flex-shrink: 0"
             />
             <span class="var-eq">→</span>
-            <el-input v-model="rule.target" placeholder="目标节点 ID" size="small" style="flex: 1" />
+            <el-input v-model="rule.target" :placeholder="t('nodeConfig.targetNodeIdPlaceholder')" size="small" style="flex: 1" />
             <el-button type="danger" text size="small" @click="removeRouterRoute(idx)">
               <el-icon><Delete /></el-icon>
             </el-button>
           </div>
           <el-button size="small" @click="addRouterRoute" style="margin-top: 6px">
             <el-icon><Plus /></el-icon>
-            添加规则
+            {{ t('nodeConfig.addRule') }}
           </el-button>
         </el-form-item>
       </section>
 
-      <!-- ═══════ 2e. Cache 核心 ═══════ -->
+      <!-- ═══════ 2e. Cache Core ═══════ -->
       <section v-if="localNode.type === 'cache'" class="drawer-section">
-        <div class="section-title">缓存</div>
+        <div class="section-title">{{ t('nodeConfig.sectionCache') }}</div>
         <el-row :gutter="12">
           <el-col :span="12">
-            <el-form-item label="操作">
+            <el-form-item :label="t('nodeConfig.operation')">
               <el-select v-model="localNode.config.customConfig.operation" style="width: 100%">
-                <el-option label="读取" value="read" />
-                <el-option label="写入" value="write" />
-                <el-option label="删除" value="delete" />
+                <el-option :label="t('nodeConfig.operationRead')" value="read" />
+                <el-option :label="t('nodeConfig.operationWrite')" value="write" />
+                <el-option :label="t('nodeConfig.operationDelete')" value="delete" />
               </el-select>
             </el-form-item>
           </el-col>
           <el-col :span="12">
-            <el-form-item label="策略">
+            <el-form-item :label="t('nodeConfig.strategyLabel')">
               <el-select v-model="localNode.config.customConfig.strategy" style="width: 100%">
-                <el-option label="精确匹配" value="exact" />
-                <el-option label="语义匹配" value="semantic" />
-                <el-option label="混合策略" value="hybrid" />
+                <el-option :label="t('nodeConfig.strategyExact')" value="exact" />
+                <el-option :label="t('nodeConfig.strategySemantic')" value="semantic" />
+                <el-option :label="t('nodeConfig.strategyHybrid')" value="hybrid" />
               </el-select>
             </el-form-item>
           </el-col>
         </el-row>
         <el-form-item
           v-if="localNode.config.customConfig.operation === 'read' || localNode.config.customConfig.operation === 'delete'"
-          label="读取存储"
+          :label="t('nodeConfig.readStorage')"
         >
-          <el-select v-model="localNode.config.customConfig.read_storage_name" style="width: 100%" clearable placeholder="留空使用默认">
+          <el-select v-model="localNode.config.customConfig.read_storage_name" style="width: 100%" clearable :placeholder="t('nodeConfig.storagePlaceholder')">
             <el-option v-for="s in availableStorages" :key="s.name" :label="`${s.name} (${s.type})`" :value="s.name" />
           </el-select>
         </el-form-item>
         <el-form-item
           v-if="localNode.config.customConfig.operation === 'write' || localNode.config.customConfig.operation === 'delete'"
-          label="写入存储"
+          :label="t('nodeConfig.writeStorage')"
         >
-          <el-select v-model="localNode.config.customConfig.write_storage_name" style="width: 100%" clearable placeholder="留空使用默认">
+          <el-select v-model="localNode.config.customConfig.write_storage_name" style="width: 100%" clearable :placeholder="t('nodeConfig.storagePlaceholder')">
             <el-option v-for="s in availableStorages" :key="s.name" :label="`${s.name} (${s.type})`" :value="s.name" />
           </el-select>
         </el-form-item>
-        <el-form-item label="缓存键模板">
+        <el-form-item :label="t('nodeConfig.cacheKeyTemplate')">
           <el-input v-model="localNode.config.customConfig.key_template" :placeholder="'{{model}}:{{hash}}'" />
         </el-form-item>
-        <el-form-item v-if="localNode.config.customConfig.operation === 'write'" label="TTL（秒）">
+        <el-form-item v-if="localNode.config.customConfig.operation === 'write'" :label="t('nodeConfig.ttlSeconds')">
           <el-input-number v-model="localNode.config.customConfig.ttl" :min="60" :max="86400" style="width: 100%" />
         </el-form-item>
       </section>
 
-      <!-- ═══════ 2f. Token 计量核心 ═══════ -->
+      <!-- ═══════ 2f. Token Usage Core ═══════ -->
       <section v-if="localNode.type === 'token_usage'" class="drawer-section">
-        <div class="section-title">Token 计量</div>
+        <div class="section-title">{{ t('nodeConfig.sectionTokenUsage') }}</div>
         <el-alert type="info" :closable="false" class="section-alert">
-          需依赖上游出站/生成节点；勿把唯一生成器改成计量节点。
+          {{ t('nodeConfig.tokenUsageAlert') }}
         </el-alert>
         <el-row :gutter="12">
           <el-col :span="12">
-            <el-form-item label="操作">
+            <el-form-item :label="t('nodeConfig.operation')">
               <el-select v-model="localNode.config.customConfig.operation" style="width: 100%">
-                <el-option label="记录用量" value="record" />
-                <el-option label="查询统计" value="query" />
-                <el-option label="聚合统计" value="aggregate" />
+                <el-option :label="t('nodeConfig.operationRecord')" value="record" />
+                <el-option :label="t('nodeConfig.operationQuery')" value="query" />
+                <el-option :label="t('nodeConfig.operationAggregate')" value="aggregate" />
               </el-select>
             </el-form-item>
           </el-col>
           <el-col :span="12">
-            <el-form-item label="存储">
+            <el-form-item :label="t('nodeConfig.storageType')">
               <el-select v-model="localNode.config.customConfig.storage_type" style="width: 100%">
-                <el-option label="应用数据库" value="sqlite" />
+                <el-option :label="t('nodeConfig.storageTypeSqlite')" value="sqlite" />
                 <el-option label="PostgreSQL" value="postgresql" />
-                <el-option label="内存（调试）" value="memory" />
+                <el-option :label="t('nodeConfig.storageTypeMemory')" value="memory" />
               </el-select>
             </el-form-item>
           </el-col>
         </el-row>
-        <el-form-item v-if="localNode.config.customConfig.operation === 'record'" label="记录字段">
+        <el-form-item v-if="localNode.config.customConfig.operation === 'record'" :label="t('nodeConfig.recordFields')">
           <el-checkbox-group v-model="localNode.config.customConfig.record_fields">
-            <el-checkbox label="prompt_tokens">输入</el-checkbox>
-            <el-checkbox label="completion_tokens">输出</el-checkbox>
-            <el-checkbox label="total_tokens">总计</el-checkbox>
-            <el-checkbox label="model">模型</el-checkbox>
-            <el-checkbox label="backend_id">后端</el-checkbox>
+            <el-checkbox label="prompt_tokens">{{ t('nodeConfig.fieldPromptTokens') }}</el-checkbox>
+            <el-checkbox label="completion_tokens">{{ t('nodeConfig.fieldCompletionTokens') }}</el-checkbox>
+            <el-checkbox label="total_tokens">{{ t('nodeConfig.fieldTotalTokens') }}</el-checkbox>
+            <el-checkbox label="model">{{ t('nodeConfig.fieldModel') }}</el-checkbox>
+            <el-checkbox label="backend_id">{{ t('nodeConfig.fieldBackendId') }}</el-checkbox>
           </el-checkbox-group>
         </el-form-item>
       </section>
 
-      <!-- ═══════ 2g. 工具注入核心 ═══════ -->
+      <!-- ═══════ 2g. Tool Call Injector Core ═══════ -->
       <section v-if="localNode.type === 'tool_call_injector'" class="drawer-section">
-        <div class="section-title">工具调用注入</div>
-        <el-form-item label="注入条件">
+        <div class="section-title">{{ t('nodeConfig.sectionToolInjector') }}</div>
+        <el-form-item :label="t('nodeConfig.injectCondition')">
           <el-input
             v-model="injectorCondition"
-            placeholder="留空则始终注入；支持模板变量"
+            :placeholder="t('nodeConfig.injectConditionPlaceholder')"
             type="textarea"
             :rows="2"
           />
         </el-form-item>
-        <el-form-item label="工具调用列表">
+        <el-form-item :label="t('nodeConfig.toolCallList')">
           <div class="injector-tc-list">
             <div v-for="(tc, idx) in injectorToolCalls" :key="idx" class="injector-tc-item">
               <div class="injector-tc-header">
-                <span>工具 #{{ idx + 1 }}</span>
+                <span>{{ t('nodeConfig.toolNumber', { n: idx + 1 }) }}</span>
                 <el-button type="danger" text size="small" @click="removeInjectorToolCall(idx)">
                   <el-icon><Delete /></el-icon>
                 </el-button>
               </div>
-              <el-input v-model="tc.id" placeholder="调用 ID" size="small" style="margin-bottom: 6px" />
-              <el-input v-model="tc.functionName" placeholder="函数名" size="small" style="margin-bottom: 6px" />
-              <el-input v-model="tc.arguments" placeholder='参数 JSON' type="textarea" :rows="2" size="small" />
+              <el-input v-model="tc.id" :placeholder="t('nodeConfig.callIdPlaceholder')" size="small" style="margin-bottom: 6px" />
+              <el-input v-model="tc.functionName" :placeholder="t('nodeConfig.functionNamePlaceholder')" size="small" style="margin-bottom: 6px" />
+              <el-input v-model="tc.arguments" :placeholder="t('nodeConfig.argumentsPlaceholder')" type="textarea" :rows="2" size="small" />
             </div>
             <el-button size="small" @click="addInjectorToolCall" style="margin-top: 8px">
               <el-icon><Plus /></el-icon>
-              添加工具调用
+              {{ t('nodeConfig.addToolCall') }}
             </el-button>
           </div>
         </el-form-item>
       </section>
 
-      <!-- ═══════ 3. 高级选项（默认折叠） ═══════ -->
+      <!-- ═══════ 3. Advanced Options (collapsed by default) ═══════ -->
       <section class="drawer-section drawer-section-advanced">
         <el-collapse v-model="advancedPanels" class="advanced-collapse">
-          <el-collapse-item title="高级：节点标识与拓扑" name="topo">
-            <el-form-item label="节点 ID" prop="id">
-              <el-input v-model="localNode.id" placeholder="唯一标识符" />
+          <el-collapse-item :title="t('nodeConfig.advancedTopology')" name="topo">
+            <el-form-item :label="t('nodeConfig.nodeId')" prop="id">
+              <el-input v-model="localNode.id" :placeholder="t('nodeConfig.nodeIdPlaceholder')" />
             </el-form-item>
             <el-row :gutter="12">
               <el-col :span="12">
-                <el-form-item label="依赖节点">
+                <el-form-item :label="t('nodeConfig.dependsOn')">
                   <el-select v-model="localNode.depends_on" multiple style="width: 100%">
                     <el-option v-for="n in otherNodes" :key="n" :label="n" :value="n" />
                   </el-select>
                 </el-form-item>
               </el-col>
               <el-col :span="12">
-                <el-form-item label="下游节点">
+                <el-form-item :label="t('nodeConfig.nextNodes')">
                   <el-select v-model="localNode.next_nodes" multiple style="width: 100%">
                     <el-option v-for="n in otherNodes" :key="n" :label="n" :value="n" />
                   </el-select>
                 </el-form-item>
               </el-col>
             </el-row>
-            <el-form-item v-if="localNode.type !== 'tool_call_injector'" label="执行条件">
+            <el-form-item v-if="localNode.type !== 'tool_call_injector'" :label="t('nodeConfig.execCondition')">
               <el-input v-model="localNode.config.condition" :placeholder="conditionPlaceholder" type="textarea" :rows="2" />
             </el-form-item>
           </el-collapse-item>
 
-          <el-collapse-item title="高级：超时 / 重试 / 降级" name="reliability">
-            <el-form-item label="超时（秒）">
+          <el-collapse-item :title="t('nodeConfig.advancedReliability')" name="reliability">
+            <el-form-item :label="t('nodeConfig.timeoutSeconds')">
               <el-input-number v-model="localNode.timeout" :min="5" :max="300" style="width: 100%" />
             </el-form-item>
-            <el-form-item label="重试">
+            <el-form-item :label="t('nodeConfig.retry')">
               <div class="retry-grid">
-                <el-input-number v-model="localNode.retry.max_attempts" :min="0" :max="10" placeholder="次数" />
+                <el-input-number v-model="localNode.retry.max_attempts" :min="0" :max="10" :placeholder="t('nodeConfig.retryAttemptsPlaceholder')" />
                 <el-select v-model="localNode.retry.backoff_strategy">
-                  <el-option label="指数退避" value="exponential" />
-                  <el-option label="线性退避" value="linear" />
-                  <el-option label="固定延迟" value="fixed" />
+                  <el-option :label="t('nodeConfig.backoffExponential')" value="exponential" />
+                  <el-option :label="t('nodeConfig.backoffLinear')" value="linear" />
+                  <el-option :label="t('nodeConfig.backoffFixed')" value="fixed" />
                 </el-select>
               </div>
             </el-form-item>
-            <el-form-item label="降级策略">
-              <el-select v-model="localNode.fallback_policy_id" clearable placeholder="继承流水线默认" style="width: 100%">
-                <el-option label="继承流水线默认" value="" />
+            <el-form-item :label="t('nodeConfig.fallbackPolicy')">
+              <el-select v-model="localNode.fallback_policy_id" clearable :placeholder="t('nodeConfig.fallbackPolicyPlaceholder')" style="width: 100%">
+                <el-option :label="t('nodeConfig.fallbackPolicyInherit')" value="" />
                 <el-option
                   v-for="policy in fallbackPolicies"
                   :key="policy.id"
@@ -405,20 +405,20 @@
 
           <el-collapse-item
             v-if="localNode.type === 'transparent_forward'"
-            title="高级：出站重定向"
+            :title="t('nodeConfig.advancedEgressRedirect')"
             name="egress_adv"
           >
-            <el-form-item label="重定向策略">
+            <el-form-item :label="t('nodeConfig.redirectPolicy')">
               <el-select v-model="egressConfig.redirect_policy" style="width: 100%">
-                <el-option label="不跟随（never）" value="never" />
-                <el-option label="始终跟随（always）" value="always" />
-                <el-option label="仅 GET/HEAD（smart）" value="smart" />
+                <el-option :label="t('nodeConfig.redirectNever')" value="never" />
+                <el-option :label="t('nodeConfig.redirectAlways')" value="always" />
+                <el-option :label="t('nodeConfig.redirectSmart')" value="smart" />
               </el-select>
             </el-form-item>
-            <el-form-item v-if="egressConfig.redirect_policy !== 'never'" label="最大重定向次数">
+            <el-form-item v-if="egressConfig.redirect_policy !== 'never'" :label="t('nodeConfig.maxRedirects')">
               <el-input-number v-model="egressConfig.max_redirects" :min="1" :max="20" style="width: 100%" />
             </el-form-item>
-            <el-form-item label="默认 URL Scheme">
+            <el-form-item :label="t('nodeConfig.defaultUrlScheme')">
               <el-select v-model="egressConfig.default_scheme" style="width: 100%">
                 <el-option label="https" value="https" />
                 <el-option label="http" value="http" />
@@ -428,13 +428,13 @@
 
           <el-collapse-item
             v-if="showPromptEditor"
-            title="高级：Prompt 变量与绑定"
+            :title="t('nodeConfig.advancedPromptVars')"
             name="prompt_vars"
           >
             <div class="var-panel">
               <div class="var-panel-header">
-                <span class="var-panel-title">可用变量</span>
-                <span class="var-panel-hint">点击插入到光标处</span>
+                <span class="var-panel-title">{{ t('nodeConfig.availableVars') }}</span>
+                <span class="var-panel-hint">{{ t('nodeConfig.clickToInsert') }}</span>
               </div>
               <table class="var-table">
                 <colgroup>
@@ -443,13 +443,13 @@
                 </colgroup>
                 <thead>
                   <tr>
-                    <th>变量名</th>
-                    <th>说明</th>
+                    <th>{{ t('nodeConfig.varName') }}</th>
+                    <th>{{ t('nodeConfig.description') }}</th>
                   </tr>
                 </thead>
                 <tbody>
                   <tr class="var-section-row">
-                    <td colspan="2" class="var-section-label">内置变量</td>
+                    <td colspan="2" class="var-section-label">{{ t('nodeConfig.builtinVars') }}</td>
                   </tr>
                   <tr v-for="v in builtinVars" :key="v.name">
                     <td>
@@ -461,7 +461,7 @@
                   </tr>
                   <template v-if="upstreamVars.length > 0">
                     <tr class="var-section-row">
-                      <td colspan="2" class="var-section-label">上游节点（需绑定）</td>
+                      <td colspan="2" class="var-section-label">{{ t('nodeConfig.upstreamNodesBound') }}</td>
                     </tr>
                     <tr v-for="v in upstreamVars" :key="v.name">
                       <td>
@@ -473,7 +473,7 @@
                     </tr>
                   </template>
                   <tr class="var-section-row">
-                    <td colspan="2" class="var-section-label">执行上下文（需绑定）</td>
+                    <td colspan="2" class="var-section-label">{{ t('nodeConfig.execContextBound') }}</td>
                   </tr>
                   <tr v-for="v in contextVars" :key="v.name">
                     <td>
@@ -489,7 +489,7 @@
 
             <el-form-item
               v-if="localNode.type === 'reviewer' || localNode.type === 'processor'"
-              label="自定义变量绑定"
+              :label="t('nodeConfig.customVarBinding')"
               style="margin-top: 12px"
             >
               <div class="template-vars-editor">
@@ -498,31 +498,31 @@
                   :key="idx"
                   class="template-var-row"
                 >
-                  <el-input v-model="binding.key" placeholder="变量名" size="small" style="width: 140px; flex-shrink: 0" />
+                  <el-input v-model="binding.key" :placeholder="t('nodeConfig.bindingVarPlaceholder')" size="small" style="width: 140px; flex-shrink: 0" />
                   <span class="var-eq">=</span>
                   <el-select
                     v-model="binding.source"
-                    placeholder="来源"
+                    :placeholder="t('nodeConfig.bindingSource')"
                     size="small"
                     style="width: 130px; flex-shrink: 0"
                     @change="(v: string) => onSourceChange(binding, v)"
                   >
-                    <el-option label="原始用户输入" value="input.content" />
-                    <el-option label="当前时间戳" value="context.timestamp" />
-                    <el-option label="用户 ID" value="context.user_id" />
-                    <el-option label="会话 ID" value="context.session_id" />
+                    <el-option :label="t('nodeConfig.sourceInputContent')" value="input.content" />
+                    <el-option :label="t('nodeConfig.sourceTimestamp')" value="context.timestamp" />
+                    <el-option :label="t('nodeConfig.sourceUserId')" value="context.user_id" />
+                    <el-option :label="t('nodeConfig.sourceSessionId')" value="context.session_id" />
                     <el-option
                       v-for="n in upstreamNodeIds"
                       :key="n + '_content'"
-                      :label="`节点 ${n} 输出`"
+                      :label="t('nodeConfig.sourceNodeOutput', { n })"
                       :value="`node.${n}.content`"
                     />
-                    <el-option label="自定义路径..." value="__custom__" />
+                    <el-option :label="t('nodeConfig.sourceCustomPath')" value="__custom__" />
                   </el-select>
                   <el-input
                     v-if="binding.source === '__custom__'"
                     v-model="binding.customPath"
-                    placeholder="自定义路径"
+                    :placeholder="t('nodeConfig.customPathPlaceholder')"
                     size="small"
                     style="flex: 1"
                   />
@@ -532,7 +532,7 @@
                 </div>
                 <el-button size="small" @click="addVarBinding" style="margin-top: 6px">
                   <el-icon><Plus /></el-icon>
-                  添加绑定
+                  {{ t('nodeConfig.addBinding') }}
                 </el-button>
               </div>
             </el-form-item>
@@ -540,58 +540,58 @@
 
           <el-collapse-item
             v-if="localNode.type === 'router' && routerConfig.strategy === 'llm_classify'"
-            title="高级：LLM 分类"
+            :title="t('nodeConfig.advancedLlmClassify')"
             name="router_llm"
           >
-            <el-form-item label="分类后端">
-              <BackendSelector v-model="localNode.backend" placeholder="轻量模型后端" style="width: 100%" @change="onBackendChange" />
+            <el-form-item :label="t('nodeConfig.classifyBackend')">
+              <BackendSelector v-model="localNode.backend" :placeholder="t('nodeConfig.classifyBackendPlaceholder')" style="width: 100%" @change="onBackendChange" />
             </el-form-item>
-            <el-form-item label="分类模型">
+            <el-form-item :label="t('nodeConfig.classifyModel')">
               <ModelSelector
                 v-model="localNode.model"
                 :backend-id="localNode.backend"
-                placeholder="如 glm-4-flash"
+                :placeholder="t('nodeConfig.classifyModelPlaceholder')"
                 :allow-create="true"
                 :default-first-option="true"
               />
             </el-form-item>
-            <el-form-item label="分类 Prompt">
+            <el-form-item :label="t('nodeConfig.classifyPrompt')">
               <el-input
                 v-model="routerConfig.classifyPrompt"
                 type="textarea"
                 :rows="5"
-                :placeholder="'留空使用默认。可用 {{.input}}'"
+                :placeholder="t('nodeConfig.classifyPromptPlaceholder')"
               />
             </el-form-item>
           </el-collapse-item>
 
           <el-collapse-item
             v-if="localNode.type === 'cache' && isSemanticStrategy"
-            title="高级：语义缓存"
+            :title="t('nodeConfig.advancedSemanticCache')"
             name="cache_semantic"
           >
-            <el-form-item label="Embedding 后端">
+            <el-form-item :label="t('nodeConfig.embeddingBackend')">
               <BackendSelector
                 v-model="localNode.config.customConfig.embedding_backend_id"
-                placeholder="选择 Embedding 后端"
+                :placeholder="t('nodeConfig.embeddingBackendPlaceholder')"
                 :filter="embeddingBackendFilter"
                 style="width: 100%"
                 @change="onEmbeddingBackendChange"
               />
             </el-form-item>
-            <el-form-item v-if="localNode.config.customConfig.embedding_backend_id" label="Embedding 模型">
+            <el-form-item v-if="localNode.config.customConfig.embedding_backend_id" :label="t('nodeConfig.embeddingModel')">
               <el-select
                 v-model="localNode.config.customConfig.embedding_model"
                 style="width: 100%"
                 clearable
-                placeholder="模型名"
+                :placeholder="t('nodeConfig.embeddingModelPlaceholder')"
                 :allow-create="true"
                 :default-first-option="true"
               >
                 <el-option v-for="m in embeddingModels" :key="m" :label="m" :value="m" />
               </el-select>
             </el-form-item>
-            <el-form-item label="语义阈值">
+            <el-form-item :label="t('nodeConfig.semanticThreshold')">
               <el-input-number
                 v-model="localNode.config.customConfig.semantic_threshold"
                 :min="0"
@@ -601,43 +601,43 @@
                 style="width: 100%"
               />
             </el-form-item>
-            <el-form-item label="Top K">
+            <el-form-item :label="t('nodeConfig.topK')">
               <el-input-number v-model="localNode.config.customConfig.semantic_top_k" :min="1" :max="100" style="width: 100%" />
             </el-form-item>
           </el-collapse-item>
 
           <el-collapse-item
             v-if="needsPluginSelection(localNode.type)"
-            title="高级：插件自定义参数"
+            :title="t('nodeConfig.advancedPluginParams')"
             name="plugin_cc"
           >
             <template v-if="localNode.implementation === 'business.mem0'">
-              <el-form-item label="Mem0 API Key">
+              <el-form-item :label="t('nodeConfig.mem0ApiKey')">
                 <el-input v-model="mem0PresetConfig.api_key" type="password" show-password />
               </el-form-item>
-              <el-form-item label="Mem0 Base URL">
+              <el-form-item :label="t('nodeConfig.mem0BaseUrl')">
                 <el-input v-model="mem0PresetConfig.base_url" placeholder="http://localhost:20061" />
               </el-form-item>
-              <el-form-item label="Namespace">
+              <el-form-item :label="t('nodeConfig.mem0Namespace')">
                 <el-input v-model="mem0PresetConfig.namespace" placeholder="default" />
               </el-form-item>
-              <el-form-item label="搜索模式">
+              <el-form-item :label="t('nodeConfig.mem0SearchMode')">
                 <el-select v-model="mem0PresetConfig.search_mode" style="width: 100%">
-                  <el-option label="语义" value="semantic" />
-                  <el-option label="关键词" value="keyword" />
-                  <el-option label="混合" value="hybrid" />
+                  <el-option :label="t('nodeConfig.mem0SearchSemantic')" value="semantic" />
+                  <el-option :label="t('nodeConfig.mem0SearchKeyword')" value="keyword" />
+                  <el-option :label="t('nodeConfig.mem0SearchHybrid')" value="hybrid" />
                 </el-select>
               </el-form-item>
-              <el-form-item label="向量化后端">
+              <el-form-item :label="t('nodeConfig.mem0EmbeddingBackend')">
                 <BackendSelector
                   v-model="mem0PresetConfig.embedding_backend_id"
-                  placeholder="Embedding 后端"
+                  :placeholder="t('nodeConfig.mem0EmbeddingBackendPlaceholder')"
                   :filter="embeddingBackendFilter"
                   style="width: 100%"
                   @change="onMem0EmbeddingBackendChange"
                 />
               </el-form-item>
-              <el-form-item v-if="mem0PresetConfig.embedding_backend_id" label="向量化模型">
+              <el-form-item v-if="mem0PresetConfig.embedding_backend_id" :label="t('nodeConfig.mem0EmbeddingModel')">
                 <el-select
                   v-model="mem0PresetConfig.embedding_model"
                   style="width: 100%"
@@ -650,18 +650,18 @@
               </el-form-item>
             </template>
 
-            <el-form-item label="自定义参数">
+            <el-form-item :label="t('nodeConfig.customParams')">
               <div class="custom-config-editor">
                 <div
                   v-for="(item, idx) in customConfigItems"
                   :key="idx"
                   class="custom-config-row"
                 >
-                  <el-input v-model="item.key" placeholder="参数名" size="small" style="width: 160px; flex-shrink: 0" />
+                  <el-input v-model="item.key" :placeholder="t('nodeConfig.paramNamePlaceholder')" size="small" style="width: 160px; flex-shrink: 0" />
                   <span class="var-eq">=</span>
                   <el-input
                     v-model="item.value"
-                    placeholder="参数值"
+                    :placeholder="t('nodeConfig.paramValuePlaceholder')"
                     size="small"
                     style="flex: 1"
                     :type="isSecretKey(item.key) ? 'password' : 'text'"
@@ -674,14 +674,14 @@
                 <div class="custom-config-actions">
                   <el-button size="small" @click="addCustomConfigItem">
                     <el-icon><Plus /></el-icon>
-                    添加参数
+                    {{ t('nodeConfig.addParam') }}
                   </el-button>
                   <el-button
                     v-if="localNode.implementation === 'business.mem0'"
                     size="small"
                     @click="fillMem0Defaults"
                   >
-                    填充 Mem0 默认值
+                    {{ t('nodeConfig.fillMem0Defaults') }}
                   </el-button>
                 </div>
               </div>
@@ -690,22 +690,22 @@
 
           <el-collapse-item
             v-if="localNode.type === 'generator'"
-            title="高级：分支路由 (RouteConfig)"
+            :title="t('nodeConfig.advancedBranchRoute')"
             name="route_config"
           >
-            <el-form-item label="启用路由配置">
+            <el-form-item :label="t('nodeConfig.enableRouteConfig')">
               <el-switch v-model="hasRouteConfig" />
             </el-form-item>
             <template v-if="hasRouteConfig">
-              <el-form-item label="上游 Router 节点">
-                <el-select v-model="routeConfig.router_node_id" style="width: 100%" placeholder="选择 Router">
+              <el-form-item :label="t('nodeConfig.upstreamRouterNode')">
+                <el-select v-model="routeConfig.router_node_id" style="width: 100%" :placeholder="t('nodeConfig.selectRouter')">
                   <el-option v-for="n in routerNodes" :key="n" :label="n" :value="n" />
                 </el-select>
               </el-form-item>
-              <el-form-item label="路由匹配值">
-                <el-input v-model="routeConfig.route_value" placeholder="如 code / chat" />
+              <el-form-item :label="t('nodeConfig.routeMatchValue')">
+                <el-input v-model="routeConfig.route_value" :placeholder="t('nodeConfig.routeMatchPlaceholder')" />
               </el-form-item>
-              <el-form-item label="默认分支">
+              <el-form-item :label="t('nodeConfig.defaultBranch')">
                 <el-switch v-model="routeConfig.is_default" />
               </el-form-item>
             </template>
@@ -717,8 +717,8 @@
 
     <template #footer>
       <div class="footer-buttons">
-        <el-button @click="handleClose">取消</el-button>
-        <el-button type="primary" @click="saveNode">保存节点配置</el-button>
+        <el-button @click="handleClose">{{ t('nodeConfig.cancel') }}</el-button>
+        <el-button type="primary" @click="saveNode">{{ t('nodeConfig.saveNodeConfig') }}</el-button>
       </div>
     </template>
   </el-drawer>
@@ -726,6 +726,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, nextTick, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
 import { Delete, Plus } from '@element-plus/icons-vue'
 import BackendSelector from './BackendSelector.vue'
@@ -738,6 +739,8 @@ import {
   SYSTEM_PROMPT_PRESETS,
   getPresetById,
 } from '../utils/system-prompt-presets'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   visible: boolean
@@ -1082,12 +1085,12 @@ const loadPlugins = async () => {
     const res = await getNodePlugins()
     loadedPlugins.value = parseNodePluginsResponse(res)
     if (loadedPlugins.value.length === 0) {
-      ElMessage.warning('未获取到已注册的节点插件，请确认后端已启动并完成插件注册')
+      ElMessage.warning(t('nodeConfig.warnNoPlugins'))
     }
   } catch (err) {
     console.error('Failed to load plugins:', err)
     loadedPlugins.value = []
-    ElMessage.error('加载节点插件失败，请检查后端服务')
+    ElMessage.error(t('nodeConfig.errorLoadPlugins'))
   } finally {
     loadingPlugins.value = false
   }
@@ -1096,7 +1099,7 @@ const loadPlugins = async () => {
 // 打开插件管理器
 const openPluginManager = () => {
   // TODO: 跳转到插件管理页面或打开插件管理对话框
-  ElMessage.info('插件管理器功能待实现')
+  ElMessage.info(t('nodeConfig.infoPluginManager'))
 }
 
 // 判断节点类型是否需要插件选择
@@ -1114,7 +1117,7 @@ const isSemanticStrategy = computed(() => {
 
 // 条件表达式 placeholder（避免 {{ 被 Vue 模板解析）
 const conditionPlaceholder = computed(() => {
-  return "例如: {{.cache_read.metadata.cache_hit}} == false"
+  return "e.g.: {{.cache_read.metadata.cache_hit}} == false"
 })
 
 // Embedding 后端列表
@@ -1188,20 +1191,19 @@ const builtinVars = computed(() => {
   const type = localNode.value.type
   // 所有节点共用的基础变量
   const common = [
-    { name: 'question', desc: '用户发送的原始问题原文，引擎全程自动传递，任何节点都能用' },
+    { name: 'question', desc: t('nodeConfig.builtinVarQuestionDesc') },
   ]
   if (type === 'reviewer') {
     const vars = [
       ...common,
-      { name: 'answer',    desc: '上游执行节点（generator）传来的内容，即待审核的回答' },
-      { name: 'timestamp', desc: '当前执行时间，格式 RFC3339，如 2026-04-24T15:30:00+08:00' },
-      { name: 'criteria',  desc: '审核维度列表（数组），来自节点配置的 custom_config.criteria，用 {{range .criteria}}-{{.}}{{end}} 遍历' },
+      { name: 'answer',    desc: t('nodeConfig.builtinVarAnswerDesc') },
+      { name: 'timestamp', desc: t('nodeConfig.builtinVarTimestampDesc') },
+      { name: 'criteria',  desc: t('nodeConfig.builtinVarCriteriaDesc') },
     ]
-    // 自动为每个上游节点注入 {nodeID}_content（无需 template_vars 绑定）
     for (const nodeId of upstreamNodeIds.value) {
       vars.push({
         name: `${nodeId}_content`,
-        desc: `节点"${nodeId}"的输出文本内容（自动注入，无需添加变量绑定）`,
+        desc: t('nodeConfig.nodeOutputDesc', { nodeId }),
       })
     }
     return vars
@@ -1209,23 +1211,22 @@ const builtinVars = computed(() => {
   if (type === 'processor') {
     const vars = [
       ...common,
-      { name: 'input',       desc: '上游节点传来的内容（待处理文本），通常是 generator 的回答' },
-      { name: 'timestamp',   desc: '当前执行时间，格式 RFC3339，如 2026-04-24T15:30:00+08:00' },
-      { name: 'target_lang', desc: '目标语言，仅在 operation=translate 时有效，取自节点 custom_config.target_lang' },
-      { name: 'metadata',    desc: '上游节点的完整元数据对象，可用 {{.metadata.key}} 访问其中任意字段' },
+      { name: 'input',       desc: t('nodeConfig.builtinVarInputDesc') },
+      { name: 'timestamp',   desc: t('nodeConfig.builtinVarTimestampDesc') },
+      { name: 'target_lang', desc: t('nodeConfig.builtinVarTargetLangDesc') },
+      { name: 'metadata',    desc: t('nodeConfig.builtinVarMetadataDesc') },
     ]
-    // 自动为每个上游节点注入 {nodeID}_content（无需 template_vars 绑定）
     for (const nodeId of upstreamNodeIds.value) {
       vars.push({
         name: `${nodeId}_content`,
-        desc: `节点"${nodeId}"的输出文本内容（自动注入，无需添加变量绑定）`,
+        desc: t('nodeConfig.nodeOutputDesc', { nodeId }),
       })
     }
     return vars
   }
   if (type === 'generator') {
     return [
-      { name: 'question', desc: '用户发送的原始问题原文（在 System Prompt 中可引用，用于告知模型上下文）' },
+      { name: 'question', desc: t('nodeConfig.builtinVarQuestionDescGenerator') },
     ]
   }
   return common
@@ -1239,15 +1240,15 @@ const upstreamVars = computed(() => {
     vars.push(
       {
         name: `${nodeId}_score`,
-        desc: `节点"${nodeId}"的评分（0~1，审核节点才有）。需在下方添加绑定：变量名=${nodeId}_score，来源路径=node.${nodeId}.score`,
+        desc: t('nodeConfig.upstreamVarScoreDesc', { nodeId }),
       },
       {
         name: `${nodeId}_passed`,
-        desc: `节点"${nodeId}"的审核是否通过（true/false）。需在下方添加绑定：变量名=${nodeId}_passed，来源路径=node.${nodeId}.passed`,
+        desc: t('nodeConfig.upstreamVarPassedDesc', { nodeId }),
       },
       {
         name: `${nodeId}_feedback`,
-        desc: `节点"${nodeId}"的审核反馈文本。需在下方添加绑定：变量名=${nodeId}_feedback，来源路径=node.${nodeId}.feedback`,
+        desc: t('nodeConfig.upstreamVarFeedbackDesc', { nodeId }),
       },
     )
   }
@@ -1256,10 +1257,10 @@ const upstreamVars = computed(() => {
 
 // 执行上下文变量（除 timestamp 对 processor/reviewer 已自动注入外，其余均需在下方添加 template_vars 绑定后使用）
 const contextVars = [
-  { name: 'timestamp',  desc: '当前执行时间，格式 RFC3339（processor/reviewer 节点已自动注入，可直接使用；其他节点需绑定路径：context.timestamp）' },
-  { name: 'user_id',    desc: '当前登录用户的 ID。需绑定路径：context.user_id' },
-  { name: 'session_id', desc: '当前对话的会话 ID。需绑定路径：context.session_id' },
-  { name: 'pipeline_id',desc: '当前流水线的 ID。需绑定路径：context.pipeline_id' },
+  { name: 'timestamp',  desc: t('nodeConfig.contextVarTimestampDesc') },
+  { name: 'user_id',    desc: t('nodeConfig.contextVarUserIdDesc') },
+  { name: 'session_id', desc: t('nodeConfig.contextVarSessionIdDesc') },
+  { name: 'pipeline_id',desc: t('nodeConfig.contextVarPipelineIdDesc') },
 ]
 
 const usesSystemPrompt = computed(() =>
@@ -1334,9 +1335,9 @@ const insertVar = async (varName: string) => {
 // ─── 表单基础逻辑 ─────────────────────────────────────────────────────────
 
 const rules = {
-  id:   [{ required: true, message: '请输入节点ID', trigger: 'blur' }],
-  name: [{ required: true, message: '请输入节点名称', trigger: 'blur' }],
-  type: [{ required: true, message: '请选择节点类型', trigger: 'change' }],
+  id:   [{ required: true, message: t('nodeConfig.validateNodeId'), trigger: 'blur' }],
+  name: [{ required: true, message: t('nodeConfig.validateNodeName'), trigger: 'blur' }],
+  type: [{ required: true, message: t('nodeConfig.validateNodeType'), trigger: 'change' }],
 }
 
 const otherNodes = computed(() => {
@@ -1402,36 +1403,36 @@ const needsLLM = (type: string) => {
 
 const getPromptLabel = (type: string) => {
   const labels: Record<string, string> = {
-    generator:  'System Prompt（可选）',
-    transparent_forward: 'System Prompt（注入时生效）',
-    aggregator: '聚合 Prompt（可选）',
+    generator:  t('nodeConfig.promptLabelGenerator'),
+    transparent_forward: t('nodeConfig.promptLabelTransparentForward'),
+    aggregator: t('nodeConfig.promptLabelAggregator'),
   }
-  return labels[type] || 'Prompt 模板'
+  return labels[type] || t('nodeConfig.promptLabelDefault')
 }
 
 const getPromptPlaceholder = (type: string) => {
   const placeholders: Record<string, string> = {
-    generator:  '可选。设置模型的角色或行为规范，如：你是一名专业的技术助手…',
-    transparent_forward: '开启注入后使用。网关人格会替换客户端 system 消息…',
-    aggregator: '可选。输入指导 LLM 如何聚合多个上游输出的指令，如：请综合以下回答，生成一个更全面、结构更清晰的答案…',
+    generator:  t('nodeConfig.promptPlaceholderGenerator'),
+    transparent_forward: t('nodeConfig.promptPlaceholderTransparentForward'),
+    aggregator: t('nodeConfig.promptPlaceholderAggregator'),
   }
-  return placeholders[type] || '在此编写 Prompt，点击下方变量名可快速插入'
+  return placeholders[type] || t('nodeConfig.promptPlaceholderDefault')
 }
 
 const getTypeDescription = (type: string) => {
   const desc: Record<string, string> = {
-    transparent_forward: '出站转发：直连/透明/跳板共用节点，用「出站策略」开关区分行为',
-    generator:  '生成初始内容（重组请求调用 LLM）；日常出站请优先用「出站转发」',
-    processor:  '对内容进行优化、翻译、摘要等后处理操作',
-    reviewer:   '对生成结果进行质量审核、打分，可配置评分标准',
-    router:     '根据条件路由到不同分支节点',
-    aggregator: '合并多个上游节点的结果',
-    parallel:   '并行执行多个节点',
-    cache:       '读取或写入缓存，支持精确/语义匹配，可配置不同的读写存储后端',
-    token_usage: '内置 Token 计量插件，记录上游 LLM 请求的 token 用量到数据库',
-    tool_call_injector: '在 Pipeline 中注入工具调用指令，支持条件触发和模板变量解析',
+    transparent_forward: t('nodeConfig.typeDescTransparentForward'),
+    generator:  t('nodeConfig.typeDescGenerator'),
+    processor:  t('nodeConfig.typeDescProcessor'),
+    reviewer:   t('nodeConfig.typeDescReviewer'),
+    router:     t('nodeConfig.typeDescRouter'),
+    aggregator: t('nodeConfig.typeDescAggregator'),
+    parallel:   t('nodeConfig.typeDescParallel'),
+    cache:       t('nodeConfig.typeDescCache'),
+    token_usage: t('nodeConfig.typeDescTokenUsage'),
+    tool_call_injector: t('nodeConfig.typeDescToolCallInjector'),
   }
-  return desc[type] || '自定义处理节点'
+  return desc[type] || t('nodeConfig.typeDescDefault')
 }
 
 const defaultTokenUsageCustomConfig = () => ({
@@ -1487,7 +1488,7 @@ const ensureTokenUsageDependsOn = () => {
   }
   if (changed) {
     localNode.value.depends_on = Array.from(current)
-    ElMessage.info('已自动将 Token 计量节点依赖到上游 LLM 节点，确保在生成之后执行')
+    ElMessage.info(t('nodeConfig.infoAutoDependTokenUsage'))
   }
 }
 
@@ -1499,10 +1500,10 @@ const onTypeChange = (newType: string) => {
       (n: any) => n.id !== localNode.value.id && n.type === 'generator' && (n.backend || n.config?.backend),
     )
     if (wasGenerator && hadBackend && otherGenerators.length === 0) {
-      ElMessage.warning('请勿将唯一的生成器改成 Token 计量。请保留生成器节点，并单独新增计量节点。')
+      ElMessage.warning(t('nodeConfig.warnCannotConvertSoleGenerator'))
     }
-    if (!localNode.value.name || localNode.value.name === '新节点') {
-      localNode.value.name = 'Token 计量'
+    if (!localNode.value.name || localNode.value.name === t('nodeConfig.defaultNameNewNode')) {
+      localNode.value.name = t('nodeConfig.typeTokenUsage')
     }
     ensureTokenUsageNodeFields()
     ensureTokenUsageDependsOn()
@@ -1528,8 +1529,8 @@ const onTypeChange = (newType: string) => {
   if (newType === 'transparent_forward') {
     ensureTransparentForwardNodeFields()
     delete localNode.value.config.prompt_template
-    if (!localNode.value.name || localNode.value.name === '新节点') {
-      localNode.value.name = '出站转发'
+    if (!localNode.value.name || localNode.value.name === t('nodeConfig.defaultNameNewNode')) {
+      localNode.value.name = t('nodeConfig.defaultNameEgressForward')
     }
     // 默认透明策略；用户可在「出站策略」改成直连/跳板
     egressConfig.value = defaultEgressConfig()
@@ -1787,7 +1788,7 @@ const saveNode = async () => {
     emit('update:node', { ...localNode.value })
 
     // 节点数据已在画布中更新，保存由主保存按钮统一处理
-    ElMessage.success('节点配置已更新，请点击"保存"按钮持久化到服务器')
+    ElMessage.success(t('nodeConfig.successNodeUpdated'))
     
     handleClose()
     

@@ -1,8 +1,8 @@
 <template>
   <div class="cache">
     <div class="header">
-      <h1 class="page-title">缓存管理</h1>
-      <p class="page-description">查看和管理缓存数据</p>
+      <h1 class="page-title">{{ t('cache.pageTitle') }}</h1>
+      <p class="page-description">{{ t('cache.pageDescription') }}</p>
     </div>
 
     <div class="content-wrapper full-width">
@@ -13,7 +13,7 @@
             <!-- 命中率展示 -->
             <el-card class="stats-card">
               <template #header>
-                <span class="card-title">缓存命中率</span>
+                <span class="card-title">{{ t('cache.hitRate') }}</span>
               </template>
               <div class="stats-content">
                 <el-progress
@@ -28,11 +28,11 @@
                 </el-progress>
                 <div class="stats-numbers">
                   <div class="stat-item">
-                    <span class="stat-label">命中</span>
+                    <span class="stat-label">{{ t('cache.hits') }}</span>
                     <span class="stat-value hit">{{ formatNumber(cacheStats.hits) }}</span>
                   </div>
                   <div class="stat-item">
-                    <span class="stat-label">未命中</span>
+                    <span class="stat-label">{{ t('cache.misses') }}</span>
                     <span class="stat-value miss">{{ formatNumber(cacheStats.misses) }}</span>
                   </div>
                 </div>
@@ -42,26 +42,26 @@
             <!-- 缓存状态 -->
             <el-card class="info-card">
               <template #header>
-                <span class="card-title">缓存状态</span>
+                <span class="card-title">{{ t('cache.cacheStatus') }}</span>
               </template>
               <div class="status-list">
                 <div class="status-item">
-                  <span class="status-label">启用状态</span>
+                  <span class="status-label">{{ t('cache.enabledStatus') }}</span>
                   <el-tag :type="cacheStats.enabled ? 'success' : 'info'" size="small">
-                    {{ cacheStats.enabled ? '已启用' : '已禁用' }}
+                    {{ cacheStats.enabled ? t('cache.enabled') : t('cache.disabled') }}
                   </el-tag>
                 </div>
                 <div class="status-item">
-                  <span class="status-label">缓存类型</span>
-                  <span>{{ cacheStats.type || '内存缓存' }}</span>
+                  <span class="status-label">{{ t('cache.cacheType') }}</span>
+                  <span>{{ cacheStats.type || t('cache.memoryCache') }}</span>
                 </div>
                 <div class="status-item">
-                  <span class="status-label">过期时间</span>
-                  <span>{{ cacheStats.ttl ? `${cacheStats.ttl}s` : '永久' }}</span>
+                  <span class="status-label">{{ t('cache.expiry') }}</span>
+                  <span>{{ cacheStats.ttl ? `${cacheStats.ttl}s` : t('cache.permanent') }}</span>
                 </div>
                 <div class="status-item">
-                  <span class="status-label">最大条目</span>
-                  <span>{{ cacheStats.max_items || '无限制' }}</span>
+                  <span class="status-label">{{ t('cache.maxEntries') }}</span>
+                  <span>{{ cacheStats.max_items || t('cache.unlimited') }}</span>
                 </div>
               </div>
             </el-card>
@@ -70,7 +70,7 @@
             <el-card class="actions-card">
               <el-button :loading="loading || listLoading" @click="refreshAll" style="width: 100%">
                 <el-icon><Refresh /></el-icon>
-                刷新数据
+                {{ t('cache.refreshData') }}
               </el-button>
               <el-button
                 type="danger"
@@ -79,7 +79,7 @@
                 style="width: 100%; margin-left: 0; margin-top: 8px"
               >
                 <el-icon><Delete /></el-icon>
-                清空缓存
+                {{ t('cache.clearCache') }}
               </el-button>
             </el-card>
           </div>
@@ -90,59 +90,58 @@
           <el-card class="list-card" v-loading="listLoading">
             <template #header>
               <div class="card-header">
-                <span class="card-title">缓存列表</span>
+                <span class="card-title">{{ t('cache.cacheList') }}</span>
                 <div class="filter-bar">
-                  <el-select v-model="cacheType" placeholder="缓存类型" style="width: 120px" @change="loadCacheList">
-                    <el-option label="全部类型" value="all"></el-option>
-                    <el-option label="精确匹配" value="exact"></el-option>
-                    <el-option label="语义匹配" value="semantic"></el-option>
+                  <el-select v-model="cacheType" :placeholder="t('cache.filterPlaceholder.cacheType')" style="width: 120px" @change="loadCacheList">
+                    <el-option :label="t('cache.filterOptions.allTypes')" value="all"></el-option>
+                    <el-option :label="t('cache.filterOptions.exact')" value="exact"></el-option>
+                    <el-option :label="t('cache.filterOptions.semantic')" value="semantic"></el-option>
                   </el-select>
-                  <el-select v-model="saveOnlyFilter" placeholder="数据来源" style="width: 120px; margin-left: 8px" @change="loadCacheList">
-                    <el-option label="全部数据" value="all"></el-option>
-                    <el-option label="仅保存" value="save_only"></el-option>
-                    <el-option label="缓存数据" value="cache"></el-option>
+                  <el-select v-model="saveOnlyFilter" :placeholder="t('cache.filterPlaceholder.dataSource')" style="width: 120px; margin-left: 8px" @change="loadCacheList">
+                    <el-option :label="t('cache.filterOptions.allData')" value="all"></el-option>
+                    <el-option :label="t('cache.filterOptions.saveOnly')" value="save_only"></el-option>
+                    <el-option :label="t('cache.filterOptions.cacheData')" value="cache"></el-option>
                   </el-select>
-                  <el-select v-model="storageFilter" placeholder="存储后端" style="width: 140px; margin-left: 8px" @change="loadCacheList" clearable>
-                    <el-option label="全部存储" value="all"></el-option>
+                  <el-select v-model="storageFilter" :placeholder="t('cache.filterPlaceholder.storage')" style="width: 140px; margin-left: 8px" @change="loadCacheList" clearable>
+                    <el-option :label="t('cache.filterOptions.allStorage')" value="all"></el-option>
                     <el-option v-for="storage in storages" :key="storage.name" :label="storage.name" :value="storage.name">
                       <span>{{ storage.name }}</span>
-                      <el-tag v-if="storage.is_default" type="success" size="small" style="margin-left: 4px">默认</el-tag>
+                      <el-tag v-if="storage.is_default" type="success" size="small" style="margin-left: 4px">{{ t('cache.filterOptions.default') }}</el-tag>
                     </el-option>
                   </el-select>
                   <el-button :loading="listLoading || loading" @click="refreshAll" style="margin-left: 8px">
                     <el-icon><Refresh /></el-icon>
-                    刷新
+                    {{ t('cache.refresh') }}
                   </el-button>
                 </div>
               </div>
             </template>
             <el-table :data="cacheList" stripe :max-height="tableMaxHeight">
-              <el-table-column prop="cache_type" label="类型" width="70">
+              <el-table-column prop="cache_type" :label="t('cache.table.type')" width="70">
                 <template #default="{ row }">
                   <el-tag v-if="row.metadata?.save_only" type="warning" size="small">
-                    保存
+                    {{ t('cache.table.save') }}
                   </el-tag>
                   <el-tag v-else :type="row.cache_type === 'exact' ? 'primary' : 'success'" size="small">
-                    {{ row.cache_type === 'exact' ? '精确' : '语义' }}
+                    {{ row.cache_type === 'exact' ? t('cache.table.exact') : t('cache.table.semantic') }}
                   </el-tag>
                 </template>
               </el-table-column>
-              <!-- 问题列：优先显示可读问题文本，用户最关心的字段 -->
-              <el-table-column label="问题/请求" min-width="200" show-overflow-tooltip>
+              <!-- 问题列 -->
+              <el-table-column :label="t('cache.table.question')" min-width="200" show-overflow-tooltip>
                 <template #default="{ row }">
                   <span :title="row.question || row.key">{{ row.question || row.key }}</span>
                 </template>
               </el-table-column>
-              <!-- 缓存键列：技术性 ID，精确匹配和删除依赖此字段 -->
-              <el-table-column label="缓存键" width="140" show-overflow-tooltip>
+              <el-table-column :label="t('cache.table.cacheKey')" width="140" show-overflow-tooltip>
                 <template #default="{ row }">
                   <el-text type="info" size="small" style="font-family: monospace; font-size: 11px;">
                     {{ row.key }}
                   </el-text>
                 </template>
               </el-table-column>
-              <el-table-column prop="model" label="模型" width="140" show-overflow-tooltip></el-table-column>
-              <el-table-column prop="storage_backend" label="存储" width="70">
+              <el-table-column prop="model" :label="t('cache.table.model')" width="140" show-overflow-tooltip></el-table-column>
+              <el-table-column prop="storage_backend" :label="t('cache.table.storage')" width="70">
                 <template #default="{ row }">
                   <el-tag v-if="row.storage_backend" type="info" size="small">
                     {{ row.storage_backend }}
@@ -150,22 +149,22 @@
                   <span v-else>-</span>
                 </template>
               </el-table-column>
-              <el-table-column prop="timestamp" label="创建时间" width="150">
+              <el-table-column prop="timestamp" :label="t('cache.table.createdAt')" width="150">
                 <template #default="{ row }">
                   {{ formatDate(row.timestamp) }}
                 </template>
               </el-table-column>
-              <el-table-column prop="similarity" label="相似度" width="70">
+              <el-table-column prop="similarity" :label="t('cache.table.similarity')" width="70">
                 <template #default="{ row }">
                   <span v-if="row.similarity !== null && row.similarity !== undefined">{{ (row.similarity * 100).toFixed(1) }}%</span>
                   <span v-else>-</span>
                 </template>
               </el-table-column>
-              <el-table-column label="操作" width="100" fixed="right">
+              <el-table-column :label="t('cache.table.actions')" width="100" fixed="right">
                 <template #default="{ row }">
                   <el-button type="primary" size="small" link @click="handleViewDetail(row)">
                     <el-icon><View /></el-icon>
-                    查看
+                    {{ t('cache.table.view') }}
                   </el-button>
                   <el-button type="danger" size="small" link @click="handleDeleteEntry(row)">
                     <el-icon><Delete /></el-icon>
@@ -191,56 +190,56 @@
       <!-- 详情对话框 -->
       <el-dialog
         v-model="detailDialogVisible"
-        title="缓存记录详情"
+        :title="t('cache.detailDialog.title')"
         width="700px"
         :close-on-click-modal="true"
       >
         <div v-loading="detailLoading">
           <template v-if="detailData">
             <el-descriptions :column="2" border>
-              <el-descriptions-item label="缓存键">
+              <el-descriptions-item :label="t('cache.detailDialog.cacheKey')">
                 <el-text style="font-family: monospace; font-size: 12px;">{{ detailData.key }}</el-text>
               </el-descriptions-item>
-              <el-descriptions-item label="类型">
+              <el-descriptions-item :label="t('cache.detailDialog.type')">
                 <el-tag v-if="detailData.metadata?.save_only" type="warning" size="small">
-                  仅保存
+                  {{ t('cache.detailDialog.saveOnly') }}
                 </el-tag>
                 <el-tag v-else :type="detailData.cache_type === 'exact' ? 'primary' : 'success'" size="small">
-                  {{ detailData.cache_type === 'exact' ? '精确匹配' : '语义匹配' }}
+                  {{ detailData.cache_type === 'exact' ? t('cache.detailDialog.exactMatch') : t('cache.detailDialog.semanticMatch') }}
                 </el-tag>
               </el-descriptions-item>
-              <el-descriptions-item label="模型">{{ detailData.model }}</el-descriptions-item>
-              <el-descriptions-item label="存储">{{ detailData.storage_backend }}</el-descriptions-item>
-              <el-descriptions-item label="创建时间">{{ formatDate(detailData.timestamp) }}</el-descriptions-item>
-              <el-descriptions-item label="过期时间">
-                {{ detailData.expires_at ? formatDate(detailData.expires_at) : '永不过期' }}
+              <el-descriptions-item :label="t('cache.detailDialog.model')">{{ detailData.model }}</el-descriptions-item>
+              <el-descriptions-item :label="t('cache.detailDialog.storage')">{{ detailData.storage_backend }}</el-descriptions-item>
+              <el-descriptions-item :label="t('cache.detailDialog.createdAt')">{{ formatDate(detailData.timestamp) }}</el-descriptions-item>
+              <el-descriptions-item :label="t('cache.detailDialog.expiresAt')">
+                {{ detailData.expires_at ? formatDate(detailData.expires_at) : t('cache.detailDialog.neverExpires') }}
               </el-descriptions-item>
-              <el-descriptions-item label="相似度" v-if="detailData.similarity !== undefined && detailData.similarity !== null">
+              <el-descriptions-item :label="t('cache.detailDialog.similarity')" v-if="detailData.similarity !== undefined && detailData.similarity !== null">
                 {{ (detailData.similarity * 100).toFixed(2) }}%
               </el-descriptions-item>
             </el-descriptions>
 
-            <el-divider content-position="left">问题/请求</el-divider>
+            <el-divider content-position="left">{{ t('cache.detailDialog.questionDivider') }}</el-divider>
             <div class="detail-content">
               <pre>{{ detailData.question }}</pre>
             </div>
 
-            <el-divider content-position="left">答案/响应</el-divider>
+            <el-divider content-position="left">{{ t('cache.detailDialog.responseDivider') }}</el-divider>
             <div class="detail-content">
               <pre>{{ detailData.response }}</pre>
             </div>
 
             <template v-if="detailData.metadata && Object.keys(detailData.metadata).length > 0">
-              <el-divider content-position="left">元数据</el-divider>
+              <el-divider content-position="left">{{ t('cache.detailDialog.metadataDivider') }}</el-divider>
               <div class="detail-content">
                 <pre>{{ formatJson(detailData.metadata) }}</pre>
               </div>
             </template>
           </template>
-          <el-empty v-else-if="!detailLoading" description="暂无数据" />
+          <el-empty v-else-if="!detailLoading" :description="t('cache.detailDialog.noData')" />
         </div>
         <template #footer>
-          <el-button @click="detailDialogVisible = false">关闭</el-button>
+          <el-button @click="detailDialogVisible = false">{{ t('cache.detailDialog.close') }}</el-button>
         </template>
       </el-dialog>
     </div>
@@ -249,10 +248,13 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Collection, CircleCheck, CircleClose, Coin, Refresh, Delete, View } from '@element-plus/icons-vue'
 import { getCacheStats, clearCache, getCacheList, deleteCacheEntry, getStorages } from '@/api'
 import { formatNumber, formatBytes } from '@/utils/format'
+
+const { t } = useI18n()
 
 const loading = ref(false)
 const clearing = ref(false)
@@ -332,7 +334,7 @@ async function load() {
     }
   } catch (error: any) {
     console.error('Failed to load cache stats:', error)
-    ElMessage.error('加载失败: ' + (error.message || '未知错误'))
+    ElMessage.error(t('cache.message.loadFailed') + ': ' + (error.message || t('cache.message.unknownError')))
   } finally {
     loading.value = false
   }
@@ -349,7 +351,6 @@ async function loadStorageList() {
     storages.value = Array.isArray(data?.storages) ? data.storages : []
   } catch (error: any) {
     console.error('Failed to load storage list:', error)
-    // 不显示错误消息，避免打扰用户
   }
 }
 
@@ -368,7 +369,7 @@ async function loadCacheList() {
     pagination.value.total = data.total_count ?? data.total ?? 0
   } catch (error: any) {
     console.error('Failed to load cache list:', error)
-    ElMessage.error('加载缓存列表失败: ' + (error.message || '未知错误'))
+    ElMessage.error(t('cache.message.loadListFailed') + ': ' + (error.message || t('cache.message.unknownError')))
   } finally {
     listLoading.value = false
   }
@@ -377,24 +378,24 @@ async function loadCacheList() {
 async function handleClear() {
   try {
     await ElMessageBox.confirm(
-      '确定要清空所有缓存数据吗？此操作不可恢复。',
-      '确认清空',
+      t('cache.confirm.clearMessage'),
+      t('cache.confirm.clearTitle'),
       {
         type: 'warning',
-        confirmButtonText: '确定',
-        cancelButtonText: '取消'
+        confirmButtonText: t('cache.confirm.confirm'),
+        cancelButtonText: t('cache.confirm.cancel')
       }
     )
 
     clearing.value = true
     await clearCache()
-    ElMessage.success('缓存已清空')
+    ElMessage.success(t('cache.message.cleared'))
     await load()
     await loadCacheList()
   } catch (error: any) {
     if (error !== 'cancel') {
       console.error('Failed to clear cache:', error)
-      ElMessage.error('清空失败: ' + (error.message || '未知错误'))
+      ElMessage.error(t('cache.message.clearFailed') + ': ' + (error.message || t('cache.message.unknownError')))
     }
   } finally {
     clearing.value = false
@@ -404,22 +405,22 @@ async function handleClear() {
 async function handleDeleteEntry(row: any) {
   try {
     await ElMessageBox.confirm(
-      '确定要删除此缓存条目吗？',
-      '确认删除',
+      t('cache.confirm.deleteMessage'),
+      t('cache.confirm.deleteTitle'),
       {
         type: 'warning',
-        confirmButtonText: '确定',
-        cancelButtonText: '取消'
+        confirmButtonText: t('cache.confirm.confirm'),
+        cancelButtonText: t('cache.confirm.cancel')
       }
     )
     await deleteCacheEntry(row.key)
-    ElMessage.success('删除成功')
+    ElMessage.success(t('cache.message.deleted'))
     await load()
     await loadCacheList()
   } catch (error: any) {
     if (error !== 'cancel') {
       console.error('Failed to delete entry:', error)
-      ElMessage.error('删除失败: ' + (error.message || '未知错误'))
+      ElMessage.error(t('cache.message.deleteFailed') + ': ' + (error.message || t('cache.message.unknownError')))
     }
   }
 }
@@ -445,7 +446,7 @@ async function handleViewDetail(row: any) {
     }
   } catch (error: any) {
     console.error('Failed to load detail:', error)
-    ElMessage.error('加载详情失败: ' + (error.message || '未知错误'))
+    ElMessage.error(t('cache.message.detailLoadFailed') + ': ' + (error.message || t('cache.message.unknownError')))
   } finally {
     detailLoading.value = false
   }

@@ -5,25 +5,25 @@
         v-model="dateRange"
         type="daterange"
         size="small"
-        range-separator="至"
-        start-placeholder="开始"
-        end-placeholder="结束"
+        :range-separator="t('usageMetricsSummary.dateSeparator')"
+        :start-placeholder="t('usageMetricsSummary.dateStart')"
+        :end-placeholder="t('usageMetricsSummary.dateEnd')"
         value-format="YYYY-MM-DD"
         style="width: 260px"
         @change="reload"
       />
       <el-select v-model="groupBy" size="small" style="width: 120px" @change="reload">
-        <el-option label="按模型" value="model" />
-        <el-option label="按后端" value="backend" />
-        <el-option label="按日期" value="date" />
+        <el-option :label="t('usageMetricsSummary.groupByModel')" value="model" />
+        <el-option :label="t('usageMetricsSummary.groupByBackend')" value="backend" />
+        <el-option :label="t('usageMetricsSummary.groupByDate')" value="date" />
       </el-select>
-      <el-button size="small" :loading="loading" @click="reload">刷新计量</el-button>
+      <el-button size="small" :loading="loading" @click="reload">{{ t('usageMetricsSummary.refresh') }}</el-button>
       <el-button v-if="effectiveShowBilling" size="small" type="primary" plain @click="emit('open-billing')">
-        计费规则
+        {{ t('usageMetricsSummary.billingRules') }}
       </el-button>
       <el-radio-group v-model="displayCurrency" size="small" @change="onDisplayCurrencyChange">
-        <el-radio-button value="USD">美元</el-radio-button>
-        <el-radio-button value="CNY">人民币</el-radio-button>
+        <el-radio-button value="USD">{{ t('usageMetricsSummary.currencyUSD') }}</el-radio-button>
+        <el-radio-button value="CNY">{{ t('usageMetricsSummary.currencyCNY') }}</el-radio-button>
       </el-radio-group>
       <slot name="actions" />
     </div>
@@ -31,37 +31,37 @@
     <div class="usage-stats">
       <div class="stat">
         <div class="stat-value">{{ currencySymbol }}{{ formatCost(summary.total_cost_usd) }}</div>
-        <div class="stat-label">总成本 ({{ displayCurrency }})</div>
+        <div class="stat-label">{{ t('usageMetricsSummary.totalCost', { currency: displayCurrency }) }}</div>
       </div>
       <div class="stat">
         <div class="stat-value">{{ formatNumber(summary.total_tokens || stats.total_tokens) }}</div>
-        <div class="stat-label">Token 消耗</div>
+        <div class="stat-label">{{ t('usageMetricsSummary.tokens') }}</div>
       </div>
       <div class="stat">
         <div class="stat-value">{{ formatNumber(stats.request_count) }}</div>
-        <div class="stat-label">请求次数</div>
+        <div class="stat-label">{{ t('usageMetricsSummary.requests') }}</div>
       </div>
       <div class="stat">
         <div class="stat-value">{{ formatNumber(stats.total_prompt_tokens) }}</div>
-        <div class="stat-label">输入</div>
+        <div class="stat-label">{{ t('usageMetricsSummary.input') }}</div>
       </div>
       <div class="stat">
         <div class="stat-value">{{ formatNumber(stats.total_completion_tokens) }}</div>
-        <div class="stat-label">输出</div>
+        <div class="stat-label">{{ t('usageMetricsSummary.output') }}</div>
       </div>
     </div>
 
     <div v-if="summary.groups?.length" class="groups-block">
-      <div class="block-title">成本分布</div>
+      <div class="block-title">{{ t('usageMetricsSummary.costDistribution') }}</div>
       <el-table :data="summary.groups" size="small" stripe :max-height="mode === 'compact' ? 180 : 320">
         <el-table-column prop="key" :label="groupByLabel" min-width="120" />
-        <el-table-column label="成本" width="110">
+        <el-table-column :label="t('usageMetricsSummary.costColumn')" width="110">
           <template #default="{ row }">{{ currencySymbol }}{{ formatCost(row.cost_usd) }}</template>
         </el-table-column>
-        <el-table-column prop="tokens" label="Token" width="100">
+        <el-table-column prop="tokens" :label="t('usageMetricsSummary.tokenColumn')" width="100">
           <template #default="{ row }">{{ formatNumber(row.tokens) }}</template>
         </el-table-column>
-        <el-table-column prop="request_count" label="请求" width="80" />
+        <el-table-column prop="request_count" :label="t('usageMetricsSummary.requestColumn')" width="80" />
       </el-table>
     </div>
 
@@ -71,6 +71,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { getUserUsage } from '@/api/token-usage'
 import * as costApi from '@/api/cost'
 import { useAuthStore } from '@/stores/auth'
@@ -82,6 +83,8 @@ import {
   setDisplayCurrency,
   type DisplayCurrency
 } from '@/utils/billing-currency'
+
+const { t } = useI18n()
 
 const props = withDefaults(
   defineProps<{
@@ -98,7 +101,6 @@ const props = withDefaults(
 
 const authStore = useAuthStore()
 const { isTeam } = useEdition()
-/** team 下仅超管可见计费规则；personal/minimal 保持入口 */
 const effectiveShowBilling = computed(
   () => props.showBillingButton && !(isTeam.value && !authStore.isAdmin)
 )
@@ -135,9 +137,9 @@ const displayCurrency = ref<DisplayCurrency>(getDisplayCurrency())
 const usdToCny = computed(() => summary.value.usd_to_cny || 7.2)
 const currencySymbol = computed(() => symbolOf(displayCurrency.value))
 const groupByLabel = computed(() => {
-  if (groupBy.value === 'backend') return '后端'
-  if (groupBy.value === 'date') return '日期'
-  return '模型'
+  if (groupBy.value === 'backend') return t('usageMetricsSummary.groupByBackendLabel')
+  if (groupBy.value === 'date') return t('usageMetricsSummary.groupByDateLabel')
+  return t('usageMetricsSummary.groupByModelLabel')
 })
 
 function formatNumber(n: number | undefined | null): string {
@@ -169,7 +171,6 @@ async function loadUsage() {
     stats.total_completion_tokens = Number(data?.total_completion_tokens || 0)
     stats.request_count = Number(data?.request_count || 0)
   } catch {
-    /* ignore */
   }
 }
 
@@ -182,7 +183,6 @@ async function loadCostSummary() {
     }
     summary.value = await costApi.getCostSummary(params)
   } catch (err: any) {
-    // personal 旧版若 cost/summary 被 team-only 拦住会 403；勿静默显示假 0 而不提示
     const status = err?.response?.status ?? err?.status
     summary.value = {
       ...summary.value,

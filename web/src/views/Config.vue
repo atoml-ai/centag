@@ -2,17 +2,17 @@
   <div class="config">
     <div class="header config-header">
       <div class="header-left">
-        <h1 class="page-title">系统配置</h1>
-        <p class="page-description">服务概览与韧性（HTTP 重试/熔断 + 降级策略）；默认后端/模型在首页设置</p>
+        <h1 class="page-title">{{ t('config.title') }}</h1>
+        <p class="page-description">{{ t('config.description') }}</p>
       </div>
       <div v-if="showConfigActions" class="header-actions">
         <el-button :loading="loading" @click="load">
           <el-icon><Refresh /></el-icon>
-          刷新
+          {{ t('config.refresh') }}
         </el-button>
         <el-button type="primary" :loading="saving" @click="save">
           <el-icon><Check /></el-icon>
-          保存配置
+          {{ t('config.saveConfig') }}
         </el-button>
       </div>
     </div>
@@ -20,31 +20,31 @@
     <div class="config-tabs-wrapper" v-loading="loading">
       <el-tabs v-model="activeTab" type="border-card" class="config-tabs">
         <!-- 服务概览 -->
-        <el-tab-pane label="服务概览" name="overview">
+        <el-tab-pane :label="t('config.serviceOverview')" name="overview">
           <el-form label-width="120px">
-            <el-divider content-position="left">监听信息（只读）</el-divider>
-            <el-form-item label="服务主机">
+            <el-divider content-position="left">{{ t('config.listenInfo') }}</el-divider>
+            <el-form-item :label="t('config.serviceHost')">
               <el-input :model-value="config.server.host" disabled />
-              <div class="form-tip">由安装 / 环境变量决定；此处保存不会热重启监听</div>
+              <div class="form-tip">{{ t('config.serviceHostTip') }}</div>
             </el-form-item>
-            <el-form-item label="服务端口">
+            <el-form-item :label="t('config.servicePort')">
               <el-input-number :model-value="config.server.port" disabled style="width: 200px" />
-              <div class="form-tip">改端口请修改启动配置（如 LLM_PROXY_SERVER_PORT）后重启</div>
+              <div class="form-tip">{{ t('config.servicePortTip') }}</div>
             </el-form-item>
 
-            <el-divider content-position="left">响应行为</el-divider>
-            <el-form-item label="响应追踪">
+            <el-divider content-position="left">{{ t('config.responseBehavior') }}</el-divider>
+            <el-form-item :label="t('config.responseTrace')">
               <el-switch v-model="config.proxy.response_trace_banner" />
               <div class="form-tip">
-                开启后在回复前附加单行流程：req → 流水线:节点链 → 后端/模型 → resp（热生效）
+                {{ t('config.responseTraceDesc') }}
               </div>
             </el-form-item>
 
-            <el-divider content-position="left">相关入口</el-divider>
+            <el-divider content-position="left">{{ t('config.relatedEntries') }}</el-divider>
             <div class="link-cards">
               <el-card shadow="never" class="link-card" @click="router.push('/dashboard')">
-                <div class="link-title">默认后端 / 模型 / 流水线</div>
-                <div class="link-desc">在首页面板设置，并显示于底部状态栏</div>
+                <div class="link-title">{{ t('config.defaultBackendModelPipeline') }}</div>
+                <div class="link-desc">{{ t('config.defaultBackendModelPipelineDesc') }}</div>
               </el-card>
               <el-card
                 v-if="showSystemProxyLink"
@@ -52,33 +52,33 @@
                 class="link-card"
                 @click="router.push('/system-proxy')"
               >
-                <div class="link-title">本机系统代理</div>
-                <div class="link-desc">PAC / MITM 主入口在「接入 → 系统代理」</div>
+                <div class="link-title">{{ t('config.systemProxyEntry') }}</div>
+                <div class="link-desc">{{ t('config.systemProxyEntryDesc') }}</div>
               </el-card>
               <el-card shadow="never" class="link-card" @click="router.push('/profile')">
-                <div class="link-title">账号与改密</div>
-                <div class="link-desc">个人中心修改密码与 API Key</div>
+                <div class="link-title">{{ t('config.accountAndPassword') }}</div>
+                <div class="link-desc">{{ t('config.accountAndPasswordDesc') }}</div>
               </el-card>
             </div>
           </el-form>
         </el-tab-pane>
 
         <!-- 韧性：HTTP 重试/熔断 + 降级策略 -->
-        <el-tab-pane label="韧性" name="resilience">
+        <el-tab-pane :label="t('config.resilience')" name="resilience">
           <el-tabs v-model="resilienceSubTab" class="resilience-sub-tabs">
-            <el-tab-pane label="HTTP 重试与熔断" name="http">
+            <el-tab-pane :label="t('config.httpRetryAndCircuitBreaker')" name="http">
               <el-form label-width="140px">
                 <el-alert
                   type="info"
                   :closable="false"
                   show-icon
                   class="section-alert"
-                  title="代理韧性（请求层）"
-                  description="配置上游失败时的 HTTP 重试与熔断。模型/后端切换链路请使用旁边的「降级策略」页签。"
+                  :title="t('config.proxyResilience')"
+                  :description="t('config.proxyResilienceDesc')"
                 />
 
-                <el-divider content-position="left">HTTP 重试</el-divider>
-                <el-form-item label="可重试状态码">
+                <el-divider content-position="left">{{ t('config.httpRetry') }}</el-divider>
+                <el-form-item :label="t('config.retryableStatusCodes')">
                   <el-select
                     v-model="config.proxy.retryable_status_codes"
                     multiple
@@ -86,7 +86,7 @@
                     allow-create
                     default-first-option
                     style="width: 400px"
-                    placeholder="如 429, 500, 502, 503, 504"
+                    :placeholder="t('config.retryableStatusCodesPlaceholder')"
                   >
                     <el-option
                       v-for="code in [400, 401, 403, 404, 408, 429, 500, 502, 503, 504]"
@@ -95,17 +95,17 @@
                       :value="code"
                     />
                   </el-select>
-                  <div class="form-tip">上游返回这些状态码时触发重试（热生效）</div>
+                  <div class="form-tip">{{ t('config.retryableStatusCodesTip') }}</div>
                 </el-form-item>
-                <el-form-item label="超时可重试">
+                <el-form-item :label="t('config.timeoutRetry')">
                   <el-switch v-model="config.proxy.timeout_retryable" />
                 </el-form-item>
-                <el-form-item label="网络错误可重试">
+                <el-form-item :label="t('config.networkErrorRetry')">
                   <el-switch v-model="config.proxy.network_retryable" />
                 </el-form-item>
 
-                <el-divider content-position="left">熔断器</el-divider>
-                <el-form-item label="失败阈值">
+                <el-divider content-position="left">{{ t('config.circuitBreaker') }}</el-divider>
+                <el-form-item :label="t('config.failureThreshold')">
                   <el-input-number
                     v-model="config.proxy.circuit_breaker.failure_threshold"
                     :min="1"
@@ -113,7 +113,7 @@
                     style="width: 150px"
                   />
                 </el-form-item>
-                <el-form-item label="恢复成功数">
+                <el-form-item :label="t('config.recoverySuccessCount')">
                   <el-input-number
                     v-model="config.proxy.circuit_breaker.success_threshold"
                     :min="1"
@@ -121,25 +121,25 @@
                     style="width: 150px"
                   />
                 </el-form-item>
-                <el-form-item label="熔断持续时间">
+                <el-form-item :label="t('config.circuitBreakerDuration')">
                   <el-input-number
                     v-model="config.proxy.circuit_breaker.timeout_sec"
                     :min="10"
                     :max="300"
                     style="width: 150px"
                   />
-                  <span class="unit">秒</span>
+                  <span class="unit">{{ t('config.seconds') }}</span>
                 </el-form-item>
-                <el-form-item label="滑动窗口">
+                <el-form-item :label="t('config.slidingWindow')">
                   <el-input-number
                     v-model="config.proxy.circuit_breaker.window_sec"
                     :min="10"
                     :max="300"
                     style="width: 150px"
                   />
-                  <span class="unit">秒</span>
+                  <span class="unit">{{ t('config.seconds') }}</span>
                 </el-form-item>
-                <el-form-item label="429 加重系数">
+                <el-form-item :label="t('config.backoff429')">
                   <el-input-number
                     v-model="config.proxy.circuit_breaker.rate_limit_weight"
                     :min="1"
@@ -149,7 +149,7 @@
                 </el-form-item>
               </el-form>
             </el-tab-pane>
-            <el-tab-pane label="降级策略" name="fallback">
+            <el-tab-pane :label="t('config.fallbackPolicy')" name="fallback">
               <FallbackPolicyView embedded />
             </el-tab-pane>
           </el-tabs>
@@ -162,6 +162,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
 import { Refresh, Check } from '@element-plus/icons-vue'
 import { getConfig, saveConfig } from '@/api'
@@ -174,6 +175,7 @@ const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
 const { edition } = useEdition()
+const { t } = useI18n()
 
 const loading = ref(false)
 const saving = ref(false)
@@ -306,7 +308,7 @@ async function load() {
     }
   } catch (error: any) {
     console.error('Failed to load config:', error)
-    ElMessage.error('加载失败: ' + (error.message || '未知错误'))
+    ElMessage.error(t('config.loadFailed') + ': ' + (error.message || t('config.unknownError')))
   } finally {
     loading.value = false
   }
@@ -316,10 +318,10 @@ async function save() {
   saving.value = true
   try {
     await saveConfig(config.value)
-    ElMessage.success('配置已保存')
+    ElMessage.success(t('config.configSaved'))
   } catch (error: any) {
     console.error('Failed to save config:', error)
-    ElMessage.error('保存失败: ' + (error.message || '未知错误'))
+    ElMessage.error(t('config.saveFailed') + ': ' + (error.message || t('config.unknownError')))
   } finally {
     saving.value = false
   }

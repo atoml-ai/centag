@@ -1,8 +1,8 @@
 <template>
   <div class="evaluation">
     <div class="header">
-      <h1 class="page-title">缓存评估管理</h1>
-      <p class="page-description">配置和管理缓存价值评估插件，智能判断哪些响应值得缓存</p>
+      <h1 class="page-title">{{ $t('evaluation.title') }}</h1>
+      <p class="page-description">{{ $t('evaluation.subtitle') }}</p>
     </div>
 
     <div class="content-wrapper">
@@ -14,36 +14,36 @@
             <el-card class="info-card">
               <template #header>
                 <div class="card-header">
-                  <span class="card-title">评估统计</span>
+                  <span class="card-title">{{ $t('evaluation.evalStats') }}</span>
                 </div>
               </template>
               <el-descriptions :column="1" border size="small">
-                <el-descriptions-item label="评估状态">
+                <el-descriptions-item :label="$t('evaluation.evalStatus')">
                   <el-tag :type="evaluationStats.enabled ? 'success' : 'info'">
-                    {{ evaluationStats.enabled ? '已启用' : '已禁用' }}
+                    {{ evaluationStats.enabled ? $t('evaluation.enabled') : $t('evaluation.disabled') }}
                   </el-tag>
                 </el-descriptions-item>
-                <el-descriptions-item label="精确匹配缓存">
+                <el-descriptions-item :label="$t('evaluation.exactMatchCache')">
                   <el-switch
                     v-model="exactMatchEnabled"
                     @change="handleExactMatchChange"
                     :loading="exactMatchLoading"
                   />
                 </el-descriptions-item>
-                <el-descriptions-item label="总评估次数">
+                <el-descriptions-item :label="$t('evaluation.totalEvals')">
                   {{ formatNumber(evaluationStats.total_executions || 0) }}
                 </el-descriptions-item>
-                <el-descriptions-item label="启用插件数">
+                <el-descriptions-item :label="$t('evaluation.enabledPlugins')">
                   {{ evaluationStats.enabled_plugins || 0 }}
                 </el-descriptions-item>
-                <el-descriptions-item label="缓存命中率">
+                <el-descriptions-item :label="$t('evaluation.cacheHitRate')">
                   {{ cacheHitRate }}%
                 </el-descriptions-item>
               </el-descriptions>
               <div class="card-actions">
                 <el-button :loading="loading" @click="load" style="width: 100%">
                   <el-icon><Refresh /></el-icon>
-                  刷新
+                  {{ $t('evaluation.refresh') }}
                 </el-button>
               </div>
             </el-card>
@@ -51,7 +51,7 @@
             <!-- 评估结果分布 -->
             <el-card class="chart-card">
               <template #header>
-                <span class="card-title">评估结果分布</span>
+                <span class="card-title">{{ $t('evaluation.evalResultDistribution') }}</span>
               </template>
               <div class="chart-container">
                 <el-progress
@@ -67,11 +67,11 @@
                 <div class="chart-legend">
                   <div class="legend-item">
                     <span class="legend-dot success"></span>
-                    <span class="legend-text">允许: {{ formatNumber(evaluationStats.allowed_count) }}</span>
+                    <span class="legend-text">{{ $t('evaluation.allow') }}: {{ formatNumber(evaluationStats.allowed_count) }}</span>
                   </div>
                   <div class="legend-item">
                     <span class="legend-dot warning"></span>
-                    <span class="legend-text">拒绝: {{ formatNumber(evaluationStats.rejected_count) }}</span>
+                    <span class="legend-text">{{ $t('evaluation.reject') }}: {{ formatNumber(evaluationStats.rejected_count) }}</span>
                   </div>
                 </div>
               </div>
@@ -84,22 +84,22 @@
           <el-card class="plugins-card" v-loading="listLoading">
             <template #header>
               <div class="card-header">
-                <span class="card-title">评估插件</span>
+                <span class="card-title">{{ $t('evaluation.evalPlugins') }}</span>
                 <div>
                   <el-button @click="handleTest" type="primary" size="small">
                     <el-icon><Operation /></el-icon>
-                    测试评估
+                    {{ $t('evaluation.testEval') }}
                   </el-button>
                   <el-button :loading="listLoading" @click="loadPlugins">
                     <el-icon><Refresh /></el-icon>
-                    刷新
+                    {{ $t('evaluation.refresh') }}
                   </el-button>
                 </div>
               </div>
             </template>
 
             <el-table :data="plugins" stripe border>
-              <el-table-column label="状态" width="80" align="center">
+              <el-table-column :label="$t('evaluation.status')" width="80" align="center">
                 <template #default="{ row }">
                   <el-switch
                     v-model="row.enabled"
@@ -107,22 +107,22 @@
                   />
                 </template>
               </el-table-column>
-              <el-table-column prop="name" label="插件名称" min-width="120" show-overflow-tooltip>
+              <el-table-column prop="name" :label="$t('evaluation.pluginName')" min-width="120" show-overflow-tooltip>
                 <template #default="{ row }">
                   <el-icon><component :is="row.icon || 'Box'" /></el-icon>
                   <span style="margin-left: 8px">{{ row.label || row.name }}</span>
                 </template>
               </el-table-column>
-              <el-table-column prop="description" label="描述" min-width="200" show-overflow-tooltip>
+              <el-table-column prop="description" :label="$t('evaluation.description')" min-width="200" show-overflow-tooltip>
               </el-table-column>
-              <el-table-column prop="type" label="类型" width="100">
+              <el-table-column prop="type" :label="$t('evaluation.type')" width="100">
                 <template #default="{ row }">
                   <el-tag :type="row.type === 'aggregator' ? 'danger' : 'primary'" size="small">
-                    {{ row.type === 'aggregator' ? '聚合器' : '评估器' }}
+                    {{ row.type === 'aggregator' ? $t('evaluation.aggregator') : $t('evaluation.evaluator') }}
                   </el-tag>
                 </template>
               </el-table-column>
-              <el-table-column label="操作" width="180" fixed="right">
+              <el-table-column :label="$t('evaluation.actions')" width="180" fixed="right">
                 <template #default="{ row }">
                   <el-button
                     type="primary"
@@ -131,7 +131,7 @@
                     @click="handleConfig(row)"
                   >
                     <el-icon><Setting /></el-icon>
-                    配置
+                    {{ $t('evaluation.configure') }}
                   </el-button>
                 </template>
               </el-table-column>
@@ -140,7 +140,7 @@
             <!-- 拖拽排序提示 -->
             <div class="sort-hint">
               <el-icon><InfoFilled /></el-icon>
-              <span>提示：插件按顺序执行，聚合器插件必须位于最后</span>
+              <span>{{ $t('evaluation.pluginOrderHint') }}</span>
             </div>
           </el-card>
         </el-col>
@@ -150,28 +150,28 @@
     <!-- 配置对话框 -->
     <el-dialog
       v-model="configDialogVisible"
-      title="配置插件"
+      :title="$t('evaluation.configurePlugin')"
       width="700px"
       style="min-height: 520px;"
     >
       <!-- 插件信息 -->
       <el-descriptions v-if="currentPlugin" :column="2" border size="small" class="plugin-info">
-        <el-descriptions-item label="插件名称">{{ currentPlugin.name }}</el-descriptions-item>
-        <el-descriptions-item label="类型">
+        <el-descriptions-item :label="$t('evaluation.pluginNameLabel')">{{ currentPlugin.name }}</el-descriptions-item>
+        <el-descriptions-item :label="$t('evaluation.typeLabel')">
           <el-tag size="small">{{ currentPlugin.type }}</el-tag>
         </el-descriptions-item>
-        <el-descriptions-item label="状态">
+        <el-descriptions-item :label="$t('evaluation.statusLabel')">
           <el-tag :type="currentPlugin.enabled ? 'success' : 'info'" size="small">
-            {{ currentPlugin.enabled ? '已启用' : '已禁用' }}
+            {{ currentPlugin.enabled ? $t('evaluation.enabled') : $t('evaluation.disabled') }}
           </el-tag>
         </el-descriptions-item>
-        <el-descriptions-item label="描述" :span="2">{{ currentPlugin.description }}</el-descriptions-item>
+        <el-descriptions-item :label="$t('evaluation.descriptionLabel')" :span="2">{{ currentPlugin.description }}</el-descriptions-item>
       </el-descriptions>
 
-      <el-divider>参数配置</el-divider>
+      <el-divider>{{ $t('evaluation.paramConfig') }}</el-divider>
 
       <div v-if="!pluginConfigSchema?.fields?.length" class="config-empty">
-        <el-empty description="该插件暂无配置参数" />
+        <el-empty :description="$t('evaluation.noConfigParams')" />
       </div>
       <div v-else-if="currentPlugin" class="config-container">
         <!-- 数字类型参数：每行最多2个 -->
@@ -183,7 +183,7 @@
           >
             <div class="config-item-header">
               <span class="config-item-label">{{ field.description || field.name }}</span>
-              <span v-if="field.default !== undefined" class="config-item-hint">默认: {{ field.default }}</span>
+              <span v-if="field.default !== undefined" class="config-item-hint">{{ $t('evaluation.default') }}: {{ field.default }}</span>
             </div>
             <el-input-number
               v-model="configForm[field.name]"
@@ -237,14 +237,14 @@
             type="textarea"
             :rows="4"
             size="small"
-            placeholder="一行一个值"
+            :placeholder="$t('evaluation.oneValuePerLine')"
           />
         </div>
       </div>
       <template #footer>
-        <el-button @click="configDialogVisible = false">取消</el-button>
+        <el-button @click="configDialogVisible = false">{{ $t('evaluation.cancel') }}</el-button>
         <el-button type="primary" @click="handleSaveConfig" :loading="configSaving">
-          保存
+          {{ $t('evaluation.save') }}
         </el-button>
       </template>
     </el-dialog>
@@ -252,39 +252,37 @@
     <!-- 测试评估对话框 -->
     <el-dialog
       v-model="testDialogVisible"
-      title="测试缓存评估"
+      :title="$t('evaluation.testCacheEval')"
       width="700px"
     >
       <el-form :model="testForm" label-width="100px">
-        <el-form-item label="问题">
+        <el-form-item :label="$t('evaluation.question')">
           <el-input
             v-model="testForm.question"
             type="textarea"
             :rows="3"
-            placeholder="输入测试问题..."
           />
         </el-form-item>
-        <el-form-item label="答案">
+        <el-form-item :label="$t('evaluation.answer')">
           <el-input
             v-model="testForm.answer"
             type="textarea"
             :rows="5"
-            placeholder="输入测试答案..."
           />
         </el-form-item>
       </el-form>
       <div v-if="testResult" class="test-result">
-        <el-divider>评估结果</el-divider>
+        <el-divider>{{ $t('evaluation.evalResult') }}</el-divider>
         <el-descriptions :column="1" border>
-          <el-descriptions-item label="是否允许缓存">
+          <el-descriptions-item :label="$t('evaluation.allowCache')">
             <el-tag :type="testResult.passed ? 'success' : 'danger'">
-              {{ testResult.passed ? '允许' : '拒绝' }}
+              {{ testResult.passed ? $t('evaluation.allow') : $t('evaluation.reject') }}
             </el-tag>
           </el-descriptions-item>
-          <el-descriptions-item label="评分">
+          <el-descriptions-item :label="$t('evaluation.score')">
             {{ testResult.score?.toFixed(2) || '-' }}
           </el-descriptions-item>
-          <el-descriptions-item label="标签">
+          <el-descriptions-item :label="$t('evaluation.tags')">
             <el-tag
               v-for="label in testResult.labels"
               :key="label"
@@ -295,15 +293,15 @@
             </el-tag>
             <span v-if="!testResult.labels || testResult.labels.length === 0">-</span>
           </el-descriptions-item>
-          <el-descriptions-item v-if="testResult.details" label="详细信息">
+          <el-descriptions-item v-if="testResult.details" :label="$t('evaluation.details')">
             <pre class="details-json">{{ JSON.stringify(testResult.details, null, 2) }}</pre>
           </el-descriptions-item>
         </el-descriptions>
       </div>
       <template #footer>
-        <el-button @click="testDialogVisible = false">关闭</el-button>
+        <el-button @click="testDialogVisible = false">{{ $t('evaluation.close') }}</el-button>
         <el-button type="primary" @click="handleRunTest" :loading="testRunning">
-          运行测试
+          {{ $t('evaluation.runTest') }}
         </el-button>
       </template>
     </el-dialog>
@@ -312,6 +310,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   Refresh,
@@ -331,6 +330,8 @@ import {
   testEvaluation,
   setExactMatchEnabled
 } from '@/api/evaluation'
+
+const { t } = useI18n()
 
 // 插件列表
 const plugins = ref<any[]>([])
@@ -413,7 +414,7 @@ async function loadStats() {
     exactMatchEnabled.value = stats.exact_match_enabled ?? false
   } catch (error: any) {
     console.error('Failed to load evaluation stats:', error)
-    ElMessage.error('加载评估统计失败: ' + error.message)
+    ElMessage.error(t('evaluation.loadStatsFailed') + ': ' + error.message)
   } finally {
     loading.value = false
   }
@@ -424,10 +425,10 @@ async function handleExactMatchChange() {
   try {
     exactMatchLoading.value = true
     await setExactMatchEnabled(exactMatchEnabled.value)
-    ElMessage.success('精确匹配缓存已' + (exactMatchEnabled.value ? '启用' : '禁用'))
+    ElMessage.success(t('evaluation.exactMatchToggled'))
   } catch (error: any) {
     console.error('Failed to set exact match:', error)
-    ElMessage.error('设置精确匹配缓存失败: ' + error.message)
+    ElMessage.error(t('evaluation.exactMatchToggleFailed') + ': ' + error.message)
     exactMatchEnabled.value = !exactMatchEnabled.value // 恢复原状态
   } finally {
     exactMatchLoading.value = false
@@ -442,7 +443,7 @@ async function loadPlugins() {
     plugins.value = res.plugins || []
   } catch (error: any) {
     console.error('Failed to load plugins:', error)
-    ElMessage.error('加载插件列表失败: ' + error.message)
+    ElMessage.error(t('evaluation.loadPluginsFailed') + ': ' + error.message)
   } finally {
     listLoading.value = false
   }
@@ -450,7 +451,7 @@ async function loadPlugins() {
 
 // 启用/禁用插件
 async function handleEnableChange(row: any) {
-  const actionText = row.enabled ? '启用' : '禁用'
+  const actionText = row.enabled ? t('evaluation.enabled') : t('evaluation.disabled')
 
   try {
     if (row.enabled) {
@@ -458,10 +459,10 @@ async function handleEnableChange(row: any) {
     } else {
       await disableEvaluationPlugin(row.name)
     }
-    ElMessage.success(`${actionText}插件成功`)
+    ElMessage.success(t('evaluation.pluginActionSuccess', { action: actionText }))
   } catch (error: any) {
     console.error('Failed to change plugin status:', error)
-    ElMessage.error(`${actionText}插件失败: ` + error.message)
+    ElMessage.error(t('evaluation.pluginActionFailed', { action: actionText }) + ': ' + error.message)
     row.enabled = !row.enabled // 恢复原状态
   }
 }
@@ -507,7 +508,7 @@ async function handleConfig(row: any) {
     }
   } catch (error: any) {
     console.error('Failed to load plugin schema:', error)
-    ElMessage.error('加载插件配置失败: ' + error.message)
+    ElMessage.error(t('evaluation.loadPluginConfigFailed') + ': ' + error.message)
     return
   }
 
@@ -529,12 +530,12 @@ async function handleSaveConfig() {
     }
 
     await updatePluginConfig(currentPlugin.value.name, configToSave)
-    ElMessage.success('保存配置成功')
+    ElMessage.success(t('evaluation.configSaved'))
     configDialogVisible.value = false
     await loadPlugins()
   } catch (error: any) {
     console.error('Failed to save plugin config:', error)
-    ElMessage.error('保存配置失败: ' + error.message)
+    ElMessage.error(t('evaluation.saveFailed') + ': ' + error.message)
   } finally {
     configSaving.value = false
   }
@@ -556,10 +557,10 @@ async function handleRunTest() {
       history_messages: []
     })
     testResult.value = res
-    ElMessage.success('评估测试完成')
+    ElMessage.success(t('evaluation.evalTestComplete'))
   } catch (error: any) {
     console.error('Failed to run test:', error)
-    ElMessage.error('评估测试失败: ' + error.message)
+    ElMessage.error(t('evaluation.testFailed') + ': ' + error.message)
   } finally {
     testRunning.value = false
   }

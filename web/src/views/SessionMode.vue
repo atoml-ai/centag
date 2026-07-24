@@ -2,43 +2,43 @@
   <div class="session-mode-page">
     <h1 class="page-title">
       <el-icon><Timer /></el-icon>
-      会话模式测试
+      {{ t('sessionMode.title') }}
     </h1>
-    <p class="page-description">设置当前会话的代理模式，有效期内的所有请求都将使用该模式</p>
+    <p class="page-description">{{ t('sessionMode.description') }}</p>
 
     <div class="session-content">
       <!-- 当前会话状态 -->
       <el-card class="status-card">
         <template #header>
           <div class="card-header">
-            <span>📊 当前会话状态</span>
+            <span>{{ t('sessionMode.currentSessionStatus') }}</span>
             <el-button 
               v-if="sessionMode"
               type="danger" 
               size="small" 
               @click="clearSession"
             >
-              清除会话
+              {{ t('sessionMode.clearSession') }}
             </el-button>
           </div>
         </template>
         
-        <el-empty v-if="!sessionMode" description="当前未设置会话模式" :image-size="80" />
+        <el-empty v-if="!sessionMode" :description="t('sessionMode.noSessionModeSet')" :image-size="80" />
         
         <el-descriptions v-else :column="1" border>
-          <el-descriptions-item label="模式关键字">
+          <el-descriptions-item :label="t('sessionMode.modeKeyword')">
             <el-tag type="warning" size="large">{{ sessionMode.mode_key }}</el-tag>
           </el-descriptions-item>
-          <el-descriptions-item label="模式名称">
+          <el-descriptions-item :label="t('sessionMode.modeName')">
             {{ sessionMode.mode_name }}
           </el-descriptions-item>
-          <el-descriptions-item label="后端覆盖">
-            {{ sessionMode.backend_id || '无' }}
+          <el-descriptions-item :label="t('sessionMode.backendOverride')">
+            {{ sessionMode.backend_id || t('sessionMode.none') }}
           </el-descriptions-item>
-          <el-descriptions-item label="模型覆盖">
-            {{ sessionMode.model_name || '无' }}
+          <el-descriptions-item :label="t('sessionMode.modelOverride')">
+            {{ sessionMode.model_name || t('sessionMode.none') }}
           </el-descriptions-item>
-          <el-descriptions-item label="剩余有效期">
+          <el-descriptions-item :label="t('sessionMode.remainingValidity')">
             <el-progress 
               :percentage="remainingPercent" 
               :status="remainingPercent < 20 ? 'exception' : 'success'"
@@ -51,14 +51,14 @@
       <!-- 设置会话模式 -->
       <el-card class="form-card">
         <template #header>
-          <span>⚙️ 设置会话模式</span>
+          <span>{{ t('sessionMode.setSessionMode') }}</span>
         </template>
         
         <el-form :model="form" label-width="120px">
-          <el-form-item label="模式关键字">
+          <el-form-item :label="t('sessionMode.modeKeywordLabel')">
             <el-select 
               v-model="form.mode" 
-              placeholder="选择模式"
+              :placeholder="t('sessionMode.selectMode')"
               style="width: 100%"
             >
               <el-option 
@@ -70,10 +70,10 @@
               />
             </el-select>
           </el-form-item>
-          <el-form-item label="指定后端（可选）">
+          <el-form-item :label="t('sessionMode.specifyBackendOptional')">
             <el-select 
               v-model="form.backend" 
-              placeholder="留空则使用默认后端"
+              :placeholder="t('sessionMode.leaveEmptyDefaultBackend')"
               clearable
               style="width: 100%"
             >
@@ -86,25 +86,25 @@
               />
             </el-select>
           </el-form-item>
-          <el-form-item label="指定模型（可选）">
+          <el-form-item :label="t('sessionMode.specifyModelOptional')">
             <el-input 
               v-model="form.model" 
-              placeholder="留空则使用默认模型"
+              :placeholder="t('sessionMode.leaveEmptyDefaultModel')"
               clearable
             />
           </el-form-item>
-          <el-form-item label="有效期">
+          <el-form-item :label="t('sessionMode.validityPeriod')">
             <el-input-number 
               v-model="form.ttl" 
               :min="60" 
               :max="86400" 
               :step="60"
             />
-            <span style="margin-left: 10px">秒（{{ formatTime(form.ttl * 1000) }}）</span>
+            <span style="margin-left: 10px">{{ t('sessionMode.seconds') }}（{{ formatTime(form.ttl * 1000) }}）</span>
           </el-form-item>
           <el-form-item>
             <el-button type="primary" :loading="setting" @click="setSession">
-              设置会话模式
+              {{ t('sessionMode.setSessionModeBtn') }}
             </el-button>
           </el-form-item>
         </el-form>
@@ -113,28 +113,28 @@
       <!-- 测试请求 -->
       <el-card class="test-card">
         <template #header>
-          <span>🧪 测试请求</span>
+          <span>{{ t('sessionMode.testRequest') }}</span>
         </template>
         
         <el-form label-width="100px">
-          <el-form-item label="测试内容">
+          <el-form-item :label="t('sessionMode.testContent')">
             <el-input 
               v-model="testContent" 
               type="textarea" 
               :rows="4"
-              placeholder="输入测试内容，如：#d 你好，请帮我写一个 Python 脚本"
+              :placeholder="t('sessionMode.testContentPlaceholder')"
             />
           </el-form-item>
-          <el-form-item label="测试方式">
+          <el-form-item :label="t('sessionMode.testMethod')">
             <el-radio-group v-model="testMethod">
-              <el-radio value="prefix">内容前缀</el-radio>
-              <el-radio value="header">请求头</el-radio>
-              <el-radio value="body">请求体扩展</el-radio>
+              <el-radio value="prefix">{{ t('sessionMode.contentPrefix') }}</el-radio>
+              <el-radio value="header">{{ t('sessionMode.requestHeader') }}</el-radio>
+              <el-radio value="body">{{ t('sessionMode.bodyExtension') }}</el-radio>
             </el-radio-group>
           </el-form-item>
           <el-form-item>
             <el-button type="primary" :loading="testing" @click="sendTestRequest">
-              发送测试
+              {{ t('sessionMode.sendTest') }}
             </el-button>
           </el-form-item>
         </el-form>
@@ -142,7 +142,7 @@
         <!-- 解析结果 -->
         <el-card v-if="testResult" class="result-card">
           <template #header>
-            <span>📋 解析结果</span>
+            <span>{{ t('sessionMode.parseResult') }}</span>
           </template>
           <pre>{{ JSON.stringify(testResult, null, 2) }}</pre>
         </el-card>
@@ -153,8 +153,11 @@
 
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
 import api from '@/api'
+
+const { t } = useI18n()
 
 interface ModeKeyword {
   mode_key: string
@@ -214,7 +217,7 @@ const loadKeywords = async () => {
       form.value.mode = enabled.mode_key
     }
   } catch (error: any) {
-    ElMessage.error('加载模式列表失败：' + error.message)
+    ElMessage.error(t('sessionMode.loadModeListFailed') + '：' + error.message)
   }
 }
 
@@ -238,17 +241,17 @@ const loadSession = async () => {
 
 const setSession = async () => {
   if (!form.value.mode) {
-    ElMessage.warning('请选择模式关键字')
+    ElMessage.warning(t('sessionMode.pleaseSelectModeKeyword'))
     return
   }
   
   setting.value = true
   try {
     await api.post('/api/v1/session/proxy-mode', form.value)
-    ElMessage.success('会话模式设置成功')
+    ElMessage.success(t('sessionMode.sessionModeSetSuccess'))
     loadSession()
   } catch (error: any) {
-    ElMessage.error('设置失败：' + error.message)
+    ElMessage.error(t('sessionMode.sessionModeSetFailed') + '：' + error.message)
   } finally {
     setting.value = false
   }
@@ -257,16 +260,16 @@ const setSession = async () => {
 const clearSession = async () => {
   try {
     await api.delete('/api/v1/session/proxy-mode')
-    ElMessage.success('会话模式已清除')
+    ElMessage.success(t('sessionMode.sessionModeCleared'))
     sessionMode.value = null
   } catch (error: any) {
-    ElMessage.error('清除失败：' + error.message)
+    ElMessage.error(t('sessionMode.sessionClearFailed') + '：' + error.message)
   }
 }
 
 const sendTestRequest = async () => {
   if (!testContent.value) {
-    ElMessage.warning('请输入测试内容')
+    ElMessage.warning(t('sessionMode.pleaseEnterTestContent'))
     return
   }
   
@@ -313,7 +316,7 @@ const sendTestRequest = async () => {
     
     testResult.value = result
   } catch (error: any) {
-    ElMessage.error('测试失败：' + error.message)
+    ElMessage.error(t('sessionMode.testFailed') + '：' + error.message)
   } finally {
     testing.value = false
   }
@@ -321,9 +324,9 @@ const sendTestRequest = async () => {
 
 const formatTime = (ms: number) => {
   const seconds = Math.floor(ms / 1000)
-  if (seconds < 60) return `${seconds}秒`
-  if (seconds < 3600) return `${Math.floor(seconds / 60)}分钟`
-  return `${Math.floor(seconds / 3600)}小时`
+  if (seconds < 60) return t('sessionMode.formatSeconds', { n: seconds })
+  if (seconds < 3600) return t('sessionMode.formatMinutes', { n: Math.floor(seconds / 60) })
+  return t('sessionMode.formatHours', { n: Math.floor(seconds / 3600) })
 }
 
 onMounted(() => {

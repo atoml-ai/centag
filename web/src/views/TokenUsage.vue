@@ -12,17 +12,16 @@
       @open-billing="billingVisible = true"
     />
 
-    <!-- 趋势图表 -->
     <el-row :gutter="20" class="chart-row">
       <el-col :span="24">
         <el-card class="chart-card">
           <template #header>
             <div class="card-header">
-              <span>每日使用趋势</span>
+              <span>{{ $t('tokenUsage.dailyTrend') }}</span>
               <el-radio-group v-model="chartDays" size="small" @change="loadDailyUsage">
-                <el-radio-button value="7">7 天</el-radio-button>
-                <el-radio-button value="30">30 天</el-radio-button>
-                <el-radio-button value="90">90 天</el-radio-button>
+                <el-radio-button value="7">{{ $t('tokenUsage.last7Days') }}</el-radio-button>
+                <el-radio-button value="30">{{ $t('tokenUsage.last30Days') }}</el-radio-button>
+                <el-radio-button value="90">{{ $t('tokenUsage.last90Days') }}</el-radio-button>
               </el-radio-group>
             </div>
           </template>
@@ -36,8 +35,8 @@
         <el-card class="chart-card">
           <template #header>
             <div class="card-header">
-              <span>模型使用 TOP5</span>
-              <el-button type="primary" link size="small" @click="loadModelStats">刷新</el-button>
+              <span>{{ $t('tokenUsage.modelTop5') }}</span>
+              <el-button type="primary" link size="small" @click="loadModelStats">{{ $t('tokenUsage.refresh') }}</el-button>
             </div>
           </template>
           <v-chart :option="modelChartOption" style="height: 300px" autoresize />
@@ -48,8 +47,8 @@
         <el-card class="chart-card">
           <template #header>
             <div class="card-header">
-              <span>后端使用 TOP5</span>
-              <el-button type="primary" link size="small" @click="loadBackendStats">刷新</el-button>
+              <span>{{ $t('tokenUsage.backendTop5') }}</span>
+              <el-button type="primary" link size="small" @click="loadBackendStats">{{ $t('tokenUsage.refresh') }}</el-button>
             </div>
           </template>
           <v-chart :option="backendChartOption" style="height: 300px" autoresize />
@@ -63,6 +62,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useEdition } from '@/composables/useEdition'
@@ -87,17 +87,18 @@ echarts.use([
   DataZoomComponent
 ])
 
+const { t } = useI18n()
+
 const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
 const { isTeam } = useEdition()
-// Admin ranking/quotas live in Team pack (centag-pro); this page is self-service + billing entry only.
 const canManageBilling = computed(() => !(isTeam.value && !authStore.isAdmin))
-const pageTitle = computed(() => (canManageBilling.value ? '用量与计费' : '用量'))
+const pageTitle = computed(() => (canManageBilling.value ? t('tokenUsage.titleBilling') : t('tokenUsage.titleUsage')))
 const pageHint = computed(() =>
   canManageBilling.value
-    ? 'Token 计量、成本汇总与计费规则入口。首页「用量与会话」为简易查询。'
-    : 'Token 计量与成本汇总。计费规则由管理员配置。'
+    ? t('tokenUsage.hintBilling')
+    : t('tokenUsage.hintUsage')
 )
 
 const metricsRef = ref<InstanceType<typeof UsageMetricsSummary> | null>(null)
@@ -109,10 +110,8 @@ const modelStats = ref<any[]>([])
 const backendStats = ref<any[]>([])
 
 const dailyChartOption = computed(() => {
-  // API 多为新→旧；反转后旧→新（左→右）
   const rows = [...dailyStats.value].reverse()
   const n = rows.length
-  // 默认窗口：最多展示约 14 天，其余靠缩放查看
   const windowSize = 14
   const start = n > windowSize ? ((n - windowSize) / n) * 100 : 0
   return {
@@ -124,7 +123,7 @@ const dailyChartOption = computed(() => {
       orient: 'vertical',
       left: 8,
       top: 'middle',
-      data: ['输入 Token', '输出 Token', '总 Token']
+      data: [t('tokenUsage.inputToken'), t('tokenUsage.outputToken'), t('tokenUsage.totalToken')]
     },
     grid: {
       left: 120,
@@ -163,11 +162,11 @@ const dailyChartOption = computed(() => {
     },
     yAxis: {
       type: 'value',
-      name: 'Token 数'
+      name: t('tokenUsage.tokenCount')
     },
     series: [
       {
-        name: '输入 Token',
+        name: t('tokenUsage.inputToken'),
         type: 'bar',
         stack: 'total',
         data: rows.map((s) => s.prompt_tokens),
@@ -175,7 +174,7 @@ const dailyChartOption = computed(() => {
         barMaxWidth: 28
       },
       {
-        name: '输出 Token',
+        name: t('tokenUsage.outputToken'),
         type: 'bar',
         stack: 'total',
         data: rows.map((s) => s.comp_tokens),
@@ -183,7 +182,7 @@ const dailyChartOption = computed(() => {
         barMaxWidth: 28
       },
       {
-        name: '总 Token',
+        name: t('tokenUsage.totalToken'),
         type: 'line',
         data: rows.map((s) => s.total_tokens),
         itemStyle: { color: '#fac858' },
@@ -205,7 +204,7 @@ const modelChartOption = computed(() => ({
   },
   series: [
     {
-      name: '模型使用',
+      name: t('tokenUsage.modelUsage'),
       type: 'pie',
       radius: '50%',
       data: modelStats.value.map((s) => ({
@@ -236,7 +235,7 @@ const backendChartOption = computed(() => ({
   },
   xAxis: {
     type: 'value',
-    name: 'Token 数'
+    name: t('tokenUsage.tokenCount')
   },
   yAxis: {
     type: 'category',
@@ -244,7 +243,7 @@ const backendChartOption = computed(() => ({
   },
   series: [
     {
-      name: '总 Token',
+      name: t('tokenUsage.totalToken'),
       type: 'bar',
       data: backendStats.value.map((s) => s.total_tokens).reverse(),
       itemStyle: {
@@ -263,7 +262,7 @@ const loadDailyUsage = async () => {
     const res = await tokenApi.getDailyUsage({ days: parseInt(chartDays.value) })
     dailyStats.value = res.daily_stats ?? []
   } catch (error: any) {
-    ElMessage.error('加载每日趋势失败：' + error.message)
+    ElMessage.error(t('tokenUsage.loadDailyTrendFailed') + '：' + error.message)
   }
 }
 
@@ -272,7 +271,7 @@ const loadModelStats = async () => {
     const res = await tokenApi.getModelStats({ days: 30 })
     modelStats.value = (res.model_stats ?? []).slice(0, 5)
   } catch (error: any) {
-    ElMessage.error('加载模型统计失败：' + error.message)
+    ElMessage.error(t('tokenUsage.loadModelStatsFailed') + '：' + error.message)
   }
 }
 
@@ -281,7 +280,7 @@ const loadBackendStats = async () => {
     const res = await tokenApi.getBackendStats({ days: 30 })
     backendStats.value = (res.backend_stats ?? []).slice(0, 5)
   } catch (error: any) {
-    ElMessage.error('加载后端统计失败：' + error.message)
+    ElMessage.error(t('tokenUsage.loadBackendStatsFailed') + '：' + error.message)
   }
 }
 

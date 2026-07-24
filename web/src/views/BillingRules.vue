@@ -2,11 +2,11 @@
   <div class="billing-rules-page">
     <el-result
       icon="info"
-      title="计费规则"
-      sub-title="配置模型单价与导入导出（YAML，默认 USD）。仅管理员可管理。"
+      :title="$t('billingRules.title')"
+      :sub-title="$t('billingRules.subtitle')"
     >
       <template #extra>
-        <el-button type="primary" @click="open = true">打开计费规则</el-button>
+        <el-button type="primary" @click="open = true">{{ $t('billingRules.openDialog') }}</el-button>
       </template>
     </el-result>
     <BillingRulesDialog v-model="open" />

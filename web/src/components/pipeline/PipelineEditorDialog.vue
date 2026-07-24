@@ -14,7 +14,7 @@
     <div v-if="modelValue && localPipeline" class="pipeline-editor-actions">
       <el-tooltip
         :disabled="hasRouterNode"
-        content="请先添加路由节点，再新增分类"
+        :content="t('pipelineEditor.addCategoryTooltip')"
         placement="bottom"
       >
         <span>
@@ -25,7 +25,7 @@
             :disabled="!hasRouterNode"
             @click="addCategoryVisible = true"
           >
-            新增分类
+            {{ t('pipelineEditor.addCategory') }}
           </el-button>
         </span>
       </el-tooltip>
@@ -37,13 +37,13 @@
         :disabled="!localPipeline.id || isCreateMode"
         @click="slotsDialogVisible = true"
       >
-        配置模型
+        {{ t('pipelineEditor.configureModel') }}
       </el-button>
       <PipelineFeatureGuard
         feature="routeAutoBuild"
         :pipeline="localPipeline"
         :is-admin="authStore.isAdmin"
-        action-label="自动配置路由"
+        :action-label="t('pipelineEditor.autoConfigureRoute')"
       >
         <template #default="{ disabled }">
           <el-button
@@ -52,7 +52,7 @@
             :disabled="disabled || !canRunRouteAutoBuild"
             @click="openRouteAutoBuildDialog"
           >
-            自动配置路由
+            {{ t('pipelineEditor.autoConfigureRoute') }}
           </el-button>
         </template>
       </PipelineFeatureGuard>
@@ -70,36 +70,36 @@
       @dirty-change="canvasDirty = $event"
     />
 
-    <el-dialog v-model="routeAutoBuildVisible" title="自动配置路由后端模型" width="760px" append-to-body>
+    <el-dialog v-model="routeAutoBuildVisible" :title="t('pipelineEditor.autoConfigureRouteBackendModel')" width="760px" append-to-body>
       <el-alert
         type="info"
         :closable="false"
         style="margin-bottom: 12px"
-        description="仅对包含 router.routes 的流水线生效。可先预览，再应用。"
+        :description="t('pipelineEditor.autoConfigureRouteAlert')"
       />
       <el-form :model="routeAutoBuildForm" label-width="100px">
-        <el-form-item label="目标流水线">
+        <el-form-item :label="t('pipelineEditor.targetPipeline')">
           <el-tag type="primary">{{ localPipeline?.id || '-' }}</el-tag>
         </el-form-item>
-        <el-form-item label="策略">
+        <el-form-item :label="t('pipelineEditor.strategy')">
           <el-select v-model="routeAutoBuildForm.strategy" style="width: 220px">
-            <el-option label="快速匹配（fast）" value="fast" />
-            <el-option label="平衡（balance）" value="balance" />
-            <el-option label="成本优先（cost）" value="cost" />
-            <el-option label="质量优先（quality）" value="quality" />
-            <el-option label="延迟优先（latency）" value="latency" />
+            <el-option :label="t('pipelineEditor.strategyFast')" value="fast" />
+            <el-option :label="t('pipelineEditor.strategyBalance')" value="balance" />
+            <el-option :label="t('pipelineEditor.strategyCost')" value="cost" />
+            <el-option :label="t('pipelineEditor.strategyQuality')" value="quality" />
+            <el-option :label="t('pipelineEditor.strategyLatency')" value="latency" />
           </el-select>
         </el-form-item>
-        <el-form-item label="探测后端">
+        <el-form-item :label="t('pipelineEditor.probeBackends')">
           <el-switch v-model="routeAutoBuildForm.probe_backends" />
           <div style="color: #909399; margin-top: 4px;">
-            建议仅在刚改过后端配置时开启，避免应用时等待过久
+            {{ t('pipelineEditor.probeBackendsTip') }}
           </div>
         </el-form-item>
-        <el-form-item label="灰度模式">
+        <el-form-item :label="t('pipelineEditor.canaryMode')">
           <el-switch v-model="routeAutoBuildForm.canary" />
         </el-form-item>
-        <el-form-item label="最大更新数">
+        <el-form-item :label="t('pipelineEditor.maxUpdates')">
           <el-input-number
             v-model="routeAutoBuildForm.max_updates"
             :min="0"
@@ -112,12 +112,12 @@
       <el-divider />
       <div v-if="routeAutoBuildResult" style="margin-bottom: 10px;">
         <el-space wrap>
-          <el-tag type="success">策略: {{ routeAutoBuildResult.strategy }}</el-tag>
+          <el-tag type="success">{{ t('pipelineEditor.strategyLabel') }}: {{ routeAutoBuildResult.strategy }}</el-tag>
           <el-tag :type="routeAutoBuildResult.applied ? 'warning' : 'info'">
-            {{ routeAutoBuildResult.applied ? '已应用' : '预览结果' }}
+            {{ routeAutoBuildResult.applied ? t('pipelineEditor.applied') : t('pipelineEditor.previewResult') }}
           </el-tag>
-          <el-tag>更新项: {{ routeAutoBuildResult.updates?.length || 0 }}</el-tag>
-          <el-tag>告警: {{ routeAutoBuildResult.warnings?.length || 0 }}</el-tag>
+          <el-tag>{{ t('pipelineEditor.updateCount') }}: {{ routeAutoBuildResult.updates?.length || 0 }}</el-tag>
+          <el-tag>{{ t('pipelineEditor.warningCount') }}: {{ routeAutoBuildResult.warnings?.length || 0 }}</el-tag>
         </el-space>
       </div>
       <el-table
@@ -128,18 +128,18 @@
         max-height="300"
         style="margin-bottom: 10px"
       >
-        <el-table-column type="index" label="#" width="50" />
-        <el-table-column prop="target_node" label="节点" width="140" />
-        <el-table-column prop="new_backend" label="新后端" width="120" />
-        <el-table-column prop="new_model" label="新模型" width="120" />
-        <el-table-column prop="reason" label="推荐理由" min-width="200" show-overflow-tooltip />
-        <el-table-column label="策略因子" min-width="280">
+        <el-table-column type="index" :label="t('pipelineEditor.columnIndex')" width="50" />
+        <el-table-column prop="target_node" :label="t('pipelineEditor.columnNode')" width="140" />
+        <el-table-column prop="new_backend" :label="t('pipelineEditor.columnNewBackend')" width="120" />
+        <el-table-column prop="new_model" :label="t('pipelineEditor.columnNewModel')" width="120" />
+        <el-table-column prop="reason" :label="t('pipelineEditor.columnReason')" min-width="200" show-overflow-tooltip />
+        <el-table-column :label="t('pipelineEditor.columnStrategyFactors')" min-width="280">
           <template #default="{ row }">
             <el-space v-if="hasStrategyFactors(row.strategy_factors)" size="small" wrap>
               <el-tag size="small" type="info">{{ strategyFactorSummary(row.strategy_factors) }}</el-tag>
               <el-popover placement="left" :width="420" trigger="hover">
                 <template #reference>
-                  <el-button link type="primary">查看详情</el-button>
+                  <el-button link type="primary">{{ t('pipelineEditor.viewDetails') }}</el-button>
                 </template>
                 <div style="max-height: 320px; overflow: auto;">
                   <template v-for="section in strategyFactorSections(row.strategy_factors)" :key="section.title">
@@ -160,7 +160,7 @@
             <span v-else>-</span>
           </template>
         </el-table-column>
-        <el-table-column prop="category" label="分类" width="200" show-overflow-tooltip />
+        <el-table-column prop="category" :label="t('pipelineEditor.columnCategory')" width="200" show-overflow-tooltip />
       </el-table>
       <el-alert
         v-for="(w, idx) in routeAutoBuildResult?.warnings || []"
@@ -172,9 +172,9 @@
       />
 
       <template #footer>
-        <el-button :loading="routeAutoBuildSubmitting" @click="runRouteAutoBuild(true)">预览</el-button>
-        <el-button type="primary" :loading="routeAutoBuildSubmitting" @click="runRouteAutoBuild(false)">应用</el-button>
-        <el-button type="danger" plain :loading="routeAutoBuildSubmitting" @click="rollbackRouteAutoBuild">一键回滚</el-button>
+        <el-button :loading="routeAutoBuildSubmitting" @click="runRouteAutoBuild(true)">{{ t('pipelineEditor.preview') }}</el-button>
+        <el-button type="primary" :loading="routeAutoBuildSubmitting" @click="runRouteAutoBuild(false)">{{ t('pipelineEditor.apply') }}</el-button>
+        <el-button type="danger" plain :loading="routeAutoBuildSubmitting" @click="rollbackRouteAutoBuild">{{ t('pipelineEditor.rollback') }}</el-button>
       </template>
     </el-dialog>
 
@@ -195,6 +195,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, nextTick } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import PipelineCanvas from '@/components/PipelineCanvas.vue'
 import PipelineFeatureGuard from '@/components/pipeline/PipelineFeatureGuard.vue'
@@ -213,6 +214,7 @@ import {
 import api from '@/api'
 import { canConfigureCapabilitySlots, listRouterNodes } from '@/utils/capabilitySlots'
 
+const { t } = useI18n()
 const authStore = useAuthStore()
 
 const props = defineProps<{
@@ -272,13 +274,13 @@ function onSlotsSaved(pipeline: AgentPatternPipeline) {
 
 const dialogTitle = computed(() => {
   const p = localPipeline.value
-  if (!p) return '流水线可视化编辑'
+  if (!p) return t('pipelineEditor.dialogTitle')
   const id = p.id || ''
   const name = p.name || ''
-  if (id && name) return `流水线可视化编辑 — ${id} · ${name}`
-  if (id) return `流水线可视化编辑 — ${id}`
-  if (name) return `流水线可视化编辑 — ${name}`
-  return '流水线可视化编辑'
+  if (id && name) return t('pipelineEditor.dialogTitleWithIdAndName', { id, name })
+  if (id) return t('pipelineEditor.dialogTitleWithId', { id })
+  if (name) return t('pipelineEditor.dialogTitleWithName', { name })
+  return t('pipelineEditor.dialogTitle')
 })
 
 const canRunRouteAutoBuild = computed(() => {
@@ -389,8 +391,8 @@ async function loadDeps() {
 }
 
 function validateBeforeSave(pipeline: AgentPatternPipeline): string | null {
-  if (!pipeline.id?.trim()) return '流水线 ID 不能为空'
-  if (!pipeline.name?.trim()) return '流水线名称不能为空'
+  if (!pipeline.id?.trim()) return t('pipelineEditor.validationIdEmpty')
+  if (!pipeline.name?.trim()) return t('pipelineEditor.validationNameEmpty')
   return null
 }
 
@@ -406,10 +408,10 @@ async function handleSave(pipeline: AgentPatternPipeline, closeAfterSave = true)
     if (isCreateMode.value) {
       await createPipeline(pipeline)
       isCreateMode.value = false
-      ElMessage.success('流水线创建成功')
+      ElMessage.success(t('pipelineEditor.createSuccess'))
     } else {
       await updatePipeline(pipeline.id, pipeline)
-      ElMessage.success('流水线更新成功')
+      ElMessage.success(t('pipelineEditor.updateSuccess'))
     }
     canvasDirty.value = false
     emit('saved', pipeline)
@@ -419,7 +421,7 @@ async function handleSave(pipeline: AgentPatternPipeline, closeAfterSave = true)
     return true
   } catch (error: any) {
     canvasDirty.value = true
-    ElMessage.error('保存失败：' + (error.message || error))
+    ElMessage.error(t('pipelineEditor.saveFailed') + (error.message || error))
     return false
   } finally {
     saving.value = false
@@ -441,43 +443,43 @@ function factorValue(factors: Record<string, any>, key: string) {
   if (value === undefined || value === null || value === '') return ''
   if (key === 'strategy') {
     const mapping: Record<string, string> = {
-      fast: '快速匹配',
-      balance: '平衡',
-      cost: '成本优先',
-      quality: '质量优先',
-      latency: '延迟优先',
-      speed: '延迟优先',
-      price: '成本优先'
+      fast: t('pipelineEditor.factorStrategyFast'),
+      balance: t('pipelineEditor.factorStrategyBalance'),
+      cost: t('pipelineEditor.factorStrategyCost'),
+      quality: t('pipelineEditor.factorStrategyQuality'),
+      latency: t('pipelineEditor.factorStrategyLatency'),
+      speed: t('pipelineEditor.factorStrategyLatency'),
+      price: t('pipelineEditor.factorStrategyCost')
     }
     const raw = String(value).toLowerCase()
     return mapping[raw] || String(value)
   }
   if (key === 'task_type') {
     const mapping: Record<string, string> = {
-      code_generation: '代码生成',
-      simple_chat: '简单对话',
-      complex_reasoning: '复杂推理',
-      long_text: '长文本',
-      translation: '翻译',
-      analysis: '分析',
-      creative: '创意写作',
-      embedding: '向量'
+      code_generation: t('pipelineEditor.factorTaskTypeCodeGeneration'),
+      simple_chat: t('pipelineEditor.factorTaskTypeSimpleChat'),
+      complex_reasoning: t('pipelineEditor.factorTaskTypeComplexReasoning'),
+      long_text: t('pipelineEditor.factorTaskTypeLongText'),
+      translation: t('pipelineEditor.factorTaskTypeTranslation'),
+      analysis: t('pipelineEditor.factorTaskTypeAnalysis'),
+      creative: t('pipelineEditor.factorTaskTypeCreative'),
+      embedding: t('pipelineEditor.factorTaskTypeEmbedding')
     }
     const raw = String(value).toLowerCase()
     return mapping[raw] || String(value)
   }
   if (key === 'health_status') {
     const mapping: Record<string, string> = {
-      healthy: '健康',
-      unhealthy: '异常',
-      unknown: '未知',
-      checking: '检测中'
+      healthy: t('pipelineEditor.factorHealthHealthy'),
+      unhealthy: t('pipelineEditor.factorHealthUnhealthy'),
+      unknown: t('pipelineEditor.factorHealthUnknown'),
+      checking: t('pipelineEditor.factorHealthChecking')
     }
     const raw = String(value).toLowerCase()
     return mapping[raw] || String(value)
   }
-  if (key === 'local_backend') return value ? '是' : '否'
-  if (typeof value === 'boolean') return value ? '是' : '否'
+  if (key === 'local_backend') return value ? t('pipelineEditor.factorYes') : t('pipelineEditor.factorNo')
+  if (typeof value === 'boolean') return value ? t('pipelineEditor.factorYes') : t('pipelineEditor.factorNo')
   if (typeof value === 'number') return Number.isInteger(value) ? `${value}` : value.toFixed(4)
   return String(value)
 }
@@ -485,19 +487,19 @@ function factorValue(factors: Record<string, any>, key: string) {
 function factorTagType(key: string, value: string) {
   if (!value) return ''
   if (key === 'health_status') {
-    if (value === '健康') return 'success'
-    if (value === '检测中') return 'warning'
-    if (value === '异常') return 'danger'
+    if (value === t('pipelineEditor.factorHealthHealthy')) return 'success'
+    if (value === t('pipelineEditor.factorHealthChecking')) return 'warning'
+    if (value === t('pipelineEditor.factorHealthUnhealthy')) return 'danger'
     return 'info'
   }
   if (key === 'local_backend') {
-    return value === '是' ? 'success' : 'info'
+    return value === t('pipelineEditor.factorYes') ? 'success' : 'info'
   }
   if (key === 'strategy') {
-    if (value === '质量优先') return 'danger'
-    if (value === '成本优先') return 'warning'
-    if (value === '延迟优先') return 'success'
-    if (value === '平衡') return 'primary'
+    if (value === t('pipelineEditor.factorStrategyQuality')) return 'danger'
+    if (value === t('pipelineEditor.factorStrategyCost')) return 'warning'
+    if (value === t('pipelineEditor.factorStrategyLatency')) return 'success'
+    if (value === t('pipelineEditor.factorStrategyBalance')) return 'primary'
     return 'info'
   }
   return ''
@@ -515,30 +517,30 @@ function strategyFactorSections(factors?: Record<string, any>) {
   if (!hasStrategyFactors(factors)) return []
   const grouped = [
     {
-      title: '基础',
+      title: t('pipelineEditor.sectionBasic'),
       items: [
-        { key: 'strategy', label: '策略' },
-        { key: 'task_type', label: '任务类型' },
-        { key: 'backend_id', label: '后端' },
-        { key: 'priority', label: '优先级' },
-        { key: 'local_backend', label: '本地后端' }
+        { key: 'strategy', label: t('pipelineEditor.factorLabelStrategy') },
+        { key: 'task_type', label: t('pipelineEditor.factorLabelTaskType') },
+        { key: 'backend_id', label: t('pipelineEditor.factorLabelBackend') },
+        { key: 'priority', label: t('pipelineEditor.factorLabelPriority') },
+        { key: 'local_backend', label: t('pipelineEditor.factorLabelLocalBackend') }
       ]
     },
     {
-      title: '质量与健康',
+      title: t('pipelineEditor.sectionQualityAndHealth'),
       items: [
-        { key: 'health_status', label: '健康状态' },
-        { key: 'quality_score', label: '质量分' },
-        { key: 'weight', label: '权重' }
+        { key: 'health_status', label: t('pipelineEditor.factorLabelHealthStatus') },
+        { key: 'quality_score', label: t('pipelineEditor.factorLabelQualityScore') },
+        { key: 'weight', label: t('pipelineEditor.factorLabelWeight') }
       ]
     },
     {
-      title: '成本与时延',
+      title: t('pipelineEditor.sectionCostAndLatency'),
       items: [
-        { key: 'unit_price', label: '单价' },
-        { key: 'cost_score', label: '成本分' },
-        { key: 'observed_latency_ms', label: '观测延迟(ms)' },
-        { key: 'score_hint', label: '综合分提示' }
+        { key: 'unit_price', label: t('pipelineEditor.factorLabelUnitPrice') },
+        { key: 'cost_score', label: t('pipelineEditor.factorLabelCostScore') },
+        { key: 'observed_latency_ms', label: t('pipelineEditor.factorLabelObservedLatencyMs') },
+        { key: 'score_hint', label: t('pipelineEditor.factorLabelScoreHint') }
       ]
     }
   ]
@@ -573,7 +575,7 @@ async function refreshPipelineFromServer() {
     canvasRef.value?.clearDirtyState?.()
     canvasDirty.value = false
   } catch (error: any) {
-    ElMessage.warning('已应用但刷新画布失败，请手动重开编辑器')
+    ElMessage.warning(t('pipelineEditor.refreshCanvasFailed'))
     console.warn(error)
   }
 }
@@ -607,7 +609,7 @@ async function applyRouteAutoBuildPreview(id: string): Promise<boolean> {
   const result = await autoBuildPipeline(id, payload)
   routeAutoBuildResult.value = result
   routeAutoBuildPreviewSignature.value = ''
-  ElMessage.success('已直接应用预览结果')
+  ElMessage.success(t('pipelineEditor.directApplyPreview'))
   await refreshPipelineFromServer()
   return true
 }
@@ -615,7 +617,7 @@ async function applyRouteAutoBuildPreview(id: string): Promise<boolean> {
 async function runRouteAutoBuild(dryRun: boolean) {
   const id = localPipeline.value?.id
   if (!id) {
-    ElMessage.warning('请先保存流水线，再执行自动配置')
+    ElMessage.warning(t('pipelineEditor.savePipelineFirst'))
     return
   }
   routeAutoBuildSubmitting.value = true
@@ -640,12 +642,12 @@ async function runRouteAutoBuild(dryRun: boolean) {
     } else {
       routeAutoBuildPreviewSignature.value = ''
     }
-    ElMessage.success(dryRun ? '自动构建预览完成' : '自动构建已应用')
+    ElMessage.success(dryRun ? t('pipelineEditor.autoBuildPreviewDone') : t('pipelineEditor.autoBuildApplied'))
     if (!dryRun) {
       await refreshPipelineFromServer()
     }
   } catch (error: any) {
-    ElMessage.error('自动构建失败：' + (error.message || error))
+    ElMessage.error(t('pipelineEditor.autoBuildFailed') + (error.message || error))
   } finally {
     routeAutoBuildSubmitting.value = false
   }
@@ -654,16 +656,16 @@ async function runRouteAutoBuild(dryRun: boolean) {
 async function rollbackRouteAutoBuild() {
   const id = localPipeline.value?.id
   if (!id) {
-    ElMessage.warning('请先保存流水线，再执行回滚')
+    ElMessage.warning(t('pipelineEditor.savePipelineFirstRollback'))
     return
   }
   routeAutoBuildSubmitting.value = true
   try {
     await rollbackAutoBuildPipeline(id, false)
-    ElMessage.success('已回滚最近一次自动构建')
+    ElMessage.success(t('pipelineEditor.rollbackSuccess'))
     await refreshPipelineFromServer()
   } catch (error: any) {
-    ElMessage.error('回滚失败：' + (error.message || error))
+    ElMessage.error(t('pipelineEditor.rollbackFailed') + (error.message || error))
   } finally {
     routeAutoBuildSubmitting.value = false
   }
@@ -677,12 +679,12 @@ async function handleBeforeClose(done: () => void) {
 
   try {
     await ElMessageBox.confirm(
-      '检测到当前流水线有未保存修改，是否先保存再关闭？',
-      '未保存的更改',
+      t('pipelineEditor.unsavedChangesConfirm'),
+      t('pipelineEditor.unsavedChangesTitle'),
       {
         type: 'warning',
-        confirmButtonText: '保存并关闭',
-        cancelButtonText: '不保存关闭',
+        confirmButtonText: t('pipelineEditor.saveAndClose'),
+        cancelButtonText: t('pipelineEditor.closeWithoutSaving'),
         distinguishCancelAndClose: true
       }
     )

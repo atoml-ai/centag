@@ -1,7 +1,7 @@
 <template>
   <el-drawer
     v-model="visible"
-    title="AI 对话测试"
+    :title="t('minimalChat.title')"
     direction="rtl"
     size="50%"
     :close-on-click-modal="true"
@@ -11,10 +11,10 @@
   >
     <div class="minimal-chat-body">
       <div class="pipeline-bar">
-        <span class="pipeline-bar-label">选择流水线</span>
+        <span class="pipeline-bar-label">{{ t('minimalChat.selectPipeline') }}</span>
         <el-select
           v-model="selectedPipelineId"
-          placeholder="选择流水线"
+          :placeholder="t('minimalChat.selectPipeline')"
           size="default"
           style="width: 260px"
           :loading="pipelinesLoading"
@@ -36,7 +36,7 @@
         <div class="chat-messages" ref="messagesContainer">
           <div v-if="messages.length === 0" class="empty-state">
             <el-icon :size="40" color="#c0c4cc"><ChatDotRound /></el-icon>
-            <p>选择流水线后发送消息测试后端</p>
+            <p>{{ t('minimalChat.selectPipelineHint') }}</p>
           </div>
 
           <div v-for="(msg, idx) in messages" :key="idx" :class="['message', msg.role]">
@@ -67,7 +67,7 @@
             v-model="inputText"
             type="textarea"
             :autosize="{ minRows: 1, maxRows: 4 }"
-            placeholder="输入消息..."
+            :placeholder="t('minimalChat.inputMessage')"
             :disabled="loading"
             @keydown.enter.exact.prevent="sendMessage"
             ref="inputRef"
@@ -89,11 +89,14 @@
 
 <script setup lang="ts">
 import { ref, computed, nextTick, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { Promotion, User, Monitor, ChatDotRound, WarningFilled } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { getPipelines, getPipelineDefaults, type AgentPatternPipeline } from '@/api/pipeline'
 import { useAuthStore } from '@/stores/auth'
 import api from '@/api'
+
+const { t } = useI18n()
 
 interface ChatMsg {
   role: 'user' | 'assistant'
@@ -238,7 +241,7 @@ async function sendMessage() {
 
     const reader = response.body?.getReader()
     const decoder = new TextDecoder()
-    if (!reader) throw new Error('无法读取响应流')
+    if (!reader) throw new Error(t('minimalChat.streamReadFailed'))
 
     let buffer = ''
     while (true) {
@@ -277,7 +280,7 @@ async function sendMessage() {
       }
     }
   } catch (e: any) {
-    assistantMsg.error = e.message || '请求失败'
+    assistantMsg.error = e.message || t('minimalChat.requestFailed')
     ElMessage.error(assistantMsg.error)
   } finally {
     loading.value = false

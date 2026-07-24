@@ -1,21 +1,20 @@
 <template>
   <el-dialog
     v-model="visible"
-    title="配置模型"
+    :title="t('capabilitySlotsDialog.title')"
     width="760px"
     destroy-on-close
     class="capability-slots-dialog"
     @closed="onClosed"
   >
     <p class="dialog-desc">
-      为各分类/阶段指定后端与模型。勾选「跟随系统默认」会随全局默认变化；保存后立即热加载。
-      拓扑（关键词与节点）请在画布用「新增分类」调整，本面板不改路由。
+      {{ t('capabilitySlotsDialog.desc') }}
     </p>
 
     <div v-loading="loading" class="assign-body">
       <div v-if="!rows.length && !loading" class="empty-hint">
-        <p>当前流水线没有可配置的能力槽。</p>
-        <p class="empty-sub">请先在画布用「新增分类」添加分类，或从带多分支的模板创建。</p>
+        <p>{{ t('capabilitySlotsDialog.noSlots') }}</p>
+        <p class="empty-sub">{{ t('capabilitySlotsDialog.noSlotsHint') }}</p>
       </div>
 
       <div v-for="row in rows" :key="row.slotId + ':' + row.nodeId" class="assign-row">
@@ -23,34 +22,34 @@
           <div class="row-title">
             <span class="label">{{ row.label }}</span>
             <span class="node-id mono">{{ row.nodeId }}</span>
-            <el-tag v-for="t in row.tags" :key="t" size="small" effect="plain" class="tag-chip">{{ t }}</el-tag>
+            <el-tag v-for="tag in row.tags" :key="tag" size="small" effect="plain" class="tag-chip">{{ tag }}</el-tag>
           </div>
           <el-switch
             v-model="row.followSystem"
             inline-prompt
-            active-text="跟随默认"
-            inactive-text="指定"
+            :active-text="t('capabilitySlotsDialog.followDefault')"
+            :inactive-text="t('capabilitySlotsDialog.custom')"
             @change="() => onFollowChange(row)"
           />
         </div>
         <p v-if="row.hint" class="row-hint">{{ row.hint }}</p>
         <div class="row-fields" :class="{ disabled: row.followSystem }">
           <div class="field">
-            <span class="field-label">后端</span>
+            <span class="field-label">{{ t('capabilitySlotsDialog.backend') }}</span>
             <BackendSelector
               v-model="row.backend"
               :disabled="row.followSystem || saving"
-              placeholder="选择后端"
+              :placeholder="t('capabilitySlotsDialog.backendPlaceholder')"
               @change="() => { row.model = '' }"
             />
           </div>
           <div class="field">
-            <span class="field-label">模型</span>
+            <span class="field-label">{{ t('capabilitySlotsDialog.model') }}</span>
             <ModelSelector
               v-model="row.model"
               :backend-id="row.backend"
               :disabled="row.followSystem || saving"
-              placeholder="选择模型"
+              :placeholder="t('capabilitySlotsDialog.modelPlaceholder')"
               :allow-create="true"
               :default-first-option="true"
             />
@@ -63,16 +62,16 @@
       <div class="footer-bar">
         <div class="footer-left">
           <el-button text :disabled="saving || loading || !rows.length" @click="resetAllFollowSystem">
-            全部跟随系统默认
+            {{ t('capabilitySlotsDialog.resetAll') }}
           </el-button>
           <el-button text :disabled="saving || loading || !rows.length" @click="handleRecommend">
-            按标签重新推荐
+            {{ t('capabilitySlotsDialog.recommend') }}
           </el-button>
         </div>
         <div class="footer-actions">
-          <el-button :disabled="saving" @click="visible = false">取消</el-button>
+          <el-button :disabled="saving" @click="visible = false">{{ t('capabilitySlotsDialog.cancel') }}</el-button>
           <el-button type="primary" :loading="saving" :disabled="!rows.length" @click="handleSave">
-            保存并生效
+            {{ t('capabilitySlotsDialog.save') }}
           </el-button>
         </div>
       </div>
@@ -83,6 +82,7 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { useI18n } from 'vue-i18n'
 import BackendSelector from '@/components/BackendSelector.vue'
 import ModelSelector from '@/components/ModelSelector.vue'
 import { getPipeline, updatePipeline, type AgentPatternPipeline } from '@/api/pipeline'
@@ -94,6 +94,8 @@ import {
   type BackendLike,
   type CapabilitySlotRow
 } from '@/utils/capabilitySlots'
+
+const { t } = useI18n()
 
 const visible = defineModel<boolean>({ default: false })
 
@@ -133,13 +135,12 @@ async function loadDetail() {
   }
   loading.value = true
   try {
-    // Always re-GET to avoid overwriting unsaved canvas edits with stale list row (R06)
     const [detail] = await Promise.all([getPipeline(props.pipelineId), loadBackends()])
     const data = (detail as { data?: AgentPatternPipeline })?.data ?? (detail as AgentPatternPipeline)
     pipeline.value = data
     rows.value = buildCapabilitySlotRows(data)
   } catch (err: any) {
-    ElMessage.error(err?.message || '加载流水线失败')
+    ElMessage.error(err?.message || t('capabilitySlotsDialog.loadFailed'))
     rows.value = []
   } finally {
     loading.value = false
@@ -164,9 +165,9 @@ function resetAllFollowSystem() {
 async function handleRecommend() {
   try {
     await ElMessageBox.confirm(
-      '将按各槽位 tags 打分填入表格草稿，不会立刻保存。是否覆盖当前表格选择？',
-      '按标签重新推荐',
-      { type: 'info', confirmButtonText: '覆盖表格', cancelButtonText: '取消' }
+      t('capabilitySlotsDialog.confirmRecommend'),
+      t('capabilitySlotsDialog.recommendTitle'),
+      { type: 'info', confirmButtonText: t('capabilitySlotsDialog.confirmButton'), cancelButtonText: t('capabilitySlotsDialog.cancelButton') }
     )
   } catch {
     return
@@ -176,7 +177,7 @@ async function handleRecommend() {
   if (result.warned) {
     ElMessage.warning(result.warned)
   } else {
-    ElMessage.success('已填入推荐结果，请确认后点击「保存并生效」')
+    ElMessage.success(t('capabilitySlotsDialog.recommendSuccess'))
   }
 }
 
@@ -187,11 +188,11 @@ async function handleSave() {
     const next = applyCapabilitySlotBindings(pipeline.value, rows.value)
     await updatePipeline(next.id, next)
     pipeline.value = next
-    ElMessage.success('已保存并生效，下一次请求将使用新绑定')
+    ElMessage.success(t('capabilitySlotsDialog.saveSuccess'))
     emit('saved', next)
     visible.value = false
   } catch (err: any) {
-    const msg = err?.response?.data?.message || err?.message || '保存失败'
+    const msg = err?.response?.data?.message || err?.message || t('capabilitySlotsDialog.saveFailed')
     ElMessage.error(msg)
   } finally {
     saving.value = false
