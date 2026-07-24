@@ -23,19 +23,22 @@ export interface Capabilities {
   navChatPage: boolean
   localProxy: boolean
   storageConfig: boolean
+  /** 顶栏是否展示「更多」分组（personal 暂整体隐藏） */
+  navMoreMenu: boolean
   /** 更多：主机代理 + Clash（高级；主推仍是接入→系统代理） */
   navHostProxyTools: boolean
   /** 存储配置内：数据存储管理 */
   navDataStores: boolean
   /** 存储配置内：缓存评估 */
   navEvaluation: boolean
-  /** 系统组：降级策略 */
+  /** 独立「降级策略」导航（已并入系统配置韧性页，默认 false） */
   navFallbackPolicy: boolean
   memoryQuery: boolean
   /** 记忆同步/重建等写运维（personal；非 team_user） */
   memoryFull: boolean
   usageBilling: boolean
   agentSetup: boolean
+  /** 系统配置入口（personal：右上角用户菜单，非顶栏） */
   systemConfig: boolean
   myTenant: boolean
   userAdmin: boolean
@@ -60,10 +63,11 @@ const WORKER_CAPS: Omit<Capabilities, 'role'> = {
   navChatPage: false,
   localProxy: true,
   storageConfig: true,
+  navMoreMenu: true,
   navHostProxyTools: true,
   navDataStores: true,
   navEvaluation: true,
-  navFallbackPolicy: true,
+  navFallbackPolicy: false,
   memoryQuery: true,
   memoryFull: true,
   usageBilling: true,
@@ -74,15 +78,18 @@ const WORKER_CAPS: Omit<Capabilities, 'role'> = {
   liteHome: true
 }
 
-/** personal 发布面：暂隐未成熟 / 非主推入口（能力位 false，后续可逐项开放） */
+/**
+ * personal 发布面：
+ * - 顶栏不展示「更多」（实验入口已收纳在 more 结构中，待整体开放）
+ * - 系统配置改走右上角用户菜单
+ * - 降级策略并入系统配置韧性页，无独立导航
+ */
 const PERSONAL_NAV_PREVIEW_OFF = {
+  navMoreMenu: false,
+  navFallbackPolicy: false,
+  // 路由层仍挡住未成熟页；结构上已挂在 more 内供后续整体开放
   memoryQuery: false,
-  memoryFull: false,
-  navHostProxyTools: false,
-  navDataStores: false,
-  navEvaluation: false,
-  // 降级策略牵涉主流程，先开放便于联调与后续调整
-  navFallbackPolicy: true
+  memoryFull: false
 } as const
 
 export function getCapabilities(edition: Edition, isAdmin = false): Capabilities {
@@ -94,6 +101,7 @@ export function getCapabilities(edition: Edition, isAdmin = false): Capabilities
       ...WORKER_CAPS,
       localProxy: false,
       storageConfig: false,
+      navMoreMenu: false,
       navHostProxyTools: false,
       navDataStores: false,
       navEvaluation: false,
@@ -114,7 +122,7 @@ export function getCapabilities(edition: Edition, isAdmin = false): Capabilities
       role,
       ...WORKER_CAPS,
       storageConfig: false,
-      navHostProxyTools: false, // 本机代理工具不适合团队共享面
+      navHostProxyTools: false,
       navDataStores: false,
       navEvaluation: false,
       navFallbackPolicy: false,
@@ -137,6 +145,7 @@ export function getCapabilities(edition: Edition, isAdmin = false): Capabilities
     navChatPage: false,
     localProxy: false,
     storageConfig: true,
+    navMoreMenu: false,
     navHostProxyTools: false,
     navDataStores: true,
     navEvaluation: true,
