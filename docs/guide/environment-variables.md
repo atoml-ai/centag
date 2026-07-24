@@ -126,7 +126,7 @@ docker run -d \
 | `LLM_PROXY_MODE_O_TEMPLATE_ENABLED` | 启用 #o 优化模式的流水线模板 | `false` |
 | `LLM_PROXY_MODE_D_TEMPLATE_ENABLED` | 启用 #d 直接后端模式的流水线模板 | `false` |
 | `LLM_PROXY_MODE_T_TEMPLATE_ENABLED` | 启用 #t 透明代理模式的流水线模板 | `false` |
-| `LLM_PROXY_MODE_F_TEMPLATE_ENABLED` | 启用 #f 降级模式的流水线模板 | `false` |
+| `LLM_PROXY_MODE_F_TEMPLATE_ENABLED` | （历史）#f 降级模式模板开关；模板已不再预置 | `false` |
 | `LLM_PROXY_MODE_M_TEMPLATE_ENABLED` | 启用 #m 模型匹配模式的流水线模板 | `false` |
 | `LLM_PROXY_MODE_C_TEMPLATE_ENABLED` | 启用 #c 意图分类模式的流水线模板 | `false` |
 | `LLM_PROXY_MODE_P_TEMPLATE_ENABLED` | 启用 #p 流水线模式的流水线模板 | `false` |

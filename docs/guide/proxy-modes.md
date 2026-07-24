@@ -732,7 +732,7 @@ export LLM_PROXY_MODE_O_TEMPLATE_ENABLED=true
 # Enable other modes
 export LLM_PROXY_MODE_D_TEMPLATE_ENABLED=true   # Direct backend
 export LLM_PROXY_MODE_T_TEMPLATE_ENABLED=true   # Transparent proxy
-export LLM_PROXY_MODE_F_TEMPLATE_ENABLED=true   # Fallback mode
+# LLM_PROXY_MODE_F_TEMPLATE_ENABLED 已废弃：fallback-mode 模板不再预置
 export LLM_PROXY_MODE_M_TEMPLATE_ENABLED=true   # Model matching
 export LLM_PROXY_MODE_C_TEMPLATE_ENABLED=true   # Intent classification
 export LLM_PROXY_MODE_P_TEMPLATE_ENABLED=true   # Pipeline mode
@@ -747,7 +747,7 @@ export LLM_PROXY_MODE_P_TEMPLATE_ENABLED=true   # Pipeline mode
 | `#o` (Optimize) | `07-optimize-mode.json` | Generator + business.optimizer |
 | `#d` (Direct) | `03-direct-backend.json` | Simple single-node pipeline |
 | `#t` (Transparent) | `14-transparent-proxy.json` | Remote node proxy |
-| `#f` (Fallback) | `04-fallback-mode.json` | Primary with fallback on error |
+| `#f` (Fallback) | —（不再预置） | Use `#d`/`#t`/`#j` built-in billing + FallbackGroup |
 | `#m` (Model Matching) | `06-model-matching.json` | Pattern-based backend routing |
 | `#c` (Intent Classification) | *(merged into router-mode)* | Now equivalent to `#r` |
 | `#r` (Router) | `11-router-mode.json` | Router → N×generator (includes intent classification) |
@@ -799,7 +799,7 @@ Ensure these pipeline templates are registered in `config/initdata/pipeline-temp
 | `transparent-proxy` | `transparent-proxy` | `16-transparent-proxy-v2.yaml` |
 | `audit-mode` | `audit-mode` | `13-audit-mode-v2.yaml` |
 | `optimize-mode` | `optimize-mode` | `14-optimize-mode-v2.yaml` |
-| `fallback` | `fallback-mode` | `18-fallback-mode-v2.yaml` |
+| `fallback` | —（不再预置） | — |
 | `model-matching` | `model-matching` | `19-model-matching-v2.yaml` |
 | `intent-classification` | `router-mode` | `20-intent-classification-v2.yaml` |
 
