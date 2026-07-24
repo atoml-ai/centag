@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -145,10 +146,30 @@ func (s *Server) updatePlugin(c *gin.Context) {
 	})
 }
 
+// formatUptime 将运行时长格式化为可读短串（秒级截断，避免 Go Duration 小数）。
+func formatUptime(d time.Duration) string {
+	if d < 0 {
+		d = 0
+	}
+	total := int64(d / time.Second)
+	days := total / 86400
+	hours := (total % 86400) / 3600
+	mins := (total % 3600) / 60
+	secs := total % 60
+	switch {
+	case days > 0:
+		return fmt.Sprintf("%dd%dh%dm", days, hours, mins)
+	case hours > 0:
+		return fmt.Sprintf("%dh%dm%ds", hours, mins, secs)
+	case mins > 0:
+		return fmt.Sprintf("%dm%ds", mins, secs)
+	default:
+		return fmt.Sprintf("%ds", secs)
+	}
+}
+
 // handleStatus 获取服务状态
 func (s *Server) handleStatus(c *gin.Context) {
-	uptime := time.Since(s.startTime).String()
-
 	resp := gin.H{
 		"service":    "centag",
 		"status":     "healthy",
@@ -156,7 +177,7 @@ func (s *Server) handleStatus(c *gin.Context) {
 		"version":    internal.GetVersion(),
 		"build_time": internal.GetBuildTime(),
 		"start_time": s.startTime.Format("2006-01-02 15:04:05"),
-		"uptime":     uptime,
+		"uptime":     formatUptime(time.Since(s.startTime)),
 		"timestamp":  time.Now().Format(time.RFC3339),
 	}
 
