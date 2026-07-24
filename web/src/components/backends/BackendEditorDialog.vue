@@ -431,8 +431,17 @@ const canFetchModels = computed(() => {
   return !isCreate.value && apiKeys.value.some((k) => k.has_key)
 })
 
+/** API Key 输入绑在 apiKeys[]，校验前需同步到 form.api_key，否则按钮会一直灰着。 */
+function formForValidation() {
+  return {
+    ...form,
+    api_key: getPrimaryApiKey(),
+    has_api_key: !!form.has_api_key || apiKeys.value.some((k) => k.has_key),
+  }
+}
+
 const canSave = computed(() =>
-  validateProviderForm(form, {
+  validateProviderForm(formForValidation(), {
     isCreate: isCreate.value,
     requireApiKey: true,
   }).ok
@@ -617,7 +626,8 @@ watch(
 )
 
 const save = async () => {
-  const check = validateProviderForm(form, {
+  form.api_key = getPrimaryApiKey()
+  const check = validateProviderForm(formForValidation(), {
     isCreate: isCreate.value,
     requireApiKey: true,
   })
@@ -626,7 +636,6 @@ const save = async () => {
     return
   }
 
-  form.api_key = getPrimaryApiKey()
   if (form.default_model) form.probe_model = form.default_model
 
   saving.value = true

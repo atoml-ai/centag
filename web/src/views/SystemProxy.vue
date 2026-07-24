@@ -58,12 +58,21 @@
           <el-step :title="t('systemProxy.wizard.step3Title')" :description="t('systemProxy.wizard.step3Desc')" />
         </el-steps>
 
-        <!-- 步骤 1：启动 MITM（出口 Key 随服务自动绑定） -->
-        <el-card class="step-card" shadow="never">
+        <!-- 步骤 1：启动/关闭 MITM（出口 Key 随服务自动绑定；运行中仍显示本卡片以便关闭） -->
+        <el-alert
+          v-if="status.enabled"
+          class="mb-sm"
+          type="success"
+          :closable="false"
+          show-icon
+          :title="t('systemProxy.wizard.runningAlertTitle')"
+          :description="t('systemProxy.wizard.runningAlertDesc')"
+        />
+        <el-card class="step-card" :class="{ 'step-card-active': status.enabled }" shadow="never">
           <div class="step-head">
             <span class="step-num">1</span>
             <div class="step-title-block">
-              <h3>{{ t('systemProxy.wizard.step1Heading') }}</h3>
+              <h3>{{ status.enabled ? t('systemProxy.wizard.step1HeadingRunning') : t('systemProxy.wizard.step1Heading') }}</h3>
               <p v-html="t('systemProxy.wizard.step1Description', { port: apiPort })" />
             </div>
             <el-space wrap size="small">
@@ -73,6 +82,16 @@
               <el-tag :type="egressConfigured ? 'success' : 'warning'" size="small">
                 {{ t('systemProxy.status.egressKey') }} {{ egressConfigured ? t('systemProxy.status.autoReady') : t('systemProxy.status.pendingBind') }}
               </el-tag>
+              <el-button
+                v-if="status.enabled"
+                type="danger"
+                plain
+                size="small"
+                :loading="toggling"
+                @click="stopMitm"
+              >
+                {{ t('systemProxy.wizard.stopMitm') }}
+              </el-button>
             </el-space>
           </div>
 
@@ -83,8 +102,8 @@
                 v-model="status.enabled"
                 :loading="toggling"
                 @change="toggleProxy"
-                :active-text="t('systemProxy.yes')"
-                :inactive-text="t('systemProxy.no')"
+                :active-text="t('systemProxy.status.running')"
+                :inactive-text="t('systemProxy.status.stopped')"
               />
               <span class="form-hint">{{ listenDisplay }}</span>
             </div>
@@ -910,6 +929,13 @@ const toggleProxy = async () => {
   }
 }
 
+/** 运行中时提供显式「停止」入口（避免用户以为步骤 1 消失了）。 */
+const stopMitm = async () => {
+  if (!status.value.enabled || toggling.value) return
+  status.value.enabled = false
+  await toggleProxy()
+}
+
 const openAddDomain = () => {
   newDomain.value = { domain: '' }
   showAddDialog.value = true
@@ -1248,8 +1274,12 @@ onMounted(() => {
   padding-top: 8px;
 }
 
-.step-card {
-  margin-bottom: 8px;
+.step-card-active {
+  border-color: var(--el-color-success-light-5);
+  box-shadow: 0 0 0 1px var(--el-color-success-light-7);
+}
+
+.step-card {  margin-bottom: 8px;
   border-radius: 8px;
 }
 
