@@ -19,6 +19,7 @@ docs/versions/
 
 | 版本 | 需求 | 分支 | 状态 |
 |------|------|------|------|
+| v0.3.0 | [国际化与 GitHub 推广](v0.3.0/i18n-github-promo/) | `feature/v0.3.0` | Step 1 ✅；Gate 1 待人工确认 |
 | v0.2.8 | [协议对齐与 Models 接口增强](v0.2.8/protocol-alignment/) | `feature/v0.2.8` | Step 1–6 ✅；GitHub `v0.2.8` |
 | v0.2.9 | [Provider/Agent 本地接入与账户池](v0.2.9/provider-agent-local/)（主） | `feature/v0.2.9` | Step 1 ✅；Gate 1 待人工确认 |
 | v0.2.9 | [npm 打包与安装文档](v0.2.9/npm-packaging/)（搭便车） | `feature/v0.2.9` | npm `@atomlai/centag@0.2.9` 已发 |
