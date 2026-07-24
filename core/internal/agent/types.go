@@ -107,6 +107,19 @@ type WriteConfigResponse struct {
 	Message   string       `json:"message,omitempty"`
 }
 
+// RestoreConfigRequest 恢复 Agent 本地默认配置
+type RestoreConfigRequest struct {
+	AgentType string `json:"agent_type" binding:"required"`
+}
+
+// RestoreConfigResponse 恢复结果
+type RestoreConfigResponse struct {
+	AgentType string          `json:"agent_type"`
+	Success   bool            `json:"success"`
+	Results   []RestoreResult `json:"results,omitempty"`
+	Message   string          `json:"message,omitempty"`
+}
+
 // GenerateConfigResponse 生成的配置响应
 type GenerateConfigResponse struct {
 	AgentType   string           `json:"agent_type"`
