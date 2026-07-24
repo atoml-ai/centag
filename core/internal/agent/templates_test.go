@@ -95,7 +95,7 @@ func TestGeminiTemplate(t *testing.T) {
 func TestOpenCodeTemplate_UsesOfficialProviderSchema(t *testing.T) {
 	tmpl := &OpenCodeTemplate{}
 	info := testInfo()
-	info.Model = "pipeline.direct-backend"
+	info.Model = "centag/direct-backend"
 
 	files, err := tmpl.ConfigFiles(info)
 	if err != nil {
@@ -114,8 +114,12 @@ func TestOpenCodeTemplate_UsesOfficialProviderSchema(t *testing.T) {
 	if !strings.Contains(content, `"npm": "@ai-sdk/openai-compatible"`) {
 		t.Fatalf("opencode config should set npm adapter, got: %s", content)
 	}
-	if !strings.Contains(content, `"model": "centag/pipeline.direct-backend"`) {
+	// OpenCode 的 model 为 provider/apiModel；apiModel 已是 centag/<id>，故为 centag/centag/<id>
+	if !strings.Contains(content, `"model": "centag/centag/direct-backend"`) {
 		t.Fatalf("opencode config should set default model with provider prefix, got: %s", content)
+	}
+	if !strings.Contains(content, `"centag/direct-backend": {`) {
+		t.Fatalf("opencode models map key should be API model id, got: %s", content)
 	}
 }
 
@@ -123,7 +127,7 @@ func TestOpenClawTemplate_UsesOpenAICompletionsAPI(t *testing.T) {
 	tmpl := &OpenClawTemplate{}
 	info := testInfo()
 	info.Type = "anthropic"
-	info.Model = "pipeline.direct-backend"
+	info.Model = "centag/direct-backend"
 
 	files, err := tmpl.ConfigFiles(info)
 	if err != nil {
@@ -136,15 +140,18 @@ func TestOpenClawTemplate_UsesOpenAICompletionsAPI(t *testing.T) {
 	if !strings.Contains(content, `"api": "openai-completions"`) {
 		t.Fatalf("openclaw config should use openai-completions api, got: %s", content)
 	}
-	if !strings.Contains(content, `"primary": "centag/pipeline.direct-backend"`) {
+	if !strings.Contains(content, `"primary": "centag/centag/direct-backend"`) {
 		t.Fatalf("openclaw config should set primary default model, got: %s", content)
+	}
+	if !strings.Contains(content, `"id": "centag/direct-backend"`) {
+		t.Fatalf("openclaw models id should be API model id, got: %s", content)
 	}
 }
 
 func TestHermesTemplate_ConfigUsesSingleModelName(t *testing.T) {
 	tmpl := &HermesTemplate{}
 	info := testInfo()
-	info.Model = "pipeline.direct-backend"
+	info.Model = "centag/direct-backend"
 
 	files, err := tmpl.ConfigFiles(info)
 	if err != nil {
@@ -154,10 +161,10 @@ func TestHermesTemplate_ConfigUsesSingleModelName(t *testing.T) {
 		t.Fatalf("expected 1 file, got %d", len(files))
 	}
 	content := files[0].Content
-	if strings.Contains(content, "centag/pipeline.direct-backend ") {
+	if strings.Contains(content, "centag/direct-backend ") {
 		t.Fatalf("config should not contain model suffix after pipeline id: %s", content)
 	}
-	if !strings.Contains(content, `model: "pipeline.direct-backend"`) {
+	if !strings.Contains(content, `model: "centag/direct-backend"`) {
 		t.Fatalf("config should set custom provider model to pipeline id, got: %s", content)
 	}
 	if !strings.Contains(content, `api_mode: "chat_completions"`) {

@@ -34,11 +34,11 @@ func NewAgentHandler(registry *agent.TemplateRegistry, backendMgr *backend.Manag
 }
 
 // resolveModelName 构建最终模型名：
-// - 有流水线时固定使用 pipeline.<id>（具体模型由流水线内部节点决定）
+// - 有流水线时固定使用 centag/<id>（具体模型由流水线内部节点决定）
 // - 无流水线时使用显式模型或后端首个支持模型
 func resolveModelName(model string, pipelineID string, supportedModels []backend.ModelMapping) string {
 	if pipelineID != "" {
-		return "pipeline." + pipelineID
+		return "centag/" + pipelineID
 	}
 	if model == "" && len(supportedModels) > 0 {
 		model = supportedModels[0].ActualModel

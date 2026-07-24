@@ -547,12 +547,9 @@ func copyProxyRequestFields(req *plugin.ProxyRequest) *plugin.ProxyRequest {
 	}
 }
 
-// ListModels 列出当前可用的流水线与后端模型，以 OpenAI models 格式返回。
-// 客户端应使用 id（如 pipeline.direct-backend 或 gpt-4o）作为 chat/completions 的 model。
-// [v0.2.8] 同时输出 Pipeline ID（pipeline.*）和配置后端实际支持的模型列表，支持 ?type=chat|embedding|all 过滤。
+// ListModels 列出当前可用的流水线，以 OpenAI models 格式返回。
+// 客户端应使用 id（如 centag/direct-backend）作为 chat/completions 的 model。
 func (h *Handler) ListModels(c *gin.Context) {
-	modelType := c.DefaultQuery("type", "chat") // chat | embedding | all
-
 	pipelines := h.listModelsPipelines()
 	data := make([]gin.H, 0, len(pipelines))
 	for _, p := range pipelines {
@@ -560,77 +557,17 @@ func (h *Handler) ListModels(c *gin.Context) {
 			continue
 		}
 		data = append(data, gin.H{
-			"id":       "pipeline." + p.ID,
+			"id":       "centag/" + p.ID,
 			"object":   "model",
 			"created":  0,
 			"owned_by": "centag",
 		})
 	}
 
-	// [v0.2.8] 追加启用后端的 supported_models（去重，owned_by=后端名）
-	if mgr := backend.GetManager(); mgr != nil {
-		seen := make(map[string]struct{})
-		for _, b := range mgr.GetAll() {
-			if b == nil || !b.Enabled {
-				continue
-			}
-			for _, sm := range b.SupportedModels {
-				name := sm.ActualModel
-				if name == "" {
-					name = sm.RequestedModel
-				}
-				if name == "" {
-					continue
-				}
-				if _, dup := seen[name]; dup {
-					continue
-				}
-				// 根据 modelType 过滤
-				if modelType != "all" {
-					if modelType == "embedding" && !isEmbeddingModelName(name) {
-						continue
-					}
-					if modelType == "chat" && isEmbeddingModelName(name) {
-						continue
-					}
-				}
-				seen[name] = struct{}{}
-				data = append(data, gin.H{
-					"id":       name,
-					"object":   "model",
-					"created":  0,
-					"owned_by": b.Name,
-				})
-			}
-		}
-	}
-
 	c.JSON(200, gin.H{
 		"object": "list",
 		"data":   data,
 	})
-}
-
-// isEmbeddingModelName 判断是否是向量化模型（与 server.isEmbeddingModel 等价，proxy 层内联实现避免跨层依赖）
-func isEmbeddingModelName(modelName string) bool {
-	modelLower := strings.ToLower(modelName)
-	embeddingKeywords := []string{
-		"embedding",
-		"embed",
-		"bge",
-		"gte",
-		"e5",
-		"sentence",
-		"nomic-embed",
-		"mxbai-embed",
-		"all-minilm",
-	}
-	for _, keyword := range embeddingKeywords {
-		if strings.Contains(modelLower, keyword) {
-			return true
-		}
-	}
-	return false
 }
 
 func (h *Handler) listModelsPipelines() []*pipeline.AgentPatternPipeline {

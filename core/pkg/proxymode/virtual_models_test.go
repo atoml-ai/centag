@@ -61,6 +61,9 @@ func TestIsPipelineModel(t *testing.T) {
 		{"NotPipeline", "gpt-4", false},
 		{"ExactlyBoundaryMatch", "pipeline.x", true},
 		{"MinValid", "pipeline.a", true},
+		{"CentagPrefix", "centag/direct-backend", true},
+		{"CentagPrefixShort", "centag/a", true},
+		{"CentagPrefixOnly", "centag/", false},
 	}
 
 	for _, tt := range tests {

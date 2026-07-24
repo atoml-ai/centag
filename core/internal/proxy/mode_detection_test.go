@@ -113,6 +113,8 @@ func TestParseModelPipelinePrefix(t *testing.T) {
 		wantActualModel string
 		wantOK          bool
 	}{
+		{"centag/direct-backend", "direct-backend", "", true},
+		{"centag/direct-backend glm-4-flash", "direct-backend", "glm-4-flash", true},
 		{"pipeline.direct-backend", "direct-backend", "", true},
 		{"pipeline.direct-backend glm-4-flash", "direct-backend", "glm-4-flash", true},
 		{"pipeline_smart-scheduling qwen2.5", "smart-scheduling", "qwen2.5", true},

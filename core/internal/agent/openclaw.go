@@ -12,11 +12,13 @@ func (t *OpenClawTemplate) Description() string  { return "AI 编程助手 (gith
 func (t *OpenClawTemplate) ConfigFiles(info *BackendInfo) ([]ConfigFile, error) {
 	url := proxyURL(info.Host, info.Port)
 	model := defaultModel(info)
+	apiModel := centagAPIModelID(model)
+	modelRef := centagModelRef(model)
 	content := fmt.Sprintf(`{
   "agents": {
     "defaults": {
       "model": {
-        "primary": "centag/%s"
+        "primary": "%s"
       }
     }
   },
@@ -31,7 +33,7 @@ func (t *OpenClawTemplate) ConfigFiles(info *BackendInfo) ([]ConfigFile, error) 
       }
     }
   }
-}`, model, url, info.APIKey, model, model)
+}`, modelRef, url, info.APIKey, apiModel, apiModel)
 	return []ConfigFile{
 		{Path: "~/.openclaw/openclaw.json", Content: content},
 	}, nil
