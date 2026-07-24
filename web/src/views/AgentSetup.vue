@@ -6,26 +6,22 @@
           <el-icon><Link /></el-icon>
           Agent 接入
         </h1>
-        <p class="page-description">管理 Agent 工具的接入配置和供应商路由</p>
+        <p class="page-description">将 Agent 工具接入 Centag 代理：选择流水线、写入配置并验证生效</p>
       </div>
     </div>
 
     <el-tabs v-model="activeTab" class="setup-tabs">
       <!-- Tab 1: 快速接入 -->
       <el-tab-pane label="快速接入" name="setup">
-        <!-- 选择 Agent -->
         <div class="section-block">
+          <p class="section-hint">点击下方 Agent，通过向导接入 Centag 代理（只需选择流水线，后端由流水线内部指定）。</p>
           <el-row :gutter="16">
             <el-col
               v-for="agent in agentTypes"
               :key="agent.type"
               :xs="24" :sm="12" :md="8"
             >
-              <div
-                class="agent-card"
-                :class="{ active: selectedAgent === agent.type }"
-                @click="selectedAgent = agent.type; onAgentChange()"
-              >
+              <div class="agent-card" @click="openWizard(agent)">
                 <div class="agent-icon">
                   <el-icon :size="32">
                     <component :is="agentIcon(agent.type)" />
@@ -35,207 +31,22 @@
                   <div class="agent-name">{{ agent.display_name }}</div>
                   <div class="agent-desc">{{ agent.description }}</div>
                 </div>
+                <div class="agent-actions" @click.stop>
+                  <el-button type="primary" link @click="openWizard(agent)">
+                    接入代理
+                  </el-button>
+                  <el-button
+                    type="info"
+                    link
+                    :loading="restoringAgent === agent.type"
+                    @click="restoreDefaults(agent)"
+                  >
+                    恢复默认
+                  </el-button>
+                </div>
               </div>
             </el-col>
           </el-row>
-        </div>
-
-        <!-- 选择 Provider + 流水线 + 配置 -->
-        <div v-if="selectedAgent" class="section-block">
-          <el-card class="config-card">
-            <div v-if="pipelines.length === 0 && !loadingPipelines" class="empty-backends">
-              <el-empty description="暂无可用流水线，请先在「策略管理」中添加">
-                <el-button type="primary" @click="$router.push('/pipelines')">前往策略管理</el-button>
-              </el-empty>
-            </div>
-            <div v-else>
-              <!-- Provider 选择 -->
-              <div v-loading="loadingBackends" class="backend-section">
-                <h4 class="select-label">选择 Provider（可选）</h4>
-                <el-select
-                  v-model="selectedBackend"
-                  placeholder="自动选择默认 Provider"
-                  filterable
-                  clearable
-                  style="width: 100%"
-                  @change="onBackendChange"
-                >
-                  <el-option
-                    v-for="backend in backends"
-                    :key="backend.id"
-                    :label="backend.name || backend.id"
-                    :value="backend.id"
-                  >
-                    <div class="backend-option">
-                      <span class="backend-name">{{ backend.name || backend.id }}</span>
-                      <el-tag size="small" type="info">{{ backend.type }}</el-tag>
-                    </div>
-                  </el-option>
-                </el-select>
-                <div v-if="selectedBackend" class="backend-hint">
-                  <el-tag type="success" size="small">
-                    <el-icon><Connection /></el-icon>
-                    已选择: {{ getBackendName(selectedBackend) }}
-                  </el-tag>
-                </div>
-              </div>
-
-              <!-- 流水线选择 -->
-              <div v-loading="loadingPipelines" class="pipeline-section">
-                <h4 class="select-label">选择流水线（必选）</h4>
-                <el-select
-                  v-model="selectedPipeline"
-                  placeholder="请选择流水线"
-                  filterable
-                  style="width: 100%"
-                  @change="onPipelineChange"
-                >
-                  <el-option
-                    v-for="pipe in pipelines"
-                    :key="pipe.id"
-                    :label="pipe.name || pipe.id"
-                    :value="pipe.id"
-                  >
-                    <div class="pipeline-option">
-                      <span>{{ pipe.name || pipe.id }}</span>
-                      <span v-if="pipe.description" class="pipeline-desc">{{ pipe.description }}</span>
-                    </div>
-                  </el-option>
-                </el-select>
-
-                <!-- 模型信息 -->
-                <div v-if="displayModel" class="model-display">
-                  <el-tag type="info" size="default">
-                    <el-icon><Cpu /></el-icon>
-                    模型: {{ displayModel }}
-                  </el-tag>
-                  <span v-if="selectedPipeline" class="model-hint">由流水线决定</span>
-                </div>
-              </div>
-
-              <!-- 生成配置按钮 -->
-              <div class="generate-section">
-                <el-button
-                  type="primary"
-                  size="large"
-                  :loading="loadingConfig"
-                  :disabled="loadingConfig || !selectedPipeline"
-                  @click="generateConfig"
-                >
-                  <el-icon class="el-icon--left"><DocumentCopy /></el-icon>
-                  生成配置
-                </el-button>
-              </div>
-            </div>
-
-            <!-- 配置结果 -->
-            <div v-if="configResult" class="config-result">
-              <el-divider content-position="center">
-                <el-icon><DocumentCopy /></el-icon>
-                配置结果
-              </el-divider>
-
-              <div class="config-header">
-                <h3>{{ configResult.description }}</h3>
-                <el-tag>路由: {{ configResult.backend_name }}</el-tag>
-              </div>
-
-              <!-- 一键写入 -->
-              <div v-if="configResult.commands" class="config-section">
-                <h4>一键配置</h4>
-                <el-button type="primary" :loading="writingConfig" @click="writeToConfig">
-                  <el-icon class="el-icon--left"><Plus /></el-icon>
-                  写入配置文件
-                </el-button>
-                <p class="write-hint" v-if="writeResult">
-                  <span v-if="writeResult.success" style="color: #67c23a">✓ {{ writeResult.message }}</span>
-                  <span v-else style="color: #f56c6c">✗ {{ writeResult.message }}</span>
-                </p>
-                <div v-if="writeResult?.success && writePreviewFiles.length" class="write-preview">
-                  <h5>已写入配置关键片段（已脱敏）</h5>
-                  <el-collapse>
-                    <el-collapse-item
-                      v-for="file in writePreviewFiles"
-                      :key="file.path"
-                      :title="file.path"
-                    >
-                      <div class="code-block">
-                        <pre><code>{{ file.preview }}</code></pre>
-                        <el-button class="copy-btn" :icon="DocumentCopy" @click="copyText(file.preview)" />
-                      </div>
-                    </el-collapse-item>
-                  </el-collapse>
-                </div>
-              </div>
-
-              <!-- 团队版：平台命令 -->
-              <div v-if="!isDesktopEdition && configResult.commands" class="config-section">
-                <h4>配置命令</h4>
-                <el-tabs v-model="platformTab" type="border-card">
-                  <el-tab-pane label="macOS" name="macos">
-                    <div class="code-block">
-                      <pre><code>{{ configResult.commands.macos }}</code></pre>
-                      <el-button class="copy-btn" :icon="DocumentCopy" @click="copyText(configResult.commands.macos)" />
-                    </div>
-                  </el-tab-pane>
-                  <el-tab-pane label="Linux" name="linux">
-                    <div class="code-block">
-                      <pre><code>{{ configResult.commands.linux }}</code></pre>
-                      <el-button class="copy-btn" :icon="DocumentCopy" @click="copyText(configResult.commands.linux)" />
-                    </div>
-                  </el-tab-pane>
-                  <el-tab-pane label="Windows" name="windows">
-                    <div class="code-block">
-                      <pre><code>{{ configResult.commands.windows }}</code></pre>
-                      <el-button class="copy-btn" :icon="DocumentCopy" @click="copyText(configResult.commands.windows)" />
-                    </div>
-                  </el-tab-pane>
-                </el-tabs>
-              </div>
-
-              <!-- 配置文件 -->
-              <div v-if="configResult.files && configResult.files.length" class="config-section">
-                <h4>配置文件</h4>
-                <el-collapse>
-                  <el-collapse-item v-for="file in configResult.files" :key="file.path" :title="file.path">
-                    <div class="code-block">
-                      <pre><code>{{ file.content }}</code></pre>
-                      <el-button class="copy-btn" :icon="DocumentCopy" @click="copyText(file.content)" />
-                    </div>
-                  </el-collapse-item>
-                </el-collapse>
-              </div>
-
-              <!-- 手动步骤 -->
-              <div v-if="configResult.steps && configResult.steps.length" class="config-section">
-                <h4>手动配置步骤</h4>
-                <el-timeline>
-                  <el-timeline-item v-for="(step, i) in configResult.steps" :key="i" :timestamp="step.title" placement="top">
-                    <p v-if="step.description">{{ step.description }}</p>
-                    <div v-if="step.code" class="code-block">
-                      <pre><code>{{ step.code }}</code></pre>
-                      <el-button class="copy-btn" :icon="DocumentCopy" @click="copyText(step.code)" />
-                    </div>
-                  </el-timeline-item>
-                </el-timeline>
-              </div>
-
-              <!-- 验证命令 -->
-              <div v-if="configResult.verify_cmd" class="config-section">
-                <h4>验证连通性</h4>
-                <div class="code-block">
-                  <pre><code>{{ configResult.verify_cmd }}</code></pre>
-                  <el-button class="copy-btn" :icon="DocumentCopy" @click="copyText(configResult.verify_cmd)" />
-                </div>
-              </div>
-            </div>
-          </el-card>
-
-          <div v-if="configResult" class="step-actions">
-            <el-button type="default" @click="resetWizard">
-              重新开始
-            </el-button>
-          </div>
         </div>
       </el-tab-pane>
 
@@ -287,6 +98,236 @@
         </el-card>
       </el-tab-pane>
     </el-tabs>
+
+    <!-- 接入向导对话框 -->
+    <el-dialog
+      v-model="wizardVisible"
+      :title="wizardTitle"
+      width="720px"
+      :close-on-click-modal="false"
+      destroy-on-close
+      class="agent-wizard-dialog"
+      @closed="resetWizard"
+    >
+      <el-steps :active="wizardStep" finish-status="success" align-center class="wizard-steps">
+        <el-step title="选择流水线" description="决定路由与模型" />
+        <el-step title="写入配置" description="应用到 Agent" />
+        <el-step title="验证生效" description="确认代理可用" />
+      </el-steps>
+
+      <!-- Step 1: 选择流水线 -->
+      <div v-show="wizardStep === 0" class="wizard-step" v-loading="loadingPipelines">
+        <el-alert type="info" :closable="false" show-icon class="step-alert">
+          只需选择流水线。后端与模型由流水线内部节点决定，无需在此单独配置。
+        </el-alert>
+
+        <el-alert
+          v-if="hasEnabledAPIKey === false"
+          type="warning"
+          :closable="false"
+          show-icon
+          class="step-alert"
+        >
+          <template #title>尚未配置可用的 Centag API Key</template>
+          接入时会自动把当前账号下可解密的 <code>llmproxy_*</code> 密钥写入 Agent 配置。
+          请先到个人中心创建 API Key，否则无法生成/写入配置。
+          <div class="alert-actions">
+            <el-button type="warning" size="small" @click="goProfileForAPIKey">前往创建 API Key</el-button>
+          </div>
+        </el-alert>
+        <el-alert
+          v-else-if="hasEnabledAPIKey === true"
+          type="success"
+          :closable="false"
+          show-icon
+          class="step-alert"
+        >
+          已检测到可用 API Key；下一步生成配置时会自动填入（不会在界面明文展示完整密钥）。
+        </el-alert>
+
+        <div v-if="pipelines.length === 0 && !loadingPipelines" class="empty-pipelines">
+          <el-empty description="暂无可用流水线，请先在「策略管理」中添加">
+            <el-button type="primary" @click="goPipelines">前往策略管理</el-button>
+          </el-empty>
+        </div>
+        <div v-else>
+          <h4 class="select-label">选择流水线（必选）</h4>
+          <el-select
+            v-model="selectedPipeline"
+            placeholder="请选择流水线"
+            filterable
+            style="width: 100%"
+            @change="onPipelineChange"
+          >
+            <el-option
+              v-for="pipe in pipelines"
+              :key="pipe.id"
+              :label="pipe.name || pipe.id"
+              :value="pipe.id"
+            >
+              <div class="pipeline-option">
+                <span>{{ pipe.name || pipe.id }}</span>
+                <span v-if="pipe.description" class="pipeline-desc">{{ pipe.description }}</span>
+              </div>
+            </el-option>
+          </el-select>
+
+          <div v-if="selectedPipeline" class="pipeline-summary">
+            <el-tag type="success" size="default">流水线: {{ selectedPipelineName }}</el-tag>
+            <el-tag type="info" size="default">
+              <el-icon><Cpu /></el-icon>
+              模型路由: centag/{{ selectedPipeline }}
+            </el-tag>
+            <span v-if="pipelineModel" class="model-hint">流水线内模型示意: {{ pipelineModel }}</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 2: 写入配置 -->
+      <div v-show="wizardStep === 1" class="wizard-step" v-loading="loadingConfig">
+        <el-alert type="info" :closable="false" show-icon class="step-alert">
+          将 Centag 代理地址与当前账号的 API Key 写入 {{ currentAgentName }}。
+          密钥来自「个人中心 → API Keys」中可解密的 <code>llmproxy_*</code> 密钥（服务端注入，界面预览已脱敏）。
+        </el-alert>
+
+        <div v-if="configResult" class="config-result">
+          <div class="config-header">
+            <h3>{{ configResult.description }}</h3>
+            <el-tag>路由: {{ configResult.backend_name }}</el-tag>
+          </div>
+
+          <!-- 一键写入 -->
+          <div class="config-section">
+            <h4>一键配置</h4>
+            <el-button type="primary" :loading="writingConfig" @click="writeToConfig">
+              <el-icon class="el-icon--left"><Plus /></el-icon>
+              写入配置文件
+            </el-button>
+            <p class="write-hint" v-if="writeResult">
+              <span v-if="writeResult.success" style="color: #67c23a">✓ {{ writeResult.message }}</span>
+              <span v-else style="color: #f56c6c">✗ {{ writeResult.message }}</span>
+            </p>
+          </div>
+
+          <!-- 写入成功：只展示已写入预览，避免与「配置预览」重复 -->
+          <div v-if="writeSucceeded && writePreviewFiles.length" class="config-section">
+            <h4>已写入配置（已脱敏）</h4>
+            <el-collapse>
+              <el-collapse-item
+                v-for="file in writePreviewFiles"
+                :key="file.path"
+                :title="file.path"
+              >
+                <div class="code-block">
+                  <pre><code>{{ file.preview }}</code></pre>
+                  <el-button class="copy-btn" :icon="DocumentCopy" @click="copyText(file.preview)" />
+                </div>
+              </el-collapse-item>
+            </el-collapse>
+          </div>
+
+          <!-- 未写入成功时：展示配置预览（脱敏）；团队版另提供命令作为备选 -->
+          <template v-if="!writeSucceeded">
+            <div v-if="sanitizedConfigFiles.length" class="config-section">
+              <h4>配置预览（已脱敏）</h4>
+              <p class="section-subhint">确认无误后点击上方「写入配置文件」；团队版也可复制下方命令自行写入。</p>
+              <el-collapse>
+                <el-collapse-item
+                  v-for="file in sanitizedConfigFiles"
+                  :key="file.path"
+                  :title="file.path"
+                >
+                  <div class="code-block">
+                    <pre><code>{{ file.preview }}</code></pre>
+                    <el-button class="copy-btn" :icon="DocumentCopy" @click="copyText(file.preview)" />
+                  </div>
+                </el-collapse-item>
+              </el-collapse>
+            </div>
+
+            <div v-if="!isDesktopEdition && configResult.commands" class="config-section">
+              <h4>配置命令（含密钥，请妥善保管）</h4>
+              <el-tabs v-model="platformTab" type="border-card">
+                <el-tab-pane label="macOS" name="macos">
+                  <div class="code-block">
+                    <pre><code>{{ configResult.commands.macos }}</code></pre>
+                    <el-button class="copy-btn" :icon="DocumentCopy" @click="copyText(configResult.commands.macos)" />
+                  </div>
+                </el-tab-pane>
+                <el-tab-pane label="Linux" name="linux">
+                  <div class="code-block">
+                    <pre><code>{{ configResult.commands.linux }}</code></pre>
+                    <el-button class="copy-btn" :icon="DocumentCopy" @click="copyText(configResult.commands.linux)" />
+                  </div>
+                </el-tab-pane>
+                <el-tab-pane label="Windows" name="windows">
+                  <div class="code-block">
+                    <pre><code>{{ configResult.commands.windows }}</code></pre>
+                    <el-button class="copy-btn" :icon="DocumentCopy" @click="copyText(configResult.commands.windows)" />
+                  </div>
+                </el-tab-pane>
+              </el-tabs>
+            </div>
+          </template>
+        </div>
+        <el-empty v-else-if="!loadingConfig" description="配置生成失败，请返回上一步重试" />
+      </div>
+
+      <!-- Step 3: 验证生效 -->
+      <div v-show="wizardStep === 2" class="wizard-step">
+        <el-result
+          icon="success"
+          title="配置已就绪"
+          :sub-title="`请按下列方式验证 ${currentAgentName} 是否已走 Centag 代理`"
+        />
+
+        <el-alert type="success" :closable="false" show-icon class="step-alert">
+          验证通过后，该 Agent 的请求将经 Centag，并按所选流水线路由到其内部配置的后端与模型。
+        </el-alert>
+
+        <div v-if="configResult?.verify_cmd" class="config-section">
+          <h4>验证命令</h4>
+          <p class="verify-desc">在终端执行以下命令，确认能连通 Centag 并返回模型响应（需本机已安装对应 Agent CLI）：</p>
+          <div class="code-block">
+            <pre><code>{{ configResult.verify_cmd }}</code></pre>
+            <el-button class="copy-btn" :icon="DocumentCopy" @click="copyText(configResult.verify_cmd)" />
+          </div>
+        </div>
+
+        <div class="config-section">
+          <h4>验证清单</h4>
+          <ol class="verify-checklist">
+            <li>重启或重新打开 {{ currentAgentName }}，确保加载了最新配置。</li>
+            <li>发起一次简单对话或补全请求（例如询问当前模型）。</li>
+            <li>在 Centag「请求日志 / 仪表盘」中确认出现对应请求，且流水线为 <code>{{ selectedPipeline }}</code>。</li>
+            <li>若失败：检查 API Key 是否有效、Centag 服务是否运行、Agent 配置中的 Base URL 是否指向本机 Centag。</li>
+          </ol>
+        </div>
+      </div>
+
+      <template #footer>
+        <div class="wizard-footer">
+          <el-button @click="wizardVisible = false">取消</el-button>
+          <div class="wizard-footer-right">
+            <el-button :disabled="wizardStep === 0 || loadingConfig || writingConfig" @click="prevStep">
+              上一步
+            </el-button>
+            <el-button
+              v-if="wizardStep < 2"
+              type="primary"
+              :loading="loadingConfig"
+              :disabled="!canGoNext"
+              @click="nextStep"
+            >
+              下一步
+            </el-button>
+            <el-button v-else type="primary" @click="wizardVisible = false">
+              完成
+            </el-button>
+          </div>
+        </div>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -300,44 +341,75 @@ import {
 } from '@element-plus/icons-vue'
 import { isPersonalEdition } from '@/utils/edition'
 import { useAuthStore } from '@/stores/auth'
+import { listAPIKeys } from '@/api/user'
 import api from '@/api'
 
 const router = useRouter()
 const authStore = useAuthStore()
 const isAdmin = computed(() => authStore.isAdmin)
 
-// --- Tab ---
 const activeTab = ref('setup')
 
-// ===================== 快速接入 (Wizard) =====================
+/** 系统默认流水线：透明模式 */
+const DEFAULT_PIPELINE_ID = 'transparent-proxy'
 
+// ===================== 快速接入向导 =====================
+
+const wizardVisible = ref(false)
+const wizardStep = ref(0)
 const selectedAgent = ref('')
+const selectedAgentDisplay = ref('')
 const selectedPipeline = ref('')
-const selectedBackend = ref('')
 const pipelineModel = ref('')
 const loadingPipelines = ref(false)
-const loadingBackends = ref(false)
 const loadingConfig = ref(false)
 const writingConfig = ref(false)
+const restoringAgent = ref('')
 const platformTab = ref('macos')
 const agentTypes = ref<Array<{ type: string; display_name: string; description: string }>>([])
 const pipelines = ref<Array<{ id: string; name: string; description?: string; nodes?: any[] }>>([])
-const backends = ref<Array<{ id: string; name: string; type: string }>>([])
 const configResult = ref<any>(null)
 const writeResult = ref<{ success: boolean; message: string; written?: Array<{ path: string; content: string }> } | null>(null)
+/** null=未检测；true/false=是否有启用中的 API Key（列表级提示，最终以服务端解密结果为准） */
+const hasEnabledAPIKey = ref<boolean | null>(null)
 
 const isDesktopEdition = computed(() => isPersonalEdition())
 
-const displayModel = computed(() => {
-  if (selectedPipeline.value) {
-    return `pipeline.${selectedPipeline.value}`
+const wizardTitle = computed(() => {
+  if (!selectedAgentDisplay.value) return '接入 Centag 代理'
+  return `接入 Centag 代理 — ${selectedAgentDisplay.value}`
+})
+
+const currentAgentName = computed(() => selectedAgentDisplay.value || selectedAgent.value || 'Agent')
+
+const selectedPipelineName = computed(() => {
+  const pipe = pipelines.value.find(p => p.id === selectedPipeline.value)
+  return pipe?.name || selectedPipeline.value
+})
+
+const writeSucceeded = computed(() => !!writeResult.value?.success)
+
+const canGoNext = computed(() => {
+  if (wizardStep.value === 0) {
+    return !!selectedPipeline.value && pipelines.value.length > 0 && hasEnabledAPIKey.value !== false
   }
-  return pipelineModel.value || ''
+  if (wizardStep.value === 1) return !!configResult.value && !loadingConfig.value
+  return true
 })
 
 const writePreviewFiles = computed(() => {
   if (!writeResult.value?.success || !Array.isArray(writeResult.value.written)) return []
   return writeResult.value.written
+    .filter((f: any) => f?.path && typeof f.content === 'string')
+    .map((f: any) => ({
+      path: f.path,
+      preview: buildSanitizedConfigPreview(f.content),
+    }))
+})
+
+const sanitizedConfigFiles = computed(() => {
+  if (!Array.isArray(configResult.value?.files)) return []
+  return configResult.value.files
     .filter((f: any) => f?.path && typeof f.content === 'string')
     .map((f: any) => ({
       path: f.path,
@@ -354,18 +426,11 @@ async function loadAgentTypes() {
   }
 }
 
-async function loadBackends() {
-  loadingBackends.value = true
-  try {
-    const res: any = await api.get('/api/v1/backends')
-    const data = res?.data || res
-    backends.value = Array.isArray(data) ? data.filter((b: any) => b.enabled) : []
-  } catch (e: any) {
-    backends.value = []
-    console.warn('加载后端列表失败:', e.message)
-  } finally {
-    loadingBackends.value = false
-  }
+function pickDefaultPipelineID(list: Array<{ id: string; name: string }>): string {
+  const byID = list.find(p => p.id === DEFAULT_PIPELINE_ID)
+  if (byID) return byID.id
+  const byName = list.find(p => p.name === '透明模式' || /transparent/i.test(p.id))
+  return byName?.id || ''
 }
 
 async function loadPipelines() {
@@ -374,6 +439,13 @@ async function loadPipelines() {
     const res: any = await api.get('/api/v1/pipelines')
     const data = res?.data || res
     pipelines.value = Array.isArray(data) ? data : []
+    if (!selectedPipeline.value) {
+      const defaultID = pickDefaultPipelineID(pipelines.value)
+      if (defaultID) {
+        selectedPipeline.value = defaultID
+        onPipelineChange(defaultID)
+      }
+    }
   } catch (e: any) {
     pipelines.value = []
     console.warn('加载流水线列表失败:', e.message)
@@ -382,15 +454,51 @@ async function loadPipelines() {
   }
 }
 
-function getBackendName(backendId: string): string {
-  const backend = backends.value.find(b => b.id === backendId)
-  return backend?.name || backendId
+async function checkAPIKeys() {
+  try {
+    const keys = await listAPIKeys()
+    hasEnabledAPIKey.value = Array.isArray(keys) && keys.some(k => k.enabled)
+  } catch (e: any) {
+    hasEnabledAPIKey.value = null
+    console.warn('检测 API Key 失败:', e.message)
+  }
 }
 
-function onBackendChange() {
-  selectedPipeline.value = ''
-  pipelineModel.value = ''
-  loadPipelines()
+function goProfileForAPIKey() {
+  wizardVisible.value = false
+  router.push('/profile')
+}
+
+async function restoreDefaults(agent: { type: string; display_name: string }) {
+  try {
+    await ElMessageBox.confirm(
+      `将恢复 ${agent.display_name} 的本地配置为接入 Centag 之前的状态。\n若写入前有备份则还原备份；若配置由 Centag 新建则删除对应文件。`,
+      '恢复默认配置',
+      {
+        confirmButtonText: '恢复默认',
+        cancelButtonText: '取消',
+        type: 'warning',
+      }
+    )
+  } catch {
+    return
+  }
+
+  restoringAgent.value = agent.type
+  try {
+    const res: any = await api.post('/api/v1/agent/configs/restore', {
+      agent_type: agent.type,
+    })
+    if (res?.success) {
+      ElMessage.success(res.message || '已恢复默认配置')
+    } else {
+      ElMessage.error(res?.message || '恢复失败')
+    }
+  } catch (e: any) {
+    ElMessage.error('恢复默认失败：' + e.message)
+  } finally {
+    restoringAgent.value = ''
+  }
 }
 
 function extractPipelineModel(pipe: any): string {
@@ -409,16 +517,57 @@ function onPipelineChange(pipeId: string) {
   }
   const pipe = pipelines.value.find(p => p.id === pipeId)
   pipelineModel.value = pipe ? extractPipelineModel(pipe) : ''
-}
-
-function onAgentChange() {
   configResult.value = null
   writeResult.value = null
+}
+
+function openWizard(agent: { type: string; display_name: string }) {
+  selectedAgent.value = agent.type
+  selectedAgentDisplay.value = agent.display_name
+  wizardStep.value = 0
   selectedPipeline.value = ''
-  selectedBackend.value = ''
   pipelineModel.value = ''
-  loadBackends()
+  configResult.value = null
+  writeResult.value = null
+  hasEnabledAPIKey.value = null
+  wizardVisible.value = true
   loadPipelines()
+  checkAPIKeys()
+}
+
+function resetWizard() {
+  wizardStep.value = 0
+  selectedAgent.value = ''
+  selectedAgentDisplay.value = ''
+  selectedPipeline.value = ''
+  pipelineModel.value = ''
+  configResult.value = null
+  writeResult.value = null
+  hasEnabledAPIKey.value = null
+}
+
+function goPipelines() {
+  wizardVisible.value = false
+  router.push('/pipelines')
+}
+
+async function nextStep() {
+  if (wizardStep.value === 0) {
+    if (!selectedPipeline.value) return
+    const ok = await generateConfig()
+    if (!ok) return
+    wizardStep.value = 1
+    return
+  }
+  if (wizardStep.value === 1 && configResult.value) {
+    wizardStep.value = 2
+  }
+}
+
+function prevStep() {
+  if (wizardStep.value > 0) {
+    wizardStep.value -= 1
+  }
 }
 
 function buildSanitizedConfigPreview(content: string): string {
@@ -449,6 +598,7 @@ async function maybeHandleMissingProxyAPIKeyError(message: string): Promise<bool
         type: 'warning',
       }
     )
+    wizardVisible.value = false
     router.push('/profile')
   } catch {
     // 用户取消时不做跳转
@@ -456,22 +606,22 @@ async function maybeHandleMissingProxyAPIKeyError(message: string): Promise<bool
   return true
 }
 
-async function generateConfig() {
-  if (!selectedAgent.value || !selectedPipeline.value) return
+async function generateConfig(): Promise<boolean> {
+  if (!selectedAgent.value || !selectedPipeline.value) return false
   loadingConfig.value = true
   configResult.value = null
+  writeResult.value = null
   try {
-    const payload: any = {
+    const res: any = await api.post('/api/v1/agent/configs/generate', {
       agent_type: selectedAgent.value,
       pipeline_id: selectedPipeline.value,
-    }
-    if (selectedBackend.value) payload.backend_id = selectedBackend.value
-    if (!selectedPipeline.value && pipelineModel.value) payload.model = pipelineModel.value
-    const res: any = await api.post('/api/v1/agent/configs/generate', payload)
+    })
     configResult.value = res
+    return true
   } catch (e: any) {
-    if (await maybeHandleMissingProxyAPIKeyError(e.message)) return
+    if (await maybeHandleMissingProxyAPIKeyError(e.message)) return false
     ElMessage.error('生成配置失败：' + e.message)
+    return false
   } finally {
     loadingConfig.value = false
   }
@@ -482,13 +632,10 @@ async function writeToConfig() {
   writingConfig.value = true
   writeResult.value = null
   try {
-    const payload: any = {
+    const res: any = await api.post('/api/v1/agent/configs/write', {
       agent_type: selectedAgent.value,
       pipeline_id: selectedPipeline.value,
-    }
-    if (selectedBackend.value) payload.backend_id = selectedBackend.value
-    if (!selectedPipeline.value && pipelineModel.value) payload.model = pipelineModel.value
-    const res: any = await api.post('/api/v1/agent/configs/write', payload)
+    })
     writeResult.value = res
     if (res.success) {
       ElMessage.success('配置写入成功')
@@ -524,14 +671,6 @@ function agentIcon(type: string) {
     'hermes': Connection,
   }
   return map[type] || Connection
-}
-
-function resetWizard() {
-  selectedAgent.value = ''
-  selectedPipeline.value = ''
-  selectedBackend.value = ''
-  pipelineModel.value = ''
-  configResult.value = null
 }
 
 // ===================== 供应商配置 (只读视图) =====================
@@ -614,11 +753,10 @@ onMounted(() => {
   margin-top: 8px;
 }
 
-.step-actions {
-  margin-top: 24px;
-  display: flex;
-  gap: 12px;
-  justify-content: center;
+.section-hint {
+  color: #606266;
+  font-size: 0.875rem;
+  margin: 0 0 16px;
 }
 
 /* Agent cards */
@@ -635,13 +773,8 @@ onMounted(() => {
 }
 
 .agent-card:hover {
-  border-color: #c0c4cc;
+  border-color: var(--el-color-primary-light-3);
   background: #fafafa;
-}
-
-.agent-card.active {
-  border-color: var(--el-color-primary);
-  background: #ecf5ff;
 }
 
 .agent-icon {
@@ -656,9 +789,14 @@ onMounted(() => {
   flex-shrink: 0;
 }
 
-.agent-card.active .agent-icon {
+.agent-card:hover .agent-icon {
   background: var(--el-color-primary-light-8);
   color: var(--el-color-primary);
+}
+
+.agent-info {
+  flex: 1;
+  min-width: 0;
 }
 
 .agent-name {
@@ -673,43 +811,42 @@ onMounted(() => {
   line-height: 1.4;
 }
 
-/* Backend selection */
+.agent-actions {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+/* Wizard */
+.wizard-steps {
+  margin-bottom: 24px;
+}
+
+.wizard-step {
+  min-height: 240px;
+}
+
+.step-alert {
+  margin-bottom: 16px;
+}
+
+.alert-actions {
+  margin-top: 8px;
+}
+
+.section-subhint {
+  margin: 0 0 8px;
+  font-size: 0.8rem;
+  color: #909399;
+}
+
 .select-label {
   font-size: 0.9rem;
   font-weight: 600;
   color: #303133;
-  margin: 16px 0 8px;
-}
-
-.select-label:first-child {
-  margin-top: 0;
-}
-
-.backend-section {
-  margin-bottom: 20px;
-}
-
-.backend-hint {
-  margin-top: 8px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.backend-option {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 4px 0;
-}
-
-.backend-name {
-  font-weight: 500;
-}
-
-/* Pipeline section */
-.pipeline-section {
-  margin-top: 20px;
+  margin: 0 0 8px;
 }
 
 .pipeline-option {
@@ -722,14 +859,15 @@ onMounted(() => {
   color: #909399;
 }
 
-.model-display {
+.pipeline-summary {
   margin-top: 12px;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
 }
 
-.model-display .el-tag {
+.pipeline-summary .el-tag {
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -740,15 +878,12 @@ onMounted(() => {
   color: #909399;
 }
 
-/* Generate button */
-.generate-section {
-  margin-top: 24px;
-  text-align: center;
+.empty-pipelines {
+  padding: 24px 0;
 }
 
-/* Config result */
 .config-result {
-  margin-top: 24px;
+  margin-top: 8px;
 }
 
 .config-header {
@@ -760,6 +895,7 @@ onMounted(() => {
 
 .config-header h3 {
   margin: 0;
+  font-size: 1rem;
 }
 
 .config-section {
@@ -807,10 +943,6 @@ onMounted(() => {
   background: #f5f7fa;
 }
 
-.empty-backends {
-  padding: 40px 0;
-}
-
 .write-hint {
   margin-top: 12px;
   font-size: 0.85rem;
@@ -824,6 +956,39 @@ onMounted(() => {
   margin: 0 0 8px;
   font-size: 0.85rem;
   color: #606266;
+}
+
+.verify-desc {
+  margin: 0 0 8px;
+  font-size: 0.875rem;
+  color: #606266;
+}
+
+.verify-checklist {
+  margin: 0;
+  padding-left: 1.25rem;
+  color: #303133;
+  font-size: 0.875rem;
+  line-height: 1.8;
+}
+
+.verify-checklist code {
+  background: #f5f7fa;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 0.8rem;
+}
+
+.wizard-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+}
+
+.wizard-footer-right {
+  display: flex;
+  gap: 8px;
 }
 
 /* Provider table */
