@@ -1,0 +1,21 @@
+{
+  "title": "リアルタイムログコンソール",
+  "categoryLabel": "カテゴリ：",
+  "categoryAll": "すべて",
+  "categoryLlm": "LLM アクセス",
+  "categoryPipeline": "パイプライン",
+  "categorySystem": "システム",
+  "levelLabel": "レベル：",
+  "levelAll": "すべて",
+  "autoScroll": "自動スクロール",
+  "pauseLive": "リアルタイム追跡を一時停止",
+  "startLive": "リアルタイム追跡を開始",
+  "pause": "⏸ 一時停止",
+  "follow": "▶ 追跡",
+  "clear": "クリア",
+  "clearTitle": "現在の表示をクリア",
+  "close": "ログパネルを閉じる",
+  "linesCount": "{count} 行 · {bytes}",
+  "paused": "一時停止中 · ",
+  "resume": "追跡を再開"
+}

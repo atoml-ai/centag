@@ -1,0 +1,89 @@
+{
+  "pageTitle": "Configuración de modos de proxy",
+  "pageDescription": "Configure palabras clave de modos de proxy. Los usuarios pueden especificar estrategias de proxy a través de encabezados de solicitud, cuerpo o prefijo de contenido",
+  "keywordFormatHint": "Formato de palabra clave: # + una letra (ej. #d, #s, #m)",
+  "refresh": "Actualizar",
+  "addMode": "Agregar modo",
+  "table": {
+    "keyword": "Palabra clave",
+    "name": "Nombre",
+    "type": "Tipo",
+    "description": "Descripción",
+    "enabled": "Habilitado",
+    "sortOrder": "Orden",
+    "actions": "Acciones"
+  },
+  "actions": {
+    "edit": "Editar",
+    "delete": "Eliminar"
+  },
+  "emptyState": "No hay configuraciones de modos de proxy",
+  "usageExamples": {
+    "title": "Ejemplos de uso",
+    "headerMethod": "Encabezado de solicitud",
+    "headerDesc": "Agregue un campo personalizado en el encabezado para especificar el modo",
+    "bodyExtension": "Extensión del cuerpo",
+    "bodyDesc": "Agregue un campo centag en el cuerpo JSON de la solicitud",
+    "contentPrefix": "Prefijo de contenido",
+    "contentDesc": "Agregue una palabra clave al inicio del contenido del mensaje. El sistema la analizará y eliminará automáticamente",
+    "apiSession": "Sesión API",
+    "apiDesc": "Establezca el nivel de sesión del proxy a través de la API. Todas las solicitudes dentro del período de validez usarán este modo"
+  },
+  "formDialog": {
+    "addTitle": "Agregar modo de proxy",
+    "editTitle": "Editar modo de proxy",
+    "keywordLabel": "Palabra clave",
+    "keywordPlaceholder": "#d",
+    "keywordTip": "Formato: # + una letra (ej. #d, #s, #m). No se puede cambiar después de crear",
+    "nameLabel": "Nombre",
+    "namePlaceholder": "ej. Especificar backend",
+    "typeLabel": "Tipo",
+    "typePlaceholder": "Seleccione el tipo de modo",
+    "descriptionLabel": "Descripción",
+    "descriptionPlaceholder": "Describa el propósito y comportamiento de este modo",
+    "enabledLabel": "Habilitado",
+    "enabledTip": "Al deshabilitar, esta palabra clave dejará de tener efecto",
+    "sortOrderLabel": "Orden de clasificación",
+    "sortOrderTip": "Los números más pequeños aparecen primero",
+    "cancel": "Cancelar",
+    "save": "Guardar"
+  },
+  "typeOptions": {
+    "direct": "Backend directo (direct)",
+    "schedule": "Programación inteligente (schedule)",
+    "match": "Coincidencia de modelo (match)",
+    "classify": "Clasificación de intención (classify)",
+    "transparent": "Modo transparente (transparent)",
+    "fallback": "Conmutación por error (fallback)"
+  },
+  "typeLabels": {
+    "direct": "Backend directo",
+    "schedule": "Programación inteligente",
+    "match": "Coincidencia de modelo",
+    "classify": "Clasificación de intención",
+    "transparent": "Modo transparente",
+    "transparent-fast": "Transparente (rápido)",
+    "fixed-egress": "Modo salto",
+    "fallback": "Conmutación por error"
+  },
+  "validation": {
+    "keywordRequired": "Ingrese una palabra clave",
+    "keywordPattern": "Formato: # + una letra (ej. #d, #s)",
+    "nameRequired": "Ingrese un nombre",
+    "typeRequired": "Seleccione un tipo"
+  },
+  "confirm": {
+    "deleteTitle": "Confirmar eliminación",
+    "deleteMessage": "¿Está seguro de que desea eliminar el modo \"{name}\"?"
+  },
+  "message": {
+    "createSuccess": "Creado correctamente",
+    "updateSuccess": "Actualizado correctamente",
+    "deleteSuccess": "Eliminado correctamente",
+    "enabled": "Habilitado",
+    "disabled": "Deshabilitado",
+    "loadFailed": "Error al cargar",
+    "operationFailed": "Operación fallida",
+    "saveFailed": "Error al guardar"
+  }
+}

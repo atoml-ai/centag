@@ -1,0 +1,22 @@
+{
+  "title": "Añadir categoría",
+  "alert": "Se creará un nodo de ejecución, se escribirán palabras clave de enrutamiento y opcionalmente se añadirán slots de capacidad.",
+  "labelField": "Nombre de categoría",
+  "labelPlaceholder": "ej. Consulta legal",
+  "nodeIdField": "ID del nodo",
+  "nodeIdPlaceholder": "Generado automáticamente desde el nombre",
+  "keywordField": "Palabras clave",
+  "keywordPlaceholder": "Escriba y presione Enter para añadir (múltiples)",
+  "routerField": "Nodo enrutador",
+  "routerPlaceholder": "Seleccionar enrutador",
+  "defaultBranch": "Rama por defecto",
+  "recommendedTags": "Etiquetas recomendadas",
+  "tagsPlaceholder": "Opcional",
+  "initialPrompt": "Prompt inicial",
+  "promptPlaceholder": "Opcional. Se escribe en system_prompt del nodo",
+  "cancel": "Cancelar",
+  "submit": "Añadir al lienzo",
+  "pipelineNotLoaded": "Pipeline no cargado",
+  "addSuccess": "Categoría añadida. Guarde el pipeline y luego configure modelos en «Configurar modelos».",
+  "addFailed": "Error al añadir"
+}

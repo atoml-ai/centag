@@ -1,0 +1,10 @@
+{
+  "placeholder": "Select backend",
+  "disabled": "Disabled",
+  "local": "Local",
+  "emptyDescAll": "No backends configured",
+  "emptyDescEnabled": "No enabled backends",
+  "goConfig": "Configure Backend",
+  "loadFailed": "Failed to load backends: {msg}",
+  "navigateHint": "Please go to the backend management page to configure"
+}

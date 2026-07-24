@@ -1,0 +1,70 @@
+{
+  "pageTitle": "降级策略管理",
+  "pageDescription": "配置全局降级策略，支持同模型跨后端、同后端跨模型、自定义链路",
+  "newPolicy": "新建策略",
+  "emptyState": "暂无降级策略",
+  "table": {
+    "id": "策略 ID",
+    "name": "策略名称",
+    "type": "策略类型",
+    "ruleCount": "规则数",
+    "status": "状态",
+    "actions": "操作"
+  },
+  "actions": {
+    "edit": "编辑",
+    "test": "测试",
+    "delete": "删除"
+  },
+  "testResultDialog": {
+    "title": "降级路径预览",
+    "policyId": "策略 ID",
+    "policyType": "策略类型",
+    "priority": "优先级",
+    "backend": "后端",
+    "model": "模型",
+    "timeout": "超时(s)"
+  },
+  "formDialog": {
+    "editTitle": "编辑降级策略",
+    "addTitle": "新建降级策略",
+    "idLabel": "策略 ID",
+    "idPlaceholder": "如 gpt4o-fallback",
+    "nameLabel": "策略名称",
+    "namePlaceholder": "如 GPT-4o 多后端降级",
+    "descriptionLabel": "策略描述",
+    "typeLabel": "策略类型",
+    "enabledLabel": "启用",
+    "rulesLabel": "降级规则",
+    "priorityPlaceholder": "优先级",
+    "backendPlaceholder": "后端 ID",
+    "modelPlaceholder": "模型名（或 {{requested_model}}）",
+    "timeoutPlaceholder": "超时(s)",
+    "addRule": "添加规则",
+    "cancel": "取消",
+    "save": "保存"
+  },
+  "strategyOptions": {
+    "same_model_different_backend": "同模型跨后端",
+    "same_backend_different_model": "同后端跨模型",
+    "custom_chain": "自定义降级链"
+  },
+  "embeddedDesc": "配置全局降级策略，支持同模型跨后端、同后端跨模型、自定义链路",
+  "confirm": {
+    "deleteTitle": "确定删除此策略？"
+  },
+  "validation": {
+    "fillRequired": "请填写策略 ID 和名称"
+  },
+  "message": {
+    "created": "策略已创建",
+    "updated": "策略已更新",
+    "deleted": "策略已删除",
+    "statusUpdated": "状态已更新",
+    "loadFailed": "获取降级策略列表失败",
+    "saveFailed": "保存失败",
+    "deleteFailed": "删除失败",
+    "updateFailed": "更新失败",
+    "testFailed": "测试失败"
+  }
+}

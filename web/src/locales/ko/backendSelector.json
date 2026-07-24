@@ -1,0 +1,10 @@
+{
+  "placeholder": "백엔드 선택",
+  "disabled": "비활성화됨",
+  "local": "로컬",
+  "emptyDescAll": "백엔드가 구성되지 않음",
+  "emptyDescEnabled": "활성화된 백엔드가 없음",
+  "goConfig": "백엔드 구성하기",
+  "loadFailed": "백엔드 목록 로드 실패: {msg}",
+  "navigateHint": "백엔드 관리 페이지에서 구성하세요"
+}

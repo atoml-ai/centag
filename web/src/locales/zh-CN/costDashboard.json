@@ -1,0 +1,22 @@
+{
+  "title": "成本看板",
+  "dateSeparator": "至",
+  "startDate": "开始日期",
+  "endDate": "结束日期",
+  "byModel": "按模型",
+  "byBackend": "按后端",
+  "byTenant": "按租户",
+  "byDepartment": "按部门",
+  "byDate": "按日期",
+  "usd": "美元",
+  "cny": "人民币",
+  "usdLabel": "美元",
+  "cnyLabel": "人民币",
+  "totalCost": "总成本",
+  "totalToken": "总 Token",
+  "cacheSavings": "缓存节省",
+  "estimated": "估算",
+  "costDistribution": "成本分布",
+  "cost": "成本",
+  "loadFailed": "加载成本数据失败"
+}

@@ -1,0 +1,26 @@
+{
+  "compactTitle": "최근 대화",
+  "refresh": "새로고침",
+  "noSessions": "세션이 없습니다. AI 대화를 시작하세요",
+  "categoryGeneral": "일반",
+  "messagesCount": "{count}개 메시지",
+  "messagesDetail": "메시지 상세",
+  "collapse": "접기",
+  "loading": "로딩 중…",
+  "noMessages": "이 세션에 메시지가 없습니다 (방금 생성되었거나 요청이 완료되지 않았을 수 있음)",
+  "loadMessagesFailed": "메시지 로드 실패 또는 비어 있음. 새로고침 후 다시 시도하세요",
+  "pageTitle": "세션 기록",
+  "pageSubtitle": "기록된 대화 세션 및 메시지 보기 (에디션별 저장: 파일 / SQLite / PG)",
+  "allCategories": "모든 카테고리",
+  "sessionList": "세션 목록",
+  "totalCount": "총 {count}개",
+  "noSessionsFull": "세션이 없습니다",
+  "messagesTitle": "메시지",
+  "selectSessionHint": "왼쪽에서 세션을 선택하여 메시지 보기",
+  "roleUser": "사용자",
+  "roleAssistant": "도우미",
+  "roleSystem": "시스템",
+  "emptyContent": "(비어 있음)",
+  "loadSessionsFailed": "세션 로드 실패"
+}
+

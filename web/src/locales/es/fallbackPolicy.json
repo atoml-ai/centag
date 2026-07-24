@@ -1,0 +1,70 @@
+{
+  "pageTitle": "Gestión de políticas de respaldo",
+  "pageDescription": "Configure políticas de respaldo globales. Soporta mismo modelo en diferentes backends, mismo backend con diferentes modelos y cadenas personalizadas",
+  "newPolicy": "Nueva política",
+  "emptyState": "No hay políticas de respaldo",
+  "table": {
+    "id": "ID de política",
+    "name": "Nombre",
+    "type": "Tipo de política",
+    "ruleCount": "Reglas",
+    "status": "Estado",
+    "actions": "Acciones"
+  },
+  "actions": {
+    "edit": "Editar",
+    "test": "Probar",
+    "delete": "Eliminar"
+  },
+  "testResultDialog": {
+    "title": "Vista previa de ruta de respaldo",
+    "policyId": "ID de política",
+    "policyType": "Tipo de política",
+    "priority": "Prioridad",
+    "backend": "Backend",
+    "model": "Modelo",
+    "timeout": "Tiempo de espera(s)"
+  },
+  "formDialog": {
+    "editTitle": "Editar política de respaldo",
+    "addTitle": "Nueva política de respaldo",
+    "idLabel": "ID de política",
+    "idPlaceholder": "ej. gpt4o-fallback",
+    "nameLabel": "Nombre de política",
+    "namePlaceholder": "ej. Respaldo multi-backend GPT-4o",
+    "descriptionLabel": "Descripción",
+    "typeLabel": "Tipo de política",
+    "enabledLabel": "Habilitada",
+    "rulesLabel": "Reglas de respaldo",
+    "priorityPlaceholder": "Prioridad",
+    "backendPlaceholder": "ID de backend",
+    "modelPlaceholder": "Nombre del modelo (o {{requested_model}})",
+    "timeoutPlaceholder": "Tiempo de espera(s)",
+    "addRule": "Agregar regla",
+    "cancel": "Cancelar",
+    "save": "Guardar"
+  },
+  "strategyOptions": {
+    "same_model_different_backend": "Mismo modelo, diferentes backends",
+    "same_backend_different_model": "Mismo backend, diferentes modelos",
+    "custom_chain": "Cadena personalizada"
+  },
+  "embeddedDesc": "Configure políticas de respaldo globales. Soporta mismo modelo en diferentes backends, mismo backend con diferentes modelos y cadenas personalizadas",
+  "confirm": {
+    "deleteTitle": "¿Eliminar esta política?"
+  },
+  "validation": {
+    "fillRequired": "Ingrese el ID y nombre de la política"
+  },
+  "message": {
+    "created": "Política creada",
+    "updated": "Política actualizada",
+    "deleted": "Política eliminada",
+    "statusUpdated": "Estado actualizado",
+    "loadFailed": "Error al cargar políticas de respaldo",
+    "saveFailed": "Error al guardar",
+    "deleteFailed": "Error al eliminar",
+    "updateFailed": "Error al actualizar",
+    "testFailed": "Error al probar"
+  }
+}

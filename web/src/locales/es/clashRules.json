@@ -1,0 +1,82 @@
+{
+  "pageTitle": "Gestión de suscripciones Clash",
+  "pageDescription": "Genere enlaces de suscripción independientes para cada regla. agrégelos al cliente Clash / Mihomo para obtener automáticamente las reglas de proxy",
+  "newRule": "Nueva regla",
+  "subscriptionDescription": "Los enlaces de suscripción no requieren autenticación. Cualquiera con el enlace puede descargar las reglas correspondientes. Para revocar, regenere el token. Las reglas sin contenido personalizado recibirán automáticamente las reglas del sistema por defecto rule.yaml.",
+  "emptyState": "No hay reglas de suscripción. Haga clic en 'Nueva regla' para crear la primera",
+  "customRule": "Regla personalizada",
+  "systemDefault": "Predeterminado del sistema",
+  "actions": {
+    "rename": "Renombrar",
+    "editContent": "Editar contenido",
+    "restoreDefault": "Restaurar predeterminado",
+    "regenerateToken": "Regenerar token",
+    "delete": "Eliminar"
+  },
+  "subscriptionLink": "Enlace de suscripción",
+  "copyLink": "Copiar enlace",
+  "token": "Token",
+  "updatedAt": "Actualizado",
+  "editContentBtn": "Editar contenido",
+  "createDialog": {
+    "title": "Nueva regla de suscripción",
+    "nameLabel": "Nombre de la regla",
+    "namePlaceholder": "Dé un nombre a esta regla para identificarla fácilmente",
+    "initialContent": "Contenido inicial",
+    "useDefault": "Usar rule.yaml predeterminado del sistema",
+    "editLater": "Editar manualmente después",
+    "cancel": "Cancelar",
+    "create": "Crear"
+  },
+  "renameDialog": {
+    "title": "Renombrar regla",
+    "nameLabel": "Nombre de la regla",
+    "namePlaceholder": "Nombre de la regla",
+    "cancel": "Cancelar",
+    "save": "Guardar"
+  },
+  "editContentDialog": {
+    "title": "Editar contenido — {name}",
+    "editorHint": "Edite reglas YAML compatibles con Clash. Se muestran las reglas predeterminadas del sistema. Guardar los cambios las convertirá en sus reglas personalizadas.",
+    "loadingText": "Cargando reglas predeterminadas...",
+    "placeholder": "Cargando contenido de reglas predeterminadas...",
+    "restoreDefault": "Restaurar predeterminado",
+    "cancel": "Cancelar",
+    "save": "Guardar"
+  },
+  "tokenDialog": {
+    "title": "Token regenerado",
+    "warning": "¡El enlace de suscripción anterior ya no es válido! Actualice al nuevo enlace en Clash.",
+    "copy": "Copiar",
+    "close": "Actualizado, cerrar"
+  },
+  "confirm": {
+    "reset": "¿Restaurar el contenido de la regla '{name}' al rule.yaml predeterminado del sistema? Se eliminará el contenido personalizado.",
+    "resetTitle": "Confirmar restauración",
+    "resetButton": "Restaurar",
+    "resetFromEditor": "¿Limpiar el contenido personalizado y restaurar el rule.yaml predeterminado del sistema?",
+    "regenToken": "Después de regenerar el token, el enlace de suscripción anterior de '{name}' dejará de funcionar. Deberá actualizar el enlace en Clash. ¿Continuar?",
+    "regenTokenTitle": "Regenerar token",
+    "regenTokenButton": "Generar",
+    "delete": "¿Eliminar la regla '{name}'? El enlace de suscripción correspondiente también dejará de funcionar.",
+    "deleteTitle": "Confirmar eliminación",
+    "deleteButton": "Eliminar",
+    "cancel": "Cancelar"
+  },
+  "message": {
+    "copySuccess": "Enlace copiado",
+    "copyFailed": "Error al copiar, copie manualmente",
+    "created": "Regla creada",
+    "renamed": "Renombrada",
+    "contentSaved": "Contenido guardado",
+    "defaultRestored": "Predeterminado restaurado",
+    "deleted": "Regla eliminada",
+    "loadFailed": "Error al cargar la lista de reglas",
+    "defaultLoadFailed": "Error al cargar las reglas predeterminadas, pegue el contenido manualmente",
+    "saveFailed": "Error al guardar",
+    "operationFailed": "Operación fallida"
+  },
+  "validation": {
+    "nameRequired": "Ingrese un nombre de regla"
+  }
+}

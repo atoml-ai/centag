@@ -1,0 +1,22 @@
+{
+  "title": "비용 대시보드",
+  "dateSeparator": "부터",
+  "startDate": "시작일",
+  "endDate": "종료일",
+  "byModel": "모델별",
+  "byBackend": "백엔드별",
+  "byTenant": "테넌트별",
+  "byDepartment": "부서별",
+  "byDate": "날짜별",
+  "usd": "USD",
+  "cny": "위안",
+  "usdLabel": "달러",
+  "cnyLabel": "인민폐",
+  "totalCost": "총 비용",
+  "totalToken": "총 토큰",
+  "cacheSavings": "캐시 절약",
+  "estimated": "추정",
+  "costDistribution": "비용 분포",
+  "cost": "비용",
+  "loadFailed": "비용 데이터 로드 실패"
+}

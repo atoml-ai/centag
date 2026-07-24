@@ -1,0 +1,70 @@
+{
+  "pageTitle": "Fallback Policy Management",
+  "pageDescription": "Configure global fallback policies. Supports same model across backends, same backend across models, and custom chains",
+  "newPolicy": "New Policy",
+  "emptyState": "No fallback policies",
+  "table": {
+    "id": "Policy ID",
+    "name": "Policy Name",
+    "type": "Policy Type",
+    "ruleCount": "Rules",
+    "status": "Status",
+    "actions": "Actions"
+  },
+  "actions": {
+    "edit": "Edit",
+    "test": "Test",
+    "delete": "Delete"
+  },
+  "testResultDialog": {
+    "title": "Fallback Path Preview",
+    "policyId": "Policy ID",
+    "policyType": "Policy Type",
+    "priority": "Priority",
+    "backend": "Backend",
+    "model": "Model",
+    "timeout": "Timeout(s)"
+  },
+  "formDialog": {
+    "editTitle": "Edit Fallback Policy",
+    "addTitle": "New Fallback Policy",
+    "idLabel": "Policy ID",
+    "idPlaceholder": "e.g. gpt4o-fallback",
+    "nameLabel": "Policy Name",
+    "namePlaceholder": "e.g. GPT-4o Multi-backend Fallback",
+    "descriptionLabel": "Description",
+    "typeLabel": "Policy Type",
+    "enabledLabel": "Enabled",
+    "rulesLabel": "Fallback Rules",
+    "priorityPlaceholder": "Priority",
+    "backendPlaceholder": "Backend ID",
+    "modelPlaceholder": "Model name (or {{requested_model}})",
+    "timeoutPlaceholder": "Timeout(s)",
+    "addRule": "Add Rule",
+    "cancel": "Cancel",
+    "save": "Save"
+  },
+  "strategyOptions": {
+    "same_model_different_backend": "Same Model, Different Backend",
+    "same_backend_different_model": "Same Backend, Different Model",
+    "custom_chain": "Custom Chain"
+  },
+  "embeddedDesc": "Configure global fallback policies. Supports same model across backends, same backend across models, and custom chains",
+  "confirm": {
+    "deleteTitle": "Delete this policy?"
+  },
+  "validation": {
+    "fillRequired": "Please fill in Policy ID and Name"
+  },
+  "message": {
+    "created": "Policy created",
+    "updated": "Policy updated",
+    "deleted": "Policy deleted",
+    "statusUpdated": "Status updated",
+    "loadFailed": "Failed to load fallback policies",
+    "saveFailed": "Save failed",
+    "deleteFailed": "Delete failed",
+    "updateFailed": "Update failed",
+    "testFailed": "Test failed"
+  }
+}

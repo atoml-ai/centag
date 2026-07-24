@@ -1,0 +1,82 @@
+{
+  "pageTitle": "Clash Subscription Management",
+  "pageDescription": "Generate independent subscription links for each rule. Add them to Clash / Mihomo client to automatically fetch proxy rules",
+  "newRule": "New Rule",
+  "subscriptionDescription": "Subscription links require no authentication. Anyone with the link can download the corresponding rules. To revoke, regenerate the token. Rules without custom content will automatically receive the system default rule.yaml.",
+  "emptyState": "No subscription rules yet. Click 'New Rule' to create the first one",
+  "customRule": "Custom Rule",
+  "systemDefault": "System Default",
+  "actions": {
+    "rename": "Rename",
+    "editContent": "Edit Rule Content",
+    "restoreDefault": "Restore System Default",
+    "regenerateToken": "Regenerate Token",
+    "delete": "Delete"
+  },
+  "subscriptionLink": "Subscription Link",
+  "copyLink": "Copy Link",
+  "token": "Token",
+  "updatedAt": "Updated",
+  "editContentBtn": "Edit Content",
+  "createDialog": {
+    "title": "New Subscription Rule",
+    "nameLabel": "Rule Name",
+    "namePlaceholder": "Give this rule a name for easy identification",
+    "initialContent": "Initial Content",
+    "useDefault": "Use system default rule.yaml",
+    "editLater": "Edit manually later",
+    "cancel": "Cancel",
+    "create": "Create"
+  },
+  "renameDialog": {
+    "title": "Rename Rule",
+    "nameLabel": "Rule Name",
+    "namePlaceholder": "Rule name",
+    "cancel": "Cancel",
+    "save": "Save"
+  },
+  "editContentDialog": {
+    "title": "Edit Rule Content — {name}",
+    "editorHint": "Edit Clash-compatible YAML rules. Currently showing the system default rules. Saving changes will make them your custom rules.",
+    "loadingText": "Loading default rules...",
+    "placeholder": "Loading default rule content...",
+    "restoreDefault": "Restore System Default",
+    "cancel": "Cancel",
+    "save": "Save"
+  },
+  "tokenDialog": {
+    "title": "Token Regenerated",
+    "warning": "The old subscription link is now invalid! Please update to the new link in Clash.",
+    "copy": "Copy",
+    "close": "Updated, Close"
+  },
+  "confirm": {
+    "reset": "Restore '{name}' rule content to system default rule.yaml? Custom content will be cleared.",
+    "resetTitle": "Restore Confirmation",
+    "resetButton": "Restore",
+    "resetFromEditor": "Clear custom content and restore to system default rule.yaml?",
+    "regenToken": "After regenerating the token, the old subscription link for '{name}' will immediately become invalid. You'll need to update the link in Clash. Continue?",
+    "regenTokenTitle": "Regenerate Token",
+    "regenTokenButton": "Generate",
+    "delete": "Delete rule '{name}'? The corresponding subscription link will also become invalid.",
+    "deleteTitle": "Delete Confirmation",
+    "deleteButton": "Delete",
+    "cancel": "Cancel"
+  },
+  "message": {
+    "copySuccess": "Link copied",
+    "copyFailed": "Copy failed, please copy manually",
+    "created": "Rule created",
+    "renamed": "Renamed",
+    "contentSaved": "Rule content saved",
+    "defaultRestored": "System default restored",
+    "deleted": "Rule deleted",
+    "loadFailed": "Failed to load rule list",
+    "defaultLoadFailed": "Failed to load default rules, please paste content manually",
+    "saveFailed": "Save failed",
+    "operationFailed": "Operation failed"
+  },
+  "validation": {
+    "nameRequired": "Please enter a rule name"
+  }
+}

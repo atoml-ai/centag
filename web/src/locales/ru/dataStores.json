@@ -1,0 +1,92 @@
+{
+  "pageTitle": "Управление хранилищами данных",
+  "pageDescription": "Настройка интерфейсов хранилищ данных/баз знаний, привязка к хранилищам и управление хранилищем по умолчанию",
+  "searchPlaceholder": "Поиск хранилищ данных...",
+  "filterPlaceholder": "Фильтр по типу",
+  "filterOptions": {
+    "all": "Все",
+    "knowledgeBase": "База знаний",
+    "vector": "Векторное хранилище",
+    "document": "Документальное хранилище",
+    "kv": "Key-Value",
+    "search": "Полнотекстовый поиск",
+    "graph": "Графовая база данных",
+    "custom": "Пользовательский"
+  },
+  "refresh": "Обновить",
+  "healthCheck": "Проверка здоровья",
+  "addDataStore": "Добавить хранилище",
+  "table": {
+    "name": "Имя",
+    "type": "Тип",
+    "linkedStorage": "Хранилище",
+    "enabledStatus": "Статус",
+    "isDefault": "По умолчанию",
+    "yes": "Да",
+    "healthStatus": "Здоровье",
+    "notChecked": "Не проверено",
+    "healthy": "Норма",
+    "unhealthy": "Ошибка",
+    "unknownError": "Неизвестная ошибка",
+    "actions": "Действия"
+  },
+  "actions": {
+    "disable": "Отключить",
+    "enable": "Включить",
+    "setDefault": "Сделать по умолчанию",
+    "removeDefault": "Убрать из умолчания",
+    "test": "Тест",
+    "edit": "Редактировать",
+    "delete": "Удалить"
+  },
+  "emptyState": "Нет конфигураций хранилищ данных",
+  "formDialog": {
+    "addTitle": "Добавить хранилище данных",
+    "editTitle": "Редактировать хранилище данных",
+    "nameLabel": "Имя",
+    "namePlaceholder": "Введите имя хранилища данных",
+    "typeLabel": "Тип",
+    "typePlaceholder": "Выберите тип",
+    "linkedStorageLabel": "Хранилище",
+    "linkedStoragePlaceholder": "Выберите хранилище",
+    "linkedStorageTip": "Выберите ранее настроенное хранилище в 'Управлении хранилищами'",
+    "extraConfigLabel": "Доп. конфигурация",
+    "extraConfigPlaceholder": "{\"key\": \"value\"}",
+    "extraConfigTip": "Необязательные параметры конфигурации в формате JSON",
+    "descriptionLabel": "Описание",
+    "descriptionPlaceholder": "Необязательно, опишите назначение этого хранилища",
+    "enabledLabel": "Включено",
+    "defaultLabel": "Сделать по умолчанию",
+    "testConnection": "Тест соединения",
+    "cancel": "Отмена",
+    "save": "Сохранить"
+  },
+  "validation": {
+    "nameRequired": "Введите имя хранилища данных",
+    "typeRequired": "Выберите тип",
+    "storageRequired": "Выберите хранилище"
+  },
+  "confirm": {
+    "deleteTitle": "Подтверждение удаления",
+    "deleteMessage": "Вы уверены, что хотите удалить хранилище данных \"{name}\"?"
+  },
+  "message": {
+    "addSuccess": "Добавлено",
+    "updateSuccess": "Обновлено",
+    "deleteSuccess": "Удалено",
+    "enabled": "Включено",
+    "disabled": "Отключено",
+    "setDefaultSuccess": "\"{name}\" установлено как хранилище по умолчанию",
+    "removeDefaultSuccess": "Хранилище \"{name}\" больше не является хранилищем по умолчанию",
+    "testSuccess": "Тест соединения \"{name}\" прошёл успешно",
+    "testFailed": "Тест соединения не удался: {error}",
+    "loadFailed": "Ошибка загрузки",
+    "operationFailed": "Операция не удалась: {error}",
+    "saveFailed": "Ошибка сохранения: {error}",
+    "deleteFailed": "Ошибка удаления: {error}",
+    "setDefaultFailed": "Сохранено, но не удалось установить по умолчанию: {error}",
+    "invalidJson": "Доп. конфигурация должна быть в формате JSON",
+    "fillRequired": "Сначала заполните обязательные поля",
+    "unknownError": "Неизвестная ошибка"
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "dialogTitle": "セキュリティ設定",
+  "tabPassword": "ログインパスワード",
+  "oldPassword": "現在のパスワード",
+  "newPassword": "新しいパスワード",
+  "confirmPassword": "パスワード確認",
+  "updatePassword": "パスワード更新",
+  "tabApiKeys": "API アクセスキー",
+  "close": "閉じる",
+  "message": {
+    "fillComplete": "すべて入力してください",
+    "passwordTooShort": "新しいパスワードは6文字以上必要です",
+    "passwordMismatch": "新しいパスワードが一致しません",
+    "passwordUpdated": "パスワードを更新しました",
+    "updateFailed": "更新に失敗しました"
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "title": "Configuración del Pipeline Predeterminado",
+  "subtitle": "Configure el pipeline predeterminado cuando no se especifica modo en la solicitud",
+  "systemDefaultPipeline": "Pipeline del Sistema",
+  "selectDefaultPipeline": "Seleccionar pipeline predeterminado",
+  "allowUserOverride": "Permitir Superposición de Usuario",
+  "allowUserOverrideDesc": "Cuando está habilitado, los usuarios pueden configurar su propio pipeline en Perfil",
+  "saveConfig": "Guardar Configuración",
+  "reset": "Restablecer",
+  "currentEffectiveConfig": "Configuración Vigente Actual",
+  "defaultPipeline": "Pipeline Predeterminado",
+  "yes": "Sí",
+  "no": "No",
+  "configSaved": "Configuración guardada",
+  "saveFailed": "Error al guardar"
+}

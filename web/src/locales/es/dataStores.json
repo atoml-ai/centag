@@ -1,0 +1,92 @@
+{
+  "pageTitle": "Gestión de almacenes de datos",
+  "pageDescription": "Configure interfaces de almacén de datos/base de conocimiento, vincule almacenamiento subyacente y gestione el almacenamiento predeterminado",
+  "searchPlaceholder": "Buscar almacenes de datos...",
+  "filterPlaceholder": "Filtro por tipo",
+  "filterOptions": {
+    "all": "Todos",
+    "knowledgeBase": "Base de conocimiento",
+    "vector": "Almacenamiento vectorial",
+    "document": "Almacenamiento de documentos",
+    "kv": "Key-Value",
+    "search": "Búsqueda de texto completo",
+    "graph": "Base de datos gráfica",
+    "custom": "Personalizado"
+  },
+  "refresh": "Actualizar",
+  "healthCheck": "Verificar estado",
+  "addDataStore": "Agregar almacén",
+  "table": {
+    "name": "Nombre",
+    "type": "Tipo",
+    "linkedStorage": "Almacenamiento vinculado",
+    "enabledStatus": "Estado",
+    "isDefault": "Predeterminado",
+    "yes": "Sí",
+    "healthStatus": "Estado",
+    "notChecked": "No verificado",
+    "healthy": "Saludable",
+    "unhealthy": "Error",
+    "unknownError": "Error desconocido",
+    "actions": "Acciones"
+  },
+  "actions": {
+    "disable": "Deshabilitar",
+    "enable": "Habilitar",
+    "setDefault": "Establecer como predeterminado",
+    "removeDefault": "Quitar predeterminado",
+    "test": "Probar",
+    "edit": "Editar",
+    "delete": "Eliminar"
+  },
+  "emptyState": "No hay configuraciones de almacén de datos",
+  "formDialog": {
+    "addTitle": "Agregar almacén de datos",
+    "editTitle": "Editar almacén de datos",
+    "nameLabel": "Nombre",
+    "namePlaceholder": "Ingrese el nombre del almacén",
+    "typeLabel": "Tipo",
+    "typePlaceholder": "Seleccione el tipo",
+    "linkedStorageLabel": "Almacenamiento vinculado",
+    "linkedStoragePlaceholder": "Seleccione el backend de almacenamiento",
+    "linkedStorageTip": "Seleccione un backend previamente configurado en 'Gestión de almacenamiento'",
+    "extraConfigLabel": "Configuración extra",
+    "extraConfigPlaceholder": "{\"key\": \"value\"}",
+    "extraConfigTip": "Parámetros de configuración opcionales en formato JSON",
+    "descriptionLabel": "Descripción",
+    "descriptionPlaceholder": "Opcional, describa el propósito de este almacén",
+    "enabledLabel": "Habilitado",
+    "defaultLabel": "Establecer como predeterminado",
+    "testConnection": "Probar conexión",
+    "cancel": "Cancelar",
+    "save": "Guardar"
+  },
+  "validation": {
+    "nameRequired": "Ingrese un nombre de almacén",
+    "typeRequired": "Seleccione un tipo",
+    "storageRequired": "Seleccione el almacenamiento vinculado"
+  },
+  "confirm": {
+    "deleteTitle": "Confirmar eliminación",
+    "deleteMessage": "¿Está seguro de que desea eliminar el almacén \"{name}\"?"
+  },
+  "message": {
+    "addSuccess": "Agregado correctamente",
+    "updateSuccess": "Actualizado correctamente",
+    "deleteSuccess": "Eliminado correctamente",
+    "enabled": "Habilitado",
+    "disabled": "Deshabilitado",
+    "setDefaultSuccess": "\"{name}\" establecido como almacén predeterminado",
+    "removeDefaultSuccess": "Predeterminado removido de \"{name}\"",
+    "testSuccess": "Prueba de conexión exitosa para \"{name}\"",
+    "testFailed": "Prueba de conexión fallida: {error}",
+    "loadFailed": "Error al cargar",
+    "operationFailed": "Operación fallida: {error}",
+    "saveFailed": "Error al guardar: {error}",
+    "deleteFailed": "Error al eliminar: {error}",
+    "setDefaultFailed": "Guardado pero error al establecer como predeterminado: {error}",
+    "invalidJson": "La configuración extra debe ser JSON válido",
+    "fillRequired": "Complete la información requerida primero",
+    "unknownError": "Error desconocido"
+  }
+}

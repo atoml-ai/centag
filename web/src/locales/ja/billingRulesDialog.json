@@ -1,0 +1,59 @@
+{
+  "dialogTitle": "請求ルール",
+  "description": "バックエンド + モデルごとの単価を設定（USD / 1M tokens）。インポート/エクスポートの YAML はデフォルト USD。表示は CNY 切替可（換算のみ、元データは変更しません）。",
+  "refresh": "更新",
+  "importYaml": "YAML インポート",
+  "export": "エクスポート",
+  "addRule": "ルールを追加",
+  "usdLabel": "USD",
+  "cnyLabel": "CNY",
+  "emptyText": "ルールがありません。インポートまたは新規追加してください。",
+  "table": {
+    "name": "名前",
+    "backend": "バックエンド",
+    "model": "モデル",
+    "inputPrice": "入力単価({unit})",
+    "outputPrice": "出力単価({unit})",
+    "priority": "優先度",
+    "enabled": "有効",
+    "enabledYes": "はい",
+    "enabledNo": "いいえ",
+    "actions": "操作",
+    "edit": "編集",
+    "delete": "削除"
+  },
+  "form": {
+    "editTitle": "ルールを編集",
+    "createTitle": "ルールを追加",
+    "name": "名前",
+    "backendId": "バックエンド ID",
+    "backendPlaceholder": "例: ppinfra、または *",
+    "model": "モデル",
+    "modelPlaceholder": "例: deepseek-v3.2、または *",
+    "inputPrice": "入力単価 $/1M",
+    "outputPrice": "出力単価 $/1M",
+    "priority": "優先度",
+    "enabled": "有効",
+    "cancel": "キャンセル",
+    "save": "保存"
+  },
+  "importDialog": {
+    "title": "YAML インポート",
+    "placeholder": "pricing YAML を貼り付け",
+    "cancel": "キャンセル",
+    "importReplace": "インポート（すべて置換）"
+  },
+  "confirmDelete": "ルール「{name}」を削除しますか？",
+  "confirmDeleteTitle": "確認",
+  "message": {
+    "loadFailed": "読み込みに失敗しました",
+    "fillRequired": "バックエンドとモデルを入力してください",
+    "saveSuccess": "保存しました",
+    "saveFailed": "保存に失敗しました",
+    "deleteSuccess": "削除しました",
+    "importSuccess": "{count} 件インポートしました",
+    "importEmptyWarning": "YAML を貼り付けてください",
+    "importFailed": "インポートに失敗しました",
+    "exportFailed": "エクスポートに失敗しました"
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "title": "AI チャットテスト",
+  "selectPipeline": "パイプラインを選択",
+  "selectPipelineHint": "パイプラインを選択してメッセージを送信し、バックエンドをテスト",
+  "inputMessage": "メッセージを入力...",
+  "requestFailed": "リクエストに失敗しました",
+  "streamReadFailed": "レスポンスストリームの読み込みに失敗しました"
+}

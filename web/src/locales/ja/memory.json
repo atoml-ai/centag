@@ -1,0 +1,89 @@
+{
+  "title": "クラウドメモリ管理",
+  "subtitle": "エージェントメモリのクラウドストレージ管理、意味検索とバージョン管理をサポート",
+  "stats": {
+    "title": "メモリ統計",
+    "vectorEntries": "ベクトルエントリ",
+    "memoryFiles": "メモリファイル",
+    "indexQueueLength": "インデックスキュー長",
+    "processed": "処理済み",
+    "failed": "失敗",
+    "dropped": "ドロップ",
+    "recentError": "最近のエラー："
+  },
+  "currentAgent": "現在のエージェント",
+  "selectAgent": "エージェントを選択",
+  "actions": {
+    "syncToCloud": "クラウドに同期",
+    "pullFromCloud": "クラウドから取得",
+    "rebuildIndex": "インデックス再構築"
+  },
+  "search": {
+    "placeholder": "メモリ内容を検索...",
+    "searchBtn": "検索"
+  },
+  "tabs": {
+    "files": "ファイルリスト",
+    "results": "検索結果",
+    "versions": "バージョン履歴"
+  },
+  "fileList": {
+    "title": "メモリファイル",
+    "searchResults": "検索結果",
+    "name": "ファイル名",
+    "size": "サイズ",
+    "modified": "変更日時",
+    "actions": "操作",
+    "view": "表示",
+    "delete": "削除",
+    "newFile": "新規ファイル",
+    "similarity": "類似度:"
+  },
+  "versionHistory": {
+    "selectFile": "ファイルを選択",
+    "versionId": "バージョンID",
+    "createdAt": "作成日時",
+    "lines": "行数",
+    "size": "サイズ",
+    "restore": "復元",
+    "noVersions": "バージョン記録なし",
+    "selectFileFirst": "まずファイルを選択してください"
+  },
+  "dialog": {
+    "editFile": "ファイルを編集",
+    "newFile": "新規ファイル",
+    "filename": "ファイル名",
+    "filenamePlaceholder": "memory/xxx.md",
+    "content": "内容",
+    "contentPlaceholder": "メモリ内容...",
+    "cancel": "キャンセル",
+    "save": "保存",
+    "close": "閉じる"
+  },
+  "message": {
+    "loginRequired": "まずログインしてください",
+    "searchFailed": "検索失敗",
+    "syncSuccess": "同期成功、{count} ファイル",
+    "syncFailed": "同期失敗",
+    "pullSuccess": "取得成功、{count} ファイル",
+    "pullFailed": "取得失敗",
+    "indexSuccess": "インデックス再構築成功、{count} ベクトル",
+    "indexFailed": "インデックス再構築失敗",
+    "readFileFailed": "ファイル読み込み失敗",
+    "filenameRequired": "ファイル名を入力してください",
+    "saveSuccess": "保存成功",
+    "saveFailed": "保存失敗",
+    "deleteConfirm": "{name} を削除しますか？",
+    "deleteTitle": "警告",
+    "deleteConfirmBtn": "確定",
+    "deleteCancelBtn": "キャンセル",
+    "deleteSuccess": "削除成功",
+    "deleteFailed": "削除失敗",
+    "restoreConfirm": "バージョン {versionId} に復元しますか？",
+    "restoreTitle": "確認",
+    "restoreConfirmBtn": "確定",
+    "restoreCancelBtn": "キャンセル",
+    "restoreSuccess": "復元成功",
+    "restoreFailed": "復元失敗"
+  }
+}

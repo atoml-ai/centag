@@ -1,0 +1,17 @@
+{
+  "unnamedNode": "未命名节点",
+  "notConfigured": "未配置",
+  "condition": "条件: {condition}",
+  "deleteConfirmTitle": "提示",
+  "deleteConfirmMessage": "确定删除此节点吗？",
+  "typeGenerator": "生成",
+  "typeProcessor": "处理",
+  "typeReviewer": "审核",
+  "typeRouter": "路由",
+  "typeAggregator": "聚合",
+  "typeParallel": "并行",
+  "typeCache": "缓存",
+  "typeTokenUsage": "计量",
+  "typeTransparentForward": "转发",
+  "typeToolCallInjector": "注入"
+}

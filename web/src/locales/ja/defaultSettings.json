@@ -1,0 +1,16 @@
+{
+  "title": "デフォルトパイプライン設定",
+  "subtitle": "リクエストでモードが指定されていない場合に使用されるデフォルトパイプラインを設定",
+  "systemDefaultPipeline": "システムデフォルトパイプライン",
+  "selectDefaultPipeline": "デフォルトパイプラインを選択",
+  "allowUserOverride": "ユーザー上書きを許可",
+  "allowUserOverrideDesc": "有効にすると、ユーザーはプロフィールで独自のデフォルトパイプラインを設定できます",
+  "saveConfig": "設定を保存",
+  "reset": "リセット",
+  "currentEffectiveConfig": "現在の有効な設定",
+  "defaultPipeline": "デフォルトパイプライン",
+  "yes": "はい",
+  "no": "いいえ",
+  "configSaved": "設定を保存しました",
+  "saveFailed": "保存に失敗しました"
+}

@@ -1,0 +1,21 @@
+{
+  "title": "실시간 로그 콘솔",
+  "categoryLabel": "분류:",
+  "categoryAll": "전체",
+  "categoryLlm": "LLM 액세스",
+  "categoryPipeline": "파이프라인",
+  "categorySystem": "시스템",
+  "levelLabel": "레벨:",
+  "levelAll": "전체",
+  "autoScroll": "자동 스크롤",
+  "pauseLive": "실시간 추적 일시 중지",
+  "startLive": "실시간 추적 시작",
+  "pause": "⏸ 일시 중지",
+  "follow": "▶ 추적",
+  "clear": "지우기",
+  "clearTitle": "현재 표시 지우기",
+  "close": "로그 패널 닫기",
+  "linesCount": "{count} 줄 · {bytes}",
+  "paused": "일시 중지됨 · ",
+  "resume": "추적 재개"
+}

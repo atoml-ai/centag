@@ -1,0 +1,59 @@
+{
+  "dialogTitle": "Правила тарификации",
+  "description": "Настройка цен по бэкенду + модели (USD / 1M токенов). Импорт/экспорт YAML по умолчанию в USD; отображение можно переключить на CNY (только конвертация, исходные данные не изменяются).",
+  "refresh": "Обновить",
+  "importYaml": "Импорт YAML",
+  "export": "Экспорт",
+  "addRule": "Добавить правило",
+  "usdLabel": "USD",
+  "cnyLabel": "CNY",
+  "emptyText": "Правил пока нет. Импортируйте или добавьте новое.",
+  "table": {
+    "name": "Название",
+    "backend": "Бэкенд",
+    "model": "Модель",
+    "inputPrice": "Цена ввода ({unit})",
+    "outputPrice": "Цена вывода ({unit})",
+    "priority": "Приоритет",
+    "enabled": "Активно",
+    "enabledYes": "Да",
+    "enabledNo": "Нет",
+    "actions": "Действия",
+    "edit": "Редактировать",
+    "delete": "Удалить"
+  },
+  "form": {
+    "editTitle": "Редактировать правило",
+    "createTitle": "Добавить правило",
+    "name": "Название",
+    "backendId": "ID бэкенда",
+    "backendPlaceholder": "например ppinfra или *",
+    "model": "Модель",
+    "modelPlaceholder": "например deepseek-v3.2 или *",
+    "inputPrice": "Цена ввода $/1M",
+    "outputPrice": "Цена вывода $/1M",
+    "priority": "Приоритет",
+    "enabled": "Активно",
+    "cancel": "Отмена",
+    "save": "Сохранить"
+  },
+  "importDialog": {
+    "title": "Импорт YAML",
+    "placeholder": "Вставьте pricing YAML",
+    "cancel": "Отмена",
+    "importReplace": "Импорт (заменить всё)"
+  },
+  "confirmDelete": "Удалить правило \"{name}\"?",
+  "confirmDeleteTitle": "Подтверждение",
+  "message": {
+    "loadFailed": "Ошибка загрузки",
+    "fillRequired": "Заполните бэкенд и модель",
+    "saveSuccess": "Сохранено",
+    "saveFailed": "Ошибка сохранения",
+    "deleteSuccess": "Удалено",
+    "importSuccess": "Импортировано {count} правил",
+    "importEmptyWarning": "Вставьте YAML",
+    "importFailed": "Ошибка импорта",
+    "exportFailed": "Ошибка экспорта"
+  }
+}

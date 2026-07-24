@@ -1,0 +1,59 @@
+{
+  "dialogTitle": "과금 규칙",
+  "description": "백엔드 + 모델별 단가를 설정합니다 (USD / 1M tokens). 가져오기/내보내기 YAML은 기본 USD; 표시는 CNY로 전환 가능 (변환만, 원본 변경 없음).",
+  "refresh": "새로고침",
+  "importYaml": "YAML 가져오기",
+  "export": "내보내기",
+  "addRule": "규칙 추가",
+  "usdLabel": "USD",
+  "cnyLabel": "CNY",
+  "emptyText": "규칙이 없습니다. 가져오거나 새로 추가하세요.",
+  "table": {
+    "name": "이름",
+    "backend": "백엔드",
+    "model": "모델",
+    "inputPrice": "입력 단가({unit})",
+    "outputPrice": "출력 단가({unit})",
+    "priority": "우선순위",
+    "enabled": "활성화",
+    "enabledYes": "예",
+    "enabledNo": "아니오",
+    "actions": "작업",
+    "edit": "편집",
+    "delete": "삭제"
+  },
+  "form": {
+    "editTitle": "규칙 편집",
+    "createTitle": "규칙 추가",
+    "name": "이름",
+    "backendId": "백엔드 ID",
+    "backendPlaceholder": "예: ppinfra 또는 *",
+    "model": "모델",
+    "modelPlaceholder": "예: deepseek-v3.2 또는 *",
+    "inputPrice": "입력 단가 $/1M",
+    "outputPrice": "출력 단가 $/1M",
+    "priority": "우선순위",
+    "enabled": "활성화",
+    "cancel": "취소",
+    "save": "저장"
+  },
+  "importDialog": {
+    "title": "YAML 가져오기",
+    "placeholder": "pricing YAML 붙여넣기",
+    "cancel": "취소",
+    "importReplace": "가져오기 (모두 바꾸기)"
+  },
+  "confirmDelete": "규칙 \"{name}\"을(를) 삭제하시겠습니까?",
+  "confirmDeleteTitle": "확인",
+  "message": {
+    "loadFailed": "로드 실패",
+    "fillRequired": "백엔드와 모델을 입력하세요",
+    "saveSuccess": "저장됨",
+    "saveFailed": "저장 실패",
+    "deleteSuccess": "삭제됨",
+    "importSuccess": "{count}개 규칙 가져옴",
+    "importEmptyWarning": "YAML을 붙여넣으세요",
+    "importFailed": "가져오기 실패",
+    "exportFailed": "내보내기 실패"
+  }
+}

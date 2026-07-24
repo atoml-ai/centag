@@ -1,0 +1,21 @@
+{
+  "username": "Username",
+  "password": "Password",
+  "confirmPassword": "Confirm Password",
+  "loginButton": "Login",
+  "setupButton": "Set Up & Enter",
+  "passwordPlaceholder": "Login token (min 6 characters)",
+  "setupPasswordPlaceholder": "Set login token (min 6 characters)",
+  "adminPasswordPlaceholder": "Set admin password (min 6 characters)",
+  "adminLoginPlaceholder": "Admin password (min 6 characters)",
+  "firstTimeTitle": "First time: please set your login token",
+  "firstTimeAdminTitle": "First time: please set admin password",
+  "resetHint": "To reset, delete data/admin.password.hash and restart",
+  "subtitle": "LLM Proxy Service Management Platform",
+  "pleaseEnterPassword": "Please enter password",
+  "pleaseEnterUsername": "Please enter username",
+  "pleaseConfirmPassword": "Please confirm password",
+  "passwordMismatch": "Passwords do not match",
+  "passwordMinLength": "Password must be at least 6 characters",
+  "operationFailed": "Operation failed"
+}

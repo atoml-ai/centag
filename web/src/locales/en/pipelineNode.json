@@ -1,0 +1,17 @@
+{
+  "unnamedNode": "Unnamed Node",
+  "notConfigured": "Not configured",
+  "condition": "Condition: {condition}",
+  "deleteConfirmTitle": "Confirm",
+  "deleteConfirmMessage": "Are you sure you want to delete this node?",
+  "typeGenerator": "Generator",
+  "typeProcessor": "Processor",
+  "typeReviewer": "Reviewer",
+  "typeRouter": "Router",
+  "typeAggregator": "Aggregator",
+  "typeParallel": "Parallel",
+  "typeCache": "Cache",
+  "typeTokenUsage": "Token Usage",
+  "typeTransparentForward": "Forward",
+  "typeToolCallInjector": "Tool Call Injector"
+}

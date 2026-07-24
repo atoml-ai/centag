@@ -1,0 +1,70 @@
+{
+  "pageTitle": "Управление политиками резервирования",
+  "pageDescription": "Настройка глобальных политик резервирования. Поддерживает одинаковые модели через бэкенды, одинаковые бэкенды через модели и пользовательские цепочки",
+  "newPolicy": "Новая политика",
+  "emptyState": "Нет политик резервирования",
+  "table": {
+    "id": "ID политики",
+    "name": "Название",
+    "type": "Тип политики",
+    "ruleCount": "Правила",
+    "status": "Статус",
+    "actions": "Действия"
+  },
+  "actions": {
+    "edit": "Редактировать",
+    "test": "Тест",
+    "delete": "Удалить"
+  },
+  "testResultDialog": {
+    "title": "Предварительный просмотр пути резервирования",
+    "policyId": "ID политики",
+    "policyType": "Тип политики",
+    "priority": "Приоритет",
+    "backend": "Бэкенд",
+    "model": "Модель",
+    "timeout": "Тайм-аут(с)"
+  },
+  "formDialog": {
+    "editTitle": "Редактировать политику резервирования",
+    "addTitle": "Новая политика резервирования",
+    "idLabel": "ID политики",
+    "idPlaceholder": "напр. gpt4o-fallback",
+    "nameLabel": "Название",
+    "namePlaceholder": "напр. GPT-4o мультибэкендное резервирование",
+    "descriptionLabel": "Описание",
+    "typeLabel": "Тип политики",
+    "enabledLabel": "Включена",
+    "rulesLabel": "Правила резервирования",
+    "priorityPlaceholder": "Приоритет",
+    "backendPlaceholder": "ID бэкенда",
+    "modelPlaceholder": "Имя модели (или {{requested_model}})",
+    "timeoutPlaceholder": "Тайм-аут(с)",
+    "addRule": "Добавить правило",
+    "cancel": "Отмена",
+    "save": "Сохранить"
+  },
+  "strategyOptions": {
+    "same_model_different_backend": "Одна модель, разные бэкенды",
+    "same_backend_different_model": "Один бэкенд, разные модели",
+    "custom_chain": "Пользовательская цепочка"
+  },
+  "embeddedDesc": "Настройка глобальных политик резервирования. Поддерживает одинаковые модели через бэкенды, одинаковые бэкенды через модели и пользовательские цепочки",
+  "confirm": {
+    "deleteTitle": "Удалить эту политику?"
+  },
+  "validation": {
+    "fillRequired": "Введите ID и название политики"
+  },
+  "message": {
+    "created": "Политика создана",
+    "updated": "Политика обновлена",
+    "deleted": "Политика удалена",
+    "statusUpdated": "Статус обновлён",
+    "loadFailed": "Не удалось загрузить политики резервирования",
+    "saveFailed": "Ошибка сохранения",
+    "deleteFailed": "Ошибка удаления",
+    "updateFailed": "Ошибка обновления",
+    "testFailed": "Ошибка тестирования"
+  }
+}

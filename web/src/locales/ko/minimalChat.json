@@ -1,0 +1,8 @@
+{
+  "title": "AI 채팅 테스트",
+  "selectPipeline": "파이프라인 선택",
+  "selectPipelineHint": "파이프라인을 선택하여 메시지를 보내고 백엔드를 테스트하세요",
+  "inputMessage": "메시지 입력...",
+  "requestFailed": "요청 실패",
+  "streamReadFailed": "응답 스트림 읽기 실패"
+}

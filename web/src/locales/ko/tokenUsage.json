@@ -1,0 +1,23 @@
+{
+  "title": "토큰 사용량",
+  "subtitle": "토큰 사용량, 비용 요약 및 결제 규칙.",
+  "titleBilling": "토큰 사용량 및 결제",
+  "titleUsage": "토큰 사용량",
+  "hintBilling": "토큰 사용량, 비용 요약 및 결제 규칙. 홈 페이지의 '사용량 및 대화'는 더 간단한 뷰입니다.",
+  "hintUsage": "토큰 사용량 및 비용 요약. 결제 규칙은 관리자가 구성합니다.",
+  "dailyTrend": "일별 사용 추세",
+  "last7Days": "7 일",
+  "last30Days": "30 일",
+  "last90Days": "90 일",
+  "modelTop5": "모델 사용 TOP5",
+  "backendTop5": "백엔드 사용 TOP5",
+  "refresh": "새로고침",
+  "inputToken": "입력 토큰",
+  "outputToken": "출력 토큰",
+  "totalToken": "총 토큰",
+  "tokenCount": "토큰 수",
+  "modelUsage": "모델 사용",
+  "loadDailyTrendFailed": "일별 추세 로드 실패",
+  "loadModelStatsFailed": "모델 통계 로드 실패",
+  "loadBackendStatsFailed": "백엔드 통계 로드 실패"
+}

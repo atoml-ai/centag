@@ -1,0 +1,23 @@
+{
+  "title": "Uso de tokens",
+  "subtitle": "Uso de tokens, resumen de costes y reglas de facturación.",
+  "titleBilling": "Uso de tokens y facturación",
+  "titleUsage": "Uso de tokens",
+  "hintBilling": "Uso de tokens, resumen de costes y reglas de facturación. La página principal 'Uso y conversaciones' es una vista más simple.",
+  "hintUsage": "Uso de tokens y resumen de costes. Las reglas de facturación las configura el administrador.",
+  "dailyTrend": "Tendencia de uso diario",
+  "last7Days": "7 días",
+  "last30Days": "30 días",
+  "last90Days": "90 días",
+  "modelTop5": "Uso de modelos TOP5",
+  "backendTop5": "Uso de backends TOP5",
+  "refresh": "Actualizar",
+  "inputToken": "Tokens de entrada",
+  "outputToken": "Tokens de salida",
+  "totalToken": "Tokens totales",
+  "tokenCount": "Cantidad de tokens",
+  "modelUsage": "Uso de modelos",
+  "loadDailyTrendFailed": "Error al cargar la tendencia diaria",
+  "loadModelStatsFailed": "Error al cargar las estadísticas de modelos",
+  "loadBackendStatsFailed": "Error al cargar las estadísticas de backends"
+}

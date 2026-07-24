@@ -1,0 +1,21 @@
+{
+  "title": "插件实现选择",
+  "viewAll": "浏览全部插件",
+  "kindLabel": "插件类型 (Kind)",
+  "kindPlaceholder": "选择插件类型",
+  "kindHelp": "插件类型，如 llm.generate、content.transform、quality.review 等",
+  "implLabel": "插件实现 (Implementation)",
+  "implPlaceholder": "选择插件实现",
+  "pluginInfo": "📋 插件信息：",
+  "version": "版本：{version}",
+  "permissions": "权限要求：",
+  "compatible": "✅ 与当前 Centag 版本兼容（最低版本：{version}）",
+  "incompatible": "⚠️ 当前 Centag 版本低于最低要求（需要：{version}）",
+  "permLlmCall": "调用 LLM 后端（生成文本）",
+  "permStorageRead": "读取存储（缓存、KV 存储）",
+  "permStorageWrite": "写入存储（缓存、KV 存储）",
+  "permMemoryRead": "读取记忆（Mem0、智能体记忆）",
+  "permMemoryWrite": "写入记忆（Mem0、智能体记忆）",
+  "permNetworkOutbound": "发起出站 HTTP 请求",
+  "permSystemAdmin": "系统管理权限"
+}

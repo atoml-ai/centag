@@ -1,0 +1,17 @@
+{
+  "unnamedNode": " unnamed ノード",
+  "notConfigured": "未設定",
+  "condition": "条件: {condition}",
+  "deleteConfirmTitle": "確認",
+  "deleteConfirmMessage": "このノードを削除してもよろしいですか？",
+  "typeGenerator": "生成",
+  "typeProcessor": "処理",
+  "typeReviewer": "レビュー",
+  "typeRouter": "ルーター",
+  "typeAggregator": "集約",
+  "typeParallel": "並列",
+  "typeCache": "キャッシュ",
+  "typeTokenUsage": "使用量計測",
+  "typeTransparentForward": "転送",
+  "typeToolCallInjector": "注入"
+}

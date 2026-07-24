@@ -1,0 +1,23 @@
+{
+  "title": "用量与计费",
+  "subtitle": "Token 计量、成本汇总与计费规则入口。",
+  "titleBilling": "用量与计费",
+  "titleUsage": "用量",
+  "hintBilling": "Token 计量、成本汇总与计费规则入口。首页「用量与会话」为简易查询。",
+  "hintUsage": "Token 计量与成本汇总。计费规则由管理员配置。",
+  "dailyTrend": "每日使用趋势",
+  "last7Days": "7 天",
+  "last30Days": "30 天",
+  "last90Days": "90 天",
+  "modelTop5": "模型使用 TOP5",
+  "backendTop5": "后端使用 TOP5",
+  "refresh": "刷新",
+  "inputToken": "输入 Token",
+  "outputToken": "输出 Token",
+  "totalToken": "总 Token",
+  "tokenCount": "Token 数",
+  "modelUsage": "模型使用",
+  "loadDailyTrendFailed": "加载每日趋势失败",
+  "loadModelStatsFailed": "加载模型统计失败",
+  "loadBackendStatsFailed": "加载后端统计失败"
+}

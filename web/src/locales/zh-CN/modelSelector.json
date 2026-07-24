@@ -1,0 +1,9 @@
+{
+  "recommended": "推荐",
+  "selectBackendFirst": "请先选择后端",
+  "loading": "加载中...",
+  "noModels": "该后端暂无模型",
+  "noMatch": "未找到匹配的模型",
+  "fetchModels": "获取模型",
+  "placeholder": "选择模型"
+}

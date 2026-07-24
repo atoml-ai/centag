@@ -1,0 +1,26 @@
+{
+  "compactTitle": "Недавние разговоры",
+  "refresh": "Обновить",
+  "noSessions": "Нет сессий. Начните разговор с AI",
+  "categoryGeneral": "общий",
+  "messagesCount": "{count} сообщений",
+  "messagesDetail": "Детали сообщений",
+  "collapse": "Свернуть",
+  "loading": "Загрузка…",
+  "noMessages": "В этой сессии нет сообщений (возможно, только создана или запрос не завершён)",
+  "loadMessagesFailed": "Не удалось загрузить сообщения или они пусты. Обновите и попробуйте снова",
+  "pageTitle": "Записи сессий",
+  "pageSubtitle": "Просмотр записанных сессий разговоров и сообщений (сохраняется по редакции: файл / SQLite / PG)",
+  "allCategories": "Все категории",
+  "sessionList": "Список сессий",
+  "totalCount": "Всего {count}",
+  "noSessionsFull": "Нет сессий",
+  "messagesTitle": "Сообщения",
+  "selectSessionHint": "Выберите сессию слева для просмотра сообщений",
+  "roleUser": "Пользователь",
+  "roleAssistant": "Помощник",
+  "roleSystem": "Система",
+  "emptyContent": "(пусто)",
+  "loadSessionsFailed": "Не удалось загрузить сессии"
+}
+

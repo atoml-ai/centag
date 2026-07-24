@@ -1,0 +1,22 @@
+{
+  "title": "카테고리 추가",
+  "alert": "실행 노드를 생성하고 라우팅 키워드를 작성하며, 선택적으로 기능 슬롯에 추가합니다.",
+  "labelField": "카테고리 이름",
+  "labelPlaceholder": "예: 법률 자문",
+  "nodeIdField": "노드 ID",
+  "nodeIdPlaceholder": "이름에서 자동 생성",
+  "keywordField": "트리거 키워드",
+  "keywordPlaceholder": "입력 후 Enter로 추가 (여러 개 가능)",
+  "routerField": "라우터 노드",
+  "routerPlaceholder": "라우터 선택",
+  "defaultBranch": "기본 브랜치",
+  "recommendedTags": "추천 태그",
+  "tagsPlaceholder": "선택 사항",
+  "initialPrompt": "초기 프롬프트",
+  "promptPlaceholder": "선택 사항. 노드 system_prompt에 기록됨",
+  "cancel": "취소",
+  "submit": "캔버스에 추가",
+  "pipelineNotLoaded": "파이프라인이 로드되지 않음",
+  "addSuccess": "카테고리가 추가되었습니다. 파이프라인을 저장한 후 \"모델 설정\"에서 바인딩할 수 있습니다.",
+  "addFailed": "추가 실패"
+}

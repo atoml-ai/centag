@@ -1,0 +1,26 @@
+{
+  "compactTitle": "最近对话",
+  "refresh": "刷新",
+  "noSessions": "暂无会话，先发起一次 AI 对话",
+  "categoryGeneral": "general",
+  "messagesCount": "{count} 条",
+  "messagesDetail": "消息详情",
+  "collapse": "收起",
+  "loading": "加载中…",
+  "noMessages": "该会话暂无消息（可能仅创建了会话、请求未完成）",
+  "loadMessagesFailed": "消息加载失败或为空，请刷新重试",
+  "pageTitle": "会话记录",
+  "pageSubtitle": "浏览已记录的对话 Session 与消息（按发行版落库：文件 / SQLite / PG）",
+  "allCategories": "全部分类",
+  "sessionList": "会话列表",
+  "totalCount": "共 {count} 条",
+  "noSessionsFull": "暂无会话",
+  "messagesTitle": "消息",
+  "selectSessionHint": "选择左侧会话查看消息",
+  "roleUser": "用户",
+  "roleAssistant": "助手",
+  "roleSystem": "系统",
+  "emptyContent": "（空）",
+  "loadSessionsFailed": "加载会话失败"
+}
+

@@ -1,0 +1,21 @@
+{
+  "username": "Usuario",
+  "password": "Contraseña",
+  "confirmPassword": "Confirmar Contraseña",
+  "loginButton": "Iniciar Sesión",
+  "setupButton": "Configurar y Entrar",
+  "passwordPlaceholder": "Token de acceso (mínimo 6 caracteres)",
+  "setupPasswordPlaceholder": "Establecer token de acceso (mínimo 6 caracteres)",
+  "adminPasswordPlaceholder": "Establecer contraseña de admin (mínimo 6 caracteres)",
+  "adminLoginPlaceholder": "Contraseña de admin (mínimo 6 caracteres)",
+  "firstTimeTitle": "Primera vez: por favor establezca su token de acceso",
+  "firstTimeAdminTitle": "Primera vez: por favor establezca la contraseña de admin",
+  "resetHint": "Para restablecer, elimine data/admin.password.hash y reinicie",
+  "subtitle": "Plataforma de Gestión del Servicio Proxy LLM",
+  "pleaseEnterPassword": "Por favor ingrese la contraseña",
+  "pleaseEnterUsername": "Por favor ingrese el usuario",
+  "pleaseConfirmPassword": "Por favor confirme la contraseña",
+  "passwordMismatch": "Las contraseñas no coinciden",
+  "passwordMinLength": "La contraseña debe tener al menos 6 caracteres",
+  "operationFailed": "Operación fallida"
+}

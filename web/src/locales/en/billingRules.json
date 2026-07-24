@@ -1,0 +1,5 @@
+{
+  "title": "Billing Rules",
+  "subtitle": "Configure model pricing and import/export (YAML, default USD). Admin only.",
+  "openDialog": "Open Billing Rules"
+}

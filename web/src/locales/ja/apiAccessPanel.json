@@ -1,0 +1,6 @@
+{
+  "copy": "コピー",
+  "endpointLabel": "API エンドポイント",
+  "copySuccess": "{label} をコピーしました",
+  "copyFailed": "コピーに失敗しました。手動でコピーしてください"
+}

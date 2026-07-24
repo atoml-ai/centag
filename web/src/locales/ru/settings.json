@@ -1,0 +1,19 @@
+{
+  "title": "Настройки",
+  "language": "Язык",
+  "languageUpdated": "Язык обновлён",
+  "serviceInfo": "Информация о сервисе",
+  "version": "Версия",
+  "edition": "Редакция",
+  "uptime": "Время работы",
+  "apiAddress": "Адрес API",
+  "changePassword": "Изменить пароль администратора",
+  "oldPassword": "Текущий пароль",
+  "newPassword": "Новый пароль",
+  "confirmPassword": "Подтвердите пароль",
+  "fillAllFields": "Пожалуйста, заполните все поля",
+  "passwordMinLength": "Пароль должен содержать не менее 6 символов",
+  "passwordMismatch": "Новые пароли не совпадают",
+  "passwordUpdated": "Пароль обновлён",
+  "updateFailed": "Ошибка обновления"
+}

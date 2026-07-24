@@ -1,0 +1,19 @@
+{
+  "title": "Configuración",
+  "language": "Idioma",
+  "languageUpdated": "Idioma actualizado",
+  "serviceInfo": "Información del servicio",
+  "version": "Versión",
+  "edition": "Edición",
+  "uptime": "Tiempo de actividad",
+  "apiAddress": "Dirección API",
+  "changePassword": "Cambiar contraseña de administrador",
+  "oldPassword": "Contraseña actual",
+  "newPassword": "Nueva contraseña",
+  "confirmPassword": "Confirmar contraseña",
+  "fillAllFields": "Por favor, complete todos los campos",
+  "passwordMinLength": "La contraseña debe tener al menos 6 caracteres",
+  "passwordMismatch": "Las contraseñas nuevas no coinciden",
+  "passwordUpdated": "Contraseña actualizada",
+  "updateFailed": "Error al actualizar"
+}

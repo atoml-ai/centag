@@ -1,0 +1,82 @@
+{
+  "pageTitle": "Clash サブスクリプション管理",
+  "pageDescription": "各ルールに独立したサブスクリプションリンクを生成し、Clash / Mihomo クライアントに追加すると自動的にプロキシルールを取得します",
+  "newRule": "新しいルール",
+  "subscriptionDescription": "サブスクリプションリンクは認証不要です。リンクを持つ人は誰でも対応ルールをダウンロードできます。取り消す場合はトークンを再生成してください。カスタムコンテンツがないルールにはシステムデフォルトの rule.yaml が自動的に配信されます。",
+  "emptyState": "サブスクリプションルールがありません。「新しいルール」をクリックして最初のルールを作成してください",
+  "customRule": "カスタムルール",
+  "systemDefault": "システムデフォルト",
+  "actions": {
+    "rename": "名前を変更",
+    "editContent": "ルール内容を編集",
+    "restoreDefault": "システムデフォルトに戻す",
+    "regenerateToken": "トークンを再生成",
+    "delete": "削除"
+  },
+  "subscriptionLink": "サブスクリプションリンク",
+  "copyLink": "リンクをコピー",
+  "token": "トークン",
+  "updatedAt": "更新日時",
+  "editContentBtn": "内容を編集",
+  "createDialog": {
+    "title": "新しいサブスクリプションルール",
+    "nameLabel": "ルール名",
+    "namePlaceholder": "このルールに名前を付けてください",
+    "initialContent": "初期コンテンツ",
+    "useDefault": "システムデフォルトの rule.yaml を使用",
+    "editLater": "後で手動編集",
+    "cancel": "キャンセル",
+    "create": "作成"
+  },
+  "renameDialog": {
+    "title": "ルール名を変更",
+    "nameLabel": "ルール名",
+    "namePlaceholder": "ルール名",
+    "cancel": "キャンセル",
+    "save": "保存"
+  },
+  "editContentDialog": {
+    "title": "ルール内容を編集 — {name}",
+    "editorHint": "Clash 互換の YAML ルールを編集します。現在表示されているのはシステムデフォルトルールです。保存するとカスタムルールになります。",
+    "loadingText": "デフォルトルールを読み込み中...",
+    "placeholder": "デフォルトルール内容を読み込み中...",
+    "restoreDefault": "システムデフォルトに戻す",
+    "cancel": "キャンセル",
+    "save": "保存"
+  },
+  "tokenDialog": {
+    "title": "トークンが再生成されました",
+    "warning": "古いサブスクリプションリンクは無効になりました！Clash で新しいリンクに更新してください。",
+    "copy": "コピー",
+    "close": "更新完了、閉じる"
+  },
+  "confirm": {
+    "reset": "「{name}」のルール内容をシステムデフォルトの rule.yaml に戻しますか？カスタムコンテンツは削除されます。",
+    "resetTitle": "復元確認",
+    "resetButton": "復元",
+    "resetFromEditor": "カスタムコンテンツを削除し、システムデフォルトの rule.yaml に戻しますか？",
+    "regenToken": "トークンを再生成すると、「{name}」の古いサブスクリプションリンクは直ちに無効になり、Clash でリンクを更新する必要があります。続行しますか？",
+    "regenTokenTitle": "トークンを再生成",
+    "regenTokenButton": "生成",
+    "delete": "ルール「{name}」を削除しますか？対応するサブスクリプションリンクも無効になります。",
+    "deleteTitle": "削除確認",
+    "deleteButton": "削除",
+    "cancel": "キャンセル"
+  },
+  "message": {
+    "copySuccess": "リンクをコピーしました",
+    "copyFailed": "コピーに失敗しました。手動でコピーしてください",
+    "created": "ルールを作成しました",
+    "renamed": "名前を変更しました",
+    "contentSaved": "ルール内容を保存しました",
+    "defaultRestored": "システムデフォルトに戻しました",
+    "deleted": "ルールを削除しました",
+    "loadFailed": "ルール一覧の取得に失敗しました",
+    "defaultLoadFailed": "デフォルトルールの読み込みに失敗しました。手動で貼り付けてください",
+    "saveFailed": "保存に失敗しました",
+    "operationFailed": "操作に失敗しました"
+  },
+  "validation": {
+    "nameRequired": "ルール名を入力してください"
+  }
+}

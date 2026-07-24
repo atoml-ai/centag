@@ -1,0 +1,17 @@
+{
+  "dialogTitle": "安全设置",
+  "tabPassword": "登录密码",
+  "oldPassword": "原密码",
+  "newPassword": "新密码",
+  "confirmPassword": "确认密码",
+  "updatePassword": "更新密码",
+  "tabApiKeys": "API 访问密钥",
+  "close": "关闭",
+  "message": {
+    "fillComplete": "请填写完整",
+    "passwordTooShort": "新密码至少 6 位",
+    "passwordMismatch": "两次输入的新密码不一致",
+    "passwordUpdated": "密码已更新",
+    "updateFailed": "修改失败"
+  }
+}

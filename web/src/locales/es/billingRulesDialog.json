@@ -1,0 +1,59 @@
+{
+  "dialogTitle": "Reglas de facturación",
+  "description": "Configure precios unitarios por backend + modelo (USD / 1M tokens). La importación/exportación YAML usa USD por defecto; la visualización puede cambiar a CNY (solo conversión, no modifica el original).",
+  "refresh": "Actualizar",
+  "importYaml": "Importar YAML",
+  "export": "Exportar",
+  "addRule": "Agregar regla",
+  "usdLabel": "USD",
+  "cnyLabel": "CNY",
+  "emptyText": "No hay reglas. Importe o agregue una nueva.",
+  "table": {
+    "name": "Nombre",
+    "backend": "Backend",
+    "model": "Modelo",
+    "inputPrice": "Precio entrada ({unit})",
+    "outputPrice": "Precio salida ({unit})",
+    "priority": "Prioridad",
+    "enabled": "Habilitado",
+    "enabledYes": "Sí",
+    "enabledNo": "No",
+    "actions": "Acciones",
+    "edit": "Editar",
+    "delete": "Eliminar"
+  },
+  "form": {
+    "editTitle": "Editar regla",
+    "createTitle": "Agregar regla",
+    "name": "Nombre",
+    "backendId": "ID del backend",
+    "backendPlaceholder": "ej. ppinfra, o *",
+    "model": "Modelo",
+    "modelPlaceholder": "ej. deepseek-v3.2, o *",
+    "inputPrice": "Precio entrada $/1M",
+    "outputPrice": "Precio salida $/1M",
+    "priority": "Prioridad",
+    "enabled": "Habilitado",
+    "cancel": "Cancelar",
+    "save": "Guardar"
+  },
+  "importDialog": {
+    "title": "Importar YAML",
+    "placeholder": "Pegue el pricing YAML",
+    "cancel": "Cancelar",
+    "importReplace": "Importar (reemplazar todo)"
+  },
+  "confirmDelete": "¿Eliminar regla \"{name}\"?",
+  "confirmDeleteTitle": "Confirmar",
+  "message": {
+    "loadFailed": "Error al cargar",
+    "fillRequired": "Complete el backend y el modelo",
+    "saveSuccess": "Guardado",
+    "saveFailed": "Error al guardar",
+    "deleteSuccess": "Eliminado",
+    "importSuccess": "{count} regla(s) importada(s)",
+    "importEmptyWarning": "Pegue el contenido YAML",
+    "importFailed": "Error al importar",
+    "exportFailed": "Error al exportar"
+  }
+}

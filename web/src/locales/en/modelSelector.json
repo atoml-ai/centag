@@ -1,0 +1,9 @@
+{
+  "recommended": "Recommended",
+  "selectBackendFirst": "Please select a backend first",
+  "loading": "Loading...",
+  "noModels": "No models for this backend",
+  "noMatch": "No matching models found",
+  "fetchModels": "Fetch Models",
+  "placeholder": "Select Model"
+}

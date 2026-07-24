@@ -1,0 +1,17 @@
+{
+  "unnamedNode": "Безымянный узел",
+  "notConfigured": "Не настроен",
+  "condition": "Условие: {condition}",
+  "deleteConfirmTitle": "Подтверждение",
+  "deleteConfirmMessage": "Вы уверены, что хотите удалить этот узел?",
+  "typeGenerator": "Генерация",
+  "typeProcessor": "Обработка",
+  "typeReviewer": "Проверка",
+  "typeRouter": "Маршрутизация",
+  "typeAggregator": "Агрегация",
+  "typeParallel": "Параллельный",
+  "typeCache": "Кэш",
+  "typeTokenUsage": "Учёт токенов",
+  "typeTransparentForward": "Пересылка",
+  "typeToolCallInjector": "Инжектор"
+}

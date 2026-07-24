@@ -1,0 +1,9 @@
+{
+  "recommended": "おすすめ",
+  "selectBackendFirst": "まずバックエンドを選択してください",
+  "loading": "読み込み中...",
+  "noModels": "このバックエンドにはモデルがありません",
+  "noMatch": "一致するモデルが見つかりません",
+  "fetchModels": "モデルを取得",
+  "placeholder": "モデルを選択"
+}

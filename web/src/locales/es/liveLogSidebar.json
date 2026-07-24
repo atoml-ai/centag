@@ -1,0 +1,21 @@
+{
+  "title": "Consola de registros en vivo",
+  "categoryLabel": "Categoría:",
+  "categoryAll": "Todo",
+  "categoryLlm": "Acceso LLM",
+  "categoryPipeline": "Pipeline",
+  "categorySystem": "Sistema",
+  "levelLabel": "Nivel:",
+  "levelAll": "Todo",
+  "autoScroll": "Desplazamiento automático",
+  "pauseLive": "Pausar seguimiento en vivo",
+  "startLive": "Iniciar seguimiento en vivo",
+  "pause": "⏸ Pausa",
+  "follow": "▶ Seguir",
+  "clear": "Limpiar",
+  "clearTitle": "Limpiar pantalla actual",
+  "close": "Cerrar panel de registros",
+  "linesCount": "{count} líneas · {bytes}",
+  "paused": "Pausado · ",
+  "resume": "Reanudar seguimiento"
+}

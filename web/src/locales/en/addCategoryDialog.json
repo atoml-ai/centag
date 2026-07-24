@@ -1,0 +1,22 @@
+{
+  "title": "Add Category",
+  "alert": "This will create an execution node, write routing keywords, and optionally include capability slots.",
+  "labelField": "Category Name",
+  "labelPlaceholder": "e.g. Legal Consult",
+  "nodeIdField": "Node ID",
+  "nodeIdPlaceholder": "Auto-generated from name",
+  "keywordField": "Trigger Keywords",
+  "keywordPlaceholder": "Type and press Enter to add multiple",
+  "routerField": "Router Node",
+  "routerPlaceholder": "Select router",
+  "defaultBranch": "Default Branch",
+  "recommendedTags": "Recommended Tags",
+  "tagsPlaceholder": "Optional",
+  "initialPrompt": "Initial Prompt",
+  "promptPlaceholder": "Optional, writes to node system_prompt",
+  "cancel": "Cancel",
+  "submit": "Add to Canvas",
+  "pipelineNotLoaded": "Pipeline not loaded",
+  "addSuccess": "Category added. Save the pipeline, then configure models in \"Configure Models\".",
+  "addFailed": "Add failed"
+}

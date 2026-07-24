@@ -1,0 +1,10 @@
+{
+  "placeholder": "选择后端",
+  "disabled": "已禁用",
+  "local": "本地",
+  "emptyDescAll": "暂无后端配置",
+  "emptyDescEnabled": "暂无启用的后端",
+  "goConfig": "去配置后端",
+  "loadFailed": "加载后端列表失败：{msg}",
+  "navigateHint": "请前往后端管理页面配置后端"
+}

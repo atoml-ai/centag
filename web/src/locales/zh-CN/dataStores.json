@@ -1,0 +1,92 @@
+{
+  "pageTitle": "数据存储管理",
+  "pageDescription": "配置知识库/数据存储接口，关联底层存储并管理默认存储",
+  "searchPlaceholder": "搜索数据存储...",
+  "filterPlaceholder": "类型筛选",
+  "filterOptions": {
+    "all": "全部",
+    "knowledgeBase": "知识库",
+    "vector": "向量存储",
+    "document": "文档存储",
+    "kv": "Key-Value",
+    "search": "全文搜索",
+    "graph": "图数据库",
+    "custom": "自定义"
+  },
+  "refresh": "刷新",
+  "healthCheck": "检查健康状态",
+  "addDataStore": "添加数据存储",
+  "table": {
+    "name": "名称",
+    "type": "类型",
+    "linkedStorage": "关联存储",
+    "enabledStatus": "启用状态",
+    "isDefault": "默认",
+    "yes": "是",
+    "healthStatus": "健康状态",
+    "notChecked": "未检查",
+    "healthy": "正常",
+    "unhealthy": "异常",
+    "unknownError": "未知错误",
+    "actions": "操作"
+  },
+  "actions": {
+    "disable": "禁用",
+    "enable": "启用",
+    "setDefault": "设为默认",
+    "removeDefault": "取消默认",
+    "test": "测试",
+    "edit": "编辑",
+    "delete": "删除"
+  },
+  "emptyState": "暂无数据存储配置",
+  "formDialog": {
+    "addTitle": "添加数据存储",
+    "editTitle": "编辑数据存储",
+    "nameLabel": "名称",
+    "namePlaceholder": "请输入数据存储名称",
+    "typeLabel": "类型",
+    "typePlaceholder": "请选择类型",
+    "linkedStorageLabel": "关联存储",
+    "linkedStoragePlaceholder": "选择底层存储后端",
+    "linkedStorageTip": "选择此前已在「存储管理」中配置好的后端",
+    "extraConfigLabel": "额外配置",
+    "extraConfigPlaceholder": "{\"key\": \"value\"}",
+    "extraConfigTip": "JSON格式的可选配置参数",
+    "descriptionLabel": "描述",
+    "descriptionPlaceholder": "可选，描述此数据存储的用途",
+    "enabledLabel": "启用状态",
+    "defaultLabel": "设为默认",
+    "testConnection": "测试连接",
+    "cancel": "取消",
+    "save": "保存"
+  },
+  "validation": {
+    "nameRequired": "请输入数据存储名称",
+    "typeRequired": "请选择类型",
+    "storageRequired": "请选择关联存储"
+  },
+  "confirm": {
+    "deleteTitle": "确认删除",
+    "deleteMessage": "确定要删除数据存储 \"{name}\" 吗?"
+  },
+  "message": {
+    "addSuccess": "添加成功",
+    "updateSuccess": "更新成功",
+    "deleteSuccess": "删除成功",
+    "enabled": "已启用",
+    "disabled": "已禁用",
+    "setDefaultSuccess": "已将 \"{name}\" 设置为默认数据存储",
+    "removeDefaultSuccess": "已取消 \"{name}\" 的默认数据存储",
+    "testSuccess": "数据存储 \"{name}\" 连接测试成功",
+    "testFailed": "连接测试失败: {error}",
+    "loadFailed": "加载失败",
+    "operationFailed": "操作失败: {error}",
+    "saveFailed": "保存失败: {error}",
+    "deleteFailed": "删除失败: {error}",
+    "setDefaultFailed": "保存成功但设置默认失败: {error}",
+    "invalidJson": "额外配置必须是有效的JSON格式",
+    "fillRequired": "请先填写完整信息",
+    "unknownError": "未知错误"
+  }
+}

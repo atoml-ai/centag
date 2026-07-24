@@ -1,0 +1,89 @@
+{
+  "pageTitle": "프록시 모드 구성",
+  "pageDescription": "프록시 모드 키워드를 구성합니다. 사용자는 요청 헤더, 본문 또는 콘텐츠 접두사를 통해 프록시 전략을 지정할 수 있습니다",
+  "keywordFormatHint": "키워드 형식: # + 단일 문자 (예: #d, #s, #m)",
+  "refresh": "새로고침",
+  "addMode": "모드 추가",
+  "table": {
+    "keyword": "키워드",
+    "name": "이름",
+    "type": "유형",
+    "description": "설명",
+    "enabled": "활성화",
+    "sortOrder": "정렬",
+    "actions": "작업"
+  },
+  "actions": {
+    "edit": "편집",
+    "delete": "삭제"
+  },
+  "emptyState": "프록시 모드 구성이 없습니다",
+  "usageExamples": {
+    "title": "사용 예시",
+    "headerMethod": "요청 헤더 방식",
+    "headerDesc": "요청 헤더에 사용자 정의 필드를 추가하여 모드를 지정합니다",
+    "bodyExtension": "본문 확장",
+    "bodyDesc": "JSON 요청 본문에 centag 필드를 추가합니다",
+    "contentPrefix": "콘텐츠 접두사 방식",
+    "contentDesc": "메시지 내용 시작 부분에 모드 키워드를 추가합니다. 시스템이 자동으로 파싱하여 제거합니다",
+    "apiSession": "API 세션 방식",
+    "apiDesc": "API를 통해 세션 수준 프록시 모드를 설정합니다. 유효 기간 내의 모든 요청에 이 모드가 적용됩니다"
+  },
+  "formDialog": {
+    "addTitle": "프록시 모드 추가",
+    "editTitle": "프록시 모드 편집",
+    "keywordLabel": "키워드",
+    "keywordPlaceholder": "#d",
+    "keywordTip": "형식: # + 단일 문자 (예: #d, #s, #m). 생성 후 변경 불가",
+    "nameLabel": "이름",
+    "namePlaceholder": "예: 백엔드 지정",
+    "typeLabel": "유형",
+    "typePlaceholder": "모드 유형 선택",
+    "descriptionLabel": "설명",
+    "descriptionPlaceholder": "이 모드의 용도와 동작을 설명합니다",
+    "enabledLabel": "활성화",
+    "enabledTip": "비활성화하면 이 키워드는 더 이상 효과가 없습니다",
+    "sortOrderLabel": "정렬 순서",
+    "sortOrderTip": "숫자가 작을수록 앞에 표시",
+    "cancel": "취소",
+    "save": "저장"
+  },
+  "typeOptions": {
+    "direct": "백엔드 지정 (direct)",
+    "schedule": "스마트 스케줄링 (schedule)",
+    "match": "모델 매칭 (match)",
+    "classify": "의도 분류 (classify)",
+    "transparent": "투명 모드 (transparent)",
+    "fallback": "폴백 (fallback)"
+  },
+  "typeLabels": {
+    "direct": "직접 백엔드",
+    "schedule": "스마트 스케줄링",
+    "match": "모델 매칭",
+    "classify": "의도 분류",
+    "transparent": "투명 모드",
+    "transparent-fast": "투명 모드 (빠름)",
+    "fixed-egress": "점프 모드",
+    "fallback": "폴백"
+  },
+  "validation": {
+    "keywordRequired": "키워드를 입력하세요",
+    "keywordPattern": "형식: # + 단일 문자 (예: #d, #s)",
+    "nameRequired": "이름을 입력하세요",
+    "typeRequired": "유형을 선택하세요"
+  },
+  "confirm": {
+    "deleteTitle": "삭제 확인",
+    "deleteMessage": "모드 \"{name}\"을(를) 삭제하시겠습니까?"
+  },
+  "message": {
+    "createSuccess": "생성되었습니다",
+    "updateSuccess": "업데이트되었습니다",
+    "deleteSuccess": "삭제되었습니다",
+    "enabled": "활성화됨",
+    "disabled": "비활성화됨",
+    "loadFailed": "로드 실패",
+    "operationFailed": "작업 실패",
+    "saveFailed": "저장 실패"
+  }
+}

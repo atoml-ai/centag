@@ -1,0 +1,92 @@
+{
+  "pageTitle": "데이터 스토어 관리",
+  "pageDescription": "지식 베이스/데이터 스토어 인터페이스를 구성하고 기본 스토어를 관리합니다",
+  "searchPlaceholder": "데이터 스토어 검색...",
+  "filterPlaceholder": "유형 필터",
+  "filterOptions": {
+    "all": "전체",
+    "knowledgeBase": "지식 베이스",
+    "vector": "벡터 스토어",
+    "document": "문서 스토어",
+    "kv": "Key-Value",
+    "search": "전체 텍스트 검색",
+    "graph": "그래프 데이터베이스",
+    "custom": "사용자 정의"
+  },
+  "refresh": "새로고침",
+  "healthCheck": "상태 확인",
+  "addDataStore": "데이터 스토어 추가",
+  "table": {
+    "name": "이름",
+    "type": "유형",
+    "linkedStorage": "연결된 스토리지",
+    "enabledStatus": "상태",
+    "isDefault": "기본값",
+    "yes": "예",
+    "healthStatus": "상태",
+    "notChecked": "미확인",
+    "healthy": "정상",
+    "unhealthy": "이상",
+    "unknownError": "알 수 없는 오류",
+    "actions": "작업"
+  },
+  "actions": {
+    "disable": "비활성화",
+    "enable": "활성화",
+    "setDefault": "기본값으로 설정",
+    "removeDefault": "기본값 해제",
+    "test": "테스트",
+    "edit": "편집",
+    "delete": "삭제"
+  },
+  "emptyState": "데이터 스토어 구성이 없습니다",
+  "formDialog": {
+    "addTitle": "데이터 스토어 추가",
+    "editTitle": "데이터 스토어 편집",
+    "nameLabel": "이름",
+    "namePlaceholder": "데이터 스토어 이름을 입력하세요",
+    "typeLabel": "유형",
+    "typePlaceholder": "유형을 선택하세요",
+    "linkedStorageLabel": "연결된 스토리지",
+    "linkedStoragePlaceholder": "기본 스토리지 백엔드 선택",
+    "linkedStorageTip": "'스토리지 관리'에서 이전에 구성한 백엔드를 선택하세요",
+    "extraConfigLabel": "추가 구성",
+    "extraConfigPlaceholder": "{\"key\": \"value\"}",
+    "extraConfigTip": "JSON 형식의 선택적 구성 매개변수",
+    "descriptionLabel": "설명",
+    "descriptionPlaceholder": "선택 사항, 이 데이터 스토어의 용도를 설명합니다",
+    "enabledLabel": "활성화",
+    "defaultLabel": "기본값으로 설정",
+    "testConnection": "연결 테스트",
+    "cancel": "취소",
+    "save": "저장"
+  },
+  "validation": {
+    "nameRequired": "데이터 스토어 이름을 입력하세요",
+    "typeRequired": "유형을 선택하세요",
+    "storageRequired": "연결된 스토리지를 선택하세요"
+  },
+  "confirm": {
+    "deleteTitle": "삭제 확인",
+    "deleteMessage": "데이터 스토어 \"{name}\"을(를) 삭제하시겠습니까?"
+  },
+  "message": {
+    "addSuccess": "추가되었습니다",
+    "updateSuccess": "업데이트되었습니다",
+    "deleteSuccess": "삭제되었습니다",
+    "enabled": "활성화됨",
+    "disabled": "비활성화됨",
+    "setDefaultSuccess": "\"{name}\"이(가) 기본 데이터 스토어로 설정되었습니다",
+    "removeDefaultSuccess": "\"{name}\"의 기본값이 해제되었습니다",
+    "testSuccess": "\"{name}\" 연결 테스트 성공",
+    "testFailed": "연결 테스트 실패: {error}",
+    "loadFailed": "로드 실패",
+    "operationFailed": "작업 실패: {error}",
+    "saveFailed": "저장 실패: {error}",
+    "deleteFailed": "삭제 실패: {error}",
+    "setDefaultFailed": "저장은 성공했지만 기본값 설정 실패: {error}",
+    "invalidJson": "추가 구성은 유효한 JSON 형식이어야 합니다",
+    "fillRequired": "먼저 필수 정보를 입력하세요",
+    "unknownError": "알 수 없는 오류"
+  }
+}

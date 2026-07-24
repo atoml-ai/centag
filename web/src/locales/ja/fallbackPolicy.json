@@ -1,0 +1,70 @@
+{
+  "pageTitle": "フォールバックポリシー管理",
+  "pageDescription": "グローバルフォールバックポリシーを設定します。同じモデルのクロスバックエンド、同じバックエンドのクロスモデル、カスタムチェーンに対応",
+  "newPolicy": "新しいポリシー",
+  "emptyState": "フォールバックポリシーがありません",
+  "table": {
+    "id": "ポリシー ID",
+    "name": "ポリシー名",
+    "type": "ポリシータイプ",
+    "ruleCount": "ルール数",
+    "status": "ステータス",
+    "actions": "操作"
+  },
+  "actions": {
+    "edit": "編集",
+    "test": "テスト",
+    "delete": "削除"
+  },
+  "testResultDialog": {
+    "title": "フォールバックパスプレビュー",
+    "policyId": "ポリシー ID",
+    "policyType": "ポリシータイプ",
+    "priority": "優先度",
+    "backend": "バックエンド",
+    "model": "モデル",
+    "timeout": "タイムアウト(s)"
+  },
+  "formDialog": {
+    "editTitle": "フォールバックポリシーを編集",
+    "addTitle": "新しいフォールバックポリシー",
+    "idLabel": "ポリシー ID",
+    "idPlaceholder": "例：gpt4o-fallback",
+    "nameLabel": "ポリシー名",
+    "namePlaceholder": "例：GPT-4o マルチバックエンドフォールバック",
+    "descriptionLabel": "説明",
+    "typeLabel": "ポリシータイプ",
+    "enabledLabel": "有効",
+    "rulesLabel": "フォールバックルール",
+    "priorityPlaceholder": "優先度",
+    "backendPlaceholder": "バックエンド ID",
+    "modelPlaceholder": "モデル名（または {{requested_model}}）",
+    "timeoutPlaceholder": "タイムアウト(s)",
+    "addRule": "ルールを追加",
+    "cancel": "キャンセル",
+    "save": "保存"
+  },
+  "strategyOptions": {
+    "same_model_different_backend": "同じモデル・クロスバックエンド",
+    "same_backend_different_model": "同じバックエンド・クロスモデル",
+    "custom_chain": "カスタムチェーン"
+  },
+  "embeddedDesc": "グローバルフォールバックポリシーを設定します。同じモデルのクロスバックエンド、同じバックエンドのクロスモデル、カスタムチェーンに対応",
+  "confirm": {
+    "deleteTitle": "このポリシーを削除しますか？"
+  },
+  "validation": {
+    "fillRequired": "ポリシー ID と名前を入力してください"
+  },
+  "message": {
+    "created": "ポリシーを作成しました",
+    "updated": "ポリシーを更新しました",
+    "deleted": "ポリシーを削除しました",
+    "statusUpdated": "ステータスを更新しました",
+    "loadFailed": "フォールバックポリシーの取得に失敗しました",
+    "saveFailed": "保存に失敗しました",
+    "deleteFailed": "削除に失敗しました",
+    "updateFailed": "更新に失敗しました",
+    "testFailed": "テストに失敗しました"
+  }
+}

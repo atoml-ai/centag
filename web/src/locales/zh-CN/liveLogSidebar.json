@@ -1,0 +1,21 @@
+{
+  "title": "实时日志控制台",
+  "categoryLabel": "分类：",
+  "categoryAll": "全部",
+  "categoryLlm": "大模型访问",
+  "categoryPipeline": "流水线",
+  "categorySystem": "系统",
+  "levelLabel": "级别：",
+  "levelAll": "全部",
+  "autoScroll": "自动滚动",
+  "pauseLive": "暂停实时跟踪",
+  "startLive": "开启实时跟踪",
+  "pause": "⏸ 暂停",
+  "follow": "▶ 跟踪",
+  "clear": "清空",
+  "clearTitle": "清空当前显示",
+  "close": "关闭日志面板",
+  "linesCount": "{count} 行 · {bytes}",
+  "paused": "已暂停 · ",
+  "resume": "继续跟踪"
+}
