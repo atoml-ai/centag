@@ -29,7 +29,6 @@
 | 文件 | pipeline_id | 快捷码 | 说明 |
 |------|-------------|--------|------|
 | `aggregator-mode.yaml` | aggregator-mode | `#ag` | 多路生成 → 聚合 |
-| `fallback-mode.yaml` | fallback-mode | `#f` | 降级链 + 熔断 |
 | `pipeline-mode.yaml` | pipeline-mode | — | 通用流水线示例 |
 | `cache-hit.yaml` | cache-hit | `#ch` | 精确缓存优先 |
 | `cache-mode.yaml` | cache-mode | — | 缓存模式 |

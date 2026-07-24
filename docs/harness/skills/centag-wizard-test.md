@@ -109,7 +109,6 @@ POST /v1/chat/completions                             → LLM 代理入口
 ```
 smart-scheduling  → smart-scheduling
 direct-backend    → direct-backend
-fallback-mode     → fallback-mode
 router-mode       → router-mode
 optimize-mode     → optimize-mode
 audit-mode        → audit-mode

@@ -21,7 +21,7 @@
 | intent-classification | #c | 意图分类（已合并→router-mode） | `ModeIntentClassification` | router-mode | **pipeline-only** ✅（等同于#r） |
 | audit-mode | #a | 审核模式 | `ModeAuditMode` | audit-mode | **pipeline-only** ✅ |
 | optimize-mode | #o | 优化模式 | `ModeOptimizeMode` | optimize-mode | **pipeline-only** ✅ |
-| fallback | #f | 降级模式 | `ModeFallback` | fallback-mode | **pipeline-only** ✅ |
+| fallback | #f | 降级模式（**已不再预置模板**；降级能力见 #d/#t/#j） | `ModeFallback` | — | 兼容保留快捷码 |
 | pipeline | #p | 流水线模式 | `ModePipeline` | pipeline-mode | **pipeline-only** ✅ |
 | aggregator | #ag | 聚合模式 | `ModeAggregator` | aggregator-mode | **pipeline-only** ✅ |
 | router | #r | 路由模式 | `ModeRouter` | router-mode | **pipeline-only** ✅ |
@@ -141,7 +141,7 @@
 │           └── 否 → #d (直接后端)
 └── 是 → 是否需要聚合/fallback?
       ├── 多模型并行聚合 → #ag (聚合模式)
-      ├── 降级容错 → #f (降级模式)
+      ├── 降级容错 → #d/#t/#j（节点内 fallback + FallbackGroup；#f 已不再预置）
       └── 否 → 是否需要审核/优化/翻译/记忆?
             ├── 审核 → #a (审核模式)
             ├── 优化 → #o (优化模式)

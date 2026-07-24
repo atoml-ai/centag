@@ -16,7 +16,7 @@
 #   export TEST_MOCK_OPENAI_HOST="127.0.0.1"
 #   export TEST_MOCK_OPENAI_PORT="28081"
 #   export CENTAG_DEPLOY_TYPE="personal"  # personal|team|minimal
-#   export TEST_PIPELINES="smart-scheduling,direct-backend,fallback-mode,transparent-fast"
+#   export TEST_PIPELINES="smart-scheduling,direct-backend,transparent-proxy,fixed-egress"
 #   bash wizard-test.sh
 #
 # 输出：

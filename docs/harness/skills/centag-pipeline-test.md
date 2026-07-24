@@ -202,19 +202,10 @@ curl -s --max-time 30 -X POST "http://localhost:20060/v1/chat/completions" \
 echo "=== 智能调度测试完成 ==="
 ```
 
-#### 2.4 降级模式专项测试（fallback-mode）
+#### 2.4 降级能力验证（附属于主路径）
 
-```bash
-# 测试用例: 正常情况 → 应使用主后端
-curl -s --max-time 30 -X POST "http://localhost:20060/v1/chat/completions" \
-  -H "Authorization: Bearer $ADMIN_KEY" \
-  -H "X-Proxy-Mode: fallback-mode" \
-  -H "Content-Type: application/json" \
-  -d '{"model": "GLM-4.7-Flash", "messages": [{"role": "user", "content": "测试降级模式"}], "max_tokens": 50}' \
-  > /tmp/test_fallback_normal.json
-
-echo "=== 降级模式测试完成 ==="
-```
+> `fallback-mode` 已不再预置。余额/节点失败降级请在 `#d` / `#t` / `#j` 上验证
+> （节点内 `fallback_model` + 模板 `FallbackGroup`）。
 
 ### Step 3: 日志分析（关键步骤）
 
@@ -447,17 +438,6 @@ echo "报告已生成: /tmp/pipeline_test_report.md"
 - 简单问题："1+1=?"
 - 复杂问题："详细解释量子计算"
 
-### 降级模式 (fallback-mode)
-
-**测试重点**：
-1. 验证主后端正常时是否使用主后端
-2. 验证主后端失败时是否正确降级
-3. 验证降级输出是否正常
-
-**测试用例**：
-- 正常情况：使用主后端
-- 模拟主后端失败：需要修改配置或使用不可用后端
-
 ### 聚合模式 (aggregator-mode)
 
 **测试重点**：
@@ -491,15 +471,16 @@ echo "报告已生成: /tmp/pipeline_test_report.md"
 | `#ch` | PostgreSQL + Redis | 缓存命中 |
 | `#r` / `#o` / `#a` / `#m` / `#l` / `#sec` | 对应流水线已安装 | Centag 精简发行可能未附带这些模板 |
 
-> 已移除（勿测）：`#mem0` / `#rag` / `#agent` / `#pi` / `#cs`（business 插件相关）。
+> 已移除（勿测）：`#f` / `fallback-mode`（不再预置）；`#mem0` / `#rag` / `#agent` / `#pi` / `#cs`（business 插件相关）。
 
 ## 快捷码（Centag 网关核心）
 
 | 快捷码 | pipeline_id | 说明 | 测试重点 | 依赖 |
 |--------|-------------|------|----------|------|
 | `#s` | `smart-scheduling` | 智能调度（默认） | 分支决策、路径选择 | 无 |
-| `#d` | `direct-backend` | 直连后端 | 单节点执行 | 无 |
-| `#f` | `fallback-mode` | 降级模式 | 降级行为、容错能力 | 无 |
+| `#d` | `direct-backend` | 直连后端 | 单节点执行、计费/节点降级 | 无 |
+| `#t` | `transparent-proxy` | 透明代理 | 按模型选路、计费/节点降级 | 无 |
+| `#j` | `fixed-egress` | 跳板模式 | 固定出站、计费降级 | 无 |
 | `#tf` | `transparent-fast` | 超快透明代理 | 原样透传、未命中缓存 | 无 |
 | `#ag` | `aggregator-mode` | 聚合模式 | 并行执行、结果聚合 | 无 |
 | `#p` | `pipeline-mode` | 自定义流水线 | 多阶段执行 | 无 |
@@ -509,11 +490,12 @@ echo "报告已生成: /tmp/pipeline_test_report.md"
 | `#m` | `model-matching` | 模型匹配 | 路由规则 | 流水线已安装 |
 | `#l` | `translate-mode` | 翻译模式 | 翻译质量 | 流水线已安装 |
 | `#sec` | `security-mode` | 安全审核 | 入站审核 | 流水线已安装 |
-| `#t` | `transparent-proxy` | 透明代理 | RawBody 贯通 | PostgreSQL |
 | `#cm` | `cache-mode` | 缓存模式 | 缓存策略 | PostgreSQL |
 | `#ch` | `cache-hit` | 缓存命中 | 语义缓存 | PostgreSQL + Redis |
 
-**推荐快速集**：`smart-scheduling,direct-backend,fallback-mode,transparent-fast`
+> 已移除预置：`#f` / `fallback-mode`（降级能力已并入 `#d` / `#t` / `#j`）。
+
+**推荐快速集**：`smart-scheduling,direct-backend,transparent-proxy,fixed-egress`
 
 **推荐标准集**：快速集 + `aggregator-mode,pipeline-mode`；若已安装再加 `router-mode`
 
