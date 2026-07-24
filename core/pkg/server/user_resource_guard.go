@@ -23,9 +23,8 @@ func (s *Server) teamResourceModelGuard() gin.HandlerFunc {
 		}
 
 		model := peekRequestModel(c)
-		// Pipeline-as-model: pipeline.<id>
-		if strings.HasPrefix(model, "pipeline.") {
-			pid := strings.TrimPrefix(model, "pipeline.")
+		// Pipeline-as-model: centag/<id> 或兼容 pipeline.<id>
+		if pid, ok := pipelineIDFromModel(model); ok {
 			if pid != "" && !useraccess.CanUseSharedPipeline(user, pid) {
 				// Allow if it is a tenant-owned pipeline (not in shared whitelist).
 				tenantID := ""
@@ -73,4 +72,24 @@ func peekRequestModel(c *gin.Context) string {
 	}
 	_ = json.Unmarshal(body, &req)
 	return strings.TrimSpace(req.Model)
+}
+
+// pipelineIDFromModel 从 model 字段解析流水线 ID。
+// 支持 centag/<id> 与兼容写法 pipeline.<id>。
+func pipelineIDFromModel(model string) (string, bool) {
+	model = strings.TrimSpace(model)
+	switch {
+	case strings.HasPrefix(model, "centag/"):
+		pid := strings.TrimPrefix(model, "centag/")
+		pid = strings.TrimSpace(strings.SplitN(pid, " ", 2)[0])
+		pid = strings.TrimSuffix(pid, ".auto")
+		return pid, pid != ""
+	case strings.HasPrefix(model, "pipeline."):
+		pid := strings.TrimPrefix(model, "pipeline.")
+		pid = strings.TrimSpace(strings.SplitN(pid, " ", 2)[0])
+		pid = strings.TrimSuffix(pid, ".auto")
+		return pid, pid != ""
+	default:
+		return "", false
+	}
 }

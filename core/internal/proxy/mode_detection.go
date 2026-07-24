@@ -150,7 +150,8 @@ func extractPipelineFromContentBytes(bodyBytes []byte) string {
 }
 
 // parseModelPipelinePrefix 解析 model 字段中的流水线前缀。
-// 支持 pipeline.direct-backend、pipeline_direct-backend、pipeline.direct-backend glm-4-flash。
+// 支持 centag/direct-backend、pipeline.direct-backend、pipeline_direct-backend、
+// 以及带实际模型后缀的写法（如 centag/direct-backend glm-4-flash）。
 func parseModelPipelinePrefix(model string) (pipelineID, actualModel string, ok bool) {
 	model = strings.TrimSpace(model)
 	// 方式1：model 直接写流水线 ID（如 smart-scheduling）
@@ -159,25 +160,30 @@ func parseModelPipelinePrefix(model string) (pipelineID, actualModel string, ok 
 		return pid, "", true
 	}
 
-	dotPrefix := false
+	prefixed := false
 	switch {
+	case strings.HasPrefix(model, "centag/"):
+		for strings.HasPrefix(model, "centag/") {
+			model = strings.TrimPrefix(model, "centag/")
+		}
+		prefixed = true
 	case strings.HasPrefix(model, "pipeline."):
 		for strings.HasPrefix(model, "pipeline.") {
 			model = strings.TrimPrefix(model, "pipeline.")
 		}
-		dotPrefix = true
+		prefixed = true
 	case strings.HasPrefix(model, "pipeline_"):
 		for strings.HasPrefix(model, "pipeline_") {
 			model = strings.TrimPrefix(model, "pipeline_")
 		}
-		dotPrefix = true
+		prefixed = true
 	}
-	if !dotPrefix {
+	if !prefixed {
 		return "", "", false
 	}
 	parts := strings.SplitN(model, " ", 2)
 	pipelineID = strings.TrimSpace(parts[0])
-	// 兼容虚拟模型名 pipeline.<id>.auto
+	// 兼容虚拟模型名 pipeline.<id>.auto / centag/<id>.auto
 	pipelineID = strings.TrimSuffix(pipelineID, ".auto")
 	if pipelineID == "" {
 		return "", "", false

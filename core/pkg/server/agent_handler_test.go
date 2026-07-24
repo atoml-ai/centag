@@ -115,8 +115,8 @@ func TestResolveModelName_PipelineOnly(t *testing.T) {
 	got := resolveModelName("glm-4-flash", "direct-backend", []backend.ModelMapping{
 		{ActualModel: "gpt-4o"},
 	})
-	if got != "pipeline.direct-backend" {
-		t.Fatalf("model = %q, want %q", got, "pipeline.direct-backend")
+	if got != "centag/direct-backend" {
+		t.Fatalf("model = %q, want %q", got, "centag/direct-backend")
 	}
 }
 

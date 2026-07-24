@@ -12,6 +12,8 @@ func (t *OpenCodeTemplate) Description() string  { return "AI 编程助手 (open
 func (t *OpenCodeTemplate) ConfigFiles(info *BackendInfo) ([]ConfigFile, error) {
 	url := proxyURL(info.Host, info.Port)
 	model := defaultModel(info)
+	apiModel := centagAPIModelID(model)
+	modelRef := centagModelRef(model)
 	content := fmt.Sprintf(`{
   "$schema": "https://opencode.ai/config.json",
   "provider": {
@@ -30,8 +32,8 @@ func (t *OpenCodeTemplate) ConfigFiles(info *BackendInfo) ([]ConfigFile, error) 
       }
     }
   },
-  "model": "centag/%s"
-}`, url, info.APIKey, model, model, model)
+  "model": "%s"
+}`, url, info.APIKey, apiModel, apiModel, modelRef)
 	return []ConfigFile{
 		{Path: "~/.config/opencode/opencode.json", Content: content},
 		{Path: "~/.config/opencode/opencode.jsonc", Content: content},
@@ -40,12 +42,12 @@ func (t *OpenCodeTemplate) ConfigFiles(info *BackendInfo) ([]ConfigFile, error) 
 
 func (t *OpenCodeTemplate) SetupCommand(info *BackendInfo) string {
 	url := proxyURL(info.Host, info.Port)
-	model := defaultModel(info)
+	modelRef := centagModelRef(defaultModel(info))
 	return fmt.Sprintf(`# OpenCode: 编辑 ~/.config/opencode/opencode.json
 # 在 provider 中添加 "centag"（npm=@ai-sdk/openai-compatible）
 # options.baseURL 设置为 "%s"
-# 并设置 model="centag/%s"
-`, url, model)
+# 并设置 model="%s"
+`, url, modelRef)
 }
 
 func (t *OpenCodeTemplate) PlatformCommands(info *BackendInfo) PlatformCommands {
@@ -63,9 +65,9 @@ func (t *OpenCodeTemplate) VerifyCommand(info *BackendInfo) string {
 
 func (t *OpenCodeTemplate) Steps(info *BackendInfo) []ConfigStep {
 	url := proxyURL(info.Host, info.Port)
-	model := defaultModel(info)
+	modelRef := centagModelRef(defaultModel(info))
 	return []ConfigStep{
-		{Title: "配置 provider", Description: fmt.Sprintf("在 opencode.json 中添加 Centag（model=centag/%s，baseURL=%s）", model, url)},
+		{Title: "配置 provider", Description: fmt.Sprintf("在 opencode.json 中添加 Centag（model=%s，baseURL=%s）", modelRef, url)},
 		{Title: "启动 OpenCode", Code: "opencode"},
 	}
 }

@@ -69,7 +69,7 @@ func TestListModelsReturnsPipelineIDs(t *testing.T) {
 			t.Errorf("id=%s owned_by=%q, want centag", m.ID, m.OwnedBy)
 		}
 	}
-	if !got["pipeline.direct-backend"] || !got["pipeline.smart-scheduling"] {
+	if !got["centag/direct-backend"] || !got["centag/smart-scheduling"] {
 		t.Fatalf("unexpected models: %v", got)
 	}
 }

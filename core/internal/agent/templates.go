@@ -26,6 +26,29 @@ func defaultModel(info *BackendInfo) string {
 	return "gpt-4o"
 }
 
+// centagAPIModelID 返回发给 Centag API 的 model id（与 /v1/models 的 id 一致）。
+func centagAPIModelID(model string) string {
+	model = strings.TrimSpace(model)
+	if model == "" {
+		return "gpt-4o"
+	}
+	if strings.HasPrefix(model, "centag/") {
+		return model
+	}
+	// 兼容旧的 pipeline.<id>：归一为 centag/<id>
+	if strings.HasPrefix(model, "pipeline.") {
+		return "centag/" + strings.TrimPrefix(model, "pipeline.")
+	}
+	return model
+}
+
+// centagModelRef 生成 OpenCode/OpenClaw 的 provider/model 引用。
+// API model 若已是 centag/<id>，则写成 centag/centag/<id>（provider=centag，发给 API 的为 centag/<id>）。
+func centagModelRef(model string) string {
+	apiModel := centagAPIModelID(model)
+	return "centag/" + apiModel
+}
+
 // expandPath 将 ~ 展开为实际 home 目录
 func expandPath(p string) string {
 	if strings.HasPrefix(p, "~/") || p == "~" {

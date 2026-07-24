@@ -788,8 +788,8 @@ func isUnspecifiedClientModel(model string) bool {
 	if lower == "auto" || lower == "default" {
 		return true
 	}
-	// virtual pipeline models (pipeline.xxx / pipeline.xxx.auto)
-	if strings.HasPrefix(lower, "pipeline.") || strings.HasPrefix(lower, "pipeline_") {
+	// virtual pipeline models (centag/xxx、pipeline.xxx / pipeline.xxx.auto)
+	if strings.HasPrefix(lower, "centag/") || strings.HasPrefix(lower, "pipeline.") || strings.HasPrefix(lower, "pipeline_") {
 		return true
 	}
 	return false

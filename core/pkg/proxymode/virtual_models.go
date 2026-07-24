@@ -84,7 +84,10 @@ func GetPipelineModel(mode ExecutionMode) string {
 	}
 }
 
-// IsPipelineModel 检查是否为虚拟模型名
+// IsPipelineModel 检查是否为虚拟模型名（centag/<id> 或兼容 pipeline.<id>）
 func IsPipelineModel(model string) bool {
+	if len(model) > 7 && model[:7] == "centag/" {
+		return true
+	}
 	return len(model) > 9 && model[:9] == "pipeline."
 }
