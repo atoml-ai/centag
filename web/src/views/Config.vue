@@ -3,9 +3,9 @@
     <div class="header config-header">
       <div class="header-left">
         <h1 class="page-title">系统配置</h1>
-        <p class="page-description">配置系统参数和功能开关</p>
+        <p class="page-description">精简设置面：服务概览、代理默认、缓存与韧性；本机代理请走「接入」</p>
       </div>
-      <div v-if="isConfigTab" class="header-actions">
+      <div class="header-actions">
         <el-button :loading="loading" @click="load">
           <el-icon><Refresh /></el-icon>
           刷新
@@ -17,40 +17,259 @@
       </div>
     </div>
 
-    <div class="config-tabs-wrapper" v-loading="isConfigTab && loading">
+    <div class="config-tabs-wrapper" v-loading="loading">
       <el-tabs v-model="activeTab" type="border-card" class="config-tabs">
-        <!-- 服务配置 -->
-        <el-tab-pane label="服务配置" name="server">
+        <!-- 服务概览 -->
+        <el-tab-pane label="服务概览" name="overview">
           <el-form label-width="120px">
-            <el-divider content-position="left">基本设置</el-divider>
+            <el-divider content-position="left">监听信息（只读）</el-divider>
             <el-form-item label="服务主机">
-              <el-input v-model="config.server.host" placeholder="0.0.0.0" />
-              <div class="form-tip">服务监听的主机地址</div>
+              <el-input :model-value="config.server.host" disabled />
+              <div class="form-tip">由安装 / 环境变量决定；此处保存不会热重启监听</div>
             </el-form-item>
             <el-form-item label="服务端口">
-              <el-input-number v-model="config.server.port" :min="1" :max="65535" style="width: 200px" />
-              <div class="form-tip">服务监听的端口号</div>
+              <el-input-number :model-value="config.server.port" disabled style="width: 200px" />
+              <div class="form-tip">改端口请修改启动配置（如 LLM_PROXY_SERVER_PORT）后重启</div>
             </el-form-item>
-            <el-divider content-position="left">代理设置</el-divider>
+
+            <el-divider content-position="left">相关入口</el-divider>
+            <div class="link-cards">
+              <el-card shadow="never" class="link-card" @click="router.push('/dashboard')">
+                <div class="link-title">默认后端 / 模型</div>
+                <div class="link-desc">在首页后端面板设置，并显示于底部状态栏</div>
+              </el-card>
+              <el-card
+                v-if="showSystemProxyLink"
+                shadow="never"
+                class="link-card"
+                @click="router.push('/system-proxy')"
+              >
+                <div class="link-title">本机系统代理</div>
+                <div class="link-desc">PAC / MITM 主入口在「接入 → 系统代理」</div>
+              </el-card>
+              <el-card shadow="never" class="link-card" @click="router.push('/profile')">
+                <div class="link-title">账号与改密</div>
+                <div class="link-desc">个人中心修改密码与 API Key</div>
+              </el-card>
+            </div>
+          </el-form>
+        </el-tab-pane>
+
+        <!-- 代理默认 -->
+        <el-tab-pane label="代理默认" name="proxy">
+          <el-form label-width="140px">
+            <el-alert
+              type="info"
+              :closable="false"
+              show-icon
+              class="section-alert"
+              title="与流水线 / 请求头的关系"
+              description="日常选路以首页默认流水线与请求头 X-Proxy-Mode 为准；此处为未指定时的全局回落默认。"
+            />
             <el-form-item label="启用代理">
               <el-switch v-model="config.proxy.enabled" />
-              <div class="form-tip">是否启用 LLM 代理功能</div>
+              <div class="form-tip">关闭后网关代理能力不可用（一般保持开启）</div>
             </el-form-item>
             <el-form-item label="默认模式">
-              <el-select v-model="config.proxy.default_mode" style="width: 220px">
+              <el-select v-model="config.proxy.default_mode" style="width: 280px">
                 <el-option label="指定默认后端" value="direct-backend" />
                 <el-option label="智能调度" value="smart-scheduling" />
                 <el-option label="透明模式（不注入 system prompt）" value="transparent-proxy" />
               </el-select>
-              <div class="form-tip">与 API / X-Proxy-Mode 一致：direct-backend、smart-scheduling、transparent-proxy；固定出站跳板请用 fixed-egress（#j）</div>
+              <div class="form-tip">
+                对应 X-Proxy-Mode：direct-backend / smart-scheduling / transparent-proxy；固定出站跳板请用 fixed-egress（#j）
+              </div>
             </el-form-item>
             <el-form-item label="代理超时">
               <el-input-number v-model="config.proxy.timeout" :min="1" :max="300" style="width: 200px" />
               <span class="unit">秒</span>
-              <div class="form-tip">代理请求的超时时间</div>
             </el-form-item>
+            <el-form-item label="默认后端">
+              <el-button @click="router.push('/dashboard')">去首页设置</el-button>
+              <div class="form-tip">系统默认后端与模型在首页「后端」面板维护</div>
+            </el-form-item>
+          </el-form>
+        </el-tab-pane>
 
-            <el-divider content-position="left">降级与重试</el-divider>
+        <!-- 缓存 -->
+        <el-tab-pane label="缓存" name="cache">
+          <el-form label-width="150px">
+            <el-card shadow="never" class="config-card">
+              <template #header><div class="card-header">功能开关</div></template>
+              <el-form-item label="启用缓存">
+                <el-switch v-model="config.cache.enabled" />
+              </el-form-item>
+              <el-form-item label="启用缓存命中">
+                <el-switch v-model="config.cache.enable_cache_read" :disabled="!config.cache.enabled" />
+                <div class="form-tip">关闭后不走命中流程，直接转发上游</div>
+              </el-form-item>
+            </el-card>
+
+            <template v-if="config.cache.enabled">
+              <el-card shadow="never" class="config-card">
+                <template #header><div class="card-header">缓存写入</div></template>
+                <el-form-item label="写入模式">
+                  <el-radio-group v-model="cacheWriteMode">
+                    <el-radio value="normal">正常缓存（可命中）</el-radio>
+                    <el-radio value="save_only">仅保存（浏览用）</el-radio>
+                    <el-radio value="disabled">关闭写入</el-radio>
+                  </el-radio-group>
+                </el-form-item>
+              </el-card>
+
+              <el-card v-if="cacheWriteMode === 'normal'" shadow="never" class="config-card">
+                <template #header><div class="card-header">匹配策略</div></template>
+                <el-form-item label="缓存策略">
+                  <el-select v-model="config.cache.strategy" style="width: 220px">
+                    <el-option label="仅精确匹配" value="exact" />
+                    <el-option label="仅语义匹配" value="semantic" />
+                    <el-option label="混合策略" value="hybrid" />
+                  </el-select>
+                </el-form-item>
+                <el-form-item label="默认过期时间">
+                  <el-input-number v-model="config.cache.default_ttl" :min="0" :max="86400" style="width: 200px" />
+                  <span class="unit">秒</span>
+                  <div class="form-tip">0 表示永不过期</div>
+                </el-form-item>
+              </el-card>
+
+              <el-collapse v-if="cacheWriteMode === 'normal'" class="advanced-collapse">
+                <el-collapse-item title="高级：语义缓存与嵌入" name="semantic">
+                  <el-alert
+                    type="info"
+                    :closable="false"
+                    show-icon
+                    class="section-alert"
+                    title="与对话「生成温度」无关"
+                    description="语义命中阈值是向量相似度下限，不是大模型采样温度。"
+                  />
+                  <el-form-item label="自动向量化">
+                    <el-switch v-model="config.cache.semantic.enable_auto_embedding" />
+                  </el-form-item>
+                  <el-form-item label="语义命中阈值">
+                    <el-slider
+                      v-model="config.cache.semantic.threshold"
+                      :min="0"
+                      :max="1"
+                      :step="0.01"
+                      :format-tooltip="(val: number) => (val * 100).toFixed(0) + '%'"
+                      style="width: 280px"
+                    />
+                    <span class="slider-val">{{ (config.cache.semantic.threshold * 100).toFixed(0) }}%</span>
+                  </el-form-item>
+                  <el-form-item label="返回结果数">
+                    <el-input-number v-model="config.cache.semantic.top_k" :min="1" :max="10" style="width: 160px" />
+                  </el-form-item>
+                  <el-form-item label="距离算法">
+                    <el-select v-model="config.cache.semantic.distance_type" style="width: 200px">
+                      <el-option label="余弦相似度" value="cosine" />
+                      <el-option label="欧氏距离" value="euclidean" />
+                      <el-option label="点积" value="dot_product" />
+                    </el-select>
+                  </el-form-item>
+                  <el-divider content-position="left">嵌入模型</el-divider>
+                  <el-form-item label="启用嵌入">
+                    <el-switch v-model="config.embedding.enabled" />
+                  </el-form-item>
+                  <el-form-item label="嵌入后端">
+                    <el-select
+                      v-model="config.embedding.backend_id"
+                      style="width: 300px"
+                      :disabled="!config.embedding.enabled"
+                      placeholder="选择后端"
+                    >
+                      <el-option
+                        v-for="backend in enabledBackends"
+                        :key="backend.id"
+                        :label="`${backend.name} (${backend.type})`"
+                        :value="backend.id"
+                      />
+                    </el-select>
+                  </el-form-item>
+                  <el-form-item label="向量化模型">
+                    <el-select
+                      v-model="config.embedding.model"
+                      style="width: 300px"
+                      :disabled="!config.embedding.backend_id || !config.embedding.enabled"
+                      :loading="loadingEmbeddingModels"
+                      filterable
+                      allow-create
+                    >
+                      <el-option v-for="model in embeddingModels" :key="model" :label="model" :value="model" />
+                    </el-select>
+                  </el-form-item>
+                </el-collapse-item>
+
+                <el-collapse-item title="高级：容量与清理" name="capacity">
+                  <el-form-item label="最大缓存数">
+                    <el-input-number v-model="config.cache.max_cache_size" :min="0" :max="1000000" style="width: 200px" />
+                    <div class="form-tip">0 表示无限制</div>
+                  </el-form-item>
+                  <el-form-item label="清理间隔">
+                    <el-input-number v-model="config.cache.cleanup_interval" :min="0" :max="3600" style="width: 200px" />
+                    <span class="unit">秒</span>
+                  </el-form-item>
+                </el-collapse-item>
+
+                <el-collapse-item title="高级：输出拆分（实验）" name="qa_split">
+                  <el-form-item label="启用拆分">
+                    <el-switch v-model="config.qa_split.enabled" />
+                    <div class="form-tip">将 LLM 输出拆为 Q&A 对写入缓存（实验能力）</div>
+                  </el-form-item>
+                  <template v-if="config.qa_split.enabled">
+                    <el-form-item label="拆分后端">
+                      <el-select v-model="config.qa_split.backend_id" style="width: 300px">
+                        <el-option
+                          v-for="backend in enabledBackends"
+                          :key="backend.id"
+                          :label="`${backend.name} (${backend.type})`"
+                          :value="backend.id"
+                        />
+                      </el-select>
+                    </el-form-item>
+                    <el-form-item label="拆分模型">
+                      <el-select
+                        v-model="config.qa_split.model"
+                        style="width: 300px"
+                        :disabled="!config.qa_split.backend_id"
+                        :loading="loadingQAModels"
+                        filterable
+                        allow-create
+                      >
+                        <el-option v-for="model in qaModels" :key="model" :label="model" :value="model" />
+                      </el-select>
+                    </el-form-item>
+                  </template>
+                </el-collapse-item>
+              </el-collapse>
+            </template>
+
+            <p class="hint-line">
+              缓存条目监控请到
+              <el-link type="primary" @click="router.push('/cache')">更多 → 存储配置 → 缓存监控</el-link>
+            </p>
+          </el-form>
+        </el-tab-pane>
+
+        <!-- 韧性 -->
+        <el-tab-pane label="韧性" name="resilience">
+          <el-form label-width="140px">
+            <el-alert
+              type="warning"
+              :closable="false"
+              show-icon
+              class="section-alert"
+              title="与「降级策略」不同"
+              description="本页配置 HTTP 重试与熔断（代理韧性）。模型/后端链路的降级策略请到「更多 → 系统 → 降级策略」。"
+            />
+            <div class="link-cards" style="margin-bottom: 16px">
+              <el-card shadow="never" class="link-card" @click="router.push('/fallback-policies')">
+                <div class="link-title">打开降级策略</div>
+                <div class="link-desc">配置后端/模型失败时的链路切换</div>
+              </el-card>
+            </div>
+
+            <el-divider content-position="left">HTTP 重试</el-divider>
             <el-form-item label="可重试状态码">
               <el-select
                 v-model="config.proxy.retryable_status_codes"
@@ -61,462 +280,66 @@
                 style="width: 400px"
                 placeholder="如 429, 500, 502, 503, 504"
               >
-                <el-option v-for="code in [400,401,403,404,408,429,500,502,503,504]" :key="code" :label="code" :value="code" />
+                <el-option
+                  v-for="code in [400, 401, 403, 404, 408, 429, 500, 502, 503, 504]"
+                  :key="code"
+                  :label="String(code)"
+                  :value="code"
+                />
               </el-select>
-              <div class="form-tip">上游返回这些状态码时触发重试/降级（热生效）</div>
+              <div class="form-tip">上游返回这些状态码时触发重试（热生效）</div>
             </el-form-item>
-            <el-form-item label="超时触发降级">
+            <el-form-item label="超时可重试">
               <el-switch v-model="config.proxy.timeout_retryable" />
-              <div class="form-tip">上游超时时是否触发降级（热生效）</div>
             </el-form-item>
-            <el-form-item label="网络错误降级">
+            <el-form-item label="网络错误可重试">
               <el-switch v-model="config.proxy.network_retryable" />
-              <div class="form-tip">网络连接失败时是否触发降级（热生效）</div>
             </el-form-item>
 
             <el-divider content-position="left">熔断器</el-divider>
             <el-form-item label="失败阈值">
-              <el-input-number v-model="config.proxy.circuit_breaker.failure_threshold" :min="1" :max="20" style="width: 150px" />
-              <div class="form-tip">窗口内失败次数触发熔断（默认 3，热生效）</div>
+              <el-input-number
+                v-model="config.proxy.circuit_breaker.failure_threshold"
+                :min="1"
+                :max="20"
+                style="width: 150px"
+              />
             </el-form-item>
             <el-form-item label="恢复成功数">
-              <el-input-number v-model="config.proxy.circuit_breaker.success_threshold" :min="1" :max="10" style="width: 150px" />
-              <div class="form-tip">半开状态恢复所需成功次数（默认 2，热生效）</div>
+              <el-input-number
+                v-model="config.proxy.circuit_breaker.success_threshold"
+                :min="1"
+                :max="10"
+                style="width: 150px"
+              />
             </el-form-item>
             <el-form-item label="熔断持续时间">
-              <el-input-number v-model="config.proxy.circuit_breaker.timeout_sec" :min="10" :max="300" style="width: 150px" />
+              <el-input-number
+                v-model="config.proxy.circuit_breaker.timeout_sec"
+                :min="10"
+                :max="300"
+                style="width: 150px"
+              />
               <span class="unit">秒</span>
-              <div class="form-tip">熔断持续时间（默认 60s，热生效）</div>
             </el-form-item>
             <el-form-item label="滑动窗口">
-              <el-input-number v-model="config.proxy.circuit_breaker.window_sec" :min="10" :max="300" style="width: 150px" />
+              <el-input-number
+                v-model="config.proxy.circuit_breaker.window_sec"
+                :min="10"
+                :max="300"
+                style="width: 150px"
+              />
               <span class="unit">秒</span>
-              <div class="form-tip">失败计数窗口大小（默认 60s，热生效）</div>
             </el-form-item>
             <el-form-item label="429 加重系数">
-              <el-input-number v-model="config.proxy.circuit_breaker.rate_limit_weight" :min="1" :max="10" style="width: 150px" />
-              <div class="form-tip">1 次 429 计为 N 次失败（默认 2，热生效）</div>
-            </el-form-item>
-
-            <el-divider content-position="left">嵌入模型</el-divider>
-            <el-form-item label="启用嵌入">
-              <el-switch v-model="config.embedding.enabled" />
-              <div class="form-tip">是否启用文本嵌入功能（用于语义缓存）</div>
-            </el-form-item>
-            <el-form-item label="选择后端服务">
-              <el-select
-                v-model="config.embedding.backend_id"
-                style="width: 300px"
-                placeholder="请选择后端服务"
-                :disabled="!config.embedding.enabled"
-              >
-                <el-option
-                  v-for="backend in backends.filter(b => b.enabled)"
-                  :key="backend.id"
-                  :label="`${backend.name} (${backend.type})`"
-                  :value="backend.id"
-                />
-              </el-select>
-              <div class="form-tip">选择提供向量化服务的后端</div>
-            </el-form-item>
-            <el-form-item label="向量化模型">
-              <el-select
-                v-model="config.embedding.model"
-                style="width: 300px"
-                placeholder="请先选择后端服务"
-                :disabled="!config.embedding.backend_id || !config.embedding.enabled"
-                :loading="loadingEmbeddingModels"
-                filterable
-                allow-create
-              >
-                <el-option
-                  v-for="model in embeddingModels"
-                  :key="model"
-                  :label="model"
-                  :value="model"
-                />
-              </el-select>
-              <div class="form-tip">选择用于文本向量化的模型（支持手动输入）</div>
+              <el-input-number
+                v-model="config.proxy.circuit_breaker.rate_limit_weight"
+                :min="1"
+                :max="10"
+                style="width: 150px"
+              />
             </el-form-item>
           </el-form>
-        </el-tab-pane>
-
-        <!-- 输入配置 -->
-        <el-tab-pane label="输入配置" name="question_split">
-          <el-form label-width="170px">
-            <!-- 缓存命中开关 -->
-            <el-card shadow="never" class="config-card">
-              <template #header>
-                <div class="card-header">
-                  <span>缓存命中</span>
-                </div>
-              </template>
-              <el-form-item label="启用缓存命中">
-                <el-switch v-model="config.cache.enable_cache_read" :disabled="!config.cache.enabled" />
-                <div class="form-tip">关闭后完全不走缓存命中流程，直接转发请求到后端</div>
-              </el-form-item>
-            </el-card>
-
-            <!-- 问题拆分开关（依赖缓存命中开启） -->
-            <el-card v-if="config.cache.enable_cache_read && config.cache.enabled" shadow="never" class="config-card">
-              <template #header>
-                <div class="card-header">
-                  <span>问题拆分</span>
-                </div>
-              </template>
-              <el-form-item label="启用问题拆分">
-                <el-switch v-model="config.question_split.enabled" />
-                <div class="form-tip">对用户提问进行拆分，分别命中缓存，提升缓存利用率（默认关闭）</div>
-              </el-form-item>
-            </el-card>
-
-            <!-- 问题拆分配置子框 -->
-            <template v-if="config.cache.enable_cache_read && config.cache.enabled && config.question_split.enabled">
-              <el-card shadow="never" class="config-card">
-                <template #header>
-                  <div class="card-header">
-                    <span>拆分策略</span>
-                  </div>
-                </template>
-                <el-form-item label="快速规则拆分">
-                  <el-switch v-model="config.question_split.fast_split_enabled" />
-                  <div class="form-tip">使用纯算法（无 LLM）快速判断是否需要拆分，延迟 &lt;1ms</div>
-                </el-form-item>
-                <el-form-item label="模型辅助拆分">
-                  <el-switch v-model="config.question_split.llm_split_enabled" />
-                  <div class="form-tip">使用 LLM 进行更精准的语义拆分（需配置后端，可提升命中率）</div>
-                </el-form-item>
-                <el-form-item label="拆分策略">
-                  <el-select v-model="config.question_split.split_strategy" style="width: 200px" placeholder="选择策略">
-                    <el-option label="规则拆分（推荐）" value="rule" />
-                    <el-option label="模型拆分" value="llm" />
-                    <el-option label="混合（规则+模型）" value="hybrid" />
-                  </el-select>
-                  <div class="form-tip">rule=纯算法快速拆分，llm=模型拆分，hybrid=先规则后模型</div>
-                </el-form-item>
-                <el-form-item label="复杂度阈值">
-                  <el-slider v-model="config.question_split.complexity_threshold"
-                    :min="0" :max="1" :step="0.05"
-                    :format-tooltip="(val: number) => (val * 100).toFixed(0) + '%'"
-                    style="width: 300px"
-                  />
-                  <span style="margin-left:12px;color:#606266;">{{ (config.question_split.complexity_threshold * 100).toFixed(0) }}%</span>
-                  <div class="form-tip">问题复杂度超过此阈值才触发拆分（越低越容易拆分）</div>
-                </el-form-item>
-                <el-form-item label="最大子问题数">
-                  <el-input-number v-model="config.question_split.max_sub_questions"
-                    :min="2" :max="10" style="width: 200px" />
-                  <div class="form-tip">一次请求最多拆分的子问题数量</div>
-                </el-form-item>
-                <el-form-item label="兜底超时">
-                  <el-input-number v-model="config.question_split.timeout"
-                    :min="1" :max="30" style="width: 200px" />
-                  <span class="unit">秒</span>
-                  <div class="form-tip">拆分流程超时后自动降级为全量 LLM 请求</div>
-                </el-form-item>
-              </el-card>
-
-              <el-card v-if="config.question_split.llm_split_enabled" shadow="never" class="config-card">
-                <template #header>
-                  <div class="card-header">
-                    <span>模型辅助拆分后端</span>
-                  </div>
-                </template>
-                <el-form-item label="拆分后端服务">
-                  <el-select v-model="config.question_split.backend_id" style="width: 300px"
-                    placeholder="请选择后端服务">
-                    <el-option v-for="backend in backends.filter((b: any) => b.enabled)"
-                      :key="backend.id" :label="`${backend.name} (${backend.type})`" :value="backend.id" />
-                  </el-select>
-                  <div class="form-tip">提供模型拆分服务的后端</div>
-                </el-form-item>
-                <el-form-item label="拆分模型">
-                  <el-input v-model="config.question_split.model" style="width: 300px"
-                    placeholder="如 qwen2.5:1.5b" />
-                  <div class="form-tip">用于问题拆分的模型（建议使用轻量小模型）</div>
-                </el-form-item>
-              </el-card>
-
-              <el-card shadow="never" class="config-card">
-                <template #header>
-                  <div class="card-header">
-                    <span>答案整合策略</span>
-                  </div>
-                </template>
-                <el-form-item label="整合策略">
-                  <el-select v-model="config.question_split.synthesis_strategy" style="width: 200px" placeholder="选择策略">
-                    <el-option label="直接拼接（推荐）" value="concat" />
-                    <el-option label="模板整合" value="template" />
-                    <el-option label="模型整合" value="llm" />
-                  </el-select>
-                  <div class="form-tip">concat=直接拼接各子问题答案，template=模板整合，llm=模型整合</div>
-                </el-form-item>
-                <el-form-item label="合成后端服务" v-if="config.question_split.synthesis_strategy === 'llm'">
-                  <el-select v-model="config.question_split.synthesis_backend_id" style="width: 300px"
-                    placeholder="请选择后端服务">
-                    <el-option v-for="backend in backends.filter((b: any) => b.enabled)"
-                      :key="backend.id" :label="`${backend.name} (${backend.type})`" :value="backend.id" />
-                  </el-select>
-                  <div class="form-tip">提供答案合成服务的后端</div>
-                </el-form-item>
-                <el-form-item label="合成模型" v-if="config.question_split.synthesis_strategy === 'llm'">
-                  <el-input v-model="config.question_split.synthesis_model" style="width: 300px"
-                    placeholder="如 qwen2.5:1.5b" />
-                  <div class="form-tip">用于答案合成的模型</div>
-                </el-form-item>
-              </el-card>
-            </template>
-          </el-form>
-        </el-tab-pane>
-
-        <!-- 缓存配置 -->
-        <el-tab-pane label="缓存配置" name="cache">
-          <el-form label-width="150px">
-            <!-- 启用缓存开关 -->
-            <el-card shadow="never" class="config-card">
-              <template #header>
-                <div class="card-header">
-                  <span>功能开关</span>
-                </div>
-              </template>
-              <el-form-item label="启用缓存">
-                <el-switch v-model="config.cache.enabled" />
-                <div class="form-tip">是否启用缓存功能</div>
-              </el-form-item>
-            </el-card>
-
-            <template v-if="config.cache.enabled">
-              <!-- 缓存写入模式 -->
-              <el-card shadow="never" class="config-card">
-                <template #header>
-                  <div class="card-header">
-                    <span>缓存写入</span>
-                  </div>
-                </template>
-                <el-form-item label="缓存写入模式">
-                  <el-radio-group v-model="cacheWriteMode">
-                    <el-radio value="normal">
-                      <div>
-                        <div style="font-weight: 500;">正常缓存</div>
-                        <div style="font-size: 12px; color: #909399;">写入缓存，可命中、可拆分、向量化</div>
-                      </div>
-                    </el-radio>
-                    <el-radio value="save_only">
-                      <div>
-                        <div style="font-weight: 500;">仅保存</div>
-                        <div style="font-size: 12px; color: #909399;">只保存问答数据用于浏览，不参与缓存命中</div>
-                      </div>
-                    </el-radio>
-                    <el-radio value="disabled">
-                      <div>
-                        <div style="font-weight: 500;">关闭写入</div>
-                        <div style="font-size: 12px; color: #909399;">不写入任何缓存数据</div>
-                      </div>
-                    </el-radio>
-                  </el-radio-group>
-                </el-form-item>
-              </el-card>
-
-              <!-- 基本设置（仅正常缓存模式显示） -->
-              <template v-if="cacheWriteMode === 'normal'">
-                <el-card shadow="never" class="config-card">
-                  <template #header>
-                    <div class="card-header">
-                      <span>基本设置</span>
-                    </div>
-                  </template>
-                  <el-form-item label="缓存策略">
-                    <el-select v-model="config.cache.strategy" style="width: 200px" placeholder="选择策略">
-                      <el-option label="仅精确匹配" value="exact">
-                        <div>
-                          <div style="font-weight: 500;">仅精确匹配</div>
-                          <div style="font-size: 12px; color: #909399;">只匹配完全相同的请求</div>
-                        </div>
-                      </el-option>
-                      <el-option label="仅语义匹配" value="semantic">
-                        <div>
-                          <div style="font-weight: 500;">仅语义匹配</div>
-                          <div style="font-size: 12px; color: #909399;">按向量相似度匹配，阈值见下方「语义命中阈值」（非对话温度）</div>
-                        </div>
-                      </el-option>
-                      <el-option label="混合策略" value="hybrid">
-                        <div>
-                          <div style="font-weight: 500;">混合策略</div>
-                          <div style="font-size: 12px; color: #909399;">先尝试精确匹配，失败后尝试语义匹配</div>
-                        </div>
-                      </el-option>
-                    </el-select>
-                    <div class="form-tip">选择缓存匹配策略</div>
-                  </el-form-item>
-                  <el-form-item label="默认过期时间">
-                    <el-input-number v-model="config.cache.default_ttl" :min="0" :max="86400" style="width: 200px" />
-                    <span class="unit">秒</span>
-                    <div class="form-tip">缓存条目的默认过期时间（0表示永不过期）</div>
-                  </el-form-item>
-                  <el-form-item label="最大缓存数">
-                    <el-input-number v-model="config.cache.max_cache_size" :min="0" :max="1000000" style="width: 200px" />
-                    <div class="form-tip">最大缓存条目数（0表示无限制）</div>
-                  </el-form-item>
-                  <el-form-item label="清理间隔">
-                    <el-input-number v-model="config.cache.cleanup_interval" :min="0" :max="3600" style="width: 200px" />
-                    <span class="unit">秒</span>
-                    <div class="form-tip">过期缓存清理间隔（0表示不自动清理）</div>
-                  </el-form-item>
-                </el-card>
-
-                <!-- 语义缓存设置（仅正常缓存模式显示） -->
-                <el-card shadow="never" class="config-card">
-                  <template #header>
-                    <div class="card-header">
-                      <span>语义缓存设置</span>
-                    </div>
-                  </template>
-                  <el-alert
-                    type="info"
-                    :closable="false"
-                    show-icon
-                    class="semantic-cache-intro"
-                    title="与「对话里的生成温度」无关"
-                    description="此处配置的是：用户问题与缓存条目的向量相似度达到多少才算命中语义缓存。对话页中的「生成温度」是发给大模型的采样参数，二者不要混淆。"
-                  />
-                  <el-form-item label="自动向量化">
-                    <el-switch v-model="config.cache.semantic.enable_auto_embedding" />
-                    <div class="form-tip">是否自动生成向量（需要配置嵌入模型）</div>
-                  </el-form-item>
-                  <el-form-item label="语义命中阈值（相似度）">
-                    <el-slider
-                      v-model="config.cache.semantic.threshold"
-                      :min="0"
-                      :max="1"
-                      :step="0.01"
-                      :format-tooltip="(val) => (val * 100).toFixed(0) + '%'"
-                      style="width: 300px"
-                    />
-                    <span style="margin-left: 12px; color: #606266;">{{ (config.cache.semantic.threshold * 100).toFixed(0) }}%</span>
-                    <div class="form-tip">
-                      向量相似度下限：只有 ≥ 该值的候选才会视为语义缓存命中；越高越严格（常见 0.75～0.85）。
-                      <strong>不是</strong>大模型请求参数里的 temperature。
-                    </div>
-                  </el-form-item>
-              <el-form-item label="返回结果数">
-                <el-input-number v-model="config.cache.semantic.top_k" :min="1" :max="10" style="width: 200px" />
-                <div class="form-tip">语义搜索返回的最大结果数</div>
-              </el-form-item>
-              <el-form-item label="距离算法">
-                <el-select v-model="config.cache.semantic.distance_type" style="width: 200px" placeholder="选择算法">
-                  <el-option label="余弦相似度 (推荐)" value="cosine" />
-                  <el-option label="欧氏距离" value="euclidean" />
-                  <el-option label="点积" value="dot_product" />
-                </el-select>
-                <div class="form-tip">向量相似度计算方法</div>
-                </el-form-item>
-                </el-card>
-
-                <!-- 输出拆分设置（仅正常缓存模式显示） -->
-                <el-card shadow="never" class="config-card">
-                  <template #header>
-                    <div class="card-header">
-                      <span>输出拆分</span>
-                    </div>
-                  </template>
-                  <el-form-item label="启用拆分">
-                    <el-switch v-model="config.qa_split.enabled" />
-                    <div class="form-tip">是否启用问答自动拆分功能（将LLM输出拆分为Q&A对）</div>
-                  </el-form-item>
-                  <template v-if="config.qa_split.enabled">
-                    <el-form-item label="选择后端服务">
-                      <el-select
-                        v-model="config.qa_split.backend_id"
-                        style="width: 300px"
-                        placeholder="请选择后端服务"
-                      >
-                        <el-option
-                          v-for="backend in backends.filter(b => b.enabled)"
-                          :key="backend.id"
-                          :label="`${backend.name} (${backend.type})`"
-                          :value="backend.id"
-                        />
-                      </el-select>
-                    <div class="form-tip">选择提供拆分服务的后端</div>
-                  </el-form-item>
-                  <el-form-item label="拆分模型">
-                    <el-select
-                      v-model="config.qa_split.model"
-                      style="width: 300px"
-                      placeholder="请先选择后端服务"
-                      :disabled="!config.qa_split.backend_id"
-                      :loading="loadingQAModels"
-                      filterable
-                      allow-create
-                    >
-                      <el-option
-                        v-for="model in qaModels"
-                        :key="model"
-                        :label="model"
-                        :value="model"
-                      />
-                    </el-select>
-                    <div class="form-tip">选择用于问答拆分的模型（建议使用小模型，支持手动输入）</div>
-                  </el-form-item>
-                  <el-form-item label="拆分用生成温度">
-                    <el-input-number
-                      v-model="config.qa_split.temperature"
-                      :min="0"
-                      :max="2"
-                      :step="0.1"
-                      :precision="1"
-                      style="width: 200px"
-                    />
-                    <div class="form-tip">
-                      仅作用于问答拆分调用的小模型（0～2，越低越稳定）。与上方「语义命中阈值」及对话页「生成温度」是不同参数。
-                    </div>
-                  </el-form-item>
-                  <el-form-item label="最大 Token 数">
-                    <el-input-number v-model="config.qa_split.max_tokens" :min="100" :max="100000" style="width: 200px" />
-                    <div class="form-tip">单次生成的最大 Token 数量</div>
-                  </el-form-item>
-                  <el-form-item label="超时时间">
-                    <el-input-number v-model="config.qa_split.timeout" :min="10" :max="300" style="width: 200px" />
-                    <span class="unit">秒</span>
-                    <div class="form-tip">请求超时时间</div>
-                  </el-form-item>
-                  <el-form-item label="系统提示词">
-                    <el-input
-                      v-model="config.qa_split.prompt"
-                      type="textarea"
-                      :rows="8"
-                      placeholder="输入系统提示词..."
-                      style="width: 100%; font-family: monospace;"
-                    />
-                    <div class="form-tip" v-pre>
-                      拆分模型的系统提示词。可用变量：{{question}} - 原始问题，{{answer}} - 原始答案
-                    </div>
-                  </el-form-item>
-                </template>
-              </el-card>
-              </template>
-            </template>
-          </el-form>
-        </el-tab-pane>
-
-        <!-- 代理设置 -->
-        <el-tab-pane label="代理设置" name="proxy_settings">
-          <el-tabs type="border-card">
-            <!-- Host 代理 -->
-            <el-tab-pane label="Host代理（高级）">
-              <HostProxyView />
-            </el-tab-pane>
-
-            <!-- 系统代理 -->
-            <el-tab-pane label="本机代理出口（PAC）">
-              <SystemProxyView />
-            </el-tab-pane>
-
-            <!-- Clash订阅 -->
-            <el-tab-pane label="Clash订阅">
-              <ClashRulesView />
-            </el-tab-pane>
-          </el-tabs>
         </el-tab-pane>
       </el-tabs>
     </div>
@@ -525,17 +348,22 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch, nextTick } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Refresh, Check } from '@element-plus/icons-vue'
 import { getConfig, saveConfig, getBackends } from '@/api'
 import { getBackendModels } from '@/api/backend'
-import HostProxyView from './HostProxy.vue'
-import SystemProxyView from './SystemProxy.vue'
-import ClashRulesView from './ClashRules.vue'
+import { useEdition } from '@/composables/useEdition'
+import { useAuthStore } from '@/stores/auth'
+import { getCapabilities } from '@/utils/capabilities'
+
+const router = useRouter()
+const authStore = useAuthStore()
+const { edition } = useEdition()
 
 const loading = ref(false)
 const saving = ref(false)
-const activeTab = ref('server')
+const activeTab = ref('overview')
 const backends = ref<any[]>([])
 const embeddingModels = ref<string[]>([])
 const qaModels = ref<string[]>([])
@@ -543,8 +371,10 @@ const loadingEmbeddingModels = ref(false)
 const loadingQAModels = ref(false)
 const isInitialLoad = ref(false)
 
-const CONFIG_TABS = ['server', 'question_split', 'cache', 'proxy_settings']
-const isConfigTab = computed(() => CONFIG_TABS.includes(activeTab.value))
+const showSystemProxyLink = computed(
+  () => getCapabilities(edition.value, authStore.isAdmin).localProxy
+)
+const enabledBackends = computed(() => backends.value.filter((b: any) => b.enabled))
 
 /** 与后端 ProxyConfig.default_mode 一致；旧版页面曾使用 direct/cache/fallback */
 const PROXY_DEFAULT_MODES = ['direct-backend', 'smart-scheduling', 'transparent-proxy'] as const
@@ -598,6 +428,7 @@ const config = ref<any>({
     max_tokens: 2000,
     timeout: 120
   },
+  // 仍随 GET/PUT 完整读写，UI 已迁出（流水线节点侧配置）
   question_split: {
     enabled: false,
     fast_split_enabled: true,
@@ -637,7 +468,6 @@ const config = ref<any>({
   }
 })
 
-// 缓存写入模式（计算属性，用于 UI 显示）
 const cacheWriteMode = computed({
   get: () => {
     if (!config.value.cache.enabled) return 'disabled'
@@ -659,29 +489,33 @@ const cacheWriteMode = computed({
   }
 })
 
-// 监听 embedding backend_id 变化，加载对应的模型
-watch(() => config.value.embedding.backend_id, async (newBackendId, oldBackendId) => {
-  if (isInitialLoad.value) return
-  if (newBackendId && newBackendId !== oldBackendId) {
-    await loadEmbeddingModels(newBackendId)
-    config.value.embedding.model = ''
-  } else if (!newBackendId) {
-    embeddingModels.value = []
-    config.value.embedding.model = ''
+watch(
+  () => config.value.embedding.backend_id,
+  async (newBackendId, oldBackendId) => {
+    if (isInitialLoad.value) return
+    if (newBackendId && newBackendId !== oldBackendId) {
+      await loadEmbeddingModels(newBackendId)
+      config.value.embedding.model = ''
+    } else if (!newBackendId) {
+      embeddingModels.value = []
+      config.value.embedding.model = ''
+    }
   }
-})
+)
 
-// 监听 qa_split backend_id 变化，加载对应的模型
-watch(() => config.value.qa_split.backend_id, async (newBackendId, oldBackendId) => {
-  if (isInitialLoad.value) return
-  if (newBackendId && newBackendId !== oldBackendId) {
-    await loadQAModels(newBackendId)
-    config.value.qa_split.model = ''
-  } else if (!newBackendId) {
-    qaModels.value = []
-    config.value.qa_split.model = ''
+watch(
+  () => config.value.qa_split.backend_id,
+  async (newBackendId, oldBackendId) => {
+    if (isInitialLoad.value) return
+    if (newBackendId && newBackendId !== oldBackendId) {
+      await loadQAModels(newBackendId)
+      config.value.qa_split.model = ''
+    } else if (!newBackendId) {
+      qaModels.value = []
+      config.value.qa_split.model = ''
+    }
   }
-})
+)
 
 async function loadBackends() {
   try {
@@ -794,7 +628,7 @@ onMounted(async () => {
 }
 
 .config-tabs-wrapper {
-  max-width: 1800px;
+  max-width: 1100px;
   margin: 0 auto;
   padding: 0 var(--spacing-sm);
 }
@@ -803,12 +637,8 @@ onMounted(async () => {
   width: 100%;
 }
 
-.semantic-cache-intro {
+.section-alert {
   margin-bottom: 16px;
-}
-
-.semantic-cache-intro :deep(.el-alert__title) {
-  font-size: 0.85rem;
 }
 
 .form-tip {
@@ -822,6 +652,11 @@ onMounted(async () => {
   color: var(--color-gray-600);
 }
 
+.slider-val {
+  margin-left: 12px;
+  color: #606266;
+}
+
 :deep(.el-divider__text) {
   font-weight: 600;
   color: var(--color-gray-700);
@@ -830,6 +665,10 @@ onMounted(async () => {
 :deep(.el-tabs--border-card) {
   border: 1px solid var(--color-gray-200);
   box-shadow: none;
+}
+
+:deep(.el-tabs__content) {
+  padding: var(--spacing-lg);
 }
 
 .config-card {
@@ -851,23 +690,42 @@ onMounted(async () => {
   color: var(--color-gray-700);
 }
 
-:deep(.el-tabs__content) {
-  padding: var(--spacing-lg);
+.advanced-collapse {
+  margin-top: 8px;
+  border: none;
 }
 
-/* 嵌入子页面：隐藏其自身的页面标题区，保留功能区域 */
-:deep(.host-proxy .header-with-toolbar),
-:deep(.system-proxy .header-with-toolbar) {
-  display: none;
+.link-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
 }
 
-:deep(.host-proxy),
-:deep(.system-proxy) {
-  min-height: unset;
+.link-card {
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
-:deep(.clash-page) {
-  max-width: unset;
-  margin: 0;
+.link-card:hover {
+  border-color: var(--el-color-primary-light-5);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.link-title {
+  font-weight: 600;
+  color: var(--color-gray-800);
+  margin-bottom: 4px;
+}
+
+.link-desc {
+  font-size: 0.75rem;
+  color: var(--color-gray-500);
+  line-height: 1.4;
+}
+
+.hint-line {
+  margin-top: 12px;
+  font-size: 0.8rem;
+  color: var(--color-gray-500);
 }
 </style>

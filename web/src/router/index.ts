@@ -36,7 +36,6 @@ const PipelineModes = () => import('@/views/PipelineModes.vue')
 const PluginRegistry = () => import('@/views/plugin/PluginRegistry.vue')
 const AgentSetup = () => import('@/views/AgentSetup.vue')
 const StorageKVBrowser = () => import('@/views/StorageKVBrowser.vue')
-const Settings = () => import('@/views/Settings.vue')
 const FallbackPolicy = () => import('@/views/FallbackPolicy.vue')
 const routes = [
   // ── Public ────────────────────────────────────────────────────────────────
@@ -52,7 +51,8 @@ const routes = [
   { path: '/dashboard', name: 'Dashboard', component: Dashboard, meta: { title: '概览' } },
   { path: '/backends', name: 'Backends', component: Backends, meta: { title: '后端管理' } },
   { path: '/fallback-policies', name: 'FallbackPolicy', component: FallbackPolicy, meta: { title: '降级策略' } },
-  { path: '/settings', name: 'Settings', component: Settings, meta: { title: '设置' } },
+  // 旧 Minimal 设置页已废弃：改密/服务信息并入个人中心与首页
+  { path: '/settings', redirect: '/profile' },
   { path: '/cache', name: 'Cache', component: Cache, meta: { title: '缓存管理' } },
   { path: '/evaluation', name: 'Evaluation', component: Evaluation, meta: { title: '缓存评估管理' } },
   { path: '/chat', name: 'Chat', component: Chat, meta: { title: 'AI 对话' } },
