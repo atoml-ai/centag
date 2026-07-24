@@ -3,6 +3,7 @@ package pipeline
 import (
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"strings"
 )
 
@@ -170,6 +171,7 @@ func normalizeResponsesTools(tools interface{}) interface{} {
 
 // sanitizeChatCompletionsTools 清洗已是 chat/completions 形态的 body 中的 tools，
 // 把 flat/hosted 工具改成智谱等上游可接受的 nested function 形态。
+// 已是合法 nested 形态时保持原始字节，避免无谓重序列化破坏透传。
 func sanitizeChatCompletionsTools(body []byte) ([]byte, bool) {
 	if len(body) == 0 {
 		return body, false
@@ -183,13 +185,35 @@ func sanitizeChatCompletionsTools(body []byte) ([]byte, bool) {
 		return body, false
 	}
 	normalized := normalizeResponsesTools(tools)
+	normalizedEmpty := false
 	if arr, ok := normalized.([]interface{}); ok && len(arr) == 0 {
+		normalizedEmpty = true
+	}
+
+	var normalizedTC interface{}
+	tc, hasTC := raw["tool_choice"]
+	if hasTC && !normalizedEmpty {
+		normalizedTC = normalizeResponsesToolChoice(tc)
+	}
+
+	toolsChanged := !reflect.DeepEqual(tools, normalized)
+	tcChanged := hasTC && !normalizedEmpty && !reflect.DeepEqual(tc, normalizedTC)
+	if !toolsChanged && !tcChanged && !normalizedEmpty {
+		return body, false
+	}
+	// tools 全被丢弃（仅 hosted / 空 function）也算变更
+	if normalizedEmpty {
+		if !hasTools {
+			return body, false
+		}
 		delete(raw, "tools")
 		delete(raw, "tool_choice")
 	} else {
-		raw["tools"] = normalized
-		if tc, ok := raw["tool_choice"]; ok {
-			raw["tool_choice"] = normalizeResponsesToolChoice(tc)
+		if toolsChanged {
+			raw["tools"] = normalized
+		}
+		if tcChanged {
+			raw["tool_choice"] = normalizedTC
 		}
 	}
 	encoded, err := json.Marshal(raw)
