@@ -7,11 +7,11 @@
 #   CENTAG_RELEASE_PLATFORMS=linux-amd64,darwin-arm64 ./scripts/release/build-artifacts.sh
 #
 # Outputs under ~/.centag/var/release/<version>/ (default components):
-#   centag-personal-<goos>-<goarch>.tar.gz   # includes `centag wrap` subcommand
-#   checksums.txt
+#   centag-cli-<edition>-<goos>-<goarch>.tar.gz   # CLI form; includes `centag wrap`
+#   checksums.txt                                 # merged over all artifacts in OUT_DIR
 #
-# Optional (not in default GitHub Release): wrap / minimal / launcher via --components.
-# Process proxy for users: `centag wrap …` (no separate centag-wrap tarball required).
+# Does NOT wipe the whole OUT_DIR (desktop packages may coexist).
+# Optional: wrap / minimal / launcher via --components.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -55,8 +55,10 @@ fi
 VERSION="${VERSION#v}"
 
 OUT_DIR="${CENTAG_RELEASE_DIR}/${VERSION}"
-rm -rf "$OUT_DIR"
 mkdir -p "$OUT_DIR"
+# Only refresh our staging trees; never delete sibling desktop/other artifacts.
+rm -rf "${OUT_DIR}/.build" "${OUT_DIR}/.stage"
+mkdir -p "${OUT_DIR}/.build" "${OUT_DIR}/.stage"
 
 IFS=',' read -r -a COMP_ARR <<< "$COMPONENTS"
 IFS=',' read -r -a PLAT_ARR <<< "$PLATFORMS"
@@ -152,7 +154,7 @@ build_edition() {
   )
 
   stage_parent="${OUT_DIR}/.stage"
-  stage_name="centag-${edition}-${goos}-${goarch}"
+  stage_name="centag-cli-${edition}-${goos}-${goarch}"
   rm -rf "${stage_parent}/${stage_name}"
   mkdir -p "${stage_parent}/${stage_name}"
   cp -f "$out_bin" "${stage_parent}/${stage_name}/centag-${edition}${ext}"
@@ -189,7 +191,10 @@ build_edition() {
       "${stage_parent}/${stage_name}/config/profiles/${edition}/initdata/pipeline-templates/team"
   fi
 
-  tarball="${OUT_DIR}/centag-${edition}-${goos}-${goarch}.tar.gz"
+  tarball="${OUT_DIR}/centag-cli-${edition}-${goos}-${goarch}.tar.gz"
+  # Replace only this CLI artifact (do not touch desktop / other OS packages).
+  rm -f "$tarball" \
+    "${OUT_DIR}/centag-${edition}-${goos}-${goarch}.tar.gz"
   package_tar "$stage_parent" "$stage_name" "$tarball"
   log "OK ${tarball}"
 }
@@ -307,17 +312,30 @@ if [[ "$BUILD_LAUNCHER_TRAY" == "1" ]] || need_component launcher-tray; then
   build_launcher_tray_host
 fi
 
-# --- checksums ------------------------------------------------------------
-log "checksums.txt"
-: > "${OUT_DIR}/checksums.txt"
-(
-  cd "$OUT_DIR"
-  for f in centag-*.tar.gz; do
-    [[ -f "$f" ]] || continue
-    printf '%s  %s\n' "$(sha256_of "$f")" "$f" >> checksums.txt
-  done
-)
-cat "${OUT_DIR}/checksums.txt" >&2
+# --- checksums (merge all release artifacts in OUT_DIR) -------------------
+refresh_release_checksums() {
+  local dir="$1"
+  log "checksums.txt (all artifacts in ${dir})"
+  : > "${dir}/checksums.txt"
+  while IFS= read -r path; do
+    [[ -f "$path" ]] || continue
+    base="$(basename "$path")"
+    printf '%s  %s\n' "$(sha256_of "$path")" "$base" >> "${dir}/checksums.txt"
+  done < <(find "$dir" -maxdepth 1 -type f \( \
+    -name 'centag-cli-*.tar.gz' -o \
+    -name 'centag-desktop-*.dmg' -o \
+    -name 'centag-desktop-*.zip' -o \
+    -name 'centag-wrap-*.tar.gz' -o \
+    -name 'centag-launcher*.tar.gz' -o \
+    -name 'centag-personal-*.tar.gz' -o \
+    -name 'centag-minimal-*.tar.gz' -o \
+    -name 'Centag-*.dmg' -o \
+    -name 'Centag-*.zip' \
+  \) | sort)
+  cat "${dir}/checksums.txt" >&2
+}
+
+refresh_release_checksums "$OUT_DIR"
 
 # cleanup staging
 rm -rf "${OUT_DIR}/.build" "${OUT_DIR}/.stage"

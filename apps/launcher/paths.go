@@ -45,6 +45,19 @@ func resolveDataDir(cfg Config) (string, error) {
 	return dir, nil
 }
 
+// appBundleResourcesDir returns Contents/Resources when exe lives in Contents/MacOS.
+func appBundleResourcesDir(exe string) string {
+	macOSDir := filepath.Dir(exe)
+	if filepath.Base(macOSDir) != "MacOS" {
+		return ""
+	}
+	contents := filepath.Dir(macOSDir)
+	if filepath.Base(contents) != "Contents" {
+		return ""
+	}
+	return filepath.Join(contents, "Resources")
+}
+
 // resolveSidecarBinary finds the Centag binary without importing the core module.
 func resolveSidecarBinary(cfg Config) (string, error) {
 	if cfg.BinPath != "" {
@@ -58,6 +71,12 @@ func resolveSidecarBinary(cfg Config) (string, error) {
 	searchRoots := []string{}
 
 	if exe, err := os.Executable(); err == nil {
+		if resolved, err := filepath.EvalSymlinks(exe); err == nil {
+			exe = resolved
+		}
+		if res := appBundleResourcesDir(exe); res != "" {
+			searchRoots = append(searchRoots, res)
+		}
 		searchRoots = append(searchRoots, filepath.Dir(exe))
 	}
 	if wd, err := os.Getwd(); err == nil {
@@ -80,12 +99,21 @@ func resolveSidecarBinary(cfg Config) (string, error) {
 }
 
 func sidecarCandidateNames(edition Edition) []string {
+	var base []string
 	switch edition {
 	case EditionMinimal:
-		return []string{"centag-minimal", "centag"}
+		base = []string{"centag-minimal", "centag"}
 	default:
-		return []string{"centag-personal", "centag"}
+		base = []string{"centag-personal", "centag"}
 	}
+	if runtime.GOOS != "windows" {
+		return base
+	}
+	out := make([]string, 0, len(base)*2)
+	for _, n := range base {
+		out = append(out, n+".exe", n)
+	}
+	return out
 }
 
 func absExisting(path string) (string, error) {

@@ -3391,7 +3391,7 @@ show_short_help() {
     echo -e "  ${GREEN}docker${NC}   run   <minimal|personal|team> [--reset]  运行 Docker 容器"
     echo -e "  ${GREEN}clean${NC}    [build|install|all] [-y] 清理构建产物 / 已部署文件（~/.centag）"
     echo -e "  ${GREEN}pack${NC}     [--upload]              打包服务端更新包"
-    echo -e "  ${GREEN}package${NC}  <fnos|...> [选项]       第三方系统/渠道打包（见 packaging.env）"
+    echo -e "  ${GREEN}package${NC}  <cli|desktop> <os> [arch]   部署包（形态×系统×架构；list 看矩阵）"
     echo -e "  ${GREEN}test${NC}                             运行单元测试"
     echo ""
 
@@ -3811,24 +3811,30 @@ _help_pack() {
 
 _help_package() {
     echo -e "${GREEN}命令: package${NC}"
-    echo -e "       ${YELLOW}第三方系统 / 渠道打包（fnOS 等）${NC}"
+    echo -e "       ${YELLOW}部署包 = 形态 × 系统 × 架构${NC}"
     echo ""
     echo -e "${CYAN}用法:${NC}"
     echo -e "  ./start.sh package list"
-    echo -e "  ./start.sh package <target> [选项...]"
+    echo -e "  ./start.sh package <form> <os> [arch] [选项...]"
+    echo ""
+    echo -e "${CYAN}维度:${NC}"
+    echo -e "  form  ${GREEN}cli${NC} | ${GREEN}desktop${NC}     （同一维度：命令行 / 桌面；桌面含托盘，不再叫 tray）"
+    echo -e "  os    ${GREEN}macos${NC} | ${GREEN}linux${NC} | ${GREEN}windows${NC} | ${GREEN}fnos${NC} | ${GREEN}docker${NC}"
+    echo -e "  arch  ${GREEN}amd64${NC} | ${GREEN}arm64${NC} | ${GREEN}host${NC} | ${GREEN}all${NC}   （可省略）"
     echo ""
     echo -e "${CYAN}说明:${NC}"
-    echo -e "  委托 scripts/packaging/package.sh；默认参数见根目录 packaging.env。"
-    echo -e "  与 ${GREEN}pack${NC}（服务端热更新包）不同：本命令面向 NAS / 离线镜像等渠道产物。"
-    echo -e "  fnOS 默认发行版 ${GREEN}minimal${NC}；可用 --edition personal|team。"
-    echo -e "  管理员密码：--admin-password > PACKAGE_ADMIN_PASSWORD > config/secrets/.env"
+    echo -e "  与 ${GREEN}pack${NC}（服务端热更新）不同。"
+    echo -e "  desktop 仅 macos/windows（须本机对应系统）；linux/fnos/docker 用 cli。"
+    echo -e "  install.sh 发布集 = desktop(macos)+desktop(windows)+cli(linux)。"
     echo ""
     echo -e "${CYAN}示例:${NC}"
+    echo -e "  ./start.sh package desktop macos --skip-frontend"
+    echo -e "  ./start.sh package desktop windows"
+    echo -e "  ./start.sh package cli linux"
+    echo -e "  ./start.sh package cli linux amd64"
+    echo -e "  ./start.sh package cli fnos amd64 --edition personal"
+    echo -e "  ./start.sh package cli docker"
     echo -e "  ./start.sh package list"
-    echo -e "  ./start.sh package fnos --mode native --arch amd64"
-    echo -e "  ./start.sh package fnos --edition personal --arch amd64"
-    echo -e "  ./start.sh package fnos --edition minimal --admin-password 'your-password'"
-    echo -e "  ./start.sh package docker-offline"
 }
 
 _help_test() {
@@ -4916,11 +4922,11 @@ main() {
             pack "$@"
             ;;
 
-        # ── 第三方系统 / 渠道打包（fnOS 等）────────────────────────────
+        # ── 部署包统一入口（桌面 / GitHub / CLI / fnOS / Docker）────────
         package)
             local package_script="${PROJECT_ROOT}/scripts/packaging/package.sh"
             if [ ! -f "$package_script" ]; then
-                print_error "渠道打包入口不存在: $package_script"
+                print_error "打包入口不存在: $package_script"
                 exit 1
             fi
             bash "$package_script" "$@"

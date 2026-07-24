@@ -14,11 +14,14 @@
 #   Piped bash is a child process; it cannot change your interactive shell PATH.
 #   Chain: … | bash && . ~/.centag/env
 #
-# Default (no args): personal CLI (includes `centag wrap` subcommand)
-# Asset convention (GitHub Releases, tag v<version>):
-#   centag-personal-<goos>-<goarch>.tar.gz
+# Default (no args): personal from GitHub Release (install.sh channel).
+# Asset convention (tag v<version>):
+#   Linux:   centag-cli-personal-linux-<arch>.tar.gz
+#   macOS:   centag-desktop-personal-macos-<arch>.zip  (.dmg also on Release)
+#   Windows: centag-desktop-personal-windows-<arch>.zip
 #   checksums.txt
-# Optional/legacy: wrap tarball still installable with `bash -s wrap` if present on a release.
+# npm channel is separate (CLI on all platforms).
+# Optional/legacy: wrap tarball / old centag-personal-* / Centag-* names still tried.
 #
 # Ordinary installs download Release assets only. Source builds require --from-source.
 set -euo pipefail
@@ -238,7 +241,39 @@ resolve_version() {
 
 asset_name() {
   # $1 = component (personal|wrap)
-  echo "centag-${1}-${PLATFORM_KEY}.tar.gz"
+  local component="$1"
+  case "$component" in
+    personal)
+      case "$GOOS" in
+        darwin) echo "centag-desktop-personal-macos-${GOARCH}.zip" ;;
+        windows) echo "centag-desktop-personal-windows-${GOARCH}.zip" ;;
+        *) echo "centag-cli-personal-${PLATFORM_KEY}.tar.gz" ;;
+      esac
+      ;;
+    *)
+      echo "centag-${component}-${PLATFORM_KEY}.tar.gz"
+      ;;
+  esac
+}
+
+# Older Release asset names (fallback download order after primary).
+asset_name_fallbacks() {
+  local component="$1"
+  case "$component" in
+    personal)
+      case "$GOOS" in
+        darwin)
+          echo "Centag-${VERSION}-macos-${GOARCH}.zip"
+          ;;
+        windows)
+          echo "Centag-${VERSION}-windows-${GOARCH}.zip"
+          ;;
+        *)
+          echo "centag-personal-${PLATFORM_KEY}.tar.gz"
+          ;;
+      esac
+      ;;
+  esac
 }
 
 download() {
@@ -267,9 +302,31 @@ verify_checksum() {
 
 write_wrapper_centag() {
   local target_edition="$1"
+  local desktop_mode="${2:-0}"
   if [[ "$GOOS" == "windows" ]]; then
     local cmd="${BIN_DIR}/centag.cmd"
-    cat > "$cmd" <<EOF
+    if [[ "$desktop_mode" == "1" ]]; then
+      cat > "$cmd" <<EOF
+@echo off
+set ROOT=%~dp0..
+set EDITION=${target_edition}
+set LIB=%ROOT%\\lib\\%EDITION%
+set BIN=%LIB%\\centag-%EDITION%.exe
+set TRAY=%ROOT%\\Centag\\Centag.exe
+set CENTAG_EDITION=%EDITION%
+if "%STATIC_PATH%"=="" set STATIC_PATH=%LIB%\\static
+if "%PROJECT_ROOT%"=="" set PROJECT_ROOT=%LIB%
+if exist "%LIB%\\config\\profiles\\%EDITION%\\initdata" if "%INITDATA_PATH%"=="" set INITDATA_PATH=%LIB%\\config\\profiles\\%EDITION%\\initdata
+if "%~1"=="" (
+  if exist "%TRAY%" (
+    start "" "%TRAY%"
+    exit /b 0
+  )
+)
+"%BIN%" %*
+EOF
+    else
+      cat > "$cmd" <<EOF
 @echo off
 set ROOT=%~dp0..
 set EDITION=${target_edition}
@@ -281,11 +338,36 @@ if "%PROJECT_ROOT%"=="" set PROJECT_ROOT=%LIB%
 if exist "%LIB%\\config\\profiles\\%EDITION%\\initdata" if "%INITDATA_PATH%"=="" set INITDATA_PATH=%LIB%\\config\\profiles\\%EDITION%\\initdata
 "%BIN%" %*
 EOF
+    fi
     return 0
   fi
 
   local wrapper="${BIN_DIR}/centag"
-  cat > "$wrapper" <<EOF
+  if [[ "$desktop_mode" == "1" ]]; then
+    cat > "$wrapper" <<EOF
+#!/usr/bin/env bash
+set -euo pipefail
+ROOT="\$(cd "\$(dirname "\$0")/.." && pwd)"
+EDITION="${target_edition}"
+LIB="\$ROOT/lib/\$EDITION"
+BIN="\$LIB/centag-\${EDITION}"
+APP="\$ROOT/Centag.app"
+export CENTAG_EDITION="\$EDITION"
+export STATIC_PATH="\${STATIC_PATH:-\$LIB/static}"
+export PROJECT_ROOT="\${PROJECT_ROOT:-\$LIB}"
+if [[ -d "\$LIB/config/profiles/\$EDITION/initdata" ]]; then
+  export INITDATA_PATH="\${INITDATA_PATH:-\$LIB/config/profiles/\$EDITION/initdata}"
+fi
+# No args → open tray desktop app; args (e.g. wrap) → CLI sidecar.
+if [[ \$# -eq 0 && -d "\$APP" ]]; then
+  open "\$APP"
+  exit 0
+fi
+[[ -x "\$BIN" ]] || { echo "missing \$BIN" >&2; exit 1; }
+exec "\$BIN" "\$@"
+EOF
+  else
+    cat > "$wrapper" <<EOF
 #!/usr/bin/env bash
 set -euo pipefail
 ROOT="\$(cd "\$(dirname "\$0")/.." && pwd)"
@@ -302,17 +384,99 @@ fi
 [[ -x "\$BIN" ]] || { echo "missing \$BIN" >&2; exit 1; }
 exec "\$BIN" "\$@"
 EOF
+  fi
   chmod 755 "$wrapper"
+}
+
+# Copy sidecar tree (binary + static + config) into lib/<edition>/.
+install_sidecar_tree_into_lib() {
+  local component="$1"
+  local stage="$2"
+  mkdir -p "${LIB_DIR}/${component}"
+  if [[ -f "${stage}/centag-${component}${EXT}" ]]; then
+    cp -f "${stage}/centag-${component}${EXT}" "${LIB_DIR}/${component}/"
+  else
+    local found
+    found="$(find "$stage" -type f -name "centag-${component}${EXT}" | head -1 || true)"
+    [[ -n "$found" ]] || fail "archive missing centag-${component}${EXT}"
+    cp -f "$found" "${LIB_DIR}/${component}/"
+  fi
+  chmod 755 "${LIB_DIR}/${component}/centag-${component}${EXT}"
+  if [[ -d "${stage}/static" ]]; then
+    rm -rf "${LIB_DIR}/${component}/static"
+    cp -R "${stage}/static" "${LIB_DIR}/${component}/static"
+  fi
+  if [[ -d "${stage}/config" ]]; then
+    rm -rf "${LIB_DIR}/${component}/config"
+    cp -R "${stage}/config" "${LIB_DIR}/${component}/config"
+  fi
+  ln -sfn "${LIB_DIR}/${component}/centag-${component}${EXT}" "${BIN_DIR}/centag-${component}${EXT}"
+}
+
+install_personal_desktop_zip() {
+  local asset="$1"
+  local tmp="$2"
+  local component="personal"
+
+  need_cmd unzip
+  info "Extracting desktop package ${asset} ..."
+  unzip -q "${tmp}/${asset}" -d "$tmp"
+
+  mkdir -p "$BIN_DIR" "$LIB_DIR"
+
+  if [[ "$GOOS" == "darwin" ]]; then
+    local app
+    app="$(find "$tmp" -maxdepth 3 -type d -name 'Centag.app' | head -1 || true)"
+    [[ -n "$app" ]] || fail "desktop zip missing Centag.app"
+    rm -rf "${INSTALL_ROOT}/Centag.app"
+    cp -R "$app" "${INSTALL_ROOT}/Centag.app"
+    # Prefer user Applications for drag-like UX without sudo.
+    mkdir -p "${HOME}/Applications"
+    rm -rf "${HOME}/Applications/Centag.app"
+    cp -R "${INSTALL_ROOT}/Centag.app" "${HOME}/Applications/Centag.app"
+    install_sidecar_tree_into_lib "$component" "${INSTALL_ROOT}/Centag.app/Contents/Resources"
+    write_wrapper_centag "$component" 1
+    log "${GREEN}OK${NC} personal desktop → ${INSTALL_ROOT}/Centag.app (also ~/Applications)"
+    return 0
+  fi
+
+  if [[ "$GOOS" == "windows" ]]; then
+    local stage
+    stage="$(find "$tmp" -maxdepth 2 -type d -name 'Centag' | head -1 || true)"
+    [[ -n "$stage" ]] || stage="$(find "$tmp" -maxdepth 1 -type d ! -path "$tmp" | head -1 || true)"
+    [[ -n "$stage" ]] || fail "windows zip missing Centag/ directory"
+    rm -rf "${INSTALL_ROOT}/Centag"
+    mkdir -p "${INSTALL_ROOT}/Centag"
+    cp -R "${stage}/." "${INSTALL_ROOT}/Centag/"
+    install_sidecar_tree_into_lib "$component" "${INSTALL_ROOT}/Centag"
+    write_wrapper_centag "$component" 1
+    log "${GREEN}OK${NC} personal desktop → ${INSTALL_ROOT}/Centag/Centag.exe"
+    return 0
+  fi
+
+  fail "desktop zip install unsupported on ${GOOS}"
 }
 
 install_component_from_archive() {
   local component="$1"
-  local asset tmp
+  local asset tmp candidates=() c
   asset="$(asset_name "$component")"
-  tmp="$(mktemp -d)"
+  candidates=("$asset")
+  while IFS= read -r c; do
+    [[ -n "$c" ]] && candidates+=("$c")
+  done < <(asset_name_fallbacks "$component")
 
-  info "Downloading ${asset} ..."
-  if ! download "${BASE_URL}/${asset}" "${tmp}/${asset}"; then
+  tmp="$(mktemp -d)"
+  asset=""
+  for c in "${candidates[@]}"; do
+    info "Downloading ${c} ..."
+    if download "${BASE_URL}/${c}" "${tmp}/${c}"; then
+      asset="$c"
+      break
+    fi
+    warn "not found: ${c}"
+  done
+  if [[ -z "$asset" ]]; then
     rm -rf "$tmp"
     return 1
   fi
@@ -324,6 +488,14 @@ install_component_from_archive() {
   fi
 
   mkdir -p "$BIN_DIR" "$LIB_DIR"
+
+  # Desktop zip (macOS / Windows) for personal.
+  if [[ "$component" == "personal" && ( "$GOOS" == "darwin" || "$GOOS" == "windows" ) ]]; then
+    install_personal_desktop_zip "$asset" "$tmp"
+    rm -rf "$tmp"
+    return 0
+  fi
+
   # macOS-built archives may carry Apple xattrs; GNU tar warns loudly but still extracts.
   local tar_err="${tmp}/tar.err"
   if tar --help 2>&1 | grep -q 'warning=no-unknown-keyword'; then
@@ -342,36 +514,11 @@ install_component_from_archive() {
 
   case "$component" in
     personal)
-      mkdir -p "${LIB_DIR}/${component}"
-      # archive root: centag-<component>-<platform>/...
       local stage
-      stage="$(find "$tmp" -maxdepth 1 -type d -name "centag-${component}-*" | head -1)"
+      stage="$(find "$tmp" -maxdepth 1 -type d \( -name "centag-cli-${component}-*" -o -name "centag-${component}-*" \) | head -1)"
       [[ -n "$stage" ]] || stage="$tmp"
-      if [[ -f "${stage}/centag-${component}${EXT}" ]]; then
-        cp -f "${stage}/centag-${component}${EXT}" "${LIB_DIR}/${component}/"
-      elif [[ -f "${tmp}/centag-${component}${EXT}" ]]; then
-        cp -f "${tmp}/centag-${component}${EXT}" "${LIB_DIR}/${component}/"
-      else
-        local found
-        found="$(find "$tmp" -type f -name "centag-${component}${EXT}" | head -1 || true)"
-        [[ -n "$found" ]] || fail "archive missing centag-${component}${EXT}"
-        cp -f "$found" "${LIB_DIR}/${component}/"
-      fi
-      chmod 755 "${LIB_DIR}/${component}/centag-${component}${EXT}"
-      if [[ -d "${stage}/static" ]]; then
-        rm -rf "${LIB_DIR}/${component}/static"
-        cp -R "${stage}/static" "${LIB_DIR}/${component}/static"
-      elif [[ -d "${tmp}/static" ]]; then
-        rm -rf "${LIB_DIR}/${component}/static"
-        cp -R "${tmp}/static" "${LIB_DIR}/${component}/static"
-      fi
-      # Pipeline / backend seed (config/initdata + profile overlay)
-      if [[ -d "${stage}/config" ]]; then
-        rm -rf "${LIB_DIR}/${component}/config"
-        cp -R "${stage}/config" "${LIB_DIR}/${component}/config"
-      fi
-      ln -sfn "${LIB_DIR}/${component}/centag-${component}${EXT}" "${BIN_DIR}/centag-${component}${EXT}"
-      write_wrapper_centag "$component"
+      install_sidecar_tree_into_lib "$component" "$stage"
+      write_wrapper_centag "$component" 0
       ;;
     wrap)
       local binname="centag-wrap${EXT}"
@@ -618,15 +765,31 @@ print_next_steps() {
   echo "  # or open a new terminal"
   echo ""
   if [[ "$has_personal" == true ]]; then
-    log "${MUTED}# Start the gateway (http://127.0.0.1:20060):${NC}"
-    echo "  centag"
-    echo "  # absolute path (works before sourcing PATH):"
-    echo "  ${BIN_DIR}/centag"
-    echo ""
-    log "${MUTED}# Process proxy for third-party CLIs (subcommand; does not start the gateway):${NC}"
-    echo "  centag wrap doctor"
-    echo "  centag wrap run -- opencode"
-    echo ""
+    case "$GOOS" in
+      darwin|windows)
+        log "${MUTED}# Start tray desktop (no args). CLI / wrap still work with args:${NC}"
+        echo "  centag"
+        if [[ "$GOOS" == "darwin" ]]; then
+          echo "  open \"${INSTALL_ROOT}/Centag.app\""
+          echo "  # also installed to ~/Applications/Centag.app"
+        else
+          echo "  # or double-click ${INSTALL_ROOT}/Centag/Centag.exe"
+        fi
+        echo "  centag wrap doctor"
+        echo ""
+        ;;
+      *)
+        log "${MUTED}# Start the gateway CLI (http://127.0.0.1:20060):${NC}"
+        echo "  centag"
+        echo "  # absolute path (works before sourcing PATH):"
+        echo "  ${BIN_DIR}/centag"
+        echo ""
+        log "${MUTED}# Process proxy for third-party CLIs (subcommand; does not start the gateway):${NC}"
+        echo "  centag wrap doctor"
+        echo "  centag wrap run -- opencode"
+        echo ""
+        ;;
+    esac
   fi
   if [[ "$has_wrap" == true ]]; then
     log "${MUTED}# Legacy standalone wrap binary (prefer: centag wrap …):${NC}"

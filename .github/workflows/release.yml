@@ -46,10 +46,8 @@ jobs:
       - name: Require version branch
         run: bash scripts/release/require-release-branch.sh --ci --version "${{ steps.ver.outputs.version }}"
 
-  # Default release set: personal CLI only (includes `centag wrap` subcommand).
-  # build-artifacts writes under $CENTAG_INSTALL_ROOT/var/release/<ver>/
-  # (same layout as local ~/.centag; CI pins INSTALL_ROOT into the workspace).
-  binaries:
+  # GitHub / install.sh: Linux CLI (cross-compile on ubuntu).
+  github-linux-cli:
     needs: [guard-branch]
     runs-on: ubuntu-latest
     env:
@@ -67,21 +65,93 @@ jobs:
           cache: npm
           cache-dependency-path: web/package-lock.json
 
-      - name: Build personal
+      - name: Build Linux CLI
         run: |
           bash scripts/release/build-artifacts.sh \
             --version "${{ needs.guard-branch.outputs.version }}" \
-            --components personal
+            --components personal \
+            --platforms linux-amd64,linux-arm64
 
-      - name: Upload artifact bundle
+      - name: Upload Linux artifacts
         uses: actions/upload-artifact@v5
         with:
-          name: centag-binaries-${{ needs.guard-branch.outputs.version }}
+          name: github-linux-${{ needs.guard-branch.outputs.version }}
+          path: .centag/var/release/${{ needs.guard-branch.outputs.version }}/
+          if-no-files-found: error
+
+  # GitHub / install.sh: macOS tray desktop (native CGO).
+  github-macos-desktop:
+    needs: [guard-branch]
+    runs-on: macos-14
+    env:
+      CENTAG_INSTALL_ROOT: ${{ github.workspace }}/.centag
+      GOPROXY: https://proxy.golang.org,direct
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Build macOS desktop (tray)
+        run: |
+          bash scripts/release/package-desktop.sh \
+            --version "${{ needs.guard-branch.outputs.version }}" \
+            --edition personal
+
+      - name: Upload macOS artifacts
+        uses: actions/upload-artifact@v5
+        with:
+          name: github-macos-${{ needs.guard-branch.outputs.version }}
+          path: .centag/var/release/${{ needs.guard-branch.outputs.version }}/
+          if-no-files-found: error
+
+  # GitHub / install.sh: Windows tray desktop (native CGO).
+  github-windows-desktop:
+    needs: [guard-branch]
+    runs-on: windows-latest
+    env:
+      CENTAG_INSTALL_ROOT: ${{ github.workspace }}/.centag
+      GOPROXY: https://proxy.golang.org,direct
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install zip
+        shell: bash
+        run: choco install zip -y || true
+
+      - name: Build Windows desktop (tray)
+        shell: bash
+        run: |
+          bash scripts/release/package-desktop.sh \
+            --version "${{ needs.guard-branch.outputs.version }}" \
+            --edition personal
+
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v5
+        with:
+          name: github-windows-${{ needs.guard-branch.outputs.version }}
           path: .centag/var/release/${{ needs.guard-branch.outputs.version }}/
           if-no-files-found: error
 
   publish:
-    needs: [guard-branch, binaries]
+    needs: [guard-branch, github-linux-cli, github-macos-desktop, github-windows-desktop]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -100,14 +170,21 @@ jobs:
         id: assets
         run: |
           V="${{ steps.ver.outputs.version }}"
-          # Staging dir for gh release upload (not the install-root layout).
           OUT="release-assets/${V}"
           mkdir -p "$OUT"
-          find release-staging -type f \( -name 'centag-*.tar.gz' -o -name 'checksums.txt' \) -exec cp -f {} "$OUT/" \;
+          find release-staging -type f \( \
+            -name 'centag-cli-*-linux-*.tar.gz' -o \
+            -name 'centag-desktop-*.dmg' -o \
+            -name 'centag-desktop-*.zip' -o \
+            -name 'centag-personal-linux-*.tar.gz' -o \
+            -name 'Centag-*.dmg' -o \
+            -name 'Centag-*.zip' \
+          \) -exec cp -f {} "$OUT/" \;
           : > "$OUT/checksums.txt"
           (
             cd "$OUT"
-            for f in centag-*.tar.gz; do
+            for f in centag-cli-*-linux-*.tar.gz centag-desktop-*.dmg centag-desktop-*.zip \
+                     centag-personal-linux-*.tar.gz Centag-*.dmg Centag-*.zip; do
               [[ -f "$f" ]] || continue
               printf '%s  %s\n' "$(sha256sum "$f" | awk '{print $1}')" "$f" >> checksums.txt
             done
@@ -131,7 +208,6 @@ jobs:
             DRAFT_FLAG=""
           fi
 
-          # Keep all lines indented under `run: |` — unindented heredoc breaks YAML parsing.
           NOTES_FILE="$(mktemp)"
           {
             echo "## Centag ${TAG}"
@@ -139,60 +215,42 @@ jobs:
             echo "### Install"
             echo ""
             echo '```bash'
-            echo "# npm (recommended for Node.js developers)"
-            echo "npm install -g centag"
-            echo ""
-            echo "# curl (one-line installer)"
+            echo "# GitHub / install.sh — macOS&Windows tray desktop; Linux CLI"
             echo "curl -fsSL https://raw.githubusercontent.com/${REPO}/${TAG}/scripts/install.sh | bash -s ${V} && . \"\$HOME/.centag/env\""
-            echo '```'
             echo ""
-            echo "Default install root: \`~/.centag\`. Chain \`. ~/.centag/env\` so PATH applies in this shell."
-            echo "Release ships **personal** only — process proxy is \`centag wrap …\` (no separate wrap tarball)."
-            echo ""
-            echo "### Default login (first run)"
-            echo ""
-            echo "- Username: \`admin\`"
-            echo "- Password: \`centag123\`"
-            echo "  (override with \`LLM_PROXY_ADMIN_PASSWORD\` before first start)"
-            echo ""
-            echo "### Wrap / process proxy (API key)"
-            echo ""
-            echo "\`centag wrap\` does not start the gateway. When setup/status returns 401:"
-            echo ""
-            echo '```bash'
-            echo "export CENTAG_WRAP_TOKEN='your_api_key'"
-            echo "centag wrap doctor"
-            echo "centag wrap run -- opencode"
-            echo '```'
-            echo ""
-            echo "### Uninstall"
-            echo ""
-            echo "No dedicated uninstall command yet — remove manually:"
-            echo ""
-            echo '```bash'
-            echo 'centag wrap disable 2>/dev/null || true'
-            echo "pkill -f 'centag-personal|/\\.centag/bin/centag' 2>/dev/null || true"
-            echo 'rm -rf "${HOME}/.centag"'
-            echo '# Also remove PATH line from ~/.zshrc / ~/.bashrc if present:'
-            echo '#   export PATH="$HOME/.centag/bin:$PATH"'
+            echo "# npm — CLI on all platforms"
+            echo "npm install -g centag"
             echo '```'
             echo ""
             echo "### Artifacts"
             echo ""
-            echo "- \`centag-personal-<goos>-<goarch>.tar.gz\` — personal CLI + WebUI static (\`centag\` / \`centag wrap\`)"
+            echo "- \`centag-desktop-personal-macos-<arch>.dmg\` / \`.zip\` — macOS desktop"
+            echo "- \`centag-desktop-personal-windows-<arch>.zip\` — Windows desktop"
+            echo "- \`centag-cli-personal-linux-<arch>.tar.gz\` — Linux CLI"
             echo "- \`checksums.txt\` — SHA-256 sums"
           } > "$NOTES_FILE"
 
+          UPLOAD=( )
+          while IFS= read -r f; do
+            UPLOAD+=("$f")
+          done < <(find "$OUT" -maxdepth 1 -type f \( \
+            -name 'centag-cli-*-linux-*.tar.gz' -o \
+            -name 'centag-desktop-*.dmg' -o \
+            -name 'centag-desktop-*.zip' -o \
+            -name 'checksums.txt' \
+          \) | sort)
+
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" "$OUT"/centag-*.tar.gz "$OUT"/checksums.txt --clobber
+            gh release upload "$TAG" "${UPLOAD[@]}" --clobber
           else
             # shellcheck disable=SC2086
             gh release create "$TAG" $DRAFT_FLAG \
               --title "Centag ${V}" \
               --notes-file "$NOTES_FILE" \
-              "$OUT"/centag-*.tar.gz "$OUT"/checksums.txt
+              "${UPLOAD[@]}"
           fi
 
+  # npm channel: unchanged — CLI for all platforms (separate from GitHub desktop).
   npm-publish:
     needs: [guard-branch, publish]
     runs-on: ubuntu-latest
@@ -223,7 +281,7 @@ jobs:
           VENDOR_DIR="${NPM_DIR}/bin/vendor"
           mkdir -p "${VENDOR_DIR}"
 
-          # Cross-compile binaries for all platforms
+          # Cross-compile CLI binaries for all platforms (npm channel)
           PLATFORMS="darwin-amd64 darwin-arm64 linux-amd64 linux-arm64 windows-amd64 windows-arm64"
           TAGS="protocol_openai,protocol_anthropic,protocol_gemini,protocol_openairesponses,backend_openai,backend_ollama,backend_anthropic,backend_gemini,backend_azure"
           VERSION="${{ needs.guard-branch.outputs.version }}"
@@ -241,7 +299,6 @@ jobs:
             )
           done
 
-          # Copy config seed data
           for p in $PLATFORMS; do
             dest="${VENDOR_DIR}/${p}/config"
             mkdir -p "${dest}"
@@ -260,12 +317,10 @@ jobs:
             fi
           done
 
-          # Build frontend
           STATIC_DIR="${NPM_DIR}/static"
           mkdir -p "${STATIC_DIR}"
           ( cd web && npm ci && CENTAG_INSTALL_ROOT="$PWD/.." CENTAG_EDITION=personal CENTAG_STATIC_DIR="$(realpath "${STATIC_DIR}")" npm run build )
 
-          # Generate checksums
           : > "${VENDOR_DIR}/checksums.txt"
           for p in $PLATFORMS; do
             goos="${p%-*}"; goarch="${p##*-}"
@@ -275,11 +330,9 @@ jobs:
             printf '%s  %s/centag-personal%s\n' "$sha" "$p" "$ext" >> "${VENDOR_DIR}/checksums.txt"
           done
 
-          # Publish online version
           echo "==> npm publish centag"
           ( cd "${NPM_DIR}" && npm publish --access public )
 
-          # Publish offline version
           echo "==> npm publish centag-offline"
           OFFLINE_STAGE="$(mktemp -d)"
           cp -R "${NPM_DIR}/bin" "${OFFLINE_STAGE}/bin"
@@ -287,6 +340,5 @@ jobs:
           cp -R "${NPM_DIR}/static" "${OFFLINE_STAGE}/static"
           cp "${NPM_DIR}/README.md" "${OFFLINE_STAGE}/README.md"
           cp "${NPM_DIR}/package.offline.json" "${OFFLINE_STAGE}/package.json"
-          # Do NOT copy .npmignore — offline variant must include bin/vendor/ and static/
           ( cd "${OFFLINE_STAGE}" && npm publish --access public )
           rm -rf "${OFFLINE_STAGE}"

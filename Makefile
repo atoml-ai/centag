@@ -173,10 +173,16 @@ gen-init-sqlite:
 package-list:
 	@bash scripts/packaging/package.sh list
 
-# TARGET=fnos|docker-offline；fnos 可用 PACKAGE_EDITION/MODE/ARCH/OUTPUT 或 PACKAGE_ARGS
+# FORM=cli|desktop OS=macos|linux|windows|fnos|docker ARCH=amd64|arm64|host|all
+# 例: make package FORM=desktop OS=macos PACKAGE_ARGS='--skip-frontend'
+#     make package FORM=cli OS=fnos ARCH=amd64
 package:
-	@if [ "$(TARGET)" = "fnos" ]; then \
-		bash scripts/packaging/package.sh fnos \
+	@if [ -n "$(FORM)" ] && [ -n "$(OS)" ]; then \
+		bash scripts/packaging/package.sh $(FORM) $(OS) $(if $(ARCH),$(ARCH),) \
+			$(if $(filter fnos,$(OS)),--mode $(PACKAGE_MODE) --edition $(PACKAGE_EDITION) --output $(PACKAGE_OUTPUT),) \
+			$(PACKAGE_ARGS); \
+	elif [ "$(TARGET)" = "fnos" ]; then \
+		bash scripts/packaging/package.sh cli fnos \
 			--mode $(PACKAGE_MODE) \
 			--arch $(PACKAGE_ARCH) \
 			--edition $(PACKAGE_EDITION) \
@@ -204,8 +210,8 @@ help:
 	@echo "  make fmt          - Format code"
 	@echo "  make lint         - Run linter"
 	@echo "  make harness-check - Harness doc / go list hygiene (scripts/check-harness-hygiene.sh)"
-	@echo "  make package-list - List third-party packaging targets"
-	@echo "  make package      - Package for TARGET (default fnos); see packaging.env"
+	@echo "  make package-list - List packaging targets (desktop/github/cli/fnos/...)"
+	@echo "  make package      - Package for TARGET (default fnos); see ./start.sh package list"
 	@echo ""
 	@echo "Layout (override with CENTAG_INSTALL_ROOT / CENTAG_EDITION):"
 	@echo "  INSTALL_ROOT=$(CENTAG_INSTALL_ROOT)"

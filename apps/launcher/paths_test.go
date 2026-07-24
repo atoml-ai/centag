@@ -22,6 +22,27 @@ func TestResolveSidecarBinaryExplicit(t *testing.T) {
 	}
 }
 
+func TestAppBundleResourcesDir(t *testing.T) {
+	dir := t.TempDir()
+	macOS := filepath.Join(dir, "Centag.app", "Contents", "MacOS")
+	res := filepath.Join(dir, "Centag.app", "Contents", "Resources")
+	if err := os.MkdirAll(macOS, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(res, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	exe := filepath.Join(macOS, "Centag")
+	got := appBundleResourcesDir(exe)
+	want := res
+	if got != want {
+		t.Fatalf("got %s want %s", got, want)
+	}
+	if appBundleResourcesDir(filepath.Join(dir, "Centag")) != "" {
+		t.Fatal("expected empty for non-bundle path")
+	}
+}
+
 func TestEnsureDirs(t *testing.T) {
 	dir := t.TempDir()
 	if err := ensureDirs(dir); err != nil {
