@@ -22,7 +22,7 @@
         </div>
         <div class="info-row">
           <span class="label">运行时长</span>
-          <span>{{ status.uptime || '--' }}</span>
+          <span>{{ formatUptime(status.uptime) }}</span>
         </div>
         <div class="info-row">
           <span class="label">API 地址</span>
@@ -59,6 +59,7 @@ import { ElMessage } from 'element-plus'
 import { getStatus } from '@/api'
 import api from '@/api'
 import { resolveApiBaseUrl } from '@/utils/apiBaseUrl'
+import { formatUptime } from '@/utils/format'
 
 const status = ref<any>({})
 const saving = ref(false)

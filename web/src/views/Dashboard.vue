@@ -61,7 +61,7 @@
               </div>
               <div class="personal-status-item">
                 <span class="info-label">运行时长</span>
-                <span class="info-val">{{ status.uptime || '--' }}</span>
+                <span class="info-val">{{ formatUptime(status.uptime) }}</span>
               </div>
             </div>
           </template>
@@ -491,6 +491,7 @@ import { useEdition } from '@/composables/useEdition'
 import { syncEditionFromStatus } from '@/utils/edition'
 import { getDashboardSections } from '@/utils/dashboard-sections'
 import { API_ENDPOINTS, resolveApiBaseUrl } from '@/utils/apiBaseUrl'
+import { formatUptime } from '@/utils/format'
 import ApiAccessPanel from '@/components/dashboard/ApiAccessPanel.vue'
 import SecuritySettingsDialog from '@/components/dashboard/SecuritySettingsDialog.vue'
 import HomePipelineCard from '@/components/dashboard/HomePipelineCard.vue'
