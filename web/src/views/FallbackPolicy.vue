@@ -1,6 +1,6 @@
 <template>
-  <div class="fallback-policy-page">
-    <div class="hermes-header">
+  <div class="fallback-policy-page" :class="{ embedded }">
+    <div v-if="!embedded" class="hermes-header">
       <div class="hermes-header-left">
         <h1 class="hermes-title">降级策略管理</h1>
         <p class="hermes-subtitle">配置全局降级策略，支持同模型跨后端、同后端跨模型、自定义链路</p>
@@ -11,6 +11,13 @@
           新建策略
         </el-button>
       </div>
+    </div>
+    <div v-else class="embedded-toolbar">
+      <p class="embedded-desc">配置全局降级策略，支持同模型跨后端、同后端跨模型、自定义链路</p>
+      <el-button type="primary" size="small" @click="openCreateDialog">
+        <el-icon><Plus /></el-icon>
+        新建策略
+      </el-button>
     </div>
 
     <div class="fallback-policy-body" v-loading="loading">
@@ -129,6 +136,14 @@ import {
   type FallbackStrategyType,
   type FallbackRule
 } from '@/api/fallback'
+
+withDefaults(
+  defineProps<{
+    /** 嵌入系统配置韧性页时隐藏独立页头 */
+    embedded?: boolean
+  }>(),
+  { embedded: false }
+)
 
 const loading = ref(false)
 const saving = ref(false)
@@ -288,8 +303,31 @@ async function testPolicy(policy: FallbackPolicy) {
   padding: 20px;
 }
 
+.fallback-policy-page.embedded {
+  padding: 0;
+}
+
 .fallback-policy-body {
   margin-top: 20px;
+}
+
+.fallback-policy-page.embedded .fallback-policy-body {
+  margin-top: 12px;
+}
+
+.embedded-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+
+.embedded-desc {
+  margin: 0;
+  color: #909399;
+  font-size: 13px;
+  line-height: 1.4;
 }
 
 .rule-row {

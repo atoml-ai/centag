@@ -6,17 +6,6 @@
         <p class="page-description">{{ pageDescription }}</p>
       </div>
       <div class="page-header-actions">
-        <div class="response-trace-toggle">
-          <el-tooltip content="开启后在 AI 回复前附加流水线、后端、模型与降级信息" placement="bottom">
-            <span class="toggle-label">响应追踪</span>
-          </el-tooltip>
-          <el-switch
-            v-model="responseTraceBanner"
-            :loading="responseTraceToggling"
-            size="small"
-            @change="toggleResponseTraceBanner"
-          />
-        </div>
         <template v-if="sections.headerActions">
           <el-button type="success" @click="openPipelineChat()">
             <el-icon><ChatDotRound /></el-icon>&nbsp;AI 对话
@@ -611,9 +600,6 @@ const proxyStatus = ref<any>({ enabled: false, pac_enabled: false, pac_domains: 
 const hostProxy = ref<any>({ enabled: false })
 const proxyToggling = ref(false)
 const hostProxyToggling = ref(false)
-const responseTraceBanner = ref(false)
-const responseTraceToggling = ref(false)
-
 const baseUrl = computed(() => resolveApiBaseUrl(status.value))
 
 const apiEndpoints = API_ENDPOINTS
@@ -771,22 +757,6 @@ function addRequestLog(data: any) {
   }
 }
 
-// 切换「响应追踪」：统一在返回正文前附加流水线 / 后端 / 模型 / 降级信息
-async function toggleResponseTraceBanner() {
-  responseTraceToggling.value = true
-  try {
-    await api.put('/api/v1/config/proxy', {
-      response_trace_banner: responseTraceBanner.value
-    })
-    ElMessage.success(responseTraceBanner.value ? '响应追踪已开启' : '响应追踪已关闭')
-  } catch (error: any) {
-    ElMessage.error('操作失败: ' + (error.message || '未知错误'))
-    responseTraceBanner.value = !responseTraceBanner.value
-  } finally {
-    responseTraceToggling.value = false
-  }
-}
-
 // 切换系统代理
 async function toggleSystemProxy() {
   proxyToggling.value = true
@@ -876,31 +846,19 @@ async function loadBackendsOnly() {
   }
 }
 
-function applyProxyConfig(data: any) {
-  if (!data || typeof data !== 'object') return
-  responseTraceBanner.value = !!data.response_trace_banner
-}
-
 async function load() {
   loading.value = true
   const gen = ++backendsLoadGen
   try {
     const sec = sections.value
     if (!sec.opsStats && !sec.serviceStatus && !sec.proxyControls) {
-      const [statusRes, backendsRes, proxyCfgRes] = await Promise.allSettled([
-        getStatus(),
-        getBackends(),
-        api.get('/api/v1/config/proxy')
-      ])
+      const [statusRes, backendsRes] = await Promise.allSettled([getStatus(), getBackends()])
       if (statusRes.status === 'fulfilled' && statusRes.value) {
         status.value = statusRes.value
         syncEditionFromStatus(statusRes.value)
       }
       if (backendsRes.status === 'fulfilled' && backendsRes.value && gen === backendsLoadGen) {
         backends.value = backendsRes.value || []
-      }
-      if (proxyCfgRes.status === 'fulfilled' && proxyCfgRes.value) {
-        applyProxyConfig(proxyCfgRes.value)
       }
       pipelinePanelRef.value?.reload()
       return
@@ -913,10 +871,9 @@ async function load() {
       sec.pluginsStorage ? getStorages() : Promise.resolve(null),
       sec.pluginsStorage ? getPlugins() : Promise.resolve(null),
       sec.proxyControls ? api.get('/api/v1/proxy/status') : Promise.resolve(null),
-      sec.proxyControls ? api.get('/api/v1/host-proxy/status') : Promise.resolve(null),
-      api.get('/api/v1/config/proxy')
+      sec.proxyControls ? api.get('/api/v1/host-proxy/status') : Promise.resolve(null)
     ]
-    const [dashRes, statusRes, backendsRes, storagesRes, pluginsRes, proxyRes, hostProxyRes, proxyCfgRes] = await Promise.allSettled(tasks)
+    const [dashRes, statusRes, backendsRes, storagesRes, pluginsRes, proxyRes, hostProxyRes] = await Promise.allSettled(tasks)
 
     if (dashRes.status === 'fulfilled' && dashRes.value) {
       dashboard.value = dashRes.value
@@ -942,10 +899,6 @@ async function load() {
     if (hostProxyRes.status === 'fulfilled' && hostProxyRes.value) {
       hostProxy.value = hostProxyRes.value
     }
-    if (proxyCfgRes.status === 'fulfilled' && proxyCfgRes.value) {
-      applyProxyConfig(proxyCfgRes.value)
-    }
-
     pipelinePanelRef.value?.reload()
 
     // 添加历史数据点
@@ -1150,23 +1103,6 @@ onMounted(() => {
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
-}
-
-.response-trace-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  margin-right: 4px;
-  padding: 4px 10px;
-  border-radius: 6px;
-  background: var(--el-fill-color-light, #f5f7fa);
-}
-
-.response-trace-toggle .toggle-label {
-  font-size: 13px;
-  color: var(--el-text-color-regular, #606266);
-  cursor: default;
-  user-select: none;
 }
 
 .mt-card { margin-top: 16px; }
