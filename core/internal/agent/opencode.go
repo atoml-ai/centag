@@ -60,7 +60,9 @@ func (t *OpenCodeTemplate) PlatformCommands(info *BackendInfo) PlatformCommands 
 }
 
 func (t *OpenCodeTemplate) VerifyCommand(info *BackendInfo) string {
-	return `opencode -m "Hello" --dry-run`
+	modelRef := centagModelRef(defaultModel(info))
+	// opencode CLI：run 发消息；-m 为 provider/model（如 centag/centag/<pipeline>）
+	return fmt.Sprintf(`opencode run -m %s "Hello, can you hear me?"`, modelRef)
 }
 
 func (t *OpenCodeTemplate) Steps(info *BackendInfo) []ConfigStep {

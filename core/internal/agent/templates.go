@@ -90,13 +90,24 @@ func generatePowerShellCommands(files []ConfigFile) string {
 	return strings.Join(cmds, "\n\n")
 }
 
-// writeFiles 将配置文件写入本地文件系统
+const centagBackupSuffix = ".centag-bak"
+
+func backupPath(path string) string {
+	return path + centagBackupSuffix
+}
+
+// writeFiles 将配置文件写入本地文件系统。
+// 首次覆盖已有文件时会另存 .centag-bak，供「恢复默认」还原。
 func writeFiles(files []ConfigFile) error {
 	for _, f := range files {
 		path := expandPath(f.Path)
 		dir := filepath.Dir(path)
 		if err := os.MkdirAll(dir, 0755); err != nil {
 			return fmt.Errorf("创建目录失败 %s: %w", dir, err)
+		}
+
+		if err := ensureCentagBackup(path); err != nil {
+			return err
 		}
 
 		var data []byte
@@ -116,6 +127,67 @@ func writeFiles(files []ConfigFile) error {
 		}
 	}
 	return nil
+}
+
+func ensureCentagBackup(path string) error {
+	if !fileExists(path) || fileExists(backupPath(path)) {
+		return nil
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("备份读取失败 %s: %w", path, err)
+	}
+	if err := os.WriteFile(backupPath(path), data, 0644); err != nil {
+		return fmt.Errorf("备份写入失败 %s: %w", backupPath(path), err)
+	}
+	return nil
+}
+
+// RestoreResult 单个文件的恢复结果
+type RestoreResult struct {
+	Path   string `json:"path"`
+	Action string `json:"action"` // restored | removed | skipped
+}
+
+// RestoreConfigFiles 恢复 Centag 写入前的配置：
+// - 存在 .centag-bak → 还原并删除备份
+// - 无备份但目标文件存在 → 视为 Centag 新建，删除该文件
+// - 都不存在 → skipped
+func RestoreConfigFiles(files []ConfigFile) ([]RestoreResult, error) {
+	results := make([]RestoreResult, 0, len(files))
+	seen := make(map[string]struct{}, len(files))
+	for _, f := range files {
+		path := expandPath(f.Path)
+		if _, ok := seen[path]; ok {
+			continue
+		}
+		seen[path] = struct{}{}
+
+		bak := backupPath(path)
+		switch {
+		case fileExists(bak):
+			data, err := os.ReadFile(bak)
+			if err != nil {
+				return results, fmt.Errorf("读取备份失败 %s: %w", bak, err)
+			}
+			if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+				return results, fmt.Errorf("创建目录失败 %s: %w", filepath.Dir(path), err)
+			}
+			if err := os.WriteFile(path, data, 0644); err != nil {
+				return results, fmt.Errorf("还原文件失败 %s: %w", path, err)
+			}
+			_ = os.Remove(bak)
+			results = append(results, RestoreResult{Path: path, Action: "restored"})
+		case fileExists(path):
+			if err := os.Remove(path); err != nil {
+				return results, fmt.Errorf("删除 Centag 配置失败 %s: %w", path, err)
+			}
+			results = append(results, RestoreResult{Path: path, Action: "removed"})
+		default:
+			results = append(results, RestoreResult{Path: path, Action: "skipped"})
+		}
+	}
+	return results, nil
 }
 
 func fileExists(path string) bool {

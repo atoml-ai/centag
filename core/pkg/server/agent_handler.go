@@ -190,6 +190,63 @@ func (h *AgentHandler) WriteConfig(c *gin.Context) {
 	})
 }
 
+// RestoreConfig 恢复 Agent 本地配置为接入 Centag 之前的状态
+func (h *AgentHandler) RestoreConfig(c *gin.Context) {
+	var req agent.RestoreConfigRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	agentType := agent.AgentType(req.AgentType)
+	tmpl, ok := h.registry.Get(agentType)
+	if !ok {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "unsupported agent type: " + req.AgentType})
+		return
+	}
+
+	// 仅需路径；用占位 BackendInfo 生成 ConfigFiles 列表
+	files, err := tmpl.ConfigFiles(&agent.BackendInfo{
+		Name:  "restore",
+		Model: "centag/transparent-proxy",
+		Host:  "localhost",
+		Port:  20060,
+	})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	results, err := agent.RestoreConfigFiles(files)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, agent.RestoreConfigResponse{
+			AgentType: req.AgentType,
+			Success:   false,
+			Results:   results,
+			Message:   err.Error(),
+		})
+		return
+	}
+
+	changed := 0
+	for _, r := range results {
+		if r.Action == "restored" || r.Action == "removed" {
+			changed++
+		}
+	}
+	msg := "未找到可恢复的配置（可能尚未写入过 Centag 配置）"
+	if changed > 0 {
+		msg = fmt.Sprintf("已恢复 %d 个配置文件", changed)
+	}
+
+	c.JSON(http.StatusOK, agent.RestoreConfigResponse{
+		AgentType: req.AgentType,
+		Success:   true,
+		Results:   results,
+		Message:   msg,
+	})
+}
+
 // GetConfigPreview 获取配置预览（无需后端 ID）
 func (h *AgentHandler) GetConfigPreview(c *gin.Context) {
 	agentType := agent.AgentType(c.Query("agent_type"))

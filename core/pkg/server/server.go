@@ -1679,6 +1679,7 @@ func (s *Server) setupRoutes() {
 			agentCfg.GET("/types", s.agentHandler.ListAgentTypes)
 			agentCfg.POST("/configs/generate", s.agentHandler.GenerateConfig)
 			agentCfg.POST("/configs/write", s.agentHandler.WriteConfig)
+			agentCfg.POST("/configs/restore", s.agentHandler.RestoreConfig)
 			agentCfg.GET("/configs/preview", s.agentHandler.GetConfigPreview)
 			agentCfg.POST("/configs/script", s.agentHandler.GenerateScript)
 		}

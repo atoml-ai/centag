@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"os"
 	"strings"
 	"testing"
 )
@@ -123,6 +124,17 @@ func TestOpenCodeTemplate_UsesOfficialProviderSchema(t *testing.T) {
 	}
 }
 
+func TestOpenCodeTemplate_VerifyCommand(t *testing.T) {
+	tmpl := &OpenCodeTemplate{}
+	info := testInfo()
+	info.Model = "centag/direct-backend"
+	got := tmpl.VerifyCommand(info)
+	want := `opencode run -m centag/centag/direct-backend "Hello, can you hear me?"`
+	if got != want {
+		t.Fatalf("VerifyCommand = %q, want %q", got, want)
+	}
+}
+
 func TestOpenClawTemplate_UsesOpenAICompletionsAPI(t *testing.T) {
 	tmpl := &OpenClawTemplate{}
 	info := testInfo()
@@ -198,5 +210,70 @@ func TestProxyURL(t *testing.T) {
 	url = proxyURL("192.168.1.100", 30060)
 	if url != "http://192.168.1.100:30060/v1" {
 		t.Errorf("unexpected custom URL: %s", url)
+	}
+}
+
+func TestWriteAndRestoreConfigFiles(t *testing.T) {
+	dir := t.TempDir()
+	target := dir + "/opencode.json"
+	original := `{"model":"original"}`
+	if err := os.WriteFile(target, []byte(original), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	files := []ConfigFile{{Path: target, Content: `{"model":"centag"}`}}
+	if err := writeFiles(files); err != nil {
+		t.Fatalf("writeFiles: %v", err)
+	}
+	got, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != `{"model":"centag"}` {
+		t.Fatalf("after write got %s", got)
+	}
+	bak, err := os.ReadFile(backupPath(target))
+	if err != nil {
+		t.Fatalf("backup missing: %v", err)
+	}
+	if string(bak) != original {
+		t.Fatalf("backup = %s, want %s", bak, original)
+	}
+
+	results, err := RestoreConfigFiles(files)
+	if err != nil {
+		t.Fatalf("RestoreConfigFiles: %v", err)
+	}
+	if len(results) != 1 || results[0].Action != "restored" {
+		t.Fatalf("unexpected results: %+v", results)
+	}
+	restored, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(restored) != original {
+		t.Fatalf("restored = %s, want %s", restored, original)
+	}
+	if fileExists(backupPath(target)) {
+		t.Fatal("backup should be removed after restore")
+	}
+}
+
+func TestRestoreConfigFiles_RemovesCentagCreated(t *testing.T) {
+	dir := t.TempDir()
+	target := dir + "/new.json"
+	files := []ConfigFile{{Path: target, Content: `{"centag":true}`}}
+	if err := writeFiles(files); err != nil {
+		t.Fatal(err)
+	}
+	results, err := RestoreConfigFiles(files)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(results) != 1 || results[0].Action != "removed" {
+		t.Fatalf("unexpected results: %+v", results)
+	}
+	if fileExists(target) {
+		t.Fatal("centag-created file should be removed")
 	}
 }
