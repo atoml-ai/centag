@@ -12,7 +12,6 @@
     </div>
     <LiveLogSidebar v-if="!isLoginPage" :visible="showLiveLogs" @close="closeLogPanel" />
     <StatusBar v-if="!isLoginPage" />
-    <LanguageSelector />
   </div>
 </template>
 
@@ -23,7 +22,6 @@ import { useLogPanel } from '@/composables/useLogPanel'
 import AppHeader from '@/components/layout/AppHeader.vue'
 import StatusBar from '@/components/layout/StatusBar.vue'
 import LiveLogSidebar from '@/components/layout/LiveLogSidebar.vue'
-import LanguageSelector from '@/components/LanguageSelector.vue'
 
 const route = useRoute()
 const isLoginPage = computed(() => route.path === '/login')
