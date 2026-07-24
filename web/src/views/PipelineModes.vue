@@ -3,12 +3,12 @@
     <div class="header-with-toolbar">
       <h1 class="page-title">
         <el-icon><SetUp /></el-icon>
-        策略管理
+        {{ t('pipelineModes.title') }}
       </h1>
       <div class="toolbar-actions">
         <el-input
           v-model="searchText"
-          placeholder="搜索名称、ID、描述..."
+          :placeholder="t('pipelineModes.searchPlaceholder')"
           clearable
           style="width: 200px"
         >
@@ -17,7 +17,7 @@
           </template>
         </el-input>
         <span class="search-count" v-if="searchText">
-          {{ filteredPipelines.length }} 条
+          {{ t('pipelineModes.searchCount', { count: filteredPipelines.length }) }}
         </span>
         <el-button
           v-if="selectedPipelines.length > 0"
@@ -25,7 +25,7 @@
           @click="handleBatchExport"
         >
           <el-icon><Download /></el-icon>
-          批量导出（{{ selectedPipelines.length }}）
+          {{ t('pipelineModes.batchExport', { count: selectedPipelines.length }) }}
         </el-button>
         <el-tooltip v-if="selectedPipelines.length > 0" :content="batchDeleteTooltip" placement="top" :disabled="canBatchDeleteSelected">
           <span>
@@ -35,21 +35,21 @@
               @click="handleBatchDelete"
             >
               <el-icon><Delete /></el-icon>
-              批量删除（{{ selectedPipelines.length }}）
+              {{ t('pipelineModes.batchDelete', { count: selectedPipelines.length }) }}
             </el-button>
           </span>
         </el-tooltip>
         <el-button :loading="loading" @click="loadData">
           <el-icon><Refresh /></el-icon>
-          刷新
+          {{ t('pipelineModes.refresh') }}
         </el-button>
         <el-button @click="openTemplateDialog">
           <el-icon><DocumentCopy /></el-icon>
-          从模板创建
+          {{ t('pipelineModes.createFromTemplate') }}
         </el-button>
         <el-button @click="triggerImportTemplate">
           <el-icon><Upload /></el-icon>
-          导入流水线
+          {{ t('pipelineModes.importPipeline') }}
         </el-button>
         <input
           ref="importTemplateInputRef"
@@ -61,7 +61,7 @@
         />
         <el-button v-if="canAddOwnPipelines" type="primary" @click="openCreate">
           <el-icon><Plus /></el-icon>
-          创建流水线
+          {{ t('pipelineModes.createPipeline') }}
         </el-button>
       </div>
     </div>
@@ -77,17 +77,17 @@
         @selection-change="handleSelectionChange"
       >
         <el-table-column type="selection" width="50" />
-        <el-table-column prop="id" label="ID" width="120" show-overflow-tooltip sortable>
+        <el-table-column prop="id" :label="t('pipelineModes.table.id')" width="120" show-overflow-tooltip sortable>
           <template #default="{ row }">
             <el-tag type="info" size="small">{{ row.id }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="shortcut_code" label="快捷码" width="150" align="center" sortable>
+        <el-table-column prop="shortcut_code" :label="t('pipelineModes.table.shortcutCode')" width="150" align="center" sortable>
           <template #default="{ row }">
             <div style="display: flex; align-items: center; gap: 4px;">
               <el-input
                 v-model="row.shortcut_code"
-                placeholder="#xxx"
+                :placeholder="t('pipelineModes.table.shortcutPlaceholder')"
                 clearable
                 size="small"
                 :loading="row.shortcutLoading"
@@ -102,7 +102,7 @@
                 feature="pipelineShortcutUpdate"
                 :pipeline="row"
                 :is-admin="authStore.isAdmin"
-                action-label="保存快捷码"
+                :action-label="t('pipelineModes.table.saveShortcut')"
               >
                 <template #default="{ disabled }">
                   <el-button
@@ -111,7 +111,7 @@
                     :loading="row.shortcutLoading"
                     :disabled="disabled"
                     @click="handleShortcutSave(row)"
-                    title="保存"
+                    :title="t('pipelineModes.table.save')"
                   >
                     <el-icon><Check /></el-icon>
                   </el-button>
@@ -120,22 +120,22 @@
             </div>
           </template>
         </el-table-column>
-        <el-table-column prop="name" label="名称" min-width="140" sortable>
+        <el-table-column prop="name" :label="t('pipelineModes.table.name')" min-width="140" sortable>
           <template #default="{ row }">
             <span style="font-weight: 500">{{ row.name }}</span>
           </template>
         </el-table-column>
-        <el-table-column prop="description" label="描述" min-width="200" show-overflow-tooltip sortable />
-        <el-table-column label="节点数" width="80" align="center" sortable :sort-method="sortByNodeCount">
+        <el-table-column prop="description" :label="t('pipelineModes.table.description')" min-width="200" show-overflow-tooltip sortable />
+        <el-table-column :label="t('pipelineModes.table.nodeCount')" width="80" align="center" sortable :sort-method="sortByNodeCount">
           <template #default="{ row }">
-            <el-tag type="primary" size="small">{{ row.nodes?.length || 0 }} 个</el-tag>
+            <el-tag type="primary" size="small">{{ row.nodes?.length || 0 }} {{ t('pipelineModes.table.nodeUnit') }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="version" label="版本" width="80" align="center" sortable />
-        <el-table-column label="操作" width="300" align="center" fixed="right">
+        <el-table-column prop="version" :label="t('pipelineModes.table.version')" width="80" align="center" sortable />
+        <el-table-column :label="t('pipelineModes.table.actions')" width="300" align="center" fixed="right">
           <template #default="{ row }">
             <div class="action-btns">
-              <el-tooltip v-if="canConfigureCapabilitySlots(row)" content="配置模型" placement="top">
+              <el-tooltip v-if="canConfigureCapabilitySlots(row)" :content="t('pipelineModes.table.configureModel')" placement="top">
                 <el-button
                   circle
                   size="small"
@@ -149,7 +149,7 @@
                 feature="pipelineEdit"
                 :pipeline="row"
                 :is-admin="authStore.isAdmin"
-                action-label="编辑"
+                :action-label="t('pipelineModes.table.edit')"
               >
                 <template #default="{ disabled }">
                   <el-button
@@ -166,7 +166,7 @@
                 feature="executionHistory"
                 :pipeline="row"
                 :is-admin="authStore.isAdmin"
-                action-label="历史"
+                :action-label="t('pipelineModes.table.history')"
               >
                 <template #default="{ disabled }">
                   <el-button
@@ -184,7 +184,7 @@
                 feature="pipelineExport"
                 :pipeline="row"
                 :is-admin="authStore.isAdmin"
-                action-label="导出"
+                :action-label="t('pipelineModes.table.export')"
               >
                 <template #default="{ disabled }">
                   <el-button
@@ -202,7 +202,7 @@
                 feature="pipelineDelete"
                 :pipeline="row"
                 :is-admin="authStore.isAdmin"
-                action-label="删除"
+                :action-label="t('pipelineModes.table.delete')"
               >
                 <template #default="{ disabled }">
                   <el-button
@@ -221,7 +221,7 @@
         </el-table-column>
       </el-table>
 
-      <el-empty v-if="!loading && pipelines.length === 0" description="暂无流水线配置，使用右侧按钮创建" :image-size="120" />
+      <el-empty v-if="!loading && pipelines.length === 0" :description="t('pipelineModes.empty')" :image-size="120" />
     </el-card>
 
     <PipelineCreateDialog
@@ -253,9 +253,9 @@
     />
 
     <!-- 从模板创建弹窗 -->
-    <el-dialog v-model="templateDialogVisible" title="从模板创建流水线" width="600px">
+    <el-dialog v-model="templateDialogVisible" :title="t('pipelineModes.templateDialog.title')" width="600px">
       <el-alert type="info" :closable="false" style="margin-bottom: 16px">
-        选择以下预设模板快速创建流水线。带多分类的模板可用「配置模型」绑定各分支后端/模型；也可在画布「新增分类」后配置。
+        {{ t('pipelineModes.templateDialog.hint') }}
       </el-alert>
       <el-row :gutter="12">
         <el-col :span="12" v-for="tmpl in templateList" :key="tmpl.id" style="margin-bottom: 12px">
@@ -263,7 +263,7 @@
             <div style="font-weight: 600; margin-bottom: 6px">{{ tmpl.name }}</div>
             <div style="font-size: 13px; color: #666">{{ tmpl.description }}</div>
             <div style="margin-top: 8px">
-              <el-tag size="small" type="primary">{{ tmpl.nodes?.length || 0 }} 个节点</el-tag>
+              <el-tag size="small" type="primary">{{ t('pipelineModes.templateDialog.nodes', { count: tmpl.nodes?.length || 0 }) }}</el-tag>
             </div>
           </el-card>
         </el-col>
@@ -271,43 +271,43 @@
     </el-dialog>
 
     <!-- 导入冲突对话框 -->
-    <el-dialog v-model="importConflictVisible" title="导入冲突" width="580px" :close-on-click-modal="false" :close-on-press-escape="false" :before-close="handleConflictCancel">
+    <el-dialog v-model="importConflictVisible" :title="t('pipelineModes.importConflict.title')" width="580px" :close-on-click-modal="false" :close-on-press-escape="false" :before-close="handleConflictCancel">
       <el-alert type="warning" :closable="false" show-icon style="margin-bottom: 14px">
-        以下模板 ID 已存在于系统中，请选择导入方式：
+        {{ t('pipelineModes.importConflict.warning') }}
       </el-alert>
       <el-table :data="importConflictItems" size="small" border max-height="320" stripe>
         <el-table-column type="index" label="#" width="46" align="center" />
-        <el-table-column prop="id" label="ID" width="120">
+        <el-table-column prop="id" :label="t('pipelineModes.importConflict.id')" width="120">
           <template #default="{ row }">
             <el-tag type="warning" effect="plain" size="small">{{ row.id }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="name" label="名称" min-width="130">
+        <el-table-column prop="name" :label="t('pipelineModes.importConflict.name')" min-width="130">
           <template #default="{ row }">
             <span style="font-weight: 500">{{ row.name }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="节点数" width="72" align="center">
+        <el-table-column :label="t('pipelineModes.importConflict.nodeCount')" width="72" align="center">
           <template #default="{ row }">
             <el-tag type="primary" size="small">{{ row.nodes?.length || 0 }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="description" label="描述" min-width="140" show-overflow-tooltip />
+        <el-table-column prop="description" :label="t('pipelineModes.importConflict.description')" min-width="140" show-overflow-tooltip />
       </el-table>
       <div style="color: #909399; font-size: 13px; margin-top: 10px;">
         <el-icon style="vertical-align: middle; margin-right: 4px;"><WarningFilled /></el-icon>
-        共 <strong>{{ importConflictItems.length }}</strong> 个冲突模板
+        {{ t('pipelineModes.importConflict.conflictCount', { count: importConflictItems.length }) }}
       </div>
       <template #footer>
         <div style="display: flex; justify-content: center; gap: 12px;">
-          <el-button @click="handleConflictCancel">取消导入</el-button>
+          <el-button @click="handleConflictCancel">{{ t('pipelineModes.importConflict.cancelImport') }}</el-button>
           <el-button @click="handleConflictSkip">
             <el-icon style="margin-right: 4px;"><CircleClose /></el-icon>
-            跳过重复（{{ importConflictItems.length }} 个）
+            {{ t('pipelineModes.importConflict.skipDuplicates', { count: importConflictItems.length }) }}
           </el-button>
           <el-button type="primary" @click="handleConflictOverwrite">
             <el-icon style="margin-right: 4px;"><Select /></el-icon>
-            全部覆盖
+            {{ t('pipelineModes.importConflict.overwriteAll') }}
           </el-button>
         </div>
       </template>
@@ -318,6 +318,7 @@
 <script setup lang="ts">
 import { ref, onMounted, computed, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Search, SetUp, Refresh, Plus, Edit, Delete, DocumentCopy, Upload, Timer, Check, Download, WarningFilled, CircleClose, Select, Connection } from '@element-plus/icons-vue'
 import * as yaml from 'js-yaml'
@@ -343,12 +344,12 @@ import { resolvePipelineFeatureSupport } from '@/utils/pipeline/features'
 import { canConfigureCapabilitySlots } from '@/utils/capabilitySlots'
 import { downloadPipelineYaml, downloadPipelinesAsZip } from '@/utils/pipeline/importExport'
 
+const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
 const { canAddOwnPipelines } = useUserResourceAccess()
 
-// ── 状态 ─────────────────────────────────────────────────────────────────────
 const loading = ref(false)
 const canvasVisible = ref(false)
 const createInfoVisible = ref(false)
@@ -364,12 +365,10 @@ const batchExporting = ref(false)
 const routeAssignVisible = ref(false)
 const routeAssignPipelineId = ref('')
 
-// 导入冲突对话框状态
 const importConflictVisible = ref(false)
 const importConflictItems = ref<any[]>([])
 const importConflictResolve = ref<((value: 'overwrite' | 'skip' | 'cancel') => void) | null>(null)
 
-// 执行历史对话框
 const historyVisible = ref(false)
 const historyPipelineId = ref('')
 const historyPipelineName = ref('')
@@ -386,7 +385,6 @@ const filteredPipelines = computed(() => {
   )
 })
 
-/** 将保存/导入的流水线立即合并进列表，避免依赖可能滞后的全量刷新 */
 function upsertPipelineInList(pipeline: Pipeline) {
   if (!pipeline?.id) return
   const row: PipelineRow = {
@@ -420,18 +418,18 @@ const canBatchDeleteSelected = computed(() => {
 })
 
 const batchDeleteTooltip = computed(() => {
-  if (canBatchDeleteSelected.value) return '批量删除'
+  if (canBatchDeleteSelected.value) return t('pipelineModes.batchDeleteTooltip')
   const unsupported = selectedPipelines.value.find((row) => !getPipelineFeatureSupport('pipelineBatchDelete', row).enabled)
-  if (!unsupported) return '批量删除'
-  return getPipelineFeatureSupport('pipelineBatchDelete', unsupported).reason || '存在不可删除的流水线'
+  if (!unsupported) return t('pipelineModes.batchDeleteTooltip')
+  return getPipelineFeatureSupport('pipelineBatchDelete', unsupported).reason || t('pipelineModes.batchDeleteTooltipDisabled')
 })
 
 const handleBatchDelete = async () => {
   if (selectedPipelines.value.length === 0) return
   try {
     await ElMessageBox.confirm(
-      `确定删除选中的 ${selectedPipelines.value.length} 个流水线吗？`,
-      '批量删除',
+      t('pipelineModes.message.batchDeleteConfirm', { count: selectedPipelines.value.length }),
+      t('pipelineModes.message.batchDeleteTitle'),
       { type: 'warning' }
     )
     const ids = selectedPipelines.value.map(p => p.id)
@@ -439,11 +437,11 @@ const handleBatchDelete = async () => {
       await deletePipeline(id)
     }
     pipelines.value = pipelines.value.filter(p => !ids.includes(p.id))
-    ElMessage.success(`成功删除 ${ids.length} 个流水线`)
+    ElMessage.success(t('pipelineModes.message.batchDeleteSuccess', { count: ids.length }))
     selectedPipelines.value = []
   } catch (error: any) {
     if (error === 'cancel' || error === 'close') return
-    ElMessage.error('删除失败：' + (error.message || error))
+    ElMessage.error(t('pipelineModes.message.deleteFailed') + '：' + (error.message || error))
     await loadData()
   }
 }
@@ -480,7 +478,6 @@ const handleImportTemplateFile = async (e: Event) => {
   const files = input.files
   if (!files || files.length === 0) return
 
-  // 1. 解析所有文件为模板数据
   const parsedTemplates: any[] = []
   for (const file of files) {
     try {
@@ -494,13 +491,12 @@ const handleImportTemplateFile = async (e: Event) => {
   }
 
   if (parsedTemplates.length === 0) {
-    ElMessage.error('导入失败，请确认文件是有效的流水线模板 YAML 格式')
+    ElMessage.error(t('pipelineModes.message.importFailed'))
     input.value = ''
     return
   }
 
-  // 2. 检查哪些 ID 已存在
-  let overwriteStrategy = 'all' // 'all' | 'skip' | 'cancel'
+  let overwriteStrategy = 'all'
   let existingIds: Set<string> | undefined
   try {
     const res = await getPipelines()
@@ -513,19 +509,18 @@ const handleImportTemplateFile = async (e: Event) => {
         input.value = ''
         return
       }
-      overwriteStrategy = action // 'overwrite' 或 'skip'
+      overwriteStrategy = action
     }
   } catch {
     // 查询失败则静默继续，默认全部覆盖
   }
 
-  // 3. 执行导入
   let successCount = 0
   let failCount = 0
   for (const data of parsedTemplates) {
     const isDuplicate = overwriteStrategy === 'skip' && existingIds?.has(data.id)
     if (isDuplicate) {
-      continue // 跳过重复
+      continue
     }
     try {
       const payload: Pipeline = {
@@ -548,9 +543,9 @@ const handleImportTemplateFile = async (e: Event) => {
 
   input.value = ''
   if (successCount > 0) {
-    ElMessage.success(`成功导入 ${successCount} 个流水线${failCount > 0 ? `，${failCount} 个失败` : ''}`)
+    ElMessage.success(t('pipelineModes.message.importSuccess', { count: successCount }) + (failCount > 0 ? `，${t('pipelineModes.message.importPartialFailed', { count: failCount })}` : ''))
   } else {
-    ElMessage.error('导入失败，请确认文件是有效的流水线模板 YAML 格式')
+    ElMessage.error(t('pipelineModes.message.importFailed'))
   }
 }
 
@@ -567,20 +562,18 @@ const templateList = computed(() => {
     .sort((a, b) => a.id.localeCompare(b.id))
 })
 
-// ── 数据加载 ─────────────────────────────────────────────────────────────────
 const loadData = async () => {
   loading.value = true
   try {
     const pipelinesRes = await getPipelines()
     const list = parsePipelinesResponse(pipelinesRes)
-    // 保存原始 shortcut_code，用于变化检测和失败回滚
     list.forEach((p: any) => {
       p.shortcutLoading = false
       p._originalShortcutCode = (p.shortcut_code || '')
     })
     pipelines.value = list
   } catch (error: any) {
-    ElMessage.error('加载流水线失败：' + error.message)
+    ElMessage.error(t('pipelineModes.message.loadFailed') + '：' + error.message)
     pipelines.value = []
   } finally {
     loading.value = false
@@ -591,45 +584,38 @@ const loadAllData = async () => {
   await Promise.all([loadData(), loadTemplates()])
 }
 
-// ── 快捷码处理 ──────────────────────────────────────────────────────────────
 const handleShortcutSave = async (row: any) => {
-  // 防止重复提交或误触发
   if (row.shortcutLoading) return
 
   const code = (row.shortcut_code || '').trim()
   const original = row._originalShortcutCode || ''
 
-  // 值未变化则不发送请求（避免点击/失焦误触发）
   if (code === original) {
     return
   }
 
-  // 格式校验：如果填写了内容，必须以 # 开头
   if (code && !code.startsWith('#')) {
-    ElMessage.warning('快捷码必须以 # 开头')
+    ElMessage.warning(t('pipelineModes.message.shortcutFormatError'))
     row.shortcut_code = original
     return
   }
 
   row.shortcutLoading = true
   try {
-    // 深拷贝 payload，避免 Vue Proxy 对象导致后端解析异常
     const payload = JSON.parse(JSON.stringify({
       ...row,
       shortcut_code: code
     }))
-    // 去除前端注入的辅助字段
     delete payload.shortcutLoading
     delete payload._originalShortcutCode
 
     await updatePipeline(row.id, payload)
     row._originalShortcutCode = code
-    ElMessage.success(code ? '快捷码已设置' : '快捷码已清除')
+    ElMessage.success(code ? t('pipelineModes.message.shortcutSet') : t('pipelineModes.message.shortcutCleared'))
   } catch (error: any) {
-    const backendError = error.response?.data?.error || error.message || '未知错误'
+    const backendError = error.response?.data?.error || error.message || t('storage.healthStatus.unknownError')
     console.error(`[ShortcutChange] 更新流水线 ${row.id} 失败:`, error.response?.data || error)
-    ElMessage.error('操作失败：' + backendError)
-    // 仅恢复当前行的快捷码，避免 loadData() 导致表格重渲染连锁反应
+    ElMessage.error(t('pipelineModes.message.shortcutSaveFailed') + '：' + backendError)
     row.shortcut_code = original
   } finally {
     row.shortcutLoading = false
@@ -645,7 +631,6 @@ const loadTemplates = async () => {
   }
 }
 
-// ── 操作方法 ─────────────────────────────────────────────────────────────────
 const buildEmptyPipeline = (info: Partial<PipelineCreateInfo> = {}) => ({
   id: info.id || `pipeline-${Date.now()}`,
   name: info.name || '',
@@ -707,7 +692,7 @@ const createFromTemplate = (tmpl: any) => {
     metadata: { from_template: tmpl.id, ...templateMetadata }
   }
   canvasVisible.value = true
-  ElMessage.success(`已基于「${tmpl.name}」模板创建流水线，请配置各节点的后端和模型`)
+  ElMessage.success(t('pipelineModes.message.createFromTemplateSuccess', { name: tmpl.name }))
 }
 
 const openEdit = (row: Pipeline) => {
@@ -743,9 +728,9 @@ const sortByNodeCount = (a: Pipeline, b: Pipeline): number => {
 const handleExport = async (row: Pipeline) => {
   try {
     await downloadPipelineYaml(row.id, row.name || row.id)
-    ElMessage.success('导出成功')
+    ElMessage.success(t('pipelineModes.message.exportSuccess'))
   } catch (error: any) {
-    ElMessage.error('导出失败：' + (error.message || error))
+    ElMessage.error(t('pipelineModes.message.exportFailed') + '：' + (error.message || error))
   }
 }
 
@@ -756,40 +741,35 @@ const handleBatchExport = async () => {
     await downloadPipelinesAsZip(
       selectedPipelines.value.map((p) => ({ id: p.id, name: p.name || p.id }))
     )
-    ElMessage.success(`已导出 ${selectedPipelines.value.length} 个流水线（ZIP）`)
+    ElMessage.success(t('pipelineModes.message.batchExportSuccess', { count: selectedPipelines.value.length }))
   } catch (error: any) {
-    ElMessage.error('批量导出失败：' + (error.message || error))
+    ElMessage.error(t('pipelineModes.message.batchExportFailed') + '：' + (error.message || error))
   } finally {
     batchExporting.value = false
   }
 }
 
-// 支持通过路由参数打开特定流水线
 const openEditById = (id: string) => {
   const pipeline = pipelines.value.find(p => p.id === id)
   if (pipeline) {
     openEdit(pipeline)
   } else {
-    ElMessage.error(`流水线 ${id} 不存在`)
+    ElMessage.error(t('pipelineModes.message.pipelineNotFound', { id }))
   }
 }
 
-// 监听路由参数变化
 watch(() => route.params.id, (id) => {
   if (id && canvasVisible.value === false) {
-    // 等待数据加载完成后打开编辑
     if (pipelines.value.length > 0) {
-      openEditById(id)
+      openEditById(id as string)
     } else {
-      // 数据未加载，先加载再打开
       loadData().then(() => {
-        openEditById(id)
+        openEditById(id as string)
       })
     }
   }
 }, { immediate: true })
 
-// 监听路由路径变化（创建模式）：先弹出基础信息表单，而非直接打开画布
 watch(() => route.path, (path) => {
   if (
     path === '/pipelines/create' &&
@@ -821,24 +801,23 @@ const handleEditorClosed = () => {
 
 const handleDelete = async (row: Pipeline) => {
   try {
-    await ElMessageBox.confirm(`确定删除流水线 "${row.name}" 吗？`, '确认删除', {
+    await ElMessageBox.confirm(t('pipelineModes.message.deleteConfirm', { name: row.name }), t('pipelineModes.message.deleteTitle'), {
       type: 'warning',
-      confirmButtonText: '删除',
-      cancelButtonText: '取消'
+      confirmButtonText: t('pipelineModes.message.deleteBtn'),
+      cancelButtonText: t('pipelineModes.message.cancelBtn')
     })
     const deletedId = row.id
     await deletePipeline(deletedId)
     pipelines.value = pipelines.value.filter(p => p.id !== deletedId)
     selectedPipelines.value = selectedPipelines.value.filter(p => p.id !== deletedId)
-    ElMessage.success('删除成功')
+    ElMessage.success(t('pipelineModes.message.deleteSuccess'))
   } catch (error: any) {
     if (error === 'cancel' || error === 'close') return
-    ElMessage.error('删除失败：' + (error.message || error))
+    ElMessage.error(t('pipelineModes.message.deleteFailed') + '：' + (error.message || error))
     await loadData()
   }
 }
 
-// ── 初始化 ───────────────────────────────────────────────────────────────────
 onMounted(() => {
   loadAllData()
 })

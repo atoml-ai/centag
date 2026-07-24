@@ -6,73 +6,92 @@
         {{ statusText }}
       </span>
       <span class="status-sep">·</span>
-      <span class="status-item">版本 <span class="mono">{{ status.version || '--' }}</span></span>
+      <span class="status-item">{{ t('statusBar.version', { version: status.version || '--' }) }}</span>
       <span class="status-sep">·</span>
-      <span class="status-item">运行时长 {{ formatUptime(status.uptime) }}</span>
+      <span class="status-item">{{ t('statusBar.uptime', { uptime: formatUptime(status.uptime) }) }}</span>
       <span class="status-sep">·</span>
-      <span class="status-item">启动于 {{ status.start_time || '--' }}</span>
+      <span class="status-item">{{ t('statusBar.startedAt', { time: status.start_time || '--' }) }}</span>
 
       <span class="status-sep status-sep-group">|</span>
       <span
         class="status-item status-clickable"
-        :title="backendId ? `后端 ID: ${backendId}` : '未设置默认后端'"
+        :title="backendId ? t('statusBar.backendTitle', { id: backendId }) : t('statusBar.backendTitleNone')"
         @click="router.push('/dashboard')"
       >
         <el-icon :size="12"><Cpu /></el-icon>
-        <span>后端</span>
-        <span class="mono truncate">{{ backendName || '未设置' }}</span>
+        <span>{{ t('statusBar.backendLabel') }}</span>
+        <span class="mono truncate">{{ backendName || t('statusBar.backendNone') }}</span>
       </span>
       <span
         class="status-item status-clickable"
-        :title="model ? `默认模型: ${model}` : '未设置默认模型'"
+        :title="model ? t('statusBar.modelTitle', { model }) : t('statusBar.modelTitleNone')"
         @click="router.push('/dashboard')"
       >
         <el-icon :size="12"><Coin /></el-icon>
-        <span>模型</span>
-        <span class="mono truncate">{{ model || '未设置' }}</span>
+        <span>{{ t('statusBar.modelLabel') }}</span>
+        <span class="mono truncate">{{ model || t('statusBar.modelNone') }}</span>
       </span>
       <span
         class="status-item status-clickable"
-        :title="pipelineId ? `流水线 ID: ${pipelineId}` : '未设置默认流水线'"
+        :title="pipelineId ? t('statusBar.pipelineTitle', { id: pipelineId }) : t('statusBar.pipelineTitleNone')"
         @click="router.push('/dashboard')"
       >
         <el-icon :size="12"><Share /></el-icon>
-        <span>流水线</span>
-        <span class="mono truncate">{{ pipelineName || '未设置' }}</span>
+        <span>{{ t('statusBar.pipelineLabel') }}</span>
+        <span class="mono truncate">{{ pipelineName || t('statusBar.pipelineNone') }}</span>
       </span>
 
       <span class="status-sep status-sep-group">|</span>
       <span
         class="status-item status-clickable"
-        title="查看用量与计费"
+        :title="t('statusBar.totalCostTitle')"
         @click="goUsage"
       >
         <el-icon :size="12"><Money /></el-icon>
-        <span>总费用</span>
+        <span>{{ t('statusBar.totalCost') }}</span>
         <span class="mono">{{ costText }}</span>
       </span>
       <span
         class="status-item status-clickable"
-        title="查看 Token 用量"
+        :title="t('statusBar.totalTokensTitle')"
         @click="goUsage"
       >
         <el-icon :size="12"><DataLine /></el-icon>
-        <span>总 Token</span>
+        <span>{{ t('statusBar.totalTokens') }}</span>
         <span class="mono">{{ tokensText }}</span>
       </span>
     </div>
     <div class="status-right">
+      <el-dropdown trigger="click" @command="(cmd) => handleLocaleChange(cmd as AppLocale)" size="small">
+        <span class="status-item status-clickable">
+          <el-icon :size="12"><Link /></el-icon>
+          <span>{{ localeLabels[localeStore.getLocale()] }}</span>
+        </span>
+        <template #dropdown>
+          <el-dropdown-menu>
+            <el-dropdown-item
+              v-for="locale in supportedLocales"
+              :key="locale"
+              :command="locale"
+              :class="{ 'is-active': localeStore.getLocale() === locale }"
+            >
+              {{ localeLabels[locale] }}
+            </el-dropdown-item>
+          </el-dropdown-menu>
+        </template>
+      </el-dropdown>
+      <span class="status-sep status-sep-group">|</span>
       <span
         class="status-item status-log-toggle"
         :class="{ 'status-log-active': logPanelVisible }"
-        title="实时日志控制台"
+        :title="t('statusBar.logTitle')"
         @click="toggleLogPanel"
       >
         <el-icon :size="12"><Monitor /></el-icon>
-        <span>日志</span>
+        <span>{{ t('statusBar.logLabel') }}</span>
       </span>
       <span class="status-sep status-sep-group">|</span>
-      <span class="status-item">构建于 {{ status.build_time || '--' }}</span>
+      <span class="status-item">{{ t('statusBar.buildTime', { time: status.build_time || '--' }) }}</span>
     </div>
   </div>
 </template>
@@ -80,7 +99,8 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { Cpu, Coin, Share, Money, DataLine, Monitor } from '@element-plus/icons-vue'
+import { useI18n } from 'vue-i18n'
+import { Cpu, Coin, Share, Money, DataLine, Monitor, Link } from '@element-plus/icons-vue'
 import { getStatus } from '@/api'
 import { formatUptime } from '@/utils/format'
 import { useActivePipeline } from '@/composables/useActivePipeline'
@@ -89,9 +109,13 @@ import { useUsageTotals } from '@/composables/useUsageTotals'
 import { useLogPanel } from '@/composables/useLogPanel'
 import { useEdition } from '@/composables/useEdition'
 import { useAuthStore } from '@/stores/auth'
+import { useLocaleStore } from '@/stores/locale'
+import { supportedLocales, localeLabels, type AppLocale } from '@/i18n'
 
+const { t } = useI18n()
 const router = useRouter()
 const authStore = useAuthStore()
+const localeStore = useLocaleStore()
 const { isMinimal, isTeam } = useEdition()
 const status = ref<any>({})
 const { visible: logPanelVisible, toggle: toggleLogPanel } = useLogPanel()
@@ -105,7 +129,7 @@ const statusClass = computed(() => {
 })
 
 const statusText = computed(() => {
-  return status.value.status === 'healthy' ? '运行中' : '异常'
+  return status.value.status === 'healthy' ? t('statusBar.healthy') : t('statusBar.error')
 })
 
 function goUsage() {
@@ -113,12 +137,15 @@ function goUsage() {
     router.push('/dashboard')
     return
   }
-  // team 超管无 /token-usage，走成本看板
   if (isTeam.value && authStore.isAdmin) {
     router.push('/cost')
     return
   }
   router.push('/token-usage')
+}
+
+function handleLocaleChange(locale: AppLocale) {
+  localeStore.setLocale(locale)
 }
 
 async function loadStatus() {

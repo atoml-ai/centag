@@ -2,83 +2,81 @@
   <div class="dashboard" :class="rootClass">
     <div class="page-header" :class="{ 'page-header--actions-only': !sections.pageTitle }">
       <div v-if="sections.pageTitle">
-        <h1 class="page-title">{{ isPersonal ? '首页' : '概览' }}</h1>
+        <h1 class="page-title">{{ isPersonal ? $t('nav.dashboard') : $t('nav.overview') }}</h1>
         <p class="page-description">{{ pageDescription }}</p>
       </div>
       <div class="page-header-actions">
         <template v-if="sections.headerActions">
           <el-button type="success" @click="openPipelineChat()">
-            <el-icon><ChatDotRound /></el-icon>&nbsp;AI 对话
+            <el-icon><ChatDotRound /></el-icon>&nbsp;{{ $t('nav.chat') }}
           </el-button>
-          <el-button @click="securityDialogVisible = true">安全设置</el-button>
-          <el-button @click="handleLogout">退出登录</el-button>
+          <el-button @click="securityDialogVisible = true">{{ $t('config') }}</el-button>
+          <el-button @click="handleLogout">{{ $t('close') }}</el-button>
         </template>
       </div>
     </div>
 
-    <!-- 主区：后端 / 流水线 / 状态 / 接入 —— 由 layout + sections 控制 -->
     <div class="dash-main" :class="'dash-main--' + sections.layout">
-      <!-- 服务状态 -->
       <el-card v-if="sections.serviceStatus" class="info-card dash-card dash-card--status">
         <template #header>
           <div class="card-head">
             <el-icon class="card-icon service-color"><Monitor /></el-icon>
-            <span>服务状态</span>
+            <span>{{ $t('dashboard.serviceStatus') }}</span>
           </div>
         </template>
         <div class="info-rows">
           <template v-if="sections.serviceStatusCompact">
             <div class="personal-status-grid">
               <div class="personal-status-item">
-                <span class="info-label">运行状态</span>
+                <span class="info-label">{{ $t('dashboard.running') }}</span>
                 <el-tag :type="status.status === 'healthy' ? 'success' : 'danger'" size="small" effect="light">
-                  {{ status.status === 'healthy' ? '运行中' : '异常' }}
+                  {{ status.status === 'healthy' ? $t('dashboard.running') : $t('dashboard.abnormal') }}
                 </el-tag>
               </div>
               <div class="personal-status-item">
-                <span class="info-label">默认后端</span>
+                <span class="info-label">{{ $t('dashboard.defaultBackend') }}</span>
                 <div class="personal-backend-val">
-                  <span class="info-val">{{ defaultBackendSummary?.name || '未配置' }}</span>
+                  <span class="info-val">{{ defaultBackendSummary?.name || $t('dashboard.notConfigured') }}</span>
                   <el-tag v-if="defaultBackendSummary" size="small" effect="plain" type="info">
                     {{ defaultBackendSummary.type }}
                   </el-tag>
                 </div>
               </div>
               <div class="personal-status-item">
-                <span class="info-label">版本</span>
+                <span class="info-label">{{ $t('dashboard.version') }}</span>
                 <span class="info-val mono">{{ status.version || '--' }}</span>
               </div>
               <div class="personal-status-item">
-                <span class="info-label">运行时长</span>
+                <span class="info-label">{{ $t('dashboard.runtime') }}</span>
                 <span class="info-val">{{ formatUptime(status.uptime) }}</span>
               </div>
             </div>
           </template>
           <template v-else>
             <div class="info-row">
-              <span class="info-label">运行状态</span>
+              <span class="info-label">{{ $t('dashboard.running') }}</span>
               <el-tag :type="status.status === 'healthy' ? 'success' : 'danger'" size="small" effect="light">
-                {{ status.status === 'healthy' ? '● 运行中' : '● 异常' }}
+                {{ status.status === 'healthy' ? '● ' + $t('dashboard.running') : '● ' + $t('dashboard.abnormal') }}
               </el-tag>
             </div>
           </template>
 
           <template v-if="sections.teamAccessInStatus && (status.external_url || status.status === 'healthy')">
             <div v-if="status.external_url" class="info-row">
-              <span class="info-label">外部地址</span>
+              <span class="info-label">{{ $t('dashboard.externalAddress') }}</span>
               <div class="external-url-row">
                 <span class="info-val mono external-url-text">{{ status.external_url }}</span>
-                <el-tooltip content="复制地址" placement="top">
+                <el-tooltip :content="$t('dashboard.copyAddress')" placement="top">
                   <el-icon class="copy-icon" @click="copyExternalUrl"><CopyDocument /></el-icon>
                 </el-tooltip>
               </div>
             </div>
             <el-divider style="margin: 8px 0" />
-            <div class="section-label" style="margin-bottom: 6px;">客户端接入地址</div>
+            <div class="section-label" style="margin-bottom: 6px;">{{ $t('dashboard.clientAccess') }}</div>
             <div v-for="ep in apiEndpoints" :key="ep.path" class="endpoint-row">
               <el-tag size="small" :type="ep.tagType || undefined" class="endpoint-tag">{{ ep.label }}</el-tag>
               <span class="endpoint-url mono">{{ baseUrl }}{{ ep.path }}</span>
-              <el-tooltip :content="'复制 ' + ep.label + ' 地址'" placement="top">
+              <el-tooltip :content="$t('dashboard.copyAddress') + ' ' + ep.label" placement="top">
                 <el-icon class="copy-icon" @click="copyEndpoint(ep)"><CopyDocument /></el-icon>
               </el-tooltip>
             </div>
@@ -87,8 +85,8 @@
           <template v-if="sections.pluginsStorage">
             <el-divider style="margin: 8px 0" />
             <div class="info-row section-title-row">
-              <span class="section-label">插件详情列表</span>
-              <span class="card-badge">{{ dashboard.plugin_running }} / {{ dashboard.plugin_count }} 运行中</span>
+              <span class="section-label">{{ $t('dashboard.pluginList') }}</span>
+              <span class="card-badge">{{ dashboard.plugin_running }} / {{ dashboard.plugin_count }} {{ $t('dashboard.pluginsRunning') }}</span>
             </div>
             <div class="plugin-list">
               <div v-for="p in plugins" :key="p.name" class="plugin-item">
@@ -98,48 +96,48 @@
                     size="small"
                     effect="light"
                     class="plugin-status"
-                  >{{ p.status === 'running' ? '运行中' : p.status }}</el-tag>
+                  >{{ p.status === 'running' ? $t('dashboard.running') : p.status }}</el-tag>
                   <div class="plugin-info">
                     <div class="plugin-name">{{ p.name }}</div>
                     <div class="plugin-meta">{{ p.type }} · v{{ p.version }}</div>
                   </div>
                 </div>
               </div>
-              <div v-if="!plugins.length" class="empty-tip">暂无插件</div>
+              <div v-if="!plugins.length" class="empty-tip">{{ $t('dashboard.noPlugins') }}</div>
             </div>
 
             <el-divider style="margin: 8px 0" />
             <div class="info-row section-title-row">
-              <span class="section-label">存储于数据库</span>
-              <span class="card-badge">{{ storages.length + 1 }} 项</span>
+              <span class="section-label">{{ $t('dashboard.storedInDatabase') }}</span>
+              <span class="card-badge">{{ $t('dashboard.items', { count: storages.length + 1 }) }}</span>
             </div>
             <div class="info-section">
-              <div class="section-label info-section-head">数据库</div>
+              <div class="section-label info-section-head">{{ $t('dashboard.database') }}</div>
               <div class="info-row info-section-row">
-                <span class="info-label">驱动类型</span>
+                <span class="info-label">{{ $t('dashboard.driverType') }}</span>
                 <el-tag :type="getDbDriverType(dashboard.database?.driver)" size="small" effect="light">
                   {{ formatDbDriver(dashboard.database?.driver) }}
                 </el-tag>
               </div>
               <div class="info-row info-section-row">
-                <span class="info-label">连接状态</span>
+                <span class="info-label">{{ $t('dashboard.connectionStatus') }}</span>
                 <el-tag
                   :type="dashboard.database?.status === 'connected' ? 'success' : 'danger'"
                   size="small"
                   effect="light"
                 >
-                  {{ dashboard.database?.status === 'connected' ? '已连接' : '未连接' }}
+                  {{ dashboard.database?.status === 'connected' ? $t('dashboard.connected') : $t('dashboard.notConnected') }}
                 </el-tag>
               </div>
               <div class="info-row">
-                <span class="info-label">连接地址</span>
-                <span class="info-val mono">{{ dashboard.database?.address || '未知' }}</span>
+                <span class="info-label">{{ $t('dashboard.connectionAddress') }}</span>
+                <span class="info-val mono">{{ dashboard.database?.address || $t('dashboard.unknown') }}</span>
               </div>
             </div>
 
             <el-divider style="margin: 8px 0" />
             <div class="info-section">
-              <div class="section-label info-section-head">存储中间件</div>
+              <div class="section-label info-section-head">{{ $t('dashboard.storageMiddleware') }}</div>
               <div v-for="s in storages" :key="s.name" class="backend-item compact-backend-item">
                 <div class="backend-left">
                   <el-tag
@@ -147,24 +145,24 @@
                     size="small"
                     effect="light"
                     class="backend-status"
-                  >{{ !s.enabled ? '禁用' : s.healthy ? '健康' : '异常' }}</el-tag>
+                  >{{ !s.enabled ? $t('dashboard.disabled') : s.healthy ? $t('dashboard.healthy') : $t('dashboard.abnormal') }}</el-tag>
                   <div class="backend-info">
                     <div class="backend-name">
                       {{ s.name }}
-                      <el-tag v-if="s.is_default" type="warning" size="small" effect="plain" style="margin-left:6px">默认</el-tag>
+                      <el-tag v-if="s.is_default" type="warning" size="small" effect="plain" style="margin-left:6px">{{ $t('dashboard.defaultTag') }}</el-tag>
                     </div>
                     <div class="backend-meta">{{ s.type }} · {{ s.description }}</div>
                   </div>
                 </div>
               </div>
-              <div v-if="!storages.length" class="empty-tip compact-empty-tip">暂无存储配置</div>
+              <div v-if="!storages.length" class="empty-tip compact-empty-tip">{{ $t('dashboard.noStorageConfig') }}</div>
             </div>
           </template>
 
           <template v-if="sections.proxyControls">
             <el-divider style="margin: 8px 0" />
             <div class="info-row section-title-row">
-              <span class="section-label">系统代理</span>
+              <span class="section-label">{{ $t('dashboard.systemProxy') }}</span>
               <el-switch
                 v-model="proxyStatus.enabled"
                 :loading="proxyToggling"
@@ -173,19 +171,19 @@
               />
             </div>
             <div v-if="proxyStatus.enabled" class="info-row">
-              <span class="info-label">PAC 代理</span>
+              <span class="info-label">{{ $t('dashboard.systemProxy') }}</span>
               <el-tag :type="proxyStatus.pac_enabled ? 'success' : 'info'" size="small" effect="plain">
-                {{ proxyStatus.pac_enabled ? '已启用' : '未启用' }}
+                {{ proxyStatus.pac_enabled ? $t('dashboard.enabled') : $t('dashboard.disabled') }}
               </el-tag>
             </div>
             <div v-if="proxyStatus.pac_domains?.length" class="info-row">
-              <span class="info-label">代理域名</span>
-              <span class="info-val">{{ proxyStatus.pac_domains.length }} 个</span>
+              <span class="info-label">{{ $t('dashboard.proxyDomain') }}</span>
+              <span class="info-val">{{ $t('dashboard.items', { count: proxyStatus.pac_domains.length }) }}</span>
             </div>
 
             <el-divider style="margin: 8px 0" />
             <div class="info-row section-title-row">
-              <span class="section-label">Host 代理</span>
+              <span class="section-label">{{ $t('dashboard.hostProxy') }}</span>
               <el-switch
                 v-model="hostProxy.enabled"
                 :loading="hostProxyToggling"
@@ -195,23 +193,22 @@
             </div>
             <template v-if="hostProxy.enabled">
               <div class="info-row">
-                <span class="info-label">HTTP 端口</span>
+                <span class="info-label">{{ $t('dashboard.httpPort') }}</span>
                 <span class="info-val mono">{{ hostProxy.http_port }}</span>
               </div>
               <div class="info-row">
-                <span class="info-label">HTTPS 端口</span>
+                <span class="info-label">{{ $t('dashboard.httpsPort') }}</span>
                 <span class="info-val mono">{{ hostProxy.https_port }}</span>
               </div>
             </template>
             <div v-if="hostProxy.domains" class="info-row">
-              <span class="info-label">代理域名</span>
-              <span class="info-val">{{ Object.keys(hostProxy.domains || {}).length }} 个</span>
+              <span class="info-label">{{ $t('dashboard.proxyDomain') }}</span>
+              <span class="info-val">{{ $t('dashboard.items', { count: Object.keys(hostProxy.domains || {}).length }) }}</span>
             </div>
           </template>
         </div>
       </el-card>
 
-      <!-- API 接入 -->
       <el-card
         v-if="sections.accessPanel"
         class="info-card access-card dash-card dash-card--access"
@@ -219,16 +216,14 @@
         :shadow="sections.accessCompact ? 'never' : undefined"
       >
         <ApiAccessPanel :base-url="baseUrl" :compact="sections.accessCompact" />
-        <!-- accessQuickLinks 已关闭：对话走流水线「测试」抽屉，后端在首页面板 -->
       </el-card>
 
-      <!-- 后端 -->
       <el-card v-if="sections.backends" class="info-card config-card dash-card dash-card--backends">
         <template #header>
           <div class="card-head">
             <el-icon class="card-icon backend-color"><DataBoard /></el-icon>
-            <span>后端配置</span>
-            <span class="card-badge">{{ backends.length }} 个</span>
+            <span>{{ $t('dashboard.backendConfig') }}</span>
+            <span class="card-badge">{{ $t('dashboard.items', { count: backends.length }) }}</span>
           </div>
         </template>
         <DashboardBackendList
@@ -239,21 +234,20 @@
         />
       </el-card>
 
-      <!-- 流水线 -->
       <el-card v-if="sections.pipelines" class="info-card config-card dash-card dash-card--pipelines">
         <template #header>
           <div class="card-head" :class="{ 'card-head--actions': sections.pipelineCreateButton }">
             <div class="card-head-main">
               <el-icon class="card-icon pipeline-color"><Share /></el-icon>
-              <span>流水线配置</span>
-              <span v-if="sections.pipelineCreateButton" class="card-badge">{{ pipelineCount }} 个</span>
+              <span>{{ $t('dashboard.pipelineConfig') }}</span>
+              <span v-if="sections.pipelineCreateButton" class="card-badge">{{ $t('dashboard.items', { count: pipelineCount }) }}</span>
             </div>
             <div v-if="sections.pipelineCreateButton" class="card-actions">
               <el-button size="small" plain @click="pipelinePanelRef?.openImport()">
-                导入
+                {{ $t('dashboard.importBtn') }}
               </el-button>
               <el-button type="primary" size="small" @click="pipelinePanelRef?.openCreate()">
-                + 创建流水线
+                + {{ $t('dashboard.createPipeline') }}
               </el-button>
             </div>
           </div>
@@ -266,15 +260,14 @@
       </el-card>
     </div>
 
-    <!-- 用量与会话 / 计费（三版可开） -->
     <el-card v-if="sections.usageBilling" class="info-card usage-card mt-card">
       <el-collapse v-model="usageCollapse" class="usage-collapse">
         <el-collapse-item name="usage">
           <template #title>
             <div class="card-head usage-collapse-title">
               <el-icon class="card-icon service-color"><TrendCharts /></el-icon>
-              <span>用量与会话</span>
-              <span v-if="sections.usageEphemeralHint" class="card-badge">进程内 · 重启清零</span>
+              <span>{{ $t('dashboard.usageAndSessions') }}</span>
+              <span v-if="sections.usageEphemeralHint" class="card-badge">{{ $t('dashboard.processInternal') }}</span>
             </div>
           </template>
           <MinimalUsagePanel
@@ -285,34 +278,33 @@
       </el-collapse>
     </el-card>
 
-    <!-- 团队运维统计 -->
     <el-card v-if="sections.opsStats" class="info-card mt-card stats-card">
       <template #header>
         <div class="card-head">
           <el-icon class="card-icon stats-color"><DataAnalysis /></el-icon>
-          <span>运行统计</span>
+          <span>{{ $t('dashboard.runStats') }}</span>
         </div>
       </template>
       <div class="stats-grid">
         <div class="stat-cell">
           <div class="stat-icon-wrap request-bg"><el-icon :size="18"><Document /></el-icon></div>
           <div class="stat-num">{{ formatNumber(dashboard.request.total_requests) }}</div>
-          <div class="stat-label">请求总数</div>
+          <div class="stat-label">{{ $t('dashboard.totalRequests') }}</div>
         </div>
         <div class="stat-cell">
           <div class="stat-icon-wrap hit-bg"><el-icon :size="18"><CircleCheck /></el-icon></div>
           <div class="stat-num">{{ formatNumber(dashboard.request.success_requests) }}</div>
-          <div class="stat-label">成功请求</div>
+          <div class="stat-label">{{ $t('dashboard.successRequests') }}</div>
         </div>
         <div class="stat-cell">
           <div class="stat-icon-wrap error-bg"><el-icon :size="18"><Warning /></el-icon></div>
           <div class="stat-num">{{ formatNumber(dashboard.request.error_requests) }}</div>
-          <div class="stat-label">错误数</div>
+          <div class="stat-label">{{ $t('dashboard.errorCount') }}</div>
         </div>
         <div class="stat-cell">
           <div class="stat-icon-wrap error-bg"><el-icon :size="18"><TrendCharts /></el-icon></div>
           <div class="stat-num">{{ dashboard.request.error_rate_percent?.toFixed(2) ?? '0' }}%</div>
-          <div class="stat-label">错误率</div>
+          <div class="stat-label">{{ $t('dashboard.errorRate') }}</div>
         </div>
         <div class="stat-cell">
           <div class="stat-icon-wrap qps-bg"><el-icon :size="18"><Timer /></el-icon></div>
@@ -322,7 +314,7 @@
         <div class="stat-cell">
           <div class="stat-icon-wrap latency-bg"><el-icon :size="18"><Stopwatch /></el-icon></div>
           <div class="stat-num">{{ dashboard.request.avg_latency_ms ?? 0 }}ms</div>
-          <div class="stat-label">平均延迟</div>
+          <div class="stat-label">{{ $t('dashboard.avgLatency') }}</div>
         </div>
       </div>
       <el-divider style="margin: 10px 0" />
@@ -330,22 +322,22 @@
         <div class="stat-cell">
           <div class="stat-icon-wrap hit-bg"><el-icon :size="18"><CircleCheck /></el-icon></div>
           <div class="stat-num">{{ formatNumber(dashboard.cache.hits) }}</div>
-          <div class="stat-label">缓存命中</div>
+          <div class="stat-label">{{ $t('dashboard.cacheHit') }}</div>
         </div>
         <div class="stat-cell">
           <div class="stat-icon-wrap rate-bg"><el-icon :size="18"><TrendCharts /></el-icon></div>
           <div class="stat-num">{{ hitRate }}%</div>
-          <div class="stat-label">命中率</div>
+          <div class="stat-label">{{ $t('dashboard.hitRate') }}</div>
         </div>
         <div class="stat-cell">
           <div class="stat-icon-wrap entry-bg"><el-icon :size="18"><Coin /></el-icon></div>
           <div class="stat-num">{{ formatNumber(dashboard.cache.entries) }}</div>
-          <div class="stat-label">缓存条目</div>
+          <div class="stat-label">{{ $t('dashboard.cacheEntries') }}</div>
         </div>
         <div class="stat-cell">
           <div class="stat-icon-wrap request-bg"><el-icon :size="18"><DataLine /></el-icon></div>
           <div class="stat-num">{{ formatNumber(dashboard.cache.misses) }}</div>
-          <div class="stat-label">未命中</div>
+          <div class="stat-label">{{ $t('dashboard.missed') }}</div>
         </div>
       </div>
     </el-card>
@@ -354,38 +346,38 @@
       <template #header>
         <div class="card-head">
           <el-icon class="card-icon stats-color"><Cpu /></el-icon>
-          <span>模型统计</span>
+          <span>{{ $t('dashboard.modelStats') }}</span>
         </div>
       </template>
       <el-table :data="modelStatsList" size="small" style="width: 100%">
-        <el-table-column prop="name" label="模型" min-width="120">
+        <el-table-column prop="name" :label="$t('dashboard.model')" min-width="120">
           <template #default="{ row }">
             <el-tag size="small" :type="row.error_rate > 10 ? 'danger' : 'success'" effect="light">
               {{ row.name }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="total_requests" label="请求数" align="center" width="100">
+        <el-table-column prop="total_requests" :label="$t('dashboard.requests')" align="center" width="100">
           <template #default="{ row }">
             <span class="stat-num-sm">{{ formatNumber(row.total_requests) }}</span>
           </template>
         </el-table-column>
-        <el-table-column prop="avg_latency_ms" label="平均延迟" align="center" width="100">
+        <el-table-column prop="avg_latency_ms" :label="$t('dashboard.avgLatency')" align="center" width="100">
           <template #default="{ row }">
             <span class="stat-num-sm">{{ row.avg_latency_ms }}ms</span>
           </template>
         </el-table-column>
-        <el-table-column label="缓存命中" align="center" width="100">
+        <el-table-column :label="$t('dashboard.cacheHit')" align="center" width="100">
           <template #default="{ row }">
             <span class="stat-num-sm">{{ formatNumber(row.cache_hits) }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="命中率" align="center" width="80">
+        <el-table-column :label="$t('dashboard.hitRate')" align="center" width="80">
           <template #default="{ row }">
             {{ row.cache_hit_rate_percent?.toFixed(1) }}%
           </template>
         </el-table-column>
-        <el-table-column label="错误率" align="center" width="80">
+        <el-table-column :label="$t('dashboard.errorRate')" align="center" width="80">
           <template #default="{ row }">
             <span :class="row.error_rate > 10 ? 'text-danger' : ''">{{ row.error_rate?.toFixed(1) }}%</span>
           </template>
@@ -397,11 +389,11 @@
       <template #header>
         <div class="card-head">
           <el-icon class="card-icon chart-color"><TrendCharts /></el-icon>
-          <span>性能趋势</span>
+          <span>{{ $t('dashboard.performance') }}</span>
           <el-radio-group v-model="chartTimeRange" size="small" style="margin-left: auto;">
-            <el-radio-button value="1m">1分钟</el-radio-button>
-            <el-radio-button value="5m">5分钟</el-radio-button>
-            <el-radio-button value="15m">15分钟</el-radio-button>
+            <el-radio-button value="1m">{{ $t('dashboard.oneMinute') }}</el-radio-button>
+            <el-radio-button value="5m">{{ $t('dashboard.fiveMinutes') }}</el-radio-button>
+            <el-radio-button value="15m">{{ $t('dashboard.fifteenMinutes') }}</el-radio-button>
           </el-radio-group>
         </div>
       </template>
@@ -412,40 +404,40 @@
       <template #header>
         <div class="card-head">
           <el-icon class="card-icon log-color"><List /></el-icon>
-          <span>实时请求</span>
-          <el-button size="small" text style="margin-left: auto;" @click="requestLogs = []">清空</el-button>
+          <span>{{ $t('dashboard.realTimeRequests') }}</span>
+          <el-button size="small" text style="margin-left: auto;" @click="requestLogs = []">{{ $t('dashboard.clear') }}</el-button>
         </div>
       </template>
       <el-table :data="requestLogs" size="small" max-height="240" style="width: 100%">
-        <el-table-column label="时间" width="90">
+        <el-table-column :label="$t('dashboard.time')" width="90">
           <template #default="{ row }">
             <span class="log-time">{{ row.time }}</span>
           </template>
         </el-table-column>
-        <el-table-column prop="model" label="模型" width="140">
+        <el-table-column prop="model" :label="$t('dashboard.model')" width="140">
           <template #default="{ row }">
             <el-tag size="small" effect="plain">{{ row.model || '-' }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="status" label="状态" width="70" align="center">
+        <el-table-column prop="status" :label="$t('dashboard.status')" width="70" align="center">
           <template #default="{ row }">
             <el-tag :type="row.status === 200 ? 'success' : 'danger'" size="small">{{ row.status }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="cacheStatus" label="缓存" width="90" align="center">
+        <el-table-column prop="cacheStatus" :label="$t('dashboard.cache')" width="90" align="center">
           <template #default="{ row }">
-            <el-tag v-if="row.cacheStatus === 'HIT-EXACT'" type="success" size="small">精确命中</el-tag>
-            <el-tag v-else-if="row.cacheStatus === 'HIT-SEMANTIC'" type="warning" size="small">语义命中</el-tag>
-            <el-tag v-else-if="row.cacheStatus === 'MISS'" size="small">未命中</el-tag>
+            <el-tag v-if="row.cacheStatus === 'HIT-EXACT'" type="success" size="small">{{ $t('dashboard.exactHit') }}</el-tag>
+            <el-tag v-else-if="row.cacheStatus === 'HIT-SEMANTIC'" type="warning" size="small">{{ $t('dashboard.semanticHit') }}</el-tag>
+            <el-tag v-else-if="row.cacheStatus === 'MISS'" size="small">{{ $t('dashboard.uncached') }}</el-tag>
             <span v-else class="text-muted">-</span>
           </template>
         </el-table-column>
-        <el-table-column label="延迟" width="80" align="right">
+        <el-table-column :label="$t('dashboard.latency')" width="80" align="right">
           <template #default="{ row }">
             <span :class="row.latency > 5000 ? 'text-warning' : ''">{{ row.latency }}ms</span>
           </template>
         </el-table-column>
-        <el-table-column prop="prompt" label="请求内容" min-width="200">
+        <el-table-column prop="prompt" :label="$t('dashboard.requestContent')" min-width="200">
           <template #default="{ row }">
             <el-text size="small" class="log-prompt" :line-clamp="1">{{ row.prompt || '-' }}</el-text>
           </template>
@@ -464,6 +456,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   Document, CircleCheck, TrendCharts, Warning,
@@ -492,6 +485,7 @@ import { getPipelineDefaults } from '@/api/pipeline'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 
+const { t } = useI18n()
 const router = useRouter()
 const authStore = useAuthStore()
 const { edition, isPersonal } = useEdition()
@@ -505,17 +499,17 @@ const rootClass = computed(() => ({
 }))
 const pageDescription = computed(() => {
   if (isPersonal.value || (edition.value === 'team' && !authStore.isAdmin)) {
-    return '配置后端与默认流水线，复制 API 地址即可在客户端使用'
+    return t('dashboard.pageDescriptionUser')
   }
   if (edition.value === 'team' && authStore.isAdmin) {
-    return '管理共用后端/策略、用户与限额；业务干活请使用普通用户账号'
+    return t('dashboard.pageDescriptionAdmin')
   }
-  return 'Centag 服务运行状态与基础配置总览'
+  return t('dashboard.pageDescriptionDefault')
 })
 const usageHint = computed(() =>
   sections.value.usageEphemeralHint
-    ? '本次进程内计量与成本估算（重启后清零）。'
-    : '计量与成本估算（按当前服务存储策略保留）。'
+    ? t('dashboard.usageHintDefault')
+    : t('dashboard.usageHintAdmin')
 )
 const pipelinePanelRef = ref<{
   reload: () => void
@@ -528,7 +522,6 @@ const pipelineCount = ref(0)
 const securityDialogVisible = ref(false)
 const chatDialogVisible = ref(false)
 const chatPipelineId = ref('')
-/** 用量与会话默认折叠 */
 const usageCollapse = ref<string[]>([])
 
 async function openPipelineChat(pipelineId = '') {
@@ -561,9 +554,9 @@ watch(usageCollapse, (names) => {
 
 async function handleLogout() {
   try {
-    await ElMessageBox.confirm('确定要退出登录吗？', '退出登录', {
-      confirmButtonText: '退出',
-      cancelButtonText: '取消',
+    await ElMessageBox.confirm(t('common.deleteConfirm'), t('close'), {
+      confirmButtonText: t('close'),
+      cancelButtonText: t('cancel'),
       type: 'warning'
     })
   } catch {
@@ -573,7 +566,6 @@ async function handleLogout() {
   router.push('/login')
 }
 
-// 注册 ECharts 组件
 use([CanvasRenderer, LineChart, GridComponent, TooltipComponent, LegendComponent])
 
 function formatNumber(n: number | undefined | null): string {
@@ -621,9 +613,9 @@ async function copyExternalUrl() {
   if (!url) return
   try {
     await navigator.clipboard.writeText(url)
-    ElMessage.success('已复制外部地址')
+    ElMessage.success(t('dashboard.copiedExternalAddress'))
   } catch {
-    ElMessage.error('复制失败，请手动复制')
+    ElMessage.error(t('dashboard.copyFailed'))
   }
 }
 
@@ -631,9 +623,9 @@ async function copyEndpoint(ep: { label: string; path: string }) {
   const url = baseUrl.value + ep.path
   try {
     await navigator.clipboard.writeText(url)
-    ElMessage.success(`已复制 ${ep.label} 地址`)
+    ElMessage.success(t('dashboard.copiedExternalAddress'))
   } catch {
-    ElMessage.error('复制失败，请手动复制')
+    ElMessage.error(t('dashboard.copyFailed'))
   }
 }
 
@@ -644,7 +636,6 @@ const hitRate = computed(() => {
   return ((h / (h + m)) * 100).toFixed(2)
 })
 
-// 模型统计数据
 const modelStatsList = computed(() => {
   const stats = dashboard.value.request?.model_stats || {}
   return Object.entries(stats).map(([name, data]: [string, any]) => ({
@@ -659,7 +650,6 @@ const modelStatsList = computed(() => {
   }))
 })
 
-// 趋势图表数据
 const chartTimeRange = ref('1m')
 const historyData = ref<{ time: string; qps: number; latency: number; hitRate: number }[]>([])
 
@@ -668,14 +658,14 @@ const chartOption = computed(() => {
   const qpsData = historyData.value.map(d => d.qps)
   const latencyData = historyData.value.map(d => d.latency)
   const hitRateData = historyData.value.map(d => d.hitRate)
-  
+
   return {
     tooltip: {
       trigger: 'axis',
       axisPointer: { type: 'cross' }
     },
     legend: {
-      data: ['QPS', '延迟(ms)', '命中率(%)'],
+      data: ['QPS', t('dashboard.latencyMs'), t('dashboard.hitRatePercent')],
       top: 0
     },
     grid: {
@@ -693,13 +683,13 @@ const chartOption = computed(() => {
     yAxis: [
       {
         type: 'value',
-        name: 'QPS/延迟',
+        name: t('dashboard.qpsLatency'),
         position: 'left',
         axisLabel: { fontSize: 10 }
       },
       {
         type: 'value',
-        name: '命中率(%)',
+        name: t('dashboard.hitRatePercent'),
         min: 0,
         max: 100,
         position: 'right',
@@ -716,14 +706,14 @@ const chartOption = computed(() => {
         areaStyle: { color: 'rgba(103,194,58,0.1)' }
       },
       {
-        name: '延迟(ms)',
+        name: t('dashboard.latencyMs'),
         type: 'line',
         smooth: true,
         data: latencyData,
         itemStyle: { color: '#409eff' }
       },
       {
-        name: '命中率(%)',
+        name: t('dashboard.hitRatePercent'),
         type: 'line',
         smooth: true,
         yAxisIndex: 1,
@@ -734,14 +724,12 @@ const chartOption = computed(() => {
   }
 })
 
-// 实时请求日志
 const requestLogs = ref<{ time: string; model: string; status: number; cacheStatus: string; latency: number; prompt: string }[]>([])
 
-// 添加新的请求日志
 function addRequestLog(data: any) {
   const now = new Date()
   const time = `${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}:${now.getSeconds().toString().padStart(2,'0')}`
-  
+
   requestLogs.value.unshift({
     time,
     model: data.model || '-',
@@ -750,14 +738,12 @@ function addRequestLog(data: any) {
     latency: data.latency || 0,
     prompt: data.prompt || '-'
   })
-  
-  // 保留最近50条
+
   if (requestLogs.value.length > 50) {
     requestLogs.value = requestLogs.value.slice(0, 50)
   }
 }
 
-// 切换系统代理
 async function toggleSystemProxy() {
   proxyToggling.value = true
   try {
@@ -768,16 +754,15 @@ async function toggleSystemProxy() {
         pac_enabled: proxyStatus.value.pac_enabled
       }
     })
-    ElMessage.success(proxyStatus.value.enabled ? '系统代理已启用' : '系统代理已禁用')
+    ElMessage.success(proxyStatus.value.enabled ? t('dashboard.systemProxyEnabled') : t('dashboard.systemProxyDisabled'))
   } catch (error: any) {
-    ElMessage.error('操作失败: ' + error.message)
+    ElMessage.error(t('dashboard.operationFailed', { msg: error.message }))
     proxyStatus.value.enabled = !proxyStatus.value.enabled
   } finally {
     proxyToggling.value = false
   }
 }
 
-// 切换 Host 代理
 async function toggleHostProxy() {
   hostProxyToggling.value = true
   try {
@@ -788,18 +773,17 @@ async function toggleHostProxy() {
         https_port: hostProxy.value.https_port || 8443
       }
     })
-    ElMessage.success(hostProxy.value.enabled ? 'Host代理已启用' : 'Host代理已禁用')
+    ElMessage.success(hostProxy.value.enabled ? t('dashboard.hostProxyEnabled') : t('dashboard.hostProxyDisabled'))
   } catch (error: any) {
-    ElMessage.error('操作失败: ' + error.message)
+    ElMessage.error(t('dashboard.operationFailed', { msg: error.message }))
     hostProxy.value.enabled = !hostProxy.value.enabled
   } finally {
     hostProxyToggling.value = false
   }
 }
 
-// 格式化数据库驱动名称
 function formatDbDriver(driver: string | undefined): string {
-  if (!driver) return '未知'
+  if (!driver) return t('dashboard.unknown')
   switch (driver.toLowerCase()) {
     case 'postgresql':
       return 'PostgreSQL'
@@ -812,7 +796,6 @@ function formatDbDriver(driver: string | undefined): string {
   }
 }
 
-// 获取数据库驱动标签类型
 function getDbDriverType(driver: string | undefined): string {
   if (!driver) return 'info'
   switch (driver.toLowerCase()) {
@@ -842,7 +825,7 @@ async function loadBackendsOnly() {
     backendListRef.value?.reloadDefault()
   } catch (e: any) {
     if (gen !== backendsLoadGen) return
-    ElMessage.error('加载后端数据失败: ' + (e.message || '未知错误'))
+    ElMessage.error(t('dashboard.loadBackendDataFailed', { msg: e.message || t('dashboard.unknownError') }))
   }
 }
 
@@ -901,25 +884,23 @@ async function load() {
     }
     pipelinePanelRef.value?.reload()
 
-    // 添加历史数据点
     const now = new Date()
     const time = `${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}`
     const qps = dashboard.value.request?.qps || 0
     const latency = dashboard.value.request?.avg_latency_ms || 0
     const cache = dashboard.value.cache || {}
-    const hitRateVal = cache.hits + cache.misses > 0 
-      ? (cache.hits / (cache.hits + cache.misses)) * 100 
+    const hitRateVal = cache.hits + cache.misses > 0
+      ? (cache.hits / (cache.hits + cache.misses)) * 100
       : 0
-    
+
     historyData.value.push({ time, qps, latency, hitRate: hitRateVal })
-    
-    // 根据时间范围保留数据
+
     const maxPoints = chartTimeRange.value === '1m' ? 6 : chartTimeRange.value === '5m' ? 30 : 90
     if (historyData.value.length > maxPoints) {
       historyData.value = historyData.value.slice(-maxPoints)
     }
   } catch (e: any) {
-    ElMessage.error('加载数据失败: ' + (e.message || '未知错误'))
+    ElMessage.error(t('dashboard.loadDataFailed', { msg: e.message || t('dashboard.unknownError') }))
   } finally {
     loading.value = false
   }
@@ -949,7 +930,6 @@ onMounted(() => {
   margin-bottom: 12px;
 }
 
-/* 图标色 */
 .request-bg  { background: rgba(102,126,234,0.12); color: #667eea; }
 .hit-bg      { background: rgba(16,185,129,0.12);  color: #10b981; }
 .rate-bg     { background: rgba(245,158,11,0.12);  color: #f59e0b; }
@@ -958,7 +938,6 @@ onMounted(() => {
 .error-bg    { background: rgba(239,68,68,0.12);   color: #ef4444; }
 .entry-bg    { background: rgba(20,184,166,0.12);  color: #14b8a6; }
 
-/* 统计网格（两行每行6/4列自适应） */
 .stats-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
@@ -984,7 +963,6 @@ onMounted(() => {
   margin-bottom: 6px;
 }
 
-/* 主区布局：由 sections.layout 决定 */
 .dash-main {
   display: grid;
   gap: 16px;
@@ -1107,7 +1085,6 @@ onMounted(() => {
 
 .mt-card { margin-top: 16px; }
 
-/* 信息卡片 */
 .info-card {
   border: 1px solid #e4e7ed;
   box-shadow: 0 1px 4px rgba(0,0,0,0.04);
@@ -1179,7 +1156,6 @@ onMounted(() => {
   flex-wrap: wrap;
 }
 
-/* Info rows */
 .info-rows {
   display: flex;
   flex-direction: column;
@@ -1281,7 +1257,6 @@ onMounted(() => {
   color: #409eff;
 }
 
-/* 存储列表复用 backend-item 样式 */
 .backend-item {
   display: flex;
   align-items: center;
@@ -1338,7 +1313,6 @@ onMounted(() => {
   padding: 8px 0;
 }
 
-/* 统计数字 */
 .stat-num {
   font-size: 1.35rem;
   font-weight: 600;
@@ -1353,7 +1327,6 @@ onMounted(() => {
   text-align: center;
 }
 
-/* 响应式 */
 @media (max-width: 1400px) {
   .grid-layout {
     grid-template-columns: repeat(2, 1fr);
@@ -1381,7 +1354,6 @@ onMounted(() => {
   }
 }
 
-/* Plugin list */
 .plugin-list {
   display: flex;
   flex-direction: column;
@@ -1429,7 +1401,6 @@ onMounted(() => {
   margin-top: 2px;
 }
 
-/* 新增组件样式 */
 .stat-num-sm {
   font-weight: 600;
   font-size: 0.9rem;
@@ -1453,12 +1424,10 @@ onMounted(() => {
   color: #4b5563;
 }
 
-/* 表格行悬停效果 */
 :deep(.el-table__row:hover) {
   cursor: default;
 }
 
-/* 图表容器 */
 :deep(.v-chart) {
   width: 100% !important;
 }

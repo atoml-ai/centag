@@ -1,17 +1,17 @@
 <template>
   <div class="node-plugin-manager">
     <div class="page-header">
-      <h2>节点插件管理器</h2>
+      <h2>{{ t('nodePluginManager.title') }}</h2>
       <div class="header-actions">
         <el-button @click="loadPlugins" :loading="loading">
           <el-icon><Refresh /></el-icon>
-          刷新
+          {{ t('nodePluginManager.refresh') }}
         </el-button>
       </div>
     </div>
 
     <div v-if="schemaVersion" class="schema-version-tip">
-      插件接口版本：{{ schemaVersion.split('/').pop() }}
+      {{ t('nodePluginManager.pluginInterfaceVersion', { version: schemaVersion.split('/').pop() }) }}
     </div>
 
     <NodePluginList
@@ -28,32 +28,32 @@
     >
       <template v-if="selectedPlugin">
         <el-descriptions :column="2" border>
-          <el-descriptions-item label="实现">
+          <el-descriptions-item :label="t('nodePluginManager.implementation')">
             <code>{{ selectedPlugin.implementation }}</code>
           </el-descriptions-item>
-          <el-descriptions-item label="版本">
+          <el-descriptions-item :label="t('nodePluginManager.version')">
             {{ selectedPlugin.version }}
           </el-descriptions-item>
-          <el-descriptions-item label="类型">
+          <el-descriptions-item :label="t('nodePluginManager.kind')">
             {{ selectedPlugin.kind }}
           </el-descriptions-item>
-          <el-descriptions-item label="插件类型">
-            <el-tag v-if="selectedPlugin.remote" size="small">远程</el-tag>
-            <el-tag v-else size="small">内置</el-tag>
+          <el-descriptions-item :label="t('nodePluginManager.pluginType')">
+            <el-tag v-if="selectedPlugin.remote" size="small">{{ t('nodePluginManager.remote') }}</el-tag>
+            <el-tag v-else size="small">{{ t('nodePluginManager.builtin') }}</el-tag>
           </el-descriptions-item>
-          <el-descriptions-item label="流式支持">
+          <el-descriptions-item :label="t('nodePluginManager.streamSupport')">
             <el-tag :type="selectedPlugin.supports_stream ? 'success' : 'info'" size="small">
-              {{ selectedPlugin.supports_stream ? '是' : '否' }}
+              {{ selectedPlugin.supports_stream ? t('nodePluginManager.yes') : t('nodePluginManager.no') }}
             </el-tag>
           </el-descriptions-item>
-          <el-descriptions-item label="已弃用">
-            <el-tag v-if="selectedPlugin.deprecated" type="warning" size="small">已弃用</el-tag>
+          <el-descriptions-item :label="t('nodePluginManager.deprecated')">
+            <el-tag v-if="selectedPlugin.deprecated" type="warning" size="small">{{ t('nodePluginManager.deprecatedTag') }}</el-tag>
             <span v-else>-</span>
           </el-descriptions-item>
-          <el-descriptions-item label="描述" :span="2">
+          <el-descriptions-item :label="t('nodePluginManager.description')" :span="2">
             {{ selectedPlugin.description || '-' }}
           </el-descriptions-item>
-          <el-descriptions-item label="权限" :span="2">
+          <el-descriptions-item :label="t('nodePluginManager.permissions')" :span="2">
             <el-tag
               v-for="perm in selectedPlugin.permissions"
               :key="perm"
@@ -63,9 +63,9 @@
             >
               {{ perm }}
             </el-tag>
-            <span v-if="!selectedPlugin.permissions?.length" class="text-muted">无</span>
+            <span v-if="!selectedPlugin.permissions?.length" class="text-muted">{{ t('nodePluginManager.none') }}</span>
           </el-descriptions-item>
-          <el-descriptions-item label="标签" :span="2">
+          <el-descriptions-item :label="t('nodePluginManager.tags')" :span="2">
             <el-tag
               v-for="tag in selectedPlugin.tags"
               :key="tag"
@@ -74,22 +74,22 @@
             >
               {{ tag }}
             </el-tag>
-            <span v-if="!selectedPlugin.tags?.length" class="text-muted">无</span>
+            <span v-if="!selectedPlugin.tags?.length" class="text-muted">{{ t('nodePluginManager.none') }}</span>
           </el-descriptions-item>
         </el-descriptions>
 
         <el-tabs style="margin-top: 16px">
-          <el-tab-pane label="配置模式">
+          <el-tab-pane :label="t('nodePluginManager.configSchema')">
             <pre v-if="selectedPlugin.config_schema">{{ formatJson(selectedPlugin.config_schema) }}</pre>
-            <el-empty v-else description="无配置模式" :image-size="60" />
+            <el-empty v-else :description="t('nodePluginManager.noConfigSchema')" :image-size="60" />
           </el-tab-pane>
-          <el-tab-pane label="输入模式">
+          <el-tab-pane :label="t('nodePluginManager.inputSchema')">
             <pre v-if="selectedPlugin.input_schema">{{ formatJson(selectedPlugin.input_schema) }}</pre>
-            <el-empty v-else description="无输入模式" :image-size="60" />
+            <el-empty v-else :description="t('nodePluginManager.noInputSchema')" :image-size="60" />
           </el-tab-pane>
-          <el-tab-pane label="输出模式">
+          <el-tab-pane :label="t('nodePluginManager.outputSchema')">
             <pre v-if="selectedPlugin.output_schema">{{ formatJson(selectedPlugin.output_schema) }}</pre>
-            <el-empty v-else description="无输出模式" :image-size="60" />
+            <el-empty v-else :description="t('nodePluginManager.noOutputSchema')" :image-size="60" />
           </el-tab-pane>
         </el-tabs>
       </template>
@@ -97,7 +97,7 @@
 
     <el-drawer
       v-model="testVisible"
-      title="测试插件"
+      :title="t('nodePluginManager.testPlugin')"
       size="70%"
       :before-close="() => testVisible = false"
     >
@@ -111,11 +111,14 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
 import { Refresh } from '@element-plus/icons-vue'
 import NodePluginList from '@/components/pipeline/NodePluginList.vue'
 import NodeTestPanel from '@/components/pipeline/NodeTestPanel.vue'
 import { getNodePlugins, parseNodePluginsResponse } from '@/api/pipeline'
+
+const { t } = useI18n()
 
 interface PluginDescriptor {
   name: string
@@ -158,7 +161,7 @@ async function loadPlugins() {
     plugins.value = parseNodePluginsResponse(resp)
   } catch (e) {
     console.error('Failed to load plugins:', e)
-    ElMessage.error('加载节点插件失败，请检查后端服务和插件注册接口')
+    ElMessage.error(t('nodePluginManager.loadPluginsFailed'))
   } finally {
     loading.value = false
   }

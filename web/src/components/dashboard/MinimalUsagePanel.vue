@@ -3,7 +3,7 @@
     <UsageMetricsSummary
       ref="metricsRef"
       mode="compact"
-      :hint="hint"
+      :hint="hint || t('minimalUsagePanel.hint')"
       show-billing-button
       @open-billing="billingVisible = true"
     />
@@ -18,12 +18,16 @@ import UsageMetricsSummary from '@/components/usage/UsageMetricsSummary.vue'
 import SessionBrowser from '@/components/usage/SessionBrowser.vue'
 import BillingRulesDialog from '@/components/dashboard/BillingRulesDialog.vue'
 
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
+
 withDefaults(
   defineProps<{
     hint?: string
   }>(),
   {
-    hint: '计量与成本估算（按当前服务存储策略保留）。'
+    hint: ''
   }
 )
 

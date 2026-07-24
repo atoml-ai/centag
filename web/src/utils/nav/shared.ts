@@ -6,41 +6,41 @@ import type { NavItem } from './types'
  * 普通用户菜单由 buildWorkerNav(capabilities) 同源生成。
  */
 
-type LeafOpts = { requiresAdmin?: boolean; requiresTeam?: boolean; label?: string }
+type LeafOpts = { requiresAdmin?: boolean; requiresTeam?: boolean; labelKey?: string }
 
 function withOpts(item: NavItem, opts?: LeafOpts): NavItem {
   if (!opts) return item
   return {
     ...item,
-    ...(opts.label ? { label: opts.label } : {}),
+    ...(opts.labelKey ? { labelKey: opts.labelKey } : {}),
     ...(opts.requiresAdmin ? { requiresAdmin: true } : {}),
     ...(opts.requiresTeam ? { requiresTeam: true } : {})
   }
 }
 
-export function dashboardNav(label: '首页' | '概览'): NavItem {
-  return { id: 'dashboard', label, icon: 'Home', path: '/dashboard' }
+export function dashboardNav(labelKey: 'nav.dashboard' | 'nav.overview' = 'nav.dashboard'): NavItem {
+  return { id: 'dashboard', labelKey, icon: 'Home', path: '/dashboard' }
 }
 
 export function backendsNav(opts?: LeafOpts): NavItem {
-  return withOpts({ id: 'backends', label: '后端', icon: 'Connection', path: '/backends' }, opts)
+  return withOpts({ id: 'backends', labelKey: 'nav.backends', icon: 'Connection', path: '/backends' }, opts)
 }
 
 export function fallbackPolicyNav(opts?: LeafOpts): NavItem {
-  return withOpts({ id: 'fallback-policies', label: '降级策略', icon: 'Switch', path: '/fallback-policies' }, opts)
+  return withOpts({ id: 'fallback-policies', labelKey: 'nav.fallbackPolicies', icon: 'Switch', path: '/fallback-policies' }, opts)
 }
 
 export function pipelinesNav(opts?: LeafOpts): NavItem {
-  return withOpts({ id: 'pipelines', label: '策略', icon: 'Share', path: '/pipelines' }, opts)
+  return withOpts({ id: 'pipelines', labelKey: 'nav.pipelines', icon: 'Share', path: '/pipelines' }, opts)
 }
 
 export function agentSetupNav(opts?: LeafOpts): NavItem {
-  return withOpts({ id: 'agent-setup', label: 'Agent 接入', icon: 'Link', path: '/agent-setup' }, opts)
+  return withOpts({ id: 'agent-setup', labelKey: 'nav.agentSetup', icon: 'Link', path: '/agent-setup' }, opts)
 }
 
 export function agentProvidersNav(opts?: LeafOpts): NavItem {
   return withOpts(
-    { id: 'agent-providers', label: 'Agent 供应商', icon: 'Connection', path: '/agent-providers' },
+    { id: 'agent-providers', labelKey: 'nav.agentProviders', icon: 'Connection', path: '/agent-providers' },
     opts
   )
 }
@@ -49,7 +49,7 @@ export function nodePluginsNav(opts?: LeafOpts): NavItem {
   return withOpts(
     {
       id: 'node-plugins',
-      label: '节点插件',
+      labelKey: 'nav.nodePlugins',
       icon: 'Connection',
       path: '/pipeline/node-plugins'
     },
@@ -59,22 +59,22 @@ export function nodePluginsNav(opts?: LeafOpts): NavItem {
 
 /** @deprecated 独立对话导航已取消；仅保留供兼容引用 */
 export function chatNav(): NavItem {
-  return { id: 'chat', label: '对话', icon: 'ChatDotRound', path: '/chat' }
+  return { id: 'chat', labelKey: 'nav.chat', icon: 'ChatDotRound', path: '/chat' }
 }
 
 export function conversationsNav(): NavItem {
-  return { id: 'conversations', label: '会话记录', icon: 'ChatLineSquare', path: '/conversations' }
+  return { id: 'conversations', labelKey: 'nav.conversations', icon: 'ChatLineSquare', path: '/conversations' }
 }
 
-export function tokenUsageNav(label = '用量统计'): NavItem {
-  return { id: 'token-usage', label, icon: 'TrendCharts', path: '/token-usage' }
+export function tokenUsageNav(labelKey = 'nav.tokenUsage'): NavItem {
+  return { id: 'token-usage', labelKey, icon: 'TrendCharts', path: '/token-usage' }
 }
 
 /** @deprecated 计费规则已并入「用量与计费」页 */
 export function billingRulesNav(): NavItem {
   return {
     id: 'billing-rules',
-    label: '计费规则',
+    labelKey: 'nav.billingRules',
     icon: 'Coin',
     path: '/token-usage',
     requiresAdmin: true
@@ -84,7 +84,7 @@ export function billingRulesNav(): NavItem {
 export function costDashboardNav(): NavItem {
   return {
     id: 'cost-dashboard',
-    label: '成本看板',
+    labelKey: 'nav.costDashboard',
     icon: 'Coin',
     path: '/cost',
     requiresAdmin: true
@@ -95,7 +95,7 @@ export function costDashboardNav(): NavItem {
 export function abComparisonNav(): NavItem {
   return {
     id: 'ab-comparison',
-    label: 'A/B 对比',
+    labelKey: 'nav.abComparison',
     icon: 'DataAnalysis',
     path: '/ab-comparison',
     requiresAdmin: true,
@@ -104,56 +104,56 @@ export function abComparisonNav(): NavItem {
 }
 
 export function logsNav(): NavItem {
-  return { id: 'logs', label: '日志', icon: 'Document', path: '/logs' }
+  return { id: 'logs', labelKey: 'nav.logs', icon: 'Document', path: '/logs' }
 }
 
 export function cacheNav(opts?: LeafOpts): NavItem {
-  return withOpts({ id: 'cache', label: '缓存监控', icon: 'Coin', path: '/cache' }, opts)
+  return withOpts({ id: 'cache', labelKey: 'nav.cache', icon: 'Coin', path: '/cache' }, opts)
 }
 
 export function evaluationNav(opts?: LeafOpts): NavItem {
-  return withOpts({ id: 'evaluation', label: '缓存评估', icon: 'TrendCharts', path: '/evaluation' }, opts)
+  return withOpts({ id: 'evaluation', labelKey: 'nav.evaluation', icon: 'TrendCharts', path: '/evaluation' }, opts)
 }
 
 export function storageNav(opts?: LeafOpts): NavItem {
-  return withOpts({ id: 'storage', label: '存储管理', icon: 'FolderOpened', path: '/storage' }, opts)
+  return withOpts({ id: 'storage', labelKey: 'nav.storage', icon: 'FolderOpened', path: '/storage' }, opts)
 }
 
 export function dataStoresNav(opts?: LeafOpts): NavItem {
-  return withOpts({ id: 'data-stores', label: '数据存储管理', icon: 'Coin', path: '/data-stores' }, opts)
+  return withOpts({ id: 'data-stores', labelKey: 'nav.dataStores', icon: 'Coin', path: '/data-stores' }, opts)
 }
 
 export function memoryNav(): NavItem {
-  return { id: 'memory', label: '记忆', icon: 'Folder', path: '/memory' }
+  return { id: 'memory', labelKey: 'nav.memory', icon: 'Folder', path: '/memory' }
 }
 
 export function hostProxyNav(opts?: LeafOpts): NavItem {
-  return withOpts({ id: 'host-proxy', label: '主机代理', icon: 'Link', path: '/host-proxy' }, opts)
+  return withOpts({ id: 'host-proxy', labelKey: 'nav.hostProxy', icon: 'Link', path: '/host-proxy' }, opts)
 }
 
 export function systemProxyNav(opts?: LeafOpts): NavItem {
-  return withOpts({ id: 'system-proxy', label: '系统代理', icon: 'Connection', path: '/system-proxy' }, opts)
+  return withOpts({ id: 'system-proxy', labelKey: 'nav.systemProxy', icon: 'Connection', path: '/system-proxy' }, opts)
 }
 
 export function clashRulesNav(opts?: LeafOpts): NavItem {
-  return withOpts({ id: 'clash-rules', label: 'Clash 规则', icon: 'Document', path: '/clash-rules' }, opts)
+  return withOpts({ id: 'clash-rules', labelKey: 'nav.clashRules', icon: 'Document', path: '/clash-rules' }, opts)
 }
 
 export function configNav(opts?: LeafOpts): NavItem {
-  return withOpts({ id: 'config-basic', label: '系统配置', icon: 'Setting', path: '/config' }, opts)
+  return withOpts({ id: 'config-basic', labelKey: 'nav.config', icon: 'Setting', path: '/config' }, opts)
 }
 
 /** 通用分组（可嵌套） */
 export function navGroup(
   id: string,
-  label: string,
+  labelKey: string,
   icon: string,
   children: NavItem[],
   path?: string
 ): NavItem {
   return {
     id,
-    label,
+    labelKey,
     icon,
     path: path ?? children[0]?.path,
     children
@@ -164,9 +164,9 @@ export function navGroup(
 export function usageNavGroup(): NavItem {
   return navGroup(
     'usage',
-    '用量',
+    'nav.usage',
     'TrendCharts',
-    [tokenUsageNav('用量与计费'), conversationsNav()],
+    [tokenUsageNav('nav.tokenUsage'), conversationsNav()],
     '/token-usage'
   )
 }
@@ -175,7 +175,7 @@ export function usageNavGroup(): NavItem {
 export function accessNavGroup(): NavItem {
   return navGroup(
     'access',
-    '接入',
+    'nav.access',
     'Link',
     [systemProxyNav(), agentSetupNav()],
     '/system-proxy'
@@ -192,7 +192,7 @@ export function storageConfigNavGroup(options?: {
   if (includeDataStores) children.push(dataStoresNav())
   children.push(cacheNav())
   if (includeEvaluation) children.push(evaluationNav())
-  return navGroup('storage-config', '存储配置', 'FolderOpened', children, children[0]?.path)
+  return navGroup('storage-config', 'nav.storageConfig', 'FolderOpened', children, children[0]?.path)
 }
 
 /**
@@ -226,7 +226,7 @@ export function buildMoreNavChildren(caps: Capabilities): NavItem[] {
   if (caps.myTenant) {
     systemChildren.push({
       id: 'my-tenant',
-      label: '我的租户',
+      labelKey: 'nav.myTenant',
       icon: 'OfficeBuilding',
       path: '/my-tenant',
       requiresTeam: true
@@ -242,7 +242,7 @@ export function buildMoreNavChildren(caps: Capabilities): NavItem[] {
   }
   if (systemChildren.length) {
     moreChildren.push(
-      navGroup('more-system', '系统', 'Setting', systemChildren, systemChildren[0]?.path)
+      navGroup('more-system', 'nav.system', 'Setting', systemChildren, systemChildren[0]?.path)
     )
   }
 
@@ -254,7 +254,7 @@ export function buildMoreNavChildren(caps: Capabilities): NavItem[] {
  * 无独立「对话」；无侧栏后端/策略列表（主入口在首页）。
  */
 export function buildWorkerNav(caps: Capabilities): NavItem[] {
-  const items: NavItem[] = [dashboardNav('首页')]
+  const items: NavItem[] = [dashboardNav('nav.dashboard')]
 
   if (caps.usageBilling) {
     items.push(usageNavGroup())
@@ -266,7 +266,7 @@ export function buildWorkerNav(caps: Capabilities): NavItem[] {
   if (caps.navMoreMenu) {
     const moreChildren = buildMoreNavChildren(caps)
     if (moreChildren.length) {
-      items.push(navGroup('more', '更多', 'MoreFilled', moreChildren, moreChildren[0]?.path))
+      items.push(navGroup('more', 'nav.more', 'MoreFilled', moreChildren, moreChildren[0]?.path))
     }
   }
 
@@ -277,9 +277,9 @@ export function buildWorkerNav(caps: Capabilities): NavItem[] {
 export function personalConfigGroup(): NavItem {
   return navGroup(
     'personal-config',
-    '配置',
+    'nav.proxyStrategy',
     'Connection',
-    [backendsNav({ label: '后端管理' }), pipelinesNav({ label: '策略管理' })],
+    [backendsNav({ labelKey: 'nav.backends' }), pipelinesNav({ labelKey: 'nav.pipelines' })],
     '/backends'
   )
 }
@@ -288,9 +288,9 @@ export function personalConfigGroup(): NavItem {
 export function personalAppGroup(): NavItem {
   return navGroup(
     'personal-app',
-    '应用',
+    'nav.application',
     'Grid',
-    [conversationsNav(), tokenUsageNav('用量与计费'), logsNav()],
+    [conversationsNav(), tokenUsageNav('nav.tokenUsage'), logsNav()],
     '/conversations'
   )
 }
@@ -324,15 +324,15 @@ export function personalMoreGroup(options?: { teamUser?: boolean }): NavItem {
     userAdmin: false,
     liteHome: true
   })
-  return navGroup('more', '更多', 'MoreFilled', children, children[0]?.path)
+  return navGroup('more', 'nav.more', 'MoreFilled', children, children[0]?.path)
 }
 
 /** 代理策略：后端 + 流水线；团队版含节点插件且仅管理员可见 */
 export function proxyStrategyGroup(options?: { includeNodePlugins?: boolean; adminOnly?: boolean }): NavItem {
   const admin = options?.adminOnly ? ({ requiresAdmin: true } as LeafOpts) : undefined
   const children: NavItem[] = [
-    backendsNav({ ...admin, label: '后端管理' }),
-    pipelinesNav({ ...admin, label: '策略管理' }),
+    backendsNav({ ...admin, labelKey: 'nav.backends' }),
+    pipelinesNav({ ...admin, labelKey: 'nav.pipelines' }),
     agentSetupNav(admin),
     agentProvidersNav(admin)
   ]
@@ -341,7 +341,7 @@ export function proxyStrategyGroup(options?: { includeNodePlugins?: boolean; adm
   }
   return {
     id: 'proxy-strategy',
-    label: '代理策略',
+    labelKey: 'nav.proxyStrategy',
     icon: 'Connection',
     path: '/backends',
     ...(options?.adminOnly ? { requiresAdmin: true } : {}),
@@ -352,12 +352,12 @@ export function proxyStrategyGroup(options?: { includeNodePlugins?: boolean; adm
 export function appGroup(options?: { tokenUsageLabel?: string }): NavItem {
   return {
     id: 'app',
-    label: '应用',
+    labelKey: 'nav.application',
     icon: 'Grid',
     path: '/token-usage',
     children: [
       conversationsNav(),
-      tokenUsageNav(options?.tokenUsageLabel ?? '用量与计费'),
+      tokenUsageNav(options?.tokenUsageLabel ?? 'nav.tokenUsage'),
       costDashboardNav(),
       abComparisonNav(),
       logsNav()
@@ -370,7 +370,7 @@ export function cacheMemoryGroup(options?: { adminTools?: boolean }): NavItem {
   const admin = options?.adminTools ? ({ requiresAdmin: true } as LeafOpts) : undefined
   return {
     id: 'cache-memory',
-    label: '缓存与记忆',
+    labelKey: 'nav.cacheAndMemory',
     icon: 'Coin',
     path: '/memory',
     children: [cacheNav(admin), evaluationNav(admin), storageNav(admin), dataStoresNav(admin), memoryNav()]
@@ -381,7 +381,7 @@ export function accessGroup(options?: { adminOnly?: boolean }): NavItem {
   const admin = options?.adminOnly ? ({ requiresAdmin: true } as LeafOpts) : undefined
   return {
     id: 'access',
-    label: '接入',
+    labelKey: 'nav.access',
     icon: 'Link',
     path: '/host-proxy',
     ...(options?.adminOnly ? { requiresAdmin: true } : {}),
@@ -396,7 +396,7 @@ export function systemAdminGroup(options?: { teamExtras?: boolean; relaxedAccess
   const children: NavItem[] = [
     {
       id: 'my-tenant',
-      label: '我的租户',
+      labelKey: 'nav.myTenant',
       icon: 'OfficeBuilding',
       path: '/my-tenant',
       requiresTeam: true
@@ -404,7 +404,7 @@ export function systemAdminGroup(options?: { teamExtras?: boolean; relaxedAccess
     configNav(leafAdmin),
     {
       id: 'system-users',
-      label: '用户管理',
+      labelKey: 'nav.users',
       icon: 'UserFilled',
       path: '/system/users',
       requiresAdmin: true,
@@ -415,7 +415,7 @@ export function systemAdminGroup(options?: { teamExtras?: boolean; relaxedAccess
     children.push(
       {
         id: 'tenants',
-        label: '租户管理',
+        labelKey: 'nav.tenants',
         icon: 'OfficeBuilding',
         path: '/tenants',
         requiresAdmin: true,
@@ -423,7 +423,7 @@ export function systemAdminGroup(options?: { teamExtras?: boolean; relaxedAccess
       },
       {
         id: 'system-update',
-        label: '系统更新',
+        labelKey: 'nav.systemUpdate',
         icon: 'Upload',
         path: '/system/update',
         requiresAdmin: true,
@@ -433,7 +433,7 @@ export function systemAdminGroup(options?: { teamExtras?: boolean; relaxedAccess
   }
   return {
     id: 'system-admin',
-    label: '系统管理',
+    labelKey: 'nav.systemAdmin',
     icon: 'Setting',
     path: '/config',
     ...(admin ? { requiresAdmin: true } : {}),

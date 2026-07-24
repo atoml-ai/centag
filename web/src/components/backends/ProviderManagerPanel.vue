@@ -1,7 +1,7 @@
 <template>
   <div class="provider-manager" v-loading="busy">
     <div v-if="!canWrite" class="readonly-tip">
-      当前为只读：管理员已关闭你的「可添加自有后端」权限
+      {{ t('providerManager.readOnlyNotice') }}
     </div>
     <div v-if="canWrite" class="mgr-toolbar">
       <div class="mgr-toolbar-left">
@@ -11,28 +11,28 @@
           :indeterminate="partialSelected"
           @change="toggleSelectAll"
         >
-          全选
+          {{ t('providerManager.selectAll') }}
         </el-checkbox>
         <template v-if="selectedIds.length > 0">
-          <span class="toolbar-count">已选 {{ selectedIds.length }} 项</span>
+          <span class="toolbar-count">{{ t('providerManager.selectedCount', { count: selectedIds.length }) }}</span>
           <el-button size="small" :loading="batchProbing" @click="handleBatchProbe">
-            批量探测
+            {{ t('providerManager.batchProbe') }}
           </el-button>
           <el-button size="small" type="danger" :loading="batchDeleting" @click="handleBatchDelete">
-            批量删除
+            {{ t('providerManager.batchDelete') }}
           </el-button>
-          <el-button size="small" text @click="clearSelection">取消选择</el-button>
+          <el-button size="small" text @click="clearSelection">{{ t('providerManager.cancelSelection') }}</el-button>
         </template>
       </div>
       <div class="mgr-toolbar-right">
-        <el-button size="small" :disabled="busy" @click="handleImport">导入</el-button>
+        <el-button size="small" :disabled="busy" @click="handleImport">{{ t('providerManager.import') }}</el-button>
         <el-dropdown trigger="click" :disabled="busy" @command="handleExportCommand">
-          <el-button size="small" :disabled="busy">导出 ▾</el-button>
+          <el-button size="small" :disabled="busy">{{ t('providerManager.export') }} ▾</el-button>
           <template #dropdown>
             <el-dropdown-menu>
-              <el-dropdown-item command="json">JSON 备份</el-dropdown-item>
-              <el-dropdown-item command="yaml">backends YAML</el-dropdown-item>
-              <el-dropdown-item command="zip">initdata 打包 (ZIP)</el-dropdown-item>
+              <el-dropdown-item command="json">{{ t('providerManager.jsonBackup') }}</el-dropdown-item>
+              <el-dropdown-item command="yaml">{{ t('providerManager.yamlExport') }}</el-dropdown-item>
+              <el-dropdown-item command="zip">{{ t('providerManager.initdataPack') }}</el-dropdown-item>
             </el-dropdown-menu>
           </template>
         </el-dropdown>
@@ -42,9 +42,9 @@
           :loading="probingAll"
           @click="handleProbeAll"
         >
-          全部探测
+           {{ t('providerManager.allProbe') }}
         </el-button>
-        <el-button type="primary" size="small" @click="openCreate">+ 添加 Provider</el-button>
+        <el-button type="primary" size="small" @click="openCreate">{{ t('providerManager.addProvider') }}</el-button>
       </div>
     </div>
 
@@ -79,10 +79,10 @@
                   effect="light"
                   class="default-tag"
                 >
-                  默认
-                </el-tag>
+                   {{ t('providerManager.default') }}
+                 </el-tag>
               </div>
-              <div class="backend-meta">{{ b.type }} · {{ b.base_url || '默认端点' }}</div>
+              <div class="backend-meta">{{ b.type }} · {{ b.base_url || t('providerManager.defaultEndpoint') }}</div>
             </div>
           </div>
           <el-switch
@@ -97,17 +97,17 @@
 
         <div class="backend-card-body">
           <div v-if="b.probe_model || b.default_model" class="backend-default-model">
-            默认模型：<span class="model-name">{{ b.default_model || b.probe_model }}</span>
+            {{ t('providerManager.defaultModel') }}<span class="model-name">{{ b.default_model || b.probe_model }}</span>
           </div>
           <div class="backend-stats">
-            <span>权重 {{ b.weight ?? 1 }}</span>
-            <span v-if="b.supported_models?.length">{{ b.supported_models.length }} 模型</span>
+            <span>{{ t('providerManager.weight') }} {{ b.weight ?? 1 }}</span>
+            <span v-if="b.supported_models?.length">{{ t('providerManager.modelsCount', { count: b.supported_models.length }) }}</span>
             <span
               v-if="b.account_pool_summary && b.account_pool_summary.total_accounts > 0"
               class="account-pool-badge"
               :class="'pool-' + b.account_pool_summary.health_status"
             >
-              {{ b.account_pool_summary.enabled_accounts }}/{{ b.account_pool_summary.total_accounts }} Keys
+              {{ t('providerManager.keysCount', { enabled: b.account_pool_summary.enabled_accounts, total: b.account_pool_summary.total_accounts }) }}
             </span>
           </div>
         </div>
@@ -121,28 +121,28 @@
             :loading="settingDefaultMap[b.id]"
             @click="handleSetDefault(b)"
           >
-            {{ defaultBackendId === b.id ? '当前默认' : '设为默认' }}
+            {{ defaultBackendId === b.id ? t('providerManager.currentDefault') : t('providerManager.setDefault') }}
           </el-button>
           <el-dropdown
             trigger="click"
             @command="(cmd: string) => handleCardAction(cmd, b)"
           >
             <el-button size="small">
-              操作
+              {{ t('providerManager.actions') }}
               <el-icon class="el-icon--right"><ArrowDown /></el-icon>
             </el-button>
             <template #dropdown>
               <el-dropdown-menu>
                 <el-dropdown-item command="test" :disabled="!!testingMap[b.id]">
-                  测试
+                  {{ t('providerManager.test') }}
                 </el-dropdown-item>
-                <el-dropdown-item command="edit">编辑</el-dropdown-item>
+                <el-dropdown-item command="edit">{{ t('providerManager.edit') }}</el-dropdown-item>
                 <el-dropdown-item
                   command="delete"
                   divided
                   :disabled="defaultBackendId === b.id"
                 >
-                  删除
+                  {{ t('providerManager.delete') }}
                 </el-dropdown-item>
               </el-dropdown-menu>
             </template>
@@ -150,7 +150,7 @@
         </div>
       </div>
       <div v-if="!backends.length" class="empty-tip">
-        {{ canWrite ? '暂无后端配置，点击「+ 添加 Provider」开始' : '暂无后端配置' }}
+        {{ canWrite ? t('providerManager.emptyWithWrite') : t('providerManager.emptyWithoutWrite') }}
       </div>
     </div>
 
@@ -172,6 +172,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { ArrowDown } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import * as yaml from 'js-yaml'
@@ -197,6 +198,7 @@ const emit = defineEmits<{
   'backend-updated': [backend: any]
 }>()
 
+const { t } = useI18n()
 const authStore = useAuthStore()
 const { isPersonal, isMinimal, isTeam } = useEdition()
 const { canAddOwnBackends } = useUserResourceAccess()
@@ -279,10 +281,10 @@ function healthStatusClass(id: string) {
 }
 
 function healthStatusText(id: string) {
-  if (probingMap[id]) return '检测中...'
-  if (healthStatuses[id] === true) return '健康'
-  if (healthStatuses[id] === false) return healthErrors[id] || '不健康'
-  return '未检测'
+  if (probingMap[id]) return t('providerManager.statusProbing')
+  if (healthStatuses[id] === true) return t('providerManager.statusHealthy')
+  if (healthStatuses[id] === false) return healthErrors[id] || t('providerManager.statusUnhealthy')
+  return t('providerManager.statusUnknown')
 }
 
 async function probeOne(id: string) {
@@ -292,13 +294,13 @@ async function probeOne(id: string) {
     const body = res && typeof res === 'object' && 'data' in res && !('healthy' in res) ? res.data : res
     healthStatuses[id] = body?.healthy !== false
     healthErrors[id] = body?.error || ''
-    if (healthStatuses[id]) ElMessage.success(`「${id}」探测成功`)
-    else ElMessage.warning(`「${id}」探测异常：${healthErrors[id] || '不健康'}`)
+    if (healthStatuses[id]) ElMessage.success(t('providerManager.probeSuccess'))
+    else ElMessage.warning(t('providerManager.probeAbnormal') + (healthErrors[id] || t('providerManager.statusUnhealthy')))
     emit('refresh')
   } catch (err: any) {
     healthStatuses[id] = false
-    healthErrors[id] = err?.response?.data?.message || err?.message || '检测失败'
-    ElMessage.error(`「${id}」探测失败：${healthErrors[id]}`)
+    healthErrors[id] = err?.response?.data?.message || err?.message || t('providerManager.statusUnhealthy')
+    ElMessage.error(t('providerManager.probeFailed') + healthErrors[id])
   } finally {
     probingMap[id] = false
   }
@@ -328,7 +330,7 @@ async function handleProbeAll() {
           healthStatuses[id] = r.success !== false && r.healthy !== false
           healthErrors[id] = r.error || ''
         }
-        ElMessage.success('全部探测完成')
+        ElMessage.success(t('providerManager.allProbeCompleted'))
         emit('refresh')
         return
       }
@@ -345,17 +347,17 @@ async function handleBatchDelete() {
   if (!selectedIds.value.length) return
   const ids = selectedIds.value.filter((id) => id !== defaultBackendId.value)
   if (!ids.length) {
-    ElMessage.warning('不能删除当前默认后端，请先设置其他后端为默认')
+    ElMessage.warning(t('providerManager.cannotDeleteDefault'))
     return
   }
   const skippedDefault = ids.length < selectedIds.value.length
   try {
     await ElMessageBox.confirm(
       skippedDefault
-        ? `将删除选中的 ${ids.length} 个后端（已跳过当前默认），此操作不可恢复。`
-        : `确定删除选中的 ${ids.length} 个后端吗？此操作不可恢复。`,
-      '批量删除',
-      { confirmButtonText: '删除', cancelButtonText: '取消', type: 'warning' }
+        ? t('providerManager.batchDeleteConfirmSkipped', { count: ids.length })
+        : t('providerManager.batchDeleteConfirm', { count: ids.length }),
+      t('providerManager.batchDeleteTitle'),
+      { confirmButtonText: t('providerManager.confirmDelete'), cancelButtonText: t('providerManager.cancel'), type: 'warning' }
     )
   } catch {
     return
@@ -363,11 +365,11 @@ async function handleBatchDelete() {
   batchDeleting.value = true
   try {
     await Promise.all(ids.map((id) => deleteBackend(id)))
-    ElMessage.success(`已删除 ${ids.length} 个后端`)
+    ElMessage.success(t('providerManager.deletedCount', { count: ids.length }))
     selectedIds.value = []
     emit('refresh')
   } catch (error: any) {
-    ElMessage.error(error?.response?.data?.message || '批量删除失败')
+    ElMessage.error(error?.response?.data?.message || t('providerManager.batchDeleteFailed'))
     emit('refresh')
   } finally {
     batchDeleting.value = false
@@ -390,11 +392,11 @@ async function handleSetDefault(backend: any) {
     })
     defaultBackendId.value = backend.id
     ElMessage.success(
-      `已将「${backend.name || backend.id}」设为默认后端，模型「${defaultModel || '未设置'}」`
+      t('providerManager.setDefaultSuccess', { name: backend.name || backend.id, model: defaultModel || '' })
     )
     emit('refresh')
   } catch (error: any) {
-    ElMessage.error(error?.response?.data?.message || '设置默认后端失败')
+    ElMessage.error(error?.response?.data?.message || t('providerManager.setDefaultFailed'))
   } finally {
     settingDefaultMap[backend.id] = false
   }
@@ -406,9 +408,9 @@ async function handleToggle(backend: any, enabled: boolean) {
   try {
     const updated = await updateBackend(backend.id, { ...backend, enabled })
     emit('backend-updated', updated?.id ? updated : { id: backend.id, enabled })
-    ElMessage.success(`${backend.name || backend.id} ${enabled ? '已启用' : '已禁用'}`)
+    ElMessage.success(enabled ? t('providerManager.toggledEnabled', { name: backend.name || backend.id }) : t('providerManager.toggledDisabled', { name: backend.name || backend.id }))
   } catch (error: any) {
-    ElMessage.error('操作失败：' + (error.message || '未知错误'))
+    ElMessage.error(t('providerManager.operationFailed') + (error.message || t('providerManager.unknownError')))
     emit('refresh')
   } finally {
     togglingMap[backend.id] = false
@@ -430,11 +432,11 @@ async function handleTest(backend: any) {
       emit('backend-updated', updatedBackend)
       showTestResult(updatedBackend, backend.id)
     } else {
-      ElMessage.warning(`${backend.name || backend.id} 连接测试完成，但未返回完整数据`)
+      ElMessage.warning(t('providerManager.testIncomplete'))
       emit('refresh')
     }
   } catch (error: any) {
-    ElMessage.error(`${backend.name || backend.id} 连接失败：${error.message}`)
+    ElMessage.error(t('providerManager.testFailed', { name: backend.name || backend.id, message: error.message }))
   } finally {
     testingMap[backend.id] = false
   }
@@ -460,30 +462,30 @@ function handleEdit(backend: any) {
 
 async function handleDelete(backend: any) {
   if (defaultBackendId.value === backend.id) {
-    ElMessage.warning('不能删除当前默认后端，请先设置其他后端为默认')
+    ElMessage.warning(t('providerManager.cannotDeleteDefault'))
     return
   }
   try {
     await ElMessageBox.confirm(
-      `确定删除后端「${backend.name || backend.id}」吗？此操作不可恢复。`,
-      '确认删除',
-      { confirmButtonText: '删除', cancelButtonText: '取消', type: 'warning' }
+      t('providerManager.confirmDeleteText', { name: backend.name || backend.id }),
+      t('providerManager.confirmDeleteTitle'),
+      { confirmButtonText: t('providerManager.confirmDelete'), cancelButtonText: t('providerManager.cancel'), type: 'warning' }
     )
   } catch {
     return
   }
   try {
     await deleteBackend(backend.id)
-    ElMessage.success(`已删除后端「${backend.name || backend.id}」`)
+    ElMessage.success(t('providerManager.deleteSuccess', { name: backend.name || backend.id }))
     emit('refresh')
   } catch (error: any) {
-    ElMessage.error(error?.response?.data?.message || '删除后端失败')
+    ElMessage.error(error?.response?.data?.message || t('providerManager.deleteFailed'))
   }
 }
 
 function openCreate() {
   if (!canWrite.value) {
-    ElMessage.warning('当前账号无权添加自有后端')
+    ElMessage.warning(t('providerManager.noPermission'))
     return
   }
   editorRef.value?.openCreate()
@@ -535,9 +537,9 @@ async function handleExportJSON() {
       new Blob([JSON.stringify(rows, null, 2)], { type: 'application/json' }),
       'centag-backends.json'
     )
-    ElMessage.success('已导出 JSON 备份（含密钥，请妥善保管）')
+    ElMessage.success(t('providerManager.exportJsonSuccess'))
   } catch {
-    ElMessage.error('导出失败')
+    ElMessage.error(t('providerManager.exportFailed'))
   } finally {
     busy.value = false
   }
@@ -549,14 +551,14 @@ async function handleExportYAML() {
     const rows = await fetchExportRows()
     const entries = exportRowsToEntries(rows)
     if (!entries.length) {
-      ElMessage.warning('没有可导出的后端')
+      ElMessage.warning(t('providerManager.noExportData'))
       return
     }
     const content = ConfigBuilder.buildBackendsYaml(entries)
     triggerDownload(new Blob([content], { type: 'text/yaml;charset=utf-8' }), 'initial-backends.yaml')
-    ElMessage.success('已导出 backends YAML')
+    ElMessage.success(t('providerManager.exportYamlSuccess'))
   } catch {
-    ElMessage.error('导出 YAML 失败')
+    ElMessage.error(t('providerManager.exportYamlFailed'))
   } finally {
     busy.value = false
   }
@@ -568,15 +570,15 @@ async function handleExportZip() {
     const rows = await fetchExportRows()
     const entries = exportRowsToEntries(rows)
     if (!entries.length) {
-      ElMessage.warning('没有可导出的后端')
+      ElMessage.warning(t('providerManager.noExportData'))
       return
     }
     const templateIds = Object.keys(ConfigBuilder.PIPELINE_TEMPLATES_DATA || {})
     const blob = await ConfigBuilder.exportAsArchive(entries, templateIds)
     triggerDownload(blob, 'centag-initdata.zip')
-    ElMessage.success('已打包导出 initdata')
+    ElMessage.success(t('providerManager.exportZipSuccess'))
   } catch {
-    ElMessage.error('打包导出失败')
+    ElMessage.error(t('providerManager.exportZipFailed'))
   } finally {
     busy.value = false
   }
@@ -588,7 +590,7 @@ function handleImport() {
 
 function parseImportPayload(text: string, fileName: string) {
   const trimmed = (text || '').trim()
-  if (!trimmed) throw new Error('文件为空')
+  if (!trimmed) throw new Error(t('providerManager.fileFormatError') + ' empty')
   const lower = (fileName || '').toLowerCase()
   const looksYaml =
     lower.endsWith('.yaml') ||
@@ -598,7 +600,7 @@ function parseImportPayload(text: string, fileName: string) {
   if (Array.isArray(data)) return data
   if (data && Array.isArray((data as any).backends)) return (data as any).backends
   if (data && typeof data === 'object') return [data]
-  throw new Error('无法识别的后端配置格式')
+  throw new Error(t('providerManager.fileFormatError') + ' unrecognized format')
 }
 
 function handleImportFile(e: Event) {
@@ -610,28 +612,28 @@ function handleImportFile(e: Event) {
     try {
       const data = parseImportPayload(String(ev.target?.result || ''), file.name)
       ElMessageBox.confirm(
-        `即将导入 ${data.length} 个后端配置。同名 id 已存在则跳过。是否继续？`,
-        '确认导入',
-        { confirmButtonText: '导入', cancelButtonText: '取消', type: 'info' }
+        t('providerManager.importConfirm', { count: data.length }),
+        t('providerManager.importTitle'),
+        { confirmButtonText: t('providerManager.importConfirmBtn'), cancelButtonText: t('providerManager.importCancelBtn'), type: 'info' }
       )
         .then(() => {
           busy.value = true
           return api.post('/api/v1/backends/import', { backends: data })
         })
         .then(() => {
-          ElMessage.success('导入成功')
+          ElMessage.success(t('providerManager.importSuccess'))
           emit('refresh')
         })
         .catch((err) => {
           if (err !== 'cancel' && err !== 'close') {
-            ElMessage.error(err?.response?.data?.message || err?.message || '导入失败')
+            ElMessage.error(err?.response?.data?.message || err?.message || t('providerManager.importFailed'))
           }
         })
         .finally(() => {
           busy.value = false
         })
     } catch (err: any) {
-      ElMessage.error('文件格式错误：' + err.message)
+      ElMessage.error(t('providerManager.fileFormatError') + err.message)
     }
   }
   reader.readAsText(file)

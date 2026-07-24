@@ -3,20 +3,20 @@
     <el-card>
       <template #header>
         <div class="card-header">
-          <span>KV 数据浏览</span>
-          <el-tag v-if="defaultKV" type="success" size="small">默认存储: {{ defaultKV }}</el-tag>
+          <span>{{ t('storageKVBrowser.kvDataBrowse') }}</span>
+          <el-tag v-if="defaultKV" type="success" size="small">{{ t('storageKVBrowser.defaultStorage', { name: defaultKV }) }}</el-tag>
         </div>
       </template>
 
       <el-alert type="info" :closable="false" style="margin-bottom: 16px">
-        浏览流水线存储钩子保存的数据。数据来自 "存储管理" 中启用的后端。
+        {{ t('storageKVBrowser.browseTip') }}
       </el-alert>
 
       <!-- 工具栏 -->
       <div class="toolbar">
         <el-input
           v-model="filterPattern"
-          placeholder="键名过滤 (支持 * 通配符, 如 pipeline:*)"
+          :placeholder="t('storageKVBrowser.filterPlaceholder')"
           clearable
           style="width: 360px"
           @clear="loadKeys"
@@ -26,16 +26,16 @@
         </el-input>
 
         <el-button type="primary" @click="loadKeys" :loading="loading">
-          <el-icon><Search /></el-icon> 查询
+          <el-icon><Search /></el-icon> {{ t('storageKVBrowser.query') }}
         </el-button>
 
         <el-button @click="loadKeys" :loading="loading">
-          <el-icon><Refresh /></el-icon> 刷新
+          <el-icon><Refresh /></el-icon> {{ t('storageKVBrowser.refresh') }}
         </el-button>
 
         <div style="flex: 1"></div>
 
-        <span class="total-info">共 {{ total }} 条</span>
+        <span class="total-info">{{ t('storageKVBrowser.totalItems', { n: total }) }}</span>
       </div>
 
       <!-- 键列表 -->
@@ -48,11 +48,11 @@
         style="margin-top: 16px; cursor: pointer"
         max-height="400"
       >
-        <el-table-column prop="key" label="键名" min-width="300" show-overflow-tooltip />
-        <el-table-column label="操作" width="120" fixed="right">
+        <el-table-column prop="key" :label="t('storageKVBrowser.keyName')" min-width="300" show-overflow-tooltip />
+        <el-table-column :label="t('storageKVBrowser.delete')" width="120" fixed="right">
           <template #default="{ row }">
             <el-button type="danger" text size="small" @click.stop="deleteKey(row.key)">
-              <el-icon><Delete /></el-icon> 删除
+              <el-icon><Delete /></el-icon> {{ t('storageKVBrowser.delete') }}
             </el-button>
           </template>
         </el-table-column>
@@ -75,34 +75,37 @@
     <el-card v-if="selectedKey" style="margin-top: 16px">
       <template #header>
         <div class="card-header">
-          <span>键详情: {{ selectedKey }}</span>
+          <span>{{ t('storageKVBrowser.keyDetail', { key: selectedKey }) }}</span>
           <el-button type="primary" text size="small" @click="copyValue">
-            <el-icon><CopyDocument /></el-icon> 复制
+            <el-icon><CopyDocument /></el-icon> {{ t('storageKVBrowser.copy') }}
           </el-button>
         </div>
       </template>
 
       <el-descriptions :column="2" border size="small" style="margin-bottom: 12px">
-        <el-descriptions-item label="键名">{{ selectedKey }}</el-descriptions-item>
-        <el-descriptions-item label="TTL">{{ formatTTL(selectedTTL) }}</el-descriptions-item>
+        <el-descriptions-item :label="t('storageKVBrowser.keyName')">{{ selectedKey }}</el-descriptions-item>
+        <el-descriptions-item :label="t('storageKVBrowser.ttl')">{{ formatTTL(selectedTTL) }}</el-descriptions-item>
       </el-descriptions>
 
       <div class="value-section">
-        <div class="value-label">值 (JSON):</div>
+        <div class="value-label">{{ t('storageKVBrowser.valueJson') }}</div>
         <pre class="value-content">{{ formattedValue }}</pre>
       </div>
     </el-card>
 
     <!-- 空状态 -->
-    <el-empty v-if="!loading && keys.length === 0 && !selectedKey" description="暂无数据" />
+    <el-empty v-if="!loading && keys.length === 0 && !selectedKey" :description="t('storageKVBrowser.noData')" />
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Search, Refresh, Delete, CopyDocument } from '@element-plus/icons-vue'
 import { listKVKeys, getKVValue, deleteKVKey, getStorages } from '@/api'
+
+const { t } = useI18n()
 
 const loading = ref(false)
 const keys = ref<{ key: string }[]>([])
@@ -146,7 +149,7 @@ async function loadKeys() {
     total.value = res?.total || 0
     currentPage.value = 1
   } catch (e: any) {
-    ElMessage.error('加载键列表失败: ' + (e?.response?.data?.message || e.message))
+    ElMessage.error(t('storageKVBrowser.loadKeysFailed') + ': ' + (e?.response?.data?.message || e.message))
     keys.value = []
     total.value = 0
   } finally {
@@ -161,17 +164,17 @@ async function onKeyClick(row: { key: string }) {
     selectedValue.value = res?.value
     selectedTTL.value = res?.ttl_seconds || 0
   } catch (e: any) {
-    ElMessage.error('获取值失败: ' + (e?.response?.data?.message || e.message))
+    ElMessage.error(t('storageKVBrowser.getValueFailed') + ': ' + (e?.response?.data?.message || e.message))
   }
 }
 
 async function deleteKey(key: string) {
   try {
-    await ElMessageBox.confirm(`确定要删除键 "${key}" 吗？`, '确认删除', {
+    await ElMessageBox.confirm(t('storageKVBrowser.deleteKeyConfirm', { key }), t('storageKVBrowser.deleteConfirmTitle'), {
       type: 'warning',
     })
     await deleteKVKey({ key })
-    ElMessage.success('删除成功')
+    ElMessage.success(t('storageKVBrowser.deleteSuccess'))
     if (selectedKey.value === key) {
       selectedKey.value = ''
       selectedValue.value = null
@@ -179,7 +182,7 @@ async function deleteKey(key: string) {
     loadKeys()
   } catch (e: any) {
     if (e !== 'cancel') {
-      ElMessage.error('删除失败: ' + (e?.response?.data?.message || e.message))
+      ElMessage.error(t('storageKVBrowser.deleteFailed') + ': ' + (e?.response?.data?.message || e.message))
     }
   }
 }
@@ -187,16 +190,16 @@ async function deleteKey(key: string) {
 function copyValue() {
   if (formattedValue.value) {
     navigator.clipboard.writeText(formattedValue.value)
-    ElMessage.success('已复制到剪贴板')
+    ElMessage.success(t('storageKVBrowser.copiedToClipboard'))
   }
 }
 
 function formatTTL(seconds: number): string {
-  if (seconds <= 0) return '永久'
-  if (seconds < 60) return `${seconds} 秒`
-  if (seconds < 3600) return `${Math.floor(seconds / 60)} 分钟`
-  if (seconds < 86400) return `${Math.floor(seconds / 3600)} 小时`
-  return `${Math.floor(seconds / 86400)} 天`
+  if (seconds <= 0) return t('storageKVBrowser.permanent')
+  if (seconds < 60) return t('storageKVBrowser.formatSeconds', { n: seconds })
+  if (seconds < 3600) return t('storageKVBrowser.formatMinutes', { n: Math.floor(seconds / 60) })
+  if (seconds < 86400) return t('storageKVBrowser.formatHours', { n: Math.floor(seconds / 3600) })
+  return t('storageKVBrowser.formatDays', { n: Math.floor(seconds / 86400) })
 }
 </script>
 

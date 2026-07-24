@@ -2,17 +2,17 @@
   <div class="host-proxy">
     <div class="header-with-toolbar">
       <div class="header-left">
-        <h1 class="page-title">Host代理管理</h1>
-        <p class="page-description">通过修改hosts文件实现透明代理,无需修改客户端代码</p>
+        <h1 class="page-title">{{ t('hostProxy.title') }}</h1>
+        <p class="page-description">{{ t('hostProxy.subtitle') }}</p>
       </div>
       <div class="toolbar-actions">
         <el-button :loading="loading" @click="load">
           <el-icon><Refresh /></el-icon>
-          刷新
+          {{ t('hostProxy.refresh') }}
         </el-button>
         <el-button type="primary" @click="openSetupWizard">
           <el-icon><MagicStick /></el-icon>
-          快速配置向导
+          {{ t('hostProxy.quickSetup') }}
         </el-button>
       </div>
     </div>
@@ -26,8 +26,8 @@
               <el-icon :size="22"><Connection /></el-icon>
             </div>
             <div class="metric-content">
-              <div class="metric-value">{{ status.enabled ? '已启用' : '已禁用' }}</div>
-              <div class="metric-label">代理状态</div>
+              <div class="metric-value">{{ status.enabled ? t('hostProxy.status.enabled') : t('hostProxy.status.disabled') }}</div>
+              <div class="metric-label">{{ t('hostProxy.status.proxyStatus') }}</div>
             </div>
           </div>
         </el-col>
@@ -38,7 +38,7 @@
             </div>
             <div class="metric-content">
               <div class="metric-value">{{ domainCount }}</div>
-              <div class="metric-label">代理域名数</div>
+              <div class="metric-label">{{ t('hostProxy.status.proxyDomains') }}</div>
             </div>
           </div>
         </el-col>
@@ -49,7 +49,7 @@
             </div>
             <div class="metric-content">
               <div class="metric-value">{{ status.http_port }}</div>
-              <div class="metric-label">HTTP端口</div>
+              <div class="metric-label">{{ t('hostProxy.status.httpPort') }}</div>
             </div>
           </div>
         </el-col>
@@ -60,7 +60,7 @@
             </div>
             <div class="metric-content">
               <div class="metric-value">{{ status.https_port }}</div>
-              <div class="metric-label">HTTPS端口</div>
+              <div class="metric-label">{{ t('hostProxy.status.httpsPort') }}</div>
             </div>
           </div>
         </el-col>
@@ -70,13 +70,13 @@
       <el-card class="control-card">
         <template #header>
           <div class="card-header">
-            <span class="card-title">代理控制</span>
+            <span class="card-title">{{ t('hostProxy.control.title') }}</span>
             <el-switch
               v-model="status.enabled"
               :loading="toggling"
               @change="toggleProxy"
-              active-text="已启用"
-              inactive-text="已禁用"
+              :active-text="t('hostProxy.control.activeText')"
+              :inactive-text="t('hostProxy.control.inactiveText')"
             />
           </div>
         </template>
@@ -84,7 +84,7 @@
           <el-form label-width="90px" class="port-form">
             <el-row :gutter="16">
               <el-col :span="11">
-                <el-form-item label="HTTP端口" style="margin-bottom: 8px;">
+                <el-form-item :label="t('hostProxy.control.httpPort')" style="margin-bottom: 8px;">
                   <el-input-number
                     v-model="portForm.httpPort"
                     :min="1024"
@@ -96,7 +96,7 @@
                 </el-form-item>
               </el-col>
               <el-col :span="11">
-                <el-form-item label="HTTPS端口" style="margin-bottom: 8px;">
+                <el-form-item :label="t('hostProxy.control.httpsPort')" style="margin-bottom: 8px;">
                   <el-input-number
                     v-model="portForm.httpsPort"
                     :min="1024"
@@ -113,15 +113,15 @@
           <el-divider />
 
           <el-alert
-            :title="status.enabled ? 'Host代理已启用' : 'Host代理已禁用'"
+            :title="status.enabled ? t('hostProxy.control.proxyEnabled') : t('hostProxy.control.proxyDisabled')"
             :type="status.enabled ? 'success' : 'info'"
             :closable="false"
             show-icon
             class="status-alert"
           >
             <template #default>
-              <span v-if="status.enabled">所有配置的域名将解析到本地代理服务器(127.0.0.1)</span>
-              <span v-else>禁用后,域名将正常解析到真实服务器。端口修改后，启用时自动保存生效。</span>
+              <span v-if="status.enabled">{{ t('hostProxy.control.enabledHint') }}</span>
+              <span v-else>{{ t('hostProxy.control.disabledHint') }}</span>
             </template>
           </el-alert>
         </div>
@@ -131,17 +131,17 @@
       <el-card class="domains-card">
         <template #header>
           <div class="card-header">
-            <span class="card-title">域名配置</span>
+            <span class="card-title">{{ t('hostProxy.domains.title') }}</span>
             <el-button type="primary" @click="openAddDomain" :disabled="!status.enabled">
               <el-icon><Plus /></el-icon>
-              添加域名
+              {{ t('hostProxy.domains.addDomain') }}
             </el-button>
           </div>
         </template>
         <el-table :data="domainList" stripe v-loading="loading">
-          <el-table-column prop="domain" label="域名" min-width="200" />
-          <el-table-column prop="target" label="目标地址" min-width="200" />
-          <el-table-column label="测试" width="100" align="center">
+          <el-table-column prop="domain" :label="t('hostProxy.domains.domain')" min-width="200" />
+          <el-table-column prop="target" :label="t('hostProxy.domains.target')" min-width="200" />
+          <el-table-column :label="t('hostProxy.domains.test')" width="100" align="center">
             <template #default="{ row }">
               <el-button
                 type="primary"
@@ -150,15 +150,15 @@
                 :loading="testingDomains[row.domain]"
               >
                 <el-icon><Position /></el-icon>
-                测试
+                {{ t('hostProxy.domains.test') }}
               </el-button>
             </template>
           </el-table-column>
-          <el-table-column label="操作" width="120" align="center">
+          <el-table-column :label="t('storage.table.actions')" width="120" align="center">
             <template #default="{ row, $index }">
               <el-button type="danger" link @click="removeDomain(row, $index)" :disabled="!status.enabled">
                 <el-icon><Delete /></el-icon>
-                删除
+                {{ t('hostProxy.domains.delete') }}
               </el-button>
             </template>
           </el-table-column>
@@ -168,40 +168,40 @@
       <!-- CA证书管理 -->
       <el-card class="cert-card">
         <template #header>
-          <div class="card-title">CA证书管理</div>
+          <div class="card-title">{{ t('hostProxy.cert.title') }}</div>
         </template>
         <div class="cert-content">
           <el-alert
-            title="HTTPS请求需要信任CA证书"
+            :title="t('hostProxy.cert.httpsWarning')"
             type="warning"
             :closable="false"
             show-icon
           >
             <template #default>
-              <p>代理使用自签名证书拦截HTTPS流量,需要将CA证书安装到系统。</p>
+              <p>{{ t('hostProxy.cert.httpsWarningDesc') }}</p>
             </template>
           </el-alert>
           <div class="cert-actions mt-md">
             <el-button type="primary" @click="downloadCACert">
               <el-icon><Download /></el-icon>
-              下载CA证书
+              {{ t('hostProxy.cert.downloadCert') }}
             </el-button>
             <el-button @click="copyCertCommand">
               <el-icon><DocumentCopy /></el-icon>
-              复制安装命令
+              {{ t('hostProxy.cert.copyInstallCmd') }}
             </el-button>
           </div>
           <el-divider />
           <div class="cert-info">
             <el-descriptions :column="2" border>
-              <el-descriptions-item label="证书状态">
+              <el-descriptions-item :label="t('hostProxy.cert.status')">
                 <el-tag :type="certInfo.valid ? 'success' : 'danger'" size="small">
-                  {{ certInfo.valid ? '有效' : '无效' }}
+                  {{ certInfo.valid ? t('hostProxy.cert.valid') : t('hostProxy.cert.invalid') }}
                 </el-tag>
               </el-descriptions-item>
-              <el-descriptions-item label="颁发者">{{ certInfo.issuer }}</el-descriptions-item>
-              <el-descriptions-item label="有效期至">{{ certInfo.expires }}</el-descriptions-item>
-              <el-descriptions-item label="剩余天数">{{ certInfo.daysLeft }}天</el-descriptions-item>
+              <el-descriptions-item :label="t('hostProxy.cert.issuer')">{{ certInfo.issuer }}</el-descriptions-item>
+              <el-descriptions-item :label="t('hostProxy.cert.expires')">{{ certInfo.expires }}</el-descriptions-item>
+              <el-descriptions-item :label="t('hostProxy.cert.daysLeft')">{{ certInfo.daysLeft }}{{ t('hostProxy.cert.days') }}</el-descriptions-item>
             </el-descriptions>
           </div>
         </div>
@@ -211,28 +211,28 @@
       <el-card class="guide-card">
         <template #header>
           <div class="card-header">
-            <span class="card-title">配置指南</span>
+            <span class="card-title">{{ t('hostProxy.guide.title') }}</span>
             <el-button link @click="toggleGuide">
-              {{ showGuide ? '收起' : '展开' }}
+              {{ showGuide ? t('hostProxy.guide.collapse') : t('hostProxy.guide.expand') }}
               <el-icon><ArrowDown v-if="!showGuide" /><ArrowUp v-else /></el-icon>
             </el-button>
           </div>
         </template>
         <div v-show="showGuide" class="guide-content">
           <el-steps :active="setupSteps.active" align-center>
-            <el-step title="启用代理" description="开启Host代理功能" />
-            <el-step title="配置hosts" description="修改/etc/hosts文件" />
-            <el-step title="安装证书" description="信任CA证书" />
-            <el-step title="测试验证" description="验证代理是否工作" />
+            <el-step :title="t('hostProxy.guide.step1Title')" :description="t('hostProxy.guide.step1Desc')" />
+            <el-step :title="t('hostProxy.guide.step2Title')" :description="t('hostProxy.guide.step2Desc')" />
+            <el-step :title="t('hostProxy.guide.step3Title')" :description="t('hostProxy.guide.step3Desc')" />
+            <el-step :title="t('hostProxy.guide.step4Title')" :description="t('hostProxy.guide.step4Desc')" />
           </el-steps>
 
           <el-divider />
 
           <div class="step-details">
-            <h3>步骤1: 配置hosts文件</h3>
+            <h3>{{ t('hostProxy.guide.hostsStepTitle') }}</h3>
             <el-alert type="warning" :closable="false" class="mb-md">
               <template #default>
-                <p>将代理的域名添加到/etc/hosts文件中,将域名解析到127.0.0.1</p>
+                <p>{{ t('hostProxy.guide.hostsStepDesc') }}</p>
               </template>
             </el-alert>
             <el-input
@@ -244,15 +244,15 @@
             />
             <el-button type="primary" @click="copyCommand(hostsCommand)">
               <el-icon><DocumentCopy /></el-icon>
-              复制命令
+              {{ t('hostProxy.guide.copyCommand') }}
             </el-button>
 
             <el-divider />
 
-            <h3>步骤2: 安装CA证书</h3>
+            <h3>{{ t('hostProxy.guide.certStepTitle') }}</h3>
             <el-alert type="info" :closable="false" class="mb-md">
               <template #default>
-                <p>下载CA证书并安装到系统信任库</p>
+                <p>{{ t('hostProxy.guide.certStepDesc') }}</p>
               </template>
             </el-alert>
             <el-input
@@ -264,10 +264,10 @@
             />
             <el-button type="primary" @click="copyCommand('curl -o ca.crt http://127.0.0.1:20060/api/v1/host-proxy/ca-cert')">
               <el-icon><DocumentCopy /></el-icon>
-              复制下载命令
+              {{ t('hostProxy.guide.copyDownloadCmd') }}
             </el-button>
             <div class="mt-md">
-              <h4>Linux/Mac:</h4>
+              <h4>{{ t('hostProxy.guide.linuxMac') }}</h4>
               <el-input
                 type="textarea"
                 :rows="2"
@@ -277,16 +277,16 @@
               />
               <el-button @click="copyCommand('sudo cp ca.crt /usr/local/share/ca-certificates/ca.crt && sudo update-ca-certificates')">
                 <el-icon><DocumentCopy /></el-icon>
-                复制安装命令
+                {{ t('hostProxy.guide.copyInstallCmd') }}
               </el-button>
             </div>
 
             <el-divider />
 
-            <h3>步骤3: 测试代理</h3>
+            <h3>{{ t('hostProxy.guide.testStepTitle') }}</h3>
             <el-alert type="success" :closable="false" class="mb-md">
               <template #default>
-                <p>验证代理是否正常工作</p>
+                <p>{{ t('hostProxy.guide.testStepDesc') }}</p>
               </template>
             </el-alert>
             <el-input
@@ -298,7 +298,7 @@
             />
             <el-button type="primary" @click="copyCommand('curl https://api.openai.com/v1/models')">
               <el-icon><DocumentCopy /></el-icon>
-              复制测试命令
+              {{ t('hostProxy.guide.copyTestCmd') }}
             </el-button>
           </div>
         </div>
@@ -306,46 +306,46 @@
     </div>
 
     <!-- 添加域名对话框 -->
-    <el-dialog v-model="showAddDialog" title="添加域名" width="500px">
+    <el-dialog v-model="showAddDialog" :title="t('hostProxy.addDialog.title')" width="500px">
       <el-form :model="newDomain" label-width="100px">
-        <el-form-item label="域名">
-          <el-input v-model="newDomain.domain" placeholder="例如: api.openai.com" />
+        <el-form-item :label="t('hostProxy.addDialog.domain')">
+          <el-input v-model="newDomain.domain" :placeholder="t('hostProxy.addDialog.domainPlaceholder')" />
         </el-form-item>
-        <el-form-item label="目标地址">
-          <el-input v-model="newDomain.target" placeholder="例如: http://127.0.0.1:20060" />
+        <el-form-item :label="t('hostProxy.addDialog.target')">
+          <el-input v-model="newDomain.target" :placeholder="t('hostProxy.addDialog.targetPlaceholder')" />
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="showAddDialog = false">取消</el-button>
-        <el-button type="primary" @click="addDomain" :loading="adding">添加</el-button>
+        <el-button @click="showAddDialog = false">{{ t('hostProxy.addDialog.cancel') }}</el-button>
+        <el-button type="primary" @click="addDomain" :loading="adding">{{ t('hostProxy.addDialog.add') }}</el-button>
       </template>
     </el-dialog>
 
     <!-- 配置向导 -->
-    <el-dialog v-model="showWizard" title="Host代理快速配置向导" width="600px">
+    <el-dialog v-model="showWizard" :title="t('hostProxy.wizard.title')" width="600px">
       <el-steps :active="wizardStep" finish-status="success" align-center class="mb-lg">
-        <el-step title="检查配置" />
-        <el-step title="配置hosts" />
-        <el-step title="完成" />
+        <el-step :title="t('hostProxy.wizard.step1Title')" />
+        <el-step :title="t('hostProxy.wizard.step2Title')" />
+        <el-step :title="t('hostProxy.wizard.step3Title')" />
       </el-steps>
 
       <div v-if="wizardStep === 0" class="wizard-step">
         <el-descriptions :column="1" border>
-          <el-descriptions-item label="代理状态">
-            <el-tag :type="status.enabled ? 'success' : 'info'">{{ status.enabled ? '已启用' : '已禁用' }}</el-tag>
+          <el-descriptions-item :label="t('hostProxy.wizard.proxyStatus')">
+            <el-tag :type="status.enabled ? 'success' : 'info'">{{ status.enabled ? t('hostProxy.status.enabled') : t('hostProxy.status.disabled') }}</el-tag>
           </el-descriptions-item>
-          <el-descriptions-item label="域名数量">{{ domainCount }}</el-descriptions-item>
-          <el-descriptions-item label="HTTP端口">{{ status.http_port }}</el-descriptions-item>
-          <el-descriptions-item label="HTTPS端口">{{ status.https_port }}</el-descriptions-item>
+          <el-descriptions-item :label="t('hostProxy.wizard.domainCount')">{{ domainCount }}</el-descriptions-item>
+          <el-descriptions-item :label="t('hostProxy.wizard.httpPort')">{{ status.http_port }}</el-descriptions-item>
+          <el-descriptions-item :label="t('hostProxy.wizard.httpsPort')">{{ status.https_port }}</el-descriptions-item>
         </el-descriptions>
         <el-alert type="info" class="mt-md" :closable="false">
-          使用非特权端口(8080/8443)，无需配置端口权限
+          {{ t('hostProxy.wizard.nonPrivilegedHint') }}
         </el-alert>
       </div>
 
       <div v-if="wizardStep === 1" class="wizard-step">
-        <h3>配置hosts文件</h3>
-        <p class="mb-md">将以下内容添加到/etc/hosts文件:</p>
+        <h3>{{ t('hostProxy.wizard.configHostsTitle') }}</h3>
+        <p class="mb-md">{{ t('hostProxy.wizard.configHostsDesc') }}</p>
         <el-input
           type="textarea"
           :rows="domainCount + 1"
@@ -355,23 +355,23 @@
         />
         <el-button @click="copyCommand(hostsCommand)">
           <el-icon><DocumentCopy /></el-icon>
-          复制命令
+          {{ t('hostProxy.wizard.copyCommand') }}
         </el-button>
       </div>
 
       <div v-if="wizardStep === 2" class="wizard-step">
-        <el-result icon="success" title="配置完成" sub-title="Host代理已配置完成">
+        <el-result icon="success" :title="t('hostProxy.wizard.configComplete')" :sub-title="t('hostProxy.wizard.configCompleteSub')">
           <template #extra>
-            <el-button type="primary" @click="showWizard = false">完成</el-button>
-            <el-button @click="testProxy">测试代理</el-button>
+            <el-button type="primary" @click="showWizard = false">{{ t('hostProxy.wizard.finish') }}</el-button>
+            <el-button @click="testProxy">{{ t('hostProxy.wizard.testProxy') }}</el-button>
           </template>
         </el-result>
       </div>
 
       <template #footer>
-        <el-button @click="wizardStep--" :disabled="wizardStep === 0">上一步</el-button>
+        <el-button @click="wizardStep--" :disabled="wizardStep === 0">{{ t('hostProxy.wizard.prevStep') }}</el-button>
         <el-button type="primary" @click="wizardStep++" :disabled="wizardStep === 2">
-          下一步
+          {{ t('hostProxy.wizard.nextStep') }}
         </el-button>
       </template>
     </el-dialog>
@@ -380,6 +380,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   Refresh,
@@ -396,6 +397,8 @@ import {
   ArrowUp
 } from '@element-plus/icons-vue'
 import api from '@/api'
+
+const { t } = useI18n()
 
 interface HostProxyStatus {
   enabled: boolean
@@ -459,23 +462,20 @@ const setupSteps = ref({
   active: -1
 })
 
-// 加载状态
 const load = async () => {
   loading.value = true
   try {
     const data = await api.get('/api/v1/host-proxy/status')
     status.value = data
-    // 同步端口表单
     portForm.value.httpPort = data.http_port || 8080
     portForm.value.httpsPort = data.https_port || 8443
   } catch (error: any) {
-    ElMessage.error('加载状态失败: ' + error.message)
+    ElMessage.error(t('hostProxy.message.loadStatusFailed') + ': ' + error.message)
   } finally {
     loading.value = false
   }
 }
 
-// 切换代理状态，同时保存端口配置（与 SystemProxy 风格一致）
 const toggleProxy = async () => {
   toggling.value = true
   try {
@@ -486,17 +486,16 @@ const toggleProxy = async () => {
         https_port: portForm.value.httpsPort
       }
     })
-    ElMessage.success(status.value.enabled ? 'Host代理已启用' : 'Host代理已禁用')
+    ElMessage.success(status.value.enabled ? t('hostProxy.message.proxyEnabled') : t('hostProxy.message.proxyDisabled'))
     await load()
   } catch (error: any) {
-    ElMessage.error('操作失败: ' + error.message)
+    ElMessage.error(t('hostProxy.message.operationFailed') + ': ' + error.message)
     status.value.enabled = !status.value.enabled
   } finally {
     toggling.value = false
   }
 }
 
-// 添加域名
 const openAddDomain = () => {
   newDomain.value = {
     domain: '',
@@ -507,7 +506,7 @@ const openAddDomain = () => {
 
 const addDomain = async () => {
   if (!newDomain.value.domain) {
-    ElMessage.warning('请输入域名')
+    ElMessage.warning(t('hostProxy.validation.pleaseEnterDomain'))
     return
   }
 
@@ -516,49 +515,46 @@ const addDomain = async () => {
     const domains = { ...status.value.domains }
     domains[newDomain.value.domain] = newDomain.value.target
     await api.put('/api/v1/host-proxy/domains', { domains })
-    ElMessage.success('域名添加成功')
+    ElMessage.success(t('hostProxy.message.domainAdded'))
     showAddDialog.value = false
     await load()
   } catch (error: any) {
-    ElMessage.error('添加失败: ' + error.message)
+    ElMessage.error(t('hostProxy.message.addFailed') + ': ' + error.message)
   } finally {
     adding.value = false
   }
 }
 
-// 删除域名
 const removeDomain = async (row: any, index: number) => {
   try {
-    await ElMessageBox.confirm(`确定删除域名 ${row.domain} 吗?`, '确认删除', {
+    await ElMessageBox.confirm(t('hostProxy.message.deleteDomainConfirm', { domain: row.domain }), t('hostProxy.message.deleteConfirmTitle'), {
       type: 'warning'
     })
 
     const domains = { ...status.value.domains }
     delete domains[row.domain]
     await api.put('/api/v1/host-proxy/domains', { domains })
-    ElMessage.success('域名删除成功')
+    ElMessage.success(t('hostProxy.message.domainDeleted'))
     await load()
   } catch (error: any) {
     if (error !== 'cancel') {
-      ElMessage.error('删除失败: ' + error.message)
+      ElMessage.error(t('hostProxy.message.deleteFailed') + ': ' + error.message)
     }
   }
 }
 
-// 测试域名
 const testDomain = async (domain: string) => {
   testingDomains.value[domain] = true
   try {
     const response = await api.get(`http://${domain}/v1/models`)
-    ElMessage.success(`域名 ${domain} 测试成功`)
+    ElMessage.success(t('hostProxy.message.domainTestSuccess', { domain }))
   } catch (error: any) {
-    ElMessage.error(`测试失败: ${error.message}`)
+    ElMessage.error(t('hostProxy.message.testFailed', { message: error.message }))
   } finally {
     testingDomains.value[domain] = false
   }
 }
 
-// 下载CA证书
 const downloadCACert = async () => {
   try {
     const response = await api.get('/api/v1/host-proxy/ca-cert', { responseType: 'blob' })
@@ -570,55 +566,50 @@ const downloadCACert = async () => {
     link.click()
     link.remove()
     window.URL.revokeObjectURL(url)
-    ElMessage.success('CA证书下载成功')
+    ElMessage.success(t('hostProxy.message.caCertDownloaded'))
   } catch (error: any) {
-    ElMessage.error('下载失败: ' + error.message)
+    ElMessage.error(t('hostProxy.message.downloadFailed') + ': ' + error.message)
   }
 }
 
-// 复制命令
 const copyCommand = async (command: string) => {
   try {
     await navigator.clipboard.writeText(command)
-    ElMessage.success('已复制到剪贴板')
+    ElMessage.success(t('hostProxy.message.copiedToClipboard'))
   } catch (error) {
-    ElMessage.error('复制失败')
+    ElMessage.error(t('hostProxy.message.copyFailed'))
   }
 }
 
-// 复制证书安装命令
 const copyCertCommand = async () => {
   const commands = [
-    '# 下载CA证书',
+    t('hostProxy.certComment.download'),
     'curl -o ca.crt http://127.0.0.1:20060/api/v1/host-proxy/ca-cert',
     '',
-    '# 安装到系统(Linux/Mac)',
+    t('hostProxy.certComment.linuxMac'),
     'sudo cp ca.crt /usr/local/share/ca-certificates/ca.crt',
     'sudo update-ca-certificates',
     '',
-    '# Windows: 双击ca.crt证书,安装到"受信任的根证书颁发机构"'
+    t('hostProxy.certComment.windows')
   ].join('\n')
   await copyCommand(commands)
 }
 
-// 切换指南显示
 const toggleGuide = () => {
   showGuide.value = !showGuide.value
 }
 
-// 打开配置向导
 const openSetupWizard = () => {
   wizardStep.value = 0
   showWizard.value = true
 }
 
-// 测试代理
 const testProxy = async () => {
   try {
     await api.get('https://api.openai.com/v1/models')
-    ElMessage.success('代理测试成功!')
+    ElMessage.success(t('hostProxy.message.proxyTestSuccess'))
   } catch (error: any) {
-    ElMessage.error(`测试失败: ${error.message}`)
+    ElMessage.error(t('hostProxy.message.testFailed', { message: error.message }))
   }
 }
 
@@ -670,7 +661,6 @@ onMounted(() => {
   gap: 16px;
 }
 
-/* 统计卡片 */
 .metrics-grid {
   margin-bottom: 16px;
 }
@@ -754,7 +744,6 @@ onMounted(() => {
   color: var(--el-text-color-secondary);
 }
 
-/* 卡片样式 */
 .control-card,
 .domains-card,
 .cert-card,
@@ -793,7 +782,6 @@ onMounted(() => {
   }
 }
 
-/* CA证书 */
 .cert-content {
   display: flex;
   flex-direction: column;
@@ -809,7 +797,6 @@ onMounted(() => {
   margin-top: 16px;
 }
 
-/* 配置指南 */
 .guide-content {
   padding: 16px 0;
 }
@@ -842,7 +829,6 @@ onMounted(() => {
   font-size: 13px;
 }
 
-/* 工具类 */
 .mt-lg {
   margin-top: 24px;
 }
@@ -855,7 +841,6 @@ onMounted(() => {
   margin-bottom: 16px;
 }
 
-/* 响应式 */
 @media (max-width: 768px) {
   .header-with-toolbar {
     flex-direction: column;

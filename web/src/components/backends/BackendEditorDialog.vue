@@ -1,7 +1,7 @@
 <template>
   <el-dialog
     v-model="dialogVisible"
-    :title="isCreate ? '添加 Provider' : '编辑 Provider'"
+    :title="isCreate ? t('backendEditor.addProvider') : t('backendEditor.editProvider')"
     width="680px"
     class="provider-editor-dialog"
     @close="onDialogClose"
@@ -9,14 +9,14 @@
     <div class="provider-form-body">
       <el-tabs v-model="activeTab" class="editor-tabs">
         <!-- ═══════════ Tab 1: 基本设置 ═══════════ -->
-        <el-tab-pane label="连接配置" name="basic">
+        <el-tab-pane :label="t('backendEditor.connectionConfig')" name="basic">
           <!-- Provider 搜索选择（创建模式） -->
           <div v-if="isCreate" class="form-group">
-            <label class="form-label">Provider</label>
+            <label class="form-label">{{ t('backendEditor.provider') }}</label>
             <div class="provider-dropdown" v-click-outside="() => (showProviderList = false)">
               <el-input
                 v-model="form.name"
-                placeholder="搜索或输入 Provider 名称..."
+                :placeholder="t('backendEditor.searchProvider')"
                 autocomplete="off"
                 @focus="showProviderList = true"
                 @click="showProviderList = true"
@@ -36,7 +36,7 @@
                   </div>
                 </div>
                 <div v-if="filteredProviders.length === 0" class="provider-empty">
-                  未找到匹配的 Provider，可继续手动填写
+                   {{ t('backendEditor.noMatchProvider') }}
                 </div>
               </div>
             </div>
@@ -45,7 +45,7 @@
           <!-- 编辑模式 -->
           <template v-else>
             <div class="form-group" v-if="form.id">
-              <label class="form-label">后端 ID</label>
+              <label class="form-label">{{ t('backendEditor.backendId') }}</label>
               <el-input :model-value="form.id" readonly class="id-input">
                 <template #prefix>
                   <el-icon><Document /></el-icon>
@@ -56,23 +56,23 @@
               </el-input>
             </div>
             <div class="form-group">
-              <label class="form-label">名称</label>
-              <el-input v-model="form.name" placeholder="Provider 名称" autocomplete="off" />
+              <label class="form-label">{{ t('backendEditor.name') }}</label>
+              <el-input v-model="form.name" :placeholder="t('backendEditor.providerName')" autocomplete="off" />
             </div>
           </template>
 
           <div class="form-row-2">
             <div class="form-group">
-              <label class="form-label">Base URL</label>
+              <label class="form-label">{{ t('backendEditor.baseUrl') }}</label>
               <el-input v-model="form.base_url" placeholder="https://api.example.com/v1" autocomplete="off" />
             </div>
             <div class="form-group">
-              <label class="form-label">类型</label>
+              <label class="form-label">{{ t('backendEditor.type') }}</label>
               <el-select v-model="form.type" style="width: 100%" @change="onTypeChanged">
                 <el-option
                   v-for="bt in backendTypes"
                   :key="bt.type"
-                  :label="bt.name + (bt.type === 'gemini' ? '（原生）' : '')"
+                  :label="bt.name + (bt.type === 'gemini' ? t('backendEditor.nativeSuffix') : '')"
                   :value="bt.type"
                 />
               </el-select>
@@ -85,21 +85,21 @@
             :closable="false"
             show-icon
             class="kimi-hint"
-            title="Kimi for Coding 需单独会员与专用 API Key"
-            description="请在 kimi.com/code 开通会员，并使用该页面生成的 Key。"
+            :title="t('backendEditor.kimiHintTitle')"
+            :description="t('backendEditor.kimiHintDesc')"
           />
 
           <!-- API Key 列表 -->
           <div class="form-group">
             <div class="key-list-header">
-              <label class="form-label">API Key</label>
+              <label class="form-label">{{ t('backendEditor.apiKey') }}</label>
               <el-button type="primary" link size="small" @click="addApiKey">
-                <el-icon><Plus /></el-icon> 添加
+                <el-icon><Plus /></el-icon> {{ t('backendEditor.addApiKey') }}
               </el-button>
             </div>
             <div v-if="apiKeys.length === 0" class="key-empty">
               <el-icon :size="20" color="#c0c4cc"><WarningFilled /></el-icon>
-              <span>请添加至少一个 API Key</span>
+              <span>{{ t('backendEditor.addApiKeyHint') }}</span>
             </div>
             <TransitionGroup name="key-list" tag="div" class="key-list">
               <div v-for="(key, idx) in apiKeys" :key="key.id" class="key-card">
@@ -109,12 +109,12 @@
                     v-model="key.api_key"
                     type="password"
                     show-password
-                    :placeholder="key.has_key ? '已设置，留空保持不变' : 'sk-...'"
+                    :placeholder="key.has_key ? t('backendEditor.hasSet') + ', ' + t('backendEditor.probeModelPlaceholder') : 'sk-...'"
                     autocomplete="new-password"
                     class="key-input"
                   />
                   <el-tag v-if="key.has_key && !key.api_key" size="small" type="success" effect="light" round>
-                    已设置
+                    {{ t('backendEditor.hasSet') }}
                   </el-tag>
                   <el-button
                     v-if="apiKeys.length > 1"
@@ -134,38 +134,38 @@
           <Transition name="el-fade-in">
             <div v-if="apiKeys.length > 1" class="strategy-section">
               <div class="form-group" style="margin-bottom: 0">
-                <label class="form-label">轮转策略</label>
+                <label class="form-label">{{ t('backendEditor.rotationPolicy') }}</label>
                 <el-select v-model="accountPool.strategy" style="width: 100%">
-                  <el-option label="加权轮询 (Round Robin)" value="round_robin" />
-                  <el-option label="最少使用 (Least Usage)" value="least_usage" />
-                  <el-option label="会话亲和 (Sticky Session)" value="sticky_session" />
+                  <el-option :label="t('backendEditor.roundRobin')" value="round_robin" />
+                  <el-option :label="t('backendEditor.leastUsage')" value="least_usage" />
+                  <el-option :label="t('backendEditor.stickySession')" value="sticky_session" />
                 </el-select>
               </div>
               <div class="strategy-desc">
                 <template v-if="accountPool.strategy === 'round_robin'">
-                  按权重依次将请求分配给各 Key，权重越高分配越多，确保所有 Key 均匀使用。
+                  {{ t('backendEditor.strategyRoundRobinDesc') }}
                 </template>
                 <template v-else-if="accountPool.strategy === 'least_usage'">
-                  每次请求选择窗口内调用次数最少的 Key，自动平衡各 Key 的负载压力。
+                  {{ t('backendEditor.strategyLeastUsageDesc') }}
                 </template>
                 <template v-else>
-                  根据请求中的用户标识（Header X-Session-ID / user 字段）绑定固定 Key，保证同一用户始终使用同一凭证。
+                  {{ t('backendEditor.strategyStickySessionDesc') }}
                 </template>
               </div>
               <div class="strategy-hint">
-                已添加 {{ apiKeys.length }} 个 Key，请求将按策略自动轮转
+                {{ t('backendEditor.keysCountHint', { count: apiKeys.length }) }}
               </div>
             </div>
           </Transition>
         </el-tab-pane>
 
         <!-- ═══════════ Tab 2: 模型管理 ═══════════ -->
-        <el-tab-pane label="模型管理" name="models">
+        <el-tab-pane :label="t('backendEditor.modelManagement')" name="models">
           <div class="form-group">
-            <label class="form-label">默认模型</label>
+            <label class="form-label">{{ t('backendEditor.defaultModel') }}</label>
             <el-input
               v-model="form.default_model"
-              placeholder="输入模型名称，如 gpt-4o"
+              :placeholder="t('backendEditor.defaultModelPlaceholder')"
               autocomplete="off"
               list="personal-model-suggestions"
             />
@@ -177,7 +177,7 @@
           <div class="model-section">
             <div class="model-list-head">
               <label class="form-label">
-                模型列表
+                {{ t('backendEditor.modelList') }}
                 <span v-if="form.models.length" class="model-count">{{ form.models.length }}</span>
               </label>
               <el-button
@@ -188,18 +188,18 @@
                 :disabled="!canFetchModels"
                 @click="fetchModelsNow"
               >
-                <el-icon><Refresh /></el-icon> 刷新
+                <el-icon><Refresh /></el-icon> {{ t('backendEditor.refresh') }}
               </el-button>
             </div>
             <div class="model-add-row">
               <el-input
                 v-model="newModelName"
-                placeholder="输入模型名称，回车添加"
+                :placeholder="t('backendEditor.addModelPlaceholder')"
                 autocomplete="off"
                 @keyup.enter="onAddModel"
               />
               <el-button @click="onAddModel" :disabled="!newModelName.trim()" type="primary" plain>
-                添加
+                {{ t('backendEditor.addModel') }}
               </el-button>
             </div>
             <div class="model-preview" :class="{ empty: form.models.length === 0 }">
@@ -220,73 +220,73 @@
               </div>
               <div v-else class="model-empty-tip">
                 <el-icon :size="24" color="#dcdfe6"><FolderOpened /></el-icon>
-                <span>暂无模型</span>
+                <span>{{ t('backendEditor.noModels') }}</span>
               </div>
             </div>
-            <div class="form-tip">点击标签设为默认，带 <el-icon :size="12" color="#409eff"><StarFilled /></el-icon> 为当前默认</div>
+            <div class="form-tip">{{ t('backendEditor.modelBeforeIcon') }}<el-icon :size="12" color="#409eff"><StarFilled /></el-icon>{{ t('backendEditor.modelAfterIcon') }}</div>
           </div>
         </el-tab-pane>
 
         <!-- ═══════════ Tab 3: 高级配置 ═══════════ -->
-        <el-tab-pane label="高级配置" name="advanced">
+        <el-tab-pane :label="t('backendEditor.advancedConfig')" name="advanced">
           <div class="advanced-section">
-            <div class="section-title">基础参数</div>
+            <div class="section-title">{{ t('backendEditor.basicParams') }}</div>
             <div class="form-group">
-              <label class="form-label">类型</label>
+              <label class="form-label">{{ t('backendEditor.type') }}</label>
               <el-select v-model="form.type" style="width: 100%" @change="onTypeChanged">
                 <el-option
                   v-for="bt in backendTypes"
                   :key="bt.type"
-                  :label="bt.name + (bt.type === 'gemini' ? '（原生）' : '')"
+                  :label="bt.name + (bt.type === 'gemini' ? t('backendEditor.nativeSuffix') : '')"
                   :value="bt.type"
                 />
               </el-select>
               <div v-if="selectedTypeMeta" class="type-hint">
                 <template v-if="selectedTypeMeta.key_help">
-                  <span class="hint-label">Key 格式：</span>{{ selectedTypeMeta.key_help }}
+                  <span class="hint-label">{{ t('backendEditor.keyFormat') }}</span>{{ selectedTypeMeta.key_help }}
                 </template>
                 <br v-if="selectedTypeMeta.key_help && selectedTypeMeta.default_base_url" />
                 <template v-if="selectedTypeMeta.default_base_url">
-                  <span class="hint-label">默认端点：</span><code>{{ selectedTypeMeta.default_base_url }}</code>
+                  <span class="hint-label">{{ t('backendEditor.defaultEndpoint') }}</span><code>{{ selectedTypeMeta.default_base_url }}</code>
                 </template>
               </div>
             </div>
 
             <div class="form-group">
-              <label class="form-label">默认探测模型</label>
-              <el-input v-model="form.probe_model" placeholder="留空则使用默认模型" autocomplete="off" />
+              <label class="form-label">{{ t('backendEditor.defaultProbeModel') }}</label>
+              <el-input v-model="form.probe_model" :placeholder="t('backendEditor.probeModelPlaceholder')" autocomplete="off" />
             </div>
 
             <div class="form-group">
-              <label class="form-label">描述</label>
-              <el-input v-model="form.description" type="textarea" :rows="2" placeholder="可选备注" />
+              <label class="form-label">{{ t('backendEditor.description') }}</label>
+              <el-input v-model="form.description" type="textarea" :rows="2" :placeholder="t('backendEditor.descriptionPlaceholder')" />
             </div>
           </div>
 
           <div class="advanced-section">
-            <div class="section-title">运行参数</div>
+            <div class="section-title">{{ t('backendEditor.runParams') }}</div>
             <div class="form-row-3">
               <div class="form-group">
-                <label class="form-label">超时（秒）</label>
+                <label class="form-label">{{ t('backendEditor.timeout') }}</label>
                 <el-input-number v-model="form.timeout" :min="1" :max="600" style="width: 100%" />
               </div>
               <div class="form-group">
-                <label class="form-label">最大重试</label>
+                <label class="form-label">{{ t('backendEditor.maxRetries') }}</label>
                 <el-input-number v-model="form.max_retries" :min="0" :max="10" style="width: 100%" />
               </div>
             </div>
             <div class="form-row-2">
               <div class="toggle-card">
                 <div class="toggle-info">
-                  <span class="toggle-label">启用</span>
-                  <span class="toggle-desc">关闭后不参与请求路由</span>
+                  <span class="toggle-label">{{ t('backendEditor.enabled') }}</span>
+                  <span class="toggle-desc">{{ t('backendEditor.enabledDesc') }}</span>
                 </div>
                 <el-switch v-model="form.enabled" />
               </div>
               <div class="toggle-card">
                 <div class="toggle-info">
-                  <span class="toggle-label">自动同步模型</span>
-                  <span class="toggle-desc">探测成功后写入模型列表</span>
+                  <span class="toggle-label">{{ t('backendEditor.autoSyncModels') }}</span>
+                  <span class="toggle-desc">{{ t('backendEditor.autoSyncModelsDesc') }}</span>
                 </div>
                 <el-switch v-model="form.auto_fetch_models" />
               </div>
@@ -299,8 +299,8 @@
             :closable="false"
             show-icon
             class="gemini-hint"
-            title="Gemini 原生 — 官方 / CLI 推荐"
-            description="直接接入 Gemini 官方 API，支持所有原生特性。"
+            :title="t('backendEditor.geminiHintTitle')"
+            :description="t('backendEditor.geminiHintDesc')"
           />
         </el-tab-pane>
       </el-tabs>
@@ -308,9 +308,9 @@
 
     <template #footer>
       <div class="dialog-footer">
-        <el-button @click="dialogVisible = false" size="large">取消</el-button>
+        <el-button @click="dialogVisible = false" size="large">{{ t('backendEditor.cancel') }}</el-button>
         <el-button type="primary" :loading="saving" :disabled="!canSave" @click="save" size="large">
-          {{ isCreate ? '添加 Provider' : '保存' }}
+          {{ isCreate ? t('backendEditor.addProvider') : t('backendEditor.save') }}
         </el-button>
       </div>
     </template>
@@ -319,6 +319,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, watch, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
 import {
   Delete,
@@ -345,6 +346,8 @@ import {
   fromApiBackend,
 } from '@/utils/shared-modules'
 import type { ProviderFormModel, ProviderDef } from '@/utils/shared-modules'
+
+const { t } = useI18n()
 
 const props = withDefaults(defineProps<{
   modelValue: boolean
@@ -572,7 +575,7 @@ async function saveAccountPool(backendId: string) {
     }
   } catch (err: any) {
     console.error('Failed to save account pool', err)
-    ElMessage.warning('账户池保存失败：' + (err.message || '未知错误'))
+    ElMessage.warning(t('backendEditor.accountPoolSaveFailed') + (err.message || t('backendEditor.unknownError')))
   }
 }
 
@@ -619,7 +622,7 @@ const save = async () => {
     requireApiKey: true,
   })
   if (!check.ok) {
-    ElMessage.warning(check.errors[0] || '请完善表单')
+    ElMessage.warning(check.errors[0] || t('backendEditor.formIncomplete'))
     return
   }
 
@@ -639,7 +642,7 @@ const save = async () => {
       delete (payload as { id?: string }).id
       const created: any = await api.post('/api/v1/backends', payload)
       backendId = created.id
-      ElMessage.success('Provider 已添加')
+      ElMessage.success(t('backendEditor.providerAdded'))
       try {
         const proxyData: any = await api.get('/api/v1/config/proxy')
         const currentDefault = (proxyData?.default_backend_id ?? proxyData?.data?.default_backend_id) || ''
@@ -648,12 +651,12 @@ const save = async () => {
           const firstSupported = sm[0] && (sm[0].actual_model || sm[0].requested_model || sm[0].name)
           const defaultModel = created.default_model || created.probe_model || form.default_model || form.probe_model || firstSupported || ''
           await api.put('/api/v1/config/proxy', { default_backend_id: created.id, default_model: defaultModel })
-          ElMessage.success(`已自动设为默认后端，模型「${defaultModel || '未设置'}」`)
+          ElMessage.success(t('backendEditor.autoSetDefault') + (defaultModel || t('backendEditor.notSet')) + '」')
         }
       } catch { /* ignore */ }
     } else {
       await api.put(`/api/v1/backends/${form.id}`, payload)
-      ElMessage.success('Provider 已更新')
+      ElMessage.success(t('backendEditor.providerUpdated'))
     }
 
     if (!isCreate.value && backendId && apiKeys.value.length > 1) {
@@ -663,7 +666,7 @@ const save = async () => {
     dialogVisible.value = false
     emit('saved')
   } catch (error: any) {
-    ElMessage.error('保存失败：' + (error.message || '未知错误'))
+    ElMessage.error(t('backendEditor.saveFailed') + (error.message || t('backendEditor.unknownError')))
   } finally {
     saving.value = false
   }
@@ -682,14 +685,14 @@ const ensureEnabledBackendCanBeSaved = async (): Promise<boolean> => {
     await api.post('/api/v1/backends/test?update_and_save=false', payload)
     return true
   } catch (error: any) {
-    ElMessage.error('保存失败：启用前连接测试未通过（' + (error.message || '未知错误') + '）')
+    ElMessage.error(t('backendEditor.saveFailedConnectionTest') + (error.message || t('backendEditor.unknownError')) + '）')
     return false
   }
 }
 
 const fetchModelsNow = async () => {
   if (!canFetchModels.value) {
-    ElMessage.warning(!(form.base_url || '').trim() ? '请先填写 Base URL' : '请先填写 API Key')
+    ElMessage.warning(!(form.base_url || '').trim() ? t('backendEditor.fillBaseUrl') : t('backendEditor.fillApiKey'))
     return
   }
   fetchingModels.value = true
@@ -706,7 +709,7 @@ const fetchModelsNow = async () => {
     const rawNames: string[] = Array.isArray(res) ? res : Array.isArray((res as any)?.data) ? (res as any).data : []
     const names = rawNames.map((n) => String(n || '').trim()).filter(Boolean)
     if (names.length === 0) {
-      ElMessage.warning('远端未返回模型，可手动添加')
+      ElMessage.warning(t('backendEditor.remoteNoModels'))
       return
     }
     form.models = names.map((name) => ({ name }))
@@ -714,9 +717,9 @@ const fetchModelsNow = async () => {
       form.default_model = names[0]
       form.probe_model = names[0]
     }
-    ElMessage.success(`已刷新 ${names.length} 个模型`)
+    ElMessage.success(t('backendEditor.refreshedModels', { count: names.length }))
   } catch (error: any) {
-    ElMessage.error('获取模型失败：' + (error.message || '未知错误'))
+    ElMessage.error(t('backendEditor.fetchModelsFailed') + (error.message || t('backendEditor.unknownError')))
   } finally {
     fetchingModels.value = false
   }
@@ -724,7 +727,7 @@ const fetchModelsNow = async () => {
 
 const copyBackendId = (id: string) => {
   navigator.clipboard.writeText(id)
-  ElMessage.success('后端 ID 已复制')
+  ElMessage.success(t('backendEditor.backendIdCopied'))
 }
 
 function getPendingApiKey(backendId: string): string | undefined {

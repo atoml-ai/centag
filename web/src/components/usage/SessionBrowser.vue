@@ -1,15 +1,14 @@
 <template>
   <div class="session-browser" :class="mode">
-    <!-- compact: accordion list under dashboard -->
     <template v-if="mode === 'compact'">
       <div class="session-head">
-        <span>最近对话</span>
-        <el-button text type="primary" size="small" :loading="loading" @click="reload">刷新</el-button>
+        <span>{{ t('sessionBrowser.compactTitle') }}</span>
+        <el-button text type="primary" size="small" :loading="loading" @click="reload">{{ t('sessionBrowser.refresh') }}</el-button>
       </div>
 
       <el-empty
         v-if="!loading && sessions.length === 0"
-        description="暂无会话，先发起一次 AI 对话"
+        :description="t('sessionBrowser.noSessions')"
         :image-size="64"
       />
       <template v-else>
@@ -29,8 +28,8 @@
               {{ s.title || s.id }}
             </div>
             <div class="session-meta">
-              <span>{{ s.category || 'general' }}</span>
-              <span>{{ s.message_count || 0 }} 条</span>
+              <span>{{ s.category || t('sessionBrowser.categoryGeneral') }}</span>
+              <span>{{ t('sessionBrowser.messagesCount', { count: s.message_count || 0 }) }}</span>
             </div>
           </li>
         </ul>
@@ -49,10 +48,10 @@
 
         <div v-if="selectedId" class="messages compact-messages">
           <div class="messages-head">
-            <span>消息详情</span>
-            <el-button text size="small" @click="collapseSession">收起</el-button>
+            <span>{{ t('sessionBrowser.messagesDetail') }}</span>
+            <el-button text size="small" @click="collapseSession">{{ t('sessionBrowser.collapse') }}</el-button>
           </div>
-          <div v-if="messagesLoading" class="msg-loading">加载中…</div>
+          <div v-if="messagesLoading" class="msg-loading">{{ t('sessionBrowser.loading') }}</div>
           <template v-else>
             <div v-for="m in messages" :key="m.id" class="msg" :class="m.role">
               <span class="role">{{ roleLabel(m.role) }}</span>
@@ -68,24 +67,23 @@
       </template>
     </template>
 
-    <!-- full: two-column page layout -->
     <template v-else>
       <div class="page-header">
         <div>
-          <h2>会话记录</h2>
-          <p class="subtitle">浏览已记录的对话 Session 与消息（按发行版落库：文件 / SQLite / PG）</p>
+          <h2>{{ t('sessionBrowser.pageTitle') }}</h2>
+          <p class="subtitle">{{ t('sessionBrowser.pageSubtitle') }}</p>
         </div>
         <div class="header-actions">
           <el-select
             v-model="category"
             clearable
-            placeholder="全部分类"
+            :placeholder="t('sessionBrowser.allCategories')"
             style="width: 160px"
             @change="reload"
           >
             <el-option v-for="c in categories" :key="c" :label="c" :value="c" />
           </el-select>
-          <el-button type="primary" :loading="loading" @click="reload">刷新</el-button>
+          <el-button type="primary" :loading="loading" @click="reload">{{ t('sessionBrowser.refresh') }}</el-button>
         </div>
       </div>
 
@@ -93,10 +91,10 @@
         <el-col :xs="24" :md="10" :lg="9">
           <el-card shadow="never" class="list-card">
             <template #header>
-              <span>会话列表</span>
-              <span class="muted">共 {{ sessions.length }} 条</span>
+              <span>{{ t('sessionBrowser.sessionList') }}</span>
+              <span class="muted">{{ t('sessionBrowser.totalCount', { count: sessions.length }) }}</span>
             </template>
-            <el-empty v-if="!loading && sessions.length === 0" description="暂无会话" />
+            <el-empty v-if="!loading && sessions.length === 0" :description="t('sessionBrowser.noSessionsFull')" />
             <div v-else class="session-list full-list">
               <button
                 v-for="s in sessions"
@@ -109,7 +107,7 @@
                 <div class="session-title">{{ s.title || s.id }}</div>
                 <div class="session-meta">
                   <el-tag size="small" type="info">{{ s.category || 'general' }}</el-tag>
-                  <span>{{ s.message_count }} 条消息</span>
+                  <span>{{ t('sessionBrowser.messagesCount', { count: s.message_count }) }}</span>
                   <span>{{ formatTime(s.updated_at) }}</span>
                 </div>
               </button>
@@ -120,10 +118,10 @@
         <el-col :xs="24" :md="14" :lg="15">
           <el-card shadow="never" class="detail-card">
             <template #header>
-              <span>消息</span>
+              <span>{{ t('sessionBrowser.messagesTitle') }}</span>
               <span v-if="selected" class="muted">{{ selected.id }}</span>
             </template>
-            <el-empty v-if="!selectedId" description="选择左侧会话查看消息" />
+            <el-empty v-if="!selectedId" :description="t('sessionBrowser.selectSessionHint')" />
             <div v-else v-loading="messagesLoading" class="message-list">
               <div v-for="m in messages" :key="m.id" class="message" :class="m.role">
                 <div class="message-role">{{ roleLabel(m.role) }}</div>
@@ -148,10 +146,13 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { ArrowDown, ArrowRight } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import * as convApi from '@/api/conversations'
 import type { ConversationMessage, ConversationSession } from '@/api/conversations'
+
+const { t } = useI18n()
 
 const props = withDefaults(
   defineProps<{
@@ -184,30 +185,29 @@ function formatTime(v?: string) {
 }
 
 function roleLabel(role: string) {
-  if (role === 'user') return '用户'
-  if (role === 'assistant') return '助手'
-  if (role === 'system') return '系统'
+  if (role === 'user') return t('sessionBrowser.roleUser')
+  if (role === 'assistant') return t('sessionBrowser.roleAssistant')
+  if (role === 'system') return t('sessionBrowser.roleSystem')
   return role
 }
 
 const emptyDetailHint = computed(() => {
   const s = sessions.value.find((x) => x.id === selectedId.value)
   if (s && (s.message_count || 0) > 0) {
-    return '消息加载失败或为空，请刷新重试'
+    return t('sessionBrowser.loadMessagesFailed')
   }
-  return '该会话暂无消息（可能仅创建了会话、请求未完成）'
+  return t('sessionBrowser.noMessages')
 })
 
-/** 兼容历史落库的上游 SSE：抽 delta.content 拼成可读文本 */
 function displayContent(m: ConversationMessage) {
   const raw = (m.content || '').trim()
-  if (!raw) return '（空）'
+  if (!raw) return t('sessionBrowser.emptyContent')
   if (m.role !== 'assistant' || !raw.includes('data:')) return raw
   const parts: string[] = []
   for (const line of raw.split('\n')) {
-    const t = line.trim()
-    if (!t.startsWith('data:')) continue
-    const payload = t.slice(5).trim()
+    const trimmed = line.trim()
+    if (!trimmed.startsWith('data:')) continue
+    const payload = trimmed.slice(5).trim()
     if (!payload || payload === '[DONE]') continue
     try {
       const o = JSON.parse(payload) as {
@@ -221,7 +221,6 @@ function displayContent(m: ConversationMessage) {
         if (typeof c === 'string' && c) parts.push(c)
       }
     } catch {
-      /* ignore bad chunk */
     }
   }
   const text = parts.join('').trim()
@@ -234,7 +233,6 @@ async function loadCategories() {
     const res = await convApi.listCategories()
     categories.value = res.categories ?? []
   } catch {
-    /* optional */
   }
 }
 
@@ -255,7 +253,7 @@ async function reload() {
   } catch (e: any) {
     sessions.value = []
     if (props.mode === 'full') {
-      ElMessage.error('加载会话失败：' + (e?.message || e))
+      ElMessage.error(t('loadSessionsFailed') + ' ' + (e?.message || e))
     }
   } finally {
     loading.value = false
@@ -275,7 +273,7 @@ async function toggleSession(id: string) {
     messages.value = res?.messages ?? []
   } catch (e: any) {
     messages.value = []
-    ElMessage.error('加载消息失败：' + (e?.message || e))
+    ElMessage.error(t('loadMessagesFailed') + ' ' + (e?.message || e))
   } finally {
     messagesLoading.value = false
   }
@@ -289,7 +287,7 @@ async function selectSession(s: ConversationSession) {
     const res = await convApi.listMessages(s.id, { limit: 200 })
     messages.value = res.messages ?? []
   } catch (e: any) {
-    ElMessage.error('加载消息失败：' + (e?.message || e))
+    ElMessage.error(t('loadMessagesFailed') + ' ' + (e?.message || e))
     messages.value = []
   } finally {
     messagesLoading.value = false

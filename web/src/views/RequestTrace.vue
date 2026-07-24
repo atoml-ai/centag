@@ -2,60 +2,60 @@
   <div class="request-trace">
     <div class="trace-header">
       <div class="trace-header-main">
-        <h2>请求追踪</h2>
-        <p class="trace-subtitle">从日志点击请求 ID 进入，查看完整调用链路与耗时</p>
+        <h2>{{ t('requestTrace.title') }}</h2>
+        <p class="trace-subtitle">{{ t('requestTrace.subtitle') }}</p>
       </div>
       <div class="header-actions">
-        <button type="button" class="btn btn-secondary" @click="router.push('/logs')">返回日志</button>
+        <button type="button" class="btn btn-secondary" @click="router.push('/logs')">{{ t('requestTrace.backToLogs') }}</button>
         <button
           v-if="trace"
           type="button"
           class="btn btn-success"
           @click="exportTrace"
         >
-          导出 JSON
+          {{ t('requestTrace.exportJson') }}
         </button>
       </div>
     </div>
 
-    <p v-if="loading" class="trace-loading">加载追踪中…</p>
+    <p v-if="loading" class="trace-loading">{{ t('requestTrace.loadingTrace') }}</p>
     <p v-if="error" class="trace-error" role="alert">{{ error }}</p>
 
     <template v-if="trace">
       <div class="trace-id-bar">
         <code class="trace-id">{{ trace.request_id }}</code>
-        <button type="button" class="btn btn-secondary btn-sm" @click="copyRequestId">复制 ID</button>
-        <span class="trace-meta">{{ trace.raw_log_count }} 条相关日志</span>
+        <button type="button" class="btn btn-secondary btn-sm" @click="copyRequestId">{{ t('requestTrace.copyId') }}</button>
+        <span class="trace-meta">{{ t('requestTrace.relatedLogs', { n: trace.raw_log_count }) }}</span>
       </div>
 
       <div class="summary-grid">
         <div class="summary-card" :class="{ success: trace.summary.success, error: !trace.summary.success }">
-          <div class="summary-label">状态</div>
+          <div class="summary-label">{{ t('requestTrace.status') }}</div>
           <div class="summary-value">
             <span v-if="trace.summary.status_code">{{ trace.summary.status_code }}</span>
-            <span v-else>{{ trace.summary.success ? '成功' : '失败' }}</span>
+            <span v-else>{{ trace.summary.success ? t('requestTrace.success') : t('requestTrace.failed') }}</span>
           </div>
         </div>
         <div class="summary-card">
-          <div class="summary-label">总耗时</div>
+          <div class="summary-label">{{ t('requestTrace.totalDuration') }}</div>
           <div class="summary-value">{{ trace.summary.duration_ms ? trace.summary.duration_ms + 'ms' : '—' }}</div>
         </div>
         <div class="summary-card">
-          <div class="summary-label">代理模式</div>
+          <div class="summary-label">{{ t('requestTrace.proxyMode') }}</div>
           <div class="summary-value">{{ trace.summary.proxy_mode || '—' }}</div>
         </div>
         <div class="summary-card">
-          <div class="summary-label">流水线</div>
+          <div class="summary-label">{{ t('requestTrace.pipeline') }}</div>
           <div class="summary-value">{{ trace.summary.pipeline_id || '—' }}</div>
         </div>
         <div class="summary-card">
-          <div class="summary-label">后端 / 模型</div>
+          <div class="summary-label">{{ t('requestTrace.backendModel') }}</div>
           <div class="summary-value">
             {{ [trace.summary.backend_id, trace.summary.model].filter(Boolean).join(' / ') || '—' }}
           </div>
         </div>
         <div class="summary-card">
-          <div class="summary-label">路径</div>
+          <div class="summary-label">{{ t('requestTrace.path') }}</div>
           <div class="summary-value mono">
             {{ trace.summary.method ? trace.summary.method + ' ' : '' }}{{ trace.summary.path || '—' }}
           </div>
@@ -63,15 +63,15 @@
       </div>
 
       <div v-if="hasRouting" class="routing-panel">
-        <h3>路由决策</h3>
+        <h3>{{ t('requestTrace.routingDecision') }}</h3>
         <div class="routing-grid">
           <div v-if="trace.routing.detected_mode">
-            <span class="routing-key">检测模式</span>
+            <span class="routing-key">{{ t('requestTrace.detectedMode') }}</span>
             <span>{{ trace.routing.detected_mode }}</span>
             <span v-if="trace.routing.source" class="muted">（{{ trace.routing.source }}）</span>
           </div>
           <div v-if="trace.routing.resolved_mode">
-            <span class="routing-key">解析结果</span>
+            <span class="routing-key">{{ t('requestTrace.resolvedMode') }}</span>
             <span>{{ trace.routing.resolved_mode }}</span>
             <span v-if="trace.routing.resolved_source" class="muted">（{{ trace.routing.resolved_source }}）</span>
           </div>
@@ -80,7 +80,7 @@
 
       <div class="trace-body">
         <section class="timeline-panel">
-          <h3>时间轴</h3>
+          <h3>{{ t('requestTrace.timeline') }}</h3>
           <ol class="timeline">
             <li
               v-for="(event, index) in trace.timeline"
@@ -106,7 +106,7 @@
         </section>
 
         <aside v-if="hasPipelineGraph" class="pipeline-panel">
-          <h3>流水线执行</h3>
+          <h3>{{ t('requestTrace.pipelineExecution') }}</h3>
           <div class="pipeline-id">{{ trace.pipeline_graph.pipeline_id || trace.summary.pipeline_id }}</div>
           <ul v-if="trace.pipeline_graph.executed_nodes?.length" class="node-list">
             <li v-for="node in trace.pipeline_graph.executed_nodes" :key="node" class="node-item executed">
@@ -114,8 +114,8 @@
             </li>
           </ul>
           <p v-if="trace.pipeline_graph.total_nodes" class="pipeline-meta">
-            共 {{ trace.pipeline_graph.total_nodes }} 个节点
-            <span v-if="trace.pipeline_graph.total_tokens"> · {{ trace.pipeline_graph.total_tokens }} tokens</span>
+            {{ t('requestTrace.totalNodes', { n: trace.pipeline_graph.total_nodes }) }}
+            <span v-if="trace.pipeline_graph.total_tokens"> · {{ t('requestTrace.tokens', { n: trace.pipeline_graph.total_tokens }) }}</span>
           </p>
         </aside>
       </div>
@@ -125,10 +125,12 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { tracesApi, type TraceResult } from '../api'
 import { saveBlobAsFile } from '@/utils/downloadFile'
 
+const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 
@@ -162,7 +164,7 @@ async function loadTrace(id: string) {
   try {
     trace.value = await tracesApi.getTrace(id)
   } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : '加载追踪失败'
+    const msg = e instanceof Error ? e.message : t('requestTrace.loadTraceFailed')
     error.value = msg
   } finally {
     loading.value = false

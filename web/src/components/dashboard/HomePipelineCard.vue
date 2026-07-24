@@ -10,8 +10,8 @@
     />
     <template v-if="pipelines.length > 0">
       <div class="pipeline-list-head">
-        <span class="section-label">流水线列表</span>
-        <span class="list-count">{{ pipelines.length }} 个</span>
+        <span class="section-label">{{ t('homePipelineCard.pipelineList') }}</span>
+        <span class="list-count">{{ t('homePipelineCard.pipelineCount', { count: pipelines.length }) }}</span>
       </div>
 
       <div v-if="selectable" class="list-toolbar">
@@ -20,17 +20,17 @@
           :indeterminate="partialSelected"
           @change="toggleSelectAll"
         >
-          全选
+          {{ t('homePipelineCard.select') }}
         </el-checkbox>
         <template v-if="selectedIds.length > 0">
-          <span class="toolbar-count">已选 {{ selectedIds.length }} 项</span>
+          <span class="toolbar-count">{{ t('homePipelineCard.selectedCount', { count: selectedIds.length }) }}</span>
           <el-button size="small" :loading="batchExporting" @click="handleBatchExport">
-            批量导出
+            {{ t('homePipelineCard.batchExport') }}
           </el-button>
           <el-button size="small" type="danger" :loading="batchDeleting" @click="handleBatchDelete">
-            批量删除
+            {{ t('homePipelineCard.batchDelete') }}
           </el-button>
-          <el-button size="small" text @click="clearSelection">取消选择</el-button>
+          <el-button size="small" text @click="clearSelection">{{ t('homePipelineCard.cancelSelect') }}</el-button>
         </template>
       </div>
 
@@ -60,13 +60,13 @@
                 type="success"
                 effect="light"
               >
-                默认
+                {{ t('homePipelineCard.defaultTag') }}
               </el-tag>
             </div>
             <div class="pipeline-meta">
               <span class="mono">{{ pipeline.id }}</span>
               <span class="meta-sep">·</span>
-              <span>{{ pipeline.nodes?.length || 0 }} 节点</span>
+              <span>{{ t('homePipelineCard.nodeCount', { count: pipeline.nodes?.length || 0 }) }}</span>
             </div>
           </div>
           <div class="pipeline-actions">
@@ -75,7 +75,7 @@
               size="small"
               @click="handleTest(pipeline)"
             >
-              测试
+              {{ t('homePipelineCard.test') }}
             </el-button>
             <el-button
               v-if="canSetDefault"
@@ -86,7 +86,7 @@
               :loading="savingDefault && pendingDefaultId === pipeline.id"
               @click="selectDefault(pipeline.id)"
             >
-              {{ pipeline.id === selectedDefaultId ? '当前默认' : '设为默认' }}
+              {{ pipeline.id === selectedDefaultId ? t('homePipelineCard.currentDefault') : t('homePipelineCard.setDefault') }}
             </el-button>
             <el-button
               v-if="canEdit && canConfigureCapabilitySlots(pipeline)"
@@ -95,13 +95,13 @@
               plain
               @click="openRouteAssign(pipeline)"
             >
-              配置模型
+              {{ t('homePipelineCard.configureModel') }}
             </el-button>
             <PipelineFeatureGuard
               feature="pipelineExport"
               :pipeline="pipeline"
               :is-admin="authStore.isAdmin"
-              action-label="导出"
+              :action-label="t('homePipelineCard.exportAction')"
             >
               <template #default="{ disabled }">
                 <el-button
@@ -111,7 +111,7 @@
                   :loading="exportingId === pipeline.id"
                   @click="handleExportOne(pipeline)"
                 >
-                  导出
+                  {{ t('homePipelineCard.exportAction') }}
                 </el-button>
               </template>
             </PipelineFeatureGuard>
@@ -119,7 +119,7 @@
               feature="pipelineEdit"
               :pipeline="pipeline"
               :is-admin="authStore.isAdmin"
-              action-label="编辑"
+              :action-label="t('homePipelineCard.editAction')"
             >
               <template #default="{ disabled }">
                 <el-button
@@ -130,7 +130,7 @@
                   @click="openEditor(pipeline)"
                 >
                   <el-icon><Edit /></el-icon>
-                  编辑
+                  {{ t('homePipelineCard.editAction') }}
                 </el-button>
               </template>
             </PipelineFeatureGuard>
@@ -141,17 +141,17 @@
               plain
               @click="handleDelete(pipeline)"
             >
-              删除
+              {{ t('homePipelineCard.deleteAction') }}
             </el-button>
           </div>
         </div>
       </div>
     </template>
 
-    <el-empty v-else-if="!loading" description="暂无流水线" :image-size="56">
+    <el-empty v-else-if="!loading" :description="t('homePipelineCard.emptyState')" :image-size="56">
       <div class="empty-actions">
         <el-button v-if="canCreatePipeline" type="primary" plain size="small" @click="openCreate">
-          创建流水线
+          {{ t('homePipelineCard.createPipeline') }}
         </el-button>
         <el-button
           v-if="canCreatePipeline"
@@ -160,7 +160,7 @@
           :loading="importing"
           @click="triggerImport"
         >
-          导入流水线
+          {{ t('homePipelineCard.importPipeline') }}
         </el-button>
       </div>
     </el-empty>
@@ -186,26 +186,26 @@
 
     <el-dialog
       v-model="importConflictVisible"
-      title="导入冲突"
+      :title="t('homePipelineCard.importConflictTitle')"
       width="580px"
       :close-on-click-modal="false"
       :close-on-press-escape="false"
       :before-close="handleConflictCancel"
     >
-      <p class="conflict-hint">以下流水线 ID 已存在，请选择处理方式：</p>
+      <p class="conflict-hint">{{ t('homePipelineCard.conflictHint') }}</p>
       <el-table :data="importConflictItems" size="small" border max-height="320" stripe>
         <el-table-column prop="id" label="ID" min-width="140" show-overflow-tooltip />
-        <el-table-column prop="name" label="名称" min-width="160" show-overflow-tooltip />
+        <el-table-column prop="name" :label="t('homePipelineCard.table.name', 'Name')" min-width="160" show-overflow-tooltip />
       </el-table>
       <p class="conflict-summary">
-        共 <strong>{{ importConflictItems.length }}</strong> 个冲突
+        {{ t('homePipelineCard.conflictCount', { count: importConflictItems.length }) }}
       </p>
       <template #footer>
-        <el-button @click="handleConflictCancel">取消</el-button>
+        <el-button @click="handleConflictCancel">{{ t('homePipelineCard.cancel') }}</el-button>
         <el-button @click="handleConflictSkip">
-          跳过重复（{{ importConflictItems.length }} 个）
+          {{ t('homePipelineCard.skipDuplicates', { count: importConflictItems.length }) }}
         </el-button>
-        <el-button type="primary" @click="handleConflictOverwrite">覆盖导入</el-button>
+        <el-button type="primary" @click="handleConflictOverwrite">{{ t('homePipelineCard.overwriteImport') }}</el-button>
       </template>
     </el-dialog>
   </div>
@@ -213,6 +213,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch, nextTick } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Edit } from '@element-plus/icons-vue'
 import PipelineCreateDialog from '@/components/pipeline/PipelineCreateDialog.vue'
@@ -246,6 +247,7 @@ const emit = defineEmits<{
   test: [pipelineId: string]
 }>()
 
+const { t } = useI18n()
 const { isPersonal, isMinimal, isTeam } = useEdition()
 const authStore = useAuthStore()
 
@@ -271,7 +273,6 @@ const routeAssignVisible = ref(false)
 const routeAssignPipelineId = ref('')
 
 const { canAddOwnPipelines, canChangeDefaultPipeline } = useUserResourceAccess()
-// team 普通用户可编辑租户内流水线（受 can_add_own_pipelines 控制）
 const canEdit = computed(
   () =>
     authStore.isAdmin ||
@@ -287,9 +288,7 @@ const canSetDefault = computed(
     isMinimal.value ||
     (isTeam.value && canChangeDefaultPipeline.value)
 )
-/** 可编辑角色开放勾选：批量导出 / 批量删除 */
 const selectable = computed(() => canEdit.value)
-/** 全角色流水线「测试」→ MinimalChat（含 team admin） */
 const canTest = computed(() => true)
 
 const allSelected = computed(() =>
@@ -340,14 +339,12 @@ async function loadPipelines() {
       selectedDefaultId.value &&
       !pipelines.value.some(p => p.id === selectedDefaultId.value)
     ) {
-      // Do not inject an empty ghost row — it looks like a broken pipeline
-      // (edit shows no nodes) when seed data failed to load.
       console.warn(
         `[HomePipelineCard] default pipeline "${selectedDefaultId.value}" is missing from the registry`
       )
     }
   } catch (error: any) {
-    ElMessage.error('加载流水线失败：' + (error.message || '未知错误'))
+    ElMessage.error(t('homePipelineCard.loadFailed', { msg: error.message || t('common.unknownError') }))
     pipelines.value = []
   } finally {
     loading.value = false
@@ -363,10 +360,10 @@ async function persistDefault(pipelineId: string) {
     selectedDefaultId.value = pipelineId
     const found = pipelines.value.find(p => p.id === pipelineId)
     ElMessage.success(
-      found ? `已将「${found.name}」设为默认流水线` : '默认流水线已更新'
+      found ? t('homePipelineCard.setDefaultSuccess', { name: found.name }) : t('homePipelineCard.setDefaultSuccessFallback')
     )
   } catch (error: any) {
-    ElMessage.error('设置失败：' + (error.message || '未知错误'))
+    ElMessage.error(t('homePipelineCard.setDefaultFailed', { msg: error.message || t('common.unknownError') }))
     await loadPipelines()
   } finally {
     savingDefault.value = false
@@ -396,24 +393,24 @@ async function handleDelete(pipeline: AgentPatternPipeline) {
   try {
     await ElMessageBox.confirm(
       wasDefault
-        ? `「${pipeline.name || pipeline.id}」当前为默认流水线，删除后将自动改用剩余流水线（若还有）。此操作不可恢复。`
-        : `确定删除流水线「${pipeline.name || pipeline.id}」吗？此操作不可恢复。`,
-      '确认删除',
-      { confirmButtonText: '删除', cancelButtonText: '取消', type: 'warning' }
+        ? t('homePipelineCard.confirmDeleteDefault', { name: pipeline.name || pipeline.id })
+        : t('homePipelineCard.confirmDelete', { name: pipeline.name || pipeline.id }),
+      t('homePipelineCard.confirmDeleteTitle'),
+      { confirmButtonText: t('homePipelineCard.deleteAction'), cancelButtonText: t('homePipelineCard.cancel'), type: 'warning' }
     )
   } catch {
     return
   }
   try {
     await deletePipeline(pipeline.id)
-    ElMessage.success(`已删除流水线「${pipeline.name || pipeline.id}」`)
+    ElMessage.success(t('homePipelineCard.deleteSuccess', { name: pipeline.name || pipeline.id }))
     if (wasDefault) {
       await reassignDefaultIfNeeded([pipeline.id])
     } else {
       await loadPipelines()
     }
   } catch (error: any) {
-    ElMessage.error(error?.response?.data?.message || '删除流水线失败')
+    ElMessage.error(error?.response?.data?.message || t('homePipelineCard.deleteFailed'))
   }
 }
 
@@ -424,10 +421,10 @@ async function handleBatchDelete() {
   try {
     await ElMessageBox.confirm(
       includesDefault
-        ? `将删除选中的 ${ids.length} 个流水线（含当前默认）；若仍有剩余流水线，将自动改设默认。此操作不可恢复。`
-        : `确定删除选中的 ${ids.length} 个流水线吗？此操作不可恢复。`,
-      '批量删除',
-      { confirmButtonText: '删除', cancelButtonText: '取消', type: 'warning' }
+        ? t('homePipelineCard.batchDeleteConfirmDefault', { count: ids.length })
+        : t('homePipelineCard.batchDeleteConfirm', { count: ids.length }),
+      t('homePipelineCard.batchDeleteTitle'),
+      { confirmButtonText: t('homePipelineCard.deleteAction'), cancelButtonText: t('homePipelineCard.cancel'), type: 'warning' }
     )
   } catch {
     return
@@ -437,7 +434,7 @@ async function handleBatchDelete() {
     for (const id of ids) {
       await deletePipeline(id)
     }
-    ElMessage.success(`已删除 ${ids.length} 个流水线`)
+    ElMessage.success(t('homePipelineCard.batchDeleteSuccess', { count: ids.length }))
     selectedIds.value = []
     if (includesDefault) {
       await reassignDefaultIfNeeded(ids)
@@ -445,7 +442,7 @@ async function handleBatchDelete() {
       await loadPipelines()
     }
   } catch (error: any) {
-    ElMessage.error(error?.response?.data?.message || '批量删除失败')
+    ElMessage.error(error?.response?.data?.message || t('homePipelineCard.batchDeleteFailed'))
     await loadPipelines()
   } finally {
     batchDeleting.value = false
@@ -456,9 +453,9 @@ async function handleExportOne(pipeline: AgentPatternPipeline) {
   exportingId.value = pipeline.id
   try {
     await downloadPipelineYaml(pipeline.id, pipeline.name || pipeline.id)
-    ElMessage.success(`已导出「${pipeline.name || pipeline.id}」`)
+    ElMessage.success(t('homePipelineCard.exportSuccess', { name: pipeline.name || pipeline.id }))
   } catch (error: any) {
-    ElMessage.error('导出失败：' + (error?.message || error))
+    ElMessage.error(t('homePipelineCard.exportFailed', { msg: error?.message || error }))
   } finally {
     exportingId.value = ''
   }
@@ -476,9 +473,9 @@ async function handleBatchExport() {
   batchExporting.value = true
   try {
     await downloadPipelinesAsZip(items)
-    ElMessage.success(`已导出 ${items.length} 个流水线（ZIP）`)
+    ElMessage.success(t('homePipelineCard.batchExportSuccess', { count: items.length }))
   } catch (error: any) {
-    ElMessage.error('批量导出失败：' + (error?.message || error))
+    ElMessage.error(t('homePipelineCard.batchExportFailed', { msg: error?.message || error }))
   } finally {
     batchExporting.value = false
   }
@@ -525,7 +522,7 @@ async function handleImportFiles(e: Event) {
   try {
     const { templates, failedFiles } = await parsePipelineYamlFiles(files)
     if (!templates.length) {
-      ElMessage.error('导入失败，请确认文件是有效的流水线 YAML（需含 id、name）')
+      ElMessage.error(t('homePipelineCard.importFailedInvalidYaml'))
       return
     }
 
@@ -545,18 +542,18 @@ async function handleImportFiles(e: Event) {
 
     if (successCount > 0) {
       await loadPipelines()
-      const parts = [`成功导入 ${successCount} 个流水线`]
-      if (skippedCount > 0) parts.push(`跳过 ${skippedCount} 个`)
-      if (failCount > 0) parts.push(`${failCount} 个失败`)
-      if (failedFiles.length > 0) parts.push(`${failedFiles.length} 个文件无法解析`)
+      const parts = [t('homePipelineCard.importSuccess', { count: successCount })]
+      if (skippedCount > 0) parts.push(t('homePipelineCard.importSkipped', { count: skippedCount }))
+      if (failCount > 0) parts.push(t('homePipelineCard.importFailedCount', { count: failCount }))
+      if (failedFiles.length > 0) parts.push(t('homePipelineCard.importFilesFailed', { count: failedFiles.length }))
       ElMessage.success(parts.join('，'))
     } else if (skippedCount > 0 && failCount === 0) {
-      ElMessage.warning(`已跳过全部 ${skippedCount} 个重复流水线`)
+      ElMessage.warning(t('homePipelineCard.importAllSkipped', { count: skippedCount }))
     } else {
-      ElMessage.error('导入失败，请确认文件是有效的流水线 YAML')
+      ElMessage.error(t('homePipelineCard.importFailedYaml'))
     }
   } catch (error: any) {
-    ElMessage.error('导入失败：' + (error?.message || error))
+    ElMessage.error(t('homePipelineCard.importFailedError', { msg: error?.message || error }))
   } finally {
     importing.value = false
     input.value = ''
@@ -572,7 +569,7 @@ async function openEditor(pipeline: AgentPatternPipeline) {
   } catch {
     editingPipeline.value = JSON.parse(JSON.stringify(pipeline))
     editorVisible.value = true
-    ElMessage.warning('已使用列表数据打开编辑器')
+    ElMessage.warning(t('homePipelineCard.editorFallbackWarning'))
   }
 }
 

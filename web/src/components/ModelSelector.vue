@@ -1,7 +1,7 @@
 <template>
   <el-select
     v-model="selectedModel"
-    :placeholder="placeholder"
+    :placeholder="placeholder || t('modelSelector.placeholder')"
     :disabled="disabled || !backendId"
     :loading="loading"
     :filterable="filterable"
@@ -26,7 +26,7 @@
           type="success"
           style="margin-left: 8px"
         >
-          推荐
+          {{ t('modelSelector.recommended') }}
         </el-tag>
       </div>
     </el-option>
@@ -36,17 +36,17 @@
         <el-empty 
           v-if="!backendId"
           :image-size="50"
-          description="请先选择后端"
+          :description="t('modelSelector.selectBackendFirst')"
         />
         <el-empty 
           v-else-if="loading"
           :image-size="50"
-          description="加载中..."
+          :description="t('modelSelector.loading')"
         />
         <el-empty 
           v-else
           :image-size="50"
-          :description="modelOptions.length === 0 ? '该后端暂无模型' : '未找到匹配的模型'"
+          :description="modelOptions.length === 0 ? t('modelSelector.noModels') : t('modelSelector.noMatch')"
         >
           <el-button 
             v-if="backendId && modelOptions.length === 0"
@@ -54,7 +54,7 @@
             size="small" 
             @click="fetchModels"
           >
-            获取模型
+            {{ t('modelSelector.fetchModels') }}
           </el-button>
         </el-empty>
       </div>
@@ -64,8 +64,11 @@
 
 <script setup lang="ts">
 import { ref, onMounted, watch, computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
 import api from '@/api'
+
+const { t } = useI18n()
 
 // Props
 interface Props {
@@ -83,7 +86,7 @@ interface Props {
 const props = withDefaults(defineProps<Props>(), {
   modelValue: null,
   backendId: null,
-  placeholder: '选择模型',
+  placeholder: '',
   disabled: false,
   filterable: true,
   allowCreate: true,

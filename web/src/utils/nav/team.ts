@@ -19,14 +19,14 @@ import {
  * 团队超管：人 + 共享资源 + 存储配置；流水线测试对话在首页抽屉（非侧栏）。
  */
 export const NAV_MENU_TEAM_ADMIN: NavItem[] = [
-  dashboardNav('概览'),
+  dashboardNav('nav.overview'),
   navGroup(
     'shared-resources',
-    '共享资源',
+    'nav.proxyStrategy',
     'Connection',
     [
-      backendsNav({ label: '共用后端', requiresAdmin: true }),
-      pipelinesNav({ label: '共用策略', requiresAdmin: true }),
+      backendsNav({ labelKey: 'nav.backends', requiresAdmin: true }),
+      pipelinesNav({ labelKey: 'nav.pipelines', requiresAdmin: true }),
       fallbackPolicyNav({ requiresAdmin: true }),
       storageConfigNavGroup()
     ],
@@ -34,12 +34,12 @@ export const NAV_MENU_TEAM_ADMIN: NavItem[] = [
   ),
   navGroup(
     'user-admin',
-    '用户与租户',
+    'nav.systemAdmin',
     'UserFilled',
     [
       {
         id: 'system-users',
-        label: '用户管理',
+        labelKey: 'nav.users',
         icon: 'UserFilled',
         path: '/system/users',
         requiresAdmin: true,
@@ -47,7 +47,7 @@ export const NAV_MENU_TEAM_ADMIN: NavItem[] = [
       },
       {
         id: 'tenants',
-        label: '租户管理',
+        labelKey: 'nav.tenants',
         icon: 'OfficeBuilding',
         path: '/tenants',
         requiresAdmin: true,
@@ -59,20 +59,20 @@ export const NAV_MENU_TEAM_ADMIN: NavItem[] = [
   ),
   navGroup(
     'system-admin',
-    '系统',
+    'nav.system',
     'Setting',
     [
       configNav({ requiresAdmin: true }),
       {
         id: 'billing-rules',
-        label: '计费规则',
+        labelKey: 'nav.billingRules',
         icon: 'Coin',
         path: '/billing',
         requiresAdmin: true
       },
       {
         id: 'system-update',
-        label: '系统更新',
+        labelKey: 'nav.systemUpdate',
         icon: 'Upload',
         path: '/system/update',
         requiresAdmin: true,
@@ -88,7 +88,7 @@ export const NAV_MENU_TEAM_USER: NavItem[] = []
 
 /** @deprecated 使用 getNavMenu(edition, isAdmin) */
 export const NAV_MENU_TEAM: NavItem[] = [
-  dashboardNav('概览'),
+  dashboardNav('nav.overview'),
   proxyStrategyGroup({ includeNodePlugins: true, adminOnly: true }),
   appGroup(),
   cacheMemoryGroup({ adminTools: true }),

@@ -1,11 +1,11 @@
 <template>
   <div class="pipeline-list">
     <div class="page-header">
-      <h2>策略管理</h2>
+      <h2>{{ t('pipelineList.title') }}</h2>
       <div class="toolbar">
         <el-input
           v-model="searchText"
-          placeholder="搜索 ID、名称..."
+          :placeholder="t('pipelineList.searchPlaceholder')"
           clearable
           style="width: 220px"
         >
@@ -14,23 +14,23 @@
           </template>
         </el-input>
         <span class="search-count" v-if="searchText">
-          {{ filteredPipelines.length }} 条
+          {{ t('pipelineList.searchCount', { n: filteredPipelines.length }) }}
         </span>
         <el-tooltip v-if="selectedPipelines.length > 0" :content="batchDeleteTooltip" placement="top" :disabled="canBatchDeleteSelected">
           <span>
             <el-button type="danger" :disabled="!canBatchDeleteSelected" @click="handleBatchDelete">
               <el-icon><Delete /></el-icon>
-              批量删除（{{ selectedPipelines.length }}）
+              {{ t('pipelineList.batchDelete', { n: selectedPipelines.length }) }}
             </el-button>
           </span>
         </el-tooltip>
         <el-button :loading="loading" @click="loadPipelines">
           <el-icon><Refresh /></el-icon>
-          刷新
+          {{ t('pipelineList.refresh') }}
         </el-button>
         <el-button v-if="canAddOwnPipelines" type="primary" @click="handleCreate">
           <el-icon><Plus /></el-icon>
-          创建流水线
+          {{ t('pipelineList.createPipeline') }}
         </el-button>
       </div>
     </div>
@@ -44,28 +44,28 @@
         @selection-change="handleSelectionChange"
       >
         <el-table-column type="selection" width="50" />
-        <el-table-column prop="id" label="ID" width="200" />
-        <el-table-column prop="name" label="名称" />
-        <el-table-column prop="version" label="版本" width="100" />
-        <el-table-column prop="description" label="描述" show-overflow-tooltip />
-        <el-table-column label="节点数" width="100">
+        <el-table-column prop="id" :label="t('pipelineList.id')" width="200" />
+        <el-table-column prop="name" :label="t('pipelineList.name')" />
+        <el-table-column prop="version" :label="t('pipelineList.version')" width="100" />
+        <el-table-column prop="description" :label="t('pipelineList.description')" show-overflow-tooltip />
+        <el-table-column :label="t('pipelineList.nodeCount')" width="100">
           <template #default="{ row }">
             {{ row.nodes?.length || 0 }}
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="250" fixed="right">
+        <el-table-column :label="t('pipelineList.actions')" width="250" fixed="right">
           <template #default="{ row }">
             <div class="action-btns">
               <PipelineFeatureGuard
                 feature="pipelineEdit"
                 :pipeline="row"
                 :is-admin="authStore.isAdmin"
-                action-label="编辑"
+                :action-label="t('pipelineList.edit')"
               >
                 <template #default="{ disabled }">
                   <el-button size="default" :disabled="disabled" @click="handleEdit(row)">
                     <el-icon><Edit /></el-icon>
-                    编辑
+                    {{ t('pipelineList.edit') }}
                   </el-button>
                 </template>
               </PipelineFeatureGuard>
@@ -74,12 +74,12 @@
                 feature="pipelineExport"
                 :pipeline="row"
                 :is-admin="authStore.isAdmin"
-                action-label="导出"
+                :action-label="t('pipelineList.export')"
               >
                 <template #default="{ disabled }">
                   <el-button size="default" :disabled="disabled" @click="handleExport(row)">
                     <el-icon><Download /></el-icon>
-                    导出
+                    {{ t('pipelineList.export') }}
                   </el-button>
                 </template>
               </PipelineFeatureGuard>
@@ -88,12 +88,12 @@
                 feature="pipelineDelete"
                 :pipeline="row"
                 :is-admin="authStore.isAdmin"
-                action-label="删除"
+                :action-label="t('pipelineList.delete')"
               >
                 <template #default="{ disabled }">
                   <el-button size="default" type="danger" :disabled="disabled" @click="handleDelete(row)">
                     <el-icon><Delete /></el-icon>
-                    删除
+                    {{ t('pipelineList.delete') }}
                   </el-button>
                 </template>
               </PipelineFeatureGuard>
@@ -102,13 +102,14 @@
         </el-table-column>
       </el-table>
 
-      <el-empty v-if="!loading && filteredPipelines.length === 0" description="暂无流水线" />
+      <el-empty v-if="!loading && filteredPipelines.length === 0" :description="t('pipelineList.noPipelines')" />
     </el-card>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Search, Plus, Edit, Delete, Download } from '@element-plus/icons-vue'
@@ -118,6 +119,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useUserResourceAccess } from '@/composables/useUserResourceAccess'
 import PipelineFeatureGuard from '@/components/pipeline/PipelineFeatureGuard.vue'
 
+const { t } = useI18n()
 const router = useRouter()
 const authStore = useAuthStore()
 const { canAddOwnPipelines } = useUserResourceAccess()
@@ -149,29 +151,29 @@ const canBatchDeleteSelected = computed(() => {
 })
 
 const batchDeleteTooltip = computed(() => {
-  if (canBatchDeleteSelected.value) return '批量删除'
+  if (canBatchDeleteSelected.value) return t('pipelineList.batchDeleteTooltip')
   const unsupported = selectedPipelines.value.find((row) => !getPipelineFeatureSupport('pipelineBatchDelete', row).enabled)
-  if (!unsupported) return '批量删除'
-  return getPipelineFeatureSupport('pipelineBatchDelete', unsupported).reason || '存在不可删除项'
+  if (!unsupported) return t('pipelineList.batchDeleteTooltip')
+  return getPipelineFeatureSupport('pipelineBatchDelete', unsupported).reason || t('pipelineList.batchDeleteUnsupported')
 })
 
 const handleBatchDelete = async () => {
   if (selectedPipelines.value.length === 0) return
   try {
     await ElMessageBox.confirm(
-      `确定删除选中的 ${selectedPipelines.value.length} 个流水线吗？`,
-      '批量删除',
+      t('pipelineList.batchDeleteConfirm', { n: selectedPipelines.value.length }),
+      t('pipelineList.batchDeleteTitle'),
       { type: 'warning' }
     )
     for (const p of selectedPipelines.value) {
       await deletePipeline(p.id)
     }
-    ElMessage.success(`成功删除 ${selectedPipelines.value.length} 个流水线`)
+    ElMessage.success(t('pipelineList.batchDeleteSuccess', { n: selectedPipelines.value.length }))
     selectedPipelines.value = []
     loadPipelines()
   } catch (error: any) {
     if (error !== 'cancel') {
-      ElMessage.error('删除失败：' + error.message)
+      ElMessage.error(t('pipelineList.batchDeleteFailed') + '：' + error.message)
     }
   }
 }
@@ -185,7 +187,7 @@ const loadPipelines = async () => {
     // 所以这里 res 可能是数组（流水线列表）或对象（需要进一步解析）
     pipelines.value = parsePipelinesResponse(res)
   } catch (error) {
-    ElMessage.error('加载流水线失败')
+    ElMessage.error(t('pipelineList.loadPipelinesFailed'))
     console.error(error)
   } finally {
     loading.value = false
@@ -206,18 +208,18 @@ const handleEdit = (row: Pipeline) => {
 // 删除流水线
 const handleDelete = async (row: Pipeline) => {
   try {
-    await ElMessageBox.confirm('确定要删除这个流水线吗？', '提示', {
-      confirmButtonText: '确定',
-      cancelButtonText: '取消',
+    await ElMessageBox.confirm(t('pipelineList.deleteConfirm'), t('pipelineList.deleteConfirmTitle'), {
+      confirmButtonText: t('pipelineList.confirmButtonText'),
+      cancelButtonText: t('pipelineList.cancelButtonText'),
       type: 'warning'
     })
     
     await deletePipeline(row.id)
-    ElMessage.success('删除成功')
+    ElMessage.success(t('pipelineList.deleteSuccess'))
     loadPipelines()
   } catch (error) {
     if (error !== 'cancel') {
-      ElMessage.error('删除失败')
+      ElMessage.error(t('pipelineList.deleteFailed'))
       console.error(error)
     }
   }
@@ -237,9 +239,9 @@ const handleExport = (row: Pipeline) => {
     link.click()
     document.body.removeChild(link)
     window.URL.revokeObjectURL(url)
-    ElMessage.success('导出成功')
+    ElMessage.success(t('pipelineList.exportSuccess'))
   }).catch((error: any) => {
-    ElMessage.error('导出失败：' + error.message)
+    ElMessage.error(t('pipelineList.exportFailed') + '：' + error.message)
   })
 }
 

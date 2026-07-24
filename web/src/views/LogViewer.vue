@@ -2,10 +2,10 @@
   <div class="log-viewer">
     <div class="log-header">
       <div class="log-header-main">
-        <h2>日志</h2>
+        <h2>{{ t('logViewer.title') }}</h2>
         <p class="log-subtitle">
-          第 1 页为最新日志，按时间从新到旧排列
-          <span v-if="isLLMScope" class="scope-hint">· 当前仅显示大模型服务请求</span>
+          {{ t('logViewer.subtitle') }}
+          <span v-if="isLLMScope" class="scope-hint">{{ t('logViewer.scopeHint') }}</span>
         </p>
       </div>
       <div class="header-actions">
@@ -15,13 +15,13 @@
           :class="liveTail ? 'btn-live-on' : 'btn-secondary'"
           @click="toggleLiveTail"
         >
-          {{ liveTail ? '● 实时跟踪中' : '实时跟踪' }}
+          {{ liveTail ? t('logViewer.liveTracking') : t('logViewer.liveTrackingOff') }}
         </button>
-        <button type="button" class="btn btn-secondary" @click="jumpToLatest">跳到最新</button>
-        <button type="button" class="btn btn-primary" @click="refreshLogs">刷新</button>
-        <button type="button" class="btn btn-success" @click="showExportModal = true">导出</button>
+        <button type="button" class="btn btn-secondary" @click="jumpToLatest">{{ t('logViewer.jumpToLatest') }}</button>
+        <button type="button" class="btn btn-primary" @click="refreshLogs">{{ t('logViewer.refresh') }}</button>
+        <button type="button" class="btn btn-success" @click="showExportModal = true">{{ t('logViewer.export') }}</button>
         <button type="button" class="btn btn-danger" :disabled="clearing" @click="confirmClearLogs">
-          {{ clearing ? '清空中…' : '清空日志' }}
+          {{ clearing ? t('logViewer.clearing') : t('logViewer.clearLogs') }}
         </button>
       </div>
     </div>
@@ -31,54 +31,54 @@
     </div>
 
     <div v-if="logPath" class="log-path-hint">
-      日志文件：<code>{{ logPath }}</code>
+      {{ t('logViewer.logFile') }} <code>{{ logPath }}</code>
     </div>
 
     <div class="stats-cards" v-if="stats">
       <div class="stat-card">
         <div class="stat-value">{{ stats.total_logs }}</div>
-        <div class="stat-label">{{ statsTimeLabel }} 总数</div>
+        <div class="stat-label">{{ statsTimeLabel }} {{ t('logViewer.stats.total') }}</div>
       </div>
       <div class="stat-card error">
         <div class="stat-value">{{ stats.error_count }}</div>
-        <div class="stat-label">错误</div>
+        <div class="stat-label">{{ t('logViewer.stats.error') }}</div>
       </div>
       <div class="stat-card warning">
         <div class="stat-value">{{ stats.warn_count }}</div>
-        <div class="stat-label">警告</div>
+        <div class="stat-label">{{ t('logViewer.stats.warning') }}</div>
       </div>
       <div class="stat-card info">
         <div class="stat-value">{{ matchedTotal }}</div>
-        <div class="stat-label">当前筛选</div>
+        <div class="stat-label">{{ t('logViewer.stats.currentFilter') }}</div>
       </div>
     </div>
 
     <div class="search-bar">
       <div class="search-field search-field--wide">
-        <label>关键词</label>
+        <label>{{ t('logViewer.filters.keyword') }}</label>
         <input
           v-model.trim="filters.q"
           type="search"
           class="filter-text"
-          placeholder="消息、路径、后端名、错误信息…"
+          :placeholder="t('logViewer.filters.keywordPlaceholder')"
           @keyup.enter="onFilterChange"
         />
       </div>
       <div class="search-field">
-        <label>请求 ID</label>
+        <label>{{ t('logViewer.filters.requestId') }}</label>
         <input
           v-model.trim="filters.request_id"
           type="search"
           class="filter-text"
-          placeholder="对话/请求 ID（部分匹配）"
+          :placeholder="t('logViewer.filters.requestIdPlaceholder')"
           @keyup.enter="onFilterChange"
         />
       </div>
-      <button type="button" class="btn btn-primary" @click="onFilterChange">搜索</button>
+      <button type="button" class="btn btn-primary" @click="onFilterChange">{{ t('logViewer.filters.search') }}</button>
     </div>
 
     <div class="quick-filters">
-      <span class="quick-label">快捷：</span>
+      <span class="quick-label">{{ t('logViewer.filters.quick') }}</span>
       <button
         v-for="preset in quickPresets"
         :key="preset.id"
@@ -93,52 +93,52 @@
 
     <div class="filters">
       <div class="filter-group filter-scope">
-        <label>日志范围</label>
+        <label>{{ t('logViewer.filters.logScope') }}</label>
         <select v-model="filters.category" @change="onScopeChange">
-          <option value="llm">仅大模型服务请求</option>
-          <option value="">全部日志</option>
-          <option value="system">仅系统/其他（排除服务请求）</option>
+          <option value="llm">{{ t('logViewer.filters.llmScope') }}</option>
+          <option value="">{{ t('logViewer.filters.allScope') }}</option>
+          <option value="system">{{ t('logViewer.filters.systemScope') }}</option>
         </select>
       </div>
 
       <div class="filter-group">
-        <label>时间</label>
+        <label>{{ t('logViewer.filters.time') }}</label>
         <select v-model="filters.from" @change="onFilterChange">
-          <option value="">不限</option>
-          <option value="1h">最近 1 小时</option>
-          <option value="6h">最近 6 小时</option>
-          <option value="24h">最近 24 小时</option>
-          <option value="7d">最近 7 天</option>
+          <option value="">{{ t('logViewer.filters.timeUnlimited') }}</option>
+          <option value="1h">{{ t('logViewer.filters.last1h') }}</option>
+          <option value="6h">{{ t('logViewer.filters.last6h') }}</option>
+          <option value="24h">{{ t('logViewer.filters.last24h') }}</option>
+          <option value="7d">{{ t('logViewer.filters.last7d') }}</option>
         </select>
       </div>
 
       <div class="filter-group">
-        <label>级别</label>
+        <label>{{ t('logViewer.filters.level') }}</label>
         <select v-model="filters.level" @change="onFilterChange">
-          <option value="">全部</option>
-          <option value="error">错误</option>
-          <option value="warn">警告</option>
-          <option value="info">信息</option>
-          <option value="debug">调试</option>
+          <option value="">{{ t('logViewer.filters.levelAll') }}</option>
+          <option value="error">{{ t('logViewer.filters.levelError') }}</option>
+          <option value="warn">{{ t('logViewer.filters.levelWarn') }}</option>
+          <option value="info">{{ t('logViewer.filters.levelInfo') }}</option>
+          <option value="debug">{{ t('logViewer.filters.levelDebug') }}</option>
         </select>
       </div>
 
       <div class="filter-group">
-        <label>后端</label>
+        <label>{{ t('logViewer.filters.backend') }}</label>
         <select v-model="filters.backend_id" @change="onFilterChange">
-          <option value="">全部</option>
+          <option value="">{{ t('logViewer.filters.levelAll') }}</option>
           <option v-for="b in backendOptions" :key="b.id" :value="b.id">{{ b.name }}</option>
         </select>
       </div>
 
       <div class="filter-group filter-model">
-        <label>模型</label>
+        <label>{{ t('logViewer.filters.model') }}</label>
         <input
           v-model.trim="filters.model"
           type="text"
           class="filter-text"
           list="log-model-suggestions"
-          placeholder="模型名"
+          :placeholder="t('logViewer.filters.modelPlaceholder')"
           @change="onFilterChange"
           @keyup.enter="onFilterChange"
         />
@@ -148,7 +148,7 @@
       </div>
 
       <div class="filter-group">
-        <label>每页</label>
+        <label>{{ t('logViewer.filters.perPage') }}</label>
         <select v-model.number="filters.limit" @change="onFilterChange">
           <option :value="50">50</option>
           <option :value="100">100</option>
@@ -159,9 +159,9 @@
     </div>
 
     <div class="list-meta" v-if="!loading && logs.length">
-      <span>第 {{ page }} / {{ totalPages }} 页</span>
-      <span v-if="page === 1" class="newest-badge">当前为最新</span>
-      <span v-else class="older-hint">较旧日志 — <button type="button" class="link-btn" @click="jumpToLatest">返回最新</button></span>
+      <span>{{ t('logViewer.pagination.page', { page, total: totalPages }) }}</span>
+      <span v-if="page === 1" class="newest-badge">{{ t('logViewer.pagination.newest') }}</span>
+      <span v-else class="older-hint">{{ t('logViewer.pagination.olderHint') }} <button type="button" class="link-btn" @click="jumpToLatest">{{ t('logViewer.pagination.returnToLatest') }}</button></span>
     </div>
 
     <div class="log-list">
@@ -170,14 +170,14 @@
           <thead>
             <tr>
               <th class="col-expand"></th>
-              <th class="col-time">时间</th>
-              <th class="col-level">级别</th>
-              <th class="col-message">消息</th>
-              <th class="col-request">请求 ID</th>
-              <th class="col-status">状态</th>
-              <th class="col-duration">耗时</th>
-              <th class="col-backend">后端</th>
-              <th class="col-model">模型</th>
+              <th class="col-time">{{ t('logViewer.table.time') }}</th>
+              <th class="col-level">{{ t('logViewer.table.level') }}</th>
+              <th class="col-message">{{ t('logViewer.table.message') }}</th>
+              <th class="col-request">{{ t('logViewer.table.requestId') }}</th>
+              <th class="col-status">{{ t('logViewer.table.status') }}</th>
+              <th class="col-duration">{{ t('logViewer.table.duration') }}</th>
+              <th class="col-backend">{{ t('logViewer.table.backend') }}</th>
+              <th class="col-model">{{ t('logViewer.table.model') }}</th>
             </tr>
           </thead>
           <tbody>
@@ -203,7 +203,7 @@
                     v-if="displayField(log, 'request_id')"
                     type="button"
                     class="request-id-btn"
-                    :title="'查看追踪 ' + displayField(log, 'request_id') + '（Shift+点击筛选）'"
+                    :title="t('logViewer.table.viewTrace', { id: displayField(log, 'request_id') })"
                     @click="onRequestIdClick($event, displayField(log, 'request_id'))"
                   >
                     {{ shortId(displayField(log, 'request_id')) }}
@@ -225,17 +225,17 @@
                 <td colspan="9">
                   <div class="detail-panel">
                     <div class="detail-grid">
-                      <div><strong>时间</strong> {{ formatAbsoluteTime(log.timestamp) }}</div>
-                      <div v-if="log.request_id"><strong>请求 ID</strong> <code>{{ log.request_id }}</code></div>
-                      <div v-if="log.client_ip"><strong>客户端</strong> {{ log.client_ip }}</div>
-                      <div v-if="log.caller"><strong>来源</strong> {{ log.caller }}</div>
+                      <div><strong>{{ t('logViewer.detail.time') }}</strong> {{ formatAbsoluteTime(log.timestamp) }}</div>
+                      <div v-if="log.request_id"><strong>{{ t('logViewer.detail.requestId') }}</strong> <code>{{ log.request_id }}</code></div>
+                      <div v-if="log.client_ip"><strong>{{ t('logViewer.detail.clientIp') }}</strong> {{ log.client_ip }}</div>
+                      <div v-if="log.caller"><strong>{{ t('logViewer.detail.caller') }}</strong> {{ log.caller }}</div>
                     </div>
                     <div v-if="bodyPreview(log, 'request')" class="detail-body-block">
-                      <strong>请求内容</strong>
+                      <strong>{{ t('logViewer.detail.requestContent') }}</strong>
                       <pre class="detail-body">{{ bodyPreview(log, 'request') }}</pre>
                     </div>
                     <div v-if="bodyPreview(log, 'response')" class="detail-body-block">
-                      <strong>响应内容</strong>
+                      <strong>{{ t('logViewer.detail.responseContent') }}</strong>
                       <pre class="detail-body">{{ bodyPreview(log, 'response') }}</pre>
                     </div>
                     <div v-if="detailExtraEntries(log).length" class="detail-extra-grid">
@@ -254,41 +254,41 @@
       </div>
 
       <div v-if="logs.length === 0 && !loading" class="empty-state">
-        <p>暂无匹配的日志</p>
-        <p v-if="hasActiveFilters" class="empty-hint">尝试放宽筛选，或确认第三方客户端是否已调用 <code>/v1/chat/completions</code></p>
+        <p>{{ t('logViewer.empty') }}</p>
+        <p v-if="hasActiveFilters" class="empty-hint">{{ t('logViewer.emptyHint') }}</p>
       </div>
 
       <div v-if="loading" class="loading-state">
-        <p>加载中…</p>
+        <p>{{ t('logViewer.loading') }}</p>
       </div>
     </div>
 
     <div class="pagination" v-if="totalPages > 1">
-      <button type="button" @click="jumpToLatest" :disabled="page === 1">最新</button>
-      <button type="button" @click="prevPage" :disabled="page === 1">上一页（更早）</button>
+      <button type="button" @click="jumpToLatest" :disabled="page === 1">{{ t('logViewer.pagination.latest') }}</button>
+      <button type="button" @click="prevPage" :disabled="page === 1">{{ t('logViewer.pagination.prevPage') }}</button>
       <span>{{ page }} / {{ totalPages }}</span>
-      <button type="button" @click="nextPage" :disabled="page >= totalPages">下一页（更早）</button>
+      <button type="button" @click="nextPage" :disabled="page >= totalPages">{{ t('logViewer.pagination.nextPage') }}</button>
     </div>
 
     <div v-if="showExportModal" class="modal-overlay" @click="showExportModal = false">
       <div class="modal" @click.stop>
-        <h3>导出日志</h3>
+        <h3>{{ t('logViewer.exportModal.title') }}</h3>
         <div class="modal-content">
           <div class="form-group">
-            <label>格式</label>
+            <label>{{ t('logViewer.exportModal.format') }}</label>
             <select v-model="exportFormat">
               <option value="json">JSON</option>
               <option value="csv">CSV</option>
               <option value="txt">TXT</option>
             </select>
           </div>
-          <p class="note">导出当前筛选条件下的全部日志</p>
+          <p class="note">{{ t('logViewer.exportModal.note') }}</p>
         </div>
         <div class="modal-actions">
           <button type="button" class="btn btn-primary" :disabled="exporting" @click="exportLogs">
-            {{ exporting ? '导出中…' : '导出' }}
+            {{ exporting ? t('logViewer.exportModal.exporting') : t('logViewer.exportModal.exportBtn') }}
           </button>
-          <button type="button" class="btn btn-secondary" :disabled="exporting" @click="showExportModal = false">取消</button>
+          <button type="button" class="btn btn-secondary" :disabled="exporting" @click="showExportModal = false">{{ t('logViewer.exportModal.cancel') }}</button>
         </div>
         <p v-if="exportFeedback" class="export-feedback" :class="{ error: exportFeedbackError }">{{ exportFeedback }}</p>
       </div>
@@ -299,11 +299,13 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { logsApi, getBackends, type LogEntry } from '../api'
 import { isPersonalEdition } from '@/utils/edition'
 import { saveBlobAsFile } from '@/utils/downloadFile'
 
+const { t } = useI18n()
 const router = useRouter()
 const LOG_SCOPE_KEY = 'centag.logViewer.category'
 
@@ -350,13 +352,13 @@ const filters = ref({
   limit: 100
 })
 
-const quickPresets = [
-  { id: 'all', label: '全部日志' },
-  { id: 'llm', label: '仅大模型请求' },
-  { id: 'error', label: '仅错误' }
-] as const
+const quickPresets = computed(() => [
+  { id: 'all', label: t('logViewer.filters.allLogs') },
+  { id: 'llm', label: t('logViewer.filters.llmOnly') },
+  { id: 'error', label: t('logViewer.filters.errorOnly') }
+] as const)
 
-type PresetId = (typeof quickPresets)[number]['id']
+type PresetId = 'all' | 'llm' | 'error'
 
 const isLLMScope = computed(() => {
   const c = filters.value.category
@@ -376,13 +378,13 @@ const hasActiveFilters = computed(() => {
 
 const statsTimeLabel = computed(() => {
   const labels: Record<string, string> = {
-    '1h': '近 1 小时',
-    '6h': '近 6 小时',
-    '24h': '近 24 小时',
-    '7d': '近 7 天',
-    '': '全部'
+    '1h': t('logViewer.statsTimeLabel.1h'),
+    '6h': t('logViewer.statsTimeLabel.6h'),
+    '24h': t('logViewer.statsTimeLabel.24h'),
+    '7d': t('logViewer.statsTimeLabel.7d'),
+    '': t('logViewer.statsTimeLabel.')
   }
-  return labels[filters.value.from] ?? '近 24 小时'
+  return labels[filters.value.from] ?? t('logViewer.statsTimeLabel.24h')
 })
 
 function emptyStats() {
@@ -426,7 +428,6 @@ function parseFieldsFromMessage(message: string): Partial<LogEntry> {
   return out
 }
 
-/** Client-side fill for legacy log lines (backend also propagates on read). */
 function enrichLogsForDisplay(entries: LogEntry[]): LogEntry[] {
   const rows = entries.map((e) => ({
     ...e,
@@ -462,26 +463,26 @@ function enrichLogsForDisplay(entries: LogEntry[]): LogEntry[] {
   return rows
 }
 
-const extraFieldLabels: Record<string, string> = {
-  node_id: '节点',
-  backend_id: '后端',
-  message_count: '消息数',
-  tokens: 'Token',
-  proxy_mode: '代理模式',
-  source: '来源',
-  stream: '流式',
-  temperature: '温度',
-  max_tokens: 'Max Tokens',
-  system_prompt_set: '系统提示',
-  method: '方法',
-  user_agent: 'UA',
-  has_system_message: '含 System',
-  cache_read: '读缓存',
-  cache_write: '写缓存',
-  kind: '调用类型',
-  duration_ms: '耗时(ms)',
-  response_model: '响应模型'
-}
+const extraFieldLabels: Record<string, string> = computed(() => ({
+  node_id: t('logViewer.extraLabels.node_id'),
+  backend_id: t('logViewer.extraLabels.backend_id'),
+  message_count: t('logViewer.extraLabels.message_count'),
+  tokens: t('logViewer.extraLabels.tokens'),
+  proxy_mode: t('logViewer.extraLabels.proxy_mode'),
+  source: t('logViewer.extraLabels.source'),
+  stream: t('logViewer.extraLabels.stream'),
+  temperature: t('logViewer.extraLabels.temperature'),
+  max_tokens: t('logViewer.extraLabels.max_tokens'),
+  system_prompt_set: t('logViewer.extraLabels.system_prompt_set'),
+  method: t('logViewer.extraLabels.method'),
+  user_agent: t('logViewer.extraLabels.user_agent'),
+  has_system_message: t('logViewer.extraLabels.has_system_message'),
+  cache_read: t('logViewer.extraLabels.cache_read'),
+  cache_write: t('logViewer.extraLabels.cache_write'),
+  kind: t('logViewer.extraLabels.kind'),
+  duration_ms: t('logViewer.extraLabels.duration_ms'),
+  response_model: t('logViewer.extraLabels.response_model')
+}))
 
 const bodyFieldKeys = {
   request: [
@@ -529,7 +530,7 @@ function detailExtraEntries(log: LogEntry): { key: string; label: string; value:
     if (!value?.trim() || skip.has(key)) continue
     out.push({
       key,
-      label: extraFieldLabels[key] ?? key,
+      label: extraFieldLabels.value[key] ?? key,
       value: value.trim()
     })
   }
@@ -766,23 +767,23 @@ function formatRelativeTime(timestamp: string) {
   const d = parseTimestamp(timestamp)
   if (!d) return '-'
   const diff = Date.now() - d.getTime()
-  if (diff < 0) return '刚刚'
+  if (diff < 0) return t('logViewer.timeAgo.justNow')
   const sec = Math.floor(diff / 1000)
-  if (sec < 60) return `${sec} 秒前`
+  if (sec < 60) return t('logViewer.timeAgo.secondsAgo', { sec })
   const min = Math.floor(sec / 60)
-  if (min < 60) return `${min} 分钟前`
+  if (min < 60) return t('logViewer.timeAgo.minutesAgo', { min })
   const hr = Math.floor(min / 60)
-  if (hr < 24) return `${hr} 小时前`
+  if (hr < 24) return t('logViewer.timeAgo.hoursAgo', { hr })
   const day = Math.floor(hr / 24)
-  return `${day} 天前`
+  return t('logViewer.timeAgo.daysAgo', { day })
 }
 
 const confirmClearLogs = async () => {
   try {
     await ElMessageBox.confirm(
-      '将清空磁盘上的日志文件（当前日志文件截断，历史轮转文件删除）。此操作不可恢复，是否继续？',
-      '清空日志',
-      { type: 'warning', confirmButtonText: '清空', cancelButtonText: '取消' }
+      t('logViewer.message.clearConfirm'),
+      t('logViewer.message.clearTitle'),
+      { type: 'warning', confirmButtonText: t('logViewer.message.clearConfirmBtn'), cancelButtonText: t('logViewer.message.clearCancelBtn') }
     )
   } catch {
     return
@@ -795,7 +796,7 @@ const confirmClearLogs = async () => {
   try {
     const data = await logsApi.clearLogs()
     const cleared = data?.cleared_files ?? 0
-    ElMessage.success(data?.message || `已清空 ${cleared} 个日志文件`)
+    ElMessage.success(data?.message || t('logViewer.message.clearedSuccess', { count: cleared }))
     if (data?.warning) {
       ElMessage.warning(data.warning)
     }
@@ -806,7 +807,7 @@ const confirmClearLogs = async () => {
     stats.value = emptyStats()
     await Promise.all([loadStats(), loadLogs()])
   } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : '清空日志失败')
+    ElMessage.error(error instanceof Error ? error.message : t('logViewer.message.clearFailed'))
     console.error('Clear logs failed:', error)
   } finally {
     clearing.value = false
@@ -832,19 +833,19 @@ const exportLogs = async () => {
     const result = await saveBlobAsFile(blob, filename)
 
     if (result.mode === 'cancelled') {
-      exportFeedback.value = '已取消保存'
+      exportFeedback.value = t('logViewer.message.exportCancelled')
       return
     }
     if (result.mode === 'desktop') {
-      exportFeedback.value = `已保存到：${result.path}`
+      exportFeedback.value = t('logViewer.message.exportSavedDesktop', { path: result.path })
       showExportModal.value = false
       return
     }
-    exportFeedback.value = `已下载到浏览器默认下载目录：${result.filename}`
+    exportFeedback.value = t('logViewer.message.exportSavedBrowser', { filename: result.filename })
     showExportModal.value = false
   } catch (error) {
     exportFeedbackError.value = true
-    exportFeedback.value = error instanceof Error ? error.message : '导出失败'
+    exportFeedback.value = error instanceof Error ? error.message : t('logViewer.message.exportFailed')
     console.error('Export failed:', error)
   } finally {
     exporting.value = false

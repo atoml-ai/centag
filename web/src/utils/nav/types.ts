@@ -1,6 +1,7 @@
 export interface NavItem {
   id: string
-  label: string
+  label?: string
+  labelKey?: string
   icon: string
   path?: string
   /** Hidden for non-admin users. */

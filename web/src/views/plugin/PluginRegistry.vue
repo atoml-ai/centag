@@ -3,10 +3,10 @@
     <el-card>
       <template #header>
         <div class="card-header">
-          <span>插件市场</span>
+          <span>{{ t('pluginRegistry.pluginMarket') }}</span>
           <el-button type="primary" @click="handleUpload">
             <el-icon><Upload /></el-icon>
-            上传插件
+            {{ t('pluginRegistry.uploadPlugin') }}
           </el-button>
         </div>
       </template>
@@ -16,7 +16,7 @@
         <el-form-item>
           <el-input
             v-model="searchForm.search"
-            placeholder="搜索插件..."
+            :placeholder="t('pluginRegistry.searchPlaceholder')"
             clearable
             @keyup.enter="handleSearch"
           >
@@ -26,27 +26,27 @@
           </el-input>
         </el-form-item>
         <el-form-item>
-          <el-select v-model="searchForm.category" placeholder="分类" clearable>
-            <el-option label="生成器" value="generator" />
-            <el-option label="处理器" value="processor" />
-            <el-option label="审核器" value="reviewer" />
-            <el-option label="路由器" value="router" />
+          <el-select v-model="searchForm.category" :placeholder="t('pluginRegistry.category')" clearable>
+            <el-option :label="t('pluginRegistry.generator')" value="generator" />
+            <el-option :label="t('pluginRegistry.processor')" value="processor" />
+            <el-option :label="t('pluginRegistry.reviewer')" value="reviewer" />
+            <el-option :label="t('pluginRegistry.router')" value="router" />
           </el-select>
         </el-form-item>
         <el-form-item>
-          <el-select v-model="searchForm.sort_by" placeholder="排序">
-            <el-option label="下载量" value="download_count" />
-            <el-option label="评分" value="rating" />
-            <el-option label="名称" value="name" />
-            <el-option label="创建时间" value="created_at" />
+          <el-select v-model="searchForm.sort_by" :placeholder="t('pluginRegistry.sortBy')">
+            <el-option :label="t('pluginRegistry.downloadCount')" value="download_count" />
+            <el-option :label="t('pluginRegistry.rating')" value="rating" />
+            <el-option :label="t('pluginRegistry.name')" value="name" />
+            <el-option :label="t('pluginRegistry.createdAt')" value="created_at" />
           </el-select>
         </el-form-item>
         <el-form-item>
           <el-button type="primary" @click="handleSearch">
             <el-icon><Search /></el-icon>
-            搜索
+            {{ t('pluginRegistry.search') }}
           </el-button>
-          <el-button @click="handleReset">重置</el-button>
+          <el-button @click="handleReset">{{ t('pluginRegistry.reset') }}</el-button>
         </el-form-item>
       </el-form>
 
@@ -66,11 +66,11 @@
               <h3 class="plugin-name">{{ plugin.name }}</h3>
               <el-tag size="small" type="info">{{ plugin.version }}</el-tag>
             </div>
-            <p class="plugin-description">{{ plugin.description || '暂无描述' }}</p>
+            <p class="plugin-description">{{ plugin.description || t('pluginRegistry.noDescription') }}</p>
             <div class="plugin-meta">
               <span class="meta-item">
                 <el-icon><User /></el-icon>
-                {{ plugin.author || '未知' }}
+                {{ plugin.author || t('pluginRegistry.unknownAuthor') }}
               </span>
               <span class="meta-item">
                 <el-icon><Download /></el-icon>
@@ -95,7 +95,7 @@
         </el-col>
       </el-row>
 
-      <el-empty v-if="!loading && plugins.length === 0" description="暂无插件" />
+      <el-empty v-if="!loading && plugins.length === 0" :description="t('pluginRegistry.noPlugins')" />
 
       <!-- 分页 -->
       <el-pagination
@@ -112,7 +112,7 @@
     </el-card>
 
     <!-- 上传对话框 -->
-    <el-dialog v-model="uploadVisible" title="上传插件" width="500px">
+    <el-dialog v-model="uploadVisible" :title="t('pluginRegistry.uploadDialogTitle')" width="500px">
       <el-upload
         drag
         action="/api/v1/registry/plugins/upload"
@@ -121,12 +121,10 @@
         accept=".zip"
       >
         <el-icon class="el-icon--upload"><upload-filled /></el-icon>
-        <div class="el-upload__text">
-          拖拽文件到此处或 <em>点击上传</em>
-        </div>
+        <div class="el-upload__text" v-html="t('pluginRegistry.dragOrClick')"></div>
         <template #tip>
           <div class="el-upload__tip">
-            请上传 ZIP 格式的插件包，包含 manifest.json
+            {{ t('pluginRegistry.uploadTip') }}
           </div>
         </template>
       </el-upload>
@@ -136,11 +134,13 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Plus, Upload, Search, User, Download, Star, UploadFilled } from '@element-plus/icons-vue'
 import { listPlugins, type PluginMetadata } from '@/api/plugin'
 
+const { t } = useI18n()
 const router = useRouter()
 
 const loading = ref(false)
@@ -166,7 +166,7 @@ const loadPlugins = async () => {
     plugins.value = res.data.data?.plugins || []
     total.value = res.data.data?.total || 0
   } catch (error) {
-    ElMessage.error('加载插件失败')
+    ElMessage.error(t('pluginRegistry.loadPluginsFailed'))
     console.error(error)
   } finally {
     loading.value = false
@@ -214,13 +214,13 @@ const handleUpload = () => {
 }
 
 const handleUploadSuccess = () => {
-  ElMessage.success('上传成功')
+  ElMessage.success(t('pluginRegistry.uploadSuccess'))
   uploadVisible.value = false
   loadPlugins()
 }
 
 const handleUploadError = () => {
-  ElMessage.error('上传失败')
+  ElMessage.error(t('pluginRegistry.uploadFailed'))
 }
 
 onMounted(() => {

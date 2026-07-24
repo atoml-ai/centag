@@ -2,15 +2,15 @@
   <div class="system-proxy">
     <div class="header-with-toolbar">
       <div class="header-left">
-        <h1 class="page-title">本机代理出口</h1>
+        <h1 class="page-title">{{ t('systemProxy.pageTitle') }}</h1>
         <p class="page-description">
-          将 Agent 的大模型流量导入 Centag。推荐用进程级代理（wrap run）；认系统代理的客户端再用 PAC。
+          {{ t('systemProxy.pageDescription') }}
         </p>
       </div>
       <div class="toolbar-actions">
         <el-button :loading="loading" @click="load">
           <el-icon><Refresh /></el-icon>
-          刷新
+          {{ t('systemProxy.refresh') }}
         </el-button>
       </div>
     </div>
@@ -18,47 +18,44 @@
     <!-- 顶部状态条：一眼看是否正常 -->
     <div class="status-strip">
       <div class="status-item" :class="status.enabled ? 'ok' : 'warn'">
-        <span class="status-label">MITM</span>
-        <span class="status-value">{{ status.enabled ? '运行中' : '未启动' }}</span>
+        <span class="status-label">{{ t('systemProxy.status.mitm') }}</span>
+        <span class="status-value">{{ status.enabled ? t('systemProxy.status.running') : t('systemProxy.status.stopped') }}</span>
       </div>
       <div class="status-item" :class="egressConfigured ? 'ok' : 'warn'">
-        <span class="status-label">出口 Key</span>
-        <span class="status-value">{{ egressConfigured ? '已自动就绪' : '未就绪' }}</span>
+        <span class="status-label">{{ t('systemProxy.status.egressKey') }}</span>
+        <span class="status-value">{{ egressConfigured ? t('systemProxy.status.autoReady') : t('systemProxy.status.notReady') }}</span>
       </div>
       <div class="status-item">
-        <span class="status-label">监听</span>
+        <span class="status-label">{{ t('systemProxy.status.listen') }}</span>
         <span class="status-value">{{ listenDisplay }}</span>
       </div>
       <div class="status-item">
-        <span class="status-label">PAC 域名</span>
+        <span class="status-label">{{ t('systemProxy.status.pacDomains') }}</span>
         <span class="status-value">{{ domainCount }}</span>
       </div>
       <div class="status-item">
-        <span class="status-label">路径模式</span>
+        <span class="status-label">{{ t('systemProxy.status.pathPatterns') }}</span>
         <span class="status-value">{{ patternCount }}</span>
       </div>
     </div>
 
     <el-tabs v-model="mainTab" class="main-tabs">
       <!-- ========== Tab 1: 配置向导 ========== -->
-      <el-tab-pane label="配置向导" name="wizard">
-        <p class="wizard-lead">
-          3 步：开 MITM（出口 Key 自动就绪）→ 自检 → 装客户端并用 <code>centag wrap run</code>。
-          勿把代理写进全局 shell。
-        </p>
+      <el-tab-pane :label="t('systemProxy.tabs.wizard')" name="wizard">
+        <p class="wizard-lead" v-html="t('systemProxy.wizard.lead')" />
         <el-alert
           v-if="setupStatus?.in_container"
           class="mb-sm"
           type="warning"
           :closable="false"
           show-icon
-          title="Docker：宿主机须映射 8081，容器内 MITM 听 0.0.0.0。请用 ./start.sh docker run personal 重启。"
+          :title="t('systemProxy.wizard.dockerWarning')"
         />
 
         <el-steps :active="wizardProgress" align-center finish-status="success" class="wizard-steps">
-          <el-step title="启动 MITM" :description="status.enabled ? '运行中' : '未启动'" />
-          <el-step title="验证" description="自检就绪" />
-          <el-step title="接入客户端" description="安装并运行" />
+          <el-step :title="t('systemProxy.wizard.step1Title')" :description="status.enabled ? t('systemProxy.status.running') : t('systemProxy.status.stopped')" />
+          <el-step :title="t('systemProxy.wizard.step2Title')" :description="t('systemProxy.wizard.step2Desc')" />
+          <el-step :title="t('systemProxy.wizard.step3Title')" :description="t('systemProxy.wizard.step3Desc')" />
         </el-steps>
 
         <!-- 步骤 1：启动 MITM（出口 Key 随服务自动绑定） -->
@@ -66,56 +63,48 @@
           <div class="step-head">
             <span class="step-num">1</span>
             <div class="step-title-block">
-              <h3>启动 MITM</h3>
-              <p>
-                MITM 与 Centag 一体：开启时服务端会<strong>自动创建/绑定</strong>内部出口 Key，并在转发到
-                :{{ apiPort }} 时注入。wrap 只设代理环境变量，不必也不应配置这把 Key。
-              </p>
+              <h3>{{ t('systemProxy.wizard.step1Heading') }}</h3>
+              <p v-html="t('systemProxy.wizard.step1Description', { port: apiPort })" />
             </div>
             <el-space wrap size="small">
               <el-tag :type="status.enabled ? 'success' : 'info'" size="small">
-                MITM {{ status.enabled ? '运行中' : '未启动' }}
+                {{ t('systemProxy.status.mitm') }} {{ status.enabled ? t('systemProxy.status.running') : t('systemProxy.status.stopped') }}
               </el-tag>
               <el-tag :type="egressConfigured ? 'success' : 'warning'" size="small">
-                出口 Key {{ egressConfigured ? '已自动就绪' : '待自动绑定' }}
+                {{ t('systemProxy.status.egressKey') }} {{ egressConfigured ? t('systemProxy.status.autoReady') : t('systemProxy.status.pendingBind') }}
               </el-tag>
             </el-space>
           </div>
 
           <div class="switch-row">
             <div class="switch-cell">
-              <span class="switch-label">MITM 服务</span>
+              <span class="switch-label">{{ t('systemProxy.form.mitmService') }}</span>
               <el-switch
                 v-model="status.enabled"
                 :loading="toggling"
                 @change="toggleProxy"
-                active-text="开"
-                inactive-text="关"
+                :active-text="t('systemProxy.yes')"
+                :inactive-text="t('systemProxy.no')"
               />
               <span class="form-hint">{{ listenDisplay }}</span>
             </div>
             <div class="switch-cell">
-              <span class="switch-label">允许局域网</span>
+              <span class="switch-label">{{ t('systemProxy.form.allowLan') }}</span>
               <el-switch v-model="allowLanClients" :loading="savingLan" @change="onAllowLanChange" />
-              <span class="form-hint">关=仅本机 · 开=同网段可连</span>
+              <span class="form-hint">{{ t('systemProxy.form.lanHint') }}</span>
             </div>
           </div>
 
-          <p class="form-hint">
-            <strong>权限</strong>：仅本机时不强制代理鉴权。开启局域网后，非本机客户端必须通过
-            <code>Proxy-Authorization</code>（由 <code>centag wrap</code> 把
-            <code>CENTAG_WRAP_TOKEN</code> 写入 <code>HTTPS_PROXY</code>，第三方 Agent 无需填 Centag Key）。
-            出口 Key 仍由服务端自动注入，与员工 Token 分离。
-          </p>
+          <p class="form-hint" v-html="t('systemProxy.wizard.permissionHint')" />
 
           <template v-if="allowLanClients">
             <el-form label-width="110px" class="lan-form" size="small">
-              <el-form-item label="本机局域网 IP" required>
-                <el-input v-model="advertiseHost" placeholder="如 192.168.1.50" style="max-width: 220px" />
-                <el-button class="ml-sm" :loading="detectingIP" @click="detectLanIP">探测</el-button>
-                <el-button type="primary" class="ml-sm" :loading="savingLan" @click="saveLanConfig">保存</el-button>
+              <el-form-item :label="t('systemProxy.form.lanIP')" required>
+                <el-input v-model="advertiseHost" :placeholder="t('systemProxy.form.lanIPPlaceholder')" style="max-width: 220px" />
+                <el-button class="ml-sm" :loading="detectingIP" @click="detectLanIP">{{ t('systemProxy.detect') }}</el-button>
+                <el-button type="primary" class="ml-sm" :loading="savingLan" @click="saveLanConfig">{{ t('systemProxy.save') }}</el-button>
                 <div v-if="suggestedLanHosts.length" class="form-hint lan-suggest">
-                  可选：
+                  {{ t('systemProxy.optional') }}：
                   <el-button
                     v-for="ip in suggestedLanHosts"
                     :key="ip"
@@ -127,28 +116,25 @@
                   </el-button>
                 </div>
               </el-form-item>
-              <el-form-item label="对外访问地址">
+              <el-form-item :label="t('systemProxy.form.externalAddress')">
                 <el-input v-model="employeeServer" placeholder="http://192.168.1.50:20060" style="max-width: 300px" />
               </el-form-item>
             </el-form>
-            <p class="form-hint">
-              仅可信内网开启；放行防火墙 {{ apiPort }} / {{ listenPort }}。
-              员工侧须：<code>export CENTAG_WRAP_TOKEN=llmproxy_…</code>（Web → API Keys），再用 wrap run。
-            </p>
+            <p class="form-hint" v-html="t('systemProxy.wizard.lanHint', { apiPort, listenPort })" />
           </template>
 
           <el-collapse v-if="!egressConfigured || showEgressAdvanced" class="optional-collapse mt-sm">
-            <el-collapse-item title="出口 Key 未就绪？手动补绑（一般不需要）" name="egress">
+            <el-collapse-item :title="t('systemProxy.egress.notReadyTitle')" name="egress">
               <el-space wrap>
                 <el-button type="primary" size="small" :loading="ensuringEgress" @click="ensureEgressKey()">
-                  立即自动绑定
+                  {{ t('systemProxy.egress.autoBind') }}
                 </el-button>
                 <el-select
                   v-model="selectedEgressKeyId"
                   clearable
                   filterable
                   size="small"
-                  placeholder="或选择已有 Key"
+                  :placeholder="t('systemProxy.egress.selectKey')"
                   style="width: 200px"
                   :loading="loadingKeys"
                 >
@@ -165,7 +151,7 @@
                   :loading="bindingEgress"
                   @click="bindSelectedEgressKey"
                 >
-                  绑定所选
+                  {{ t('systemProxy.egress.bindSelected') }}
                 </el-button>
               </el-space>
             </el-collapse-item>
@@ -177,23 +163,23 @@
           <div class="step-head">
             <span class="step-num">2</span>
             <div class="step-title-block">
-              <h3>验证服务端就绪</h3>
-              <p>先确认本机出口可用，再装客户端接入。</p>
+              <h3>{{ t('systemProxy.wizard.step2Heading') }}</h3>
+              <p>{{ t('systemProxy.wizard.step2Description') }}</p>
             </div>
           </div>
           <ul class="check-list">
             <li :class="status.enabled ? 'pass' : 'fail'">
-              MITM {{ status.enabled ? '运行中' : '未启动' }}
+              {{ status.enabled ? t('systemProxy.wizard.checkMitmRunning') : t('systemProxy.wizard.checkMitmStopped') }}
             </li>
             <li :class="egressConfigured ? 'pass' : 'fail'">
-              出口 Key {{ egressConfigured ? '已自动就绪' : '未就绪（开 MITM 后应自动绑定）' }}
+              {{ egressConfigured ? t('systemProxy.wizard.checkEgressReady') : t('systemProxy.wizard.checkEgressNotReady') }}
             </li>
-            <li class="info">「后端 / Provider」至少一个已启用（否则 503）</li>
-            <li class="info">证书报错 →「其它」页下载并信任 CA</li>
+            <li class="info">{{ t('systemProxy.wizard.checkProvider') }}</li>
+            <li class="info">{{ t('systemProxy.wizard.checkCert') }}</li>
           </ul>
           <el-space wrap>
-            <el-button size="small" @click="copyProxyctlCmd('doctor')">复制诊断命令</el-button>
-            <el-button type="primary" size="small" :loading="testing" @click="testProxy">立即测试</el-button>
+            <el-button size="small" @click="copyProxyctlCmd('doctor')">{{ t('systemProxy.wizard.copyDiagCmd') }}</el-button>
+            <el-button type="primary" size="small" :loading="testing" @click="testProxy">{{ t('systemProxy.wizard.testNow') }}</el-button>
           </el-space>
           <el-alert
             v-if="testResult"
@@ -209,7 +195,7 @@
               </li>
             </ul>
           </el-alert>
-          <p class="form-hint mt-sm">页面自检 MITM / PAC / 出口 Key / CA；端到端请用诊断命令或 wrap run。</p>
+          <p class="form-hint mt-sm">{{ t('systemProxy.wizard.selfCheckHint') }}</p>
         </el-card>
 
         <!-- 步骤 3：接入客户端 -->
@@ -217,50 +203,47 @@
           <div class="step-head">
             <span class="step-num">3</span>
             <div class="step-title-block">
-              <h3>安装客户端并接入 Agent</h3>
-              <p>先安装含 <code>centag wrap</code> 的 personal CLI，再用一条命令启动 Agent。</p>
+              <h3>{{ t('systemProxy.wizard.step3Heading') }}</h3>
+              <p v-html="t('systemProxy.wizard.step3Description')" />
             </div>
-            <el-tag type="success" size="small">推荐</el-tag>
+            <el-tag type="success" size="small">{{ t('systemProxy.recommended') }}</el-tag>
           </div>
 
           <div class="sub-block">
-            <div class="sub-label">① 安装客户端（本机未装过时）</div>
+            <div class="sub-label">{{ t('systemProxy.wizard.subStep1') }}</div>
             <div class="cmd-block">
               <code>{{ installCommand }}</code>
-              <el-button type="primary" size="small" @click="copyInstallCmd">复制</el-button>
+              <el-button type="primary" size="small" @click="copyInstallCmd">{{ t('systemProxy.copy') }}</el-button>
             </div>
-            <p class="form-hint">
-              装完执行 <code>. "$HOME/.centag/env"</code>，确认 <code>centag wrap --help</code> 可用。
-              开发机也可用仓库内 <code>./start.sh build personal</code>。
-            </p>
+            <p class="form-hint" v-html="t('systemProxy.wizard.subStep1Hint')" />
           </div>
 
           <div class="sub-block">
-            <div class="sub-label">② 局域网时先设员工 Token（本机可跳过）</div>
+            <div class="sub-label">{{ t('systemProxy.wizard.subStep2') }}</div>
             <div class="cmd-block">
               <code>export CENTAG_WRAP_TOKEN='llmproxy_xxxx'   # Web → API Keys 创建</code>
-              <el-button size="small" @click="copyWrapTokenHint">复制说明</el-button>
+              <el-button size="small" @click="copyWrapTokenHint">{{ t('systemProxy.copy') }}</el-button>
             </div>
             <p v-if="setupStatus?.proxy_auth_required || allowLanClients" class="form-hint">
-              当前已开局域网：未设置 Token 时 wrap 会直接报错，裸连 MITM 会收到 407。
+              {{ t('systemProxy.wizard.subStep2Hint') }}
             </p>
           </div>
 
           <div class="sub-block">
-            <div class="sub-label">③ 用 wrap 启动 Agent（自动 CA + HTTPS_PROXY；LAN 时自动带代理鉴权）</div>
+            <div class="sub-label">{{ t('systemProxy.wizard.subStep3') }}</div>
             <div class="cmd-block">
               <code>{{ runCommand }}</code>
-              <el-button type="primary" size="small" @click="copyRunCmd">复制</el-button>
+              <el-button type="primary" size="small" @click="copyRunCmd">{{ t('systemProxy.copy') }}</el-button>
             </div>
           </div>
 
           <el-collapse class="optional-collapse">
-            <el-collapse-item title="可选：系统 PAC / 手写环境变量" name="pac">
-              <p class="mb-sm form-hint">多数 CLI 不读系统 PAC。PAC：{{ apiPACURL }}</p>
+            <el-collapse-item :title="t('systemProxy.wizard.optionalPac')" name="pac">
+              <p class="mb-sm form-hint" v-html="t('systemProxy.wizard.pacHint', { url: apiPACURL })" />
               <el-space wrap>
-                <el-button size="small" @click="copyProxyctlCmd('enable')">PAC 启用</el-button>
-                <el-button size="small" type="danger" plain @click="copyProxyctlCmd('disable')">停用恢复</el-button>
-                <el-button size="small" @click="copyEnvProxyCmd">手写 HTTPS_PROXY</el-button>
+                <el-button size="small" @click="copyProxyctlCmd('enable')">{{ t('systemProxy.wizard.pacEnable') }}</el-button>
+                <el-button size="small" type="danger" plain @click="copyProxyctlCmd('disable')">{{ t('systemProxy.wizard.pacDisable') }}</el-button>
+                <el-button size="small" @click="copyEnvProxyCmd">{{ t('systemProxy.wizard.manualProxy') }}</el-button>
               </el-space>
             </el-collapse-item>
           </el-collapse>
@@ -268,36 +251,36 @@
       </el-tab-pane>
 
       <!-- ========== Tab 2: 域名与路径 ========== -->
-      <el-tab-pane label="域名与路径" name="rules">
+      <el-tab-pane :label="t('systemProxy.tabs.rules')" name="rules">
         <el-card class="pac-card" shadow="never">
           <template #header>
             <div class="card-header">
-              <span class="card-title">PAC 域名白名单</span>
+              <span class="card-title">{{ t('systemProxy.cards.pacWhitelist') }}</span>
               <div>
                 <el-button type="primary" link @click="showPACPreview">
                   <el-icon><View /></el-icon>
-                  查看 PAC
+                  {{ t('systemProxy.wizard.pacEnable') }}
                 </el-button>
                 <el-button type="primary" link @click="downloadPAC">
                   <el-icon><Download /></el-icon>
-                  下载 PAC
+                  {{ t('systemProxy.wizard.pacDisable') }}
                 </el-button>
                 <el-button :loading="ensuringDefaults" @click="ensureDefaultRules">
-                  补全默认列表
+                  {{ t('systemProxy.egress.autoBind') }}
                 </el-button>
                 <el-button type="primary" @click="openAddDomain" :disabled="!status.enabled">
                   <el-icon><Plus /></el-icon>
-                  添加域名
+                  {{ t('systemProxy.add') }}
                 </el-button>
               </div>
             </div>
           </template>
           <el-alert type="info" :closable="false" class="mb-md" show-icon>
-            仅白名单内域名会走代理。初始化列表已覆盖 Provider 目录中的大模型服务域名，可按需增删。
+            {{ t('systemProxy.cards.pacWhitelistHint') }}
           </el-alert>
           <el-table :data="domainList" stripe v-loading="loading" max-height="420">
-            <el-table-column prop="domain" label="域名" min-width="220" />
-            <el-table-column label="测试" width="100" align="center">
+            <el-table-column prop="domain" :label="t('systemProxy.table.domain')" min-width="220" />
+            <el-table-column :label="t('systemProxy.table.test')" width="100" align="center">
               <template #default="{ row }">
                 <el-button
                   type="primary"
@@ -306,15 +289,15 @@
                   :loading="testingDomains[row.domain]"
                 >
                   <el-icon><Position /></el-icon>
-                  测试
+                  {{ t('systemProxy.test') }}
                 </el-button>
               </template>
             </el-table-column>
-            <el-table-column label="操作" width="120" align="center">
+            <el-table-column :label="t('systemProxy.table.action')" width="120" align="center">
               <template #default="{ row }">
                 <el-button type="danger" link @click="removeDomain(row.domain)" :disabled="!status.enabled">
                   <el-icon><Delete /></el-icon>
-                  删除
+                  {{ t('systemProxy.delete') }}
                 </el-button>
               </template>
             </el-table-column>
@@ -324,23 +307,23 @@
         <el-card class="pattern-card mt-md" shadow="never">
           <template #header>
             <div class="card-header">
-              <span class="card-title">路径模式</span>
+              <span class="card-title">{{ t('systemProxy.cards.pathPatterns') }}</span>
               <el-button type="primary" @click="openAddPattern" :disabled="!status.enabled">
                 <el-icon><Plus /></el-icon>
-                添加路径模式
+                {{ t('systemProxy.dialog.addPattern') }}
               </el-button>
             </div>
           </template>
           <el-alert type="info" :closable="false" class="mb-md" show-icon>
-            域名须在白名单。命中路径后会改写到 Centag 的 /v1/*；白名单域名上识别到常见 LLM 路径也会转发。
+            {{ t('systemProxy.cards.pathPatternsHint') }}
           </el-alert>
           <el-table :data="patternList" stripe v-loading="loading" max-height="320">
-            <el-table-column prop="pattern" label="路径模式" min-width="220" />
-            <el-table-column label="操作" width="120" align="center">
+            <el-table-column prop="pattern" :label="t('systemProxy.table.pathPattern')" min-width="220" />
+            <el-table-column :label="t('systemProxy.table.action')" width="120" align="center">
               <template #default="{ row }">
                 <el-button type="danger" link @click="removePattern(row.pattern)" :disabled="!status.enabled">
                   <el-icon><Delete /></el-icon>
-                  删除
+                  {{ t('systemProxy.delete') }}
                 </el-button>
               </template>
             </el-table-column>
@@ -349,13 +332,13 @@
       </el-tab-pane>
 
       <!-- ========== Tab 3: 其它 ========== -->
-      <el-tab-pane label="其它" name="advanced">
+      <el-tab-pane :label="t('systemProxy.tabs.advanced')" name="advanced">
         <el-card class="control-card" shadow="never">
           <template #header>
-            <span class="card-title">MITM 高级选项</span>
+            <span class="card-title">{{ t('systemProxy.cards.mitmAdvanced') }}</span>
           </template>
           <el-form :model="config" label-width="120px">
-            <el-form-item label="监听端口">
+            <el-form-item :label="t('systemProxy.form.listenPort')">
               <el-input-number
                 v-model="listenPort"
                 :min="1024"
@@ -363,111 +346,111 @@
                 :disabled="status.enabled"
                 controls-position="right"
               />
-              <span class="form-hint">修改后需关闭再开启 MITM</span>
+              <span class="form-hint">{{ t('systemProxy.form.listenPortHint') }}</span>
             </el-form-item>
-            <el-form-item label="代理模式">
+            <el-form-item :label="t('systemProxy.form.proxyMode')">
               <el-select
                 v-model="status.pac_enabled"
                 :disabled="status.enabled"
                 style="max-width: 360px"
                 @change="onPacModeChange"
               >
-                <el-option label="PAC 模式（仅代理指定域名，推荐）" :value="true" />
-                <el-option label="全局模式（代理所有流量）" :value="false" />
+                <el-option :label="t('systemProxy.options.pacMode')" :value="true" />
+                <el-option :label="t('systemProxy.options.globalMode')" :value="false" />
               </el-select>
             </el-form-item>
-            <el-form-item label="Listen Addr" v-if="allowLanClients">
+            <el-form-item :label="t('systemProxy.form.listenAddr')" v-if="allowLanClients">
               <el-input v-model="listenAddr" placeholder="0.0.0.0" style="max-width: 240px" />
-              <el-button type="primary" class="ml-sm" :loading="savingLan" @click="saveLanConfig">保存</el-button>
+              <el-button type="primary" class="ml-sm" :loading="savingLan" @click="saveLanConfig">{{ t('systemProxy.save') }}</el-button>
             </el-form-item>
           </el-form>
           <el-descriptions :column="2" size="small" border>
-            <el-descriptions-item label="PAC URL">{{ apiPACURL }}</el-descriptions-item>
-            <el-descriptions-item label="MITM PROXY">
+            <el-descriptions-item :label="t('systemProxy.form.pacUrl')">{{ apiPACURL }}</el-descriptions-item>
+            <el-descriptions-item :label="t('systemProxy.form.mitmProxy')">
               {{ setupStatus?.mitm_proxy || `http://127.0.0.1:${listenPort}` }}
             </el-descriptions-item>
-            <el-descriptions-item label="CA 指纹">
-              {{ setupStatus?.ca_fingerprint_sha256 || '（启 MITM 后生成）' }}
+            <el-descriptions-item :label="t('systemProxy.form.caFingerprint')">
+              {{ setupStatus?.ca_fingerprint_sha256 || t('systemProxy.form.caFingerprintPlaceholder') }}
             </el-descriptions-item>
-            <el-descriptions-item label="Loopback">
-              {{ setupStatus?.listen_is_loopback !== false ? '是' : '否' }}
+            <el-descriptions-item :label="t('systemProxy.form.loopback')">
+              {{ setupStatus?.listen_is_loopback !== false ? t('systemProxy.yes') : t('systemProxy.no') }}
             </el-descriptions-item>
           </el-descriptions>
         </el-card>
 
         <el-card class="cert-card mt-md" shadow="never">
           <template #header>
-            <span class="card-title">CA 证书</span>
+            <span class="card-title">{{ t('systemProxy.cards.caCert') }}</span>
           </template>
-          <el-alert title="HTTPS 需要信任本 CA，否则会证书错误" type="warning" :closable="false" show-icon class="mb-md" />
+          <el-alert :title="t('systemProxy.cards.caCertHint')" type="warning" :closable="false" show-icon class="mb-md" />
           <el-space wrap class="mb-md">
             <el-button type="primary" @click="downloadCACert">
               <el-icon><Download /></el-icon>
-              下载 CA 证书
+              {{ t('systemProxy.cert.downloadCert') }}
             </el-button>
             <el-button @click="copyCertCommand">
               <el-icon><DocumentCopy /></el-icon>
-              复制安装命令
+              {{ t('systemProxy.cert.copyInstallCmd') }}
             </el-button>
           </el-space>
           <el-descriptions :column="2" border size="small">
-            <el-descriptions-item label="证书状态">
+            <el-descriptions-item :label="t('systemProxy.cert.status')">
               <el-tag :type="certInfo.valid ? 'success' : 'danger'" size="small">
-                {{ certInfo.valid ? '有效' : '无效' }}
+                {{ certInfo.valid ? t('systemProxy.cert.valid') : t('systemProxy.cert.invalid') }}
               </el-tag>
             </el-descriptions-item>
-            <el-descriptions-item label="颁发者">{{ certInfo.issuer }}</el-descriptions-item>
-            <el-descriptions-item label="有效期至">{{ certInfo.expires }}</el-descriptions-item>
-            <el-descriptions-item label="剩余天数">{{ certInfo.daysLeft }} 天</el-descriptions-item>
+            <el-descriptions-item :label="t('systemProxy.cert.issuer')">{{ certInfo.issuer }}</el-descriptions-item>
+            <el-descriptions-item :label="t('systemProxy.cert.expires')">{{ certInfo.expires }}</el-descriptions-item>
+            <el-descriptions-item :label="t('systemProxy.cert.daysLeft')">{{ certInfo.daysLeft }} {{ t('systemProxy.days') }}</el-descriptions-item>
           </el-descriptions>
         </el-card>
       </el-tab-pane>
     </el-tabs>
 
     <!-- 添加域名 -->
-    <el-dialog v-model="showAddDialog" title="添加域名" width="500px">
+    <el-dialog v-model="showAddDialog" :title="t('systemProxy.dialog.addDomain')" width="500px">
       <el-form :model="newDomain" label-width="100px">
-        <el-form-item label="域名">
-          <el-input v-model="newDomain.domain" placeholder="例如: api.openai.com" />
+        <el-form-item :label="t('systemProxy.table.domain')">
+          <el-input v-model="newDomain.domain" :placeholder="t('systemProxy.domainPlaceholder')" />
           <el-alert type="warning" :closable="false" class="mt-md">
-            只输入域名，不要包含协议或路径
+            {{ t('systemProxy.dialog.addDomainHint') }}
           </el-alert>
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="showAddDialog = false">取消</el-button>
-        <el-button type="primary" @click="addDomain" :loading="adding">添加</el-button>
+        <el-button @click="showAddDialog = false">{{ t('systemProxy.cancel') }}</el-button>
+        <el-button type="primary" @click="addDomain" :loading="adding">{{ t('systemProxy.add') }}</el-button>
       </template>
     </el-dialog>
 
     <!-- 添加路径模式 -->
-    <el-dialog v-model="showAddPatternDialog" title="添加路径模式" width="500px">
+    <el-dialog v-model="showAddPatternDialog" :title="t('systemProxy.dialog.addPattern')" width="500px">
       <el-form :model="newPattern" label-width="100px">
-        <el-form-item label="路径模式">
-          <el-input v-model="newPattern.pattern" placeholder="例如: /v1 或 /api/paas/v4" />
+        <el-form-item :label="t('systemProxy.table.pathPattern')">
+          <el-input v-model="newPattern.pattern" :placeholder="t('systemProxy.patternPlaceholder')" />
           <el-alert type="info" :closable="false" class="mt-md">
-            常见：/v1、/v2、/openai/v1、/api/paas/v4、/zen/v1
+            {{ t('systemProxy.dialog.addPatternHint') }}
           </el-alert>
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="showAddPatternDialog = false">取消</el-button>
-        <el-button type="primary" @click="addPattern" :loading="addingPattern">添加</el-button>
+        <el-button @click="showAddPatternDialog = false">{{ t('systemProxy.cancel') }}</el-button>
+        <el-button type="primary" @click="addPattern" :loading="addingPattern">{{ t('systemProxy.add') }}</el-button>
       </template>
     </el-dialog>
 
     <!-- PAC 预览 -->
-    <el-dialog v-model="showPACDialog" title="PAC 文件预览" width="800px">
+    <el-dialog v-model="showPACDialog" :title="t('systemProxy.dialog.pacPreview')" width="800px">
       <el-input type="textarea" :rows="20" v-model="pacContent" readonly class="pac-preview" />
       <template #footer>
-        <el-button @click="showPACDialog = false">关闭</el-button>
+        <el-button @click="showPACDialog = false">{{ t('systemProxy.close') }}</el-button>
         <el-button type="primary" @click="downloadPAC">
           <el-icon><Download /></el-icon>
-          下载
+          {{ t('systemProxy.wizard.pacDisable') }}
         </el-button>
         <el-button @click="copyPACContent">
           <el-icon><DocumentCopy /></el-icon>
-          复制
+          {{ t('systemProxy.copy') }}
         </el-button>
       </template>
     </el-dialog>
@@ -476,6 +459,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   Refresh,
@@ -494,6 +478,8 @@ import {
   getProxySetupStatus,
   type ProxySetupStatus
 } from '@/api/system-proxy'
+
+const { t } = useI18n()
 
 interface SystemProxyStatus {
   enabled: boolean
@@ -677,19 +663,19 @@ async function ensureEgressKey(opts?: { silent?: boolean }) {
     if (res.configured) {
       showEgressAdvanced.value = false
       if (!opts?.silent) {
-        ElMessage.success(res.changed ? '出口 Key 已自动绑定' : '出口 Key 已就绪')
+        ElMessage.success(res.changed ? t('systemProxy.egress.autoBound') : t('systemProxy.egress.alreadyReady'))
       }
     } else {
       showEgressAdvanced.value = true
       if (!opts?.silent) {
-        ElMessage.warning('出口 Key 仍未就绪，请展开下方手动补绑')
+        ElMessage.warning(t('systemProxy.egress.stillNotReady'))
       }
     }
     await load({ skipAutoEgress: true })
   } catch (error: any) {
     showEgressAdvanced.value = true
     if (!opts?.silent) {
-      ElMessage.error('自动绑定失败: ' + (error.message || error))
+      ElMessage.error(t('systemProxy.egress.autoBindFailed') + ': ' + (error.message || error))
     }
   } finally {
     ensuringEgress.value = false
@@ -701,10 +687,10 @@ async function bindSelectedEgressKey() {
   bindingEgress.value = true
   try {
     await bindEgressAPIKey(selectedEgressKeyId.value)
-    ElMessage.success('已绑定所选出口 Key（热生效）')
+    ElMessage.success(t('systemProxy.egress.boundSuccess'))
     await load()
   } catch (error: any) {
-    ElMessage.error('绑定失败: ' + (error.message || error))
+    ElMessage.error(t('systemProxy.egress.bindFailed') + ': ' + (error.message || error))
   } finally {
     bindingEgress.value = false
   }
@@ -717,9 +703,9 @@ async function onAllowLanChange(val: boolean) {
   }
   try {
     await ElMessageBox.confirm(
-      '开启后 MITM 将对局域网可达（0.0.0.0），并对非本机客户端强制代理鉴权。员工须设置 CENTAG_WRAP_TOKEN 后用 centag wrap run。是否继续？',
-      '允许局域网访问',
-      { type: 'warning', confirmButtonText: '确认开启', cancelButtonText: '取消' }
+      t('systemProxy.message.lanConfirmMessage'),
+      t('systemProxy.message.lanConfirmTitle'),
+      { type: 'warning', confirmButtonText: t('systemProxy.confirm'), cancelButtonText: t('systemProxy.cancel') }
     )
     if (!listenAddr.value || listenAddr.value === '127.0.0.1') {
       listenAddr.value = '0.0.0.0'
@@ -729,7 +715,7 @@ async function onAllowLanChange(val: boolean) {
     }
     // 探测失败时不要立刻保存：留在表单让用户填 IP / 点候选
     if (!advertiseHost.value.trim()) {
-      ElMessage.warning('请选择或填写本机局域网 IP，再点「保存」')
+      ElMessage.warning(t('systemProxy.message.fillLanIP'))
       return
     }
     await saveLanConfig()
@@ -742,8 +728,8 @@ async function onPacModeChange(val: boolean) {
   if (val) return
   try {
     await ElMessageBox.confirm(
-      '全局模式会代理所有 HTTP/HTTPS 流量，可能影响其它应用。确定切换？',
-      '全局模式警告',
+      t('systemProxy.message.globalModeWarning'),
+      t('systemProxy.message.globalModeTitle'),
       { type: 'warning' }
     )
   } catch {
@@ -763,7 +749,7 @@ async function detectLanIP() {
     const host = window.location.hostname
     if (host && host !== 'localhost' && host !== '127.0.0.1' && host !== '[::1]') {
       pickLanHost(host)
-      ElMessage.success(`已填入 ${host}`)
+      ElMessage.success(t('systemProxy.message.filledIP', { ip: host }))
       return
     }
 
@@ -774,19 +760,19 @@ async function detectLanIP() {
       suggestedLanHosts.value = list
       if (list.length === 1) {
         pickLanHost(list[0])
-        ElMessage.success(`已填入 ${list[0]}`)
+        ElMessage.success(t('systemProxy.message.filledIP', { ip: list[0] }))
         return
       }
       if (list.length > 1) {
         pickLanHost(list[0])
-        ElMessage.info(`已填入 ${list[0]}，如有多个网卡可点下方候选切换`)
+        ElMessage.info(t('systemProxy.message.multipleInterfaces', { ip: list[0] }))
         return
       }
     } catch {
       // ignore, fall through
     }
 
-    ElMessage.warning('未能自动探测，请手动填写局域网 IP（如 192.168.x.x）')
+    ElMessage.warning(t('systemProxy.message.autoDetectFailed'))
   } finally {
     detectingIP.value = false
   }
@@ -796,11 +782,11 @@ async function saveLanConfig() {
   if (allowLanClients.value) {
     const host = advertiseHost.value.trim()
     if (!host) {
-      ElMessage.warning('开启局域网访问时必须填写本机局域网 IP')
+      ElMessage.warning(t('systemProxy.message.lanIPRequired'))
       return
     }
     if (host === 'localhost' || host === '127.0.0.1' || host === '::1') {
-      ElMessage.warning('局域网 IP 不能是 127.0.0.1 / localhost')
+      ElMessage.warning(t('systemProxy.message.lanIPInvalid'))
       return
     }
   }
@@ -817,10 +803,10 @@ async function saveLanConfig() {
         advertise_host: allowLanClients.value ? advertiseHost.value.trim() : ''
       }
     })
-    ElMessage.success(allowLanClients.value ? '局域网访问已开启' : '已恢复为仅本机访问')
+    ElMessage.success(allowLanClients.value ? t('systemProxy.message.lanEnabled') : t('systemProxy.message.lanDisabled'))
     await load()
   } catch (error: any) {
-    ElMessage.error('保存失败: ' + error.message)
+    ElMessage.error(t('systemProxy.message.saveFailed') + ': ' + error.message)
     allowLanClients.value = !!setupStatus.value?.allow_lan_clients
   } finally {
     savingLan.value = false
@@ -869,7 +855,7 @@ const load = async (opts?: { skipAutoEgress?: boolean }) => {
     }
     showEgressAdvanced.value = status.value.enabled && !setupStatus.value?.egress_api_key_configured
   } catch (error: any) {
-    ElMessage.error('加载状态失败: ' + error.message)
+    ElMessage.error(t('systemProxy.message.loadFailed') + ': ' + error.message)
   } finally {
     loading.value = false
   }
@@ -890,10 +876,10 @@ const ensureDefaultRules = async () => {
     const res = await api.post('/api/v1/proxy/domains/ensure-defaults')
     const d = res.added_domains ?? 0
     const p = res.added_patterns ?? 0
-    ElMessage.success(d + p === 0 ? '默认列表已是最新' : `已补全 ${d} 个域名、${p} 个路径`)
+    ElMessage.success(d + p === 0 ? t('systemProxy.message.defaultsUpdated') : t('systemProxy.message.defaultsUpdatedDetail', { domains: d, patterns: p }))
     await load()
   } catch (error: any) {
-    ElMessage.error('补全失败: ' + (error.message || error))
+    ElMessage.error(t('systemProxy.message.defaultsFailed') + ': ' + (error.message || error))
   } finally {
     ensuringDefaults.value = false
   }
@@ -913,11 +899,11 @@ const toggleProxy = async () => {
       }
     })
     ElMessage.success(
-      status.value.enabled ? 'MITM 已启用（出口 Key 将自动绑定）' : 'MITM 服务已禁用'
+      status.value.enabled ? t('systemProxy.message.mitmEnabled') : t('systemProxy.message.mitmDisabled')
     )
     await load()
   } catch (error: any) {
-    ElMessage.error('操作失败: ' + error.message)
+    ElMessage.error(t('systemProxy.message.operationFailed') + ': ' + error.message)
     status.value.enabled = !status.value.enabled
   } finally {
     toggling.value = false
@@ -931,17 +917,17 @@ const openAddDomain = () => {
 
 const addDomain = async () => {
   if (!newDomain.value.domain) {
-    ElMessage.warning('请输入域名')
+    ElMessage.warning(t('systemProxy.message.pleaseEnterDomain'))
     return
   }
   adding.value = true
   try {
     await api.post('/api/v1/proxy/domains/add', { domain: newDomain.value.domain })
-    ElMessage.success('域名添加成功')
+    ElMessage.success(t('systemProxy.message.domainAdded'))
     showAddDialog.value = false
     await loadDomains()
   } catch (error: any) {
-    ElMessage.error('添加失败: ' + error.message)
+    ElMessage.error(t('systemProxy.message.addFailed') + ': ' + error.message)
   } finally {
     adding.value = false
   }
@@ -949,13 +935,13 @@ const addDomain = async () => {
 
 const removeDomain = async (domain: string) => {
   try {
-    await ElMessageBox.confirm(`确定删除域名 ${domain} 吗?`, '确认删除', { type: 'warning' })
+    await ElMessageBox.confirm(t('systemProxy.confirmDeleteDomain', { domain }), t('systemProxy.confirmDelete'), { type: 'warning' })
     await api.post('/api/v1/proxy/domains/remove', { domain })
-    ElMessage.success('域名删除成功')
+    ElMessage.success(t('systemProxy.message.domainDeleted'))
     await loadDomains()
   } catch (error: any) {
     if (error !== 'cancel') {
-      ElMessage.error('删除失败: ' + error.message)
+      ElMessage.error(t('systemProxy.message.deleteFailed') + ': ' + error.message)
     }
   }
 }
@@ -967,7 +953,7 @@ const openAddPattern = () => {
 
 const addPattern = async () => {
   if (!newPattern.value.pattern) {
-    ElMessage.warning('请输入路径模式')
+    ElMessage.warning(t('systemProxy.message.pleaseEnterPattern'))
     return
   }
   let pattern = newPattern.value.pattern.trim()
@@ -977,11 +963,11 @@ const addPattern = async () => {
   addingPattern.value = true
   try {
     await api.post('/api/v1/proxy/patterns/add', { pattern })
-    ElMessage.success('路径模式添加成功')
+    ElMessage.success(t('systemProxy.message.patternAdded'))
     showAddPatternDialog.value = false
     await load()
   } catch (error: any) {
-    ElMessage.error('添加失败: ' + error.message)
+    ElMessage.error(t('systemProxy.message.addFailed') + ': ' + error.message)
   } finally {
     addingPattern.value = false
   }
@@ -989,13 +975,13 @@ const addPattern = async () => {
 
 const removePattern = async (pattern: string) => {
   try {
-    await ElMessageBox.confirm(`确定删除路径模式 ${pattern} 吗?`, '确认删除', { type: 'warning' })
+    await ElMessageBox.confirm(t('systemProxy.confirmDeletePattern', { pattern }), t('systemProxy.confirmDelete'), { type: 'warning' })
     await api.post('/api/v1/proxy/patterns/remove', { pattern })
-    ElMessage.success('路径模式删除成功')
+    ElMessage.success(t('systemProxy.message.patternDeleted'))
     await load()
   } catch (error: any) {
     if (error !== 'cancel') {
-      ElMessage.error('删除失败: ' + error.message)
+      ElMessage.error(t('systemProxy.message.deleteFailed') + ': ' + error.message)
     }
   }
 }
@@ -1004,9 +990,9 @@ const testDomain = async (domain: string) => {
   testingDomains.value[domain] = true
   try {
     await api.get(`https://${domain}/v1/models`)
-    ElMessage.success(`域名 ${domain} 测试成功`)
+    ElMessage.success(t('systemProxy.message.domainTestSuccess', { domain }))
   } catch (error: any) {
-    ElMessage.error(`测试失败: ${error.message}`)
+    ElMessage.error(t('systemProxy.message.testFailed', { message: error.message }))
   } finally {
     testingDomains.value[domain] = false
   }
@@ -1024,18 +1010,18 @@ const downloadCACert = async () => {
     link.click()
     link.remove()
     window.URL.revokeObjectURL(url)
-    ElMessage.success('CA证书下载成功')
+    ElMessage.success(t('systemProxy.message.caCertDownloaded'))
   } catch (error: any) {
-    ElMessage.error('下载失败: ' + error.message)
+    ElMessage.error(t('systemProxy.message.downloadFailed') + ': ' + error.message)
   }
 }
 
 const copyCommand = async (command: string) => {
   try {
     await navigator.clipboard.writeText(command)
-    ElMessage.success('已复制到剪贴板')
+    ElMessage.success(t('systemProxy.message.copiedToClipboard'))
   } catch {
-    ElMessage.error('复制失败')
+    ElMessage.error(t('systemProxy.message.copyFailed'))
   }
 }
 
@@ -1059,7 +1045,7 @@ const showPACPreview = async () => {
     pacContent.value = await response.text()
     showPACDialog.value = true
   } catch (error: any) {
-    ElMessage.error('获取PAC文件失败: ' + error.message)
+    ElMessage.error(t('systemProxy.message.pacFileFetched') + ': ' + error.message)
   }
 }
 
@@ -1076,9 +1062,9 @@ const downloadPAC = async () => {
     link.click()
     link.remove()
     window.URL.revokeObjectURL(url)
-    ElMessage.success('PAC文件下载成功')
+    ElMessage.success(t('systemProxy.message.pacDownloaded'))
   } catch (error: any) {
-    ElMessage.error('下载失败: ' + error.message)
+    ElMessage.error(t('systemProxy.message.downloadFailed') + ': ' + error.message)
   }
 }
 
@@ -1094,11 +1080,11 @@ const testProxy = async () => {
     await load()
     lines.push({
       ok: !!status.value.enabled,
-      text: status.value.enabled ? 'MITM 服务运行中' : 'MITM 未启动（请先在步骤 1 开启）'
+      text: status.value.enabled ? t('systemProxy.wizardCheck.mitmRunning') : t('systemProxy.wizardCheck.mitmStopped')
     })
     lines.push({
       ok: egressConfigured.value,
-      text: egressConfigured.value ? '出口 Key 已配置' : '出口 Key 未配置（MITM 无法注入鉴权）'
+      text: egressConfigured.value ? t('systemProxy.wizardCheck.egressConfigured') : t('systemProxy.egress.notConfigured')
     })
 
     try {
@@ -1108,45 +1094,45 @@ const testProxy = async () => {
       lines.push({
         ok: pacResp.ok && hasProxy,
         text: pacResp.ok && hasProxy
-          ? `PAC 可访问（${pacText.length} bytes，含 PROXY）`
-          : `PAC 异常（HTTP ${pacResp.status}）`
+          ? t('systemProxy.wizardCheck.pacAccessible', { size: pacText.length })
+          : t('systemProxy.wizardCheck.pacError', { status: pacResp.status })
       })
     } catch (e: any) {
-      lines.push({ ok: false, text: `PAC 拉取失败: ${e.message || e}` })
+      lines.push({ ok: false, text: t('systemProxy.wizardCheck.pacFetchFailed', { message: e.message || e }) })
     }
 
     try {
       const caResp = await fetch('/api/v1/proxy/ca.crt', { cache: 'no-store' })
       lines.push({
         ok: caResp.ok,
-        text: caResp.ok ? 'CA 证书可下载' : `CA 下载失败（HTTP ${caResp.status}）`
+        text: caResp.ok ? t('systemProxy.wizardCheck.caDownloadOk') : t('systemProxy.wizardCheck.caDownloadFail', { status: caResp.status })
       })
     } catch (e: any) {
-      lines.push({ ok: false, text: `CA 下载失败: ${e.message || e}` })
+      lines.push({ ok: false, text: t('systemProxy.wizardCheck.caDownloadError', { message: e.message || e }) })
     }
 
     if (setupStatus.value?.in_container) {
       lines.push({
         ok: true,
-        text: 'Docker 部署：请确认宿主机已映射 8081（./start.sh docker run personal）'
+        text: t('systemProxy.wizardCheck.dockerHint')
       })
     }
 
     const ok = lines.every(l => l.ok)
     testResult.value = {
       ok,
-      title: ok ? '本机代理出口就绪（页面自检通过）' : '自检未通过，请按下列项处理',
+      title: ok ? t('systemProxy.wizardCheck.allPassed') : t('systemProxy.wizardCheck.hasFailed'),
       lines
     }
-    if (ok) ElMessage.success('自检通过')
-    else ElMessage.warning('自检未全部通过')
+    if (ok) ElMessage.success(t('systemProxy.wizardCheck.selfCheckPassed'))
+    else ElMessage.warning(t('systemProxy.wizardCheck.selfCheckPartial'))
   } catch (error: any) {
     testResult.value = {
       ok: false,
-      title: '自检失败',
+      title: t('systemProxy.wizardCheck.selfCheckFailed'),
       lines: [{ ok: false, text: error.message || String(error) }]
     }
-    ElMessage.error(`测试失败: ${error.message || error}`)
+    ElMessage.error(t('systemProxy.wizardCheck.testFailed') + ': ' + (error.message || error))
   } finally {
     testing.value = false
   }

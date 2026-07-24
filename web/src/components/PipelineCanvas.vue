@@ -4,28 +4,28 @@
     <div class="canvas-toolbar">
       <el-button-group>
         <el-button size="small" @click="fitView">
-          <el-icon><FullScreen /></el-icon> 适应画布
+          <el-icon><FullScreen /></el-icon> {{ t('pipelineCanvas.fitCanvas') }}
         </el-button>
         <el-button size="small" @click="autoLayout">
-          <el-icon><Rank /></el-icon> 自动布局
+          <el-icon><Rank /></el-icon> {{ t('pipelineCanvas.autoLayout') }}
         </el-button>
         <el-button size="small" type="success" @click="addNewNode">
-          <el-icon><Plus /></el-icon> 添加节点
+          <el-icon><Plus /></el-icon> {{ t('pipelineCanvas.addNode') }}
         </el-button>
         <el-button size="small" @click="exportPipeline">
-          <el-icon><Download /></el-icon> 导出
+          <el-icon><Download /></el-icon> {{ t('pipelineCanvas.export') }}
         </el-button>
         <el-button size="small" @click="triggerImport">
-          <el-icon><Upload /></el-icon> 导入
+          <el-icon><Upload /></el-icon> {{ t('pipelineCanvas.import') }}
         </el-button>
         <el-button size="small" type="primary" @click="savePipeline">
-          <el-icon><DocumentAdd /></el-icon> 保存流水线
+          <el-icon><DocumentAdd /></el-icon> {{ t('pipelineCanvas.savePipeline') }}
         </el-button>
         <el-button size="small" @click="showGlobalConfig = true">
-          <el-icon><Setting /></el-icon> 全局配置
+          <el-icon><Setting /></el-icon> {{ t('pipelineCanvas.globalConfig') }}
         </el-button>
           <el-button size="small" type="warning" @click="showTestPanel = true">
-          <el-icon><VideoPlay /></el-icon> 测试
+          <el-icon><VideoPlay /></el-icon> {{ t('pipelineCanvas.test') }}
         </el-button>
       </el-button-group>
       <input
@@ -37,15 +37,15 @@
       />
 
       <div class="legend">
-        <span class="node-type generator">生成器</span>
-        <span class="node-type processor">处理器</span>
-        <span class="node-type reviewer">审核器</span>
-        <span class="node-type router">路由器</span>
-        <span class="node-type aggregator">聚合器</span>
-        <span class="node-type parallel">并行</span>
-        <span class="node-type cache">缓存</span>
-        <span class="node-type token_usage">计量</span>
-        <span class="node-type tool_call_injector">注入</span>
+        <span class="node-type generator">{{ t('pipelineCanvas.generator') }}</span>
+        <span class="node-type processor">{{ t('pipelineCanvas.processor') }}</span>
+        <span class="node-type reviewer">{{ t('pipelineCanvas.moderator') }}</span>
+        <span class="node-type router">{{ t('pipelineCanvas.router') }}</span>
+        <span class="node-type aggregator">{{ t('pipelineCanvas.aggregator') }}</span>
+        <span class="node-type parallel">{{ t('pipelineCanvas.parallel') }}</span>
+        <span class="node-type cache">{{ t('pipelineCanvas.cache') }}</span>
+        <span class="node-type token_usage">{{ t('pipelineCanvas.meter') }}</span>
+        <span class="node-type tool_call_injector">{{ t('pipelineCanvas.inject') }}</span>
       </div>
     </div>
 
@@ -93,7 +93,7 @@
       <!-- 测试抽屉 -->
       <el-drawer
         v-model="showTestPanel"
-        title="流水线测试"
+        :title="t('pipelineCanvas.pipelineTest')"
         size="1200px"
         direction="rtl"
       >
@@ -102,22 +102,22 @@
             v-model="testContent"
             type="textarea"
             :rows="4"
-            placeholder="输入测试问题，按 Enter 提交..."
+            :placeholder="t('pipelineCanvas.testPlaceholder')"
             :disabled="testing"
             @keydown.enter.prevent="testing || runTest()"
           />
           <div class="test-actions">
             <el-button type="primary" :loading="testing" @click="runTest">
-              <el-icon><VideoPlay /></el-icon> 执行
+              <el-icon><VideoPlay /></el-icon> {{ t('pipelineCanvas.execute') }}
             </el-button>
           </div>
 
           <div v-if="testResult" class="test-result">
-            <el-divider style="margin: 16px 0 12px;">执行结果</el-divider>
+            <el-divider style="margin: 16px 0 12px;">{{ t('pipelineCanvas.executionResult') }}</el-divider>
             <el-alert
               v-if="testResult.success"
               type="success"
-              title="执行成功"
+              :title="t('pipelineCanvas.executionSuccess')"
               show-icon
               :closable="false"
             />
@@ -131,24 +131,24 @@
             <el-alert
               v-else
               type="warning"
-              title="执行完成（部分节点失败，已使用降级输出）"
+              :title="t('pipelineCanvas.executionPartialFail')"
               show-icon
               :closable="false"
             />
 
             <div v-if="testResult.content" class="result-content">
-              <div class="result-label">输出内容</div>
+              <div class="result-label">{{ t('pipelineCanvas.outputContent') }}</div>
               <div class="result-text">{{ testResult.content }}</div>
             </div>
 
             <div v-if="testResult.execution_log" class="result-log-summary">
-              <span>耗时：{{ testResult.execution_log.duration_ms }} ms</span>
-              <span>Token：{{ testResult.execution_log.total_tokens }}</span>
-              <span>节点数：{{ testResult.execution_log.node_logs?.length || 0 }}</span>
+              <span>{{ t('pipelineCanvas.elapsed') }}：{{ testResult.execution_log.duration_ms }} ms</span>
+              <span>{{ t('pipelineCanvas.tokenCount') }}：{{ testResult.execution_log.total_tokens }}</span>
+              <span>{{ t('pipelineCanvas.nodeCount') }}：{{ testResult.execution_log.node_logs?.length || 0 }}</span>
             </div>
 
             <el-collapse style="margin-top: 12px">
-              <el-collapse-item title="查看完整 JSON 数据">
+              <el-collapse-item :title="t('pipelineCanvas.viewFullJson')">
                 <pre class="result-json">{{ JSON.stringify(testResult, null, 2) }}</pre>
               </el-collapse-item>
             </el-collapse>
@@ -173,77 +173,77 @@
     <!-- 全局配置抽屉 -->
     <el-drawer
       v-model="showGlobalConfig"
-      title="流水线全局配置"
+      :title="t('pipelineCanvas.pipelineGlobalConfig')"
       size="600px"
       direction="rtl"
     >
       <div style="padding: 20px">
         <el-form label-position="top">
-          <el-divider>流水线信息</el-divider>
-          <el-form-item label="ID">
-            <el-input :model-value="pipelineInfo.id" :readonly="!isCreate" placeholder="流水线 ID" />
+          <el-divider>{{ t('pipelineCanvas.pipelineInfo') }}</el-divider>
+          <el-form-item :label="t('pipelineCanvas.id')">
+            <el-input :model-value="pipelineInfo.id" :readonly="!isCreate" :placeholder="t('pipelineCanvas.pipelineIdPlaceholder')" />
             <div v-if="!isCreate" style="font-size: 12px; color: #666; margin-top: 4px">
-              创建后不可修改
+              {{ t('pipelineCanvas.cannotModifyAfterCreate') }}
             </div>
           </el-form-item>
-          <el-form-item label="名称">
-            <el-input v-model="pipelineInfo.name" placeholder="流水线名称" />
+          <el-form-item :label="t('pipelineCanvas.name')">
+            <el-input v-model="pipelineInfo.name" :placeholder="t('pipelineCanvas.pipelineNamePlaceholder')" />
           </el-form-item>
-          <el-form-item label="描述">
-            <el-input v-model="pipelineInfo.description" type="textarea" :rows="2" placeholder="描述（可选）" />
+          <el-form-item :label="t('pipelineCanvas.description')">
+            <el-input v-model="pipelineInfo.description" type="textarea" :rows="2" :placeholder="t('pipelineCanvas.descriptionOptional')" />
           </el-form-item>
-          <el-form-item label="版本">
+          <el-form-item :label="t('pipelineCanvas.version')">
             <el-input v-model="pipelineInfo.version" placeholder="1.0" />
           </el-form-item>
-          <el-form-item label="快捷码">
-            <el-input v-model="pipelineInfo.shortcut_code" placeholder="#xxx（可选）" />
+          <el-form-item :label="t('pipelineCanvas.shortcutCode')">
+            <el-input v-model="pipelineInfo.shortcut_code" :placeholder="t('pipelineCanvas.shortcutPlaceholder')" />
           </el-form-item>
 
-          <el-divider>运行配置</el-divider>
-          <el-form-item label="超时时间（秒）">
+          <el-divider>{{ t('pipelineCanvas.runConfig') }}</el-divider>
+          <el-form-item :label="t('pipelineCanvas.timeoutSeconds')">
             <el-input-number 
               v-model="globalConfig.timeout" 
               :min="10" :max="600" 
               style="width: 100%"
             />
           </el-form-item>
-          <el-form-item label="最大重试次数">
+          <el-form-item :label="t('pipelineCanvas.maxRetries')">
             <el-input-number 
               v-model="globalConfig.max_retries" 
               :min="0" :max="10" 
               style="width: 100%"
             />
           </el-form-item>
-          <el-form-item label="并行限制">
+          <el-form-item :label="t('pipelineCanvas.parallelLimit')">
             <el-input-number 
               v-model="globalConfig.parallel_limit" 
               :min="1" :max="20" 
               style="width: 100%"
             />
             <div style="font-size: 12px; color: #666; margin-top: 4px">
-              同一层无依赖节点并行执行的最大数量
+              {{ t('pipelineCanvas.parallelLimitDesc') }}
             </div>
           </el-form-item>
-          <el-form-item label="流式模式">
+          <el-form-item :label="t('pipelineCanvas.streamMode')">
             <el-switch v-model="globalConfig.stream_mode" />
           </el-form-item>
-          <el-form-item label="错误时降级">
+          <el-form-item :label="t('pipelineCanvas.bypassOnError')">
             <el-switch v-model="globalConfig.bypass_on_error" />
             <div style="font-size: 12px; color: #666; margin-top: 4px">
-              节点执行失败时是否使用降级输出
+              {{ t('pipelineCanvas.bypassOnErrorDesc') }}
             </div>
           </el-form-item>
 
-          <el-divider>降级组配置 (Fallback Groups)</el-divider>
+          <el-divider>{{ t('pipelineCanvas.fallbackGroups') }}</el-divider>
           <!-- 全局降级策略 -->
-          <el-form-item label="默认降级策略">
+          <el-form-item :label="t('pipelineCanvas.defaultFallbackPolicy')">
             <el-select
               v-model="globalConfig.fallback_policy_id"
               clearable
-              placeholder="自动（同模型跨后端）"
+              :placeholder="t('pipelineCanvas.autoFallbackPolicy')"
               style="width: 100%"
             >
-              <el-option label="自动（同模型跨后端）" value="" />
+              <el-option :label="t('pipelineCanvas.autoFallbackPolicy')" value="" />
               <el-option
                 v-for="policy in fallbackPolicies"
                 :key="policy.id"
@@ -252,16 +252,16 @@
               />
             </el-select>
             <div style="font-size: 12px; color: #666; margin-top: 4px">
-              流水线内未单独设置降级策略的节点将使用此策略（热生效）
+              {{ t('pipelineCanvas.fallbackPolicyDesc') }}
             </div>
           </el-form-item>
 
           <el-alert type="info" :closable="false" style="margin-bottom: 16px">
             <template #default>
               <div style="font-size: 13px; line-height: 1.5">
-                <strong>降级组说明（旧版兼容）：</strong><br>
-                配置主节点失败时的备用节点。当主节点执行失败时，系统会按顺序尝试备用节点。<br>
-                建议使用上方的「默认降级策略」替代，更灵活且支持前端可配。
+                <strong>{{ t('pipelineCanvas.fallbackGroupLegacyNote') }}</strong><br>
+                {{ t('pipelineCanvas.fallbackGroupLegacyDesc1') }}<br>
+                {{ t('pipelineCanvas.fallbackGroupLegacyDesc2') }}
               </div>
             </template>
           </el-alert>
@@ -270,14 +270,14 @@
             <el-card shadow="hover" style="margin-bottom: 16px">
               <template #header>
                 <div style="display: flex; justify-content: space-between; align-items: center">
-                  <span>降级组 {{ idx + 1 }}</span>
+                  <span>{{ t('pipelineCanvas.fallbackGroup') }} {{ idx + 1 }}</span>
                   <el-button type="danger" text @click="removeFallbackGroup(idx)">
-                    <el-icon><Delete /></el-icon> 删除
+                      <el-icon><Delete /></el-icon> {{ t('pipelineCanvas.delete') }}
                   </el-button>
                 </div>
               </template>
               
-              <el-form-item label="主节点">
+              <el-form-item :label="t('pipelineCanvas.primaryNode')">
                 <el-select v-model="fg.primary_node_id" style="width: 100%">
                   <el-option 
                     v-for="n in nodes" 
@@ -288,7 +288,7 @@
                 </el-select>
               </el-form-item>
 
-              <el-form-item label="备用节点（按优先级排序）">
+              <el-form-item :label="t('pipelineCanvas.fallbackNodes')">
                 <el-select v-model="fg.fallback_nodes" multiple style="width: 100%">
                   <el-option 
                     v-for="n in nodes" 
@@ -299,52 +299,52 @@
                 </el-select>
               </el-form-item>
 
-              <el-form-item label="最大尝试次数">
+              <el-form-item :label="t('pipelineCanvas.maxAttempts')">
                 <el-input-number 
                   v-model="fg.max_attempts" 
                   :min="1" :max="10" 
                   style="width: 100%"
                 />
                 <div style="font-size: 12px; color: #666; margin-top: 4px">
-                  总共尝试多少次（主节点 + 备用节点）
+                  {{ t('pipelineCanvas.maxAttemptsDesc') }}
                 </div>
               </el-form-item>
             </el-card>
           </div>
 
           <el-button type="primary" @click="addFallbackGroup" style="margin-bottom: 20px">
-            <el-icon><Plus /></el-icon> 添加降级组
+            <el-icon><Plus /></el-icon> {{ t('pipelineCanvas.addFallbackGroup') }}
           </el-button>
 
-          <el-divider>存储钩子 (Storage Hook)</el-divider>
+          <el-divider>{{ t('pipelineCanvas.storageHook') }}</el-divider>
           <el-alert type="info" :closable="false" style="margin-bottom: 16px">
             <template #default>
               <div style="font-size: 13px; line-height: 1.5">
-                开启后流水线执行时自动持久化节点输入输出、对话历史、代码片段等数据到全局存储后端，便于审计、续接和分析。
+                {{ t('pipelineCanvas.storageHookDesc') }}
               </div>
             </template>
           </el-alert>
 
-          <el-form-item label="启用存储钩子">
+          <el-form-item :label="t('pipelineCanvas.enableStorageHook')">
             <el-switch v-model="globalConfig.storage_config.enabled" />
           </el-form-item>
 
           <template v-if="globalConfig.storage_config.enabled">
-            <el-form-item label="命名空间 (Namespace)">
-              <el-input v-model="globalConfig.storage_config.namespace" placeholder="如 education、coding，留空则使用流水线 ID" />
+            <el-form-item :label="t('pipelineCanvas.namespace')">
+              <el-input v-model="globalConfig.storage_config.namespace" :placeholder="t('pipelineCanvas.namespacePlaceholder')" />
               <div style="font-size: 12px; color: #666; margin-top: 4px">
-                数据隔离键前缀，留空时自动使用流水线 ID
+                {{ t('pipelineCanvas.namespaceDesc') }}
               </div>
             </el-form-item>
 
-            <el-form-item label="自动保存">
+            <el-form-item :label="t('pipelineCanvas.autoSave')">
               <el-switch v-model="globalConfig.storage_config.auto_save" />
               <div style="font-size: 12px; color: #666; margin-top: 4px">
-                每个节点执行完成后自动持久化数据
+                {{ t('pipelineCanvas.autoSaveDesc') }}
               </div>
             </el-form-item>
 
-            <el-form-item label="保存间隔（秒）">
+            <el-form-item :label="t('pipelineCanvas.saveInterval')">
               <el-input-number
                 v-model="globalConfig.storage_config.save_interval"
                 :min="10" :max="600"
@@ -352,22 +352,22 @@
               />
             </el-form-item>
 
-            <el-form-item label="保留天数">
+            <el-form-item :label="t('pipelineCanvas.retentionDays')">
               <el-input-number
                 v-model="globalConfig.storage_config.retention_days"
                 :min="1" :max="365"
                 style="width: 100%"
               />
               <div style="font-size: 12px; color: #666; margin-top: 4px">
-                超过天数的存储数据将被自动清理
+                {{ t('pipelineCanvas.retentionDaysDesc') }}
               </div>
             </el-form-item>
 
-            <el-divider>钩子行为配置 (Hooks)</el-divider>
+            <el-divider>{{ t('pipelineCanvas.hookBehavior') }}</el-divider>
             <el-alert type="warning" :closable="false" style="margin-bottom: 16px">
               <template #default>
                 <div style="font-size: 13px; line-height: 1.5">
-                  至少需要配置一个 storage 类型的钩子并指定触发时机（on），存储功能才会生效。
+                  {{ t('pipelineCanvas.hookBehaviorDesc') }}
                 </div>
               </template>
             </el-alert>
@@ -376,31 +376,31 @@
               <el-card shadow="hover" style="margin-bottom: 16px">
                 <template #header>
                   <div style="display: flex; justify-content: space-between; align-items: center">
-                    <span>钩子 {{ hIdx + 1 }}</span>
+                    <span>{{ t('pipelineCanvas.hook') }} {{ hIdx + 1 }}</span>
                     <el-button type="danger" text @click="removeHook(hIdx)">
-                      <el-icon><Delete /></el-icon> 删除
+                    <el-icon><Delete /></el-icon> {{ t('pipelineCanvas.delete') }}
                     </el-button>
                   </div>
                 </template>
 
-                <el-form-item label="类型">
+                <el-form-item :label="t('pipelineCanvas.hookType')">
                   <el-select v-model="hook.type" style="width: 100%">
                     <el-option label="storage" value="storage" />
                   </el-select>
                 </el-form-item>
 
-                <el-form-item label="触发时机 (on)">
+                <el-form-item :label="t('pipelineCanvas.hookTriggerOn')">
                   <el-select v-model="hook.on" multiple style="width: 100%">
-                    <el-option label="节点开始 (node_start)" value="node_start" />
-                    <el-option label="节点完成 (node_complete)" value="node_complete" />
-                    <el-option label="节点错误 (node_error)" value="node_error" />
-                    <el-option label="流水线完成 (pipeline_complete)" value="pipeline_complete" />
-                    <el-option label="流水线错误 (pipeline_error)" value="pipeline_error" />
+                    <el-option :label="t('pipelineCanvas.hookOnNodeStart')" value="node_start" />
+                    <el-option :label="t('pipelineCanvas.hookOnNodeComplete')" value="node_complete" />
+                    <el-option :label="t('pipelineCanvas.hookOnNodeError')" value="node_error" />
+                    <el-option :label="t('pipelineCanvas.hookOnPipelineComplete')" value="pipeline_complete" />
+                    <el-option :label="t('pipelineCanvas.hookOnPipelineError')" value="pipeline_error" />
                   </el-select>
                 </el-form-item>
 
-                <el-form-item label="目标存储">
-                  <el-select v-model="hook.storage_name" clearable placeholder="留空则使用默认存储" style="width: 100%">
+                <el-form-item :label="t('pipelineCanvas.targetStorage')">
+                  <el-select v-model="hook.storage_name" clearable :placeholder="t('pipelineCanvas.defaultStoragePlaceholder')" style="width: 100%">
                     <el-option
                       v-for="s in storages"
                       :key="s.name"
@@ -409,47 +409,47 @@
                     />
                   </el-select>
                   <div style="font-size: 12px; color: #666; margin-top: 4px">
-                    选择数据写入的存储后端。知识库类型需选择支持 Knowledge 的存储（如 file）。
+                    {{ t('pipelineCanvas.targetStorageDesc') }}
                   </div>
                 </el-form-item>
 
-                <el-form-item label="存储类型">
+                <el-form-item :label="t('pipelineCanvas.storageType')">
                   <el-select v-model="hook.storage_type" style="width: 100%">
-                    <el-option label="键值 (KV)" value="kv" />
-                    <el-option label="知识库 (Knowledge)" value="knowledge" />
-                    <el-option label="向量 (Vector)" value="vector" />
+                    <el-option :label="t('pipelineCanvas.storageTypeKv')" value="kv" />
+                    <el-option :label="t('pipelineCanvas.storageTypeKnowledge')" value="knowledge" />
+                    <el-option :label="t('pipelineCanvas.storageTypeVector')" value="vector" />
                   </el-select>
                   <div style="font-size: 12px; color: #666; margin-top: 4px">
-                    KV 适合精确键值存取；Knowledge 适合语义检索与智能问答；Vector 适合相似度搜索
+                    {{ t('pipelineCanvas.storageTypeDesc') }}
                   </div>
                 </el-form-item>
 
-                <el-form-item label="存储行为">
+                <el-form-item :label="t('pipelineCanvas.storageBehavior')">
                   <el-checkbox-group
                     :model-value="getHookBehaviorFlags(hook)"
                     @update:model-value="(vals: string[]) => setHookBehaviorFlags(hook, vals)"
                     style="display: flex; flex-direction: column; gap: 8px"
                   >
-                    <el-checkbox label="save_user_progress">保存用户进度</el-checkbox>
-                    <el-checkbox label="save_conversation_history">保存对话历史</el-checkbox>
-                    <el-checkbox label="save_scene_context">保存场景上下文</el-checkbox>
-                    <el-checkbox label="save_code_snippets">保存代码片段</el-checkbox>
-                    <el-checkbox label="save_solutions">保存解决方案</el-checkbox>
-                    <el-checkbox label="track_file_changes">追踪文件变更</el-checkbox>
+                    <el-checkbox label="save_user_progress">{{ t('pipelineCanvas.behaviorSaveUserProgress') }}</el-checkbox>
+                    <el-checkbox label="save_conversation_history">{{ t('pipelineCanvas.behaviorSaveConversation') }}</el-checkbox>
+                    <el-checkbox label="save_scene_context">{{ t('pipelineCanvas.behaviorSaveSceneContext') }}</el-checkbox>
+                    <el-checkbox label="save_code_snippets">{{ t('pipelineCanvas.behaviorSaveCodeSnippets') }}</el-checkbox>
+                    <el-checkbox label="save_solutions">{{ t('pipelineCanvas.behaviorSaveSolutions') }}</el-checkbox>
+                    <el-checkbox label="track_file_changes">{{ t('pipelineCanvas.behaviorTrackFileChanges') }}</el-checkbox>
                   </el-checkbox-group>
                 </el-form-item>
               </el-card>
             </div>
 
             <el-button type="primary" @click="addHook" style="margin-bottom: 20px">
-              <el-icon><Plus /></el-icon> 添加钩子
+              <el-icon><Plus /></el-icon> {{ t('pipelineCanvas.addHook') }}
             </el-button>
           </template>
         </el-form>
 
         <div style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 20px">
-          <el-button @click="showGlobalConfig = false">取消</el-button>
-          <el-button type="primary" @click="saveGlobalConfig">保存全局配置</el-button>
+          <el-button @click="showGlobalConfig = false">{{ t('pipelineCanvas.cancel') }}</el-button>
+          <el-button type="primary" @click="saveGlobalConfig">{{ t('pipelineCanvas.saveGlobalConfig') }}</el-button>
         </div>
       </div>
     </el-drawer>
@@ -458,6 +458,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch, nextTick } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { VueFlow, useVueFlow, Position, type Node, type Edge, type NodeChange, type EdgeChange, type Connection } from '@vue-flow/core'
 import { MiniMap } from '@vue-flow/minimap'
 import { Controls } from '@vue-flow/controls'
@@ -468,6 +469,8 @@ import { dump as yamlDump, load as yamlLoad } from 'js-yaml'
 import { FullScreen, Rank, DocumentAdd, Plus, Upload, Download, VideoPlay, Setting, Delete } from '@element-plus/icons-vue'
 import type { PipelineNodeConfig, PluginDescriptor } from '@/api/pipeline'
 import { executePipelineDirect, getNodePlugins, parseNodePluginsResponse } from '@/api/pipeline'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   pipeline: any
@@ -595,7 +598,7 @@ const loadGlobalConfig = () => {
 const saveGlobalConfig = () => {
   const code = (pipelineInfo.value.shortcut_code || '').trim()
   if (code && !code.startsWith('#')) {
-    ElMessage.warning('快捷码必须以 # 开头')
+    ElMessage.warning(t('pipelineCanvas.shortcutMustStartWithHash'))
     return
   }
 
@@ -620,7 +623,7 @@ const saveGlobalConfig = () => {
   emit('update:pipeline', updatedPipeline)
   showGlobalConfig.value = false
   markDirty()
-  ElMessage.success('配置已更新')
+  ElMessage.success(t('pipelineCanvas.configUpdated'))
 }
 
 // 添加降级组
@@ -891,7 +894,7 @@ const deleteNode = async (nodeId: string) => {
   }
   emit('update:pipeline', updatedPipeline)
   markDirty()
-  ElMessage.success('节点已删除')
+  ElMessage.success(t('pipelineCanvas.nodeDeleted'))
 }
 
 const onNodesChange = (changes: NodeChange[]) => {
@@ -958,7 +961,7 @@ const addNewNode = () => {
   // 后端和模型留空，由用户手动选择（避免使用可能不存在或未启用的默认值）
   const newNodeConfig = {
     id: newId,
-    name: '新节点',
+    name: t('pipelineCanvas.newNode'),
     type: 'generator',
     backend: '',
     model: '',
@@ -988,7 +991,7 @@ const addNewNode = () => {
   })
   markDirty()
 
-  ElMessage.success('新节点已添加，请点击节点配置后端和模型')
+  ElMessage.success(t('pipelineCanvas.newNodeAdded'))
 }
 
 const fitView = () => {
@@ -996,7 +999,7 @@ const fitView = () => {
 }
 
 const autoLayout = () => {
-  ElMessage.info('自动布局功能正在开发中（可后续集成 dagre 或 elk）...')
+  ElMessage.info(t('pipelineCanvas.autoLayoutInDevelopment'))
 }
 
 const savePipeline = () => {
@@ -1006,7 +1009,7 @@ const savePipeline = () => {
 const runTest = async () => {
   if (testing.value) return // 防止重复提交（尤其是快速按 Enter 时）
   if (!testContent.value.trim()) {
-    ElMessage.warning('请输入测试内容')
+    ElMessage.warning(t('pipelineCanvas.enterTestContent'))
     return
   }
   testing.value = true
@@ -1021,13 +1024,13 @@ const runTest = async () => {
     const allNodesSucceeded = pipelineOutput.execution_log?.success !== false
     testResult.value = { success: allNodesSucceeded, ...pipelineOutput }
     if (allNodesSucceeded) {
-      ElMessage.success('测试执行完成')
+      ElMessage.success(t('pipelineCanvas.testCompleted'))
     } else {
-      ElMessage.warning('执行完成，但部分节点出错（已使用降级输出）')
+      ElMessage.warning(t('pipelineCanvas.testPartialFail'))
     }
   } catch (error: any) {
-    testResult.value = { success: false, error: error.message || '执行失败' }
-    ElMessage.error('测试失败：' + (error.message || error))
+    testResult.value = { success: false, error: error.message || t('pipelineCanvas.executionFailed') }
+    ElMessage.error(t('pipelineCanvas.testFailedPrefix') + (error.message || error))
   } finally {
     testing.value = false
   }
@@ -1047,9 +1050,9 @@ const exportPipeline = () => {
     a.click()
     document.body.removeChild(a)
     URL.revokeObjectURL(url)
-    ElMessage.success('流水线描述文件已导出')
+    ElMessage.success(t('pipelineCanvas.pipelineExported'))
   } catch (error: any) {
-    ElMessage.error(`导出失败：${error?.message || error}`)
+    ElMessage.error(t('pipelineCanvas.exportFailed') + (error?.message || error))
   }
 }
 
@@ -1069,13 +1072,13 @@ const handleImportFile = async (event: Event) => {
     const text = await file.text()
     const imported = yamlLoad(text)
     if (!imported || typeof imported !== 'object') {
-      throw new Error('文件内容不是有效 YAML 对象')
+      throw new Error(t('pipelineCanvas.invalidYaml'))
     }
     if (!Array.isArray(imported.nodes)) {
-      throw new Error('缺少 nodes 数组')
+      throw new Error(t('pipelineCanvas.missingNodesArray'))
     }
     if (!imported.id || !imported.name || !imported.version) {
-      throw new Error('缺少 id/name/version 字段')
+      throw new Error(t('pipelineCanvas.missingFields'))
     }
 
     const normalized = {
@@ -1094,9 +1097,9 @@ const handleImportFile = async (event: Event) => {
     emit('update:pipeline', normalized)
     convertToFlow(normalized)
     markDirty()
-    ElMessage.success(`已导入流水线描述：${normalized.name}`)
+    ElMessage.success(t('pipelineCanvas.pipelineImported') + normalized.name)
   } catch (error: any) {
-    ElMessage.error(`导入失败：${error?.message || error}`)
+    ElMessage.error(t('pipelineCanvas.importFailed') + (error?.message || error))
   }
 }
 

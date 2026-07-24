@@ -13,8 +13,11 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { resolvePipelineFeatureSupport, getPipelineFeatureLabel, type PipelineFeatureKey } from '@/utils/pipeline/features'
 import type { Pipeline } from '@/api/pipeline'
+
+const { t } = useI18n()
 
 const props = withDefaults(defineProps<{
   feature: PipelineFeatureKey
@@ -35,7 +38,7 @@ const support = computed(() =>
 
 const tooltipText = computed(() => {
   if (!support.value.enabled) {
-    return support.value.reason || `${getPipelineFeatureLabel(props.feature)}暂不可用`
+    return support.value.reason || t('pipelineFeatureGuard.notAvailable', { label: getPipelineFeatureLabel(props.feature) })
   }
   return props.actionLabel || getPipelineFeatureLabel(props.feature)
 })

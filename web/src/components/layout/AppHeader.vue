@@ -15,7 +15,7 @@
               <el-icon :size="16">
                 <component :is="item.icon" />
               </el-icon>
-              <span>{{ item.label }}</span>
+              <span>{{ item.labelKey ? t(item.labelKey) : item.label }}</span>
               <el-icon :size="12" class="dropdown-arrow"><ArrowDown /></el-icon>
             </div>
             <template #dropdown>
@@ -36,7 +36,7 @@
                     >
                       <div class="nav-submenu-trigger" @click.stop="handleDropdownClick(child)">
                         <el-icon><component :is="child.icon" /></el-icon>
-                        <span>{{ child.label }}</span>
+                        <span>{{ child.labelKey ? t(child.labelKey) : child.label }}</span>
                         <el-icon class="submenu-arrow"><ArrowRight /></el-icon>
                       </div>
                       <template #dropdown>
@@ -48,7 +48,7 @@
                             :class="{ 'is-active': currentNav === leaf.id }"
                           >
                             <el-icon><component :is="leaf.icon" /></el-icon>
-                            <span>{{ leaf.label }}</span>
+                            <span>{{ leaf.labelKey ? t(leaf.labelKey) : leaf.label }}</span>
                           </el-dropdown-item>
                         </el-dropdown-menu>
                       </template>
@@ -60,7 +60,7 @@
                     :class="{ 'is-active': currentNav === child.id }"
                   >
                     <el-icon><component :is="child.icon" /></el-icon>
-                    <span>{{ child.label }}</span>
+                    <span>{{ child.labelKey ? t(child.labelKey) : child.label }}</span>
                   </el-dropdown-item>
                 </template>
               </el-dropdown-menu>
@@ -76,7 +76,7 @@
             <el-icon :size="16">
               <component :is="item.icon" />
             </el-icon>
-            <span>{{ item.label }}</span>
+            <span>{{ item.labelKey ? t(item.labelKey) : item.label }}</span>
           </div>
         </template>
       </nav>
@@ -86,6 +86,24 @@
       <el-button :loading="refreshing" @click="handleRefresh" circle>
         <el-icon><Refresh /></el-icon>
       </el-button>
+
+      <el-dropdown trigger="click" @command="(cmd) => handleLocaleChange(cmd as AppLocale)">
+        <el-button circle>
+          <el-icon><Link /></el-icon>
+        </el-button>
+        <template #dropdown>
+          <el-dropdown-menu>
+            <el-dropdown-item
+              v-for="locale in supportedLocales"
+              :key="locale"
+              :command="locale"
+              :class="{ 'is-active': localeStore.getLocale() === locale }"
+            >
+              {{ localeLabels[locale] }}
+            </el-dropdown-item>
+          </el-dropdown-menu>
+        </template>
+      </el-dropdown>
 
       <!-- Minimal：无用户菜单；改密/退出在概览页 -->
       <el-dropdown v-if="!isMinimal" trigger="click" @command="handleUserCommand">
@@ -102,18 +120,18 @@
               <div class="user-info">
                 <div class="user-name">{{ authStore.displayName }}</div>
                 <el-tag :type="authStore.isAdmin ? 'danger' : 'info'" size="small">
-                  {{ authStore.isAdmin ? '管理员' : '普通用户' }}
+                  {{ authStore.isAdmin ? t('appHeader.admin') : t('appHeader.user') }}
                 </el-tag>
               </div>
             </el-dropdown-item>
             <el-dropdown-item command="profile">
-              <el-icon><User /></el-icon>个人中心
+              <el-icon><User /></el-icon>{{ t('appHeader.profile') }}
             </el-dropdown-item>
             <el-dropdown-item v-if="showSystemConfig" command="config">
-              <el-icon><Setting /></el-icon>系统设置
+              <el-icon><Setting /></el-icon>{{ t('appHeader.systemConfig') }}
             </el-dropdown-item>
             <el-dropdown-item divided command="logout">
-              <el-icon><SwitchButton /></el-icon>退出登录
+              <el-icon><SwitchButton /></el-icon>{{ t('appHeader.logout') }}
             </el-dropdown-item>
           </el-dropdown-menu>
         </template>
@@ -124,16 +142,21 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useNavigation } from '@/composables/useNavigation'
 import { useEdition } from '@/composables/useEdition'
 import type { NavItem } from '@/utils/nav'
 import { getCapabilities } from '@/utils/capabilities'
-import { Refresh, ArrowDown, ArrowRight, User, SwitchButton, Setting } from '@element-plus/icons-vue'
+import { Refresh, ArrowDown, ArrowRight, User, SwitchButton, Setting, Link } from '@element-plus/icons-vue'
 import CentagMark from '@/components/icons/CentagMark.vue'
 import { ElMessageBox } from 'element-plus'
+import { useLocaleStore } from '@/stores/locale'
+import { supportedLocales, localeLabels, type AppLocale } from '@/i18n'
 
+const { t } = useI18n()
+const localeStore = useLocaleStore()
 const router = useRouter()
 const authStore = useAuthStore()
 const { isMinimal, edition } = useEdition()
@@ -150,6 +173,10 @@ const {
 } = useNavigation()
 
 const refreshing = ref(false)
+
+function handleLocaleChange(locale: AppLocale) {
+  localeStore.setLocale(locale)
+}
 
 bindRouteSync()
 
@@ -188,9 +215,9 @@ async function handleUserCommand(cmd: string) {
     router.push('/config')
   } else if (cmd === 'logout') {
     try {
-      await ElMessageBox.confirm('确定要退出登录吗？', '退出登录', {
-        confirmButtonText: '退出',
-        cancelButtonText: '取消',
+      await ElMessageBox.confirm(t('appHeader.logoutConfirm'), t('appHeader.logoutTitle'), {
+        confirmButtonText: t('appHeader.confirm'),
+        cancelButtonText: t('appHeader.cancel'),
         type: 'warning'
       })
       await authStore.logout()

@@ -1,14 +1,14 @@
 <template>
   <div class="pipeline-default-settings">
     <div class="page-header">
-      <h2>默认流水线配置</h2>
-      <p class="description">配置系统默认使用的流水线，当请求未指定模式时将使用此流水线</p>
+      <h2>{{ t('defaultSettings.title') }}</h2>
+      <p class="description">{{ t('defaultSettings.subtitle') }}</p>
     </div>
 
     <el-card v-loading="loading">
       <el-form :model="form" label-width="160px" style="max-width: 500px">
-        <el-form-item label="系统默认流水线">
-          <el-select v-model="form.default_pipeline_id" placeholder="选择默认流水线" style="width: 100%">
+        <el-form-item :label="t('defaultSettings.systemDefaultPipeline')">
+          <el-select v-model="form.default_pipeline_id" :placeholder="t('defaultSettings.selectDefaultPipeline')" style="width: 100%">
             <el-option
               v-for="pipeline in availablePipelines"
               :key="pipeline.id"
@@ -21,33 +21,33 @@
           </el-select>
         </el-form-item>
 
-        <el-form-item label="允许用户覆盖">
+        <el-form-item :label="t('defaultSettings.allowUserOverride')">
           <el-switch v-model="form.allow_user_override" />
           <span style="margin-left: 8px; color: #999; font-size: 12px">
-            启用后，用户可以在个人中心设置自己的默认流水线
+            {{ t('defaultSettings.allowUserOverrideDesc') }}
           </span>
         </el-form-item>
 
         <el-form-item>
           <el-button type="primary" :loading="saving" @click="handleSave">
-            保存配置
+            {{ t('defaultSettings.saveConfig') }}
           </el-button>
-          <el-button @click="loadDefaults">重置</el-button>
+          <el-button @click="loadDefaults">{{ t('defaultSettings.reset') }}</el-button>
         </el-form-item>
       </el-form>
     </el-card>
 
     <el-card style="margin-top: 20px">
       <template #header>
-        <span>当前生效配置</span>
+        <span>{{ t('defaultSettings.currentEffectiveConfig') }}</span>
       </template>
       <el-descriptions :column="1" border>
-        <el-descriptions-item label="默认流水线">
+        <el-descriptions-item :label="t('defaultSettings.defaultPipeline')">
           <el-tag>{{ getPipelineName(form.default_pipeline_id) }}</el-tag>
         </el-descriptions-item>
-        <el-descriptions-item label="允许用户覆盖">
+        <el-descriptions-item :label="t('defaultSettings.allowUserOverride')">
           <el-tag :type="form.allow_user_override ? 'success' : 'info'">
-            {{ form.allow_user_override ? '是' : '否' }}
+            {{ form.allow_user_override ? t('defaultSettings.yes') : t('defaultSettings.no') }}
           </el-tag>
         </el-descriptions-item>
       </el-descriptions>
@@ -57,6 +57,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
 import {
   getPipelineDefaults,
@@ -65,6 +66,7 @@ import {
   type PipelineDefaults
 } from '@/api/pipeline'
 
+const { t } = useI18n()
 const loading = ref(false)
 const saving = ref(false)
 
@@ -103,9 +105,9 @@ const handleSave = async () => {
     await updatePipelineDefaults({
       default_pipeline_id: form.value.default_pipeline_id
     })
-    ElMessage.success('配置已保存')
+    ElMessage.success(t('defaultSettings.configSaved'))
   } catch (error) {
-    ElMessage.error('保存失败')
+    ElMessage.error(t('defaultSettings.saveFailed'))
     console.error('Failed to save defaults:', error)
   } finally {
     saving.value = false

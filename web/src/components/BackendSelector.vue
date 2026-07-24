@@ -1,7 +1,7 @@
 <template>
   <el-select
     v-model="selectedBackendId"
-    :placeholder="placeholder"
+    :placeholder="placeholder || t('backendSelector.placeholder')"
     :disabled="disabled"
     :loading="loading"
     :filterable="filterable"
@@ -25,7 +25,7 @@
           type="info"
           style="margin-left: 8px"
         >
-          已禁用
+          {{ t('backendSelector.disabled') }}
         </el-tag>
         <el-tag 
           v-if="backend.type === 'ollama'" 
@@ -33,7 +33,7 @@
           type="success"
           style="margin-left: 8px"
         >
-          本地
+          {{ t('backendSelector.local') }}
         </el-tag>
       </div>
     </el-option>
@@ -41,10 +41,10 @@
     <template #empty>
       <el-empty 
         :image-size="60"
-        :description="includeDisabled ? '暂无后端配置' : '暂无启用的后端'"
+        :description="includeDisabled ? t('backendSelector.emptyDescAll') : t('backendSelector.emptyDescEnabled')"
       >
         <el-button type="primary" size="small" @click="goToBackendManagement">
-          去配置后端
+          {{ t('backendSelector.goConfig') }}
         </el-button>
       </el-empty>
     </template>
@@ -54,54 +54,50 @@
 <script setup lang="ts">
 import { ref, onMounted, watch } from 'vue'
 import { ElMessage } from 'element-plus'
+import { useI18n } from 'vue-i18n'
 import api from '@/api'
 
-// Props
+const { t } = useI18n()
+
 interface Props {
   modelValue?: string | null
   placeholder?: string
   disabled?: boolean
   filterable?: boolean
-  includeDisabled?: boolean  // 是否包含禁用的后端
-  autoLoad?: boolean        // 是否自动加载后端列表
-  filter?: (backend: any) => boolean  // 自定义筛选函数
+  includeDisabled?: boolean
+  autoLoad?: boolean
+  filter?: (backend: any) => boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
   modelValue: null,
-  placeholder: '选择后端',
+  placeholder: '',
   disabled: false,
   filterable: true,
   includeDisabled: false,
   autoLoad: true,
 })
 
-// Emits
 const emit = defineEmits<{
   'update:modelValue': [value: string | null]
   'change': [backendId: string | null, backend: any | null]
   'load': [backends: any[]]
 }>()
 
-// State
 const selectedBackendId = ref<string | null>(props.modelValue)
 const backends = ref<any[]>([])
 const loading = ref(false)
 
-// 加载后端列表
 const loadBackends = async () => {
   loading.value = true
   try {
     const res = await api.get('/api/v1/backends')
-    // axios 拦截器已解包 {success: true, data: [...]} → res 已经是数组
     let allBackends = Array.isArray(res) ? res : []
     
-    // 1. 如果不包含禁用的后端，先过滤
     if (!props.includeDisabled) {
       allBackends = allBackends.filter((b: any) => b.enabled === true)
     }
     
-    // 2. 如果有自定义筛选函数，应用它
     if (props.filter) {
       allBackends = allBackends.filter((b: any) => props.filter!(b))
     }
@@ -109,14 +105,13 @@ const loadBackends = async () => {
     backends.value = allBackends
     emit('load', backends.value)
   } catch (error: any) {
-    ElMessage.error('加载后端列表失败：' + error.message)
+    ElMessage.error(t('backendSelector.loadFailed', { msg: error.message }))
     backends.value = []
   } finally {
     loading.value = false
   }
 }
 
-// 处理后端选择变化
 const handleBackendChange = (backendId: string | null) => {
   emit('update:modelValue', backendId)
   
@@ -124,31 +119,26 @@ const handleBackendChange = (backendId: string | null) => {
   emit('change', backendId, selectedBackend)
 }
 
-// 跳转到后端管理页面
 const goToBackendManagement = () => {
-  // 使用 router 跳转，如果没有 router 则提示
   try {
     window.location.href = '/static/#/backends'
   } catch (e) {
-    ElMessage.info('请前往后端管理页面配置后端')
+    ElMessage.info(t('backendSelector.navigateHint'))
   }
 }
 
-// 监听外部值变化
 watch(() => props.modelValue, (newVal) => {
   if (newVal !== selectedBackendId.value) {
     selectedBackendId.value = newVal
   }
 })
 
-// 初始化
 onMounted(() => {
   if (props.autoLoad) {
     loadBackends()
   }
 })
 
-// 暴露方法给父组件
 defineExpose({
   loadBackends,
   backends,

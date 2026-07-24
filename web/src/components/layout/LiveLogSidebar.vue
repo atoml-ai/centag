@@ -4,23 +4,23 @@
       <div class="log-panel-header">
         <div class="log-panel-title">
           <el-icon :size="14"><Monitor /></el-icon>
-          <span>实时日志控制台</span>
+          <span>{{ t('liveLogSidebar.title') }}</span>
           <span v-if="liveTail" class="live-dot">●</span>
         </div>
         <div class="log-panel-controls">
           <div class="log-filter-group">
-            <label class="log-filter-label">分类：</label>
+            <label class="log-filter-label">{{ t('liveLogSidebar.categoryLabel') }}</label>
             <select v-model="categoryFilter" class="log-filter-select">
-              <option value="">全部</option>
-              <option value="llm">大模型访问</option>
-              <option value="pipeline">流水线</option>
-              <option value="system">系统</option>
+              <option value="">{{ t('liveLogSidebar.categoryAll') }}</option>
+              <option value="llm">{{ t('liveLogSidebar.categoryLlm') }}</option>
+              <option value="pipeline">{{ t('liveLogSidebar.categoryPipeline') }}</option>
+              <option value="system">{{ t('liveLogSidebar.categorySystem') }}</option>
             </select>
           </div>
           <div class="log-filter-group">
-            <label class="log-filter-label">级别：</label>
+            <label class="log-filter-label">{{ t('liveLogSidebar.levelLabel') }}</label>
             <select v-model="levelFilter" class="log-filter-select">
-              <option value="">全部</option>
+              <option value="">{{ t('liveLogSidebar.levelAll') }}</option>
               <option value="error">Error</option>
               <option value="warn">Warn</option>
               <option value="info">Info</option>
@@ -28,7 +28,7 @@
             </select>
           </div>
           <label class="log-autoscroll">
-            <input type="checkbox" v-model="autoScroll" /> 自动滚动
+            <input type="checkbox" v-model="autoScroll" /> {{ t('liveLogSidebar.autoScroll') }}
           </label>
         </div>
         <div class="log-panel-actions">
@@ -37,23 +37,23 @@
             class="log-btn"
             :class="{ active: liveTail }"
             @click="toggleLiveTail"
-            :title="liveTail ? '暂停实时跟踪' : '开启实时跟踪'"
+            :title="liveTail ? t('liveLogSidebar.pauseLive') : t('liveLogSidebar.startLive')"
           >
-            {{ liveTail ? '⏸ 暂停' : '▶ 跟踪' }}
+            {{ liveTail ? t('liveLogSidebar.pause') : t('liveLogSidebar.follow') }}
           </button>
           <button
             type="button"
             class="log-btn"
             @click="clearConsole"
-            title="清空当前显示"
+            :title="t('liveLogSidebar.clearTitle')"
           >
-            清空
+            {{ t('liveLogSidebar.clear') }}
           </button>
           <button
             type="button"
             class="log-btn log-btn-close"
             @click="$emit('close')"
-            title="关闭日志面板"
+            :title="t('liveLogSidebar.close')"
           >
             ✕
           </button>
@@ -61,12 +61,12 @@
       </div>
       <div class="log-panel-meta">
         <span class="log-file-path" :title="logFilePath">{{ logFilePath || '...' }}</span>
-        <span class="log-stats">{{ lineCount }} 行 · {{ formatBytes(totalBytes) }}</span>
+        <span class="log-stats">{{ t('liveLogSidebar.linesCount', { count: lineCount, bytes: formatBytes(totalBytes) }) }}</span>
       </div>
       <div ref="consoleEl" class="log-console" @scroll="onScroll">
         <pre class="log-content"><code>{{ displayContent }}</code></pre>
         <div v-if="!liveTail && pausedHint" class="paused-hint">
-          已暂停 · <a href="#" @click.prevent="resumeLiveTail">继续跟踪</a>
+          {{ t('liveLogSidebar.paused') }}<a href="#" @click.prevent="resumeLiveTail">{{ t('liveLogSidebar.resume') }}</a>
         </div>
       </div>
     </div>
@@ -75,8 +75,11 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onBeforeUnmount, nextTick, computed, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { Monitor } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
+
+const { t } = useI18n()
 
 const props = defineProps<{ visible: boolean }>()
 const emit = defineEmits<{ (e: 'close'): void }>()
@@ -102,60 +105,55 @@ const MAX_BUFFER_LINES = 5000
 const filteredContent = computed(() => {
   const buffer = rawBuffer.value
   if (!levelFilter.value && !categoryFilter.value) return buffer
-  
+
   const level = levelFilter.value.toLowerCase()
   const category = categoryFilter.value.toLowerCase()
   const lines = buffer.split('\n')
-  
+
   const filtered = lines.filter((line) => {
     const lower = line.toLowerCase()
-    
-    // 级别过滤
+
     if (level && !(lower.includes(`"level":"${level}"`) || lower.includes(`level=${level}`))) {
       return false
     }
-    
-    // 分类过滤
+
     if (category) {
       if (category === 'llm') {
-        // 大模型访问日志：包含 chat/completions、model、backend 等关键词
         const llmMarkers = [
           'chat completions', 'request started', '[request]', '[config] proxy mode',
           '/v1/chat', '/v1/messages', '/v1/completions', '/v1/embeddings',
           'transparent proxy', 'cache hit mode', 'cache mode', 'proxy auth rejected',
-          '无效的 api key', '需要认证', 'requested_model', 'selected_backend',
-          '后端选择', '缓存命中', '缓存未命中', '"model":', '"backend":'
+          'requested_model', 'selected_backend',
+          '"model":', '"backend":'
         ]
         const isLLM = llmMarkers.some(marker => lower.includes(marker))
         if (!isLLM) return false
       } else if (category === 'pipeline') {
-        // 流水线日志：包含 pipeline 关键词
         const pipelineMarkers = [
-          'pipeline', '流水线', 'node', 'execution', 'resolved pipeline'
+          'pipeline', 'node', 'execution', 'resolved pipeline'
         ]
         const isPipeline = pipelineMarkers.some(marker => lower.includes(marker))
         if (!isPipeline) return false
       } else if (category === 'system') {
-        // 系统日志：不包含大模型和流水线关键词
         const llmMarkers = [
           'chat completions', 'request started', '[request]', '[config] proxy mode',
           '/v1/chat', '/v1/messages', '/v1/completions', '/v1/embeddings',
           'transparent proxy', 'cache hit mode', 'cache mode', 'proxy auth rejected',
-          '无效的 api key', '需要认证', 'requested_model', 'selected_backend',
-          '后端选择', '缓存命中', '缓存未命中', '"model":', '"backend":'
+          'requested_model', 'selected_backend',
+          '"model":', '"backend":'
         ]
         const pipelineMarkers = [
-          'pipeline', '流水线', 'node', 'execution', 'resolved pipeline'
+          'pipeline', 'node', 'execution', 'resolved pipeline'
         ]
         const isLLM = llmMarkers.some(marker => lower.includes(marker))
         const isPipeline = pipelineMarkers.some(marker => lower.includes(marker))
         if (isLLM || isPipeline) return false
       }
     }
-    
+
     return true
   })
-  
+
   return filtered.join('\n')
 })
 
@@ -179,7 +177,6 @@ function onScroll() {
   const el = consoleEl.value
   const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 40
   if (!atBottom && liveTail.value) {
-    // 用户向上滚动，暂停自动跟踪
     liveTail.value = false
     pausedHint.value = true
   }
@@ -202,14 +199,12 @@ function toggleLiveTail() {
 
 function appendContent(chunk: string) {
   const nextBuffer = rawBuffer.value + chunk
-  // 限制缓冲区行数，防止内存爆炸
   const lines = nextBuffer.split('\n')
   if (lines.length > MAX_BUFFER_LINES) {
     rawBuffer.value = lines.slice(lines.length - MAX_BUFFER_LINES).join('\n')
   } else {
     rawBuffer.value = nextBuffer
   }
-  // 统计
   totalBytes.value += chunk.length
   lineCount.value = rawBuffer.value.split('\n').length
 }
@@ -259,7 +254,6 @@ async function loadFilePath() {
       }
     }
   } catch {
-    // ignore
   }
 }
 
@@ -297,7 +291,6 @@ watch(
 
 watch(liveTail, (v) => {
   if (v) startPolling()
-  // 即使暂停也保持轮询以维持 offset，只是不自动滚动
 })
 
 onMounted(() => {
@@ -519,7 +512,6 @@ function formatBytes(n: number): string {
   font-size: 11px;
 }
 
-/* 底部滑入动画 */
 .log-panel-slide-enter-active,
 .log-panel-slide-leave-active {
   transition: transform 0.25s ease, opacity 0.25s ease;

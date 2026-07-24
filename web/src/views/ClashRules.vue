@@ -2,21 +2,20 @@
   <div class="clash-page">
     <div class="page-header">
       <div class="header-info">
-        <h1 class="page-title">Clash 订阅管理</h1>
+        <h1 class="page-title">{{ t('clashRules.pageTitle') }}</h1>
         <p class="page-description">
-          为每条规则生成独立订阅链接，填入 Clash / Mihomo 客户端即可自动拉取代理规则
+          {{ t('clashRules.pageDescription') }}
         </p>
       </div>
       <el-button type="primary" @click="openCreate">
-        <el-icon><Plus /></el-icon>新建规则
+        <el-icon><Plus /></el-icon>{{ t('clashRules.newRule') }}
       </el-button>
     </div>
 
     <!-- 说明卡片 -->
     <el-alert type="info" :closable="false" show-icon style="margin-bottom:20px;border-radius:8px">
       <template #title>
-        订阅链接无需鉴权，任何人持有链接均可下载对应规则。如需撤销，请重新生成令牌。
-        未自定义内容的规则将自动下发系统默认 <code>rule.yaml</code>。
+        {{ t('clashRules.subscriptionDescription') }}
       </template>
     </el-alert>
 
@@ -25,7 +24,7 @@
       <!-- 空状态 -->
       <el-empty
         v-if="!loading && rules.length === 0"
-        description="暂无订阅规则，点击「新建规则」创建第一条"
+        :description="t('clashRules.emptyState')"
         :image-size="120"
       />
 
@@ -46,7 +45,7 @@
                 size="small"
                 effect="plain"
               >
-                {{ rule.has_custom_rule ? '自定义规则' : '系统默认' }}
+                {{ rule.has_custom_rule ? t('clashRules.customRule') : t('clashRules.systemDefault') }}
               </el-tag>
             </div>
             <el-dropdown trigger="click" @command="(cmd: string) => handleCmd(cmd, rule)">
@@ -56,19 +55,19 @@
               <template #dropdown>
                 <el-dropdown-menu>
                   <el-dropdown-item command="edit-name">
-                    <el-icon><EditPen /></el-icon>重命名
+                    <el-icon><EditPen /></el-icon>{{ t('clashRules.actions.rename') }}
                   </el-dropdown-item>
                   <el-dropdown-item command="edit-content">
-                    <el-icon><Edit /></el-icon>编辑规则内容
+                    <el-icon><Edit /></el-icon>{{ t('clashRules.actions.editContent') }}
                   </el-dropdown-item>
                   <el-dropdown-item v-if="rule.has_custom_rule" command="reset">
-                    <el-icon><RefreshLeft /></el-icon>恢复系统默认
+                    <el-icon><RefreshLeft /></el-icon>{{ t('clashRules.actions.restoreDefault') }}
                   </el-dropdown-item>
                   <el-dropdown-item divided command="regen-token">
-                    <el-icon><Key /></el-icon>重新生成令牌
+                    <el-icon><Key /></el-icon>{{ t('clashRules.actions.regenerateToken') }}
                   </el-dropdown-item>
                   <el-dropdown-item divided command="delete" style="color:var(--el-color-danger)">
-                    <el-icon><Delete /></el-icon>删除
+                    <el-icon><Delete /></el-icon>{{ t('clashRules.actions.delete') }}
                   </el-dropdown-item>
                 </el-dropdown-menu>
               </template>
@@ -80,11 +79,11 @@
         <div class="url-section">
           <div class="url-label">
             <el-icon><Link /></el-icon>
-            <span>订阅链接</span>
+            <span>{{ t('clashRules.subscriptionLink') }}</span>
           </div>
           <div class="url-row">
             <code class="url-text">{{ rule.subscribe_url }}</code>
-            <el-tooltip content="复制链接" placement="top">
+            <el-tooltip :content="t('clashRules.copyLink')" placement="top">
               <el-button type="primary" link @click="copyUrl(rule.subscribe_url)">
                 <el-icon><CopyDocument /></el-icon>
               </el-button>
@@ -94,22 +93,22 @@
 
         <!-- 令牌 -->
         <div class="token-section">
-          <span class="meta-label">令牌</span>
+          <span class="meta-label">{{ t('clashRules.token') }}</span>
           <code class="token-text">{{ rule.subscribe_token.slice(0, 16) }}…</code>
-          <span class="meta-label" style="margin-left:16px">更新时间</span>
+          <span class="meta-label" style="margin-left:16px">{{ t('clashRules.updatedAt') }}</span>
           <span class="meta-val">{{ formatTime(rule.updated_at) }}</span>
         </div>
 
         <!-- 快速操作 -->
         <div class="quick-actions">
           <el-button size="small" @click="openEditContent(rule)">
-            <el-icon><Edit /></el-icon>编辑内容
+            <el-icon><Edit /></el-icon>{{ t('clashRules.editContentBtn') }}
           </el-button>
           <el-button size="small" @click="copyUrl(rule.subscribe_url)">
-            <el-icon><CopyDocument /></el-icon>复制链接
+            <el-icon><CopyDocument /></el-icon>{{ t('clashRules.copyLink') }}
           </el-button>
           <el-button size="small" type="danger" plain @click="confirmDelete(rule)">
-            <el-icon><Delete /></el-icon>删除
+            <el-icon><Delete /></el-icon>{{ t('clashRules.actions.delete') }}
           </el-button>
         </div>
       </el-card>
@@ -118,51 +117,51 @@
     <!-- ── 新建对话框 ── -->
     <el-dialog
       v-model="showCreate"
-      title="新建订阅规则"
+      :title="t('clashRules.createDialog.title')"
       width="480px"
       :close-on-click-modal="false"
       destroy-on-close
     >
       <el-form :model="createForm" :rules="createRules" ref="createFormRef" label-width="90px">
-        <el-form-item label="规则名称" prop="name">
-          <el-input v-model="createForm.name" placeholder="给这条规则起个名字，方便识别" />
+        <el-form-item :label="t('clashRules.createDialog.nameLabel')" prop="name">
+          <el-input v-model="createForm.name" :placeholder="t('clashRules.createDialog.namePlaceholder')" />
         </el-form-item>
-        <el-form-item label="初始内容">
+        <el-form-item :label="t('clashRules.createDialog.initialContent')">
           <el-radio-group v-model="createForm.useDefault">
-            <el-radio :value="true">使用系统默认 rule.yaml</el-radio>
-            <el-radio :value="false">稍后手动编辑</el-radio>
+            <el-radio :value="true">{{ t('clashRules.createDialog.useDefault') }}</el-radio>
+            <el-radio :value="false">{{ t('clashRules.createDialog.editLater') }}</el-radio>
           </el-radio-group>
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="showCreate = false">取消</el-button>
-        <el-button type="primary" :loading="creating" @click="doCreate">创建</el-button>
+        <el-button @click="showCreate = false">{{ t('clashRules.createDialog.cancel') }}</el-button>
+        <el-button type="primary" :loading="creating" @click="doCreate">{{ t('clashRules.createDialog.create') }}</el-button>
       </template>
     </el-dialog>
 
     <!-- ── 重命名对话框 ── -->
     <el-dialog
       v-model="showRename"
-      title="重命名规则"
+      :title="t('clashRules.renameDialog.title')"
       width="400px"
       :close-on-click-modal="false"
       destroy-on-close
     >
       <el-form :model="renameForm" :rules="renameRules" ref="renameFormRef" label-width="90px">
-        <el-form-item label="规则名称" prop="name">
-          <el-input v-model="renameForm.name" placeholder="规则名称" />
+        <el-form-item :label="t('clashRules.renameDialog.nameLabel')" prop="name">
+          <el-input v-model="renameForm.name" :placeholder="t('clashRules.renameDialog.namePlaceholder')" />
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="showRename = false">取消</el-button>
-        <el-button type="primary" :loading="renaming" @click="doRename">保存</el-button>
+        <el-button @click="showRename = false">{{ t('clashRules.renameDialog.cancel') }}</el-button>
+        <el-button type="primary" :loading="renaming" @click="doRename">{{ t('clashRules.renameDialog.save') }}</el-button>
       </template>
     </el-dialog>
 
     <!-- ── 编辑内容对话框 ── -->
     <el-dialog
       v-model="showEditContent"
-      :title="`编辑规则内容 — ${editTarget?.name}`"
+      :title="t('clashRules.editContentDialog.title', { name: editTarget?.name })"
       width="82%"
       :close-on-click-modal="false"
       destroy-on-close
@@ -171,13 +170,13 @@
     >
       <div class="editor-hint">
         <el-icon><InfoFilled /></el-icon>
-        <span>编辑 Clash 兼容的 YAML 规则。当前显示的是系统默认规则，修改后保存即变为您的自定义规则。</span>
+        <span>{{ t('clashRules.editContentDialog.editorHint') }}</span>
       </div>
-      <div v-loading="loadingDefaultRule" element-loading-text="正在加载默认规则..." class="editor-wrap">
+      <div v-loading="loadingDefaultRule" :element-loading-text="t('clashRules.editContentDialog.loadingText')" class="editor-wrap">
         <el-input
           v-model="editContent"
           type="textarea"
-          placeholder="正在加载默认规则内容..."
+          :placeholder="t('clashRules.editContentDialog.placeholder')"
           class="yaml-editor"
           spellcheck="false"
           :disabled="loadingDefaultRule"
@@ -192,11 +191,11 @@
             :loading="resetting"
             @click="doReset"
           >
-            <el-icon><RefreshLeft /></el-icon>恢复系统默认
+            <el-icon><RefreshLeft /></el-icon>{{ t('clashRules.editContentDialog.restoreDefault') }}
           </el-button>
           <span style="flex:1" />
-          <el-button @click="showEditContent = false">取消</el-button>
-          <el-button type="primary" :loading="savingContent" @click="doSaveContent">保存</el-button>
+          <el-button @click="showEditContent = false">{{ t('clashRules.editContentDialog.cancel') }}</el-button>
+          <el-button type="primary" :loading="savingContent" @click="doSaveContent">{{ t('clashRules.editContentDialog.save') }}</el-button>
         </div>
       </template>
     </el-dialog>
@@ -204,21 +203,21 @@
     <!-- ── 令牌重新生成确认 ── -->
     <el-dialog
       v-model="showNewToken"
-      title="令牌已重新生成"
+      :title="t('clashRules.tokenDialog.title')"
       width="520px"
       :close-on-click-modal="false"
     >
       <el-alert type="warning" :closable="false" show-icon style="margin-bottom:16px;border-radius:6px">
-        <template #title>旧订阅链接已失效！请在 Clash 中更新为以下新链接。</template>
+        <template #title>{{ t('clashRules.tokenDialog.warning') }}</template>
       </el-alert>
       <div class="new-token-box">
         <code class="new-url">{{ newTokenUrl }}</code>
         <el-button type="primary" plain size="small" @click="copyUrl(newTokenUrl)">
-          <el-icon><CopyDocument /></el-icon>复制
+          <el-icon><CopyDocument /></el-icon>{{ t('clashRules.tokenDialog.copy') }}
         </el-button>
       </div>
       <template #footer>
-        <el-button type="primary" @click="showNewToken = false">已更新，关闭</el-button>
+        <el-button type="primary" @click="showNewToken = false">{{ t('clashRules.tokenDialog.close') }}</el-button>
       </template>
     </el-dialog>
   </div>
@@ -226,6 +225,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
 import {
@@ -237,6 +237,8 @@ import {
   resetClashRuleContent, regenerateClashToken, getDefaultClashRule
 } from '@/api/clash'
 import type { ClashRule } from '@/api/clash'
+
+const { t } = useI18n()
 
 // ── 编辑器高度：视口高度 - 标题栏(54px) - 提示行(36px) - 底部按钮(72px) - 对话框头尾内边距(48px) - 安全边距(32px)
 const dialogBodyHeight = computed(() => `${Math.max(300, window.innerHeight * 0.9 - 242)}px`)
@@ -251,7 +253,7 @@ async function load() {
   try {
     rules.value = await listClashRules()
   } catch (e: any) {
-    ElMessage.error(e.message || '获取规则列表失败')
+    ElMessage.error(e.message || t('clashRules.message.loadFailed'))
   } finally {
     loading.value = false
   }
@@ -273,9 +275,9 @@ function formatTime(iso: string) {
 async function copyUrl(url: string) {
   try {
     await navigator.clipboard.writeText(url)
-    ElMessage.success('链接已复制')
+    ElMessage.success(t('clashRules.message.copySuccess'))
   } catch {
-    ElMessage.warning('复制失败，请手动复制')
+    ElMessage.warning(t('clashRules.message.copyFailed'))
   }
 }
 
@@ -297,7 +299,7 @@ const showCreate = ref(false)
 const createFormRef = ref<FormInstance>()
 const createForm = reactive({ name: '', useDefault: true })
 const createRules: FormRules = {
-  name: [{ required: true, message: '请输入规则名称', trigger: 'blur' }]
+  name: [{ required: true, message: t('clashRules.validation.nameRequired'), trigger: 'blur' }]
 }
 const creating = ref(false)
 
@@ -314,7 +316,7 @@ async function doCreate() {
     creating.value = true
     await createClashRule({ name: createForm.name, rule_content: '' })
     showCreate.value = false
-    ElMessage.success('规则已创建')
+    ElMessage.success(t('clashRules.message.created'))
     load()
   } catch (e: any) {
     if (e?.message) ElMessage.error(e.message)
@@ -329,7 +331,7 @@ const showRename = ref(false)
 const renameFormRef = ref<FormInstance>()
 const renameForm = reactive({ name: '' })
 const renameRules: FormRules = {
-  name: [{ required: true, message: '请输入规则名称', trigger: 'blur' }]
+  name: [{ required: true, message: t('clashRules.validation.nameRequired'), trigger: 'blur' }]
 }
 const renaming = ref(false)
 let renameTarget: ClashRule | null = null
@@ -347,7 +349,7 @@ async function doRename() {
     renaming.value = true
     await updateClashRule(renameTarget.id, { name: renameForm.name })
     showRename.value = false
-    ElMessage.success('已重命名')
+    ElMessage.success(t('clashRules.message.renamed'))
     load()
   } catch (e: any) {
     if (e?.message) ElMessage.error(e.message)
@@ -379,7 +381,7 @@ async function openEditContent(rule: ClashRule) {
       const res = await getDefaultClashRule()
       editContent.value = res.content
     } catch (e: any) {
-      ElMessage.warning('默认规则加载失败，请手动粘贴内容')
+      ElMessage.warning(t('clashRules.message.defaultLoadFailed'))
     } finally {
       loadingDefaultRule.value = false
     }
@@ -392,10 +394,10 @@ async function doSaveContent() {
   try {
     await updateClashRule(editTarget.value.id, { rule_content: editContent.value })
     showEditContent.value = false
-    ElMessage.success('规则内容已保存')
+    ElMessage.success(t('clashRules.message.contentSaved'))
     load()
   } catch (e: any) {
-    ElMessage.error(e.message || '保存失败')
+    ElMessage.error(e.message || t('clashRules.message.saveFailed'))
   } finally {
     savingContent.value = false
   }
@@ -408,9 +410,9 @@ const resetting = ref(false)
 async function confirmReset(rule: ClashRule) {
   try {
     await ElMessageBox.confirm(
-      `确定将「${rule.name}」的规则内容恢复为系统默认 rule.yaml？自定义内容将被清除。`,
-      '恢复确认',
-      { confirmButtonText: '恢复', cancelButtonText: '取消', type: 'warning' }
+      t('clashRules.confirm.reset', { name: rule.name }),
+      t('clashRules.confirm.resetTitle'),
+      { confirmButtonText: t('clashRules.confirm.resetButton'), cancelButtonText: t('clashRules.confirm.cancel'), type: 'warning' }
     )
     await doResetById(rule.id)
   } catch { /* cancel */ }
@@ -420,9 +422,9 @@ async function doReset() {
   if (!editTarget.value) return
   try {
     await ElMessageBox.confirm(
-      '确定清除自定义内容，恢复为系统默认 rule.yaml？',
-      '恢复确认',
-      { confirmButtonText: '恢复', cancelButtonText: '取消', type: 'warning' }
+      t('clashRules.confirm.resetFromEditor'),
+      t('clashRules.confirm.resetTitle'),
+      { confirmButtonText: t('clashRules.confirm.resetButton'), cancelButtonText: t('clashRules.confirm.cancel'), type: 'warning' }
     )
     await doResetById(editTarget.value.id)
     showEditContent.value = false
@@ -433,10 +435,10 @@ async function doResetById(id: number) {
   resetting.value = true
   try {
     await resetClashRuleContent(id)
-    ElMessage.success('已恢复系统默认')
+    ElMessage.success(t('clashRules.message.defaultRestored'))
     load()
   } catch (e: any) {
-    ElMessage.error(e.message || '操作失败')
+    ElMessage.error(e.message || t('clashRules.message.operationFailed'))
   } finally {
     resetting.value = false
   }
@@ -450,9 +452,9 @@ const newTokenUrl = ref('')
 async function confirmRegenToken(rule: ClashRule) {
   try {
     await ElMessageBox.confirm(
-      `重新生成令牌后，「${rule.name}」的旧订阅链接将立即失效，需要在 Clash 中更新链接。确定继续？`,
-      '重新生成令牌',
-      { confirmButtonText: '生成', cancelButtonText: '取消', type: 'warning' }
+      t('clashRules.confirm.regenToken', { name: rule.name }),
+      t('clashRules.confirm.regenTokenTitle'),
+      { confirmButtonText: t('clashRules.confirm.regenTokenButton'), cancelButtonText: t('clashRules.confirm.cancel'), type: 'warning' }
     )
     const res = await regenerateClashToken(rule.id)
     newTokenUrl.value = res.subscribe_url
@@ -468,12 +470,12 @@ async function confirmRegenToken(rule: ClashRule) {
 async function confirmDelete(rule: ClashRule) {
   try {
     await ElMessageBox.confirm(
-      `确定删除规则「${rule.name}」？对应的订阅链接将同时失效。`,
-      '删除确认',
-      { confirmButtonText: '删除', cancelButtonText: '取消', type: 'danger' }
+      t('clashRules.confirm.delete', { name: rule.name }),
+      t('clashRules.confirm.deleteTitle'),
+      { confirmButtonText: t('clashRules.confirm.deleteButton'), cancelButtonText: t('clashRules.confirm.cancel'), type: 'danger' }
     )
     await deleteClashRule(rule.id)
-    ElMessage.success('规则已删除')
+    ElMessage.success(t('clashRules.message.deleted'))
     load()
   } catch (e: any) {
     if (e !== 'cancel' && e?.message) ElMessage.error(e.message)

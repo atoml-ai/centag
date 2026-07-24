@@ -15,12 +15,12 @@
     </div>
     
     <div class="node-content">
-      <div class="node-name">{{ (node?.data?.name || node?.name || node?.id || '未命名节点') }}</div>
+      <div class="node-name">{{ (node?.data?.name || node?.name || node?.id || t('pipelineNode.unnamedNode')) }}</div>
       <div class="node-model" v-if="node?.data?.model || node?.model">
-        {{ (node?.data?.backend || node?.backend || '未配置') }} • {{ (node?.data?.model || node?.model) }}
+        {{ (node?.data?.backend || node?.backend || t('pipelineNode.notConfigured')) }} • {{ (node?.data?.model || node?.model) }}
       </div>
       <div class="node-condition" v-if="node?.data?.condition || node?.condition">
-        <small>条件: {{ (node?.data?.condition || node?.condition) }}</small>
+        <small>{{ t('pipelineNode.condition', { condition: node?.data?.condition || node?.condition }) }}</small>
       </div>
     </div>
 
@@ -40,8 +40,11 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { Handle, Position, useNode } from '@vue-flow/core'
 import { ElMessageBox } from 'element-plus'
+
+const { t } = useI18n()
 
 const { node } = useNode()
 
@@ -55,22 +58,22 @@ const nodeTypeClass = computed(() => {
 const nodeTypeLabel = computed(() => {
   const type = node.value?.data?.type || node.value?.type || 'generator'
   const map: Record<string, string> = {
-    generator: '生成',
-    processor: '处理',
-    reviewer: '审核',
-    router: '路由',
-    aggregator: '聚合',
-    parallel: '并行',
-    cache: '缓存',
-    token_usage: '计量',
-    transparent_forward: '转发',
-    tool_call_injector: '注入'
+    generator: t('pipelineNode.typeGenerator'),
+    processor: t('pipelineNode.typeProcessor'),
+    reviewer: t('pipelineNode.typeReviewer'),
+    router: t('pipelineNode.typeRouter'),
+    aggregator: t('pipelineNode.typeAggregator'),
+    parallel: t('pipelineNode.typeParallel'),
+    cache: t('pipelineNode.typeCache'),
+    token_usage: t('pipelineNode.typeTokenUsage'),
+    transparent_forward: t('pipelineNode.typeTransparentForward'),
+    tool_call_injector: t('pipelineNode.typeToolCallInjector')
   }
   return map[type] || type
 })
 
 const deleteNode = () => {
-  ElMessageBox.confirm('确定删除此节点吗？', '提示', {
+  ElMessageBox.confirm(t('pipelineNode.deleteConfirmMessage'), t('pipelineNode.deleteConfirmTitle'), {
     type: 'warning'
   }).then(() => {
     emit('delete', node.value?.id)

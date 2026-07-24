@@ -1,9 +1,9 @@
 <template>
   <div class="chat">
     <div class="header">
-      <h1 class="page-title">接入演示</h1>
+      <h1 class="page-title">{{ t('chat.pageTitle') }}</h1>
       <p class="page-description">
-        调试与演示 Centag 的三种接入方式，帮助你在 Cursor、CLI 等 Agent 工具中正确配置 Base URL 与 API Key。
+        {{ t('chat.pageDescription') }}
       </p>
     </div>
 
@@ -12,22 +12,22 @@
       <div class="params-panel">
         <!-- 接入方式 -->
         <div class="access-section access-section-primary">
-          <div class="params-panel-title">推荐接入</div>
-          <p class="access-section-hint">无需改造客户端，兼容 OpenAI / Anthropic 标准协议</p>
+          <div class="params-panel-title">{{ t('chat.sectionRecommended') }}</div>
+          <p class="access-section-hint">{{ t('chat.recommendedHint') }}</p>
           <el-radio-group v-model="accessMode" class="source-radio-group">
-            <el-tooltip content="使用系统默认流水线，客户端只需配置 Base URL 和 API Key" placement="right">
+            <el-tooltip :content="t('chat.tooltipDefault')" placement="right">
               <el-radio value="default">
                 <span class="radio-label">
                   <span class="radio-icon">🔗</span>
-                  <span>默认方式</span>
+                  <span>{{ t('chat.modeDefault') }}</span>
                 </span>
               </el-radio>
             </el-tooltip>
-            <el-tooltip content="在消息开头添加关键码选择流水线，灵活且无需改代码" placement="right">
+            <el-tooltip :content="t('chat.tooltipKeyword')" placement="right">
               <el-radio value="keyword">
                 <span class="radio-label">
                   <span class="radio-icon">✏️</span>
-                  <span>关键码方式</span>
+                  <span>{{ t('chat.modeKeyword') }}</span>
                 </span>
               </el-radio>
             </el-tooltip>
@@ -36,24 +36,24 @@
 
         <div class="access-section access-section-advanced">
           <div class="params-panel-title">
-            高级接入
-            <el-tag size="small" type="warning" effect="plain" class="access-badge">需改造客户端</el-tag>
+            {{ t('chat.sectionAdvanced') }}
+            <el-tag size="small" type="warning" effect="plain" class="access-badge">{{ t('chat.badgeAdvanced') }}</el-tag>
           </div>
-          <p class="access-section-hint">模型名方式改配置即可；请求头方式需改代码</p>
+          <p class="access-section-hint">{{ t('chat.advancedHint') }}</p>
           <el-radio-group v-model="accessMode" class="source-radio-group">
-            <el-tooltip content="在 model 字段使用 pipeline.&lt;id&gt; 指定流水线" placement="right">
+            <el-tooltip :content="t('chat.tooltipModel')" placement="right">
               <el-radio value="model">
                 <span class="radio-label">
                   <span class="radio-icon">🏷️</span>
-                  <span>模型名方式</span>
+                  <span>{{ t('chat.modeModel') }}</span>
                 </span>
               </el-radio>
             </el-tooltip>
-            <el-tooltip content="通过 X-Proxy-Mode 等请求头指定，需客户端支持自定义头" placement="right">
+            <el-tooltip :content="t('chat.tooltipHeader')" placement="right">
               <el-radio value="header">
                 <span class="radio-label">
                   <span class="radio-icon">📋</span>
-                  <span>请求头方式</span>
+                  <span>{{ t('chat.modeHeader') }}</span>
                 </span>
               </el-radio>
             </el-tooltip>
@@ -64,27 +64,27 @@
         <div v-if="accessMode === 'default'" class="mode-explanation">
           <div class="explanation-title">
             <el-icon><InfoFilled /></el-icon>
-            默认方式
+            {{ t('chat.modeDefault') }}
           </div>
           <p class="explanation-text">
-            不修改请求协议，走标准 <code>/v1/chat/completions</code>。未指定流水线时自动使用系统默认流水线。
+            {{ t('chat.defaultExplain') }}
           </p>
           <div class="default-pipeline-card" v-loading="pipelinesLoading">
             <div class="default-pipeline-row">
-              <span class="default-pipeline-label">当前默认</span>
-              <span class="default-pipeline-name">{{ defaultPipeline?.name || defaultPipelineId || '未设置' }}</span>
+              <span class="default-pipeline-label">{{ t('chat.currentDefault') }}</span>
+              <span class="default-pipeline-name">{{ defaultPipeline?.name || defaultPipelineId || t('chat.unset') }}</span>
             </div>
             <div v-if="defaultPipelineId" class="default-pipeline-id mono">{{ defaultPipelineId }}</div>
             <div class="default-pipeline-actions">
-              <el-link type="primary" size="small" @click="$router.push('/pipelines')">管理策略</el-link>
-              <el-link type="primary" size="small" @click="$router.push('/dashboard')">修改默认</el-link>
+              <el-link type="primary" size="small" @click="$router.push('/pipelines')">{{ t('chat.managePipeline') }}</el-link>
+              <el-link type="primary" size="small" @click="$router.push('/dashboard')">{{ t('chat.changeDefault') }}</el-link>
             </div>
           </div>
           <div class="example-block">
-            <div class="example-label">客户端配置示例：</div>
+            <div class="example-label">{{ t('chat.clientExample') }}</div>
             <pre class="example-code">Base URL: https://your-proxy/v1
 API Key: &lt;your-key&gt;
-Model: auto  （或留空，由服务端解析）</pre>
+{{ t('chat.clientExampleModel') }}</pre>
           </div>
         </div>
 
@@ -92,10 +92,10 @@ Model: auto  （或留空，由服务端解析）</pre>
         <div v-if="accessMode === 'keyword'" class="mode-explanation">
           <div class="explanation-title">
             <el-icon><InfoFilled /></el-icon>
-            关键码方式
+            {{ t('chat.modeKeyword') }}
           </div>
           <p class="explanation-text">
-            在 user 消息内容开头添加关键码（内置 <code>#d</code> 或流水线自定义快捷码），服务端自动路由到对应流水线。
+            {{ t('chat.keywordExplain') }}
           </p>
         </div>
 
@@ -103,11 +103,10 @@ Model: auto  （或留空，由服务端解析）</pre>
         <div v-if="accessMode === 'model'" class="mode-explanation">
           <div class="explanation-title">
             <el-icon><InfoFilled /></el-icon>
-            模型名方式
+            {{ t('chat.modeModel') }}
           </div>
           <p class="explanation-text">
-            请求头保持 OpenAI 标准（<code>Authorization</code> 等），在请求体 <code>model</code> 字段填写
-            <code>pipeline.&lt;流水线ID&gt;</code> 即可；后端与模型由流水线节点配置。
+            {{ t('chat.modelExplain') }}
           </p>
         </div>
 
@@ -115,23 +114,22 @@ Model: auto  （或留空，由服务端解析）</pre>
         <div v-if="accessMode === 'header'" class="mode-explanation">
           <div class="explanation-title">
             <el-icon><InfoFilled /></el-icon>
-            请求头方式
+            {{ t('chat.modeHeader') }}
           </div>
           <p class="explanation-text">
-            通过 <code>X-Pipeline-ID</code> 请求头指定流水线策略，请求体 <code>model</code> 使用 <code>auto</code>。
-            需客户端支持自定义 HTTP 头。
+            {{ t('chat.headerExplain') }}
           </p>
         </div>
 
         <!-- 模型名 / 请求头：选择流水线 -->
         <template v-if="accessMode === 'model' || accessMode === 'header'">
           <div class="params-divider"></div>
-          <div class="params-panel-title">选择流水线</div>
+          <div class="params-panel-title">{{ t('chat.selectPipeline') }}</div>
           <el-form label-position="top" size="small" class="panel-form">
             <el-form-item>
               <el-select
                 v-model="selectedPipelineId"
-                placeholder="选择流水线策略"
+                :placeholder="t('chat.selectPipelinePlaceholder')"
                 style="width: 100%"
                 :loading="pipelinesLoading"
               >
@@ -146,18 +144,18 @@ Model: auto  （或留空，由服务端解析）</pre>
                 </el-option>
               </el-select>
               <div class="form-tip">
-                后端与模型由流水线节点配置，无需在此指定。
-                <el-link type="primary" size="small" style="margin-left: 6px" @click="$router.push('/pipelines')">编辑策略</el-link>
+                {{ t('chat.pipelineFormHint') }}
+                <el-link type="primary" size="small" style="margin-left: 6px" @click="$router.push('/pipelines')">{{ t('chat.editPipeline') }}</el-link>
               </div>
             </el-form-item>
             <div v-if="accessMode === 'model'" class="example-block">
-              <div class="example-label">将发送的 model 字段：</div>
+              <div class="example-label">{{ t('chat.modelFieldLabel') }}</div>
               <pre class="example-code">{{ modelFieldPreview }}</pre>
             </div>
             <div v-if="accessMode === 'header'" class="example-block">
-              <div class="example-label">将发送的私有请求头：</div>
-              <pre class="example-code">X-Pipeline-ID: {{ selectedPipelineId || '&lt;流水线ID&gt;' }}</pre>
-              <div class="example-label" style="margin-top: 8px">请求体 model：</div>
+              <div class="example-label">{{ t('chat.headerFieldLabel') }}</div>
+              <pre class="example-code">X-Pipeline-ID: {{ selectedPipelineId || t('chat.pipelineIdPlaceholder') }}</pre>
+              <div class="example-label" style="margin-top: 8px">{{ t('chat.bodyModelLabel') }}</div>
               <pre class="example-code">auto</pre>
             </div>
           </el-form>
@@ -165,7 +163,7 @@ Model: auto  （或留空，由服务端解析）</pre>
 
         <!-- 关键码快捷按钮 -->
         <div v-if="accessMode === 'keyword'" class="params-divider"></div>
-        <div v-if="accessMode === 'keyword'" class="params-panel-title">内置关键码</div>
+        <div v-if="accessMode === 'keyword'" class="params-panel-title">{{ t('chat.builtinKeywords') }}</div>
         <div v-if="accessMode === 'keyword'" class="keyword-buttons">
           <el-tooltip
             v-for="item in builtinShortcuts"
@@ -181,7 +179,7 @@ Model: auto  （或留空，由服务端解析）</pre>
           </el-tooltip>
         </div>
         <div v-if="accessMode === 'keyword' && pipelineShortcuts.length > 0" class="params-panel-title" style="margin-top: 8px">
-          流水线快捷码
+          {{ t('chat.pipelineShortcuts') }}
         </div>
         <div v-if="accessMode === 'keyword' && pipelineShortcuts.length > 0" class="keyword-buttons">
           <el-tooltip
@@ -198,22 +196,22 @@ Model: auto  （或留空，由服务端解析）</pre>
           </el-tooltip>
         </div>
         <p v-if="accessMode === 'keyword'" class="params-panel-hint">
-          点击关键码插入到输入框开头。关键码会原样发送，由服务端解析并路由到对应流水线。
+          {{ t('chat.keywordHint') }}
         </p>
 
         <div class="params-divider"></div>
 
         <!-- 模型生成参数 -->
-        <div class="params-panel-title">模型生成参数</div>
+        <div class="params-panel-title">{{ t('chat.generationParams') }}</div>
         <el-form :model="settings" label-position="top" size="small" class="panel-form">
           <el-form-item>
             <template #label>
               <span class="label-with-tip">
-                生成温度
+                {{ t('chat.temperature') }}
                 <el-tooltip placement="top" :show-after="400" max-width="300">
                   <template #content>
                     <div>
-                      控制模型输出的随机性（约 0～2，越低越稳定）。仅作用于本次对话请求。
+                      {{ t('chat.temperatureTip') }}
                     </div>
                   </template>
                   <el-icon class="label-help-icon" :size="14"><QuestionFilled /></el-icon>
@@ -223,7 +221,7 @@ Model: auto  （或留空，由服务端解析）</pre>
             <el-slider v-model="settings.temperature" :min="0" :max="2" :step="0.1" />
             <span class="param-value">{{ settings.temperature }}</span>
           </el-form-item>
-          <el-form-item label="最大 Token">
+          <el-form-item :label="t('chat.maxToken')">
             <el-input-number
               v-model="settings.max_tokens"
               :min="1"
@@ -233,8 +231,8 @@ Model: auto  （或留空，由服务端解析）</pre>
               controls-position="right"
             />
           </el-form-item>
-          <el-form-item label="流式输出">
-            <el-switch v-model="settings.stream" active-text="开" inactive-text="关" />
+          <el-form-item :label="t('chat.streamOutput')">
+            <el-switch v-model="settings.stream" :active-text="t('chat.on')" :inactive-text="t('chat.off')" />
           </el-form-item>
         </el-form>
       </div>
@@ -247,10 +245,10 @@ Model: auto  （或留空，由服务端解析）</pre>
           <div v-if="accessMode === 'header' || accessMode === 'model'" class="http-preview">
             <div class="http-preview-title">
               <el-icon><Document /></el-icon>
-              {{ accessMode === 'model' ? '模型名方式请求示例（标准请求头）' : '请求头方式 HTTP 请求预览' }}
+              {{ accessMode === 'model' ? t('chat.httpModelExample') : t('chat.httpHeaderPreview') }}
             </div>
             <p v-if="accessMode === 'model'" class="http-preview-hint">
-              客户端无需添加 Centag 私有头；在请求体 <code>model</code> 字段填写 <code>pipeline.&lt;流水线ID&gt;</code> 即可，服务端中间件解析后内部路由。
+              {{ t('chat.httpPreviewHint') }}
             </p>
             <div class="http-preview-content">
               <div class="http-line method-line">
@@ -272,59 +270,59 @@ Model: auto  （或留空，由服务端解析）</pre>
           <div v-if="accessMode === 'keyword'" class="keyword-guide">
             <div class="keyword-guide-title">
               <el-icon><MagicStick /></el-icon>
-              关键字使用指南
+              {{ t('chat.keywordGuide') }}
             </div>
             <div class="keyword-guide-content">
-              <p>在消息开头添加关键字来指定代理模式，格式：<code>关键字 + 空格 + 消息内容</code></p>
+              <p>{{ t('chat.keywordGuideDesc') }}</p>
               <div class="keyword-table">
                 <div class="keyword-row header-row">
-                  <span>关键字</span>
-                  <span>代理模式</span>
-                  <span>说明</span>
+                  <span>{{ t('chat.keyword') }}</span>
+                  <span>{{ t('chat.proxyMode') }}</span>
+                  <span>{{ t('chat.description') }}</span>
                 </div>
                 <div class="keyword-row">
                   <code>#d</code>
                   <span>direct</span>
-                  <span>指定后端</span>
+                  <span>{{ t('chat.directDesc') }}</span>
                 </div>
                 <div class="keyword-row">
                   <code>#s</code>
                   <span>smart</span>
-                  <span>智能调度</span>
+                  <span>{{ t('chat.smartDesc') }}</span>
                 </div>
                 <div class="keyword-row">
                   <code>#m</code>
                   <span>model-match</span>
-                  <span>模型匹配</span>
+                  <span>{{ t('chat.modelMatchDesc') }}</span>
                 </div>
                 <div class="keyword-row">
                   <code>#c</code>
                   <span>classify</span>
-                  <span>意图分类</span>
+                  <span>{{ t('chat.classifyDesc') }}</span>
                 </div>
                 <div class="keyword-row">
                   <code>#t</code>
                   <span>transparent</span>
-                  <span>透明代理</span>
+                  <span>{{ t('chat.transparentDesc') }}</span>
                 </div>
                 <div class="keyword-row">
                   <code>#a</code>
                   <span>audit</span>
-                  <span>审核模式</span>
+                  <span>{{ t('chat.auditDesc') }}</span>
                 </div>
                 <div class="keyword-row">
                   <code>#f</code>
                   <span>fallback</span>
-                  <span>降级容错</span>
+                  <span>{{ t('chat.fallbackDesc') }}</span>
                 </div>
               </div>
               <div class="keyword-example">
-                <div class="example-label">发送示例：</div>
+                <div class="example-label">{{ t('chat.sendExample') }}</div>
                 <pre class="example-code">#c 你使用PPIO的deepseek模型回答</pre>
                 <div class="example-arrow">↓</div>
-                <div class="example-label">实际发送（关键字原封不动，后端自动解析）：</div>
+                <div class="example-label">{{ t('chat.actualSend') }}</div>
                 <pre class="example-code">#c 你使用PPIO的deepseek模型回答</pre>
-                <div class="example-hint">（后端会识别 #c 并切换到意图分类模式）</div>
+                <div class="example-hint">{{ t('chat.exampleHint') }}</div>
               </div>
             </div>
           </div>
@@ -340,13 +338,13 @@ Model: auto  （或留空，由服务端解析）</pre>
             </div>
             <div class="message-content">
               <div class="message-role">
-                {{ message.role === 'user' ? '你' : 'AI助手' }}
+                {{ message.role === 'user' ? t('chat.userLabel') : t('chat.assistantLabel') }}
               </div>
               <div class="message-text" v-html="formatMessage(message.content)"></div>
               <!-- 显示该消息使用的代理模式（关键字方式时） -->
               <div v-if="message.role === 'user' && message.proxyMode" class="message-mode-tag">
                 <el-tag :type="getModeTagType(message.proxyMode)" size="small">
-                  关键字模式: {{ message.proxyMode }}
+                  {{ t('chat.keywordModeLabel', { mode: message.proxyMode }) }}
                 </el-tag>
               </div>
               <span v-if="message.streaming" class="streaming-cursor">▋</span>
@@ -355,7 +353,7 @@ Model: auto  （或留空，由服务端解析）</pre>
                 <el-icon class="meta-icon"><InfoFilled /></el-icon>
                 <!-- 代理模式 -->
                 <span class="meta-item">
-                  <span class="meta-label">模式</span>
+                  <span class="meta-label">{{ t('chat.metaMode') }}</span>
                   <el-tag :type="getModeTagType(message.meta.proxyMode)" size="small" effect="plain">
                     {{ modeNames[message.meta.proxyMode] || message.meta.proxyMode || '—' }}
                   </el-tag>
@@ -363,26 +361,26 @@ Model: auto  （或留空，由服务端解析）</pre>
                 <span class="meta-sep">·</span>
                 <!-- 服务 -->
                 <span class="meta-item">
-                  <span class="meta-label">服务</span>
+                  <span class="meta-label">{{ t('chat.metaService') }}</span>
                   <span class="meta-value">{{ resolveDisplayBackend(message.meta) }}</span>
                 </span>
                 <span class="meta-sep">·</span>
                 <!-- 模型（流水线节点实际使用） -->
                 <span class="meta-item">
-                  <span class="meta-label">模型</span>
+                  <span class="meta-label">{{ t('chat.metaModel') }}</span>
                   <span class="meta-value">{{ resolveDisplayModel(message.meta) }}</span>
                 </span>
                 <!-- 审核模式额外信息 -->
                 <template v-if="message.meta.proxyMode === '#a'">
                   <span class="meta-sep">·</span>
                   <span class="meta-item">
-                    <span class="meta-label">执行</span>
+                    <span class="meta-label">{{ t('chat.metaExecute') }}</span>
                     <span class="meta-value">{{ resolveDisplayModel(message.meta) }}</span>
                   </span>
                   <template v-if="message.meta.auditorBackend">
                     <span class="meta-sep">·</span>
                     <span class="meta-item">
-                      <span class="meta-label">审核</span>
+                      <span class="meta-label">{{ t('chat.metaAudit') }}</span>
                       <span class="meta-value">{{ message.meta.auditorBackend }}</span>
                     </span>
                     <template v-if="message.meta.auditorModel">
@@ -399,13 +397,13 @@ Model: auto  （或留空，由服务端解析）</pre>
                         size="small"
                         effect="plain"
                       >
-                        {{ message.meta.auditPassed === 'true' || message.meta.auditPassed === true ? '通过' : '未通过' }}
+                        {{ message.meta.auditPassed === 'true' || message.meta.auditPassed === true ? t('chat.auditPassed') : t('chat.auditFailed') }}
                       </el-tag>
                     </span>
                     <template v-if="message.meta.auditScore">
                       <span class="meta-sep">·</span>
                       <span class="meta-item">
-                        <span class="meta-label">评分</span>
+                        <span class="meta-label">{{ t('chat.metaScore') }}</span>
                         <span class="meta-value">{{ parseFloat(message.meta.auditScore).toFixed(2) }}</span>
                       </span>
                     </template>
@@ -413,7 +411,7 @@ Model: auto  （或留空，由服务端解析）</pre>
                       <el-tooltip :content="message.meta.auditFeedback" placement="top" effect="light">
                         <span class="meta-sep">·</span>
                         <span class="meta-item">
-                          <span class="meta-label">反馈</span>
+                          <span class="meta-label">{{ t('chat.metaFeedback') }}</span>
                           <span class="meta-value audit-feedback">{{ message.meta.auditFeedback.substring(0, 30) }}{{ message.meta.auditFeedback.length > 30 ? '...' : '' }}</span>
                         </span>
                       </el-tooltip>
@@ -424,7 +422,7 @@ Model: auto  （或留空，由服务端解析）</pre>
                 <template v-if="message.meta.proxyMode === '#m' && message.meta.analyzerBackend">
                   <span class="meta-sep">·</span>
                   <span class="meta-item">
-                    <span class="meta-label">分析</span>
+                    <span class="meta-label">{{ t('chat.metaAnalyze') }}</span>
                     <span class="meta-value">{{ message.meta.analyzerBackend }}</span>
                     <template v-if="message.meta.analyzerModel">
                       <span class="meta-sep">/</span>
@@ -434,7 +432,7 @@ Model: auto  （或留空，由服务端解析）</pre>
                   <template v-if="message.meta.matchStrategy">
                     <span class="meta-sep">·</span>
                     <span class="meta-item">
-                      <span class="meta-label">策略</span>
+                      <span class="meta-label">{{ t('chat.metaStrategy') }}</span>
                       <el-tag size="small" effect="plain">{{ message.meta.matchStrategy }}</el-tag>
                     </span>
                   </template>
@@ -444,13 +442,13 @@ Model: auto  （或留空，由服务端解析）</pre>
                 <template v-if="message.meta.proxyMode === '#o'">
                   <span class="meta-sep">·</span>
                   <span class="meta-item">
-                    <span class="meta-label">执行</span>
+                    <span class="meta-label">{{ t('chat.metaExecute') }}</span>
                     <span class="meta-value">{{ resolveDisplayModel(message.meta) }}</span>
                   </span>
                   <template v-if="message.meta.optimizerBackend">
                     <span class="meta-sep">·</span>
                     <span class="meta-item">
-                      <span class="meta-label">优化</span>
+                      <span class="meta-label">{{ t('chat.metaOptimize') }}</span>
                       <span class="meta-value">{{ message.meta.optimizerBackend }}</span>
                       <template v-if="message.meta.optimizerModel">
                         <span class="meta-sep">/</span>
@@ -466,7 +464,7 @@ Model: auto  （或留空，由服务端解析）</pre>
                         size="small"
                         effect="plain"
                       >
-                        {{ message.meta.optimizeApplied === 'true' ? '优化成功' : '优化失败' }}
+                        {{ message.meta.optimizeApplied === 'true' ? t('chat.optimizeSuccess') : t('chat.optimizeFailed') }}
                       </el-tag>
                     </span>
                   </template>
@@ -475,13 +473,13 @@ Model: auto  （或留空，由服务端解析）</pre>
                 <template v-if="message.meta.pipelineId">
                   <span class="meta-sep">·</span>
                   <span class="meta-item">
-                    <span class="meta-label">流水线</span>
+                    <span class="meta-label">{{ t('chat.metaPipeline') }}</span>
                     <span class="meta-value mono">{{ message.meta.pipelineId }}</span>
                   </span>
                   <template v-if="message.meta.pipelineDuration">
                     <span class="meta-sep">·</span>
                     <span class="meta-item">
-                      <span class="meta-label">耗时</span>
+                      <span class="meta-label">{{ t('chat.metaDuration') }}</span>
                       <span class="meta-value">{{ message.meta.pipelineDuration }}ms</span>
                     </span>
                   </template>
@@ -506,7 +504,7 @@ Model: auto  （或留空，由服务端解析）</pre>
                   @click="rawDataExpanded[index] = !rawDataExpanded[index]"
                 >
                   <span class="debug-toggle-icon">{{ rawDataExpanded[index] ? '▾' : '▸' }}</span>
-                  <span>完整响应数据</span>
+                  <span>{{ t('chat.fullResponseData') }}</span>
                   <span v-if="!rawDataExpanded[index]" class="debug-toggle-hint">
                     · passed={{ message.meta.rawData.passed }}
                     <template v-if="message.meta.rawData.score != null">
@@ -526,9 +524,9 @@ Model: auto  （或留空，由服务端解析）</pre>
               <el-icon :size="24"><ChatDotRound /></el-icon>
             </div>
             <div class="message-content">
-              <div class="message-role">AI助手</div>
+              <div class="message-role">{{ t('chat.assistantLabel') }}</div>
               <div class="message-text">
-                <span class="typing-indicator">{{ settings.stream ? '思考中...' : '正在输入...' }}</span>
+                <span class="typing-indicator">{{ settings.stream ? t('chat.thinking') : t('chat.typing') }}</span>
               </div>
             </div>
           </div>
@@ -536,7 +534,7 @@ Model: auto  （或留空，由服务端解析）</pre>
           <!-- 空状态提示 -->
           <div v-if="messages.length === 0 && !loading" class="empty-messages">
             <div class="empty-icon">💬</div>
-            <div class="empty-title">开始接入演示</div>
+            <div class="empty-title">{{ t('chat.emptyTitle') }}</div>
             <div class="empty-description">{{ emptyStateHint }}</div>
           </div>
         </div>
@@ -553,11 +551,11 @@ Model: auto  （或留空，由服务端解析）</pre>
           <div class="input-actions">
             <el-button @click="clearMessages" :disabled="loading || messages.length === 0">
               <el-icon><Delete /></el-icon>
-              清空对话
+              {{ t('chat.clearChat') }}
             </el-button>
             <el-button type="primary" @click="sendMessage" :loading="loading" :disabled="!inputMessage.trim()">
               <el-icon><Promotion /></el-icon>
-              发送
+              {{ t('chat.send') }}
             </el-button>
           </div>
         </div>
@@ -571,6 +569,7 @@ Model: auto  （或留空，由服务端解析）</pre>
 import { ref, computed, watch, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
 import { User, ChatDotRound, Delete, Promotion, InfoFilled, QuestionFilled, Document, MagicStick } from '@element-plus/icons-vue'
+import { useI18n } from 'vue-i18n'
 
 import { useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
@@ -597,6 +596,7 @@ import {
 
 const route = useRoute()
 const authStore = useAuthStore()
+const { t } = useI18n()
 
 const accessMode = ref<ChatAccessMode>('default')
 
@@ -634,26 +634,26 @@ const keywordToModeMap = computed(() => buildKeywordToModeMap(pipelineShortcuts.
 const emptyStateHint = computed(() => {
   switch (accessMode.value) {
     case 'default':
-      return '直接发送消息，将使用系统默认流水线处理（无需关键码或特殊 model）'
+      return t('chat.emptyHintDefault')
     case 'keyword':
-      return '在消息开头添加关键码（如 #d）切换流水线，或留空走默认流水线'
+      return t('chat.emptyHintKeyword')
     case 'model':
-      return `发送消息时将使用 model 字段 ${modelFieldPreview.value}，模型由流水线节点配置`
+      return t('chat.emptyHintModel', { model: modelFieldPreview.value })
     case 'header':
-      return '选择流水线后发送，将通过 X-Pipeline-ID 请求头指定策略，model 使用 auto'
+      return t('chat.emptyHintHeader')
     default:
-      return '输入消息开始演示'
+      return t('chat.emptyHint')
   }
 })
 
 const inputPlaceholder = computed(() => {
   if (accessMode.value === 'keyword') {
-    return '输入消息，可在开头加关键码（如 #d 你好）'
+    return t('chat.placeholderKeyword')
   }
   if (accessMode.value === 'model') {
-    return '输入消息，将通过 model 字段指定流水线'
+    return t('chat.placeholderModel')
   }
-  return '输入消息'
+  return t('chat.placeholderDefault')
 })
 
 watch(defaultPipelineId, (id) => {
@@ -692,7 +692,7 @@ const formattedBodyPreview = computed(() => {
   const body = {
     model: previewRequestModel.value,
     messages: [
-      { role: 'user', content: accessMode.value === 'keyword' ? '#d 消息内容...' : '消息内容...' }
+      { role: 'user', content: accessMode.value === 'keyword' ? t('chat.messageContentPreviewKeyword') : t('chat.messageContentPreview') }
     ],
     temperature: settings.value.temperature,
     max_tokens: settings.value.max_tokens,
@@ -755,18 +755,18 @@ function resolveChatRequest(rawContent: string): {
     requestModel = 'auto'
     if (result.proxyMode) {
       usedKeyword = result.proxyMode
-      ElMessage.success(`关键码已识别: ${modeNames[result.proxyMode] || result.proxyMode}`)
+      ElMessage.success(t('chat.keywordRecognized', { mode: modeNames[result.proxyMode] || result.proxyMode }))
     }
   } else if (accessMode.value === 'model') {
     if (!selectedPipelineId.value) {
-      ElMessage.warning('请先选择流水线')
+      ElMessage.warning(t('chat.selectPipelineFirst'))
       return null
     }
     requestModel = buildPipelineModelField(selectedPipelineId.value)
     effectiveProxyMode = 'pipeline'
   } else {
     if (!selectedPipelineId.value) {
-      ElMessage.warning('请先选择流水线')
+      ElMessage.warning(t('chat.selectPipelineFirst'))
       return null
     }
     headers['X-Pipeline-ID'] = selectedPipelineId.value
@@ -837,7 +837,7 @@ async function sendMessage() {
       const decoder = new TextDecoder()
       
       if (!reader) {
-        throw new Error('无法读取响应流')
+        throw new Error(t('chat.cannotReadStream'))
       }
 
       let buffer = ''
@@ -873,12 +873,12 @@ async function sendMessage() {
                   assistantMessageIndex = messages.value.length
                   messages.value.push({
                     role: 'assistant',
-                    content: `后端错误：${errMsg}`,
+                    content: t('chat.backendError', { error: errMsg }),
                     streaming: false,
                     meta: responseMeta
                   })
                 } else {
-                  messages.value[assistantMessageIndex].content += `\n\n后端错误：${errMsg}`
+                  messages.value[assistantMessageIndex].content += `\n\n${t('chat.backendError', { error: errMsg })}`
                   messages.value[assistantMessageIndex].streaming = false
                 }
                 continue
@@ -926,14 +926,14 @@ async function sendMessage() {
         assistantMessageIndex = messages.value.length
         messages.value.push({
           role: 'assistant',
-          content: '未收到模型回复，可能后端返回格式异常或未返回内容。',
+          content: t('chat.noModelReply'),
           streaming: false
         })
       } else {
         // 若已创建过消息但内容为空，显示友好提示
         if (!messages.value[assistantMessageIndex].content?.trim()) {
           messages.value[assistantMessageIndex].content =
-            '未收到模型回复内容。请检查流式响应是否被代理截断，或尝试关闭「流式输出」后重试。'
+            t('chat.noModelReplyHint')
         }
         messages.value[assistantMessageIndex].streaming = false
         if (streamCentag) {
@@ -947,7 +947,7 @@ async function sendMessage() {
       console.error('Failed to send message:', error)
       
       // 提取详细的错误信息
-      let detailedError = error.message || '未知错误'
+      let detailedError = error.message || t('chat.unknownError')
       
       // 尝试从响应体中提取错误信息
       if (error.response?.data) {
@@ -972,14 +972,14 @@ async function sendMessage() {
         detailedError = typeof error.error === 'string' ? error.error : JSON.stringify(error.error)
       }
       
-      ElMessage.error('发送失败：' + detailedError)
+      ElMessage.error(t('chat.sendFailed', { error: detailedError }))
       if (assistantMessageIndex >= 0 && messages.value[assistantMessageIndex]) {
-        messages.value[assistantMessageIndex].content = `**请求失败**\n\n${detailedError}`
+        messages.value[assistantMessageIndex].content = `**${t('chat.requestFailed')}**\n\n${detailedError}`
         messages.value[assistantMessageIndex].streaming = false
       } else {
         messages.value.push({
           role: 'assistant',
-          content: `**请求失败**\n\n${detailedError}`,
+          content: `**${t('chat.requestFailed')}**\n\n${detailedError}`,
           streaming: false
         })
       }
@@ -1018,7 +1018,7 @@ async function sendMessage() {
       const choice = data?.choices?.[0] as Record<string, unknown> | undefined
       const assistantMessage =
         extractStreamDeltaContent(choice) ||
-        '未收到模型回复内容，请查看日志或稍后重试。'
+        t('chat.noModelReplyHint')
       const nonStreamMeta = extractResponseMeta(response.headers)
       messages.value.push({
         role: 'assistant',
@@ -1029,7 +1029,7 @@ async function sendMessage() {
       console.error('Failed to send message:', error)
       
       // 提取详细的错误信息
-      let detailedError = error.message || '未知错误'
+      let detailedError = error.message || t('chat.unknownError')
       
       // 尝试从响应体中提取错误信息
       if (error.response?.data) {
@@ -1054,10 +1054,10 @@ async function sendMessage() {
         detailedError = typeof error.error === 'string' ? error.error : JSON.stringify(error.error)
       }
       
-      ElMessage.error('发送失败：' + detailedError)
+      ElMessage.error(t('chat.sendFailed', { error: detailedError }))
       messages.value.push({
         role: 'assistant',
-        content: `**请求失败**\n\n${detailedError}`
+        content: `**${t('chat.requestFailed')}**\n\n${detailedError}`
       })
     } finally {
       loading.value = false
@@ -1079,18 +1079,18 @@ function getCacheTagType(meta: any): string {
 function getCacheTagText(meta: any): string {
   const status = meta.cacheStatus || ''
   if (status === 'HIT-SPLIT-ALL') {
-    return meta.splitTotal > 0 ? `全部命中 ${meta.splitHits}/${meta.splitTotal}` : '全部命中'
+    return meta.splitTotal > 0 ? t('chat.cacheAllHit', { hits: meta.splitHits, total: meta.splitTotal }) : t('chat.cacheAllHitSimple')
   }
   if (status === 'HIT-SPLIT-PARTIAL') {
-    return meta.splitTotal > 0 ? `部分命中 ${meta.splitHits}/${meta.splitTotal}` : '部分命中'
+    return meta.splitTotal > 0 ? t('chat.cachePartialHit', { hits: meta.splitHits, total: meta.splitTotal }) : t('chat.cachePartialHitSimple')
   }
-  if (status.startsWith('HIT')) return '缓存命中'
-  return '实时请求'
+  if (status.startsWith('HIT')) return t('chat.cacheHit')
+  return t('chat.cacheRealtime')
 }
 
 function clearMessages() {
   messages.value = []
-  ElMessage.success('对话已清空')
+  ElMessage.success(t('chat.chatCleared'))
 }
 
 function formatMessage(content: string) {
