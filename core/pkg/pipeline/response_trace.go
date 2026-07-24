@@ -61,6 +61,11 @@ func ApplyResponseTraceBanner(out *PipelineOutput, pipelineID string) {
 		out.Content = banner + out.Content
 		return
 	}
+	// /v1/responses 客户端不能收到 chat.completion.chunk（含 centag-fallback-notice）。
+	if isResponsesAPIPath(firstMetaString(out.Metadata, "request_path")) {
+		out.Content = banner + out.Content
+		return
+	}
 	if looksLikeOpenAISSEContent(out.Content) {
 		out.Content = sseFallbackNoticePrefix(strings.TrimSpace(banner)) + out.Content
 		return

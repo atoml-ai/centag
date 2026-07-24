@@ -687,6 +687,90 @@ func TestTransparentForwardNode_InjectSystemPromptOnExecute(t *testing.T) {
 	}
 }
 
+// 直连模板 inject_system_prompt=true + OpenCode /v1/responses：
+// 必须先 Responses→Chat，再注入 system；且 responses_to_chat 必须为 true，
+// 否则会把 chat.completion.chunk（含响应追踪前缀）原样打给 Responses 客户端。
+func TestTransparentForwardNode_InjectSystemPrompt_AfterResponsesToChat(t *testing.T) {
+	inner := &mockHTTPClient{
+		status: 200,
+		body: "data: {\"choices\":[{\"delta\":{\"role\":\"assistant\",\"content\":\"deepseek\"}}]}\n\n" +
+			"data: [DONE]\n\n",
+	}
+	capturing := &capturingHTTPClient{inner: inner}
+	broker := &mockCapabilityBroker{httpClient: capturing}
+
+	prev := ResolveBackendEndpoint
+	ResolveBackendEndpoint = func(backendID string) (*BackendEndpoint, error) {
+		return &BackendEndpoint{BaseURL: "https://opencode.ai/zen/v1", APIKey: "sk-x"}, nil
+	}
+	t.Cleanup(func() { ResolveBackendEndpoint = prev })
+
+	node, err := NewTransparentForwardNode(NodeConfig{
+		Backend:      "opencode-zen",
+		SystemPrompt: "gateway persona for direct-backend",
+		CustomConfig: map[string]interface{}{
+			"route_policy":         "fixed",
+			"inject_system_prompt": true,
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	tf := node.(*TransparentForwardNode)
+	tf.BaseNode.id = "forward"
+	tf.SetCapabilityBroker(broker)
+
+	out, err := tf.Execute(context.Background(), &NodeInput{
+		Metadata: map[string]interface{}{
+			"backend_id":   "opencode-zen",
+			"request_path": "/v1/responses",
+			"raw_request_body": `{
+				"model":"gpt-5.6-luna",
+				"stream":true,
+				"input":[{"role":"user","content":"你使用的什么模型"}]
+			}`,
+		},
+	})
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if strings.Contains(capturing.body, `"input"`) {
+		t.Fatalf("upstream body still has input (convert must run before inject): %s", capturing.body)
+	}
+	if !strings.Contains(capturing.body, `"messages"`) {
+		t.Fatalf("upstream body missing messages: %s", capturing.body)
+	}
+	if !strings.Contains(capturing.body, `"gateway persona for direct-backend"`) {
+		t.Fatalf("missing injected system after responses→chat: %s", capturing.body)
+	}
+	if !strings.Contains(capturing.body, `"你使用的什么模型"`) {
+		t.Fatalf("user content lost: %s", capturing.body)
+	}
+	if out.Metadata["responses_to_chat"] != true {
+		t.Fatalf("responses_to_chat=%v, want true", out.Metadata["responses_to_chat"])
+	}
+	if out.Metadata["raw_passthrough"] != false {
+		t.Fatalf("raw_passthrough=%v, want false", out.Metadata["raw_passthrough"])
+	}
+	if out.Content != "deepseek" {
+		t.Fatalf("content=%q, want extracted text (not chat SSE)", out.Content)
+	}
+	if strings.HasPrefix(strings.TrimSpace(out.Content), "data:") {
+		t.Fatalf("must not keep chat SSE for /v1/responses: %q", out.Content)
+	}
+}
+
+func TestInjectSystemPromptIntoChatBody_SkipsResponsesShape(t *testing.T) {
+	in := []byte(`{"model":"m","input":[{"role":"user","content":"hi"}]}`)
+	out, ok := injectSystemPromptIntoChatBody(in, "gateway")
+	if ok {
+		t.Fatal("must not inject into responses-shaped body")
+	}
+	if string(out) != string(in) {
+		t.Fatalf("body mutated: %s", out)
+	}
+}
+
 func TestTransparentForwardNode_FixedEgressIgnoresPinnedBackendID(t *testing.T) {
 	prevCfg := config.Get()
 	config.Set(&config.Config{

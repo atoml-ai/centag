@@ -729,6 +729,9 @@ func shouldRawWriteTransparentStream(output *pipeline.PipelineOutput) bool {
 		if v, ok := output.Metadata["responses_to_chat"].(bool); ok && v {
 			return false
 		}
+		if rp, ok := output.Metadata["request_path"].(string); ok && strings.HasSuffix(strings.TrimRight(strings.TrimSpace(rp), "/"), "/responses") {
+			return false
+		}
 		if v, ok := output.Metadata["raw_passthrough"].(bool); ok {
 			return v
 		}
