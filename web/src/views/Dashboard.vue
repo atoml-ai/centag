@@ -522,7 +522,7 @@ const pipelineCount = ref(0)
 const securityDialogVisible = ref(false)
 const chatDialogVisible = ref(false)
 const chatPipelineId = ref('')
-const usageCollapse = ref<string[]>([])
+const usageCollapse = ref<string[]>(['usage'])
 
 async function openPipelineChat(pipelineId = '') {
   let id = (pipelineId || '').trim()

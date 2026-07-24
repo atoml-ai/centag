@@ -19,7 +19,7 @@ function withOpts(item: NavItem, opts?: LeafOpts): NavItem {
 }
 
 export function dashboardNav(labelKey: 'nav.dashboard' | 'nav.overview' = 'nav.dashboard'): NavItem {
-  return { id: 'dashboard', labelKey, icon: 'Home', path: '/dashboard' }
+  return { id: 'dashboard', labelKey, icon: 'House', path: '/dashboard' }
 }
 
 export function backendsNav(opts?: LeafOpts): NavItem {
