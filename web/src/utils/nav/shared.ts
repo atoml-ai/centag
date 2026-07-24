@@ -182,19 +182,23 @@ export function accessNavGroup(): NavItem {
   )
 }
 
-export function storageConfigNavGroup(): NavItem {
-  return navGroup(
-    'storage-config',
-    '存储配置',
-    'FolderOpened',
-    [storageNav(), dataStoresNav(), cacheNav(), evaluationNav()],
-    '/storage'
-  )
+export function storageConfigNavGroup(options?: {
+  includeDataStores?: boolean
+  includeEvaluation?: boolean
+}): NavItem {
+  const includeDataStores = options?.includeDataStores ?? true
+  const includeEvaluation = options?.includeEvaluation ?? true
+  const children: NavItem[] = [storageNav()]
+  if (includeDataStores) children.push(dataStoresNav())
+  children.push(cacheNav())
+  if (includeEvaluation) children.push(evaluationNav())
+  return navGroup('storage-config', '存储配置', 'FolderOpened', children, children[0]?.path)
 }
 
 /**
  * Personal / Team User 同源导航（由 capabilities 裁剪节点）。
  * 无独立「对话」；无侧栏后端/策略列表（主入口在首页）。
+ * 记忆与部分高级入口挂在「更多」下，由 capability 控制显隐（便于后续逐项开放）。
  */
 export function buildWorkerNav(caps: Capabilities): NavItem[] {
   const items: NavItem[] = [dashboardNav('首页')]
@@ -205,15 +209,21 @@ export function buildWorkerNav(caps: Capabilities): NavItem[] {
   if (caps.localProxy || caps.agentSetup) {
     items.push(accessNavGroup())
   }
-  if (caps.memoryQuery) {
-    items.push(memoryNav())
-  }
 
   const moreChildren: NavItem[] = []
   if (caps.storageConfig) {
-    moreChildren.push(storageConfigNavGroup())
+    moreChildren.push(
+      storageConfigNavGroup({
+        includeDataStores: caps.navDataStores,
+        includeEvaluation: caps.navEvaluation
+      })
+    )
   }
-  if (caps.localProxy) {
+  // 记忆：放在「更多」内；personal 等通过 memoryQuery=false 暂隐
+  if (caps.memoryQuery) {
+    moreChildren.push(memoryNav())
+  }
+  if (caps.navHostProxyTools) {
     moreChildren.push(hostProxyNav())
     moreChildren.push(clashRulesNav())
   }
@@ -232,7 +242,7 @@ export function buildWorkerNav(caps: Capabilities): NavItem[] {
   if (caps.systemConfig) {
     systemChildren.push(configNav())
   }
-  if (caps.manageBackends) {
+  if (caps.navFallbackPolicy) {
     systemChildren.push(fallbackPolicyNav())
   }
   if (systemChildren.length) {
@@ -272,15 +282,7 @@ export function personalAppGroup(): NavItem {
 
 /** @deprecated */
 export function personalMoreGroup(options?: { teamUser?: boolean }): NavItem {
-  const caps = {
-    myTenant: !!options?.teamUser,
-    systemConfig: !options?.teamUser,
-    storageConfig: !options?.teamUser,
-    agentSetup: true,
-    localProxy: true,
-    memoryQuery: true
-  }
-  // 兼容旧调用：拼一个近似 more
+  // 兼容旧调用：拼一个近似 more（与当前 personal / team_user 裁剪策略对齐）
   return buildWorkerNav({
     role: options?.teamUser ? 'team_user' : 'personal',
     manageBackends: true,
@@ -291,14 +293,18 @@ export function personalMoreGroup(options?: { teamUser?: boolean }): NavItem {
     navPipelinesPage: false,
     pipelineTestChat: true,
     navChatPage: false,
-    localProxy: caps.localProxy,
-    storageConfig: caps.storageConfig,
-    memoryQuery: caps.memoryQuery,
-    memoryFull: !options?.teamUser,
+    localProxy: true,
+    storageConfig: !options?.teamUser,
+    navHostProxyTools: false,
+    navDataStores: false,
+    navEvaluation: false,
+    navFallbackPolicy: !options?.teamUser,
+    memoryQuery: !!options?.teamUser,
+    memoryFull: false,
     usageBilling: true,
-    agentSetup: caps.agentSetup,
-    systemConfig: caps.systemConfig,
-    myTenant: caps.myTenant,
+    agentSetup: true,
+    systemConfig: !options?.teamUser,
+    myTenant: !!options?.teamUser,
     userAdmin: false,
     liteHome: true
   }).find((i) => i.id === 'more')!

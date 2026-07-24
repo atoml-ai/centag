@@ -48,15 +48,48 @@ function run() {
       name: 'personal worker',
       edition: 'personal',
       isAdmin: true,
-      mustHave: ['dashboard', 'usage', 'access', 'memory', 'more', 'storage-config', 'config-basic'],
-      mustNot: ['chat', 'backends', 'pipelines', 'personal-config', 'my-tenant', 'local-proxy']
+      mustHave: [
+        'dashboard',
+        'usage',
+        'access',
+        'more',
+        'storage-config',
+        'cache',
+        'storage',
+        'logs',
+        'config-basic',
+        'fallback-policies'
+      ],
+      mustNot: [
+        'chat',
+        'backends',
+        'pipelines',
+        'personal-config',
+        'my-tenant',
+        'local-proxy',
+        'memory',
+        'host-proxy',
+        'clash-rules',
+        'data-stores',
+        'evaluation'
+      ]
     },
     {
       name: 'team_user worker',
       edition: 'team',
       isAdmin: false,
-      mustHave: ['dashboard', 'usage', 'access', 'memory', 'more', 'my-tenant'],
-      mustNot: ['chat', 'backends', 'pipelines', 'storage-config', 'config-basic', 'shared-resources', 'local-proxy']
+      mustHave: ['dashboard', 'usage', 'access', 'memory', 'more', 'my-tenant', 'logs'],
+      mustNot: [
+        'chat',
+        'backends',
+        'pipelines',
+        'storage-config',
+        'config-basic',
+        'shared-resources',
+        'local-proxy',
+        'host-proxy',
+        'clash-rules'
+      ]
     },
     {
       name: 'team_admin ops',
@@ -90,6 +123,20 @@ function run() {
     JSON.stringify(personalTop) === JSON.stringify(userTop),
     'personal and team_user top-level nav ids must match'
   )
+
+  assert(
+    !getNavMenu('personal', true).some((n) => n.id === 'memory'),
+    'personal: memory not top-level'
+  )
+  assert(
+    !idsOf('personal', true).has('memory'),
+    'personal: memory hidden until feature matures'
+  )
+  assert(
+    !getNavMenu('team', false).some((n) => n.id === 'memory'),
+    'team_user: memory not top-level (lives under more)'
+  )
+  assert(idsOf('team', false).has('memory'), 'team_user: memory available under more')
 
   console.log('nav.selftest: OK')
 }
