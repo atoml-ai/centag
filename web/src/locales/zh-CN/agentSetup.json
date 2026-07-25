@@ -1,5 +1,5 @@
 {
-  "title": "Agent 接入",
+  "title": "Agent配置",
   "subtitle": "将 Agent 工具接入 Centag 代理：选择流水线、写入配置并验证生效",
   "quickSetup": "快速接入",
   "quickSetupHint": "点击下方 Agent，通过向导接入 Centag 代理（只需选择流水线，后端由流水线内部指定）。",
@@ -82,5 +82,92 @@
   "loadProviderFailed": "加载供应商配置失败：",
   "setDefaultSuccess": "已将 {name} 设为默认",
   "hotSwapFailed": "HotSwap 失败：",
-  "verify": "验证生效"
+  "verify": "验证生效",
+  "configMethod": "配置方法",
+  "configPaths": "配置路径",
+  "keyFields": "关键字段",
+  "writeMode": "写入模式",
+  "writeModeOverwrite": "覆盖写入",
+  "writeModeMerge": "合并累加",
+  "writeModeNone": "无本地配置",
+  "installGuide": "安装部署指引",
+  "noConfigMethod": "暂无配置方法说明",
+  "agents": {
+    "claude-code": {
+      "description": "Anthropic 官方的 AI 编程助手 CLI 工具",
+      "configMethod": "写入 ~/.claude/settings.json：合并 env 中的 ANTHROPIC_BASE_URL / ANTHROPIC_AUTH_TOKEN / ANTHROPIC_MODEL 指向 Centag。首次覆盖会备份为 .centag-bak。",
+      "installHint": "macOS/Linux: curl -fsSL https://claude.ai/install.sh | bash；或 brew install --cask claude-code"
+    },
+    "claude-desktop": {
+      "description": "Anthropic 官方桌面客户端",
+      "configMethod": "macOS/Windows：写入 Claude + Claude-3p 的 deploymentMode=3p，并在 configLibrary 写入 Centag gateway profile（inferenceGatewayBaseUrl / ApiKey / AuthScheme=bearer / inferenceProvider=gateway）。需重启 Desktop。",
+      "configMethodUnsupported": "当前平台不支持 Claude Desktop 本地写入（仅 macOS / Windows）。请在支持的系统上使用一键配置。",
+      "installHint": "从官网下载 Claude Desktop 桌面应用（非 CLI）"
+    },
+    "codex": {
+      "description": "OpenAI 官方的 AI 编程助手 CLI (ChatGPT Codex)",
+      "configMethod": "覆盖写入 ~/.codex/auth.json（OPENAI_API_KEY）与 ~/.codex/config.toml（model_provider=custom，base_url 指向 Centag，wire_api=responses）。",
+      "installHint": "curl -fsSL https://chatgpt.com/codex/install.sh | sh；或 npm i -g @openai/codex"
+    },
+    "gemini-cli": {
+      "description": "Google 官方的 AI 编程助手 CLI 工具",
+      "configMethod": "写入 ~/.gemini/.env（GEMINI_API_KEY / GOOGLE_GEMINI_BASE_URL / GEMINI_MODEL），并合并 settings.json 的 security.auth.selectedType=gemini-api-key。",
+      "installHint": "npm i -g @google/gemini-cli；或 brew install gemini-cli"
+    },
+    "grok-build": {
+      "description": "xAI Grok 编程助手 CLI",
+      "configMethod": "覆盖写入 ~/.grok/config.toml：[models] default=\"centag\"，[model.\"centag\"] 内设置 model / base_url / api_key / api_backend=responses。",
+      "installHint": "curl -fsSL https://x.ai/cli/install.sh | bash；或 npm i -g @xai-official/grok"
+    },
+    "opencode": {
+      "description": "AI 编程助手 (opencode.ai)",
+      "configMethod": "合并写入 ~/.config/opencode/opencode.json：在 provider 中累加/更新 centag，并设置默认 model。不覆盖其它 provider。",
+      "installHint": "curl -fsSL https://opencode.ai/install | bash；或 npm i -g opencode-ai"
+    },
+    "openclaw": {
+      "description": "AI 编程助手 (openclaw)",
+      "configMethod": "合并写入 ~/.openclaw/openclaw.json：在 models.providers 中累加/更新 centag，并设置默认 primary 模型。",
+      "installHint": "npm i -g openclaw"
+    },
+    "hermes": {
+      "description": "面向任务的 AI Agent 框架",
+      "configMethod": "合并写入 ~/.hermes/config.yaml：更新 model 默认值，并在 custom_providers 中按 name=centag 累加/更新。",
+      "installHint": "curl -fsSL https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.sh | bash；或 pip install \"hermes-agent[web]\""
+    },
+    "codebuddy": {
+      "description": "腾讯云代码助手 CodeBuddy Code CLI（OpenAI 兼容自定义模型）",
+      "configMethod": "合并写入 ~/.codebuddy/models.json。url 必须为完整路径 …/v1/chat/completions；仅支持 OpenAI 接口格式。",
+      "installHint": "npm i -g @tencent-ai/codebuddy-code；或 curl -fsSL https://www.codebuddy.cn/cli/install.sh | bash"
+    },
+    "workbuddy": {
+      "description": "腾讯云 WorkBuddy 桌面助理（自定义模型可读 ~/.codebuddy/models.json）",
+      "configMethod": "与 CodeBuddy 共用 ~/.codebuddy/models.json；写入后可在 WorkBuddy「设置 → 模型」中选用。也可仅在 UI 中配置自定义 API。",
+      "installHint": "从 CodeBuddy / WorkBuddy 官网下载桌面端"
+    },
+    "trae": {
+      "description": "字节跳动 TRAE IDE（自定义 OpenAI 兼容模型）",
+      "configMethod": "推荐：设置 → 模型 → 自定义配置；API 格式选 OpenAI；关闭「完整 URL」时 Base URL 填 …/v1；模型 ID 填 centag/<pipeline>。一键写入会尽力合并 Trae/Trae CN 的 settings.json。",
+      "installHint": "从 trae.ai / trae.cn 下载 IDE"
+    },
+    "coding-tui": {
+      "description": "编程场景终端交互 Agent",
+      "configMethod": "TUI Agent 不通过写入本地配置文件接入 Centag；由进程内路由/流水线绑定。",
+      "installHint": "内置能力，无需单独安装 CLI"
+    },
+    "education-tui": {
+      "description": "教育场景终端交互 Agent",
+      "configMethod": "TUI Agent 不通过写入本地配置文件接入 Centag；由进程内路由/流水线绑定。",
+      "installHint": "内置能力，无需单独安装 CLI"
+    },
+    "coding-web": {
+      "description": "编程场景 Web 自动化 Agent",
+      "configMethod": "Web Agent 不通过写入本地配置文件接入 Centag；由浏览器自动化与进程内路由绑定。",
+      "installHint": "内置能力，无需单独安装 CLI"
+    },
+    "education-web": {
+      "description": "教育场景 Web 自动化 Agent",
+      "configMethod": "Web Agent 不通过写入本地配置文件接入 Centag；由浏览器自动化与进程内路由绑定。",
+      "installHint": "内置能力，无需单独安装 CLI"
+    }
+  }
 }

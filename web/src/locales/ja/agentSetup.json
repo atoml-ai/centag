@@ -1,5 +1,5 @@
 {
-  "title": "Agent 接続",
+  "title": "Agent設定",
   "subtitle": "Agent ツールを Centag プロキシに接続：パイプライン選択、設定書き込み、検証",
   "quickSetup": "クイックセットアップ",
   "quickSetupHint": "下の Agent をクリックしてウィザードで接続します（パイプラインを選択するだけでOK。バックエンドは内部で決定されます）。",
@@ -82,5 +82,14 @@
   "loadProviderFailed": "プロバイダー設定の読み込み失敗:",
   "setDefaultSuccess": "{name} をデフォルトに設定しました",
   "hotSwapFailed": "HotSwap 失敗:",
-  "verify": "検証"
+  "verify": "検証",
+  "configMethod": "設定方法",
+  "configPaths": "設定パス",
+  "keyFields": "主要フィールド",
+  "writeMode": "書き込みモード",
+  "writeModeOverwrite": "上書き",
+  "writeModeMerge": "マージ追加",
+  "writeModeNone": "ローカル設定なし",
+  "installGuide": "インストール案内",
+  "noConfigMethod": "設定方法の説明はありません"
 }
