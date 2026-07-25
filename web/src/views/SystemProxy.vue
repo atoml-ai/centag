@@ -90,7 +90,14 @@
           :title="t('systemProxy.wizard.dockerWarning')"
         />
 
-        <el-steps :active="wizardProgress" align-center finish-status="success" class="wizard-steps">
+        <el-steps
+          :active="wizardProgress"
+          :direction="wizardStepsDirection"
+          :align-center="wizardStepsDirection === 'horizontal'"
+          finish-status="success"
+          class="wizard-steps"
+          :class="wizardStepsDirection === 'vertical' ? 'is-vertical' : 'is-horizontal'"
+        >
           <el-step
             :title="t('systemProxy.wizard.step1Title')"
             :description="step1Ready ? t('systemProxy.guide.ready') : t('systemProxy.guide.needsAction')"
@@ -105,6 +112,7 @@
           />
         </el-steps>
 
+        <div class="wizard-flow" :class="wizardFlowClass">
         <!-- 步骤 1：启动/关闭 MITM -->
         <el-card
           id="spy-step-1"
@@ -180,7 +188,7 @@
             <p class="form-hint" v-html="t('systemProxy.wizard.lanHint', { apiPort, listenPort })" />
           </template>
 
-          <el-collapse class="optional-collapse mt-sm">
+          <el-collapse v-model="wizardMoreStep1" class="optional-collapse mt-sm">
             <el-collapse-item :title="t('systemProxy.guide.moreOptions')" name="step1-more">
               <p class="form-hint" v-html="t('systemProxy.wizard.permissionHint')" />
               <p class="form-hint mt-sm" v-html="t('systemProxy.wizard.step1Description', { port: apiPort })" />
@@ -270,7 +278,7 @@
             </ul>
           </el-alert>
 
-          <el-collapse class="optional-collapse mt-sm">
+          <el-collapse v-model="wizardMoreStep2" class="optional-collapse mt-sm">
             <el-collapse-item :title="t('systemProxy.guide.moreOptions')" name="step2-more">
               <el-button size="small" @click="copyProxyctlCmd('doctor')">{{ t('systemProxy.wizard.copyDiagCmd') }}</el-button>
               <p class="form-hint mt-sm">{{ t('systemProxy.wizard.selfCheckHint') }}</p>
@@ -296,6 +304,27 @@
             </div>
           </div>
 
+          <div class="sub-block">
+            <div class="sub-label">{{ t('systemProxy.wizard.selectAgent') }}</div>
+            <p class="form-hint mb-sm">{{ t('systemProxy.wizard.selectAgentHint') }}</p>
+            <el-select
+              v-model="selectedWrapAgent"
+              filterable
+              :placeholder="t('systemProxy.wizard.selectAgentPlaceholder')"
+              class="wrap-agent-select"
+            >
+              <el-option
+                v-for="opt in wrapPresets"
+                :key="opt.id"
+                :label="opt.display_name"
+                :value="opt.id"
+              >
+                <span>{{ opt.display_name }}</span>
+                <span v-if="opt.description" class="wrap-opt-desc">{{ opt.description }}</span>
+              </el-option>
+            </el-select>
+          </div>
+
           <div class="sub-block is-primary-cmd">
             <div class="sub-label">{{ t('systemProxy.wizard.runWithEnv') }}</div>
             <p class="form-hint mb-sm">{{ t('systemProxy.wizard.runWithEnvHint') }}</p>
@@ -314,7 +343,7 @@
             </div>
           </div>
 
-          <el-collapse class="optional-collapse">
+          <el-collapse v-model="wizardMoreStep3" class="optional-collapse">
             <el-collapse-item :title="t('systemProxy.guide.installAndToken')" name="step3-more">
               <div class="sub-block">
                 <div class="sub-label">{{ t('systemProxy.wizard.subStep1') }}</div>
@@ -348,6 +377,7 @@
             </el-collapse-item>
           </el-collapse>
         </el-card>
+        </div>
       </el-tab-pane>
 
       <!-- ========== Tab 2: 域名与路径 ========== -->
@@ -559,7 +589,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
@@ -579,6 +609,7 @@ import {
   getProxySetupStatus,
   type ProxySetupStatus
 } from '@/api/system-proxy'
+import { listWrapPresets, type WrapPreset } from '@/api/wrap'
 
 const { t } = useI18n()
 
@@ -607,6 +638,10 @@ const bindingEgress = ref(false)
 const loadingKeys = ref(false)
 /** 出口 Key 已就绪时隐藏手动补绑；失败时可展开 */
 const showEgressAdvanced = ref(false)
+/** 向导三步「更多选项」默认展开 */
+const wizardMoreStep1 = ref(['step1-more'])
+const wizardMoreStep2 = ref(['step2-more'])
+const wizardMoreStep3 = ref(['step3-more'])
 const mainTab = ref('wizard')
 const setupStatus = ref<ProxySetupStatus | null>(null)
 const allowLanClients = ref(false)
@@ -755,9 +790,31 @@ const installCommand = computed(
     'curl -fsSL https://raw.githubusercontent.com/atoml-ai/centag/v0.2.9/scripts/install.sh | bash && . "$HOME/.centag/env"'
 )
 
+/** wrap 可启动的 CLI 客户端（与「Agent 配置」写入本地配置文件是两件事） */
+const wrapPresets = ref<WrapPreset[]>([])
+const selectedWrapAgent = ref('')
+
 function wrapBin() {
   // Prefer main-binary subcommand (personal ships wrap; no separate centag-wrap asset).
   return 'centag wrap'
+}
+
+function selectedWrapArgvText() {
+  const p = wrapPresets.value.find((x) => x.id === selectedWrapAgent.value)
+  const argv = p?.argv?.length ? p.argv : ['opencode']
+  return argv.map((a) => (/\s/.test(a) ? `'${a.replace(/'/g, `'\\''`)}'` : a)).join(' ')
+}
+
+async function loadWrapPresets() {
+  try {
+    const res = await listWrapPresets()
+    wrapPresets.value = res.presets || []
+    if (!selectedWrapAgent.value && wrapPresets.value.length) {
+      selectedWrapAgent.value = wrapPresets.value[0].id
+    }
+  } catch {
+    wrapPresets.value = []
+  }
 }
 
 function normalizeAPIBase(raw: string) {
@@ -794,10 +851,11 @@ watch(allowLanClients, (on) => {
 })
 
 const runCommand = computed(() => {
+  const agentArgs = selectedWrapArgvText()
   if (allowLanClients.value) {
-    return `${wrapBin()} run --server ${employeeAPIBase.value} --token llmproxy_xxxx -- opencode`
+    return `${wrapBin()} run --server ${employeeAPIBase.value} --token llmproxy_xxxx -- ${agentArgs}`
   }
-  return `${wrapBin()} run -- opencode`
+  return `${wrapBin()} run -- ${agentArgs}`
 })
 
 /** 先 export 再 run：日常命令更短 */
@@ -809,7 +867,7 @@ const envRunScript = computed(() => {
   if (allowLanClients.value) {
     lines.push(`export CENTAG_API_BASE='${employeeAPIBase.value}'`)
   }
-  lines.push(`${wrapBin()} run -- opencode`)
+  lines.push(`${wrapBin()} run -- ${selectedWrapArgvText()}`)
   return lines.join('\n')
 })
 
@@ -1375,21 +1433,50 @@ const testProxy = async () => {
   }
 }
 
+/** 宽屏横排步骤卡，窄屏竖排；与 el-steps direction 同步 */
+const WIZARD_FLOW_BREAKPOINT = 1100
+const wizardLayoutWide = ref(
+  typeof window !== 'undefined' ? window.innerWidth >= WIZARD_FLOW_BREAKPOINT : true
+)
+const wizardStepsDirection = computed(() => (wizardLayoutWide.value ? 'horizontal' : 'vertical'))
+const wizardFlowClass = computed(() => (wizardLayoutWide.value ? 'is-row' : 'is-stack'))
+
+function syncWizardLayout() {
+  wizardLayoutWide.value = window.innerWidth >= WIZARD_FLOW_BREAKPOINT
+}
+
 onMounted(() => {
   load()
+  loadWrapPresets()
+  syncWizardLayout()
+  window.addEventListener('resize', syncWizardLayout, { passive: true })
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', syncWizardLayout)
 })
 </script>
 
 <style scoped>
 .system-proxy {
   min-height: 100%;
-  padding: 8px 24px 40px;
+  width: 100%;
+  padding: 0 0 24px;
 }
 
 .page-shell {
-  max-width: 960px;
-  margin: 0 auto;
   width: 100%;
+}
+
+.wrap-agent-select {
+  width: 100%;
+  max-width: 420px;
+}
+
+.wrap-opt-desc {
+  margin-left: 8px;
+  color: var(--el-text-color-secondary);
+  font-size: 0.75rem;
 }
 
 .page-header {
@@ -1565,6 +1652,10 @@ onMounted(() => {
   margin-bottom: 20px;
 }
 
+.wizard-steps.is-vertical {
+  max-width: 420px;
+}
+
 .wizard-steps :deep(.el-step__title) {
   font-size: 13px;
   line-height: 1.3;
@@ -1574,11 +1665,52 @@ onMounted(() => {
   font-size: 11px;
 }
 
+.wizard-flow {
+  display: grid;
+  gap: 16px;
+  align-items: start;
+}
+
+.wizard-flow.is-stack {
+  grid-template-columns: 1fr;
+}
+
+.wizard-flow.is-row {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.wizard-flow.is-row .step-head {
+  flex-wrap: wrap;
+}
+
+.wizard-flow.is-row .step-title-block h3 {
+  font-size: 1rem;
+}
+
+.wizard-flow.is-row .step-card {
+  margin-bottom: 0;
+  height: 100%;
+}
+
+.wizard-flow.is-row .step-card :deep(.el-card__body) {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+  height: 100%;
+}
+
+.wizard-flow.is-row .cmd-block code,
+.wizard-flow.is-row .cmd-pre {
+  word-break: break-all;
+  white-space: pre-wrap;
+}
+
 .step-card {
-  margin-bottom: 14px;
+  margin-bottom: 0;
   border-radius: 12px;
   border: 1px solid var(--el-border-color-lighter);
   transition: border-color 0.15s, opacity 0.15s, box-shadow 0.15s;
+  min-width: 0;
 }
 
 .step-card.is-current {
@@ -1860,17 +1992,13 @@ onMounted(() => {
   padding-top: 4px;
 }
 
-@media (max-width: 900px) {
+@media (max-width: 1100px) {
   .ready-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
 @media (max-width: 768px) {
-  .system-proxy {
-    padding: 8px 16px 32px;
-  }
-
   .page-header,
   .guide-banner {
     flex-direction: column;
@@ -1883,6 +2011,10 @@ onMounted(() => {
 
   .switch-cell {
     min-width: 100%;
+  }
+
+  .wizard-flow.is-row .step-head {
+    flex-wrap: wrap;
   }
 }
 </style>
