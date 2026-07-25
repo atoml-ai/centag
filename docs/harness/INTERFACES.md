@@ -165,6 +165,8 @@
 | GET | `/api/v1/system/update/history` | 更新历史 |
 | POST | `/api/v1/system/rollback` | 回滚更新 |
 | GET | `/api/v1/status` | 系统状态 |
+| GET | `/api/v1/wrap/presets` | 可经 wrap 启动的 CLI Agent 预设（需登录；personal/minimal 或 loopback） |
+| POST | `/api/v1/wrap/run` | 打开系统终端执行 `centag wrap run -- <argv>`（需登录；personal/minimal 或 loopback） |
 | GET | `/health` | 健康检查 |
 | GET | `/health/ready` | 就绪检查 |
 | GET | `/ping` | Ping |

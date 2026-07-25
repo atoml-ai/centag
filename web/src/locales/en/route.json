@@ -6,6 +6,7 @@
   "evaluation": "Cache Evaluation",
   "chat": "AI Chat",
   "agentSetup": "Agent Config",
+  "agentRun": "Run Agent",
   "proxyModes": "Proxy Modes",
   "sessionMode": "Session Mode Test",
   "pipelines": "Pipelines",

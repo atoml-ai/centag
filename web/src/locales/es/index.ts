@@ -6,6 +6,7 @@ import backends from './backends.json'
 import login from './login.json'
 import profile from './profile.json'
 import agentSetup from './agentSetup.json'
+import agentRun from './agentRun.json'
 import tokenUsage from './tokenUsage.json'
 import costDashboard from './costDashboard.json'
 import systemProxy from './systemProxy.json'
@@ -70,6 +71,7 @@ const es = {
   login,
   profile,
   agentSetup,
+  agentRun,
   tokenUsage,
   costDashboard,
   systemProxy,

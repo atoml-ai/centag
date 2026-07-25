@@ -59,6 +59,9 @@ func (a *launcherApp) onReady() {
 	openItem := systray.AddMenuItem("打开管理界面", "在系统浏览器中打开")
 	openItem.Click(func() { _ = openBrowser(a.cfg.baseURL()) })
 
+	runItem := systray.AddMenuItem("运行", "用 wrap 启动 Agent 应用")
+	runItem.Click(func() { _ = openBrowser(a.cfg.baseURL() + "/agent-run") })
+
 	systray.AddSeparator()
 
 	quitItem := systray.AddMenuItem("退出", "停止 sidecar 并退出")

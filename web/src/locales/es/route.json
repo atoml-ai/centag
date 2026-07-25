@@ -6,6 +6,7 @@
   "evaluation": "Evaluación de caché",
   "chat": "Chat IA",
   "agentSetup": "Config Agent",
+  "agentRun": "Ejecutar Agent",
   "proxyModes": "Modos de proxy",
   "sessionMode": "Prueba de modo de sesión",
   "pipelines": "Pipelines",
