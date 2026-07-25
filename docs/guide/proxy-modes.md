@@ -82,7 +82,7 @@ X-Cache: HIT-EXACT
 
 ### 2. Direct Backend Mode (`#d`)
 
-**Description**: Single `generator` to a configured backend/model. **Injects** the pipeline `system_prompt`, which **replaces** any client `system` messages.
+**Description**: Fixed egress via `transparent_forward` (`route_policy=fixed`) with `system_prompt_strategy: replace` (or legacy `inject_system_prompt: true`). Gateway `system_prompt` **replaces** client `system` messages.
 
 **When to use**:
 - Default chat / personal gateway with a hosted assistant persona
@@ -90,11 +90,11 @@ X-Cache: HIT-EXACT
 
 **How it works**:
 1. Resolve pipeline `direct-backend` (or `#d`)
-2. Call configured backend via `builtin.generator`
-3. If `system_prompt` is non-empty, replace client system messages
+2. `transparent_forward` to system default (or pinned) backend
+3. Apply system strategy `replace` when gateway prompt is non-empty (see [prompt-strategy.md](./prompt-strategy.md))
 
 **Shortcut**: `#d`  
-**Template**: `config/initdata/pipeline-templates/03-direct-backend.yaml`
+**Template**: `config/initdata/pipeline-templates/common/direct-backend.yaml`
 
 **Request Example** (standard OpenAI client — only `base_url` / API key needed):
 
@@ -112,7 +112,7 @@ Optional: `X-Backend-ID` / `X-Backend-Name` still work for forcing a backend whe
 
 ### 3. Transparent Mode (`#t` / `#tf`)
 
-**Description**: Same as direct (configured backend + `generator`), but **does not inject** gateway `system_prompt`. Client `messages` (including their system) are kept as-is.
+**Description**: Pass through the client request as much as possible. Uses `transparent_forward` with `system_prompt_strategy: passthrough` (or legacy `inject_system_prompt: false`). Client `messages` (including their system) are kept as-is.
 
 **When to use**:
 - Standard chat clients where you must not rewrite prompts
@@ -120,11 +120,11 @@ Optional: `X-Backend-ID` / `X-Backend-Name` still work for forcing a backend whe
 
 **How it works**:
 1. Resolve `transparent-proxy` (`#t`) or `transparent-fast` (`#tf`) — same semantics
-2. `builtin.generator` with empty `system_prompt`
-3. No `X-Target-URL` required
+2. `transparent_forward` + `route_policy=match_model`, **no** system prompt injection
+3. Optional: attach `user_prompt_ops` / `output_post_ops` nodes for inbound/outbound normalization (see [prompt-strategy.md](./prompt-strategy.md))
 
 **Shortcuts**: `#t`, `#tf`  
-**Templates**: `14-transparent-proxy.yaml`, `02-transparent-fast.yaml`
+**Templates**: `transparent-proxy.yaml`, `transparent-fast.yaml`
 
 ```bash
 curl -X POST http://localhost:20060/v1/chat/completions \

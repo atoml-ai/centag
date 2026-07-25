@@ -9,9 +9,9 @@
 |------|------|:----:|:--------:|---------|
 | **Phase 1** 方案设计 | Step 1: 方案设计与确认 | ✅ | 2026-07-25 | `docs/versions/v0.3.1/prompt-strategy/技术方案.md` |
 | **Phase 2** 任务规划 | Step 2: 任务规划 | ✅ | 2026-07-25 | `docs/versions/v0.3.1/prompt-strategy/任务计划.md` |
-| **Phase 3** 编码实现 | Step 3: SDD 编码实现 | 🔄 | | `core/pkg/pipeline/promptstrategy/` 等 |
-| | Step 4: 单元测试补全 | ⬜ | | 对应 `*_test.go` |
-| **Phase 4** 质量交付 | Step 5: CR 审查 | ⬜ | | `docs/versions/v0.3.1/prompt-strategy/` |
+| **Phase 3** 编码实现 | Step 3: SDD 编码实现 | ✅ | 2026-07-25 | `core/pkg/pipeline/promptstrategy/` 等 |
+| | Step 4: 单元测试补全 | ✅ | 2026-07-25 | `*_test.go`（generator 策略 / user&output ops / 模板契约） |
+| **Phase 4** 质量交付 | Step 5: CR 审查 | ✅ | 2026-07-25 | `CR_报告.md`；人工批准可发版 |
 | **Phase 5** 发版 | Step 6: 发版 | ⬜ | | GitHub Release `v0.3.1` |
 
 > 状态标记：⬜ = 未开始 | 🔄 = 进行中 | ✅ = 已完成
@@ -22,8 +22,8 @@
 |------|------|:----:|:--------:|------|
 | Gate 1 | Phase 1 → 2（技术方案落盘 + 内审通过） | ✅ | 2026-07-25 | 用户要求建分支并进入 step2-plan，视为方案与风险确认 |
 | Gate 2 | Phase 2 → 3（任务计划落盘 + 可执行验收标准） | ✅ | 2026-07-25 | 任务计划已确认，Critical=0，High 风险已映射 |
-| Gate 3 | Phase 3 → 4（测试通过 + 覆盖率达标） | ⬜ | | |
-| Gate 4 | Phase 4 → 5（CR 准出 + **人工批准可发版**） | ⬜ | | 未人工确认不得 ✅ |
+| Gate 3 | Phase 3 → 4（测试通过 + 覆盖率达标） | ✅ | 2026-07-25 | `make test` + promptstrategy 89.9%；web lint ✅；harness-check ✅；本机无 golangci-lint |
+| Gate 4 | Phase 4 → 5（CR 准出 + **人工批准可发版**） | ✅ | 2026-07-25 | 人工确认发版许可（选项：批准 — 可发版） |
 | Gate 5 | 发版准出（Release 资产 + 冒烟） | ⬜ | | |
 
 ## 产物清单
@@ -32,8 +32,8 @@
 - [x] **开发风险评估** → `docs/versions/v0.3.1/prompt-strategy/开发风险评估.md`（Critical=0）
 - [x] **前端配置操作说明** → `docs/versions/v0.3.1/prompt-strategy/前端配置操作说明.md`
 - [x] **任务计划** → `docs/versions/v0.3.1/prompt-strategy/任务计划.md`
-- [ ] **自测记录** → `docs/versions/v0.3.1/prompt-strategy/自测记录.md`
-- [ ] **CR 报告** → `docs/versions/v0.3.1/prompt-strategy/CR_报告.md`
+- [x] **自测记录** → `docs/versions/v0.3.1/prompt-strategy/自测记录.md`
+- [x] **CR 报告** → `docs/versions/v0.3.1/prompt-strategy/CR_报告.md`
 - [x] **代码 + 测试** → `core/pkg/pipeline/promptstrategy/`（任务1已完成）
 - [ ] **GitHub Release**（Step 6）→ `v0.3.1`
 

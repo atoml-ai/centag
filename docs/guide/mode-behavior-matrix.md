@@ -60,9 +60,9 @@
 | 模式 | 节点数 | 执行顺序 | 并发能力 | 依赖关系 |
 |------|--------|---------|----------|----------|
 | #s | 1-3 | 分支选择 → 生成 | 支持分支并发 | 条件依赖 |
-| #d | 1 | 直接生成 | 无 | 无 |
-| #t / #tf | 1 | generator（无 system prompt） | 无 | 无 |
-| #j | 1 | transparent_forward（route_policy=fixed） | 无 | 固定默认后端 |
+| #d | 1 | transparent_forward（fixed + system replace） | 无 | 无 |
+| #t / #tf | 1 | transparent_forward（match_model + system passthrough） | 无 | 无 |
+| #j | 1 | transparent_forward（route_policy=fixed，无 system 注入） | 无 | 固定默认后端 |
 | #m | 1+N | 路由 → 条件分支生成 | 支持分支并发 | 依赖路由器 |
 | #c | 1+N | 分类 → 条件分支处理 | 支持分支并发 | 依赖分类器 |
 | #a | 2 | 生成 → 审核 | 串行 | executor → auditor |

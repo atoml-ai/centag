@@ -34,7 +34,8 @@ nodes:
       custom_config:
         default_scheme: https
         route_policy: fixed
-        inject_system_prompt: true
+        system_prompt_strategy: replace
+        inject_system_prompt: true # legacy alias; strategy takes precedence
         redirect_policy: never
         max_redirects: 5
     timeout: 120
@@ -72,7 +73,8 @@ nodes:
       custom_config:
         default_scheme: https
         route_policy: fixed
-        inject_system_prompt: true
+        system_prompt_strategy: replace
+        inject_system_prompt: true # legacy alias; strategy takes precedence
         redirect_policy: never
         max_redirects: 5
         is_fallback: true

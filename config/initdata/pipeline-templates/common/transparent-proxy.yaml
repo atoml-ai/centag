@@ -23,7 +23,8 @@ nodes:
       custom_config:
         default_scheme: https
         route_policy: match_model
-        inject_system_prompt: false
+        system_prompt_strategy: passthrough
+        inject_system_prompt: false # legacy alias; strategy takes precedence
         redirect_policy: never
         max_redirects: 5
     timeout: 120
@@ -51,7 +52,8 @@ nodes:
         default_scheme: https
         # 降级节点固定走 fallback_model，避免 match_model 再次选中客户端付费模型
         route_policy: fixed
-        inject_system_prompt: false
+        system_prompt_strategy: passthrough
+        inject_system_prompt: false # legacy alias; strategy takes precedence
         redirect_policy: never
         max_redirects: 5
         is_fallback: true
