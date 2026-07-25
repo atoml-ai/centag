@@ -1685,6 +1685,13 @@ func (s *Server) setupRoutes() {
 		}
 	}
 
+	// wrap run：本机终端启动第三方 Agent（personal/minimal 或 loopback）
+	wrapAPI := v1Protected.Group("/wrap")
+	{
+		wrapAPI.GET("/presets", s.ListWrapPresets)
+		wrapAPI.POST("/run", s.RunWrapAgent)
+	}
+
 	// Agent 供应商配置管理（需要 JWT 认证）
 	if s.agentProviderHandler != nil {
 		agentProv := v1Protected.Group("/agent-providers")
