@@ -96,5 +96,7 @@
   "pageDescriptionDefault": "Centag サービスの状態と基本設定の概要",
   "usageHintAdmin": "課金とコスト見積もり（現在のサービス保存ポリシーに基づく）。",
   "usageHintDefault": "プロセス内計測とコスト見積もり（再起動でリセット）。",
-  "items": "{count} 件"
+  "items": "{count} 件",
+  "config": "設定",
+  "logout": "ログアウト"
 }

@@ -96,5 +96,7 @@
   "pageDescriptionDefault": "Centag 서비스 상태 및 기본 구성 개요",
   "usageHintAdmin": "과금 및 비용 추정 (현재 서비스 저장 정책에 따라 보관).",
   "usageHintDefault": "프로세스 내 측정 및 비용 추정 (재시작 시 초기화).",
-  "items": "{count}개"
+  "items": "{count}개",
+  "config": "설정",
+  "logout": "로그아웃"
 }

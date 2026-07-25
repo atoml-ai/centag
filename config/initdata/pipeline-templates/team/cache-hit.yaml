@@ -1,9 +1,9 @@
 version: '1.0'
 schema_version: centag.pipeline/v1alpha1
 id: cache-hit
-name: 缓存优先模式
+name: Cache-First Mode
 shortcut_code: '#ch'
-description: 先读取缓存，命中则直接返回，未命中则调用大模型生成并写入缓存
+description: "Read cache first; return on hit, otherwise generate with the model and write back to cache"
 metadata:
   aligned_proxy_mode: cache-hit
   lastUpdated: '2026-05-19T15:25:00.000Z'
@@ -12,15 +12,15 @@ metadata:
   phase: '5'
   features:
   - cache
-  - cache优先
+  - cache-first
   - fallback_to_generate
 nodes:
 - id: cache_read
   type: cache
   kind: cache.access
   implementation: builtin.cache
-  name: 缓存读取
-  description: 尝试从缓存读取响应，命中则设置 cache_hit=true
+  name: Cache Read
+  description: Try reading a response from cache; on hit set cache_hit=true
   config:
     custom_config:
       operation: read
@@ -37,8 +37,8 @@ nodes:
   type: generator
   kind: llm.generate
   implementation: builtin.generator
-  name: 内容生成
-  description: 当缓存未命中时生成内容
+  name: Content Generate
+  description: Generate content when cache misses
   backend: "{{system.default_backend}}"
   model: "{{system.default_model}}"
   config:
@@ -56,8 +56,8 @@ nodes:
   type: cache
   kind: cache.access
   implementation: builtin.cache
-  name: 缓存写入
-  description: 当缓存未命中时，将生成的内容写入缓存
+  name: Cache Write
+  description: Write generated content to cache on miss
   config:
     custom_config:
       operation: write
@@ -85,16 +85,16 @@ global_config:
   log_level: info
 inputs:
   content:
-    description: 用户输入内容
+    description: User input
     required: true
     type: string
   model:
-    description: 目标模型
+    description: Target model
     required: false
     type: string
     default: ''
   cache_strategy:
-    description: 缓存策略，支持KV/语义/混合
+    description: "Cache strategy: KV / semantic / hybrid"
     required: false
     type: string
     default: exact
@@ -103,21 +103,21 @@ inputs:
     - semantic
     - hybrid
   vector_storage:
-    description: 向量存储名称（语义/混合策略时使用）
+    description: Vector store name (for semantic/hybrid)
     required: false
     type: string
     default: pg
   embedding_model:
-    description: 向量生成使用的embedding模型
+    description: Embedding model for vectors
     required: false
     type: string
     default: text-embedding-3-small
 outputs:
   content:
-    description: 响应内容（缓存命中时为缓存内容，未命中时为生成内容。由引擎自动选择最后一个执行节点的输出）
+    description: "Response content (cached on hit, generated on miss; engine picks the last executed node output)"
   cache_hit:
-    description: 是否命中缓存
+    description: Whether cache was hit
     source: cache_read.metadata.cache_hit
   cache_saved:
-    description: 是否成功保存到缓存
+    description: Whether cache write succeeded
     source: cache_write.metadata.write_success

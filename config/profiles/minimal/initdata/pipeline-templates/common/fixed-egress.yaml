@@ -1,9 +1,9 @@
 id: fixed-egress
-name: 跳板模式（固定出站）
+name: Fixed Egress (Hop)
 description: |
-  Centag 作为固定出站跳板：不做跨后端模型匹配，固定走系统默认后端/模型（或显式 X-Backend-ID），
-  服务端用后端 API Key 改写鉴权后转发。与直连/透明共用 transparent_forward，差异在开关：
-  route_policy=fixed + inject_system_prompt=false。
+  Centag as a fixed egress hop: no cross-backend model matching; always use the system default backend/model (or explicit X-Backend-ID).
+  Server rewrites auth with the backend API key before forwarding. Shares transparent_forward with direct/transparent; difference is switches:
+  route_policy=fixed + inject_system_prompt=false.
 version: "1.0"
 shortcut_code: '#j'
 nodes:
@@ -11,7 +11,7 @@ nodes:
     type: transparent_forward
     kind: proxy.transparent_forward
     implementation: builtin.transparent_forward
-    name: 固定出站转发
+    name: Fixed Egress Forward
     backend: "{{system.default_backend}}"
     model: "{{system.default_model}}"
     config:

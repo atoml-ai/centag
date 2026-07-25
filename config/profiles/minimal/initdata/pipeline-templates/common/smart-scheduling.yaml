@@ -4,7 +4,7 @@ nodes:
   type: scheduler
   kind: scheduling.decide
   implementation: builtin.scheduler
-  name: 智能调度
+  name: Smart Scheduling
   timeout: 15
   config:
     custom_config:
@@ -13,7 +13,7 @@ nodes:
   type: generator
   kind: llm.generate
   implementation: builtin.generator
-  name: 调度生成
+  name: Scheduled Generate
   backend: "{{system.default_backend}}"
   model: "{{system.default_model}}"
   config:
@@ -27,7 +27,7 @@ nodes:
   - scheduler
 schema_version: centag.pipeline/v1alpha1
 id: smart-scheduling
-name: 智能调度
+name: Smart Scheduling
 shortcut_code: '#s'
 global_config:
   timeout: 180
@@ -35,7 +35,7 @@ global_config:
   bypass_on_error: true
   parallel_limit: 4
   log_level: info
-description: 智能调度（策略暂不变）：通过 builtin.scheduler 意图分类与多维评分，自动选择最优 backend/model 后生成回答；与透明模式（跟客户端 model）/ 直连模式（注入 prompt + 固定后端模型）相对
+description: "Smart scheduling (strategy unchanged): builtin.scheduler classifies intent and scores backends/models, then generates; contrasts with transparent mode (follow client model) and direct mode (inject prompt + fixed backend/model)"
 metadata:
   aligned_proxy_mode: smart-scheduling
   lastUpdated: '2026-07-21T00:00:00.000Z'

@@ -1,15 +1,15 @@
 version: '1.1'
 schema_version: centag.pipeline/v1alpha1
 id: aggregator-mode
-name: 聚合模式
+name: Aggregator Mode
 shortcut_code: '#ag'
-description: "两路并行生成，reviewer 多维评分选优（支持 /model: 覆盖各候选模型）"
+description: "Two parallel candidates; reviewer scores and picks the best (supports /model: override)"
 nodes:
 - id: generator-a
   type: generator
   kind: llm.generate
   implementation: builtin.generator
-  name: 候选 A
+  name: Candidate A
   backend: "{{system.default_backend}}"
   model: "{{system.default_model}}"
   config:
@@ -45,7 +45,7 @@ nodes:
   type: generator
   kind: llm.generate
   implementation: builtin.generator
-  name: 候选 B
+  name: Candidate B
   backend: "{{system.default_backend}}"
   model: "{{system.default_model}}"
   config:
@@ -81,7 +81,7 @@ nodes:
   type: aggregator
   kind: aggregate.merge
   implementation: builtin.aggregator
-  name: 评分择优
+  name: "Score & Select"
   backend: "{{system.default_backend}}"
   model: "{{system.default_model}}"
   config:

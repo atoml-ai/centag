@@ -96,5 +96,7 @@
   "pageDescriptionDefault": "Centag service status and basic configuration overview",
   "usageHintAdmin": "Billing and cost estimation (stored by current service policy).",
   "usageHintDefault": "In-process measurement and cost estimation (resets on restart).",
-  "items": "{count} items"
+  "items": "{count} items",
+  "config": "Config",
+  "logout": "Log out"
 }

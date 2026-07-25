@@ -1,9 +1,9 @@
 id: transparent-proxy
-name: 透明模式
+name: Transparent Mode
 description: |
-  尽可能原样透传客户端请求（不注入 system prompt）；按客户端 model 跨已启用后端松匹配，
-  未命中时回落系统默认后端与模型。余额/额度不足时：节点内先试 fallback_model，再走 FallbackGroup。
-  与直连/跳板共用 transparent_forward，差异在开关：route_policy=match_model。
+  Pass through the client request as much as possible (no system prompt injection); loosely match the client model across enabled backends,
+  falling back to the system default backend/model on miss. On insufficient balance/quota: try fallback_model on the node first, then FallbackGroup.
+  Shares transparent_forward with direct/hop modes; difference is switch: route_policy=match_model.
 version: "3.1"
 shortcut_code: '#t'
 nodes:
@@ -11,7 +11,7 @@ nodes:
     type: transparent_forward
     kind: proxy.transparent_forward
     implementation: builtin.transparent_forward
-    name: 透明转发
+    name: Transparent Forward
     backend: "{{system.default_backend}}"
     model: "{{system.default_model}}"
     config:
@@ -38,7 +38,7 @@ nodes:
     type: transparent_forward
     kind: proxy.transparent_forward
     implementation: builtin.transparent_forward
-    name: 透明降级转发
+    name: Transparent Fallback Forward
     backend: "{{system.fallback_backend}}"
     model: "{{system.fallback_model}}"
     config:

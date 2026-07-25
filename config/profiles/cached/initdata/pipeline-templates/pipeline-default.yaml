@@ -1,14 +1,14 @@
 id: cache-mode
-name: 缓存模式
+name: Cache Mode
 shortcut_code: '#cm'
-description: cached Profile 默认模式：精确缓存 + 语义缓存，大幅降低 API 调用成本
+description: "Default for cached profile: exact + semantic cache to cut API cost"
 version: '1.0'
 nodes:
 - id: cache_read
   type: cache
   kind: cache.access
   implementation: builtin.cache
-  name: 缓存读取
+  name: Cache Read
   config:
     custom_config:
       embedding_backend_id: ollama-local
@@ -33,7 +33,7 @@ nodes:
   type: generator
   kind: llm.generate
   implementation: builtin.generator
-  name: 内容生成
+  name: Content Generate
   backend: openai
   model: gpt-4o-mini
   config:
@@ -48,7 +48,7 @@ nodes:
   type: cache
   kind: cache.access
   implementation: builtin.cache
-  name: 缓存写入
+  name: Cache Write
   config:
     custom_config:
       embedding_backend_id: ollama-local

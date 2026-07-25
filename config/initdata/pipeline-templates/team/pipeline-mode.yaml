@@ -4,7 +4,7 @@ nodes:
   type: processor
   kind: content.transform
   implementation: builtin.processor
-  name: 阶段 1：规范化输入
+  name: "Stage 1: Normalize Input"
   backend: "{{system.default_backend}}"
   model: "{{system.default_model}}"
   config:
@@ -20,7 +20,7 @@ nodes:
   type: generator
   kind: llm.generate
   implementation: builtin.generator
-  name: 阶段 2：生成回答
+  name: "Stage 2: Generate Answer"
   backend: "{{system.default_backend}}"
   model: "{{system.default_model}}"
   config:
@@ -50,7 +50,7 @@ nodes:
   type: processor
   kind: content.transform
   implementation: builtin.processor
-  name: 阶段 3：整理输出
+  name: "Stage 3: Format Output"
   backend: "{{system.default_backend}}"
   model: "{{system.default_model}}"
   config:
@@ -66,7 +66,7 @@ nodes:
   - stage-2
 schema_version: centag.pipeline/v1alpha1
 id: pipeline-mode
-name: 通用流水线模式
+name: Generic Pipeline Mode
 shortcut_code: '#p'
 global_config:
   timeout: 240
@@ -74,7 +74,7 @@ global_config:
   bypass_on_error: true
   parallel_limit: 2
   log_level: info
-description: '与 #p/pipeline 模式 ID 对齐的三阶段串行模板，可作为可配置流水线的默认样例。'
+description: "Three-stage serial template aligned with #p/pipeline mode ID; a default sample for configurable pipelines."
 metadata:
   aligned_proxy_mode: pipeline
   lastUpdated: '2026-05-10T00:00:00.000Z'

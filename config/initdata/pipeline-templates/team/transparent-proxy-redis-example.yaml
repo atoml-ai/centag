@@ -1,8 +1,8 @@
 version: '1.0'
 schema_version: centag.pipeline/v1alpha1
 id: transparent-proxy-redis-cache
-name: 缓存 + 跳板转发示例（Redis）
-description: 示例模板：cache + transparent_forward；用户侧透明模式已改为无 system prompt 的 generator，缓存请用 cache-mode，固定出站跳板请用 fixed-egress
+name: Cache + Fixed-Egress Example (Redis)
+description: "Example: cache + transparent_forward; user transparent mode now uses a generator without system prompt — use cache-mode for caching and fixed-egress for fixed outbound hop"
 metadata:
   aligned_proxy_mode: fixed-egress
   lastUpdated: '2026-07-14T00:00:00.000Z'
@@ -19,7 +19,7 @@ nodes:
   type: cache
   kind: cache.access
   implementation: builtin.cache
-  name: Redis 缓存读取
+  name: Redis Cache Read
   config:
     custom_config:
       operation: read
@@ -37,7 +37,7 @@ nodes:
   type: generator
   kind: llm.generate
   implementation: builtin.generator
-  name: 透明代理生成
+  name: Transparent Proxy Generate
   backend: "{{system.default_backend}}"
   model: "{{system.default_model}}"
   config:
@@ -53,7 +53,7 @@ nodes:
   type: cache
   kind: cache.access
   implementation: builtin.cache
-  name: Redis 缓存写入
+  name: Redis Cache Write
   config:
     custom_config:
       operation: write
@@ -73,7 +73,7 @@ nodes:
   type: token_usage
   kind: metrics.token_usage
   implementation: builtin.token_usage
-  name: Token 计量（SQLite）
+  name: Token Metering (SQLite)
   config:
     custom_config:
       operation: record

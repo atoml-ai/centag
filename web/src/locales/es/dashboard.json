@@ -96,5 +96,7 @@
   "pageDescriptionDefault": "Resumen del estado del servicio Centag y configuración básica",
   "usageHintAdmin": "Facturación y estimación de costos (almacenada según la política actual).",
   "usageHintDefault": "Medición y estimación de costos dentro del proceso (se reinicia al reiniciar).",
-  "items": "{count} elementos"
+  "items": "{count} elementos",
+  "config": "Configuración",
+  "logout": "Cerrar sesión"
 }
