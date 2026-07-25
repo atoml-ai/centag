@@ -2,12 +2,35 @@ package agent
 
 import "fmt"
 
-// CodexTemplate Codex CLI 配置模板
+// CodexTemplate Codex CLI 配置模板（对齐 cc-switch：auth.json + config.toml）
 type CodexTemplate struct{}
 
 func (t *CodexTemplate) AgentType() AgentType { return AgentCodex }
 func (t *CodexTemplate) DisplayName() string  { return "Codex CLI" }
-func (t *CodexTemplate) Description() string  { return "OpenAI 官方的 AI 编程助手 CLI (ChatGPT Codex)" }
+func (t *CodexTemplate) Description() string {
+	return "OpenAI 官方的 AI 编程助手 CLI (ChatGPT Codex)"
+}
+
+func (t *CodexTemplate) Meta() AgentSetupMeta {
+	return AgentSetupMeta{
+		Category:  AgentCategoryCLI,
+		WriteMode: WriteModeOverwrite,
+		ConfigPaths: []string{
+			"~/.codex/auth.json",
+			"~/.codex/config.toml",
+		},
+		KeyFields: []string{
+			"OPENAI_API_KEY",
+			"model_provider",
+			"model",
+			"model_providers.custom.base_url",
+			"wire_api",
+		},
+		ConfigMethod: "覆盖写入 ~/.codex/auth.json（OPENAI_API_KEY）与 ~/.codex/config.toml（model_provider=custom，[model_providers.custom].base_url 指向 Centag，wire_api=responses）。",
+		InstallURL:   "https://github.com/openai/codex",
+		InstallHint:  "curl -fsSL https://chatgpt.com/codex/install.sh | sh；或 npm i -g @openai/codex",
+	}
+}
 
 func (t *CodexTemplate) ConfigFiles(info *BackendInfo) ([]ConfigFile, error) {
 	url := proxyURL(info.Host, info.Port)

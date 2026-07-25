@@ -46,12 +46,19 @@ func resolveModelName(model string, pipelineID string, supportedModels []backend
 	return model
 }
 
-// ListAgentTypes 列出所有支持的 Agent 工具类型
+// ListAgentTypes 列出所有支持的 Agent 工具类型（含配置方法与安装指引）
 func (h *AgentHandler) ListAgentTypes(c *gin.Context) {
 	type agentInfo struct {
-		Type        string `json:"type"`
-		DisplayName string `json:"display_name"`
-		Description string `json:"description"`
+		Type         string              `json:"type"`
+		DisplayName  string              `json:"display_name"`
+		Description  string              `json:"description"`
+		Category     agent.AgentCategory `json:"category"`
+		WriteMode    string              `json:"write_mode"`
+		ConfigPaths  []string            `json:"config_paths"`
+		KeyFields    []string            `json:"key_fields"`
+		ConfigMethod string              `json:"config_method"`
+		InstallURL   string              `json:"install_url"`
+		InstallHint  string              `json:"install_hint"`
 	}
 	var list []agentInfo
 	for _, at := range h.registry.List() {
@@ -59,12 +66,23 @@ func (h *AgentHandler) ListAgentTypes(c *gin.Context) {
 		if !ok {
 			continue
 		}
+		meta := t.Meta()
 		list = append(list, agentInfo{
-			Type:        string(at),
-			DisplayName: t.DisplayName(),
-			Description: t.Description(),
+			Type:         string(at),
+			DisplayName:  t.DisplayName(),
+			Description:  t.Description(),
+			Category:     meta.Category,
+			WriteMode:    meta.WriteMode,
+			ConfigPaths:  meta.ConfigPaths,
+			KeyFields:    meta.KeyFields,
+			ConfigMethod: meta.ConfigMethod,
+			InstallURL:   meta.InstallURL,
+			InstallHint:  meta.InstallHint,
 		})
 	}
+	sort.Slice(list, func(i, j int) bool {
+		return list[i].Type < list[j].Type
+	})
 	c.JSON(http.StatusOK, gin.H{"agent_types": list})
 }
 

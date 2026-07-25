@@ -2,12 +2,33 @@ package agent
 
 import "fmt"
 
-// OpenClawTemplate OpenClaw 配置模板
+// OpenClawTemplate OpenClaw 配置模板（对齐 cc-switch：累加 models.providers）
 type OpenClawTemplate struct{}
 
 func (t *OpenClawTemplate) AgentType() AgentType { return AgentOpenClaw }
 func (t *OpenClawTemplate) DisplayName() string  { return "OpenClaw" }
-func (t *OpenClawTemplate) Description() string  { return "AI 编程助手 (github.com/anomalyco/openclaw)" }
+func (t *OpenClawTemplate) Description() string {
+	return "AI 编程助手 (github.com/anomalyco/openclaw)"
+}
+
+func (t *OpenClawTemplate) Meta() AgentSetupMeta {
+	return AgentSetupMeta{
+		Category:  AgentCategoryCLI,
+		WriteMode: WriteModeMerge,
+		ConfigPaths: []string{
+			"~/.openclaw/openclaw.json",
+		},
+		KeyFields: []string{
+			"agents.defaults.model.primary",
+			"models.providers.centag.baseUrl",
+			"models.providers.centag.apiKey",
+			"models.providers.centag.api",
+		},
+		ConfigMethod: "合并写入 ~/.openclaw/openclaw.json：在 models.providers 中累加/更新 centag（baseUrl/apiKey/api=openai-completions），并设置 agents.defaults.model.primary。不覆盖其它 provider。",
+		InstallURL:   "https://www.npmjs.com/package/openclaw",
+		InstallHint:  "npm i -g openclaw",
+	}
+}
 
 func (t *OpenClawTemplate) ConfigFiles(info *BackendInfo) ([]ConfigFile, error) {
 	url := proxyURL(info.Host, info.Port)
@@ -41,9 +62,9 @@ func (t *OpenClawTemplate) ConfigFiles(info *BackendInfo) ([]ConfigFile, error) 
 
 func (t *OpenClawTemplate) SetupCommand(info *BackendInfo) string {
 	url := proxyURL(info.Host, info.Port)
-	return fmt.Sprintf(`# OpenClaw: 编辑 ~/.openclaw/openclaw.json
-# 在 models.providers 中添加 "centag": { "baseUrl": "%s", "apiKey": "%s" }
-`, url, info.APIKey)
+	return fmt.Sprintf(`# OpenClaw: 合并编辑 ~/.openclaw/openclaw.json
+# 在 models.providers 中添加/更新 "centag": { "baseUrl": "%s", "apiKey": "<key>", "api": "openai-completions" }
+`, url)
 }
 
 func (t *OpenClawTemplate) PlatformCommands(info *BackendInfo) PlatformCommands {
@@ -62,15 +83,19 @@ func (t *OpenClawTemplate) VerifyCommand(info *BackendInfo) string {
 func (t *OpenClawTemplate) Steps(info *BackendInfo) []ConfigStep {
 	url := proxyURL(info.Host, info.Port)
 	return []ConfigStep{
-		{Title: "配置 OpenClaw", Description: fmt.Sprintf("在 openclaw.json 中添加 Centag: %s", url)},
+		{Title: "合并 OpenClaw provider", Description: fmt.Sprintf("在 openclaw.json 中累加 Centag: %s", url)},
 		{Title: "启动 OpenClaw", Code: "openclaw"},
 	}
 }
 
 func (t *OpenClawTemplate) WriteConfig(info *BackendInfo) error {
-	files, err := t.ConfigFiles(info)
-	if err != nil {
-		return err
-	}
-	return writeFiles(files)
+	url := proxyURL(info.Host, info.Port)
+	model := defaultModel(info)
+	return mergeOpenClawProvider(
+		"~/.openclaw/openclaw.json",
+		url,
+		info.APIKey,
+		centagAPIModelID(model),
+		centagModelRef(model),
+	)
 }
