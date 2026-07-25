@@ -3,7 +3,7 @@
   "backends": "后端",
   "fallbackPolicies": "降级策略",
   "pipelines": "策略",
-  "agentSetup": "Agent 接入",
+  "agentSetup": "Agent配置",
   "agentProviders": "Agent 供应商",
   "nodePlugins": "节点插件",
   "chat": "对话",

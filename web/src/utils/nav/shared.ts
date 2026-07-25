@@ -171,7 +171,7 @@ export function usageNavGroup(): NavItem {
   )
 }
 
-/** 接入：系统代理 + Agent 快速接入 */
+/** 接入：系统代理 + Agent 配置 */
 export function accessNavGroup(): NavItem {
   return navGroup(
     'access',

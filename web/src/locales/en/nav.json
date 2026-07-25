@@ -3,7 +3,7 @@
   "backends": "Backends",
   "fallbackPolicies": "Fallback Policies",
   "pipelines": "Pipelines",
-  "agentSetup": "Agent Setup",
+  "agentSetup": "Agent Config",
   "agentProviders": "Agent Providers",
   "nodePlugins": "Node Plugins",
   "chat": "Chat",
