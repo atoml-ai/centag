@@ -61,12 +61,15 @@ func TestGenerateAPIKey(t *testing.T) {
 		t.Error("keyPrefix should not be empty")
 	}
 
-	if len(keyPrefix) != 16 {
-		t.Errorf("keyPrefix should be 16 characters, got: %d", len(keyPrefix))
+	wantPrefix := APIKeyDisplayPrefix(fullKey)
+	if keyPrefix != wantPrefix {
+		t.Errorf("keyPrefix = %q, want display prefix %q", keyPrefix, wantPrefix)
 	}
-
-	if !strings.HasPrefix(fullKey, keyPrefix) {
-		t.Error("keyPrefix should be the prefix of fullKey")
+	if !strings.Contains(keyPrefix, "…") {
+		t.Errorf("keyPrefix should contain ellipsis, got: %s", keyPrefix)
+	}
+	if !strings.HasPrefix(fullKey, strings.Split(keyPrefix, "…")[0]) {
+		t.Error("keyPrefix head should be a prefix of fullKey")
 	}
 }
 
@@ -125,8 +128,10 @@ func TestMaskAPIKey(t *testing.T) {
 		prefix string
 		want   string
 	}{
-		{"llmproxy_ab12cd", "llmproxy_ab12cd****…****"},
-		{"12345678", "12345678****…****"},
+		{"llmproxy_ab12cdef…9f3a12", "llmproxy_ab12cdef…9f3a12"},
+		{"llmproxy_ab12cd", "llmproxy_ab…12cd"},     // len14 → head10…tail4
+		{"llmproxy_12345678", "llmproxy_1234…5678"}, // len16 → head12…tail4
+		{"12345678", "12345678…"},
 	}
 
 	for _, tt := range tests {
@@ -134,6 +139,15 @@ func TestMaskAPIKey(t *testing.T) {
 		if result != tt.want {
 			t.Errorf("MaskAPIKey(%q) = %s, want %s", tt.prefix, result, tt.want)
 		}
+	}
+}
+
+func TestAPIKeyDisplayPrefix(t *testing.T) {
+	full := "llmproxy_" + strings.Repeat("ab", 32) // 9 + 64
+	got := APIKeyDisplayPrefix(full)
+	want := full[:32] + "…" + full[len(full)-12:]
+	if got != want {
+		t.Fatalf("APIKeyDisplayPrefix = %q, want %q", got, want)
 	}
 }
 

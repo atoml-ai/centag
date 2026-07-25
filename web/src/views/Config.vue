@@ -36,53 +36,80 @@
 
       <main class="config-main">
         <!-- 服务概览 -->
-        <section v-show="activeSection === 'overview'" class="section-panel">
+        <section v-show="activeSection === 'overview'" class="section-panel overview-panel">
           <header class="section-header">
             <h2 class="section-title">{{ t('config.serviceOverview') }}</h2>
+            <p class="section-desc">{{ t('config.serviceOverviewDesc') }}</p>
           </header>
 
-          <el-form label-width="120px">
-            <el-divider content-position="left">{{ t('config.listenInfo') }}</el-divider>
-            <el-form-item :label="t('config.serviceHost')">
-              <el-input :model-value="config.server.host" disabled />
-              <div class="form-tip">{{ t('config.serviceHostTip') }}</div>
-            </el-form-item>
-            <el-form-item :label="t('config.servicePort')">
-              <el-input-number :model-value="config.server.port" disabled style="width: 200px" />
-              <div class="form-tip">{{ t('config.servicePortTip') }}</div>
-            </el-form-item>
+          <div class="overview-block">
+            <div class="overview-block-head">
+              <span class="overview-block-title">{{ t('config.listenInfo') }}</span>
+              <el-tag size="small" type="info" effect="plain">{{ t('config.readOnly') }}</el-tag>
+            </div>
+            <div class="listen-row">
+              <div class="listen-field">
+                <label class="field-label">{{ t('config.serviceHost') }}</label>
+                <el-input :model-value="config.server.host" disabled class="listen-input" />
+              </div>
+              <div class="listen-field listen-field--port">
+                <label class="field-label">{{ t('config.servicePort') }}</label>
+                <el-input :model-value="String(config.server.port ?? '')" disabled class="listen-input" />
+              </div>
+              <p class="form-tip listen-tip">{{ t('config.listenInfoTip') }}</p>
+            </div>
+          </div>
 
-            <el-divider content-position="left">{{ t('config.responseBehavior') }}</el-divider>
-            <el-form-item :label="t('config.responseTrace')">
+          <div class="overview-block">
+            <div class="overview-block-head">
+              <span class="overview-block-title">{{ t('config.responseBehavior') }}</span>
+            </div>
+            <div class="setting-row">
+              <div class="setting-copy">
+                <div class="setting-label">{{ t('config.responseTrace') }}</div>
+                <p class="form-tip">{{ t('config.responseTraceDesc') }}</p>
+              </div>
               <el-switch v-model="config.proxy.response_trace_banner" />
-              <div class="form-tip">{{ t('config.responseTraceDesc') }}</div>
-            </el-form-item>
+            </div>
+          </div>
 
-            <el-divider content-position="left">{{ t('config.relatedEntries') }}</el-divider>
+          <div class="overview-block">
+            <div class="overview-block-head">
+              <span class="overview-block-title">{{ t('config.relatedEntries') }}</span>
+            </div>
             <div class="link-cards">
-              <el-card shadow="never" class="link-card" @click="router.push('/dashboard')">
-                <div class="link-title">{{ t('config.defaultBackendModelPipeline') }}</div>
-                <div class="link-desc">{{ t('config.defaultBackendModelPipelineDesc') }}</div>
-              </el-card>
-              <el-card
+              <button type="button" class="link-card" @click="router.push('/dashboard')">
+                <div class="link-copy">
+                  <div class="link-title">{{ t('config.defaultBackendModelPipeline') }}</div>
+                  <div class="link-desc">{{ t('config.defaultBackendModelPipelineDesc') }}</div>
+                </div>
+                <el-icon class="link-arrow"><ArrowRight /></el-icon>
+              </button>
+              <button
                 v-if="showSystemProxyLink"
-                shadow="never"
+                type="button"
                 class="link-card"
                 @click="router.push('/system-proxy')"
               >
-                <div class="link-title">{{ t('config.systemProxyEntry') }}</div>
-                <div class="link-desc">{{ t('config.systemProxyEntryDesc') }}</div>
-              </el-card>
-              <el-card
-                shadow="never"
+                <div class="link-copy">
+                  <div class="link-title">{{ t('config.systemProxyEntry') }}</div>
+                  <div class="link-desc">{{ t('config.systemProxyEntryDesc') }}</div>
+                </div>
+                <el-icon class="link-arrow"><ArrowRight /></el-icon>
+              </button>
+              <button
+                type="button"
                 class="link-card"
                 @click="router.push({ path: '/profile', query: { section: 'password' } })"
               >
-                <div class="link-title">{{ t('config.accountAndPassword') }}</div>
-                <div class="link-desc">{{ t('config.accountAndPasswordDesc') }}</div>
-              </el-card>
+                <div class="link-copy">
+                  <div class="link-title">{{ t('config.accountAndPassword') }}</div>
+                  <div class="link-desc">{{ t('config.accountAndPasswordDesc') }}</div>
+                </div>
+                <el-icon class="link-arrow"><ArrowRight /></el-icon>
+              </button>
             </div>
-          </el-form>
+          </div>
         </section>
 
         <!-- HTTP 重试与熔断 -->
@@ -192,7 +219,7 @@ import { ref, computed, onMounted, watch, type Component } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
-import { Refresh, Check, Monitor, Connection, Switch } from '@element-plus/icons-vue'
+import { Refresh, Check, Monitor, Connection, Switch, ArrowRight } from '@element-plus/icons-vue'
 import { getConfig, saveConfig } from '@/api'
 import { useEdition } from '@/composables/useEdition'
 import { useAuthStore } from '@/stores/auth'
@@ -390,6 +417,7 @@ onMounted(() => {
   max-width: 1100px;
   margin: 0 auto;
   width: 100%;
+  padding: 0 0 24px;
 }
 
 .page-header {
@@ -508,10 +536,83 @@ onMounted(() => {
   margin-bottom: 16px;
 }
 
+.overview-panel {
+  max-width: 760px;
+}
+
+.overview-block {
+  margin-bottom: 16px;
+  padding: 16px 18px;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 10px;
+  background: var(--el-fill-color-blank);
+}
+
+.overview-block-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.overview-block-title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--el-text-color-primary);
+}
+
+.listen-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 140px;
+  column-gap: 16px;
+  row-gap: 10px;
+  align-items: start;
+}
+
+.field-label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 0.8125rem;
+  color: var(--el-text-color-regular);
+}
+
+.listen-input {
+  width: 100%;
+}
+
+.listen-tip {
+  grid-column: 1 / -1;
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  box-sizing: border-box;
+}
+
+.setting-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.setting-copy {
+  flex: 1;
+  min-width: 0;
+}
+
+.setting-label {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--el-text-color-primary);
+  margin-bottom: 4px;
+}
+
 .form-tip {
   font-size: 0.75rem;
   color: var(--el-text-color-secondary);
-  margin-top: 4px;
+  margin: 6px 0 0;
+  line-height: 1.45;
 }
 
 .unit {
@@ -525,31 +626,52 @@ onMounted(() => {
 }
 
 .link-cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .link-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 8px;
+  background: var(--el-bg-color);
+  text-align: left;
   cursor: pointer;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  transition: border-color 0.15s ease, background 0.15s ease;
 }
 
 .link-card:hover {
   border-color: var(--el-color-primary-light-5);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  background: var(--el-color-primary-light-9);
+}
+
+.link-copy {
+  flex: 1;
+  min-width: 0;
 }
 
 .link-title {
   font-weight: 600;
+  font-size: 0.875rem;
   color: var(--el-text-color-primary);
-  margin-bottom: 4px;
+  margin-bottom: 2px;
 }
 
 .link-desc {
   font-size: 0.75rem;
   color: var(--el-text-color-secondary);
   line-height: 1.4;
+}
+
+.link-arrow {
+  flex-shrink: 0;
+  color: var(--el-text-color-secondary);
 }
 
 @media (max-width: 768px) {
@@ -578,6 +700,18 @@ onMounted(() => {
 
   .config-main {
     padding: 16px;
+  }
+
+  .listen-row {
+    grid-template-columns: 1fr;
+  }
+
+  .listen-field--port {
+    max-width: 160px;
+  }
+
+  .overview-panel {
+    max-width: none;
   }
 }
 </style>

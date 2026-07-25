@@ -349,12 +349,20 @@ func ToAPIKeyResponse(k *database.APIKey) APIKeyResponse {
 	return toAPIKeyResponse(k)
 }
 
+func maskedAPIKeyForList(k *database.APIKey) string {
+	// Prefer full-key head…tail when ciphertext is available (legacy rows only store 16-char prefix).
+	if plain, ok := revealAPIKeyPlaintext(k); ok {
+		return auth.APIKeyDisplayPrefix(plain)
+	}
+	return auth.MaskAPIKey(k.KeyPrefix)
+}
+
 func toAPIKeyResponse(k *database.APIKey) APIKeyResponse {
 	r := APIKeyResponse{
 		ID:              k.ID,
 		Name:            k.Name,
 		KeyPrefix:       k.KeyPrefix,
-		MaskedKey:       auth.MaskAPIKey(k.KeyPrefix),
+		MaskedKey:       maskedAPIKeyForList(k),
 		RevealAvailable: apiKeyRevealAvailable(k),
 		Enabled:         k.Enabled,
 		BudgetUSD:       k.BudgetUSD,
