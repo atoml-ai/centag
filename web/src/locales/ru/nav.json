@@ -3,7 +3,7 @@
   "backends": "Бэкенды",
   "fallbackPolicies": "Политики отката",
   "pipelines": "Конвейеры",
-  "agentSetup": "Настройка агента",
+  "agentSetup": "Конфиг Agent",
   "agentProviders": "Провайдеры агентов",
   "nodePlugins": "Плагины узлов",
   "chat": "Чат",

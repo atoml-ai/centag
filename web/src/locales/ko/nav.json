@@ -3,7 +3,7 @@
   "backends": "백엔드",
   "fallbackPolicies": "폴백 정책",
   "pipelines": "파이프라인",
-  "agentSetup": "에이전트 설정",
+  "agentSetup": "Agent설정",
   "agentProviders": "에이전트 프로바이더",
   "nodePlugins": "노드 플러그인",
   "chat": "채팅",
