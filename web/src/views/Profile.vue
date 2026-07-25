@@ -26,93 +26,97 @@
       <!-- 右侧内容 -->
       <main class="profile-main">
         <!-- 基本信息 -->
-        <section v-show="activeSection === 'basic'" class="section-panel">
-          <header class="section-header">
-            <h2 class="section-title">{{ $t('profile.basicInfo') }}</h2>
-            <p class="section-desc">{{ $t('profile.basicInfoDesc') }}</p>
-          </header>
+        <section v-show="activeSection === 'basic'" class="section-panel section-panel--center">
+          <div class="section-center">
+            <header class="section-header">
+              <h2 class="section-title">{{ $t('profile.basicInfo') }}</h2>
+              <p class="section-desc">{{ $t('profile.basicInfoDesc') }}</p>
+            </header>
 
-          <div class="p-hero">
-            <el-avatar :size="64" :style="avatarStyle">{{ avatarText }}</el-avatar>
-            <div class="p-hero-info">
-              <div class="p-hero-name">{{ authStore.displayName }}</div>
-              <div class="p-hero-meta">
-                <span class="p-hero-uname">@{{ authStore.user?.username }}</span>
-                <el-tag :type="authStore.isAdmin ? 'danger' : 'primary'" size="small" effect="light">
-                  {{ authStore.isAdmin ? $t('profile.admin') : $t('profile.regularUser') }}
-                </el-tag>
+            <div class="p-hero">
+              <el-avatar :size="64" :style="avatarStyle">{{ avatarText }}</el-avatar>
+              <div class="p-hero-info">
+                <div class="p-hero-name">{{ authStore.displayName }}</div>
+                <div class="p-hero-meta">
+                  <span class="p-hero-uname">@{{ authStore.user?.username }}</span>
+                  <el-tag :type="authStore.isAdmin ? 'danger' : 'primary'" size="small" effect="light">
+                    {{ authStore.isAdmin ? $t('profile.admin') : $t('profile.regularUser') }}
+                  </el-tag>
+                </div>
               </div>
             </div>
+
+            <el-divider />
+
+            <el-form :model="profileForm" label-width="100px" class="section-form">
+              <el-form-item :label="$t('profile.username')">
+                <el-input v-model="profileForm.username" disabled>
+                  <template #suffix>
+                    <el-icon style="color:var(--el-text-color-secondary)"><Lock /></el-icon>
+                  </template>
+                </el-input>
+              </el-form-item>
+              <el-form-item :label="$t('profile.displayName')">
+                <el-input v-model="profileForm.display_name" :placeholder="$t('profile.displayNamePlaceholder')" />
+              </el-form-item>
+              <el-form-item :label="$t('profile.email')">
+                <el-input v-model="profileForm.email" :placeholder="$t('profile.emailPlaceholder')" />
+              </el-form-item>
+              <el-form-item>
+                <el-button type="primary" :loading="savingProfile" @click="saveProfile">
+                  {{ $t('profile.saveInfo') }}
+                </el-button>
+              </el-form-item>
+            </el-form>
           </div>
-
-          <el-divider />
-
-          <el-form :model="profileForm" label-width="100px" class="section-form">
-            <el-form-item :label="$t('profile.username')">
-              <el-input v-model="profileForm.username" disabled>
-                <template #suffix>
-                  <el-icon style="color:var(--el-text-color-secondary)"><Lock /></el-icon>
-                </template>
-              </el-input>
-            </el-form-item>
-            <el-form-item :label="$t('profile.displayName')">
-              <el-input v-model="profileForm.display_name" :placeholder="$t('profile.displayNamePlaceholder')" />
-            </el-form-item>
-            <el-form-item :label="$t('profile.email')">
-              <el-input v-model="profileForm.email" :placeholder="$t('profile.emailPlaceholder')" />
-            </el-form-item>
-            <el-form-item>
-              <el-button type="primary" :loading="savingProfile" @click="saveProfile">
-                {{ $t('profile.saveInfo') }}
-              </el-button>
-            </el-form-item>
-          </el-form>
         </section>
 
         <!-- 修改密码 -->
-        <section v-show="activeSection === 'password'" class="section-panel">
-          <header class="section-header">
-            <h2 class="section-title">{{ $t('profile.changePassword') }}</h2>
-            <p class="section-desc">{{ $t('profile.changePasswordDesc') }}</p>
-          </header>
+        <section v-show="activeSection === 'password'" class="section-panel section-panel--center">
+          <div class="section-center section-center--narrow">
+            <header class="section-header">
+              <h2 class="section-title">{{ $t('profile.changePassword') }}</h2>
+              <p class="section-desc">{{ $t('profile.changePasswordDesc') }}</p>
+            </header>
 
-          <el-form
-            ref="pwdFormRef"
-            :model="pwdForm"
-            :rules="pwdRules"
-            label-width="100px"
-            class="section-form section-form--narrow"
-          >
-            <el-form-item :label="$t('profile.currentPassword')" prop="old_password">
-              <el-input
-                v-model="pwdForm.old_password"
-                type="password"
-                show-password
-                :placeholder="$t('profile.currentPasswordPlaceholder')"
-              />
-            </el-form-item>
-            <el-form-item :label="$t('profile.newPassword')" prop="new_password">
-              <el-input
-                v-model="pwdForm.new_password"
-                type="password"
-                show-password
-                :placeholder="$t('profile.newPasswordPlaceholder')"
-              />
-            </el-form-item>
-            <el-form-item :label="$t('profile.confirmPassword')" prop="confirm_password">
-              <el-input
-                v-model="pwdForm.confirm_password"
-                type="password"
-                show-password
-                :placeholder="$t('profile.confirmPasswordPlaceholder')"
-              />
-            </el-form-item>
-            <el-form-item>
-              <el-button type="warning" :loading="changingPwd" @click="changePassword">
-                {{ $t('profile.updatePassword') }}
-              </el-button>
-            </el-form-item>
-          </el-form>
+            <el-form
+              ref="pwdFormRef"
+              :model="pwdForm"
+              :rules="pwdRules"
+              label-width="100px"
+              class="section-form"
+            >
+              <el-form-item :label="$t('profile.currentPassword')" prop="old_password">
+                <el-input
+                  v-model="pwdForm.old_password"
+                  type="password"
+                  show-password
+                  :placeholder="$t('profile.currentPasswordPlaceholder')"
+                />
+              </el-form-item>
+              <el-form-item :label="$t('profile.newPassword')" prop="new_password">
+                <el-input
+                  v-model="pwdForm.new_password"
+                  type="password"
+                  show-password
+                  :placeholder="$t('profile.newPasswordPlaceholder')"
+                />
+              </el-form-item>
+              <el-form-item :label="$t('profile.confirmPassword')" prop="confirm_password">
+                <el-input
+                  v-model="pwdForm.confirm_password"
+                  type="password"
+                  show-password
+                  :placeholder="$t('profile.confirmPasswordPlaceholder')"
+                />
+              </el-form-item>
+              <el-form-item>
+                <el-button type="warning" :loading="changingPwd" @click="changePassword">
+                  {{ $t('profile.updatePassword') }}
+                </el-button>
+              </el-form-item>
+            </el-form>
+          </div>
         </section>
 
         <!-- API Key -->
@@ -131,24 +135,32 @@
             <template #title>{{ $t('profile.apiKeyHint') }}</template>
           </el-alert>
 
-          <el-table :data="apiKeys" v-loading="loadingKeys" :empty-text="$t('profile.noApiKeys')" stripe size="large">
-            <el-table-column :label="$t('profile.name')" prop="name" min-width="110">
+          <el-table
+            class="api-keys-table"
+            :data="apiKeys"
+            v-loading="loadingKeys"
+            :empty-text="$t('profile.noApiKeys')"
+            stripe
+            size="large"
+            style="width: 100%"
+          >
+            <el-table-column :label="$t('profile.name')" prop="name" min-width="96" show-overflow-tooltip>
               <template #default="{ row }"><span style="font-weight:500">{{ row.name }}</span></template>
             </el-table-column>
-            <el-table-column :label="$t('profile.key')" min-width="220">
+            <el-table-column :label="$t('profile.key')" min-width="134">
               <template #default="{ row }">
                 <div class="key-cell">
-                  <code class="masked-key">{{ row.masked_key }}</code>
-                  <el-tooltip
-                    :content="row.reveal_available ? $t('profile.viewFullKey') : $t('profile.fullKeyHint')"
-                    placement="top"
-                  >
+                  <el-tooltip :content="row.masked_key || row.key_prefix" placement="top" :show-after="400">
+                    <code class="masked-key">{{ formatShortAPIKey(row) }}</code>
+                  </el-tooltip>
+                  <el-tooltip :content="$t('profile.copyKey')" placement="top">
                     <el-button
                       type="primary"
                       link
                       size="small"
                       class="copy-key-btn"
-                      @click="handleCopyAPIKey(row)"
+                      :disabled="!row.reveal_available"
+                      @click.stop="handleCopyAPIKey(row)"
                     >
                       <el-icon><CopyDocument /></el-icon>
                     </el-button>
@@ -156,44 +168,44 @@
                 </div>
               </template>
             </el-table-column>
-            <el-table-column :label="$t('profile.status')" width="80" align="center">
+            <el-table-column :label="$t('profile.status')" width="72" align="center">
               <template #default="{ row }">
                 <el-tag :type="row.enabled ? 'success' : 'info'" size="small" effect="plain">
                   {{ row.enabled ? $t('profile.enabled') : $t('profile.disabled') }}
                 </el-tag>
               </template>
             </el-table-column>
-            <el-table-column :label="$t('profile.expiresAt')" min-width="130">
+            <el-table-column :label="$t('profile.expiresAt')" width="105" show-overflow-tooltip>
               <template #default="{ row }">
-                <span v-if="row.expires_at">{{ row.expires_at }}</span>
+                <span v-if="row.expires_at" class="cell-compact">{{ row.expires_at }}</span>
                 <span v-else class="text-muted">{{ $t('profile.neverExpires') }}</span>
               </template>
             </el-table-column>
-            <el-table-column :label="$t('profile.lastUsed')" min-width="130">
+            <el-table-column :label="$t('profile.lastUsed')" width="105" show-overflow-tooltip>
               <template #default="{ row }">
-                <span v-if="row.last_used_at">{{ row.last_used_at }}</span>
+                <span v-if="row.last_used_at" class="cell-compact">{{ row.last_used_at }}</span>
                 <span v-else class="text-muted">{{ $t('profile.neverUsed') }}</span>
               </template>
             </el-table-column>
-            <el-table-column :label="$t('profile.actions')" width="130" align="center" fixed="right">
+            <el-table-column :label="$t('profile.actions')" width="64" align="center">
               <template #default="{ row }">
-                <el-button
-                  v-if="row.reveal_available"
-                  type="primary"
-                  link
-                  size="small"
-                  @click="handleCopyAPIKey(row)"
-                >
-                  {{ $t('profile.copyKey') }}
-                </el-button>
                 <el-dropdown trigger="click">
                   <el-button type="primary" link>
                     <el-icon><MoreFilled /></el-icon>
                   </el-button>
                   <template #dropdown>
                     <el-dropdown-menu>
-                      <el-dropdown-item v-if="row.reveal_available" @click="viewFullKey(row)">
+                      <el-dropdown-item
+                        :disabled="!row.reveal_available"
+                        @click="viewFullKey(row)"
+                      >
                         <el-icon><View /></el-icon>{{ $t('profile.viewFullKeyAction') }}
+                      </el-dropdown-item>
+                      <el-dropdown-item
+                        :disabled="!row.reveal_available"
+                        @click="handleCopyAPIKey(row)"
+                      >
+                        <el-icon><CopyDocument /></el-icon>{{ $t('profile.copyKey') }}
                       </el-dropdown-item>
                       <el-dropdown-item @click="toggleKey(row)">
                         <el-icon><Edit /></el-icon>
@@ -527,6 +539,13 @@ async function changePassword() {
 
 const apiKeys = ref<APIKey[]>([])
 const loadingKeys = ref(false)
+
+/** 列表展示：直接用后端脱敏（可解密时前后位数更长）；单元格内铺满 */
+function formatShortAPIKey(row: APIKey): string {
+  const masked = (row.masked_key || row.key_prefix || '').trim().replace(/\.\.\./g, '…')
+  return masked || '••••'
+}
+
 async function loadAPIKeys() {
   loadingKeys.value = true
   try {
@@ -606,7 +625,11 @@ async function copyKey() {
   await copyText(newFullKey.value)
 }
 
-async function revealFullKey(row: APIKey, autoCopy: boolean) {
+async function viewFullKey(row: APIKey) {
+  if (!row.reveal_available) {
+    ElMessage.warning(t('profile.keyViewWarning'))
+    return
+  }
   showRevealDialog.value = true
   revealLoading.value = true
   revealedFullKey.value = ''
@@ -614,7 +637,6 @@ async function revealFullKey(row: APIKey, autoCopy: boolean) {
     const d = await getAPIKey(row.id)
     if (d.full_key) {
       revealedFullKey.value = d.full_key
-      if (autoCopy) await copyText(d.full_key)
     } else {
       ElMessage.warning(t('profile.cannotViewFullKey'))
       showRevealDialog.value = false
@@ -627,16 +649,22 @@ async function revealFullKey(row: APIKey, autoCopy: boolean) {
   }
 }
 
+/** 静默拉取并复制，不打开「查看密钥」对话框 */
 async function handleCopyAPIKey(row: APIKey) {
   if (!row.reveal_available) {
     ElMessage.warning(t('profile.keyViewWarning'))
     return
   }
-  await revealFullKey(row, true)
-}
-
-async function viewFullKey(row: APIKey) {
-  await revealFullKey(row, false)
+  try {
+    const d = await getAPIKey(row.id)
+    if (d.full_key) {
+      await copyText(d.full_key)
+    } else {
+      ElMessage.warning(t('profile.cannotViewFullKey'))
+    }
+  } catch (e: any) {
+    ElMessage.error(e.message || t('profile.operationFailed'))
+  }
 }
 
 async function copyRevealedKey() {
@@ -649,6 +677,7 @@ async function copyRevealedKey() {
   max-width: 1100px;
   margin: 0 auto;
   width: 100%;
+  padding: 0 0 24px;
 }
 
 .page-header {
@@ -729,6 +758,20 @@ async function copyRevealedKey() {
   padding: 24px;
 }
 
+.section-panel--center {
+  display: flex;
+  justify-content: center;
+}
+
+.section-center {
+  width: 100%;
+  max-width: 520px;
+}
+
+.section-center--narrow {
+  max-width: 440px;
+}
+
 .section-header {
   margin-bottom: 20px;
 }
@@ -759,11 +802,17 @@ async function copyRevealedKey() {
 }
 
 .section-form {
-  max-width: 520px;
+  width: 100%;
 }
 
-.section-form--narrow {
-  max-width: 440px;
+.cell-compact {
+  display: inline-block;
+  max-width: 100%;
+  font-size: 0.75rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: bottom;
 }
 
 .p-hero {
@@ -790,29 +839,41 @@ async function copyRevealedKey() {
   color: var(--el-text-color-secondary);
 }
 
+.api-keys-table {
+  width: 100%;
+}
+
+.api-keys-table :deep(.el-table__body-wrapper) {
+  overflow-x: hidden;
+}
+
 .key-cell {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
+  min-width: 0;
 }
 
 .masked-key {
+  flex: 1;
+  min-width: 0;
+  display: block;
+  box-sizing: border-box;
   font-family: 'Menlo', 'Monaco', 'Consolas', monospace;
-  font-size: 0.8125rem;
+  font-size: 0.75rem;
   background: var(--el-fill-color-light);
   padding: 3px 8px;
   border-radius: 4px;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: default;
 }
 
 .copy-key-btn {
-  opacity: 0.55;
-  transition: opacity 0.15s;
   flex-shrink: 0;
-}
-
-.key-cell:hover .copy-key-btn {
-  opacity: 1;
+  padding: 0 2px;
 }
 
 .new-key-box {

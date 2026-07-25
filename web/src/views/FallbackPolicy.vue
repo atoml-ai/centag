@@ -21,33 +21,49 @@
     </div>
 
     <div class="fallback-policy-body" v-loading="loading">
-      <el-table :data="policies" style="width: 100%" :empty-text="t('fallbackPolicy.emptyState')">
-        <el-table-column prop="id" :label="t('fallbackPolicy.table.id')" width="200" />
-        <el-table-column prop="name" :label="t('fallbackPolicy.table.name')" min-width="180" />
-        <el-table-column prop="strategy" :label="t('fallbackPolicy.table.type')" width="200">
+      <el-table
+        class="policy-table"
+        :data="policies"
+        style="width: 100%"
+        :empty-text="t('fallbackPolicy.emptyState')"
+      >
+        <el-table-column prop="id" :label="t('fallbackPolicy.table.id')" min-width="110" show-overflow-tooltip />
+        <el-table-column prop="enabled" :label="t('fallbackPolicy.table.status')" width="72" align="center">
           <template #default="{ row }">
-            <el-tag :type="strategyTagType(row.strategy)">{{ strategyLabel(row.strategy) }}</el-tag>
+            <el-switch v-model="row.enabled" size="small" @change="toggleEnabled(row)" />
           </template>
         </el-table-column>
-        <el-table-column :label="t('fallbackPolicy.table.ruleCount')" width="80" align="center">
+        <el-table-column prop="name" :label="t('fallbackPolicy.table.name')" min-width="100" show-overflow-tooltip />
+        <el-table-column prop="strategy" :label="t('fallbackPolicy.table.type')" min-width="120" show-overflow-tooltip>
+          <template #default="{ row }">
+            <el-tag size="small" :type="strategyTagType(row.strategy)">{{ strategyLabel(row.strategy) }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column :label="t('fallbackPolicy.table.ruleCount')" width="64" align="center">
           <template #default="{ row }">
             <el-tag size="small">{{ row.rules?.length || 0 }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="enabled" :label="t('fallbackPolicy.table.status')" width="80" align="center">
+        <el-table-column :label="t('fallbackPolicy.table.actions')" width="64" align="center">
           <template #default="{ row }">
-            <el-switch v-model="row.enabled" @change="toggleEnabled(row)" />
-          </template>
-        </el-table-column>
-        <el-table-column :label="t('fallbackPolicy.table.actions')" width="200" fixed="right">
-          <template #default="{ row }">
-            <el-button size="small" @click="openEditDialog(row)">{{ t('fallbackPolicy.actions.edit') }}</el-button>
-            <el-button size="small" @click="testPolicy(row)">{{ t('fallbackPolicy.actions.test') }}</el-button>
-            <el-popconfirm :title="t('fallbackPolicy.confirm.deleteTitle')" @confirm="deletePolicy(row.id)">
-              <template #reference>
-                <el-button size="small" type="danger">{{ t('fallbackPolicy.actions.delete') }}</el-button>
+            <el-dropdown trigger="click">
+              <el-button type="primary" link>
+                <el-icon><MoreFilled /></el-icon>
+              </el-button>
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item @click="openEditDialog(row)">
+                    <el-icon><Edit /></el-icon>{{ t('fallbackPolicy.actions.edit') }}
+                  </el-dropdown-item>
+                  <el-dropdown-item @click="testPolicy(row)">
+                    <el-icon><View /></el-icon>{{ t('fallbackPolicy.actions.test') }}
+                  </el-dropdown-item>
+                  <el-dropdown-item divided @click="confirmDeletePolicy(row.id)">
+                    <el-icon><Delete /></el-icon>{{ t('fallbackPolicy.actions.delete') }}
+                  </el-dropdown-item>
+                </el-dropdown-menu>
               </template>
-            </el-popconfirm>
+            </el-dropdown>
           </template>
         </el-table-column>
       </el-table>
@@ -124,8 +140,8 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { ElMessage } from 'element-plus'
-import { Plus, Delete } from '@element-plus/icons-vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { Plus, Delete, MoreFilled, Edit, View } from '@element-plus/icons-vue'
 import {
   getFallbackPolicies,
   createFallbackPolicy,
@@ -270,6 +286,19 @@ async function savePolicy() {
   }
 }
 
+async function confirmDeletePolicy(id: string) {
+  try {
+    await ElMessageBox.confirm(
+      t('fallbackPolicy.confirm.deleteTitle'),
+      t('fallbackPolicy.actions.delete'),
+      { type: 'warning', confirmButtonText: t('fallbackPolicy.actions.delete'), cancelButtonText: t('fallbackPolicy.formDialog.cancel') }
+    )
+  } catch {
+    return
+  }
+  await deletePolicy(id)
+}
+
 async function deletePolicy(id: string) {
   try {
     await deleteFallbackPolicy(id)
@@ -303,7 +332,8 @@ async function testPolicy(policy: FallbackPolicy) {
 
 <style scoped>
 .fallback-policy-page {
-  padding: 20px;
+  width: 100%;
+  padding: 0 0 24px;
 }
 
 .fallback-policy-page.embedded {
@@ -312,6 +342,14 @@ async function testPolicy(policy: FallbackPolicy) {
 
 .fallback-policy-body {
   margin-top: 20px;
+}
+
+.policy-table {
+  width: 100%;
+}
+
+.policy-table :deep(.el-table__body-wrapper) {
+  overflow-x: hidden;
 }
 
 .fallback-policy-page.embedded .fallback-policy-body {

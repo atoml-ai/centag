@@ -90,12 +90,12 @@ func TestAPIKeyMetadataFromFullKey(t *testing.T) {
 		t.Errorf("keyHash = %s, want %s", keyHash, expectedHash)
 	}
 
-	if keyPrefix != "llmproxy_abcdef1" {
-		t.Errorf("keyPrefix = %s, want llmproxy_abcdef1", keyPrefix)
+	wantPrefix := APIKeyDisplayPrefix(fullKey)
+	if keyPrefix != wantPrefix {
+		t.Errorf("keyPrefix = %s, want %s", keyPrefix, wantPrefix)
 	}
-
-	if len(keyPrefix) != 16 {
-		t.Errorf("keyPrefix should be 16 characters, got: %d", len(keyPrefix))
+	if !strings.Contains(keyPrefix, "…") {
+		t.Errorf("keyPrefix should contain ellipsis, got: %s", keyPrefix)
 	}
 }
 

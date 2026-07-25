@@ -176,11 +176,7 @@ func resetAPIKeyStorageForTest() {
 // APIKeyMetadataFromFullKey derives hash and display prefix for any full API key string.
 func APIKeyMetadataFromFullKey(fullKey string) (keyHash, keyPrefix string) {
 	keyHash = SHA256Hex(fullKey)
-	if len(fullKey) >= 16 {
-		keyPrefix = fullKey[:16]
-	} else {
-		keyPrefix = fullKey
-	}
+	keyPrefix = APIKeyDisplayPrefix(fullKey)
 	return keyHash, keyPrefix
 }
 
