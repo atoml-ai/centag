@@ -118,13 +118,14 @@ gh release view "v${VER}" --repo atoml-ai/centag 2>&1 | head -5 || true
 | 选了 `github` 且 `gh auth` 失败 | 提示 `gh auth login` / `gh auth refresh`，确认后继续 |
 | 选了 `npm` 且 GitHub Release 不存在 | 建议改为 `all` 或先完成 `github` |
 | 选了 `ci` 且 tag 已存在 | 确认覆盖策略或改版本 |
-| 版本与 package.json 不一致 | 确认以哪边为准 |
+| 版本与 package.json 不一致 | **以 `CENTAG_RELEASE_VERSION` 为准**，执行 `sync-npm-version.sh` 并提交（见 procedure「版本号同步」） |
 
 ### 3. 共用准备
 
 1. `require-release-branch.sh --version <ver>`
-2. 按渠道检查鉴权（procedure §鉴权矩阵）
-3. 确定构建策略：reuse / rebuild / skip
+2. **`sync-npm-version.sh --version <ver>`**（github / npm / ci 均需；有 diff 则提交后再继续）
+3. 按渠道检查鉴权（procedure §鉴权矩阵）
+4. 确定构建策略：reuse / rebuild / skip
 
 ### 4. 共用构建（一次，GitHub 形态）
 
@@ -145,7 +146,7 @@ gh release view "v${VER}" --repo atoml-ai/centag 2>&1 | head -5 || true
 ### 6. 分渠道验收
 
 - `github` → Release 资产齐全；草稿则提醒 Publish 后 curl 才可用
-- `npm` → `npm view centag version` 与 `centag-offline version`
+- `npm` → `npm view @atomlai/centag version` 与 `@atomlai/centag-offline version`（须等于 `CENTAG_RELEASE_VERSION`）
 - `ci` → Actions run 成功 + Release job 绿
 - `verify=smoke` → 仅用户点名时跑 `install.sh` 冒烟
 

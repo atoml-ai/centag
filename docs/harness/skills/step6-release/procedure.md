@@ -75,7 +75,7 @@
 | GitHub 产物 | `cli` 全平台（6）+ `desktop(macos|windows)`（见 §4.3） |
 | npm 产物 | personal **cli** × 6 平台（交叉编译） |
 | 版本号（未指定时） | `apps/wrap-npm/package.json` → `version` |
-| npm 包版本 | `apps/centag-npm/package.json`（须与 Release 对齐） |
+| npm 包版本 | `apps/centag-npm/package.json` + `package.offline.json`（**必须**与 `CENTAG_RELEASE_VERSION` 对齐；见下节） |
 | 本地产物目录 | `${CENTAG_INSTALL_ROOT:-~/.centag}/var/release/<version>/` |
 | 默认仓库 | `atoml-ai/centag`（`CENTAG_RELEASE_REPO` 覆盖） |
 | 一键安装 | `scripts/install.sh`（默认 CLI；`--desktop` 装 Win/mac 桌面） |
@@ -97,6 +97,27 @@ bash scripts/release/require-release-branch.sh --version "${CENTAG_RELEASE_VERSI
 | 仅 `build-only` | 任意分支可构建 |
 
 紧急绕过（默认禁止建议）：`CENTAG_RELEASE_ALLOW_ANY_BRANCH=1`。
+
+### 版本号同步（发版前强制）
+
+GitHub Release 版本来自 workflow input / tag；npm 版本来自 `package.json`。二者不一致会导致「GitHub 已是 vX，npm 仍停在旧版」。
+
+发版前（含 `github` / `npm` / `ci`）**必须**对齐：
+
+```bash
+bash scripts/release/sync-npm-version.sh --version "${CENTAG_RELEASE_VERSION}"
+# 本地发版：提交后再上传 / 推 tag
+git add apps/centag-npm/package.json apps/centag-npm/package.offline.json apps/wrap-npm/package.json
+git commit -m "chore(release): bump npm package versions to ${CENTAG_RELEASE_VERSION}"
+```
+
+| 场景 | 行为 |
+|------|------|
+| 本地 Step 6（github / npm） | Agent **先 sync 并提交**，再构建/上传 |
+| CI `release` workflow | `npm-publish` job **自动**跑 sync（以 `guard-branch` 解析出的版本为准），再 `publish-centag-npm.sh` |
+| 仅检查是否已对齐 | `bash scripts/release/sync-npm-version.sh --version X.Y.Z --check` |
+
+同步文件：`apps/centag-npm/package.json`、`apps/centag-npm/package.offline.json`、`apps/wrap-npm/package.json`。
 
 ---
 
@@ -278,11 +299,13 @@ curl -fsSL "https://raw.githubusercontent.com/${CENTAG_RELEASE_REPO:-atoml-ai/ce
 - npm 包内始终是 **cli** 形态（6 平台交叉编译），不打包 desktop。
 
 ```bash
+bash scripts/release/sync-npm-version.sh --version "${CENTAG_RELEASE_VERSION}"
+# 若有未提交变更：先 commit / push，再 publish
 DRY_RUN=1 ./scripts/publish-centag-npm.sh
 CENTAG_NPM_TOKEN="${CENTAG_NPM_TOKEN:-}" ./scripts/publish-centag-npm.sh
 ```
 
-版本须与 `apps/centag-npm/package.json` 一致；与 `CENTAG_RELEASE_VERSION` 不一致则 **AskQuestion** 确认。
+版本以 `CENTAG_RELEASE_VERSION` 为准；`package.json` 不一致时 **直接 sync**（不要只问不改）。验收：`npm view @atomlai/centag version` / `npm view @atomlai/centag-offline version`。
 
 ### 5.4 `ci` — GitHub Actions
 
@@ -307,6 +330,7 @@ CI jobs（`.github/workflows/release.yml`）：
 | `github-macos-desktop` | macos-14 | `centag-desktop-*-macos-*` |
 | `github-windows-desktop` | windows-latest | `centag-desktop-*-windows-*` |
 | `publish` | ubuntu | 汇总上传 GitHub Release |
+| `npm-publish` | ubuntu | sync 版本 → 全平台 cli → npm（`draft=false` / tag 触发时真正 publish） |
 | `npm-publish` | ubuntu | 全平台 cli → npm |
 
 **注意**：workflow `run: |` 内禁止顶格 heredoc。
@@ -395,7 +419,7 @@ test -x "$PREFIX/bin/centag" || test -x "$PREFIX/bin/centag-personal"
 | npm publish 403 | `npm login` 或检查 `CENTAG_NPM_TOKEN` 权限 |
 | 在线 centag 安装失败 | GitHub Release 仍为 draft 或版本未 publish |
 | Release 已存在但用户要草稿 | 说明脚本无法回退 draft；仅覆盖资产 |
-| `publish-centag-npm` 版本不符 | 对齐 `apps/centag-npm/package.json` |
+| `publish-centag-npm` 版本不符 / npm 仍旧版 | `bash scripts/release/sync-npm-version.sh --version X.Y.Z` 后重跑；CI 已内置 sync |
 | CI tag not on version branch | 在版本分支重打 tag |
 | install.sh 404 on main | 用 tag raw URL 或先合 main |
 | desktop 交叉编译失败 | 必须在目标 OS 本机或 CI runner 构建 |
@@ -415,6 +439,7 @@ test -x "$PREFIX/bin/centag" || test -x "$PREFIX/bin/centag-personal"
 | `scripts/publish-centag-npm.sh` | npm（全平台 cli） |
 | `scripts/install.sh` | curl 安装（按 OS 选 desktop/cli） |
 | `scripts/release/require-release-branch.sh` | 分支门禁 |
+| `scripts/release/sync-npm-version.sh` | 对齐 npm / wrap-npm `package.json` 版本 |
 | `.github/workflows/release.yml` | CI（desktop 原生 runner + linux cli + npm cli） |
 | `apps/centag-npm/` | npm 包定义 |
 | `apps/wrap-npm/package.json` | 版本参考 |
