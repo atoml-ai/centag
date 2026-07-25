@@ -86,6 +86,19 @@ func (t *TUIAgentTemplate) Steps(info *BackendInfo) []ConfigStep { return nil }
 // WriteConfig TUI Agent 默认无本地写入
 func (t *TUIAgentTemplate) WriteConfig(info *BackendInfo) error { return nil }
 
+// Meta TUI Agent 无本地写配置接入
+func (t *TUIAgentTemplate) Meta() AgentSetupMeta {
+	return AgentSetupMeta{
+		Category:     AgentCategoryTUI,
+		WriteMode:    WriteModeNone,
+		ConfigPaths:  nil,
+		KeyFields:    nil,
+		ConfigMethod: "TUI Agent 不通过写入本地配置文件接入 Centag；由进程内路由/流水线绑定。",
+		InstallURL:   "",
+		InstallHint:  "内置能力，无需单独安装 CLI",
+	}
+}
+
 // --- TUIAgent 接口的默认实现 ---
 
 // RenderStatusBar 默认状态栏渲染（简洁模式 → 文件:行号）
@@ -452,6 +465,14 @@ func newTUIConfigTemplate(agentType AgentType, displayName, description string) 
 func (t *tuiConfigTemplate) AgentType() AgentType               { return t.agentType }
 func (t *tuiConfigTemplate) DisplayName() string                { return t.displayName }
 func (t *tuiConfigTemplate) Description() string                { return t.description }
+func (t *tuiConfigTemplate) Meta() AgentSetupMeta {
+	return AgentSetupMeta{
+		Category:     AgentCategoryTUI,
+		WriteMode:    WriteModeNone,
+		ConfigMethod: "TUI Agent 不通过写入本地配置文件接入 Centag；由进程内路由/流水线绑定。",
+		InstallHint:  "内置能力，无需单独安装 CLI",
+	}
+}
 func (t *tuiConfigTemplate) ConfigFiles(*BackendInfo) ([]ConfigFile, error) { return nil, nil }
 func (t *tuiConfigTemplate) SetupCommand(*BackendInfo) string   { return "" }
 func (t *tuiConfigTemplate) PlatformCommands(*BackendInfo) PlatformCommands { return PlatformCommands{} }

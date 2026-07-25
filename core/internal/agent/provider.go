@@ -310,6 +310,27 @@ func (m *AgentProviderManager) seedDefaultsLocked() {
 			Enabled:     true,
 			Description: "Hermes Agent 默认配置",
 		},
+		{
+			ID:          "codebuddy",
+			AgentType:   "codebuddy",
+			DisplayName: "CodeBuddy",
+			Enabled:     true,
+			Description: "腾讯云 CodeBuddy Code CLI 默认配置",
+		},
+		{
+			ID:          "workbuddy",
+			AgentType:   "workbuddy",
+			DisplayName: "WorkBuddy",
+			Enabled:     true,
+			Description: "腾讯云 WorkBuddy 默认配置",
+		},
+		{
+			ID:          "trae",
+			AgentType:   "trae",
+			DisplayName: "TRAE",
+			Enabled:     true,
+			Description: "字节跳动 TRAE IDE 默认配置",
+		},
 		// TUI Agents
 		{
 			ID:          "coding-tui",

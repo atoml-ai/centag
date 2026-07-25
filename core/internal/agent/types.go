@@ -12,6 +12,9 @@ const (
 	AgentOpenCode      AgentType = "opencode"
 	AgentOpenClaw      AgentType = "openclaw"
 	AgentHermes        AgentType = "hermes"
+	AgentCodeBuddy     AgentType = "codebuddy"
+	AgentWorkBuddy     AgentType = "workbuddy"
+	AgentTrae          AgentType = "trae"
 
 	// TUI Agent 类型（终端用户界面）
 	AgentCodingTUI    AgentType = "coding-tui"
@@ -143,11 +146,30 @@ type BackendInfo struct {
 	Port    int
 }
 
+// WriteMode 本地配置写入模式
+const (
+	WriteModeOverwrite = "overwrite" // 覆盖型（切换当前供应商）
+	WriteModeMerge     = "merge"     // 累加共存（合并进现有配置）
+	WriteModeNone      = "none"      // 无本地写配置
+)
+
+// AgentSetupMeta Agent 接入元数据（卡片展示 / 调试用）
+type AgentSetupMeta struct {
+	Category     AgentCategory `json:"category"`
+	WriteMode    string        `json:"write_mode"` // overwrite | merge | none
+	ConfigPaths  []string      `json:"config_paths"`
+	KeyFields    []string      `json:"key_fields"`
+	ConfigMethod string        `json:"config_method"` // 给人看的写入说明
+	InstallURL   string        `json:"install_url"`
+	InstallHint  string        `json:"install_hint"`
+}
+
 // AgentTemplate 各 Agent 工具的配置模板接口
 type AgentTemplate interface {
 	AgentType() AgentType
 	DisplayName() string
 	Description() string
+	Meta() AgentSetupMeta
 	ConfigFiles(info *BackendInfo) ([]ConfigFile, error)
 	SetupCommand(info *BackendInfo) string
 	PlatformCommands(info *BackendInfo) PlatformCommands
@@ -180,6 +202,9 @@ func (r *TemplateRegistry) registerDefaults() {
 	r.Register(&OpenCodeTemplate{})
 	r.Register(&OpenClawTemplate{})
 	r.Register(&HermesTemplate{})
+	r.Register(&CodeBuddyTemplate{})
+	r.Register(&WorkBuddyTemplate{})
+	r.Register(&TraeTemplate{})
 
 	// TUI Agents
 	r.Register(newTUIConfigTemplate(AgentCodingTUI, "Coding TUI Agent", "编程场景终端交互 Agent"))

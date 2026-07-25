@@ -2,43 +2,56 @@ package agent
 
 import "fmt"
 
-// ClaudeCodeTemplate Claude Code 配置模板
+// ClaudeCodeTemplate Claude Code 配置模板（对齐 cc-switch：~/.claude/settings.json）
 type ClaudeCodeTemplate struct{}
 
-func (t *ClaudeCodeTemplate) AgentType() AgentType    { return AgentClaudeCode }
-func (t *ClaudeCodeTemplate) DisplayName() string     { return "Claude Code" }
-func (t *ClaudeCodeTemplate) Description() string     { return "Anthropic 官方的 AI 编程助手 CLI 工具" }
+func (t *ClaudeCodeTemplate) AgentType() AgentType { return AgentClaudeCode }
+func (t *ClaudeCodeTemplate) DisplayName() string  { return "Claude Code" }
+func (t *ClaudeCodeTemplate) Description() string {
+	return "Anthropic 官方的 AI 编程助手 CLI 工具"
+}
+
+func (t *ClaudeCodeTemplate) Meta() AgentSetupMeta {
+	return AgentSetupMeta{
+		Category:  AgentCategoryCLI,
+		WriteMode: WriteModeOverwrite,
+		ConfigPaths: []string{
+			"~/.claude/settings.json",
+		},
+		KeyFields: []string{
+			"env.ANTHROPIC_BASE_URL",
+			"env.ANTHROPIC_AUTH_TOKEN",
+			"env.ANTHROPIC_MODEL",
+		},
+		ConfigMethod: "写入 ~/.claude/settings.json：合并 env 中的 ANTHROPIC_BASE_URL / ANTHROPIC_AUTH_TOKEN / ANTHROPIC_MODEL 指向 Centag（对齐 cc-switch）。首次覆盖会备份为 .centag-bak。",
+		InstallURL:   "https://code.claude.com/docs/en/install",
+		InstallHint:  "macOS/Linux: curl -fsSL https://claude.ai/install.sh | bash；或 brew install --cask claude-code",
+	}
+}
 
 func (t *ClaudeCodeTemplate) ConfigFiles(info *BackendInfo) ([]ConfigFile, error) {
 	url := proxyURL(info.Host, info.Port)
 	model := defaultModel(info)
-
-	claudeJSON := fmt.Sprintf(`{
-  "primaryApiKey": "%s",
+	content := fmt.Sprintf(`{
   "env": {
     "ANTHROPIC_BASE_URL": "%s",
+    "ANTHROPIC_AUTH_TOKEN": "%s",
     "ANTHROPIC_MODEL": "%s"
   }
-}`, info.APIKey, url, model)
-
-	envContent := fmt.Sprintf(`export ANTHROPIC_BASE_URL="%s"
-export ANTHROPIC_AUTH_TOKEN="%s"
-export ANTHROPIC_MODEL="%s"
-`, url, info.APIKey, model)
-
+}`, url, info.APIKey, model)
 	return []ConfigFile{
-		{Path: "~/.claude.json", Content: claudeJSON},
-		{Path: "~/.claude/.env", Content: envContent, Append: true},
+		{Path: "~/.claude/settings.json", Content: content},
 	}, nil
 }
 
 func (t *ClaudeCodeTemplate) SetupCommand(info *BackendInfo) string {
 	url := proxyURL(info.Host, info.Port)
 	model := defaultModel(info)
-	return fmt.Sprintf(`# Claude Code 一键配置
-export ANTHROPIC_BASE_URL="%s"
-export ANTHROPIC_AUTH_TOKEN="%s"
-export ANTHROPIC_MODEL="%s"
+	return fmt.Sprintf(`# Claude Code（settings.json env）
+# 编辑 ~/.claude/settings.json，合并：
+# env.ANTHROPIC_BASE_URL="%s"
+# env.ANTHROPIC_AUTH_TOKEN="%s"
+# env.ANTHROPIC_MODEL="%s"
 `, url, info.APIKey, model)
 }
 
@@ -58,15 +71,17 @@ func (t *ClaudeCodeTemplate) VerifyCommand(info *BackendInfo) string {
 func (t *ClaudeCodeTemplate) Steps(info *BackendInfo) []ConfigStep {
 	url := proxyURL(info.Host, info.Port)
 	return []ConfigStep{
-		{Title: "配置环境变量", Description: fmt.Sprintf("设置 ANTHROPIC_BASE_URL 指向 Centag: %s", url)},
+		{Title: "合并 settings.json", Description: fmt.Sprintf("设置 env.ANTHROPIC_BASE_URL 指向 Centag: %s", url)},
 		{Title: "启动 Claude Code", Description: "在终端中运行 claude 命令", Code: "claude"},
 	}
 }
 
 func (t *ClaudeCodeTemplate) WriteConfig(info *BackendInfo) error {
-	files, err := t.ConfigFiles(info)
-	if err != nil {
-		return err
-	}
-	return writeFiles(files)
+	url := proxyURL(info.Host, info.Port)
+	model := defaultModel(info)
+	return mergeClaudeSettingsEnv("~/.claude/settings.json", map[string]string{
+		"ANTHROPIC_BASE_URL":   url,
+		"ANTHROPIC_AUTH_TOKEN": info.APIKey,
+		"ANTHROPIC_MODEL":      model,
+	})
 }

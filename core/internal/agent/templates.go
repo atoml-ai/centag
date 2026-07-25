@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-// proxyURL 构建 Centag 访问地址
+// proxyURL 构建 Centag OpenAI 兼容 base（…/v1）
 func proxyURL(host string, port int) string {
 	if host == "" {
 		host = "localhost"
@@ -16,6 +16,11 @@ func proxyURL(host string, port int) string {
 		port = 20060
 	}
 	return fmt.Sprintf("http://%s:%d/v1", host, port)
+}
+
+// chatCompletionsURL 构建完整 chat/completions 路径（CodeBuddy models.json 要求）
+func chatCompletionsURL(host string, port int) string {
+	return proxyURL(host, port) + "/chat/completions"
 }
 
 // defaultModel 返回默认模型名称
@@ -58,17 +63,29 @@ func expandPath(p string) string {
 	return p
 }
 
+// shellQuote 简单单引号转义，避免路径空格（如 Application Support）拆词。
+func shellQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+}
+
 // generateShellCommands 生成 macOS/Linux 的 shell 写入命令
 func generateShellCommands(files []ConfigFile) string {
 	var cmds []string
 	for _, f := range files {
 		path := expandPath(f.Path)
+		// Windows 逻辑路径在 Unix shell 预览中保持原样
+		if strings.Contains(f.Path, "%LOCALAPPDATA%") || strings.Contains(f.Path, "%APPDATA%") {
+			path = f.Path
+		}
 		dir := filepath.Dir(path)
-		cmds = append(cmds, fmt.Sprintf("mkdir -p %s", dir))
+		if strings.Contains(f.Path, "%LOCALAPPDATA%") || strings.Contains(f.Path, "%APPDATA%") {
+			dir = filepath.ToSlash(filepath.Dir(strings.ReplaceAll(f.Path, `\`, `/`)))
+		}
+		cmds = append(cmds, fmt.Sprintf("mkdir -p %s", shellQuote(dir)))
 		if f.Append {
-			cmds = append(cmds, fmt.Sprintf("cat >> %s << 'AGENTEOF'\n%s\nAGENTEOF", path, f.Content))
+			cmds = append(cmds, fmt.Sprintf("cat >> %s << 'AGENTEOF'\n%s\nAGENTEOF", shellQuote(path), f.Content))
 		} else {
-			cmds = append(cmds, fmt.Sprintf("cat > %s << 'AGENTEOF'\n%s\nAGENTEOF", path, f.Content))
+			cmds = append(cmds, fmt.Sprintf("cat > %s << 'AGENTEOF'\n%s\nAGENTEOF", shellQuote(path), f.Content))
 		}
 	}
 	return strings.Join(cmds, "\n")
@@ -79,8 +96,11 @@ func generatePowerShellCommands(files []ConfigFile) string {
 	var cmds []string
 	cmds = append(cmds, "# PowerShell 配置写入")
 	for _, f := range files {
-		// 将 ~ 转换为 $env:USERPROFILE
+		// 将 ~ / %APPDATA% / %LOCALAPPDATA% 转为 PowerShell 友好路径
 		path := strings.Replace(f.Path, "~", "$env:USERPROFILE", 1)
+		path = strings.ReplaceAll(path, "%APPDATA%", "$env:APPDATA")
+		path = strings.ReplaceAll(path, "%LOCALAPPDATA%", "$env:LOCALAPPDATA")
+		path = strings.ReplaceAll(path, `\`, `/`)
 		if f.Append {
 			cmds = append(cmds, fmt.Sprintf("Add-Content -Path '%s' -Value @'\n%s\n'@", path, f.Content))
 		} else {
@@ -100,7 +120,7 @@ func backupPath(path string) string {
 // 首次覆盖已有文件时会另存 .centag-bak，供「恢复默认」还原。
 func writeFiles(files []ConfigFile) error {
 	for _, f := range files {
-		path := expandPath(f.Path)
+		path := resolveConfigPath(f.Path)
 		dir := filepath.Dir(path)
 		if err := os.MkdirAll(dir, 0755); err != nil {
 			return fmt.Errorf("创建目录失败 %s: %w", dir, err)
@@ -149,6 +169,16 @@ type RestoreResult struct {
 	Action string `json:"action"` // restored | removed | skipped
 }
 
+func resolveConfigPath(p string) string {
+	if strings.Contains(p, "%LOCALAPPDATA%") {
+		return expandClaudeDesktopPath(p)
+	}
+	if strings.Contains(p, "%APPDATA%") {
+		return expandAppDataPath(p)
+	}
+	return expandPath(p)
+}
+
 // RestoreConfigFiles 恢复 Centag 写入前的配置：
 // - 存在 .centag-bak → 还原并删除备份
 // - 无备份但目标文件存在 → 视为 Centag 新建，删除该文件
@@ -157,7 +187,7 @@ func RestoreConfigFiles(files []ConfigFile) ([]RestoreResult, error) {
 	results := make([]RestoreResult, 0, len(files))
 	seen := make(map[string]struct{}, len(files))
 	for _, f := range files {
-		path := expandPath(f.Path)
+		path := resolveConfigPath(f.Path)
 		if _, ok := seen[path]; ok {
 			continue
 		}

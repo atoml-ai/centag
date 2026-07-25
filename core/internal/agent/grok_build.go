@@ -2,59 +2,79 @@ package agent
 
 import "fmt"
 
-// GrokBuildTemplate Grok Build (xAI) 配置模板
-// 使用 Codex 风格的 TOML 配置格式
+// GrokBuildTemplate Grok Build (xAI) 配置模板（对齐 cc-switch：~/.grok/config.toml）
 type GrokBuildTemplate struct{}
 
 func (t *GrokBuildTemplate) AgentType() AgentType { return AgentGrokBuild }
 func (t *GrokBuildTemplate) DisplayName() string  { return "Grok Build" }
-func (t *GrokBuildTemplate) Description() string  { return "xAI Grok 编程助手（使用 Codex 风格配置）" }
+func (t *GrokBuildTemplate) Description() string  { return "xAI Grok 编程助手 CLI" }
+
+func (t *GrokBuildTemplate) Meta() AgentSetupMeta {
+	return AgentSetupMeta{
+		Category:  AgentCategoryCLI,
+		WriteMode: WriteModeOverwrite,
+		ConfigPaths: []string{
+			"~/.grok/config.toml",
+		},
+		KeyFields: []string{
+			"models.default",
+			`model."centag".model`,
+			`model."centag".base_url`,
+			`model."centag".api_key`,
+			`model."centag".api_backend`,
+		},
+		ConfigMethod: "覆盖写入 ~/.grok/config.toml：[models] default=\"centag\"，[model.\"centag\"] 内设置 model / base_url / api_key / api_backend=responses / context_window（对齐 cc-switch Grok Build）。",
+		InstallURL:   "https://x.ai/cli",
+		InstallHint:  "curl -fsSL https://x.ai/cli/install.sh | bash；或 npm i -g @xai-official/grok",
+	}
+}
+
+func (t *GrokBuildTemplate) grokModel(info *BackendInfo) string {
+	model := defaultModel(info)
+	if model == "gpt-4o" {
+		return "grok-4.5"
+	}
+	return model
+}
 
 func (t *GrokBuildTemplate) ConfigFiles(info *BackendInfo) ([]ConfigFile, error) {
 	url := proxyURL(info.Host, info.Port)
-	model := defaultModel(info)
-	if model == "gpt-4o" {
-		model = "grok-4.5"
-	}
+	model := t.grokModel(info)
+	configTOML := fmt.Sprintf(`[models]
+default = "centag"
 
-	authJSON := fmt.Sprintf(`{"OPENAI_API_KEY": "%s"}`, info.APIKey)
-	configTOML := fmt.Sprintf(`model_provider = "custom"
+[model."centag"]
 model = "%s"
-model_reasoning_effort = "high"
-disable_response_storage = true
-
-[model_providers.custom]
-name = "centag"
 base_url = "%s"
-wire_api = "responses"
-requires_openai_auth = true
-`, model, url)
+name = "Centag"
+api_key = "%s"
+api_backend = "responses"
+context_window = 500000
+`, model, url, info.APIKey)
 
 	return []ConfigFile{
-		{Path: "~/.grok-build/auth.json", Content: authJSON},
-		{Path: "~/.grok-build/config.toml", Content: configTOML},
+		{Path: "~/.grok/config.toml", Content: configTOML},
 	}, nil
 }
 
 func (t *GrokBuildTemplate) SetupCommand(info *BackendInfo) string {
 	url := proxyURL(info.Host, info.Port)
-	model := defaultModel(info)
-	if model == "gpt-4o" {
-		model = "grok-4.5"
-	}
-	return fmt.Sprintf(`# Grok Build 一键配置
-mkdir -p ~/.grok-build
-echo '{"OPENAI_API_KEY": "%s"}' > ~/.grok-build/auth.json
-cat > ~/.grok-build/config.toml << 'EOF'
-model_provider = "custom"
+	model := t.grokModel(info)
+	return fmt.Sprintf(`# Grok Build 一键配置（~/.grok/config.toml）
+mkdir -p ~/.grok
+cat > ~/.grok/config.toml << 'EOF'
+[models]
+default = "centag"
+
+[model."centag"]
 model = "%s"
-[model_providers.custom]
-name = "centag"
 base_url = "%s"
-wire_api = "responses"
-requires_openai_auth = true
+name = "Centag"
+api_key = "%s"
+api_backend = "responses"
+context_window = 500000
 EOF
-`, info.APIKey, model, url)
+`, model, url, info.APIKey)
 }
 
 func (t *GrokBuildTemplate) PlatformCommands(info *BackendInfo) PlatformCommands {
@@ -67,15 +87,14 @@ func (t *GrokBuildTemplate) PlatformCommands(info *BackendInfo) PlatformCommands
 }
 
 func (t *GrokBuildTemplate) VerifyCommand(info *BackendInfo) string {
-	return `grok-build -m "Hello, can you hear me?" --no-interactive`
+	return `grok -m "Hello, can you hear me?"`
 }
 
 func (t *GrokBuildTemplate) Steps(info *BackendInfo) []ConfigStep {
 	url := proxyURL(info.Host, info.Port)
 	return []ConfigStep{
-		{Title: "配置 auth.json", Code: fmt.Sprintf(`echo '{"OPENAI_API_KEY": "%s"}' > ~/.grok-build/auth.json`, info.APIKey)},
-		{Title: "配置 config.toml", Description: fmt.Sprintf("设置 base_url 指向 Centag: %s", url)},
-		{Title: "启动 Grok Build", Code: "grok-build"},
+		{Title: "配置 ~/.grok/config.toml", Description: fmt.Sprintf("设置 [model.\"centag\"].base_url=%s", url)},
+		{Title: "启动 Grok", Code: "grok"},
 	}
 }
 
