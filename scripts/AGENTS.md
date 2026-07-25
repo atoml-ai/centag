@@ -32,6 +32,7 @@
 | `release/require-release-branch_test.sh` | 上述门禁的表驱动 shell 测试 |
 | `check-harness-hygiene.sh` | Harness 卫生检查（Centag 布局） |
 | `ci-go-packages.sh` | CI 包列表生成 |
+| `pprof-sample.sh` | pprof 定时采样 / heap·goroutine 对比 / 泄漏初判 |
 | `packaging/package.sh` | 部署包调度：`package <cli\|desktop> <os> [arch]`（见 `packaging.env`） |
 | `log_analyzer.py` | 日志分析 |
 
