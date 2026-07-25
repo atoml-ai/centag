@@ -192,11 +192,12 @@ type ModelCapabilities struct {
 
 // ServerConfig holds HTTP server settings (sourced from env vars via bootstrap).
 type ServerConfig struct {
-	Port        int    `json:"port"`
-	Host        string `json:"host"`
-	Mode        string `json:"mode"`         // debug | release
-	ExternalURL string `json:"external_url"` // 对外暴露的访问地址，用于 UI 展示
-	Edition     string `json:"edition"`      // personal | team
+	Port         int    `json:"port"`
+	Host         string `json:"host"`
+	Mode         string `json:"mode"`         // debug | release
+	ExternalURL  string `json:"external_url"` // 对外暴露的访问地址，用于 UI 展示
+	Edition      string `json:"edition"`      // personal | team
+	PprofEnabled bool   `json:"pprof_enabled"` // pprof 观测开关（仅监听 loopback）
 }
 
 // LogConfig holds logging settings (sourced from env vars via bootstrap).

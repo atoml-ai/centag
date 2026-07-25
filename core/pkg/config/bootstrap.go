@@ -58,6 +58,7 @@ type DBBootstrapConfig struct {
 //	LLM_PROXY_DB_DRIVER        default "auto" (auto-detect: postgresql or sqlite)
 //	LLM_PROXY_DB_DSN           default "" (built from PG_* or SQLITE_PATH env vars)
 //	CENTAG_EDITION default "team" ("personal" for desktop / single-user)
+//	CENTAG_PPROF / LLM_PROXY_PPROF_ENABLED  default false（loopback pprof :6060）
 //
 // 相对路径（如 ./data/centag.db、./logs）会按可执行文件所在目录解析，
 // 这样无论从项目根还是 bin/ 启动，data/logs 都会落在可执行文件同目录下（如 bin/data、bin/logs）。
@@ -82,11 +83,12 @@ func LoadBootstrap() *BootstrapConfig {
 
 	return &BootstrapConfig{
 		Server: ServerConfig{
-			Port:        envInt("LLM_PROXY_SERVER_PORT", 20060),
-			Host:        envStr("LLM_PROXY_SERVER_HOST", "0.0.0.0"),
-			Mode:        envStr("LLM_PROXY_SERVER_MODE", "release"),
-			ExternalURL: envStr("LLM_PROXY_EXTERNAL_URL", ""),
-			Edition:     envStr("CENTAG_EDITION", "team"),
+			Port:         envInt("LLM_PROXY_SERVER_PORT", 20060),
+			Host:         envStr("LLM_PROXY_SERVER_HOST", "0.0.0.0"),
+			Mode:         envStr("LLM_PROXY_SERVER_MODE", "release"),
+			ExternalURL:  envStr("LLM_PROXY_EXTERNAL_URL", ""),
+			Edition:      envStr("CENTAG_EDITION", "team"),
+			PprofEnabled: envBoolFirst(false, "CENTAG_PPROF", "LLM_PROXY_PPROF_ENABLED"),
 		},
 		Log: LogConfig{
 			Level:  envStr("LLM_PROXY_LOG_LEVEL", "info"),
@@ -186,6 +188,18 @@ func envBool(key string, def bool) bool {
 	if v := os.Getenv(key); v != "" {
 		if b, err := strconv.ParseBool(v); err == nil {
 			return b
+		}
+	}
+	return def
+}
+
+// envBoolFirst 返回第一个已设置且可解析的布尔环境变量，否则 def。
+func envBoolFirst(def bool, keys ...string) bool {
+	for _, k := range keys {
+		if v := os.Getenv(k); v != "" {
+			if b, err := strconv.ParseBool(v); err == nil {
+				return b
+			}
 		}
 	}
 	return def

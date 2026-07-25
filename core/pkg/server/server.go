@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	_ "net/http/pprof" // pprof 观测
 	"os"
 	"path/filepath"
 	"strings"
@@ -1753,6 +1754,16 @@ func (s *Server) setupRoutes() {
 // Start 启动服务器
 func (s *Server) Start() error {
 	addr := fmt.Sprintf("%s:%d", s.cfg.Server.Host, s.cfg.Server.Port)
+
+	// pprof 观测（仅 loopback）。开启：CENTAG_PPROF=true 或 LLM_PROXY_PPROF_ENABLED=true
+	if s.cfg.Server.PprofEnabled {
+		go func() {
+			logger.Info("pprof listening on 127.0.0.1:6060 (CENTAG_PPROF)")
+			if err := http.ListenAndServe("127.0.0.1:6060", nil); err != nil {
+				logger.Warn("pprof server stopped", zap.Error(err))
+			}
+		}()
+	}
 
 	s.server = &http.Server{
 		Addr:         addr,
