@@ -95,7 +95,18 @@ The `output_post_ops` node provides string-level output normalization.
         - extract_json
         - json_compact
       on_invalid_json: pass | wrap_error_object
+      stream_mode: skip | buffer   # skip when metadata.stream=true (default skip)
+      max_buffer_bytes: 0          # 0 = unlimited; overflow fail-open
 ```
+
+## Compatibility
+
+| Legacy field | Maps to |
+|--------------|---------|
+| `inject_system_prompt: false` / unset | `system_prompt_strategy: passthrough` |
+| `inject_system_prompt: true` | `system_prompt_strategy: replace` |
+
+When both are set, **`system_prompt_strategy` wins**.
 
 ## Node Types
 
