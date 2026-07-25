@@ -5,7 +5,7 @@
   "cache": "캐시",
   "evaluation": "캐시 평가",
   "chat": "AI 채팅",
-  "agentSetup": "Agent 연동",
+  "agentSetup": "Agent설정",
   "proxyModes": "프록시 모드",
   "sessionMode": "세션 모드 테스트",
   "pipelines": "파이프라인",

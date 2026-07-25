@@ -1,51 +1,89 @@
 <template>
   <div class="system-proxy">
-    <div class="header-with-toolbar">
-      <div class="header-left">
-        <h1 class="page-title">{{ t('systemProxy.pageTitle') }}</h1>
-        <p class="page-description">
-          {{ t('systemProxy.pageDescription') }}
-        </p>
-      </div>
-      <div class="toolbar-actions">
-        <el-button :loading="loading" @click="load">
-          <el-icon><Refresh /></el-icon>
-          {{ t('systemProxy.refresh') }}
+    <div class="page-shell">
+      <header class="page-header">
+        <div class="header-left">
+          <h1 class="page-title">{{ t('systemProxy.pageTitle') }}</h1>
+          <p class="page-description">{{ t('systemProxy.pageDescription') }}</p>
+        </div>
+        <div class="toolbar-actions">
+          <el-button :loading="loading" @click="load">
+            <el-icon><Refresh /></el-icon>
+            {{ t('systemProxy.refresh') }}
+          </el-button>
+        </div>
+      </header>
+
+      <!-- 主引导：告诉用户现在该做什么 -->
+      <section class="guide-banner" :class="guideToneClass">
+        <div class="guide-copy">
+          <span class="guide-kicker">{{ t('systemProxy.guide.kicker') }}</span>
+          <h2 class="guide-title">{{ t(nextAction.titleKey) }}</h2>
+          <p class="guide-desc">{{ t(nextAction.descKey) }}</p>
+        </div>
+        <el-button
+          :type="nextAction.tone === 'ready' ? 'success' : 'primary'"
+          size="large"
+          @click="goNextAction"
+        >
+          {{ t(nextAction.ctaKey) }}
         </el-button>
-      </div>
-    </div>
+      </section>
 
-    <!-- 顶部状态条：一眼看是否正常 -->
-    <div class="status-strip">
-      <div class="status-item" :class="status.enabled ? 'ok' : 'warn'">
-        <span class="status-label">{{ t('systemProxy.status.mitm') }}</span>
-        <span class="status-value">{{ status.enabled ? t('systemProxy.status.running') : t('systemProxy.status.stopped') }}</span>
-      </div>
-      <div class="status-item" :class="egressConfigured ? 'ok' : 'warn'">
-        <span class="status-label">{{ t('systemProxy.status.egressKey') }}</span>
-        <span class="status-value">{{ egressConfigured ? t('systemProxy.status.autoReady') : t('systemProxy.status.notReady') }}</span>
-      </div>
-      <div class="status-item">
-        <span class="status-label">{{ t('systemProxy.status.listen') }}</span>
-        <span class="status-value">{{ listenDisplay }}</span>
-      </div>
-      <div class="status-item">
-        <span class="status-label">{{ t('systemProxy.status.pacDomains') }}</span>
-        <span class="status-value">{{ domainCount }}</span>
-      </div>
-      <div class="status-item">
-        <span class="status-label">{{ t('systemProxy.status.pathPatterns') }}</span>
-        <span class="status-value">{{ patternCount }}</span>
-      </div>
-    </div>
+      <!-- 就绪清单：已就绪 / 需配置 -->
+      <section class="ready-grid" aria-label="setup readiness">
+        <button
+          type="button"
+          class="ready-card"
+          :class="status.enabled ? 'is-ready' : 'needs-action'"
+          @click="focusStep(1)"
+        >
+          <span class="ready-state">{{ status.enabled ? t('systemProxy.guide.ready') : t('systemProxy.guide.needsAction') }}</span>
+          <span class="ready-name">{{ t('systemProxy.status.mitm') }}</span>
+          <span class="ready-meta">{{ status.enabled ? t('systemProxy.status.running') : t('systemProxy.status.stopped') }}</span>
+        </button>
+        <button
+          type="button"
+          class="ready-card"
+          :class="egressConfigured ? 'is-ready' : 'needs-action'"
+          @click="focusStep(1)"
+        >
+          <span class="ready-state">{{ egressConfigured ? t('systemProxy.guide.ready') : t('systemProxy.guide.needsAction') }}</span>
+          <span class="ready-name">{{ t('systemProxy.status.egressKey') }}</span>
+          <span class="ready-meta">{{ egressConfigured ? t('systemProxy.status.autoReady') : t('systemProxy.status.notReady') }}</span>
+        </button>
+        <button
+          type="button"
+          class="ready-card"
+          :class="testResult?.ok ? 'is-ready' : 'needs-action'"
+          @click="focusStep(2)"
+        >
+          <span class="ready-state">{{ testResult?.ok ? t('systemProxy.guide.ready') : t('systemProxy.guide.needsAction') }}</span>
+          <span class="ready-name">{{ t('systemProxy.guide.selfCheck') }}</span>
+          <span class="ready-meta">{{ testResult?.ok ? t('systemProxy.guide.selfCheckPassed') : t('systemProxy.guide.selfCheckPending') }}</span>
+        </button>
+        <button
+          type="button"
+          class="ready-card is-ready"
+          @click="mainTab = 'rules'"
+        >
+          <span class="ready-state">{{ t('systemProxy.guide.ready') }}</span>
+          <span class="ready-name">{{ t('systemProxy.guide.rulesSummary') }}</span>
+          <span class="ready-meta">{{ t('systemProxy.guide.rulesMeta', { domains: domainCount, patterns: patternCount }) }}</span>
+        </button>
+      </section>
 
-    <el-tabs v-model="mainTab" class="main-tabs">
+      <p v-if="listenDisplay" class="listen-line">
+        <span class="listen-label">{{ t('systemProxy.status.listen') }}</span>
+        <code>{{ listenDisplay }}</code>
+      </p>
+
+      <el-tabs v-model="mainTab" class="main-tabs">
       <!-- ========== Tab 1: 配置向导 ========== -->
       <el-tab-pane :label="t('systemProxy.tabs.wizard')" name="wizard">
-        <p class="wizard-lead" v-html="t('systemProxy.wizard.lead')" />
         <el-alert
           v-if="setupStatus?.in_container"
-          class="mb-sm"
+          class="mb-md"
           type="warning"
           :closable="false"
           show-icon
@@ -53,50 +91,52 @@
         />
 
         <el-steps :active="wizardProgress" align-center finish-status="success" class="wizard-steps">
-          <el-step :title="t('systemProxy.wizard.step1Title')" :description="status.enabled ? t('systemProxy.status.running') : t('systemProxy.status.stopped')" />
-          <el-step :title="t('systemProxy.wizard.step2Title')" :description="t('systemProxy.wizard.step2Desc')" />
-          <el-step :title="t('systemProxy.wizard.step3Title')" :description="t('systemProxy.wizard.step3Desc')" />
+          <el-step
+            :title="t('systemProxy.wizard.step1Title')"
+            :description="step1Ready ? t('systemProxy.guide.ready') : t('systemProxy.guide.needsAction')"
+          />
+          <el-step
+            :title="t('systemProxy.wizard.step2Title')"
+            :description="testResult?.ok ? t('systemProxy.guide.ready') : t('systemProxy.wizard.step2Desc')"
+          />
+          <el-step
+            :title="t('systemProxy.wizard.step3Title')"
+            :description="step1Ready && testResult?.ok ? t('systemProxy.guide.doNow') : t('systemProxy.wizard.step3Desc')"
+          />
         </el-steps>
 
-        <!-- 步骤 1：启动/关闭 MITM（出口 Key 随服务自动绑定；运行中仍显示本卡片以便关闭） -->
-        <el-alert
-          v-if="status.enabled"
-          class="mb-sm"
-          type="success"
-          :closable="false"
-          show-icon
-          :title="t('systemProxy.wizard.runningAlertTitle')"
-          :description="t('systemProxy.wizard.runningAlertDesc')"
-        />
-        <el-card class="step-card" :class="{ 'step-card-active': status.enabled }" shadow="never">
+        <!-- 步骤 1：启动/关闭 MITM -->
+        <el-card
+          id="spy-step-1"
+          class="step-card"
+          :class="stepCardClass(1)"
+          shadow="never"
+        >
           <div class="step-head">
             <span class="step-num">1</span>
             <div class="step-title-block">
-              <h3>{{ status.enabled ? t('systemProxy.wizard.step1HeadingRunning') : t('systemProxy.wizard.step1Heading') }}</h3>
-              <p v-html="t('systemProxy.wizard.step1Description', { port: apiPort })" />
+              <div class="step-title-row">
+                <h3>{{ status.enabled ? t('systemProxy.wizard.step1HeadingRunning') : t('systemProxy.wizard.step1Heading') }}</h3>
+                <el-tag :type="step1Ready ? 'success' : 'warning'" size="small" effect="plain">
+                  {{ step1Ready ? t('systemProxy.guide.ready') : t('systemProxy.guide.needsAction') }}
+                </el-tag>
+              </div>
+              <p class="step-summary">{{ t('systemProxy.guide.step1Summary') }}</p>
             </div>
-            <el-space wrap size="small">
-              <el-tag :type="status.enabled ? 'success' : 'info'" size="small">
-                {{ t('systemProxy.status.mitm') }} {{ status.enabled ? t('systemProxy.status.running') : t('systemProxy.status.stopped') }}
-              </el-tag>
-              <el-tag :type="egressConfigured ? 'success' : 'warning'" size="small">
-                {{ t('systemProxy.status.egressKey') }} {{ egressConfigured ? t('systemProxy.status.autoReady') : t('systemProxy.status.pendingBind') }}
-              </el-tag>
-              <el-button
-                v-if="status.enabled"
-                type="danger"
-                plain
-                size="small"
-                :loading="toggling"
-                @click="stopMitm"
-              >
-                {{ t('systemProxy.wizard.stopMitm') }}
-              </el-button>
-            </el-space>
+            <el-button
+              v-if="status.enabled"
+              type="danger"
+              plain
+              size="small"
+              :loading="toggling"
+              @click="stopMitm"
+            >
+              {{ t('systemProxy.wizard.stopMitm') }}
+            </el-button>
           </div>
 
-          <div class="switch-row">
-            <div class="switch-cell">
+          <div class="primary-action-row">
+            <div class="switch-cell switch-cell-primary">
               <span class="switch-label">{{ t('systemProxy.form.mitmService') }}</span>
               <el-switch
                 v-model="status.enabled"
@@ -107,14 +147,12 @@
               />
               <span class="form-hint">{{ listenDisplay }}</span>
             </div>
-            <div class="switch-cell">
+            <div class="switch-cell switch-cell-primary">
               <span class="switch-label">{{ t('systemProxy.form.allowLan') }}</span>
               <el-switch v-model="allowLanClients" :loading="savingLan" @change="onAllowLanChange" />
               <span class="form-hint">{{ t('systemProxy.form.lanHint') }}</span>
             </div>
           </div>
-
-          <p class="form-hint" v-html="t('systemProxy.wizard.permissionHint')" />
 
           <template v-if="allowLanClients">
             <el-form label-width="110px" class="lan-form" size="small">
@@ -142,50 +180,70 @@
             <p class="form-hint" v-html="t('systemProxy.wizard.lanHint', { apiPort, listenPort })" />
           </template>
 
-          <el-collapse v-if="!egressConfigured || showEgressAdvanced" class="optional-collapse mt-sm">
-            <el-collapse-item :title="t('systemProxy.egress.notReadyTitle')" name="egress">
-              <el-space wrap>
-                <el-button type="primary" size="small" :loading="ensuringEgress" @click="ensureEgressKey()">
-                  {{ t('systemProxy.egress.autoBind') }}
-                </el-button>
-                <el-select
-                  v-model="selectedEgressKeyId"
-                  clearable
-                  filterable
-                  size="small"
-                  :placeholder="t('systemProxy.egress.selectKey')"
-                  style="width: 200px"
-                  :loading="loadingKeys"
-                >
-                  <el-option
-                    v-for="k in apiKeyOptions"
-                    :key="k.id"
-                    :label="`${k.name} (${k.key_prefix}…)`"
-                    :value="k.id"
-                  />
-                </el-select>
-                <el-button
-                  size="small"
-                  :disabled="!selectedEgressKeyId"
-                  :loading="bindingEgress"
-                  @click="bindSelectedEgressKey"
-                >
-                  {{ t('systemProxy.egress.bindSelected') }}
-                </el-button>
-              </el-space>
+          <el-collapse class="optional-collapse mt-sm">
+            <el-collapse-item :title="t('systemProxy.guide.moreOptions')" name="step1-more">
+              <p class="form-hint" v-html="t('systemProxy.wizard.permissionHint')" />
+              <p class="form-hint mt-sm" v-html="t('systemProxy.wizard.step1Description', { port: apiPort })" />
+
+              <div v-if="!egressConfigured || showEgressAdvanced" class="egress-tools mt-sm">
+                <div class="sub-label">{{ t('systemProxy.egress.notReadyTitle') }}</div>
+                <el-space wrap>
+                  <el-button type="primary" size="small" :loading="ensuringEgress" @click="ensureEgressKey()">
+                    {{ t('systemProxy.egress.autoBind') }}
+                  </el-button>
+                  <el-select
+                    v-model="selectedEgressKeyId"
+                    clearable
+                    filterable
+                    size="small"
+                    :placeholder="t('systemProxy.egress.selectKey')"
+                    style="width: 200px"
+                    :loading="loadingKeys"
+                  >
+                    <el-option
+                      v-for="k in apiKeyOptions"
+                      :key="k.id"
+                      :label="`${k.name} (${k.key_prefix}…)`"
+                      :value="k.id"
+                    />
+                  </el-select>
+                  <el-button
+                    size="small"
+                    :disabled="!selectedEgressKeyId"
+                    :loading="bindingEgress"
+                    @click="bindSelectedEgressKey"
+                  >
+                    {{ t('systemProxy.egress.bindSelected') }}
+                  </el-button>
+                </el-space>
+              </div>
             </el-collapse-item>
           </el-collapse>
         </el-card>
 
         <!-- 步骤 2：验证 -->
-        <el-card class="step-card" shadow="never">
+        <el-card
+          id="spy-step-2"
+          class="step-card"
+          :class="stepCardClass(2)"
+          shadow="never"
+        >
           <div class="step-head">
             <span class="step-num">2</span>
             <div class="step-title-block">
-              <h3>{{ t('systemProxy.wizard.step2Heading') }}</h3>
-              <p>{{ t('systemProxy.wizard.step2Description') }}</p>
+              <div class="step-title-row">
+                <h3>{{ t('systemProxy.wizard.step2Heading') }}</h3>
+                <el-tag :type="testResult?.ok ? 'success' : 'warning'" size="small" effect="plain">
+                  {{ testResult?.ok ? t('systemProxy.guide.ready') : t('systemProxy.guide.needsAction') }}
+                </el-tag>
+              </div>
+              <p class="step-summary">{{ t('systemProxy.wizard.step2Description') }}</p>
             </div>
+            <el-button type="primary" :loading="testing" @click="testProxy">
+              {{ t('systemProxy.wizard.testNow') }}
+            </el-button>
           </div>
+
           <ul class="check-list">
             <li :class="status.enabled ? 'pass' : 'fail'">
               {{ status.enabled ? t('systemProxy.wizard.checkMitmRunning') : t('systemProxy.wizard.checkMitmStopped') }}
@@ -196,10 +254,7 @@
             <li class="info">{{ t('systemProxy.wizard.checkProvider') }}</li>
             <li class="info">{{ t('systemProxy.wizard.checkCert') }}</li>
           </ul>
-          <el-space wrap>
-            <el-button size="small" @click="copyProxyctlCmd('doctor')">{{ t('systemProxy.wizard.copyDiagCmd') }}</el-button>
-            <el-button type="primary" size="small" :loading="testing" @click="testProxy">{{ t('systemProxy.wizard.testNow') }}</el-button>
-          </el-space>
+
           <el-alert
             v-if="testResult"
             class="mt-sm"
@@ -214,56 +269,82 @@
               </li>
             </ul>
           </el-alert>
-          <p class="form-hint mt-sm">{{ t('systemProxy.wizard.selfCheckHint') }}</p>
+
+          <el-collapse class="optional-collapse mt-sm">
+            <el-collapse-item :title="t('systemProxy.guide.moreOptions')" name="step2-more">
+              <el-button size="small" @click="copyProxyctlCmd('doctor')">{{ t('systemProxy.wizard.copyDiagCmd') }}</el-button>
+              <p class="form-hint mt-sm">{{ t('systemProxy.wizard.selfCheckHint') }}</p>
+            </el-collapse-item>
+          </el-collapse>
         </el-card>
 
         <!-- 步骤 3：接入客户端 -->
-        <el-card class="step-card" shadow="never">
+        <el-card
+          id="spy-step-3"
+          class="step-card"
+          :class="stepCardClass(3)"
+          shadow="never"
+        >
           <div class="step-head">
             <span class="step-num">3</span>
             <div class="step-title-block">
-              <h3>{{ t('systemProxy.wizard.step3Heading') }}</h3>
-              <p v-html="t('systemProxy.wizard.step3Description')" />
+              <div class="step-title-row">
+                <h3>{{ t('systemProxy.wizard.step3Heading') }}</h3>
+                <el-tag type="success" size="small" effect="plain">{{ t('systemProxy.recommended') }}</el-tag>
+              </div>
+              <p class="step-summary" v-html="t('systemProxy.wizard.step3Description')" />
             </div>
-            <el-tag type="success" size="small">{{ t('systemProxy.recommended') }}</el-tag>
+          </div>
+
+          <div class="sub-block is-primary-cmd">
+            <div class="sub-label">{{ t('systemProxy.wizard.runWithEnv') }}</div>
+            <p class="form-hint mb-sm">{{ t('systemProxy.wizard.runWithEnvHint') }}</p>
+            <div class="cmd-block cmd-block-stack">
+              <pre class="cmd-pre">{{ envRunScript }}</pre>
+              <el-button type="primary" size="small" @click="copyEnvRunScript">{{ t('systemProxy.copy') }}</el-button>
+            </div>
           </div>
 
           <div class="sub-block">
-            <div class="sub-label">{{ t('systemProxy.wizard.subStep1') }}</div>
-            <div class="cmd-block">
-              <code>{{ installCommand }}</code>
-              <el-button type="primary" size="small" @click="copyInstallCmd">{{ t('systemProxy.copy') }}</el-button>
-            </div>
-            <p class="form-hint" v-html="t('systemProxy.wizard.subStep1Hint')" />
-          </div>
-
-          <div class="sub-block">
-            <div class="sub-label">{{ t('systemProxy.wizard.subStep2') }}</div>
-            <div class="cmd-block">
-              <code>export CENTAG_WRAP_TOKEN='llmproxy_xxxx'   # Web → API Keys 创建</code>
-              <el-button size="small" @click="copyWrapTokenHint">{{ t('systemProxy.copy') }}</el-button>
-            </div>
-            <p v-if="setupStatus?.proxy_auth_required || allowLanClients" class="form-hint">
-              {{ t('systemProxy.wizard.subStep2Hint') }}
-            </p>
-          </div>
-
-          <div class="sub-block">
-            <div class="sub-label">{{ t('systemProxy.wizard.subStep3') }}</div>
+            <div class="sub-label">{{ t('systemProxy.wizard.runWithFlags') }}</div>
+            <p class="form-hint mb-sm">{{ t('systemProxy.wizard.runWithFlagsHint') }}</p>
             <div class="cmd-block">
               <code>{{ runCommand }}</code>
-              <el-button type="primary" size="small" @click="copyRunCmd">{{ t('systemProxy.copy') }}</el-button>
+              <el-button size="small" @click="copyRunCmd">{{ t('systemProxy.copy') }}</el-button>
             </div>
           </div>
 
           <el-collapse class="optional-collapse">
-            <el-collapse-item :title="t('systemProxy.wizard.optionalPac')" name="pac">
-              <p class="mb-sm form-hint" v-html="t('systemProxy.wizard.pacHint', { url: apiPACURL })" />
-              <el-space wrap>
-                <el-button size="small" @click="copyProxyctlCmd('enable')">{{ t('systemProxy.wizard.pacEnable') }}</el-button>
-                <el-button size="small" type="danger" plain @click="copyProxyctlCmd('disable')">{{ t('systemProxy.wizard.pacDisable') }}</el-button>
-                <el-button size="small" @click="copyEnvProxyCmd">{{ t('systemProxy.wizard.manualProxy') }}</el-button>
-              </el-space>
+            <el-collapse-item :title="t('systemProxy.guide.installAndToken')" name="step3-more">
+              <div class="sub-block">
+                <div class="sub-label">{{ t('systemProxy.wizard.subStep1') }}</div>
+                <div class="cmd-block">
+                  <code>{{ installCommand }}</code>
+                  <el-button type="primary" size="small" @click="copyInstallCmd">{{ t('systemProxy.copy') }}</el-button>
+                </div>
+                <p class="form-hint" v-html="t('systemProxy.wizard.subStep1Hint')" />
+              </div>
+
+              <div class="sub-block">
+                <div class="sub-label">{{ t('systemProxy.wizard.subStep2') }}</div>
+                <div class="cmd-block">
+                  <code>export CENTAG_WRAP_TOKEN='llmproxy_xxxx'   # Web → API Keys 创建</code>
+                  <el-button size="small" @click="copyWrapTokenHint">{{ t('systemProxy.copy') }}</el-button>
+                </div>
+                <p v-if="setupStatus?.proxy_auth_required || allowLanClients" class="form-hint">
+                  {{ t('systemProxy.wizard.subStep2Hint') }}
+                </p>
+              </div>
+
+              <div class="sub-block">
+                <div class="sub-label">{{ t('systemProxy.wizard.optionalPac') }}</div>
+                <p class="mb-sm form-hint" v-html="t('systemProxy.wizard.pacHint', { url: apiPACURL })" />
+                <el-space wrap>
+                  <el-button size="small" @click="copyProxyctlCmd('enable')">{{ t('systemProxy.wizard.pacEnable') }}</el-button>
+                  <el-button size="small" type="danger" plain @click="copyProxyctlCmd('disable')">{{ t('systemProxy.wizard.pacDisable') }}</el-button>
+                  <el-button size="small" @click="copyEnvProxyCmd">{{ t('systemProxy.wizard.manualProxy') }}</el-button>
+                </el-space>
+              </div>
             </el-collapse-item>
           </el-collapse>
         </el-card>
@@ -473,11 +554,12 @@
         </el-button>
       </template>
     </el-dialog>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
@@ -567,6 +649,86 @@ const newPattern = ref({
   pattern: ''
 })
 
+const step1Ready = computed(() => status.value.enabled && egressConfigured.value)
+
+type NextAction = {
+  step: 1 | 2 | 3
+  tone: 'action' | 'ready'
+  titleKey: string
+  descKey: string
+  ctaKey: string
+}
+
+const nextAction = computed<NextAction>(() => {
+  if (!status.value.enabled) {
+    return {
+      step: 1,
+      tone: 'action',
+      titleKey: 'systemProxy.guide.nextStartMitm',
+      descKey: 'systemProxy.guide.nextStartMitmDesc',
+      ctaKey: 'systemProxy.guide.ctaGoStep1'
+    }
+  }
+  if (!egressConfigured.value) {
+    return {
+      step: 1,
+      tone: 'action',
+      titleKey: 'systemProxy.guide.nextEgress',
+      descKey: 'systemProxy.guide.nextEgressDesc',
+      ctaKey: 'systemProxy.guide.ctaGoStep1'
+    }
+  }
+  if (!testResult.value?.ok) {
+    return {
+      step: 2,
+      tone: 'action',
+      titleKey: 'systemProxy.guide.nextVerify',
+      descKey: 'systemProxy.guide.nextVerifyDesc',
+      ctaKey: 'systemProxy.guide.ctaGoStep2'
+    }
+  }
+  return {
+    step: 3,
+    tone: 'ready',
+    titleKey: 'systemProxy.guide.nextClient',
+    descKey: 'systemProxy.guide.nextClientDesc',
+    ctaKey: 'systemProxy.guide.ctaGoStep3'
+  }
+})
+
+const guideToneClass = computed(() =>
+  nextAction.value.tone === 'ready' ? 'is-ready' : 'needs-action'
+)
+
+function stepCardClass(step: 1 | 2 | 3) {
+  const current = nextAction.value.step
+  const done =
+    (step === 1 && step1Ready.value) ||
+    (step === 2 && !!testResult.value?.ok) ||
+    (step === 3 && step1Ready.value && !!testResult.value?.ok)
+  return {
+    'is-current': current === step,
+    'is-done': done && current !== step,
+    'is-pending': current < step
+  }
+}
+
+function focusStep(step: 1 | 2 | 3) {
+  mainTab.value = 'wizard'
+  requestAnimationFrame(() => {
+    document.getElementById(`spy-step-${step}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  })
+}
+
+function goNextAction() {
+  if (nextAction.value.step === 2 && step1Ready.value && !testResult.value) {
+    focusStep(2)
+    void testProxy()
+    return
+  }
+  focusStep(nextAction.value.step)
+}
+
 const domainCount = computed(() => status.value.pac_domains.length)
 const patternCount = computed(() => status.value.pac_patterns.length)
 const domainList = computed(() => status.value.pac_domains.map(domain => ({ domain })))
@@ -578,8 +740,8 @@ const listenDisplay = computed(() => {
 })
 
 const wizardProgress = computed(() => {
-  if (!status.value.enabled) return 0
-  // MITM 就绪后停留在「验证」；自检通过再指向接入
+  if (!step1Ready.value) return 0
+  // MITM + 出口 Key 就绪后停留在「验证」；自检通过再指向接入
   return testResult.value?.ok ? 2 : 1
 })
 
@@ -593,29 +755,70 @@ const installCommand = computed(
     'curl -fsSL https://raw.githubusercontent.com/atoml-ai/centag/v0.2.9/scripts/install.sh | bash && . "$HOME/.centag/env"'
 )
 
-const runCommand = computed(() => {
-  if (allowLanClients.value) {
-    return `${wrapBin()} run --server ${employeeAPIBase()} --token llmproxy_xxxx -- opencode`
-  }
-  return `${wrapBin()} run -- opencode`
-})
-
 function wrapBin() {
   // Prefer main-binary subcommand (personal ships wrap; no separate centag-wrap asset).
   return 'centag wrap'
 }
 
-function employeeAPIBase() {
-  const base = (employeeServer.value || setupStatus.value?.pac_url || '').replace(/\/api\/v1\/proxy\/pac$/, '')
-  return base || `http://127.0.0.1:${apiPort.value}`
+function normalizeAPIBase(raw: string) {
+  return raw.trim().replace(/\/api\/v1\/proxy\/pac\/?$/, '').replace(/\/$/, '')
 }
+
+/** 与「对外访问地址」同步；空时回退局域网 IP / PAC */
+const employeeAPIBase = computed(() => {
+  const fromField = normalizeAPIBase(employeeServer.value)
+  if (fromField) return fromField
+  const host = advertiseHost.value.trim()
+  if (allowLanClients.value && host && host !== 'localhost' && host !== '127.0.0.1' && host !== '::1') {
+    return `http://${host}:${apiPort.value}`
+  }
+  const fromPac = normalizeAPIBase(setupStatus.value?.pac_url || '')
+  if (fromPac) return fromPac
+  return `http://127.0.0.1:${apiPort.value}`
+})
+
+/** 本机局域网 IP 变更时，对外访问地址跟随（与探测按钮行为一致） */
+function syncEmployeeServerFromAdvertiseHost() {
+  const host = advertiseHost.value.trim()
+  if (!host || host === 'localhost' || host === '127.0.0.1' || host === '::1') return
+  employeeServer.value = `http://${host}:${apiPort.value}`
+}
+
+watch([advertiseHost, apiPort], () => {
+  if (!allowLanClients.value) return
+  syncEmployeeServerFromAdvertiseHost()
+})
+
+watch(allowLanClients, (on) => {
+  if (on) syncEmployeeServerFromAdvertiseHost()
+})
+
+const runCommand = computed(() => {
+  if (allowLanClients.value) {
+    return `${wrapBin()} run --server ${employeeAPIBase.value} --token llmproxy_xxxx -- opencode`
+  }
+  return `${wrapBin()} run -- opencode`
+})
+
+/** 先 export 再 run：日常命令更短 */
+const envRunScript = computed(() => {
+  const lines: string[] = [
+    `# ${t('systemProxy.wizard.envScriptComment')}`,
+    "export CENTAG_WRAP_TOKEN='llmproxy_xxxx'   # Web → API Keys"
+  ]
+  if (allowLanClients.value) {
+    lines.push(`export CENTAG_API_BASE='${employeeAPIBase.value}'`)
+  }
+  lines.push(`${wrapBin()} run -- opencode`)
+  return lines.join('\n')
+})
 
 function copyProxyctlCmd(kind: 'enable' | 'disable' | 'doctor') {
   const bin = wrapBin()
   let cmd =
     kind === 'enable' ? `${bin} enable` : kind === 'disable' ? `${bin} disable` : `${bin} doctor`
   if (allowLanClients.value) {
-    const server = employeeAPIBase()
+    const server = employeeAPIBase.value
     if (kind === 'enable') cmd = `${bin} enable --server ${server}`
     else if (kind === 'doctor') cmd = `${bin} doctor --server ${server}`
   }
@@ -647,6 +850,10 @@ function copyRunCmd() {
   copyCommand(runCommand.value)
 }
 
+function copyEnvRunScript() {
+  copyCommand(envRunScript.value)
+}
+
 function copyInstallCmd() {
   copyCommand(installCommand.value)
 }
@@ -655,11 +862,12 @@ function copyWrapTokenHint() {
   copyCommand(
     [
       '# 推荐：命令行传入 Token（也可用环境变量 CENTAG_WRAP_TOKEN）',
-      `${wrapBin()} run --server ${employeeAPIBase()} --token llmproxy_xxxx -- opencode`,
+      `${wrapBin()} run --server ${employeeAPIBase.value} --token llmproxy_xxxx -- opencode`,
       '',
       '# 或先 export 再 run：',
       "export CENTAG_WRAP_TOKEN='llmproxy_xxxx'",
-      `${wrapBin()} run --server ${employeeAPIBase()} -- opencode`
+      `export CENTAG_API_BASE='${employeeAPIBase.value}'`,
+      `${wrapBin()} run -- opencode`
     ].join('\n')
   )
 }
@@ -758,7 +966,7 @@ async function onPacModeChange(val: boolean) {
 
 function pickLanHost(ip: string) {
   advertiseHost.value = ip
-  employeeServer.value = `http://${ip}:${apiPort.value}`
+  syncEmployeeServerFromAdvertiseHost()
 }
 
 async function detectLanIP() {
@@ -855,8 +1063,11 @@ const load = async (opts?: { skipAutoEgress?: boolean }) => {
     try {
       setupStatus.value = await getProxySetupStatus()
       suggestedLanHosts.value = setupStatus.value?.suggested_lan_hosts || []
-      if (setupStatus.value?.pac_url && !employeeServer.value) {
-        employeeServer.value = setupStatus.value.pac_url.replace(/\/api\/v1\/proxy\/pac$/, '')
+      // 对外访问地址与局域网 IP / PAC 对齐（优先 advertise_host）
+      if (allowLanClients.value && advertiseHost.value.trim()) {
+        syncEmployeeServerFromAdvertiseHost()
+      } else if (setupStatus.value?.pac_url) {
+        employeeServer.value = normalizeAPIBase(setupStatus.value.pac_url)
       }
     } catch {
       setupStatus.value = null
@@ -1171,50 +1382,187 @@ onMounted(() => {
 
 <style scoped>
 .system-proxy {
-  min-height: 100vh;
+  min-height: 100%;
+  padding: 8px 24px 40px;
 }
 
-.header-with-toolbar {
+.page-shell {
+  max-width: 960px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.page-header {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  margin-bottom: 16px;
-  flex-wrap: wrap;
   gap: 16px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
 }
 
 .header-left {
   flex: 1;
-  min-width: 200px;
+  min-width: 220px;
 }
 
 .page-title {
-  font-size: 20px;
+  margin: 0;
+  font-size: 1.5rem;
   font-weight: 600;
-  margin: 0 0 4px 0;
   color: var(--el-text-color-primary);
 }
 
 .page-description {
-  font-size: 12px;
+  margin: 6px 0 0;
+  font-size: 0.875rem;
+  line-height: 1.5;
   color: var(--el-text-color-secondary);
+  max-width: 46rem;
+}
+
+.toolbar-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.guide-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 18px 22px;
+  margin-bottom: 16px;
+  border-radius: 12px;
+  border: 1px solid var(--el-border-color-lighter);
+  background: var(--el-fill-color-blank);
+}
+
+.guide-banner.needs-action {
+  border-color: var(--el-color-primary-light-5);
+  background: linear-gradient(135deg, var(--el-color-primary-light-9), var(--el-bg-color));
+}
+
+.guide-banner.is-ready {
+  border-color: var(--el-color-success-light-5);
+  background: linear-gradient(135deg, var(--el-color-success-light-9), var(--el-bg-color));
+}
+
+.guide-kicker {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--el-text-color-secondary);
+  margin-bottom: 4px;
+}
+
+.guide-title {
   margin: 0;
-  line-height: 1.4;
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--el-text-color-primary);
 }
 
-.wizard-lead {
-  margin: 0 0 8px;
+.guide-desc {
+  margin: 6px 0 0;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  color: var(--el-text-color-secondary);
+  max-width: 36rem;
+}
+
+.ready-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.ready-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 14px 14px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--el-border-color-lighter);
+  background: var(--el-bg-color);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s;
+}
+
+.ready-card:hover {
+  border-color: var(--el-color-primary-light-5);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.ready-card.is-ready {
+  border-color: var(--el-color-success-light-5);
+  background: var(--el-color-success-light-9);
+}
+
+.ready-card.needs-action {
+  border-color: var(--el-color-warning-light-5);
+  background: var(--el-color-warning-light-9);
+}
+
+.ready-state {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--el-text-color-secondary);
+}
+
+.ready-card.is-ready .ready-state {
+  color: var(--el-color-success);
+}
+
+.ready-card.needs-action .ready-state {
+  color: var(--el-color-warning-dark-2);
+}
+
+.ready-name {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--el-text-color-primary);
+}
+
+.ready-meta {
   font-size: 12px;
   color: var(--el-text-color-secondary);
-  line-height: 1.45;
 }
 
-.wizard-lead code {
-  font-size: 11px;
+.listen-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 16px;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+
+.listen-label {
+  flex-shrink: 0;
+}
+
+.listen-line code {
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: var(--el-fill-color-light);
+}
+
+.main-tabs :deep(.el-tabs__header) {
+  margin-bottom: 16px;
+}
+
+.main-tabs :deep(.el-tabs__content) {
+  padding-top: 4px;
 }
 
 .wizard-steps {
-  margin-bottom: 12px;
+  margin-bottom: 20px;
 }
 
 .wizard-steps :deep(.el-step__title) {
@@ -1226,77 +1574,40 @@ onMounted(() => {
   font-size: 11px;
 }
 
-.toolbar-actions {
-  display: flex;
-  gap: 12px;
+.step-card {
+  margin-bottom: 14px;
+  border-radius: 12px;
+  border: 1px solid var(--el-border-color-lighter);
+  transition: border-color 0.15s, opacity 0.15s, box-shadow 0.15s;
 }
 
-.status-strip {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-bottom: 16px;
+.step-card.is-current {
+  border-color: var(--el-color-primary-light-5);
+  box-shadow: 0 0 0 1px var(--el-color-primary-light-7);
 }
 
-.status-item {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  padding: 8px 14px;
-  border-radius: 8px;
-  border: 1px solid var(--el-border-color);
-  background: var(--el-bg-color);
-  min-width: 120px;
-}
-
-.status-item.ok {
+.step-card.is-done {
   border-color: var(--el-color-success-light-5);
-  background: var(--el-color-success-light-9);
 }
 
-.status-item.warn {
-  border-color: var(--el-color-warning-light-5);
-  background: var(--el-color-warning-light-9);
-}
-
-.status-label {
-  font-size: 12px;
-  color: var(--el-text-color-secondary);
-}
-
-.status-value {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--el-text-color-primary);
-}
-
-.main-tabs :deep(.el-tabs__content) {
-  padding-top: 8px;
-}
-
-.step-card-active {
-  border-color: var(--el-color-success-light-5);
-  box-shadow: 0 0 0 1px var(--el-color-success-light-7);
-}
-
-.step-card {  margin-bottom: 8px;
-  border-radius: 8px;
+.step-card.is-pending {
+  opacity: 0.72;
 }
 
 .step-card :deep(.el-card__body) {
-  padding: 12px 14px;
+  padding: 18px 20px;
 }
 
 .step-head {
   display: flex;
   align-items: flex-start;
-  gap: 10px;
-  margin-bottom: 10px;
+  gap: 12px;
+  margin-bottom: 14px;
 }
 
 .step-num {
-  width: 22px;
-  height: 22px;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
   background: var(--el-color-primary);
   color: #fff;
@@ -1304,8 +1615,13 @@ onMounted(() => {
   align-items: center;
   justify-content: center;
   font-weight: 700;
-  font-size: 12px;
+  font-size: 13px;
   flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.step-card.is-done .step-num {
+  background: var(--el-color-success);
 }
 
 .step-title-block {
@@ -1313,21 +1629,64 @@ onMounted(() => {
   min-width: 0;
 }
 
+.step-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .step-title-block h3 {
-  margin: 0 0 2px;
-  font-size: 14px;
+  margin: 0;
+  font-size: 1rem;
   font-weight: 600;
 }
 
-.step-title-block p {
-  margin: 0;
-  font-size: 12px;
-  line-height: 1.45;
+.step-summary {
+  margin: 6px 0 0;
+  font-size: 0.8125rem;
+  line-height: 1.5;
   color: var(--el-text-color-secondary);
 }
 
-.step-title-block code {
+.step-summary code {
   font-size: 11px;
+}
+
+.primary-action-row {
+  display: flex;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 14px 28px;
+  padding: 14px 16px;
+  border-radius: 10px;
+  background: var(--el-fill-color-lighter);
+}
+
+.primary-action-row .switch-cell {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-rows: auto auto;
+  column-gap: 10px;
+  row-gap: 4px;
+  align-items: center;
+  min-width: 220px;
+}
+
+.primary-action-row .switch-label {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.primary-action-row .el-switch {
+  grid-column: 2;
+  grid-row: 1;
+  justify-self: start;
+}
+
+.primary-action-row .form-hint {
+  grid-column: 1 / -1;
+  grid-row: 2;
 }
 
 .switch-row {
@@ -1344,18 +1703,28 @@ onMounted(() => {
   min-width: 240px;
 }
 
+.switch-cell-primary {
+  min-width: 0;
+}
+
 .switch-label {
   font-size: 13px;
+  font-weight: 500;
   color: var(--el-text-color-regular);
   white-space: nowrap;
 }
 
 .lan-form {
-  margin-top: 4px;
+  margin-top: 8px;
 }
 
 .sub-block {
-  margin-bottom: 10px;
+  margin-bottom: 12px;
+}
+
+.sub-block.is-primary-cmd .cmd-block {
+  border: 1px solid var(--el-color-primary-light-5);
+  background: var(--el-color-primary-light-9);
 }
 
 .sub-label {
@@ -1370,17 +1739,29 @@ onMounted(() => {
   align-items: center;
   gap: 10px;
   flex-wrap: wrap;
-  padding: 8px 10px;
-  border-radius: 6px;
+  padding: 10px 12px;
+  border-radius: 8px;
   background: var(--el-fill-color-light);
   margin-bottom: 6px;
 }
 
-.cmd-block code {
+.cmd-block code,
+.cmd-pre {
   flex: 1;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: 12px;
   word-break: break-all;
+}
+
+.cmd-block-stack {
+  align-items: flex-start;
+}
+
+.cmd-pre {
+  margin: 0;
+  white-space: pre-wrap;
+  line-height: 1.5;
+  color: var(--el-text-color-primary);
 }
 
 .optional-collapse {
@@ -1391,6 +1772,11 @@ onMounted(() => {
   font-size: 12px;
   height: 36px;
   line-height: 36px;
+  color: var(--el-text-color-secondary);
+}
+
+.optional-collapse :deep(.el-collapse-item__wrap) {
+  border-bottom: none;
 }
 
 .check-list {
@@ -1399,9 +1785,9 @@ onMounted(() => {
 }
 
 .check-list li {
-  margin-bottom: 3px;
-  font-size: 12px;
-  line-height: 1.4;
+  margin-bottom: 4px;
+  font-size: 13px;
+  line-height: 1.45;
 }
 
 .check-list li.pass {
@@ -1420,11 +1806,13 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
 .card-title {
   font-weight: 600;
-  font-size: 16px;
+  font-size: 1rem;
 }
 
 .pac-preview {
@@ -1437,7 +1825,7 @@ onMounted(() => {
 }
 
 .mt-sm {
-  margin-top: 6px;
+  margin-top: 8px;
 }
 
 .mb-md {
@@ -1454,8 +1842,8 @@ onMounted(() => {
 
 .form-hint {
   color: var(--el-text-color-secondary);
-  font-size: 11px;
-  line-height: 1.4;
+  font-size: 12px;
+  line-height: 1.45;
 }
 
 .form-hint code {
@@ -1468,9 +1856,29 @@ onMounted(() => {
   margin-left: 0;
 }
 
+.egress-tools {
+  padding-top: 4px;
+}
+
+@media (max-width: 900px) {
+  .ready-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 @media (max-width: 768px) {
-  .header-with-toolbar {
+  .system-proxy {
+    padding: 8px 16px 32px;
+  }
+
+  .page-header,
+  .guide-banner {
     flex-direction: column;
+    align-items: stretch;
+  }
+
+  .ready-grid {
+    grid-template-columns: 1fr;
   }
 
   .switch-cell {

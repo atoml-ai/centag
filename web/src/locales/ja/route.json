@@ -5,7 +5,7 @@
   "cache": "キャッシュ",
   "evaluation": "キャッシュ評価",
   "chat": "AI チャット",
-  "agentSetup": "Agent 連携",
+  "agentSetup": "Agent設定",
   "proxyModes": "プロキシモード",
   "sessionMode": "セッションモードテスト",
   "pipelines": "パイプライン",

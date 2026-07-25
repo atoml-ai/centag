@@ -5,7 +5,7 @@
   "cache": "Кэш",
   "evaluation": "Оценка кэша",
   "chat": "AI-чат",
-  "agentSetup": "Подключение Agent",
+  "agentSetup": "Конфиг Agent",
   "proxyModes": "Режимы прокси",
   "sessionMode": "Тест режима сессии",
   "pipelines": "Пайплайны",
