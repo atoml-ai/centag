@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"centag/core/pkg/plugin"
@@ -526,15 +527,24 @@ func (c *controlledHTTPClient) Do(req *http.Request) (*http.Response, error) {
 	return resp, nil
 }
 
-// gatewayEgressTransport 构建网关出站 Transport：直连上游，不继承进程环境代理。
-func gatewayEgressTransport(tlsVerify bool) http.RoundTripper {
-	// 基于 DefaultTransport 拷贝拨号等默认值，但清空 Proxy。
+// egressTransports 进程级共享出站 Transport，按 TLS 验证开关分为两个实例。
+// 避免每次 Do() 调用 http.Transport.Clone() 导致连接池碎片化。
+var (
+	egressTransportWithTLS    *http.Transport
+	egressTransportSkipVerify *http.Transport
+	egressTransportOnce       sync.Once
+)
+
+func initEgressTransports() {
 	base, _ := http.DefaultTransport.(*http.Transport)
-	var tr *http.Transport
 	if base != nil {
-		tr = base.Clone()
+		egressTransportWithTLS = base.Clone()
+		egressTransportWithTLS.Proxy = nil
+		egressTransportSkipVerify = base.Clone()
+		egressTransportSkipVerify.Proxy = nil
+		egressTransportSkipVerify.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
 	} else {
-		tr = &http.Transport{
+		egressTransportWithTLS = &http.Transport{
 			Proxy: nil,
 			DialContext: (&net.Dialer{
 				Timeout:   30 * time.Second,
@@ -542,20 +552,23 @@ func gatewayEgressTransport(tlsVerify bool) http.RoundTripper {
 			}).DialContext,
 			ForceAttemptHTTP2:     true,
 			MaxIdleConns:          100,
+			MaxIdleConnsPerHost:   20,
 			IdleConnTimeout:       90 * time.Second,
 			TLSHandshakeTimeout:   10 * time.Second,
 			ExpectContinueTimeout: 1 * time.Second,
 		}
+		egressTransportSkipVerify = egressTransportWithTLS.Clone()
+		egressTransportSkipVerify.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
 	}
-	tr.Proxy = nil
-	if !tlsVerify {
-		if tr.TLSClientConfig == nil {
-			tr.TLSClientConfig = &tls.Config{}
-		}
-		tr.TLSClientConfig = tr.TLSClientConfig.Clone()
-		tr.TLSClientConfig.InsecureSkipVerify = true
+}
+
+// gatewayEgressTransport 构建网关出站 Transport：直连上游，不继承进程环境代理。
+func gatewayEgressTransport(tlsVerify bool) http.RoundTripper {
+	egressTransportOnce.Do(initEgressTransports)
+	if tlsVerify {
+		return egressTransportWithTLS
 	}
-	return tr
+	return egressTransportSkipVerify
 }
 
 // defaultPermissionChecker 默认权限检查器

@@ -75,18 +75,8 @@ func NewServer(config *Config) (*Server, error) {
 				serverName = "localhost"
 			}
 
-			logger.Debug("Generating certificate for host", zap.String("host", serverName))
-
-			certBytes, privKey, err := certManager.GenerateCertForDomain(serverName)
-			if err != nil {
-				return nil, fmt.Errorf("failed to generate certificate for %s: %w", serverName, err)
-			}
-
-			return &tls.Certificate{
-				Certificate: [][]byte{certBytes},
-				PrivateKey:  privKey,
-				Leaf:        nil,
-			}, nil
+			// 复用 TLS 证书缓存（含私钥），与 MITM 路径一致
+			return certManager.GetOrCreateTLSCertificate(serverName)
 		},
 		MinVersion: tls.VersionTLS12,
 		NextProtos: []string{"http/1.1", "h2"},
