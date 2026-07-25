@@ -1,6 +1,10 @@
 {
   "title": "个人中心",
   "subtitle": "管理您的账号信息与 API 访问密钥",
+  "navBasic": "基本信息",
+  "navPassword": "修改密码",
+  "navApiKeys": "密钥管理",
+  "navUsage": "资源统计",
   "basicInfo": "基本信息",
   "basicInfoDesc": "个人资料与联系方式",
   "admin": "管理员",

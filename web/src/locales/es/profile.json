@@ -1,6 +1,10 @@
 {
   "title": "Perfil",
   "subtitle": "Administra tu información de cuenta y claves de acceso API",
+  "navBasic": "Básico",
+  "navPassword": "Contraseña",
+  "navApiKeys": "API Keys",
+  "navUsage": "Uso",
   "basicInfo": "Información Básica",
   "basicInfoDesc": "Perfil personal y datos de contacto",
   "admin": "Administrador",
