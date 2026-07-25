@@ -1,5 +1,5 @@
 {
-  "title": "Agent Access",
+  "title": "Agent Config",
   "subtitle": "Connect Agent tools to Centag proxy: select pipeline, write config and verify",
   "quickSetup": "Quick Setup",
   "quickSetupHint": "Click the Agent below to connect through the wizard (just select a pipeline; backend is determined internally).",
@@ -82,5 +82,92 @@
   "loadProviderFailed": "Failed to load provider config:",
   "setDefaultSuccess": "Set {name} as default",
   "hotSwapFailed": "HotSwap failed:",
-  "verify": "Verify"
+  "verify": "Verify",
+  "configMethod": "Config method",
+  "configPaths": "Config paths",
+  "keyFields": "Key fields",
+  "writeMode": "Write mode",
+  "writeModeOverwrite": "Overwrite",
+  "writeModeMerge": "Merge",
+  "writeModeNone": "No local config",
+  "installGuide": "Install guide",
+  "noConfigMethod": "No config method documented",
+  "agents": {
+    "claude-code": {
+      "description": "Anthropic's official AI coding assistant CLI",
+      "configMethod": "Writes ~/.claude/settings.json by merging env.ANTHROPIC_BASE_URL / ANTHROPIC_AUTH_TOKEN / ANTHROPIC_MODEL to point at Centag. First overwrite creates a .centag-bak backup.",
+      "installHint": "macOS/Linux: curl -fsSL https://claude.ai/install.sh | bash; or brew install --cask claude-code"
+    },
+    "claude-desktop": {
+      "description": "Anthropic's official desktop client",
+      "configMethod": "On macOS/Windows: set deploymentMode=3p on Claude + Claude-3p, and write a Centag gateway profile in configLibrary (inferenceGatewayBaseUrl / ApiKey / AuthScheme=bearer / inferenceProvider=gateway). Restart Desktop to apply.",
+      "configMethodUnsupported": "Local write for Claude Desktop is not supported on this platform (macOS/Windows only). Use one-click setup on a supported system.",
+      "installHint": "Download the Claude Desktop app from the official site (not a CLI)"
+    },
+    "codex": {
+      "description": "OpenAI's official AI coding assistant CLI (ChatGPT Codex)",
+      "configMethod": "Overwrites ~/.codex/auth.json (OPENAI_API_KEY) and ~/.codex/config.toml (model_provider=custom, base_url → Centag, wire_api=responses).",
+      "installHint": "curl -fsSL https://chatgpt.com/codex/install.sh | sh; or npm i -g @openai/codex"
+    },
+    "gemini-cli": {
+      "description": "Google's official AI coding assistant CLI",
+      "configMethod": "Writes ~/.gemini/.env (GEMINI_API_KEY / GOOGLE_GEMINI_BASE_URL / GEMINI_MODEL) and merges settings.json security.auth.selectedType=gemini-api-key.",
+      "installHint": "npm i -g @google/gemini-cli; or brew install gemini-cli"
+    },
+    "grok-build": {
+      "description": "xAI Grok coding assistant CLI",
+      "configMethod": "Overwrites ~/.grok/config.toml with [models] default=\"centag\" and [model.\"centag\"] fields (model / base_url / api_key / api_backend=responses).",
+      "installHint": "curl -fsSL https://x.ai/cli/install.sh | bash; or npm i -g @xai-official/grok"
+    },
+    "opencode": {
+      "description": "AI coding assistant (opencode.ai)",
+      "configMethod": "Merges into ~/.config/opencode/opencode.json: upsert provider.centag and set default model. Other providers are preserved.",
+      "installHint": "curl -fsSL https://opencode.ai/install | bash; or npm i -g opencode-ai"
+    },
+    "openclaw": {
+      "description": "AI coding assistant (openclaw)",
+      "configMethod": "Merges into ~/.openclaw/openclaw.json: upsert models.providers.centag and set agents.defaults.model.primary.",
+      "installHint": "npm i -g openclaw"
+    },
+    "hermes": {
+      "description": "Task-oriented AI agent framework",
+      "configMethod": "Merges into ~/.hermes/config.yaml: update model defaults and upsert custom_providers entry name=centag.",
+      "installHint": "curl -fsSL https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.sh | bash; or pip install \"hermes-agent[web]\""
+    },
+    "codebuddy": {
+      "description": "Tencent CodeBuddy Code CLI (OpenAI-compatible custom models)",
+      "configMethod": "Merges into ~/.codebuddy/models.json. url must be a full …/v1/chat/completions path; OpenAI API format only.",
+      "installHint": "npm i -g @tencent-ai/codebuddy-code; or curl -fsSL https://www.codebuddy.cn/cli/install.sh | bash"
+    },
+    "workbuddy": {
+      "description": "Tencent WorkBuddy desktop assistant (reads ~/.codebuddy/models.json)",
+      "configMethod": "Shares ~/.codebuddy/models.json with CodeBuddy; after write, pick the model in WorkBuddy Settings → Models. You can also configure a custom API in the UI only.",
+      "installHint": "Download the desktop app from the CodeBuddy / WorkBuddy site"
+    },
+    "trae": {
+      "description": "ByteDance TRAE IDE (custom OpenAI-compatible models)",
+      "configMethod": "Preferred: Settings → Models → Custom. Use OpenAI format; with Full URL off, set Base URL to …/v1; model ID = centag/<pipeline>. One-click setup best-effort merges Trae/Trae CN settings.json.",
+      "installHint": "Download the IDE from trae.ai / trae.cn"
+    },
+    "coding-tui": {
+      "description": "Coding-focused terminal UI agent",
+      "configMethod": "TUI agents do not write local config files; routing is bound in-process via pipelines.",
+      "installHint": "Built-in capability; no separate CLI install"
+    },
+    "education-tui": {
+      "description": "Education-focused terminal UI agent",
+      "configMethod": "TUI agents do not write local config files; routing is bound in-process via pipelines.",
+      "installHint": "Built-in capability; no separate CLI install"
+    },
+    "coding-web": {
+      "description": "Coding-focused web automation agent",
+      "configMethod": "Web agents do not write local config files; routing is bound in-process via browser automation.",
+      "installHint": "Built-in capability; no separate CLI install"
+    },
+    "education-web": {
+      "description": "Education-focused web automation agent",
+      "configMethod": "Web agents do not write local config files; routing is bound in-process via browser automation.",
+      "installHint": "Built-in capability; no separate CLI install"
+    }
+  }
 }

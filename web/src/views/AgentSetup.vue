@@ -22,28 +22,64 @@
               :xs="24" :sm="12" :md="8"
             >
               <div class="agent-card" @click="openWizard(agent)">
-                <div class="agent-icon">
-                  <el-icon :size="32">
-                    <component :is="agentIcon(agent.type)" />
-                  </el-icon>
+                <div class="agent-card-main">
+                  <div class="agent-icon">
+                    <el-icon :size="32">
+                      <component :is="agentIcon(agent.type)" />
+                    </el-icon>
+                  </div>
+                  <div class="agent-info">
+                    <div class="agent-name">
+                      {{ agent.display_name }}
+                      <el-tag v-if="agent.write_mode" size="small" type="info" class="write-mode-tag">
+                        {{ writeModeLabel(agent.write_mode) }}
+                      </el-tag>
+                    </div>
+                    <div class="agent-desc">{{ agentLocalized(agent, 'description') }}</div>
+                    <a
+                      v-if="agent.install_url"
+                      class="install-link"
+                      :href="agent.install_url"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      @click.stop
+                    >
+                      {{ $t('agentSetup.installGuide') }}
+                    </a>
+                    <div v-if="agentLocalized(agent, 'installHint')" class="install-hint">
+                      {{ agentLocalized(agent, 'installHint') }}
+                    </div>
+                  </div>
+                  <div class="agent-actions" @click.stop>
+                    <el-button type="primary" link @click="openWizard(agent)">
+                      {{ $t('agentSetup.connectProxy') }}
+                    </el-button>
+                    <el-button
+                      v-if="agent.write_mode !== 'none'"
+                      type="info"
+                      link
+                      :loading="restoringAgent === agent.type"
+                      @click="restoreDefaults(agent)"
+                    >
+                      {{ $t('agentSetup.restoreDefault') }}
+                    </el-button>
+                  </div>
                 </div>
-                <div class="agent-info">
-                  <div class="agent-name">{{ agent.display_name }}</div>
-                  <div class="agent-desc">{{ agent.description }}</div>
-                </div>
-                <div class="agent-actions" @click.stop>
-                  <el-button type="primary" link @click="openWizard(agent)">
-                    {{ $t('agentSetup.connectProxy') }}
-                  </el-button>
-                  <el-button
-                    type="info"
-                    link
-                    :loading="restoringAgent === agent.type"
-                    @click="restoreDefaults(agent)"
-                  >
-                    {{ $t('agentSetup.restoreDefault') }}
-                  </el-button>
-                </div>
+                <el-collapse class="agent-meta-collapse" @click.stop>
+                  <el-collapse-item :title="$t('agentSetup.configMethod')" name="method">
+                    <div class="meta-block">
+                      <div v-if="agent.config_paths?.length" class="meta-row">
+                        <span class="meta-label">{{ $t('agentSetup.configPaths') }}</span>
+                        <code v-for="p in agent.config_paths" :key="p" class="meta-path">{{ p }}</code>
+                      </div>
+                      <div v-if="agent.key_fields?.length" class="meta-row">
+                        <span class="meta-label">{{ $t('agentSetup.keyFields') }}</span>
+                        <span class="meta-fields">{{ agent.key_fields.join(', ') }}</span>
+                      </div>
+                      <p class="meta-method">{{ agentLocalized(agent, 'configMethod') || $t('agentSetup.noConfigMethod') }}</p>
+                    </div>
+                  </el-collapse-item>
+                </el-collapse>
               </div>
             </el-col>
           </el-row>
@@ -189,6 +225,30 @@
           {{ $t('agentSetup.writeConfigHint', { agent: currentAgentName }) }}
           {{ $t('agentSetup.writeConfigKeySource') }}
         </el-alert>
+
+        <div v-if="selectedAgentMeta" class="wizard-meta">
+          <div class="meta-row">
+            <span class="meta-label">{{ $t('agentSetup.writeMode') }}</span>
+            <el-tag size="small" type="info">{{ writeModeLabel(selectedAgentMeta.write_mode) }}</el-tag>
+          </div>
+          <div v-if="selectedAgentMeta.config_paths?.length" class="meta-row">
+            <span class="meta-label">{{ $t('agentSetup.configPaths') }}</span>
+            <code v-for="p in selectedAgentMeta.config_paths" :key="p" class="meta-path">{{ p }}</code>
+          </div>
+          <p class="meta-method">{{ agentLocalized(selectedAgentMeta, 'configMethod') }}</p>
+          <a
+            v-if="selectedAgentMeta.install_url"
+            class="install-link"
+            :href="selectedAgentMeta.install_url"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            {{ $t('agentSetup.installGuide') }}
+          </a>
+          <div v-if="agentLocalized(selectedAgentMeta, 'installHint')" class="install-hint">
+            {{ agentLocalized(selectedAgentMeta, 'installHint') }}
+          </div>
+        </div>
 
         <div v-if="configResult" class="config-result">
           <div class="config-header">
@@ -345,7 +405,7 @@ import { useAuthStore } from '@/stores/auth'
 import { listAPIKeys } from '@/api/user'
 import api from '@/api'
 
-const { t } = useI18n()
+const { t, te } = useI18n()
 const router = useRouter()
 const authStore = useAuthStore()
 const isAdmin = computed(() => authStore.isAdmin)
@@ -368,7 +428,20 @@ const loadingConfig = ref(false)
 const writingConfig = ref(false)
 const restoringAgent = ref('')
 const platformTab = ref('macos')
-const agentTypes = ref<Array<{ type: string; display_name: string; description: string }>>([])
+interface AgentTypeInfo {
+  type: string
+  display_name: string
+  description: string
+  category?: string
+  write_mode?: string
+  config_paths?: string[]
+  key_fields?: string[]
+  config_method?: string
+  install_url?: string
+  install_hint?: string
+}
+
+const agentTypes = ref<AgentTypeInfo[]>([])
 const pipelines = ref<Array<{ id: string; name: string; description?: string; nodes?: any[] }>>([])
 const configResult = ref<any>(null)
 const writeResult = ref<{ success: boolean; message: string; written?: Array<{ path: string; content: string }> } | null>(null)
@@ -383,6 +456,10 @@ const wizardTitle = computed(() => {
 })
 
 const currentAgentName = computed(() => selectedAgentDisplay.value || selectedAgent.value || 'Agent')
+
+const selectedAgentMeta = computed(() =>
+  agentTypes.value.find(a => a.type === selectedAgent.value) || null
+)
 
 const selectedPipelineName = computed(() => {
   const pipe = pipelines.value.find(p => p.id === selectedPipeline.value)
@@ -468,7 +545,7 @@ async function checkAPIKeys() {
 
 function goProfileForAPIKey() {
   wizardVisible.value = false
-  router.push('/profile')
+  router.push({ path: '/profile', query: { section: 'api-keys' } })
 }
 
 async function restoreDefaults(agent: { type: string; display_name: string }) {
@@ -601,7 +678,7 @@ async function maybeHandleMissingProxyAPIKeyError(message: string): Promise<bool
       }
     )
     wizardVisible.value = false
-    router.push('/profile')
+    router.push({ path: '/profile', query: { section: 'api-keys' } })
   } catch {
     // 用户取消时不做跳转
   }
@@ -671,8 +748,42 @@ function agentIcon(type: string) {
     'opencode': Connection,
     'openclaw': Connection,
     'hermes': Connection,
+    'codebuddy': Monitor,
+    'workbuddy': Monitor,
+    'trae': ChatDotRound,
   }
   return map[type] || Connection
+}
+
+function writeModeLabel(mode?: string): string {
+  switch (mode) {
+    case 'merge':
+      return t('agentSetup.writeModeMerge')
+    case 'none':
+      return t('agentSetup.writeModeNone')
+    case 'overwrite':
+      return t('agentSetup.writeModeOverwrite')
+    default:
+      return mode || '-'
+  }
+}
+
+/** 卡片/向导文案走前端 i18n；路径与 install_url 仍用后端。 */
+function agentLocalized(
+  agent: { type?: string; description?: string; config_method?: string; install_hint?: string; config_paths?: string[] } | null,
+  field: 'description' | 'configMethod' | 'installHint'
+): string {
+  if (!agent?.type) return ''
+  if (field === 'configMethod' && agent.type === 'claude-desktop' && (!agent.config_paths || agent.config_paths.length === 0)) {
+    const unsupportedKey = 'agentSetup.agents.claude-desktop.configMethodUnsupported'
+    if (te(unsupportedKey) || te(unsupportedKey, 'en')) return t(unsupportedKey)
+  }
+  const key = `agentSetup.agents.${agent.type}.${field}`
+  // 当前语言缺失时回退 en，避免显示后端硬编码中文
+  if (te(key) || te(key, 'en')) return t(key)
+  if (field === 'description') return agent.description || ''
+  if (field === 'configMethod') return agent.config_method || ''
+  return agent.install_hint || ''
 }
 
 // ===================== 供应商配置 (只读视图) =====================
@@ -765,18 +876,24 @@ onMounted(() => {
 .agent-card {
   border: 2px solid #e4e7ed;
   border-radius: 12px;
-  padding: 20px;
+  padding: 16px 20px;
   margin-bottom: 16px;
   cursor: pointer;
   transition: all 0.2s;
   display: flex;
-  align-items: center;
-  gap: 16px;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .agent-card:hover {
   border-color: var(--el-color-primary-light-3);
   background: #fafafa;
+}
+
+.agent-card-main {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
 }
 
 .agent-icon {
@@ -805,6 +922,14 @@ onMounted(() => {
   font-weight: 600;
   font-size: 1rem;
   margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.write-mode-tag {
+  font-weight: 400;
 }
 
 .agent-desc {
@@ -813,12 +938,95 @@ onMounted(() => {
   line-height: 1.4;
 }
 
+.install-link {
+  display: inline-block;
+  margin-top: 6px;
+  font-size: 0.8rem;
+  color: var(--el-color-primary);
+  text-decoration: none;
+}
+
+.install-link:hover {
+  text-decoration: underline;
+}
+
+.install-hint {
+  margin-top: 2px;
+  font-size: 0.75rem;
+  color: #a8abb2;
+  line-height: 1.35;
+  word-break: break-all;
+}
+
 .agent-actions {
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
   align-items: flex-end;
   gap: 2px;
+}
+
+.agent-meta-collapse {
+  border: none;
+  --el-collapse-header-height: 36px;
+}
+
+.agent-meta-collapse :deep(.el-collapse-item__header) {
+  font-size: 0.8rem;
+  color: #606266;
+  border: none;
+  background: transparent;
+}
+
+.agent-meta-collapse :deep(.el-collapse-item__wrap) {
+  border: none;
+  background: transparent;
+}
+
+.meta-block,
+.wizard-meta {
+  font-size: 0.8rem;
+  color: #606266;
+  line-height: 1.5;
+}
+
+.wizard-meta {
+  margin-bottom: 16px;
+  padding: 12px 14px;
+  background: #f5f7fa;
+  border-radius: 8px;
+}
+
+.meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 8px;
+  margin-bottom: 6px;
+}
+
+.meta-label {
+  font-weight: 600;
+  color: #303133;
+  flex-shrink: 0;
+}
+
+.meta-path {
+  font-size: 0.75rem;
+  background: #eef1f6;
+  padding: 1px 6px;
+  border-radius: 4px;
+  word-break: break-all;
+}
+
+.meta-fields {
+  word-break: break-all;
+  color: #909399;
+}
+
+.meta-method {
+  margin: 4px 0 0;
+  white-space: pre-wrap;
 }
 
 /* Wizard */

@@ -1,5 +1,5 @@
 {
-  "title": "Acceso de Agent",
+  "title": "Config Agent",
   "subtitle": "Conecte herramientas Agent al proxy Centag: seleccione pipeline, escriba config y verifique",
   "quickSetup": "Configuración Rápida",
   "quickSetupHint": "Haga clic en el Agent a continuación para conectar a través del asistente (solo seleccione un pipeline; el backend se determina internamente).",
@@ -82,5 +82,14 @@
   "loadProviderFailed": "Error al cargar configuración del proveedor:",
   "setDefaultSuccess": "{name} establecido como predeterminado",
   "hotSwapFailed": "Error de HotSwap:",
-  "verify": "Verificar"
+  "verify": "Verificar",
+  "configMethod": "Método de configuración",
+  "configPaths": "Rutas de configuración",
+  "keyFields": "Campos clave",
+  "writeMode": "Modo de escritura",
+  "writeModeOverwrite": "Sobrescribir",
+  "writeModeMerge": "Fusionar",
+  "writeModeNone": "Sin config local",
+  "installGuide": "Guía de instalación",
+  "noConfigMethod": "Sin método de configuración documentado"
 }

@@ -1,5 +1,5 @@
 {
-  "title": "Agent 연결",
+  "title": "Agent설정",
   "subtitle": "Agent 도구를 Centag 프록시에 연결: 파이프라인 선택, 설정 작성 및 검증",
   "quickSetup": "빠른 설정",
   "quickSetupHint": "아래 Agent를 클릭하여 마법사로 연결하세요 (파이프라인만 선택하면 됩니다; 백엔드는 내부적으로 결정됩니다).",
@@ -82,5 +82,14 @@
   "loadProviderFailed": "공급자 설정 로드 실패:",
   "setDefaultSuccess": "{name}을(를) 기본값으로 설정했습니다",
   "hotSwapFailed": "HotSwap 실패:",
-  "verify": "검증"
+  "verify": "검증",
+  "configMethod": "설정 방법",
+  "configPaths": "설정 경로",
+  "keyFields": "주요 필드",
+  "writeMode": "쓰기 모드",
+  "writeModeOverwrite": "덮어쓰기",
+  "writeModeMerge": "병합 추가",
+  "writeModeNone": "로컬 설정 없음",
+  "installGuide": "설치 가이드",
+  "noConfigMethod": "설정 방법 설명이 없습니다"
 }
