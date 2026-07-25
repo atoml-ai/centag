@@ -107,6 +107,11 @@
               <el-option :label="t('nodeConfig.appendPositionBeforeClient')" value="before_client" />
               <el-option :label="t('nodeConfig.appendPositionMergeLast')" value="merge_last" />
             </el-select>
+            <div class="help-text">{{ t('nodeConfig.appendPositionHelp') }}</div>
+            <div class="append-position-example">
+              <div class="append-position-example-title">{{ t('nodeConfig.appendPositionExampleTitle') }}</div>
+              <pre class="append-position-example-body">{{ appendPositionExampleText(egressConfig.append_position) }}</pre>
+            </div>
           </el-form-item>
 
           <div v-if="egressConfig.system_prompt_strategy !== 'passthrough'" class="egress-prompt-body">
@@ -161,6 +166,34 @@
             </el-form-item>
           </el-col>
         </el-row>
+
+        <el-form-item
+          v-if="localNode.type === 'generator'"
+          :label="t('nodeConfig.systemPromptStrategy')"
+        >
+          <el-radio-group v-model="generatorSystemStrategy">
+            <el-radio-button value="passthrough">{{ t('nodeConfig.strategyPassthrough') }}</el-radio-button>
+            <el-radio-button value="append">{{ t('nodeConfig.strategyAppend') }}</el-radio-button>
+            <el-radio-button value="replace">{{ t('nodeConfig.strategyReplace') }}</el-radio-button>
+          </el-radio-group>
+          <div class="help-text">{{ t('nodeConfig.generatorStrategyHelp') }}</div>
+        </el-form-item>
+
+        <el-form-item
+          v-if="localNode.type === 'generator' && generatorSystemStrategy === 'append'"
+          :label="t('nodeConfig.appendPosition')"
+        >
+          <el-select v-model="generatorAppendPosition" style="width: 100%">
+            <el-option :label="t('nodeConfig.appendPositionAfterClient')" value="after_client" />
+            <el-option :label="t('nodeConfig.appendPositionBeforeClient')" value="before_client" />
+            <el-option :label="t('nodeConfig.appendPositionMergeLast')" value="merge_last" />
+          </el-select>
+          <div class="help-text">{{ t('nodeConfig.appendPositionHelp') }}</div>
+          <div class="append-position-example">
+            <div class="append-position-example-title">{{ t('nodeConfig.appendPositionExampleTitle') }}</div>
+            <pre class="append-position-example-body">{{ appendPositionExampleText(generatorAppendPosition) }}</pre>
+          </div>
+        </el-form-item>
 
         <el-form-item v-if="showPromptEditor" :label="getPromptLabel(localNode.type)">
           <div v-if="usesSystemPrompt" class="system-prompt-toolbar">
@@ -927,8 +960,52 @@ const defaultEgressConfig = () => ({
   default_scheme: 'https',
 })
 const egressConfig = ref(defaultEgressConfig())
+/** generator 节点的 system 策略（写入 config.custom_config） */
+const generatorSystemStrategy = ref<'passthrough' | 'append' | 'replace'>('replace')
+const generatorAppendPosition = ref<'after_client' | 'before_client' | 'merge_last'>('after_client')
 /** 高级折叠面板：默认全部收起，聚焦常用配置 */
 const advancedPanels = ref<string[]>([])
+
+function appendPositionExampleText(pos: string): string {
+  switch (pos) {
+    case 'before_client':
+      return t('nodeConfig.appendPositionExampleBefore')
+    case 'merge_last':
+      return t('nodeConfig.appendPositionExampleMerge')
+    default:
+      return t('nodeConfig.appendPositionExampleAfter')
+  }
+}
+
+const loadGeneratorSystemStrategy = (node: any) => {
+  const cc = node?.config?.custom_config || {}
+  let strategy = String(cc.system_prompt_strategy || '').trim()
+  if (!strategy) {
+    // 兼容旧行为：有 system_prompt 则视为 replace，否则透传
+    strategy = String(node?.config?.system_prompt || '').trim() ? 'replace' : 'passthrough'
+  }
+  if (!['passthrough', 'append', 'replace'].includes(strategy)) {
+    strategy = 'replace'
+  }
+  generatorSystemStrategy.value = strategy as 'passthrough' | 'append' | 'replace'
+  generatorAppendPosition.value = (String(cc.append_position || 'after_client').trim() || 'after_client') as
+    | 'after_client'
+    | 'before_client'
+    | 'merge_last'
+}
+
+const applyGeneratorSystemStrategyToConfig = () => {
+  localNode.value.config = localNode.value.config || {}
+  const prev = localNode.value.config.custom_config || {}
+  const next: Record<string, any> = { ...prev }
+  next.system_prompt_strategy = generatorSystemStrategy.value
+  if (generatorSystemStrategy.value === 'append') {
+    next.append_position = generatorAppendPosition.value
+  } else {
+    delete next.append_position
+  }
+  localNode.value.config.custom_config = next
+}
 
 const loadEgressConfig = (node: any) => {
   const cc = node?.config?.custom_config || {}
@@ -962,8 +1039,12 @@ const buildEgressCustomConfig = (): Record<string, any> => {
   const next: Record<string, any> = { ...prev }
   next.route_policy = egressConfig.value.route_policy
   next.system_prompt_strategy = egressConfig.value.system_prompt_strategy
+  // 清除旧布尔，避免与 strategy 双写混淆；兼容读侧已优先 strategy
+  delete next.inject_system_prompt
   if (egressConfig.value.system_prompt_strategy === 'append') {
     next.append_position = egressConfig.value.append_position
+  } else {
+    delete next.append_position
   }
   next.redirect_policy = egressConfig.value.redirect_policy
   next.max_redirects = egressConfig.value.max_redirects
@@ -1442,30 +1523,35 @@ const contextVars = [
   { name: 'pipeline_id',desc: t('nodeConfig.contextVarPipelineIdDesc') },
 ]
 
-const usesSystemPrompt = computed(() =>
-  localNode.value.type === 'generator'
-  || (localNode.value.type === 'transparent_forward' && egressConfig.value.inject_system_prompt),
-)
+const usesSystemPrompt = computed(() => {
+  if (localNode.value.type === 'generator') return true
+  if (localNode.value.type === 'transparent_forward') {
+    return egressConfig.value.system_prompt_strategy !== 'passthrough'
+  }
+  return false
+})
 
 const showPromptEditor = computed(() => {
   if (localNode.value.type === 'transparent_forward') {
-    return egressConfig.value.inject_system_prompt
+    // 出站区已有独立 system 文本框；此处避免再绑到 prompt_template
+    return false
   }
-  // transparent_forward 以外：原逻辑（LLM 节点显示 prompt，但 transparent 已单独处理）
-  return localNode.value.type !== 'transparent_forward' && needsLLM(localNode.value.type)
+  return needsLLM(localNode.value.type)
 })
 
 // generator / 出站注入：绑 system_prompt；其他节点绑 prompt_template
 const promptFieldValue = computed({
   get: () => {
     if (!localNode.value.config) return ''
-    return usesSystemPrompt.value
-      ? (localNode.value.config.system_prompt ?? '')
-      : (localNode.value.config.prompt_template ?? '')
+    // transparent_forward 的文本框始终读写 system_prompt（策略非透传时才显示）
+    if (localNode.value.type === 'transparent_forward' || usesSystemPrompt.value) {
+      return localNode.value.config.system_prompt ?? ''
+    }
+    return localNode.value.config.prompt_template ?? ''
   },
   set: (val: string) => {
     localNode.value.config = localNode.value.config || {}
-    if (usesSystemPrompt.value) {
+    if (localNode.value.type === 'transparent_forward' || usesSystemPrompt.value) {
       localNode.value.config.system_prompt = val
     } else {
       localNode.value.config.prompt_template = val
@@ -1691,6 +1777,31 @@ const onTypeChange = (newType: string) => {
     return
   }
 
+  if (newType === 'user_prompt_ops') {
+    localNode.value.backend = ''
+    localNode.value.model = ''
+    localNode.value.config = localNode.value.config || {}
+    delete localNode.value.config.prompt_template
+    localNode.value.kind = 'prompt.ops'
+    localNode.value.implementation = 'builtin.user_prompt_ops'
+    if (!localNode.value.name || localNode.value.name === t('nodeConfig.defaultNameNewNode')) {
+      localNode.value.name = t('nodeConfig.typeUserPromptOps')
+    }
+    return
+  }
+  if (newType === 'output_post_ops') {
+    localNode.value.backend = ''
+    localNode.value.model = ''
+    localNode.value.config = localNode.value.config || {}
+    delete localNode.value.config.prompt_template
+    localNode.value.kind = 'prompt.postprocess'
+    localNode.value.implementation = 'builtin.output_post_ops'
+    if (!localNode.value.name || localNode.value.name === t('nodeConfig.defaultNameNewNode')) {
+      localNode.value.name = t('nodeConfig.typeOutputPostOps')
+    }
+    return
+  }
+
   // router 在 llm_classify 策略下也需要 backend/model，切换时保留
   const needsLLMOrRouter = needsLLM(newType) || newType === 'router'
   if (!needsLLMOrRouter) {
@@ -1704,6 +1815,10 @@ const onTypeChange = (newType: string) => {
     localNode.value.config = localNode.value.config || {}
     // generator 节点只使用 system_prompt，不使用 prompt_template，清除旧值避免误解
     delete localNode.value.config.prompt_template
+    localNode.value.kind = 'llm.generate'
+    localNode.value.implementation = 'builtin.generator'
+    generatorSystemStrategy.value = 'replace'
+    generatorAppendPosition.value = 'after_client'
   }
   if (newType === 'transparent_forward') {
     ensureTransparentForwardNodeFields()
@@ -1956,6 +2071,11 @@ const saveNode = async () => {
       localNode.value.config.custom_config = buildEgressCustomConfig()
     }
 
+    // generator：写入 system_prompt_strategy
+    if (localNode.value.type === 'generator') {
+      applyGeneratorSystemStrategyToConfig()
+    }
+
     // 消除双源字段歧义：将顶层 backend/model 同步到 config 内层，确保执行引擎和回填逻辑读取一致
     if (localNode.value.backend !== undefined) {
       localNode.value.config = localNode.value.config || {}
@@ -2076,6 +2196,10 @@ watch(() => props.node, (newNode) => {
       if (!localNode.value.config.prompt_template) {
         localNode.value.config.prompt_template = '{{input}}'
       }
+      loadGeneratorSystemStrategy(newNode)
+    } else {
+      generatorSystemStrategy.value = 'replace'
+      generatorAppendPosition.value = 'after_client'
     }
     // 加载 template_vars
     loadTemplateVars(localNode.value.config?.template_vars)
@@ -2454,5 +2578,29 @@ onMounted(() => {
 .injector-tc-body {
   display: flex;
   flex-direction: column;
+}
+
+.append-position-example {
+  margin-top: 8px;
+  padding: 10px 12px;
+  background: #f5f7fa;
+  border: 1px solid #e4e7ed;
+  border-radius: 6px;
+}
+
+.append-position-example-title {
+  font-size: 12px;
+  color: #606266;
+  margin-bottom: 6px;
+  line-height: 1.45;
+}
+
+.append-position-example-body {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.55;
+  color: #303133;
+  white-space: pre-wrap;
+  font-family: 'SFMono-Regular', Consolas, 'PingFang SC', sans-serif;
 }
 </style>
