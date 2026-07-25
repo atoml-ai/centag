@@ -14,7 +14,10 @@ type OutputPostOpsConfig struct {
 	// OnInvalidJSON 无效 JSON 处置: pass | wrap_error_object
 	OnInvalidJSON string `json:"on_invalid_json,omitempty"`
 	// StreamMode 流式模式: skip | buffer
+	// Phase A：节点 Execute 仅处理聚合后的完整文本；若上游标记 stream=true 且 mode=skip，则原样透传。
 	StreamMode string `json:"stream_mode,omitempty"`
+	// MaxBufferBytes buffer/处理上限；超出则 fail-open 原样返回（0=不限制）
+	MaxBufferBytes int `json:"max_buffer_bytes,omitempty"`
 	// LLM Phase B 占位（Phase A 忽略）
 	LLM *LLMPlaceholderConfig `json:"llm,omitempty"`
 }
@@ -73,6 +76,29 @@ func (n *OutputPostOpsNode) Execute(ctx context.Context, input *NodeInput) (*Nod
 		return &NodeOutput{Content: content}, nil
 	}
 
+	// 流式请求且配置 skip：不做字符串规范化（避免半截 JSON）
+	if n.opsConfig.StreamMode == "skip" && isStreamRequest(input) {
+		if log != nil {
+			log.Debug("[OutputPostOpsNode] stream_mode=skip, passthrough content")
+		}
+		return &NodeOutput{
+			Content:  content,
+			Metadata: map[string]interface{}{"node_type": "output_post_ops", "stream_skipped": true},
+		}, nil
+	}
+
+	// buffer/处理体积上限：超限 fail-open
+	if n.opsConfig.MaxBufferBytes > 0 && len(content) > n.opsConfig.MaxBufferBytes {
+		if log != nil {
+			log.Warn("[OutputPostOpsNode] content exceeds max_buffer_bytes, passthrough",
+				"size", len(content), "max", n.opsConfig.MaxBufferBytes)
+		}
+		return &NodeOutput{
+			Content:  content,
+			Metadata: map[string]interface{}{"node_type": "output_post_ops", "buffer_overflow": true},
+		}, nil
+	}
+
 	// 应用操作链
 	result := n.applyOps(content, log)
 
@@ -80,6 +106,19 @@ func (n *OutputPostOpsNode) Execute(ctx context.Context, input *NodeInput) (*Nod
 		Content:  result,
 		Metadata: map[string]interface{}{"node_type": "output_post_ops"},
 	}, nil
+}
+
+func isStreamRequest(input *NodeInput) bool {
+	if input == nil || input.Metadata == nil {
+		return false
+	}
+	switch v := input.Metadata["stream"].(type) {
+	case bool:
+		return v
+	case string:
+		return strings.EqualFold(strings.TrimSpace(v), "true")
+	}
+	return false
 }
 
 // applyOps 应用操作链

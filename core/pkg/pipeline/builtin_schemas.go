@@ -685,6 +685,9 @@ var BuiltinNodeSchemas = map[NodeType]NodeTypeSchemas{
 							"type": "string",
 							"enum": []interface{}{"skip", "buffer"},
 						},
+						"max_buffer_bytes": map[string]interface{}{
+							"type": "integer",
+						},
 					},
 				},
 			},

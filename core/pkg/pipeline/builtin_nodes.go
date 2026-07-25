@@ -158,44 +158,47 @@ func (n *GeneratorNode) Execute(ctx context.Context, input *NodeInput) (*NodeOut
 	}
 
 	// 应用 system prompt 策略
-	// 优先级：节点配置的 system_prompt_strategy > 有 system_prompt 时默认 replace > 无 system_prompt 时 passthrough
+	// 未配置 strategy 且有 system_prompt → 默认 replace（兼容旧行为）
+	// 显式 passthrough → 保留客户端 system，不强制改写
 	if renderedSystemPrompt != "" {
 		strategy := n.SystemPromptStrategy
-		if strategy == "" || strategy == promptstrategy.SystemModePassthrough {
-			// 有 system_prompt 但未显式配置策略时，默认 replace（保持现有行为）
+		if strategy == "" {
 			strategy = promptstrategy.SystemModeReplace
 		}
-		// 转换为 promptstrategy.Message 列体
-		psMessages := make([]promptstrategy.Message, len(messages))
-		for i, msg := range messages {
-			psMessages[i] = promptstrategy.Message{
-				Role:    msg.Role,
-				Content: msg.Content,
-			}
-		}
-		result, err := promptstrategy.ApplySystemStrategy(promptstrategy.SystemApplyInput{
-			Mode:           strategy,
-			GatewayPrompt:  renderedSystemPrompt,
-			AppendPosition: n.AppendPosition,
-			Messages:       psMessages,
-		})
-		if err == nil && result.Applied {
-			messages = make([]Message, len(result.Messages))
-			for i, msg := range result.Messages {
-				messages[i] = Message{
+		if strategy != promptstrategy.SystemModePassthrough {
+			psMessages := make([]promptstrategy.Message, len(messages))
+			for i, msg := range messages {
+				psMessages[i] = promptstrategy.Message{
 					Role:    msg.Role,
 					Content: msg.Content,
 				}
 			}
-		} else {
-			// 降级到原有逻辑：直接替换
-			filtered := make([]Message, 0, len(messages))
-			for _, msg := range messages {
-				if msg.Role != "system" {
-					filtered = append(filtered, msg)
+			result, err := promptstrategy.ApplySystemStrategy(promptstrategy.SystemApplyInput{
+				Mode:           strategy,
+				GatewayPrompt:  renderedSystemPrompt,
+				AppendPosition: n.AppendPosition,
+				Messages:       psMessages,
+			})
+			if err == nil && result.Applied {
+				messages = make([]Message, len(result.Messages))
+				for i, msg := range result.Messages {
+					messages[i] = Message{
+						Role:    msg.Role,
+						Content: msg.Content,
+					}
 				}
+			} else if err == nil && !result.Applied {
+				// passthrough / 空 gateway：保持 messages
+			} else {
+				// 降级到原有逻辑：直接替换
+				filtered := make([]Message, 0, len(messages))
+				for _, msg := range messages {
+					if msg.Role != "system" {
+						filtered = append(filtered, msg)
+					}
+				}
+				messages = append([]Message{{Role: "system", Content: renderedSystemPrompt}}, filtered...)
 			}
-			messages = append([]Message{{Role: "system", Content: renderedSystemPrompt}}, filtered...)
 		}
 	}
 
@@ -318,41 +321,40 @@ func (n *GeneratorNode) ExecuteStream(ctx context.Context, input *NodeInput) (<-
 	// 应用 system prompt 策略（流式路径与非流式路径对齐）
 	if renderedSystemPrompt != "" {
 		strategy := n.SystemPromptStrategy
-		if strategy == "" || strategy == promptstrategy.SystemModePassthrough {
-			// 有 system_prompt 但未显式配置策略时，默认 replace（保持现有行为）
+		if strategy == "" {
 			strategy = promptstrategy.SystemModeReplace
 		}
-		// 转换为 promptstrategy.Message 列表
-		psMessages := make([]promptstrategy.Message, len(messages))
-		for i, msg := range messages {
-			psMessages[i] = promptstrategy.Message{
-				Role:    msg.Role,
-				Content: msg.Content,
-			}
-		}
-		result, err := promptstrategy.ApplySystemStrategy(promptstrategy.SystemApplyInput{
-			Mode:           strategy,
-			GatewayPrompt:  renderedSystemPrompt,
-			AppendPosition: n.AppendPosition,
-			Messages:       psMessages,
-		})
-		if err == nil && result.Applied {
-			messages = make([]Message, len(result.Messages))
-			for i, msg := range result.Messages {
-				messages[i] = Message{
+		if strategy != promptstrategy.SystemModePassthrough {
+			psMessages := make([]promptstrategy.Message, len(messages))
+			for i, msg := range messages {
+				psMessages[i] = promptstrategy.Message{
 					Role:    msg.Role,
 					Content: msg.Content,
 				}
 			}
-		} else {
-			// 降级到原有逻辑：直接替换
-			filtered := make([]Message, 0, len(messages))
-			for _, msg := range messages {
-				if msg.Role != "system" {
-					filtered = append(filtered, msg)
+			result, err := promptstrategy.ApplySystemStrategy(promptstrategy.SystemApplyInput{
+				Mode:           strategy,
+				GatewayPrompt:  renderedSystemPrompt,
+				AppendPosition: n.AppendPosition,
+				Messages:       psMessages,
+			})
+			if err == nil && result.Applied {
+				messages = make([]Message, len(result.Messages))
+				for i, msg := range result.Messages {
+					messages[i] = Message{
+						Role:    msg.Role,
+						Content: msg.Content,
+					}
 				}
+			} else if err != nil {
+				filtered := make([]Message, 0, len(messages))
+				for _, msg := range messages {
+					if msg.Role != "system" {
+						filtered = append(filtered, msg)
+					}
+				}
+				messages = append([]Message{{Role: "system", Content: renderedSystemPrompt}}, filtered...)
 			}
-			messages = append([]Message{{Role: "system", Content: renderedSystemPrompt}}, filtered...)
 		}
 	}
 

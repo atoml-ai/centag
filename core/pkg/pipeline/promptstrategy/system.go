@@ -115,10 +115,10 @@ func ApplySystemStrategy(in SystemApplyInput) (SystemApplyResult, error) {
 		return SystemApplyResult{}, fmt.Errorf("unhandled system mode: %s", in.Mode)
 	}
 
-	// 同步 raw_request_body（若有）
+	// 同步 raw_request_body：在原始 messages map 上改 system，保留 tool_calls / 多模态 content 等字段
 	var rawBody []byte
 	if len(in.RawBody) > 0 {
-		synced, err := syncMessagesToRawBody(in.RawBody, messages)
+		synced, err := applySystemStrategyToRawBody(in.RawBody, in.Mode, gatewayPrompt, in.AppendPosition)
 		if err == nil {
 			rawBody = synced
 		} else {
@@ -227,12 +227,14 @@ func appendSystemMessages(messages []Message, gatewayPrompt string, pos AppendPo
 	}
 }
 
-// SyncMessagesToRawBody 将消息列表同步到 raw_request_body
+// SyncMessagesToRawBody 将结构化 Message 同步回 raw_request_body。
+// 按索引合并：尽量保留原始 message 上的 tool_calls / 多模态 content 等扩展字段，
+// 仅覆盖 role 与（当 content 为 string 时）content 文本。
 func SyncMessagesToRawBody(rawBody []byte, messages []Message) ([]byte, error) {
 	return syncMessagesToRawBody(rawBody, messages)
 }
 
-// ParseChatBody 从 JSON body 解析 messages 数组
+// ParseChatBody 从 JSON body 解析 messages 数组（content 仅取 string；多模态记为空串供规则检查）
 func ParseChatBody(body []byte) ([]Message, error) {
 	if len(body) == 0 {
 		return nil, fmt.Errorf("empty body")
@@ -270,7 +272,117 @@ func ParseChatBody(body []byte) ([]Message, error) {
 	return messages, nil
 }
 
-// syncMessagesToRawBody 将消息列表同步到 raw_request_body
+// applySystemStrategyToRawBody 在原始 messages map 上应用 system 策略，保留非 system 消息的全部字段。
+func applySystemStrategyToRawBody(rawBody []byte, mode SystemMode, gatewayPrompt string, pos AppendPosition) ([]byte, error) {
+	if len(rawBody) == 0 {
+		return rawBody, nil
+	}
+	var body map[string]interface{}
+	if err := json.Unmarshal(rawBody, &body); err != nil {
+		return nil, fmt.Errorf("unmarshal raw body: %w", err)
+	}
+	msgs, ok := body["messages"].([]interface{})
+	if !ok {
+		return nil, fmt.Errorf("messages is not an array")
+	}
+	if pos == "" {
+		pos = AppendPositionAfterClient
+	}
+	gateway := map[string]interface{}{
+		"role":    "system",
+		"content": gatewayPrompt,
+	}
+	var out []interface{}
+	switch mode {
+	case SystemModeReplace:
+		out = make([]interface{}, 0, len(msgs)+1)
+		out = append(out, gateway)
+		for _, m := range msgs {
+			mm, ok := m.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			if role, _ := mm["role"].(string); strings.EqualFold(strings.TrimSpace(role), "system") {
+				continue
+			}
+			out = append(out, mm)
+		}
+	case SystemModeAppend:
+		out = appendSystemRawMessages(msgs, gateway, pos)
+	default:
+		return rawBody, nil
+	}
+	body["messages"] = out
+	encoded, err := json.Marshal(body)
+	if err != nil {
+		return nil, fmt.Errorf("marshal raw body: %w", err)
+	}
+	return encoded, nil
+}
+
+func appendSystemRawMessages(msgs []interface{}, gateway map[string]interface{}, pos AppendPosition) []interface{} {
+	switch pos {
+	case AppendPositionBeforeClient:
+		out := make([]interface{}, 0, len(msgs)+1)
+		out = append(out, gateway)
+		out = append(out, msgs...)
+		return out
+	case AppendPositionMergeLast:
+		out := make([]interface{}, len(msgs))
+		copy(out, msgs)
+		lastSystemIdx := -1
+		for i, m := range out {
+			mm, ok := m.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			if role, _ := mm["role"].(string); strings.EqualFold(strings.TrimSpace(role), "system") {
+				lastSystemIdx = i
+			}
+		}
+		if lastSystemIdx < 0 {
+			return append([]interface{}{gateway}, out...)
+		}
+		mm := out[lastSystemIdx].(map[string]interface{})
+		cloned := cloneJSONMap(mm)
+		prev, _ := cloned["content"].(string)
+		gw, _ := gateway["content"].(string)
+		cloned["content"] = prev + "\n" + gw
+		out[lastSystemIdx] = cloned
+		return out
+	default: // after_client
+		out := make([]interface{}, 0, len(msgs)+1)
+		lastSystemIdx := -1
+		for i, m := range msgs {
+			mm, ok := m.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			if role, _ := mm["role"].(string); strings.EqualFold(strings.TrimSpace(role), "system") {
+				lastSystemIdx = i
+			}
+		}
+		if lastSystemIdx >= 0 {
+			out = append(out, msgs[:lastSystemIdx+1]...)
+			out = append(out, gateway)
+			out = append(out, msgs[lastSystemIdx+1:]...)
+			return out
+		}
+		out = append(out, gateway)
+		out = append(out, msgs...)
+		return out
+	}
+}
+
+func cloneJSONMap(in map[string]interface{}) map[string]interface{} {
+	out := make(map[string]interface{}, len(in))
+	for k, v := range in {
+		out[k] = v
+	}
+	return out
+}
+
+// syncMessagesToRawBody 按索引合并结构化 Message 回 raw body，保留扩展字段。
 func syncMessagesToRawBody(rawBody []byte, messages []Message) ([]byte, error) {
 	if len(rawBody) == 0 {
 		return rawBody, nil
@@ -281,14 +393,26 @@ func syncMessagesToRawBody(rawBody []byte, messages []Message) ([]byte, error) {
 		return rawBody, fmt.Errorf("unmarshal raw body: %w", err)
 	}
 
-	// 转换消息为 JSON 兼容格式
+	origMsgs, _ := body["messages"].([]interface{})
 	msgs := make([]interface{}, len(messages))
 	for i, msg := range messages {
-		m := map[string]interface{}{
-			"role":    msg.Role,
-			"content": msg.Content,
+		var base map[string]interface{}
+		if i < len(origMsgs) {
+			if mm, ok := origMsgs[i].(map[string]interface{}); ok {
+				base = cloneJSONMap(mm)
+			}
 		}
-		msgs[i] = m
+		if base == nil {
+			base = map[string]interface{}{}
+		}
+		base["role"] = msg.Role
+		// 仅当原 content 缺失或为 string 时覆盖，避免抹掉多模态 array content
+		if _, isArr := base["content"].([]interface{}); !isArr {
+			base["content"] = msg.Content
+		} else if msg.Content != "" {
+			base["content"] = msg.Content
+		}
+		msgs[i] = base
 	}
 
 	body["messages"] = msgs
