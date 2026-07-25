@@ -33,6 +33,8 @@ type Server struct {
 	// LAN：非 loopback 客户端必须通过 Proxy-Authorization
 	requireClientProxyAuthFlag bool
 	clientTokenValidator       ClientTokenValidator
+	// sharedTransport 进程级复用 HTTP Transport，避免每请求新建 Transport 导致连接碎片化。
+	sharedTransport *http.Transport
 }
 
 // Config MITM服务器配置
@@ -83,29 +85,30 @@ func NewServer(config *Config) (*Server, error) {
 				serverName = "localhost"
 			}
 
-			logger.Debug("Generating certificate for host", zap.String("host", serverName))
-
-			// 为域名生成证书
-			certBytes, privKey, err := certManager.GenerateCertForDomain(serverName)
-			if err != nil {
-				return nil, fmt.Errorf("failed to generate certificate for %s: %w", serverName, err)
-			}
-
-			return &tls.Certificate{
-				Certificate: [][]byte{certBytes},
-				PrivateKey:  privKey,
-				Leaf:        nil, // 将会被自动解析
-			}, nil
+			// 使用 TLS 证书缓存（含私钥），避免每次握手 rsa.GenerateKey
+			return certManager.GetOrCreateTLSCertificate(serverName)
 		},
 		MinVersion: tls.VersionTLS12,
 		NextProtos: []string{"http/1.1", "h2"},
 	}
 
+	// 进程级共享 HTTP Transport，避免每请求新建 Transport 导致连接碎片化。
+	// Proxy=nil 确保 MITM 不走系统代理（防止请求循环回本服务器）。
+	sharedTransport := &http.Transport{
+		Proxy:                 nil,
+		MaxIdleConns:          100,
+		MaxIdleConnsPerHost:   20,
+		IdleConnTimeout:       90 * time.Second,
+		TLSHandshakeTimeout:   10 * time.Second,
+		ExpectContinueTimeout: 1 * time.Second,
+	}
+
 	s := &Server{
-		addr:        config.Addr,
-		certManager: certManager,
-		backendAddr: config.BackendAddr,
-		tlsConfig:   tlsConfig,
+		addr:            config.Addr,
+		certManager:     certManager,
+		backendAddr:     config.BackendAddr,
+		tlsConfig:       tlsConfig,
+		sharedTransport: sharedTransport,
 	}
 	s.SetRoutingRules(config.Domains, config.PathPatterns)
 	s.SetBackendAuthToken(config.BackendAuthToken)
@@ -586,10 +589,9 @@ func (s *Server) forwardToBackend(w http.ResponseWriter, r *http.Request, scheme
 	applyBackendAuth(req, s.backendAuthTokenLocked())
 
 	// 直连后端；不设短 Client.Timeout（流式响应可能远超 60s），由请求 Context 取消。
+	// 复用进程级 Transport，避免每请求创建新 Transport 导致空闲连接碎片化。
 	client := &http.Client{
-		Transport: &http.Transport{
-			Proxy: nil,
-		},
+		Transport: s.sharedTransport,
 	}
 
 	resp, err := client.Do(req)
@@ -694,7 +696,7 @@ func (s *Server) forwardToOriginal(w http.ResponseWriter, r *http.Request) error
 		body = r.Body
 	}
 
-	req, err := http.NewRequest(r.Method, targetURL.String(), body)
+	req, err := http.NewRequestWithContext(r.Context(), r.Method, targetURL.String(), body)
 	if err != nil {
 		return fmt.Errorf("failed to create original request: %w", err)
 	}
@@ -711,15 +713,14 @@ func (s *Server) forwardToOriginal(w http.ResponseWriter, r *http.Request) error
 	// 设置Host头
 	req.Host = r.Host
 
-	// 发送请求，使用不走系统代理的 Transport，避免请求循环回本 MITM 服务器
+	// 发送请求，使用不走系统代理的 Transport，避免请求循环回本 MITM 服务器。
+	// 复用进程级 Transport，避免每请求新建 Transport。
 	client := &http.Client{
 		Timeout: 60 * time.Second,
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			return http.ErrUseLastResponse // 不自动跟随重定向
 		},
-		Transport: &http.Transport{
-			Proxy: nil, // 直连，不使用系统代理（防止请求循环）
-		},
+		Transport: s.sharedTransport,
 	}
 
 	resp, err := client.Do(req)

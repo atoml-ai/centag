@@ -3,6 +3,7 @@ package cert
 import (
 	"crypto/rand"
 	"crypto/rsa"
+	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
@@ -11,19 +12,40 @@ import (
 	"math/big"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
 	"centag/core/pkg/logger"
 
 	"go.uber.org/zap"
+	"golang.org/x/sync/singleflight"
 )
 
 var (
-	// 证书缓存
+	// 证书公钥缓存（仅 x509.Certificate，不含私钥；兼容旧调用）
 	certCache = make(map[string]*x509.Certificate)
 	certMutex sync.RWMutex
 )
+
+const (
+	// tlsCertTTL TLS 证书缓存有效期。命中后直接返回完整 tls.Certificate（含私钥），
+	// 避免每次 TLS 握手重新执行 rsa.GenerateKey。
+	tlsCertTTL = 24 * time.Hour
+)
+
+// tlsCertEntry TLS 完整证书缓存条目（含私钥），用于 MITM 握手复用。
+type tlsCertEntry struct {
+	cert      *tls.Certificate
+	createdAt time.Time
+}
+
+// tlsCertCache 按域名缓存完整 TLS 证书（含私钥）。
+// 使用 sync.Map 适合高频读场景（MITM 每个 CONNECT 都会查询）。
+var tlsCertCache sync.Map
+
+// tlsCertFlight 合并同一域名的并发慢路径生成，避免冷启动/过期时并行 rsa.GenerateKey。
+var tlsCertFlight singleflight.Group
 
 // CertManager 证书管理器
 type CertManager struct {
@@ -159,14 +181,12 @@ func (m *CertManager) generateCA() error {
 	return nil
 }
 
-// GenerateCertForDomain 为指定域名生成证书
+// GenerateCertForDomain 为指定域名签发一张新的叶证书（含新私钥）。
+// 握手路径请使用 GetOrCreateTLSCertificate：后者按域名缓存完整 tls.Certificate，
+// 避免每次 CONNECT 都执行 rsa.GenerateKey。本函数始终生成新材料，供缓存未命中或测试调用。
 func (m *CertManager) GenerateCertForDomain(domain string) ([]byte, *rsa.PrivateKey, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-
-	// 注意：目前不使用缓存，每次都生成新证书
-	// 因为缓存需要同时存储证书和对应的私钥
-	// 这里简化实现，每次都生成新的证书和私钥对
 
 	// 生成新的私钥
 	priv, err := rsa.GenerateKey(rand.Reader, 2048)
@@ -334,10 +354,71 @@ func (m *CertManager) matchCertAndKey(cert *x509.Certificate, key *rsa.PrivateKe
 	return pubKey.N.Cmp(key.N) == 0 && pubKey.E == key.E
 }
 
-// ClearCache 清除证书缓存
+// GetOrCreateTLSCertificate 按域名获取或生成完整 TLS 证书（含私钥）。
+// 首次生成后缓存 tlsCertTTL 时长；并发未命中由 singleflight 合并为一次 GenerateKey。
+func (m *CertManager) GetOrCreateTLSCertificate(domain string) (*tls.Certificate, error) {
+	domain = strings.TrimSpace(strings.ToLower(domain))
+	if domain == "" {
+		domain = "localhost"
+	}
+
+	if cert := loadValidTLSCert(domain); cert != nil {
+		return cert, nil
+	}
+
+	v, err, _ := tlsCertFlight.Do(domain, func() (interface{}, error) {
+		// 赢得 flight 后双检，避免与刚写入的条目重复生成
+		if cert := loadValidTLSCert(domain); cert != nil {
+			return cert, nil
+		}
+
+		certBytes, privKey, err := m.GenerateCertForDomain(domain)
+		if err != nil {
+			return nil, fmt.Errorf("failed to generate certificate for %s: %w", domain, err)
+		}
+
+		tlsCert := &tls.Certificate{
+			Certificate: [][]byte{certBytes},
+			PrivateKey:  privKey,
+			Leaf:        nil, // 将由 tls 包自动解析
+		}
+		tlsCertCache.Store(domain, &tlsCertEntry{cert: tlsCert, createdAt: time.Now()})
+		return tlsCert, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return v.(*tls.Certificate), nil
+}
+
+func loadValidTLSCert(domain string) *tls.Certificate {
+	v, ok := tlsCertCache.Load(domain)
+	if !ok {
+		return nil
+	}
+	entry, ok := v.(*tlsCertEntry)
+	if !ok || entry == nil || entry.cert == nil {
+		tlsCertCache.Delete(domain)
+		return nil
+	}
+	if time.Since(entry.createdAt) >= tlsCertTTL {
+		tlsCertCache.Delete(domain)
+		return nil
+	}
+	return entry.cert
+}
+
+// ClearCache 清除所有证书缓存（公钥缓存 + TLS 完整证书缓存）。
 func (m *CertManager) ClearCache() {
 	certMutex.Lock()
 	certCache = make(map[string]*x509.Certificate)
 	certMutex.Unlock()
+
+	// 清除 TLS 证书缓存
+	tlsCertCache.Range(func(key, _ any) bool {
+		tlsCertCache.Delete(key)
+		return true
+	})
+
 	logger.Info("Certificate cache cleared")
 }
