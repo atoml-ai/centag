@@ -73,7 +73,7 @@ jobs:
             --platforms darwin-amd64,darwin-arm64,linux-amd64,linux-arm64,windows-amd64,windows-arm64
 
       - name: Upload CLI artifacts
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: github-cli-${{ needs.guard-branch.outputs.version }}
           path: .centag/var/release/${{ needs.guard-branch.outputs.version }}/
@@ -106,7 +106,7 @@ jobs:
             --edition personal
 
       - name: Upload macOS artifacts
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: github-macos-${{ needs.guard-branch.outputs.version }}
           path: .centag/var/release/${{ needs.guard-branch.outputs.version }}/
@@ -144,7 +144,7 @@ jobs:
             --edition personal
 
       - name: Upload Windows artifacts
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: github-windows-${{ needs.guard-branch.outputs.version }}
           path: .centag/var/release/${{ needs.guard-branch.outputs.version }}/
@@ -162,7 +162,7 @@ jobs:
           echo "version=${{ needs.guard-branch.outputs.version }}" >> "$GITHUB_OUTPUT"
 
       - name: Download artifacts
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           path: release-staging
 
