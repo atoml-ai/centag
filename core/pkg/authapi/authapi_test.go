@@ -23,8 +23,16 @@ func TestGenerateAPIKey_PrefixAndParts(t *testing.T) {
 	if full == "" || hash == "" || prefix == "" {
 		t.Fatalf("empty parts: full=%q hash=%q prefix=%q", full, hash, prefix)
 	}
-	if !strings.HasPrefix(full, prefix) {
-		t.Fatalf("full key %q should start with prefix %q", full, prefix)
+	if !strings.HasPrefix(full, "llmproxy_") {
+		t.Fatalf("full key %q should start with llmproxy_", full)
+	}
+	// keyPrefix is a list-safe display mask (head…tail), not a literal prefix of full.
+	if !strings.Contains(prefix, "…") {
+		t.Fatalf("prefix %q should contain ellipsis", prefix)
+	}
+	head, _, ok := strings.Cut(prefix, "…")
+	if !ok || !strings.HasPrefix(full, head) {
+		t.Fatalf("prefix head %q should be a prefix of full key %q", head, full)
 	}
 	if full == hash {
 		t.Fatal("full key must differ from storage hash")
