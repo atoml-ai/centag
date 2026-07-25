@@ -11,7 +11,7 @@
 #   checksums.txt                                 # merged over all artifacts in OUT_DIR
 #
 # Does NOT wipe the whole OUT_DIR (desktop packages may coexist).
-# Optional: wrap / minimal / launcher via --components.
+# Optional: wrap / minimal / desktop via --components.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -27,7 +27,7 @@ VERSION=""
 COMPONENTS="personal"
 PLATFORMS="${CENTAG_RELEASE_PLATFORMS:-darwin-amd64,darwin-arm64,linux-amd64,linux-arm64,windows-amd64,windows-arm64}"
 SKIP_FRONTEND="${CENTAG_RELEASE_SKIP_FRONTEND:-0}"
-BUILD_LAUNCHER_TRAY="${CENTAG_RELEASE_LAUNCHER_TRAY:-0}"
+BUILD_DESKTOP="${CENTAG_RELEASE_DESKTOP:-0}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -35,7 +35,7 @@ while [[ $# -gt 0 ]]; do
     --components) COMPONENTS="${2:-}"; shift 2 ;;
     --platforms) PLATFORMS="${2:-}"; shift 2 ;;
     --skip-frontend) SKIP_FRONTEND=1; shift ;;
-    --launcher-tray) BUILD_LAUNCHER_TRAY=1; shift ;;
+    --desktop) BUILD_DESKTOP=1; shift ;;
     -h|--help)
       sed -n '2,24p' "$0"
       exit 0
@@ -253,29 +253,30 @@ build_launcher_lite() {
   log "OK ${tarball}"
 }
 
-# --- launcher tray (host only; CGO / systray) ------------------------------
-build_launcher_tray_host() {
+# --- desktop shell binary only (host/CGO; full .app/.zip via package-desktop.sh)
+build_desktop_host() {
   local goos="$HOST_GOOS" goarch="$HOST_GOARCH"
   local ext="" out_bin stage_parent stage_name tarball
   if [[ "$goos" == "windows" ]]; then ext=".exe"; fi
 
-  log "build centag-launcher-tray ${goos}/${goarch} (host/CGO)"
+  log "build centag-desktop ${goos}/${goarch} (host/CGO)"
   (
     cd "$ROOT"
     CENTAG_LAUNCHER_GOOS="$goos" CENTAG_LAUNCHER_GOARCH="$goarch" \
-      bash scripts/build-launcher.sh --tray
+      bash scripts/build-launcher.sh --desktop
   )
-  out_bin="${CENTAG_CROSS_DIR}/launcher/${goos}-${goarch}/centag-launcher-tray${ext}"
-  [[ -f "$out_bin" ]] || fail "launcher-tray binary missing: $out_bin"
+  out_bin="${CENTAG_CROSS_DIR}/launcher/${goos}-${goarch}/centag-desktop${ext}"
+  [[ -f "$out_bin" ]] || fail "desktop binary missing: $out_bin"
 
+  # Optional raw-shell tarball (not the product centag-desktop-<edition>-*.zip/dmg).
   stage_parent="${OUT_DIR}/.stage"
-  stage_name="centag-launcher-tray-${goos}-${goarch}"
+  stage_name="centag-desktop-shell-${goos}-${goarch}"
   rm -rf "${stage_parent}/${stage_name}"
   mkdir -p "${stage_parent}/${stage_name}"
-  cp -f "$out_bin" "${stage_parent}/${stage_name}/centag-launcher-tray${ext}"
-  chmod 755 "${stage_parent}/${stage_name}/centag-launcher-tray${ext}"
+  cp -f "$out_bin" "${stage_parent}/${stage_name}/centag-desktop${ext}"
+  chmod 755 "${stage_parent}/${stage_name}/centag-desktop${ext}"
 
-  tarball="${OUT_DIR}/centag-launcher-tray-${goos}-${goarch}.tar.gz"
+  tarball="${OUT_DIR}/centag-desktop-shell-${goos}-${goarch}.tar.gz"
   package_tar "$stage_parent" "$stage_name" "$tarball"
   log "OK ${tarball}"
 }
@@ -283,9 +284,8 @@ build_launcher_tray_host() {
 # --- drive builds ---------------------------------------------------------
 command -v go >/dev/null 2>&1 || fail "go is required"
 
-# launcher-tray in --components implies tray build
-if need_component launcher-tray; then
-  BUILD_LAUNCHER_TRAY=1
+if need_component desktop; then
+  BUILD_DESKTOP=1
 fi
 
 for plat in "${PLAT_ARR[@]}"; do
@@ -308,8 +308,8 @@ for plat in "${PLAT_ARR[@]}"; do
   fi
 done
 
-if [[ "$BUILD_LAUNCHER_TRAY" == "1" ]] || need_component launcher-tray; then
-  build_launcher_tray_host
+if [[ "$BUILD_DESKTOP" == "1" ]]; then
+  build_desktop_host
 fi
 
 # --- checksums (merge all release artifacts in OUT_DIR) -------------------
@@ -325,6 +325,7 @@ refresh_release_checksums() {
     -name 'centag-cli-*.tar.gz' -o \
     -name 'centag-desktop-*.dmg' -o \
     -name 'centag-desktop-*.zip' -o \
+    -name 'centag-desktop-shell-*.tar.gz' -o \
     -name 'centag-wrap-*.tar.gz' -o \
     -name 'centag-launcher*.tar.gz' -o \
     -name 'centag-personal-*.tar.gz' -o \

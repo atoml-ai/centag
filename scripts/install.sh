@@ -109,14 +109,13 @@ while [[ $# -gt 0 ]]; do
       [[ -n "${2:-}" ]] || fail "--bin-dir requires a directory"
       BIN_DIR="$2"; shift 2 ;;
     --no-modify-path) no_modify_path=true; shift ;;
-    # deferred: minimal / launcher / launcher-tray
-    --edition|--launcher|--launcher-tray)
-      fail "option '$1' is not supported yet (installer currently ships personal + wrap only)"
+    --edition)
+      fail "option '--edition' is not supported; use personal (CLI) or --desktop"
       ;;
     personal|wrap)
       positional_component="$1"; shift ;;
-    minimal|launcher|launcher-tray)
-      fail "component '$1' is not supported yet (installer currently ships personal + wrap only)"
+    minimal)
+      fail "component 'minimal' is not supported yet (installer currently ships personal + wrap only)"
       ;;
     *)
       # Short pin: wrap 0.2.7 / personal v0.2.7 / 0.2.7 (default components)

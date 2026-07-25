@@ -146,16 +146,16 @@ stage_sidecar_tree() {
   fi
 }
 
-build_tray() {
-  log "build centag-launcher-tray ${HOST_GOOS}/${HOST_GOARCH} (CGO)"
+build_desktop_shell() {
+  log "build centag-desktop ${HOST_GOOS}/${HOST_GOARCH} (CGO)"
   local out_bin
   out_bin="$(
     cd "$ROOT"
     CENTAG_LAUNCHER_GOOS="$HOST_GOOS" CENTAG_LAUNCHER_GOARCH="$HOST_GOARCH" \
-      bash scripts/build-launcher.sh --tray
+      bash scripts/build-launcher.sh --desktop
   )"
   out_bin="$(printf '%s' "$out_bin" | tail -n 1)"
-  [[ -f "$out_bin" ]] || fail "tray binary missing: $out_bin"
+  [[ -f "$out_bin" ]] || fail "desktop binary missing: $out_bin"
   echo "$out_bin"
 }
 
@@ -196,7 +196,7 @@ EOF
 }
 
 package_macos() {
-  local tray_bin="$1"
+  local desktop_bin="$1"
   local app="${STAGE}/Centag.app"
   local macos_dir="${app}/Contents/MacOS"
   local res_dir="${app}/Contents/Resources"
@@ -204,7 +204,7 @@ package_macos() {
   mkdir -p "$macos_dir" "$res_dir"
 
   stage_sidecar_tree "$res_dir"
-  cp -f "$tray_bin" "${macos_dir}/Centag"
+  cp -f "$desktop_bin" "${macos_dir}/Centag"
   chmod 755 "${macos_dir}/Centag"
   write_info_plist "${app}/Contents/Info.plist"
 
@@ -250,14 +250,14 @@ package_macos() {
 }
 
 package_windows() {
-  local tray_bin="$1"
+  local desktop_bin="$1"
   local dir_name="Centag"
   local stage_dir="${STAGE}/${dir_name}"
   rm -rf "$stage_dir"
   mkdir -p "$stage_dir"
 
   stage_sidecar_tree "$stage_dir"
-  cp -f "$tray_bin" "${stage_dir}/Centag.exe"
+  cp -f "$desktop_bin" "${stage_dir}/Centag.exe"
   chmod 755 "${stage_dir}/Centag.exe" 2>/dev/null || true
 
   local zip_out="${OUT_DIR}/centag-desktop-${EDITION}-windows-${HOST_GOARCH}.zip"
@@ -304,12 +304,12 @@ package_linux_cli() {
 ARTIFACT=""
 case "$HOST_GOOS" in
   darwin)
-    TRAY="$(build_tray)"
-    ARTIFACT="$(package_macos "$TRAY")"
+    DESKTOP_BIN="$(build_desktop_shell)"
+    ARTIFACT="$(package_macos "$DESKTOP_BIN")"
     ;;
   windows)
-    TRAY="$(build_tray)"
-    ARTIFACT="$(package_windows "$TRAY")"
+    DESKTOP_BIN="$(build_desktop_shell)"
+    ARTIFACT="$(package_windows "$DESKTOP_BIN")"
     ;;
   linux)
     ARTIFACT="$(package_linux_cli)"

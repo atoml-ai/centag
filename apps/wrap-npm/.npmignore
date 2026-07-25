@@ -1,5 +1,5 @@
 # Keep the main package tiny: never bundle cross-compiled binaries.
-# The offline variant (centag-proxyctl-offline) is built from package.offline.json
+# The offline variant (centag-wrap-offline) is built from package.offline.json
 # and intentionally includes bin/vendor. This ignore only applies to the main package.
 bin/vendor/
 node_modules/
