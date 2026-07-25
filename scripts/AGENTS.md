@@ -28,6 +28,7 @@
 | `release/build-artifacts.sh` | 纯 CLI 交叉编译（npm / linux 段） |
 | `release/publish-binaries.sh` | 构建并上传 GitHub Release |
 | `release/require-release-branch.sh` | 发版门禁：仅版本分支（`vX` / `feature/vX` / `release/vX`） |
+| `release/sync-npm-version.sh` | 将 npm `package.json` 版本对齐到发版版本（centag / offline / wrap-npm） |
 | `release/require-release-branch_test.sh` | 上述门禁的表驱动 shell 测试 |
 | `check-harness-hygiene.sh` | Harness 卫生检查（Centag 布局） |
 | `ci-go-packages.sh` | CI 包列表生成 |

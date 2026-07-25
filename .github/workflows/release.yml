@@ -274,77 +274,17 @@ jobs:
           cache-dependency-path: web/package-lock.json
           registry-url: 'https://registry.npmjs.org'
 
-      - name: Build & pack npm packages
-        run: |
-          DRY_RUN=1 bash scripts/publish-centag-npm.sh
+      - name: Sync npm package versions
+        run: bash scripts/release/sync-npm-version.sh --version "${{ needs.guard-branch.outputs.version }}"
 
-      - name: Publish to npm
-        if: "!github.event.inputs.draft"
+      - name: Build & publish npm packages
         env:
           NODE_AUTH_TOKEN: ${{ secrets.CENTAG_NPM_TOKEN }}
+          CENTAG_NPM_TOKEN: ${{ secrets.CENTAG_NPM_TOKEN }}
         run: |
-          NPM_DIR="apps/centag-npm"
-          VENDOR_DIR="${NPM_DIR}/bin/vendor"
-          mkdir -p "${VENDOR_DIR}"
-
-          # Cross-compile CLI binaries for all platforms (npm channel)
-          PLATFORMS="darwin-amd64 darwin-arm64 linux-amd64 linux-arm64 windows-amd64 windows-arm64"
-          TAGS="protocol_openai,protocol_anthropic,protocol_gemini,protocol_openairesponses,backend_openai,backend_ollama,backend_anthropic,backend_gemini,backend_azure"
-          VERSION="${{ needs.guard-branch.outputs.version }}"
-
-          for p in $PLATFORMS; do
-            goos="${p%-*}"; goarch="${p##*-}"
-            ext=""; [[ "$goos" == "windows" ]] && ext=".exe"
-            out="${VENDOR_DIR}/${p}/centag-personal${ext}"
-            mkdir -p "$(dirname "$out")"
-            echo "==> build centag-personal ${p}"
-            (
-              cd dist/personal
-              GOWORK=off CGO_ENABLED=0 GOOS="${goos}" GOARCH="${goarch}" \
-                go build -trimpath -tags "$TAGS" -ldflags="-s -w" -o "$(realpath "$out")" .
-            )
-          done
-
-          for p in $PLATFORMS; do
-            dest="${VENDOR_DIR}/${p}/config"
-            mkdir -p "${dest}"
-            if [[ -d config/initdata ]]; then
-              rm -rf "${dest}/initdata"
-              cp -R config/initdata "${dest}/initdata"
-              rm -rf "${dest}/initdata/postgresql" "${dest}/initdata/scripts" \
-                "${dest}/initdata/update" "${dest}/initdata/secrets" 2>/dev/null || true
-              find "${dest}/initdata" \( -name 'README.md' -o -name 'AGENTS.md' \) -delete 2>/dev/null || true
-              rm -rf "${dest}/initdata/pipeline-templates/personal" "${dest}/initdata/pipeline-templates/team"
-            fi
-            if [[ -d config/profiles/personal/initdata ]]; then
-              mkdir -p "${dest}/profiles/personal"
-              rm -rf "${dest}/profiles/personal/initdata"
-              cp -R config/profiles/personal/initdata "${dest}/profiles/personal/initdata"
-            fi
-          done
-
-          STATIC_DIR="${NPM_DIR}/static"
-          mkdir -p "${STATIC_DIR}"
-          ( cd web && npm ci && CENTAG_INSTALL_ROOT="$PWD/.." CENTAG_EDITION=personal CENTAG_STATIC_DIR="$(realpath "${STATIC_DIR}")" npm run build )
-
-          : > "${VENDOR_DIR}/checksums.txt"
-          for p in $PLATFORMS; do
-            goos="${p%-*}"; goarch="${p##*-}"
-            ext=""; [[ "$goos" == "windows" ]] && ext=".exe"
-            f="${VENDOR_DIR}/${p}/centag-personal${ext}"
-            sha="$(sha256sum "$f" | awk '{print $1}')"
-            printf '%s  %s/centag-personal%s\n' "$sha" "$p" "$ext" >> "${VENDOR_DIR}/checksums.txt"
-          done
-
-          echo "==> npm publish centag"
-          ( cd "${NPM_DIR}" && npm publish --access public )
-
-          echo "==> npm publish centag-offline"
-          OFFLINE_STAGE="$(mktemp -d)"
-          cp -R "${NPM_DIR}/bin" "${OFFLINE_STAGE}/bin"
-          cp -R "${NPM_DIR}/lib" "${OFFLINE_STAGE}/lib"
-          cp -R "${NPM_DIR}/static" "${OFFLINE_STAGE}/static"
-          cp "${NPM_DIR}/README.md" "${OFFLINE_STAGE}/README.md"
-          cp "${NPM_DIR}/package.offline.json" "${OFFLINE_STAGE}/package.json"
-          ( cd "${OFFLINE_STAGE}" && npm publish --access public )
-          rm -rf "${OFFLINE_STAGE}"
+          # draft=true → pack only; otherwise publish (tag push has no draft input → publish)
+          if [[ "${{ github.event.inputs.draft }}" == "true" ]]; then
+            DRY_RUN=1 bash scripts/publish-centag-npm.sh
+          else
+            bash scripts/publish-centag-npm.sh
+          fi
