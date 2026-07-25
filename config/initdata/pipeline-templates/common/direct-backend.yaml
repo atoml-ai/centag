@@ -1,9 +1,9 @@
 id: direct-backend
-name: 直连后端
+name: Direct Backend
 description: |
-  固定出站到系统默认（或钉死）后端，并注入网关 system prompt 替换客户端 system。
-  余额/额度不足时：节点内先试 fallback_model，再走 FallbackGroup。
-  与透明/跳板共用 transparent_forward 出站节点，差异仅在开关：route_policy=fixed + inject_system_prompt=true。
+  Fixed egress to the system default (or pinned) backend, injecting a gateway system prompt that replaces the client system message.
+  On insufficient balance/quota: try fallback_model on the node first, then FallbackGroup.
+  Shares transparent_forward with transparent/hop modes; difference is switches: route_policy=fixed + inject_system_prompt=true.
 version: "3.1"
 shortcut_code: '#d'
 nodes:
@@ -11,7 +11,7 @@ nodes:
     type: transparent_forward
     kind: proxy.transparent_forward
     implementation: builtin.transparent_forward
-    name: 直连出站
+    name: Direct Egress
     backend: "{{system.default_backend}}"
     model: "{{system.default_model}}"
     config:
@@ -49,7 +49,7 @@ nodes:
     type: transparent_forward
     kind: proxy.transparent_forward
     implementation: builtin.transparent_forward
-    name: 直连降级出站
+    name: Direct Fallback Egress
     backend: "{{system.fallback_backend}}"
     model: "{{system.fallback_model}}"
     config:

@@ -1,17 +1,17 @@
 schema_version: centag.pipeline/v1alpha1
 id: education-scene
-name: 教育Agent
+name: Education Agent
 shortcut_code: '#edu'
 version: '1.0'
 description: |
-  教育场景统一 Pipeline：根据 context.scene 路由到不同教育子场景。
+  Unified education-scene pipeline: route to education sub-scenes by context.scene.
 
-  传参方式（三选一）：
+  Pass scene in one of three ways:
     - body: { "centag": { "mode": "education-scene", "scene": "problem_solving" } }
     - header: X-Scene: problem_solving
     - query: ?scene=problem_solving
 
-  可用 scene 值：problem_solving | explain | knowledge_thinking | essay_review | speaking | qa（默认）
+  Available scene values: problem_solving | explain | knowledge_thinking | essay_review | speaking | qa (default)
 nodes:
 # ── 节点 1：场景路由 ──────────────────────────────────────
 # 通过 inputs 绑定将 metadata.scene 注入为 input.Content，
@@ -20,7 +20,7 @@ nodes:
   type: router
   kind: route.decide
   implementation: business.router
-  name: 教育子场景路由
+  name: Education Scene Router
   inputs:
     content: input.metadata.scene
   config:
@@ -51,7 +51,7 @@ nodes:
   type: generator
   kind: llm.generate
   implementation: builtin.generator
-  name: 解题辅导
+  name: Problem Solving Coach
   backend: "{{system.default_backend}}"
   model: "{{system.default_model}}"
   inputs:
@@ -99,7 +99,7 @@ nodes:
   type: generator
   kind: llm.generate
   implementation: builtin.generator
-  name: 概念讲解
+  name: Concept Explainer
   backend: "{{system.default_backend}}"
   model: "{{system.default_model}}"
   inputs:
@@ -147,7 +147,7 @@ nodes:
   type: generator
   kind: llm.generate
   implementation: builtin.generator
-  name: 知识点思考
+  name: Knowledge Thinking
   backend: "{{system.default_backend}}"
   model: "{{system.default_model}}"
   inputs:
@@ -197,7 +197,7 @@ nodes:
   type: generator
   kind: llm.generate
   implementation: builtin.generator
-  name: 作文批改
+  name: Essay Review
   backend: "{{system.default_backend}}"
   model: "{{system.default_model}}"
   inputs:
@@ -227,7 +227,7 @@ nodes:
   type: generator
   kind: llm.generate
   implementation: builtin.generator
-  name: 口语练习
+  name: Speaking Practice
   backend: "{{system.default_backend}}"
   model: "{{system.default_model}}"
   inputs:
@@ -255,7 +255,7 @@ nodes:
   type: generator
   kind: llm.generate
   implementation: builtin.generator
-  name: 知识答疑
+  name: "Q&A Assistant"
   backend: "{{system.default_backend}}"
   model: "{{system.default_model}}"
   inputs:
@@ -309,42 +309,42 @@ metadata:
   capability_slots:
     - slot_id: edu.problem_solving
       node_id: problem-solver
-      label: 解题辅导
+      label: Problem Solving Coach
       kind: route
       tags: [reasoning, explain]
       hint: 苏格拉底引导解题
       default_follow_system: true
     - slot_id: edu.explain
       node_id: explainer
-      label: 概念讲解
+      label: Concept Explainer
       kind: route
       tags: [explain]
       hint: 类比与渐进讲解
       default_follow_system: true
     - slot_id: edu.knowledge_thinking
       node_id: knowledge-thinker
-      label: 知识思考
+      label: Knowledge Thinking
       kind: route
       tags: [reasoning]
       hint: 深度思考与知识关联
       default_follow_system: true
     - slot_id: edu.essay_review
       node_id: essay-reviewer
-      label: 作文批改
+      label: Essay Review
       kind: route
       tags: [review, multilingual]
       hint: 批改与润色建议
       default_follow_system: true
     - slot_id: edu.speaking
       node_id: speaking-practice
-      label: 口语练习
+      label: Speaking Practice
       kind: route
       tags: [multilingual]
       hint: 口语对话练习
       default_follow_system: true
     - slot_id: edu.qa
       node_id: qa-generator
-      label: 知识答疑
+      label: Q&A Assistant
       kind: route
       tags: [default, cheap]
       hint: 默认分支；可用更轻量模型

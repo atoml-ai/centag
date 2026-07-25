@@ -1,15 +1,15 @@
 version: '1.0'
 schema_version: centag.pipeline/v1alpha1
 id: router-mode
-name: 路由模式
+name: Router Mode
 shortcut_code: '#r'
-description: 按关键词/意图将请求分发到代码、翻译、摘要或通用对话分支（builtin.router）
+description: "Route by keyword/intent to code, translation, summary, or general chat (builtin.router)"
 nodes:
 - id: classifier
   type: router
   kind: routing.decide
   implementation: builtin.router
-  name: 路由分类
+  name: Route Classify
   timeout: 15
   config:
     custom_config:
@@ -50,7 +50,7 @@ nodes:
   type: generator
   kind: llm.generate
   implementation: builtin.generator
-  name: 代码生成
+  name: Code Generate
   backend: "{{system.default_backend}}"
   model: "{{system.default_model}}"
   timeout: 120
@@ -73,7 +73,7 @@ nodes:
   type: generator
   kind: llm.generate
   implementation: builtin.generator
-  name: 翻译生成
+  name: Translate Generate
   backend: "{{system.default_backend}}"
   model: "{{system.default_model}}"
   timeout: 120
@@ -96,7 +96,7 @@ nodes:
   type: generator
   kind: llm.generate
   implementation: builtin.generator
-  name: 摘要生成
+  name: Summarize Generate
   backend: "{{system.default_backend}}"
   model: "{{system.default_model}}"
   timeout: 120
@@ -119,7 +119,7 @@ nodes:
   type: generator
   kind: llm.generate
   implementation: builtin.generator
-  name: 通用对话
+  name: General Chat
   backend: "{{system.default_backend}}"
   model: "{{system.default_model}}"
   timeout: 120
@@ -153,40 +153,40 @@ metadata:
   capability_slots:
     - slot_id: router.code
       node_id: code-generator
-      label: 代码生成
+      label: Code Generate
       kind: route
       tags: [code]
       hint: 建议绑定强代码能力模型
     - slot_id: router.translate
       node_id: translate-gen
-      label: 翻译
+      label: Translate
       kind: route
       tags: [multilingual]
       hint: 建议绑定通用/多语言模型
     - slot_id: router.summary
       node_id: summary-gen
-      label: 摘要
+      label: Summarize
       kind: route
       tags: [cheap]
       hint: 可用更便宜或长上下文模型
     - slot_id: router.chat
       node_id: chat-generator
-      label: 通用对话
+      label: General Chat
       kind: route
       tags: [default]
       hint: 日常对话；默认可跟随系统默认
       default_follow_system: true
   route_model_targets:
     - node_id: code-generator
-      label: 代码生成
+      label: Code Generate
       hint: 建议绑定强代码能力模型
     - node_id: translate-gen
-      label: 翻译
+      label: Translate
       hint: 建议绑定通用/多语言模型
     - node_id: summary-gen
-      label: 摘要
+      label: Summarize
       hint: 可用更便宜或长上下文模型
     - node_id: chat-generator
-      label: 通用对话
+      label: General Chat
       hint: 日常对话；默认可跟随系统默认
       default_follow_system: true

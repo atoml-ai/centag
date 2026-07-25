@@ -1,9 +1,9 @@
 schema_version: centag.pipeline/v1alpha1
 id: coding-agent
-name: 编程Agent
+name: Coding Agent
 description: |
-  多阶段编程助手（验证样板）：按关键词将请求分发到架构 / 编码 / 审核 / 测试节点。
-  各阶段可在 Web「配置模型」中独立绑定后端与模型。旧版单节点定义请从本模板重建。
+  Multi-stage coding assistant (reference template): route requests by keyword to architecture / implementation / review / test nodes.
+  Each stage can bind backend and model independently in Web "Configure models". Rebuild from this template if you still use the old single-node definition.
 version: "1.0"
 shortcut_code: '#code'
 nodes:
@@ -11,7 +11,7 @@ nodes:
   type: router
   kind: routing.decide
   implementation: builtin.router
-  name: 编程阶段路由
+  name: Coding Stage Router
   timeout: 15
   config:
     custom_config:
@@ -51,7 +51,7 @@ nodes:
   type: generator
   kind: llm.generate
   implementation: builtin.generator
-  name: 架构设计
+  name: Architecture Design
   backend: "{{system.default_backend}}"
   model: "{{system.default_model}}"
   timeout: 180
@@ -81,7 +81,7 @@ nodes:
   type: generator
   kind: llm.generate
   implementation: builtin.generator
-  name: 编码实现
+  name: Implementation
   backend: "{{system.default_backend}}"
   model: "{{system.default_model}}"
   timeout: 300
@@ -137,7 +137,7 @@ nodes:
   type: generator
   kind: llm.generate
   implementation: builtin.generator
-  name: 代码审核
+  name: Code Review
   backend: "{{system.default_backend}}"
   model: "{{system.default_model}}"
   timeout: 180
@@ -172,7 +172,7 @@ nodes:
   type: generator
   kind: llm.generate
   implementation: builtin.generator
-  name: 测试调试
+  name: "Test & Debug"
   backend: "{{system.default_backend}}"
   model: "{{system.default_model}}"
   timeout: 180
@@ -228,28 +228,28 @@ metadata:
   capability_slots:
     - slot_id: code.architect
       node_id: architect-generator
-      label: 架构设计
+      label: Architecture Design
       kind: stage
       tags: [reasoning, code]
       hint: 方案与边界，建议强推理模型
       default_follow_system: true
     - slot_id: code.implement
       node_id: implement-generator
-      label: 编码实现
+      label: Implementation
       kind: stage
       tags: [code]
       hint: 写代码/改代码，建议代码能力强的模型（默认分支）
       default_follow_system: true
     - slot_id: code.review
       node_id: review-generator
-      label: 代码审核
+      label: Code Review
       kind: stage
       tags: [review, code]
       hint: 审查缺陷与规范
       default_follow_system: true
     - slot_id: code.test
       node_id: test-generator
-      label: 测试调试
+      label: Test & Debug
       kind: stage
       tags: [code, cheap]
       hint: 用例与调试，可用更便宜模型

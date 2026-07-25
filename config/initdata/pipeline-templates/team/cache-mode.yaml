@@ -1,6 +1,6 @@
 id: cache-mode
-name: 缓存模式
-description: 生成内容并保存到缓存。用于测试缓存写入功能。
+name: Cache Mode
+description: Generate content and save to cache. For testing cache write.
 version: '1.0'
 shortcut_code: '#cm'
 nodes:
@@ -8,7 +8,7 @@ nodes:
   type: generator
   kind: llm.generate
   implementation: builtin.generator
-  name: 内容生成
+  name: Content Generate
   backend: "{{system.default_backend}}"
   model: "{{system.default_model}}"
   config:
@@ -31,7 +31,7 @@ nodes:
   type: cache
   kind: cache.access
   implementation: builtin.cache
-  name: 缓存写入
+  name: Cache Write
   config:
     custom_config:
       embedding_backend_id: alibaba-dashscope
@@ -64,7 +64,7 @@ nodes:
   type: token_usage
   kind: metrics.token_usage
   implementation: builtin.token_usage
-  name: Token 计量
+  name: Token Metering
   config:
     custom_config:
       operation: record

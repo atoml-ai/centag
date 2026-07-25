@@ -10,8 +10,8 @@
           <el-button type="success" @click="openPipelineChat()">
             <el-icon><ChatDotRound /></el-icon>&nbsp;{{ $t('nav.chat') }}
           </el-button>
-          <el-button @click="securityDialogVisible = true">{{ $t('config') }}</el-button>
-          <el-button @click="handleLogout">{{ $t('close') }}</el-button>
+          <el-button @click="securityDialogVisible = true">{{ $t('dashboard.config') }}</el-button>
+          <el-button @click="handleLogout">{{ $t('dashboard.logout') }}</el-button>
         </template>
       </div>
     </div>
@@ -554,9 +554,9 @@ watch(usageCollapse, (names) => {
 
 async function handleLogout() {
   try {
-    await ElMessageBox.confirm(t('common.deleteConfirm'), t('close'), {
-      confirmButtonText: t('close'),
-      cancelButtonText: t('cancel'),
+    await ElMessageBox.confirm(t('appHeader.logoutConfirm'), t('appHeader.logoutTitle'), {
+      confirmButtonText: t('appHeader.confirm'),
+      cancelButtonText: t('appHeader.cancel'),
       type: 'warning'
     })
   } catch {

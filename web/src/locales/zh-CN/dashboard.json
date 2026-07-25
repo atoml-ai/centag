@@ -96,5 +96,7 @@
   "pageDescriptionDefault": "Centag 服务运行状态与基础配置总览",
   "usageHintAdmin": "计量与成本估算（按当前服务存储策略保留）。",
   "usageHintDefault": "本次进程内计量与成本估算（重启后清零）。",
-  "items": "{count} 项"
+  "items": "{count} 项",
+  "config": "配置",
+  "logout": "退出登录"
 }
