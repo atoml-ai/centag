@@ -1,6 +1,6 @@
 {
   "name": "centag-wrap",
-  "version": "0.2.9",
+  "version": "0.3.0",
   "description": "Centag system PAC / process-proxy helper (npm wrapper around the Go binary). Wraps third-party agents (OpenCode etc.) to route LLM traffic through Centag MITM.",
   "type": "module",
   "bin": {

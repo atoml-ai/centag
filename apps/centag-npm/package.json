@@ -1,6 +1,6 @@
 {
   "name": "@atomlai/centag",
-  "version": "0.2.9",
+  "version": "0.3.0",
   "description": "Centag — LLM unified gateway. Installs the Go binary via postinstall from GitHub Releases.",
   "type": "module",
   "bin": {
