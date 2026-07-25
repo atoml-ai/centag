@@ -308,3 +308,223 @@ func TestReplaceSystemMessages(t *testing.T) {
 		t.Errorf("third should be assistant, got %v", result[2])
 	}
 }
+
+func TestParseChatBody(t *testing.T) {
+	t.Run("ok", func(t *testing.T) {
+		msgs, err := ParseChatBody([]byte(`{"messages":[{"role":"user","content":"hi"},{"role":"system","content":"sys"}]}`))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(msgs) != 2 || msgs[0].Role != "user" || msgs[1].Content != "sys" {
+			t.Fatalf("%#v", msgs)
+		}
+	})
+	t.Run("empty", func(t *testing.T) {
+		if _, err := ParseChatBody(nil); err == nil {
+			t.Fatal("expected error")
+		}
+	})
+	t.Run("no messages", func(t *testing.T) {
+		if _, err := ParseChatBody([]byte(`{"model":"x"}`)); err == nil {
+			t.Fatal("expected error")
+		}
+	})
+	t.Run("invalid json", func(t *testing.T) {
+		if _, err := ParseChatBody([]byte(`{`)); err == nil {
+			t.Fatal("expected error")
+		}
+	})
+}
+
+func TestSyncMessagesToRawBody(t *testing.T) {
+	in := []byte(`{"model":"m","messages":[{"role":"user","content":"old"}]}`)
+	out, err := SyncMessagesToRawBody(in, []Message{{Role: "user", Content: "new"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var raw map[string]interface{}
+	if err := json.Unmarshal(out, &raw); err != nil {
+		t.Fatal(err)
+	}
+	if raw["model"] != "m" {
+		t.Fatalf("model lost: %v", raw["model"])
+	}
+	msgs := raw["messages"].([]interface{})
+	first := msgs[0].(map[string]interface{})
+	if first["content"] != "new" {
+		t.Fatalf("content=%v", first["content"])
+	}
+	empty, err := SyncMessagesToRawBody(nil, nil)
+	if err != nil || empty != nil {
+		t.Fatalf("empty body: %v %v", empty, err)
+	}
+}
+
+func TestApplySystemStrategy_RawBodyPreservesToolCallsAndMultimodal(t *testing.T) {
+	rawBody := []byte(`{
+		"model":"m",
+		"messages":[
+			{"role":"system","content":"old sys"},
+			{"role":"user","content":[{"type":"text","text":"hi"},{"type":"image_url","image_url":{"url":"http://x"}}]},
+			{"role":"assistant","content":null,"tool_calls":[{"id":"c1","type":"function","function":{"name":"f","arguments":"{}"}}]},
+			{"role":"tool","tool_call_id":"c1","content":"ok"}
+		]
+	}`)
+
+	result, err := ApplySystemStrategy(SystemApplyInput{
+		Mode:          SystemModeReplace,
+		GatewayPrompt: "gateway",
+		RawBody:       rawBody,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !result.Applied {
+		t.Fatal("expected applied")
+	}
+
+	var body map[string]interface{}
+	if err := json.Unmarshal(result.RawBody, &body); err != nil {
+		t.Fatal(err)
+	}
+	msgs := body["messages"].([]interface{})
+	if len(msgs) != 4 {
+		t.Fatalf("len=%d want 4", len(msgs))
+	}
+	sys := msgs[0].(map[string]interface{})
+	if sys["content"] != "gateway" {
+		t.Fatalf("system=%v", sys["content"])
+	}
+	user := msgs[1].(map[string]interface{})
+	if _, ok := user["content"].([]interface{}); !ok {
+		t.Fatalf("multimodal content lost: %#v", user["content"])
+	}
+	asst := msgs[2].(map[string]interface{})
+	if _, ok := asst["tool_calls"].([]interface{}); !ok {
+		t.Fatalf("tool_calls lost: %#v", asst)
+	}
+	tool := msgs[3].(map[string]interface{})
+	if tool["tool_call_id"] != "c1" {
+		t.Fatalf("tool_call_id lost: %#v", tool)
+	}
+}
+
+func TestApplySystemStrategy_RawBodyAppendPositions(t *testing.T) {
+	rawBody := []byte(`{
+		"messages":[
+			{"role":"system","content":"client"},
+			{"role":"user","content":"hi","name":"u1"}
+		]
+	}`)
+
+	t.Run("after_client", func(t *testing.T) {
+		result, err := ApplySystemStrategy(SystemApplyInput{
+			Mode:           SystemModeAppend,
+			GatewayPrompt:  "gw",
+			AppendPosition: AppendPositionAfterClient,
+			RawBody:        rawBody,
+			Messages:       []Message{{Role: "system", Content: "client"}, {Role: "user", Content: "hi"}},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var body map[string]interface{}
+		_ = json.Unmarshal(result.RawBody, &body)
+		msgs := body["messages"].([]interface{})
+		if len(msgs) != 3 {
+			t.Fatalf("len=%d", len(msgs))
+		}
+		if msgs[1].(map[string]interface{})["content"] != "gw" {
+			t.Fatalf("gateway not after client: %#v", msgs)
+		}
+		if msgs[2].(map[string]interface{})["name"] != "u1" {
+			t.Fatalf("user ext field lost: %#v", msgs[2])
+		}
+	})
+
+	t.Run("before_client", func(t *testing.T) {
+		result, err := ApplySystemStrategy(SystemApplyInput{
+			Mode:           SystemModeAppend,
+			GatewayPrompt:  "gw",
+			AppendPosition: AppendPositionBeforeClient,
+			RawBody:        rawBody,
+			Messages:       []Message{{Role: "system", Content: "client"}, {Role: "user", Content: "hi"}},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var body map[string]interface{}
+		_ = json.Unmarshal(result.RawBody, &body)
+		msgs := body["messages"].([]interface{})
+		if msgs[0].(map[string]interface{})["content"] != "gw" {
+			t.Fatalf("want gateway first: %#v", msgs[0])
+		}
+	})
+
+	t.Run("merge_last", func(t *testing.T) {
+		result, err := ApplySystemStrategy(SystemApplyInput{
+			Mode:           SystemModeAppend,
+			GatewayPrompt:  "gw",
+			AppendPosition: AppendPositionMergeLast,
+			RawBody:        rawBody,
+			Messages:       []Message{{Role: "system", Content: "client"}, {Role: "user", Content: "hi"}},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var body map[string]interface{}
+		_ = json.Unmarshal(result.RawBody, &body)
+		msgs := body["messages"].([]interface{})
+		if len(msgs) != 2 {
+			t.Fatalf("len=%d", len(msgs))
+		}
+		if msgs[0].(map[string]interface{})["content"] != "client\ngw" {
+			t.Fatalf("merge content=%v", msgs[0].(map[string]interface{})["content"])
+		}
+	})
+
+	t.Run("append_no_system", func(t *testing.T) {
+		noSys := []byte(`{"messages":[{"role":"user","content":"hi","name":"u1"}]}`)
+		result, err := ApplySystemStrategy(SystemApplyInput{
+			Mode:          SystemModeAppend,
+			GatewayPrompt: "gw",
+			RawBody:       noSys,
+			Messages:      []Message{{Role: "user", Content: "hi"}},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var body map[string]interface{}
+		_ = json.Unmarshal(result.RawBody, &body)
+		msgs := body["messages"].([]interface{})
+		if len(msgs) != 2 || msgs[0].(map[string]interface{})["content"] != "gw" {
+			t.Fatalf("%#v", msgs)
+		}
+		if msgs[1].(map[string]interface{})["name"] != "u1" {
+			t.Fatalf("ext lost: %#v", msgs[1])
+		}
+	})
+}
+
+func TestSyncMessagesToRawBody_PreservesToolCalls(t *testing.T) {
+	in := []byte(`{"messages":[{"role":"assistant","content":"","tool_calls":[{"id":"c1"}]},{"role":"user","content":"x"}]}`)
+	out, err := SyncMessagesToRawBody(in, []Message{
+		{Role: "assistant", Content: ""},
+		{Role: "user", Content: "y"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var raw map[string]interface{}
+	if err := json.Unmarshal(out, &raw); err != nil {
+		t.Fatal(err)
+	}
+	asst := raw["messages"].([]interface{})[0].(map[string]interface{})
+	if _, ok := asst["tool_calls"].([]interface{}); !ok {
+		t.Fatalf("tool_calls not preserved: %#v", asst)
+	}
+	user := raw["messages"].([]interface{})[1].(map[string]interface{})
+	if user["content"] != "y" {
+		t.Fatalf("user content=%v", user["content"])
+	}
+}

@@ -228,3 +228,50 @@ func TestOutputPostOpsNode_OnInvalidJSON(t *testing.T) {
 		t.Error("expected wrapped error object, got original content")
 	}
 }
+
+func TestOutputPostOpsNode_StreamSkip(t *testing.T) {
+	node, err := NewOutputPostOpsNode(NodeConfig{
+		CustomConfig: map[string]interface{}{
+			"ops":         []interface{}{"trim_space"},
+			"stream_mode": "skip",
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := node.Execute(context.Background(), &NodeInput{
+		Content:  "  hello  ",
+		Metadata: map[string]interface{}{"stream": true},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out.Content != "  hello  " {
+		t.Fatalf("stream skip should passthrough, got %q", out.Content)
+	}
+	if out.Metadata["stream_skipped"] != true {
+		t.Fatalf("expected stream_skipped metadata")
+	}
+}
+
+func TestOutputPostOpsNode_MaxBufferBytes(t *testing.T) {
+	node, err := NewOutputPostOpsNode(NodeConfig{
+		CustomConfig: map[string]interface{}{
+			"ops":              []interface{}{"trim_space"},
+			"max_buffer_bytes": 4,
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := node.Execute(context.Background(), &NodeInput{Content: "  hello world  "})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out.Content != "  hello world  " {
+		t.Fatalf("overflow should fail-open, got %q", out.Content)
+	}
+	if out.Metadata["buffer_overflow"] != true {
+		t.Fatalf("expected buffer_overflow metadata")
+	}
+}

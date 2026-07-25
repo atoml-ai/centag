@@ -27,6 +27,10 @@ func TestModeTemplates_TransparentDirectFixedEgressContract(t *testing.T) {
 		if p.ShortcutCode != "#t" {
 			t.Fatalf("shortcut = %q, want #t", p.ShortcutCode)
 		}
+		strategy, _ := p.Nodes[0].Config.CustomConfig["system_prompt_strategy"].(string)
+		if strategy != "passthrough" {
+			t.Fatalf("system_prompt_strategy=%q, want passthrough", strategy)
+		}
 	})
 
 	// direct-backend 使用 transparent_forward + 注入非空 system_prompt（inject_system_prompt=true）。
@@ -48,6 +52,10 @@ func TestModeTemplates_TransparentDirectFixedEgressContract(t *testing.T) {
 		}
 		if p.ShortcutCode != "#d" {
 			t.Fatalf("shortcut = %q, want #d", p.ShortcutCode)
+		}
+		strategy, _ := p.Nodes[0].Config.CustomConfig["system_prompt_strategy"].(string)
+		if strategy != "replace" {
+			t.Fatalf("system_prompt_strategy=%q, want replace", strategy)
 		}
 	})
 

@@ -503,6 +503,8 @@ func TestRegisterBuiltinNodes(t *testing.T) {
 		NodeTypeProcessor,
 		NodeTypeReviewer,
 		NodeTypeRouter,
+		NodeTypeUserPromptOps,
+		NodeTypeOutputPostOps,
 	}
 
 	for _, nodeType := range expectedTypes {
