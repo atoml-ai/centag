@@ -65,9 +65,7 @@ function patchProvider(updated: any) {
 <style scoped>
 .backends-page {
   width: 100%;
-  max-width: none;
-  margin: 0;
-  padding: 24px 20px 40px;
+  padding: 0 0 24px;
 }
 
 .hermes-header {

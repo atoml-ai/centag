@@ -479,8 +479,9 @@ onMounted(() => {
 
 <style scoped>
 .content-wrapper.full-width {
-  max-width: 100%;
-  padding: 0 16px;
+  width: 100%;
+  max-width: none;
+  padding: 0;
 }
 
 .content-wrapper.full-width :deep(.el-row) {

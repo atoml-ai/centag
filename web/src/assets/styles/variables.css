@@ -82,6 +82,9 @@
   --header-height: 56px;
   --nav-height: 48px;
 
+  /* 页面左右边距：与顶栏对齐，由 WebLayout 统一提供，各页勿再加水平 padding */
+  --page-gutter: var(--spacing-xl);
+
   /* Shell — shared Web + Desktop */
   --shell-bg: #ffffff;
   --shell-sidebar-bg: #f5f5f7;

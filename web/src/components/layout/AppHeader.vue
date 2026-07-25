@@ -259,7 +259,7 @@ const avatarStyle = computed(() => ({
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 var(--spacing-xl);
+  padding: 0 var(--page-gutter);
   z-index: 1000;
   box-shadow: var(--shadow-sm);
 }

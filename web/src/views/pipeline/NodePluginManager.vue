@@ -188,7 +188,8 @@ function formatJson(data: any): string {
 
 <style scoped>
 .node-plugin-manager {
-  padding: 20px;
+  width: 100%;
+  padding: 0 0 24px;
   position: relative;
 }
 .page-header {

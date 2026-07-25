@@ -60,7 +60,7 @@ onBeforeUnmount(() => {
 .main {
   flex: 1;
   min-width: 0;
-  padding: calc(var(--header-height) + var(--spacing-md)) var(--spacing-md) var(--spacing-md);
+  padding: calc(var(--header-height) + var(--spacing-md)) var(--page-gutter) var(--spacing-md);
   margin-top: 0;
   overflow-y: auto;
   display: flex;
@@ -73,7 +73,7 @@ onBeforeUnmount(() => {
 
 @media (max-width: 768px) {
   .main {
-    padding: calc(var(--header-height) + var(--spacing-sm)) var(--spacing-sm) var(--spacing-sm);
+    padding: calc(var(--header-height) + var(--spacing-sm)) var(--spacing-md) var(--spacing-sm);
   }
 }
 </style>

@@ -30,6 +30,7 @@ onMounted(() => {
 
 <style scoped>
 .billing-rules-page {
-  padding: 24px;
+  width: 100%;
+  padding: 0 0 24px;
 }
 </style>

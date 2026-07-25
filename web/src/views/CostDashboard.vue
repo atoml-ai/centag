@@ -169,7 +169,8 @@ onMounted(loadSummary)
 
 <style scoped>
 .cost-dashboard {
-  padding: 20px;
+  width: 100%;
+  padding: 0 0 24px;
 }
 .usage-header {
   display: flex;

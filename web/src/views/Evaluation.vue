@@ -574,7 +574,8 @@ onMounted(() => {
 
 <style scoped>
 .evaluation {
-  padding: 20px;
+  width: 100%;
+  padding: 0 0 24px;
 }
 
 .config-empty {
