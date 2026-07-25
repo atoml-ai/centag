@@ -1256,7 +1256,7 @@ func TestTransparentForwardNode_LegacyInjectSystemPrompt(t *testing.T) {
 	tf := node.(*TransparentForwardNode)
 	tf.SetCapabilityBroker(broker)
 
-	rawBody := `{"model":"x","messages":[{"role":"system","content":"client system"},{"role":"user","content":"hello"}]}`
+	rawBody := `{"model":"x","messages":[{"role":"system","content":"client system"},{"role":"user","content":"hello"},{"role":"assistant","content":null,"tool_calls":[{"id":"c1","type":"function","function":{"name":"f","arguments":"{}"}}]}]}`
 	out, err := tf.Execute(context.Background(), &NodeInput{
 		Metadata: map[string]interface{}{
 			"target_url":       "https://api.example.com",
@@ -1270,5 +1270,23 @@ func TestTransparentForwardNode_LegacyInjectSystemPrompt(t *testing.T) {
 	// 旧字段应该映射到 replace
 	if out.Metadata["inject_system_prompt"] != true {
 		t.Errorf("expected inject_system_prompt=true, got %v", out.Metadata["inject_system_prompt"])
+	}
+	if out.Metadata["system_prompt_strategy"] != "replace" {
+		t.Errorf("expected system_prompt_strategy=replace, got %v", out.Metadata["system_prompt_strategy"])
+	}
+	var sent map[string]interface{}
+	if err := json.Unmarshal([]byte(client.body), &sent); err != nil {
+		t.Fatalf("unmarshal upstream body: %v", err)
+	}
+	msgs := sent["messages"].([]interface{})
+	if len(msgs) != 3 {
+		t.Fatalf("messages len=%d want 3", len(msgs))
+	}
+	if msgs[0].(map[string]interface{})["content"] != "gateway system" {
+		t.Fatalf("system not replaced: %#v", msgs[0])
+	}
+	asst := msgs[2].(map[string]interface{})
+	if _, ok := asst["tool_calls"].([]interface{}); !ok {
+		t.Fatalf("tool_calls not preserved on #d/replace path: %#v", asst)
 	}
 }
