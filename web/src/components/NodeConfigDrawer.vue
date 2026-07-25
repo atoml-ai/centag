@@ -36,6 +36,8 @@
                 <el-option :label="t('nodeConfig.typeCache')" value="cache" />
                 <el-option :label="t('nodeConfig.typeTokenUsage')" value="token_usage" />
                 <el-option :label="t('nodeConfig.typeToolCallInjector')" value="tool_call_injector" />
+                <el-option :label="t('nodeConfig.typeUserPromptOps')" value="user_prompt_ops" />
+                <el-option :label="t('nodeConfig.typeOutputPostOps')" value="output_post_ops" />
               </el-select>
             </el-form-item>
           </el-col>
@@ -91,14 +93,23 @@
         </div>
 
         <div class="egress-prompt-block">
-          <el-form-item class="egress-inject-item" label-width="0">
-            <div class="egress-inject-row">
-              <span class="egress-inject-label">{{ t('nodeConfig.injectSystemPrompt') }}</span>
-              <el-switch v-model="egressConfig.inject_system_prompt" />
-            </div>
+          <el-form-item :label="t('nodeConfig.systemPromptStrategy')">
+            <el-radio-group v-model="egressConfig.system_prompt_strategy">
+              <el-radio-button value="passthrough">{{ t('nodeConfig.strategyPassthrough') }}</el-radio-button>
+              <el-radio-button value="append">{{ t('nodeConfig.strategyAppend') }}</el-radio-button>
+              <el-radio-button value="replace">{{ t('nodeConfig.strategyReplace') }}</el-radio-button>
+            </el-radio-group>
           </el-form-item>
 
-          <div v-if="egressConfig.inject_system_prompt" class="egress-prompt-body">
+          <el-form-item v-if="egressConfig.system_prompt_strategy === 'append'" :label="t('nodeConfig.appendPosition')">
+            <el-select v-model="egressConfig.append_position" style="width: 100%">
+              <el-option :label="t('nodeConfig.appendPositionAfterClient')" value="after_client" />
+              <el-option :label="t('nodeConfig.appendPositionBeforeClient')" value="before_client" />
+              <el-option :label="t('nodeConfig.appendPositionMergeLast')" value="merge_last" />
+            </el-select>
+          </el-form-item>
+
+          <div v-if="egressConfig.system_prompt_strategy !== 'passthrough'" class="egress-prompt-body">
             <div class="egress-prompt-label">{{ t('nodeConfig.systemPromptContent') }}</div>
             <div class="system-prompt-toolbar">
               <el-select
@@ -345,6 +356,67 @@
               {{ t('nodeConfig.addToolCall') }}
             </el-button>
           </div>
+        </el-form-item>
+      </section>
+
+      <!-- ═══════ 2h. User Prompt Ops Core ═══════ -->
+      <section v-if="localNode.type === 'user_prompt_ops'" class="drawer-section">
+        <div class="section-title">{{ t('nodeConfig.sectionUserPromptOps') }}</div>
+        <el-form-item :label="t('nodeConfig.enableCheck')">
+          <el-switch v-model="userPromptOpsConfig.check.enabled" />
+        </el-form-item>
+        <template v-if="userPromptOpsConfig.check.enabled">
+          <el-form-item :label="t('nodeConfig.denyPatterns')">
+            <div class="pattern-list">
+              <div v-for="(pattern, idx) in userPromptOpsConfig.check.deny_patterns" :key="idx" class="pattern-row">
+                <el-input v-model="userPromptOpsConfig.check.deny_patterns[idx]" :placeholder="t('nodeConfig.denyPatternPlaceholder')" size="small" />
+                <el-button type="danger" text size="small" @click="userPromptOpsConfig.check.deny_patterns.splice(idx, 1)">
+                  <el-icon><Delete /></el-icon>
+                </el-button>
+              </div>
+              <el-button size="small" @click="userPromptOpsConfig.check.deny_patterns.push('')" style="margin-top: 6px">
+                <el-icon><Plus /></el-icon>
+                {{ t('nodeConfig.addPattern') }}
+              </el-button>
+            </div>
+          </el-form-item>
+          <el-form-item :label="t('nodeConfig.onHit')">
+            <el-select v-model="userPromptOpsConfig.check.on_hit" style="width: 100%">
+              <el-option :label="t('nodeConfig.actionLog')" value="log" />
+              <el-option :label="t('nodeConfig.actionRedact')" value="redact" />
+              <el-option :label="t('nodeConfig.actionBlock')" value="block" />
+            </el-select>
+          </el-form-item>
+        </template>
+        <el-form-item :label="t('nodeConfig.enableOptimize')">
+          <el-switch v-model="userPromptOpsConfig.optimize.enabled" />
+        </el-form-item>
+        <template v-if="userPromptOpsConfig.optimize.enabled">
+          <el-form-item :label="t('nodeConfig.maxUserChars')">
+            <el-input-number v-model="userPromptOpsConfig.optimize.max_user_chars" :min="0" :max="1000000" style="width: 100%" />
+          </el-form-item>
+          <el-form-item :label="t('nodeConfig.collapseWhitespace')">
+            <el-switch v-model="userPromptOpsConfig.optimize.collapse_whitespace" />
+          </el-form-item>
+        </template>
+      </section>
+
+      <!-- ═══════ 2i. Output Post Ops Core ═══════ -->
+      <section v-if="localNode.type === 'output_post_ops'" class="drawer-section">
+        <div class="section-title">{{ t('nodeConfig.sectionOutputPostOps') }}</div>
+        <el-form-item :label="t('nodeConfig.operations')">
+          <el-checkbox-group v-model="outputPostOpsConfig.ops">
+            <el-checkbox label="trim_space">{{ t('nodeConfig.opTrimSpace') }}</el-checkbox>
+            <el-checkbox label="strip_markdown_fence">{{ t('nodeConfig.opStripFence') }}</el-checkbox>
+            <el-checkbox label="extract_json">{{ t('nodeConfig.opExtractJson') }}</el-checkbox>
+            <el-checkbox label="json_compact">{{ t('nodeConfig.opJsonCompact') }}</el-checkbox>
+          </el-checkbox-group>
+        </el-form-item>
+        <el-form-item :label="t('nodeConfig.onInvalidJson')">
+          <el-select v-model="outputPostOpsConfig.on_invalid_json" style="width: 100%">
+            <el-option :label="t('nodeConfig.actionPass')" value="pass" />
+            <el-option :label="t('nodeConfig.actionWrapError')" value="wrap_error_object" />
+          </el-select>
         </el-form-item>
       </section>
 
@@ -848,7 +920,8 @@ const buildRouterCustomConfig = (): Record<string, any> => {
 // ─── 出站转发策略 (transparent_forward) ───────────────────────────────────
 const defaultEgressConfig = () => ({
   route_policy: 'match_model' as 'match_model' | 'fixed',
-  inject_system_prompt: false,
+  system_prompt_strategy: 'passthrough' as 'passthrough' | 'append' | 'replace',
+  append_position: 'after_client' as 'after_client' | 'before_client' | 'merge_last',
   redirect_policy: 'never',
   max_redirects: 5,
   default_scheme: 'https',
@@ -866,9 +939,18 @@ const loadEgressConfig = (node: any) => {
   if (route !== 'fixed' && route !== 'match_model') {
     route = 'match_model'
   }
+  // 优先读取新字段 system_prompt_strategy，兼容旧字段 inject_system_prompt
+  let strategy = String(cc.system_prompt_strategy || '').trim()
+  if (!strategy) {
+    strategy = cc.inject_system_prompt === true ? 'replace' : 'passthrough'
+  }
+  if (!['passthrough', 'append', 'replace'].includes(strategy)) {
+    strategy = 'passthrough'
+  }
   egressConfig.value = {
     route_policy: route as 'match_model' | 'fixed',
-    inject_system_prompt: cc.inject_system_prompt === true,
+    system_prompt_strategy: strategy as 'passthrough' | 'append' | 'replace',
+    append_position: (String(cc.append_position || 'after_client').trim() || 'after_client') as 'after_client' | 'before_client' | 'merge_last',
     redirect_policy: String(cc.redirect_policy || 'never').trim() || 'never',
     max_redirects: Number(cc.max_redirects) > 0 ? Number(cc.max_redirects) : 5,
     default_scheme: String(cc.default_scheme || 'https').trim() || 'https',
@@ -879,7 +961,10 @@ const buildEgressCustomConfig = (): Record<string, any> => {
   const prev = localNode.value.config?.custom_config || {}
   const next: Record<string, any> = { ...prev }
   next.route_policy = egressConfig.value.route_policy
-  next.inject_system_prompt = egressConfig.value.inject_system_prompt
+  next.system_prompt_strategy = egressConfig.value.system_prompt_strategy
+  if (egressConfig.value.system_prompt_strategy === 'append') {
+    next.append_position = egressConfig.value.append_position
+  }
   next.redirect_policy = egressConfig.value.redirect_policy
   next.max_redirects = egressConfig.value.max_redirects
   next.default_scheme = egressConfig.value.default_scheme
@@ -957,6 +1042,100 @@ const fillMem0Defaults = () => {
     } else {
       customConfigItems.value.push({ ...d })
     }
+  }
+}
+
+// ─── 用户 Prompt 操作 (UserPromptOps) 配置 ───────────────────────────────
+
+interface UserPromptOpsConfigState {
+  check: {
+    enabled: boolean
+    deny_patterns: string[]
+    on_hit: string
+  }
+  optimize: {
+    enabled: boolean
+    max_user_chars: number
+    collapse_whitespace: boolean
+  }
+}
+
+const defaultUserPromptOpsConfig = (): UserPromptOpsConfigState => ({
+  check: {
+    enabled: true,
+    deny_patterns: [],
+    on_hit: 'log',
+  },
+  optimize: {
+    enabled: false,
+    max_user_chars: 32000,
+    collapse_whitespace: true,
+  },
+})
+
+const userPromptOpsConfig = ref<UserPromptOpsConfigState>(defaultUserPromptOpsConfig())
+
+const loadUserPromptOpsConfig = (node: any) => {
+  const cc = node?.config?.custom_config || {}
+  userPromptOpsConfig.value = {
+    check: {
+      enabled: cc.check?.enabled === true,
+      deny_patterns: Array.isArray(cc.check?.deny_patterns) ? [...cc.check.deny_patterns] : [],
+      on_hit: String(cc.check?.on_hit || 'log').trim() || 'log',
+    },
+    optimize: {
+      enabled: cc.optimize?.enabled === true,
+      max_user_chars: Number(cc.optimize?.max_user_chars) > 0 ? Number(cc.optimize.max_user_chars) : 32000,
+      collapse_whitespace: cc.optimize?.collapse_whitespace === true,
+    },
+  }
+}
+
+const buildUserPromptOpsCustomConfig = (): Record<string, any> => {
+  return {
+    check: {
+      enabled: userPromptOpsConfig.value.check.enabled,
+      deny_patterns: userPromptOpsConfig.value.check.deny_patterns.filter(p => p.trim()),
+      on_hit: userPromptOpsConfig.value.check.on_hit,
+    },
+    optimize: {
+      enabled: userPromptOpsConfig.value.optimize.enabled,
+      max_user_chars: userPromptOpsConfig.value.optimize.max_user_chars,
+      collapse_whitespace: userPromptOpsConfig.value.optimize.collapse_whitespace,
+    },
+  }
+}
+
+// ─── 输出后处理 (OutputPostOps) 配置 ───────────────────────────────────
+
+interface OutputPostOpsConfigState {
+  ops: string[]
+  on_invalid_json: string
+  stream_mode: string
+}
+
+const defaultOutputPostOpsConfig = (): OutputPostOpsConfigState => ({
+  ops: ['trim_space'],
+  on_invalid_json: 'pass',
+  stream_mode: 'skip',
+})
+
+const outputPostOpsConfig = ref<OutputPostOpsConfigState>(defaultOutputPostOpsConfig())
+
+const loadOutputPostOpsConfig = (node: any) => {
+  const cc = node?.config?.custom_config || {}
+  outputPostOpsConfig.value = {
+    ops: Array.isArray(cc.ops) ? [...cc.ops] : ['trim_space'],
+    on_invalid_json: String(cc.on_invalid_json || 'pass').trim() || 'pass',
+    stream_mode: String(cc.stream_mode || 'skip').trim() || 'skip',
+  }
+}
+
+const buildOutputPostOpsCustomConfig = (): Record<string, any> => {
+  return {
+    ops: outputPostOpsConfig.value.ops,
+    on_invalid_json: outputPostOpsConfig.value.on_invalid_json,
+    stream_mode: outputPostOpsConfig.value.stream_mode,
   }
 }
 
@@ -1757,7 +1936,21 @@ const saveNode = async () => {
       localNode.value.config.custom_config = cc
     }
 
-    // 出站转发：写入 route_policy / inject_system_prompt 等开关
+    // 用户 Prompt 操作节点：构建 custom_config
+    if (localNode.value.type === 'user_prompt_ops') {
+      const cc = buildUserPromptOpsCustomConfig()
+      localNode.value.config = localNode.value.config || {}
+      localNode.value.config.custom_config = cc
+    }
+
+    // 输出后处理节点：构建 custom_config
+    if (localNode.value.type === 'output_post_ops') {
+      const cc = buildOutputPostOpsCustomConfig()
+      localNode.value.config = localNode.value.config || {}
+      localNode.value.config.custom_config = cc
+    }
+
+    // 出站转发：写入 route_policy / system_prompt_strategy 等开关
     if (localNode.value.type === 'transparent_forward') {
       ensureTransparentForwardNodeFields()
       localNode.value.config.custom_config = buildEgressCustomConfig()
@@ -1829,6 +2022,18 @@ watch(() => props.node, (newNode) => {
     }
     if (localNode.value.type === 'tool_call_injector') {
       loadInjectorConfig(newNode)
+    }
+    // 加载用户 Prompt 操作节点配置
+    if (localNode.value.type === 'user_prompt_ops') {
+      loadUserPromptOpsConfig(newNode)
+    } else {
+      userPromptOpsConfig.value = defaultUserPromptOpsConfig()
+    }
+    // 加载输出后处理节点配置
+    if (localNode.value.type === 'output_post_ops') {
+      loadOutputPostOpsConfig(newNode)
+    } else {
+      outputPostOpsConfig.value = defaultOutputPostOpsConfig()
     }
     // 缓存节点默认配置
     if (localNode.value.type === 'cache') {
