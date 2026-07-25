@@ -19,6 +19,7 @@ docs/versions/
 
 | 版本 | 需求 | 分支 | 状态 |
 |------|------|------|------|
+| v0.3.1 | [条件流式透传与内存治理](v0.3.1/conditional-stream-passthrough/) | `feature/v0.3.1` | ⏸ **搁置**；技术方案备查；禁止误执行后续 Step |
 | v0.3.1 | [Prompt 策略](v0.3.1/prompt-strategy/) | `feature/v0.3.1` | Step 1–5 ✅；Gate 4 ✅；可 `step6-release` |
 | v0.3.0 | [国际化与 GitHub 推广](v0.3.0/i18n-github-promo/) | `feature/v0.3.0` | Step 1 ✅；Gate 1 待人工确认 |
 | v0.2.8 | [协议对齐与 Models 接口增强](v0.2.8/protocol-alignment/) | `feature/v0.2.8` | Step 1–6 ✅；GitHub `v0.2.8` |

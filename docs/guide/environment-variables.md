@@ -165,6 +165,7 @@ export LLM_PROXY_MODE_O_TEMPLATE_ENABLED=true
 |----------|--------|------|
 | `CENTAG_STREAM_FAKE` | `true` | 设为 `0`/`false`/`off` 可关闭 StreamFake |
 | `CENTAG_STREAM_FAKE_MAX_BYTES` | `33554432` (32MB) | 聚合阶段最大缓冲字节数（防 OOM） |
+| `CENTAG_PPROF` / `LLM_PROXY_PPROF_ENABLED` | `false`（`./start.sh debug` 默认 `true`） | 为 `true` 时在 `127.0.0.1:6060` 暴露 pprof（仅 loopback）；debug 可 `CENTAG_PPROF=false` 关闭 |
 
 - **关闭效果**：`stream: false` 请求直接以真实非流式方式调用后端，不走流式管道聚合
 
