@@ -611,38 +611,32 @@ resolve_launcher_bin() {
     return 1
 }
 
-# Optional L1 launcher (apps/launcher). Used via --launcher / --launcher-tray on build/run.
-# Default lite: no CGO. Tray variant: CGO + systray → centag-launcher-tray.
-build_launcher_shell() {
-    local mode="${1:-lite}"
+# Desktop shell (apps/launcher, systray). Product forms: cli | desktop.
+# Used via --desktop on build/run.
+build_desktop_shell() {
     local script="${PROJECT_ROOT}/scripts/build-launcher.sh"
     if [ ! -x "$script" ]; then
         print_error "未找到构建脚本: $script"
         exit 1
     fi
-    if [ "$mode" = "tray" ]; then
-        print_info "Building tray launcher (CGO) for current host ($(go env GOOS)/$(go env GOARCH))..."
-        bash "$script" --tray
-    else
-        print_info "Building lite launcher (no CGO) for ($(go env GOOS)/$(go env GOARCH))..."
-        bash "$script"
-    fi
+    print_info "Building desktop shell (CGO) for current host ($(go env GOOS)/$(go env GOARCH))..."
+    bash "$script" --desktop
 }
 
-resolve_launcher_tray_bin() {
-    local goos goarch ext plat
+resolve_desktop_bin() {
+    local goos goarch ext plat latest
     goos="$(go env GOOS 2>/dev/null || echo "")"
     goarch="$(go env GOARCH 2>/dev/null || echo "")"
     ext=""
     if [ "$goos" = "windows" ]; then
         ext=".exe"
     fi
-    plat="${CENTAG_CROSS_DIR}/launcher/${goos}-${goarch}/centag-launcher-tray${ext}"
+    plat="${CENTAG_CROSS_DIR}/launcher/${goos}-${goarch}/centag-desktop${ext}"
     if [ -x "$plat" ] || [ -f "$plat" ]; then
         echo "$plat"
         return 0
     fi
-    local latest="${CENTAG_BIN_DIR}/centag-launcher-tray${ext}"
+    latest="${CENTAG_BIN_DIR}/centag-desktop${ext}"
     if [ -x "$latest" ] || [ -f "$latest" ]; then
         echo "$latest"
         return 0
@@ -705,19 +699,18 @@ run_wrap() {
     fi
 }
 
-# ./start.sh build <personal|minimal> --launcher|--launcher-tray
-# $2 = lite|tray (default lite)
-build_with_launcher() {
+# ./start.sh build <personal|minimal> --desktop
+# Product forms: cli (default) | desktop (--desktop)
+build_with_desktop() {
     local edition="$1"
-    local launcher_mode="${2:-lite}"
     case "$edition" in
         personal|minimal) ;;
         team)
-            print_error "--launcher 不支持 team（团队版请用 Web/Docker）"
+            print_error "--desktop 不支持 team（团队版请用 Web/Docker）"
             exit 1
             ;;
         *)
-            print_error "--launcher 仅支持 personal / minimal"
+            print_error "--desktop 仅支持 personal / minimal"
             exit 1
             ;;
     esac
@@ -726,11 +719,11 @@ build_with_launcher() {
     dist_name="$(edition_to_dist "$edition")"
     local label="$edition"
 
-    print_info "Building ${label} service + launcher (${launcher_mode})..."
+    print_info "Building ${label} service + desktop shell..."
     build_distribution "$dist_name"
     build_frontend_prod
-    build_launcher_shell "$launcher_mode"
-    print_success "Ready: $(edition_to_sidecar "$edition") + launcher/${launcher_mode} ($(go env GOOS)/$(go env GOARCH))"
+    build_desktop_shell
+    print_success "Ready: $(edition_to_sidecar "$edition") + desktop ($(go env GOOS)/$(go env GOARCH))"
 }
 
 # Build Distribution (minimal/personal/team)
@@ -1275,49 +1268,63 @@ detect_database_mode() {
     fi
 }
 
-# Debug - 开发模式：Vite 监听重建 (输出到 bin/static) + 后端 (debug 模式 + 控制台日志)
+# Debug - 开发模式：先构建后端（可选 desktop 外壳）+ Vite watch + debug 日志启动
 # WSL2 环境下 5173 端口不可达，改用 vite build --watch 直接输出到 bin/static/
 # 前端文件变化后 Vite 自动重建，刷新浏览器 (localhost:20060) 即可看到最新内容
 #
 # 用法（与 build/run 风格一致）:
-#   ./start.sh debug                 # 默认 personal
-#   ./start.sh debug minimal         # 精简 WebUI + centag-minimal
-#   ./start.sh debug personal        # 显式 personal（同默认）
+#   ./start.sh debug                      # 默认 personal CLI
+#   ./start.sh debug minimal              # 精简 WebUI + centag-minimal
+#   ./start.sh debug personal             # 显式 personal CLI
+#   ./start.sh debug personal --desktop   # 构建 sidecar+desktop，以 debug 模式开托盘
 #   Team：cd ../centag-pro && ./start.sh debug team
 debug() {
-    # ── 解析发行版（位置参数，与 build/run 一致）──────────────────
+    # ── 解析发行版 + 可选 --desktop（与 build/run 一致）────────────
     local edition="personal"
-    if [ "$#" -gt 1 ]; then
-        print_error "debug 只接受一个发行版参数"
-        echo "用法: $0 debug [personal|minimal]"
-        exit 1
-    fi
-    if [ "$#" -eq 1 ]; then
-        case "$1" in
-            minimal|personal|team)
-                edition="$1"
+    local with_desktop=false
+    local positional=()
+    local arg
+    for arg in "$@"; do
+        case "$arg" in
+            --desktop)
+                with_desktop=true
                 ;;
             --minimal|--team|--personal)
-                print_error "请使用位置参数，不要加 --：./start.sh debug ${1#--}"
-                echo "用法: $0 debug [personal|minimal]"
+                print_error "请使用位置参数，不要加 --：./start.sh debug ${arg#--}"
+                echo "用法: $0 debug [personal|minimal] [--desktop]"
                 exit 1
                 ;;
+            minimal|personal|team)
+                positional+=("$arg")
+                ;;
             *)
-                print_error "未知 debug 发行版: $1"
-                echo "用法: $0 debug [personal|minimal]（Team → centag-pro）"
+                print_error "未知 debug 参数: $arg"
+                echo "用法: $0 debug [personal|minimal] [--desktop]（Team → centag-pro）"
                 exit 1
                 ;;
         esac
+    done
+    if [ "${#positional[@]}" -gt 1 ]; then
+        print_error "debug 只接受一个发行版参数"
+        echo "用法: $0 debug [personal|minimal] [--desktop]"
+        exit 1
+    fi
+    if [ "${#positional[@]}" -eq 1 ]; then
+        edition="${positional[0]}"
     fi
 
     # ── minimal 分支：精简 WebUI + centag-minimal ─────────────────
     if [ "$edition" = "minimal" ]; then
-        _debug_minimal
+        _debug_minimal "$with_desktop"
         return
     fi
 
     # ── team：开源仓不再构建/转调；请到 centag-pro ────────────────
     if [ "$edition" = "team" ]; then
+        if $with_desktop; then
+            print_error "--desktop 不支持 team"
+            exit 1
+        fi
         _reject_team_build_in_oss debug
     fi
 
@@ -1345,6 +1352,10 @@ debug() {
     check_go
     print_info "编译后端 (edition=personal)..."
     build backend
+    if $with_desktop; then
+        print_info "编译 desktop 外壳..."
+        build_desktop_shell
+    fi
 
     # 检查前端依赖
     check_node
@@ -1398,6 +1409,11 @@ debug() {
     print_info "════════════════════════════════════════"
     print_info "  开发模式已启动"
     print_info "  产品版本:    personal"
+    if $with_desktop; then
+        print_info "  形态:        desktop（托盘 + sidecar）"
+    else
+        print_info "  形态:        cli（前台 sidecar）"
+    fi
     print_info "  访问地址:    http://localhost:$BACKEND_PORT"
     print_info "  前端变化后:  刷新浏览器即可看到最新内容"
     print_info "  后端变化后:  下次执行 debug 会先自动编译；也可 ./start.sh build be 单独编译"
@@ -1405,25 +1421,61 @@ debug() {
     print_info "════════════════════════════════════════"
     echo ""
 
-    # 前台启动后端（日志直接输出到控制台）
-    cd "$BIN_DIR"
-    CENTAG_EDITION=personal ./"$SERVER_BIN"
-    cd "$PROJECT_ROOT"
+    if $with_desktop; then
+        _debug_run_desktop personal "$SERVER_BIN"
+    else
+        # 前台启动后端（日志直接输出到控制台）
+        cd "$BIN_DIR"
+        CENTAG_EDITION=personal ./"$SERVER_BIN"
+        cd "$PROJECT_ROOT"
+    fi
 }
 
-# ./start.sh run <personal|minimal> [--launcher|--launcher-tray]
-# Without launcher flags: foreground sidecar.
-# --launcher: lite (browser + sidecar, no CGO). --launcher-tray: systray menu.
+# debug --desktop：前台跑托盘外壳（勿 exec，以便 EXIT trap 能停掉 vite）
+_debug_run_desktop() {
+    local edition="$1"
+    local sidecar_name="$2"
+    local sidecar="${BIN_DIR}/${sidecar_name}"
+    local desktop_bin
+
+    if [ ! -x "$sidecar" ] && [ ! -f "$sidecar" ]; then
+        print_error "sidecar 不存在: $sidecar"
+        exit 1
+    fi
+    if ! desktop_bin="$(resolve_desktop_bin)"; then
+        print_info "未找到 desktop 外壳，先构建..."
+        build_desktop_shell
+        desktop_bin="$(resolve_desktop_bin)" || {
+            print_error "desktop 外壳构建后仍未找到"
+            exit 1
+        }
+    fi
+
+    if [ -z "${LLM_PROXY_ADMIN_PASSWORD:-}" ]; then
+        print_warn "未检测到 LLM_PROXY_ADMIN_PASSWORD；首轮 seed 将使用内置默认口令"
+    fi
+
+    print_info "启动 desktop (debug) edition=${edition}"
+    print_info "  desktop: ${desktop_bin}"
+    print_info "  sidecar: ${sidecar}"
+    print_info "  日志:    debug → 控制台 + sidecar 日志文件（launcher 用户数据目录）"
+    # 继承 centag_export_debug_console_env；launcher 不再覆盖 LOG_OUTPUT/FORMAT
+    "$desktop_bin" -edition="$edition" -bin="$sidecar"
+}
+
+# ./start.sh run <personal|minimal> [--desktop]
+# Without flags: CLI (foreground sidecar).
+# --desktop: tray/menu shell + sidecar (product desktop form).
 run_edition() {
     local edition="$1"
     shift || true
-    local with_launcher=false
-    local with_launcher_tray=false
+    local with_desktop=false
     local extra_args=()
     for arg in "$@"; do
         case "$arg" in
-            --launcher) with_launcher=true ;;
-            --launcher-tray) with_launcher_tray=true; with_launcher=true ;;
+            --desktop)
+                with_desktop=true
+                ;;
             --) ;;
             *)
                 extra_args+=("$arg")
@@ -1434,8 +1486,8 @@ run_edition() {
     case "$edition" in
         personal|minimal) ;;
         team)
-            if $with_launcher; then
-                print_error "--launcher 不支持 team"
+            if $with_desktop; then
+                print_error "--desktop 不支持 team"
                 exit 1
             fi
             ;;
@@ -1458,8 +1510,8 @@ run_edition() {
 
     load_env
 
-    if ! $with_launcher; then
-        print_info "启动 ${run_edition} 服务: ${sidecar}"
+    if ! $with_desktop; then
+        print_info "启动 ${run_edition} CLI: ${sidecar}"
         cd "$BIN_DIR"
         CENTAG_EDITION="${run_edition}" exec "./${sidecar_name}"
     fi
@@ -1469,22 +1521,12 @@ run_edition() {
         build_frontend_prod
     fi
 
-    local launcher_bin launcher_mode="lite"
-    if $with_launcher_tray; then
-        launcher_mode="tray"
-        if ! launcher_bin="$(resolve_launcher_tray_bin)"; then
-            print_info "未找到 tray 启动器，先构建..."
-            build_launcher_shell tray
-            launcher_bin="$(resolve_launcher_tray_bin)" || {
-                print_error "tray 启动器构建后仍未找到"
-                exit 1
-            }
-        fi
-    elif ! launcher_bin="$(resolve_launcher_bin)"; then
-        print_info "未找到 lite 启动器，先构建..."
-        build_launcher_shell lite
-        launcher_bin="$(resolve_launcher_bin)" || {
-            print_error "lite 启动器构建后仍未找到"
+    local desktop_bin
+    if ! desktop_bin="$(resolve_desktop_bin)"; then
+        print_info "未找到 desktop 外壳，先构建..."
+        build_desktop_shell
+        desktop_bin="$(resolve_desktop_bin)" || {
+            print_error "desktop 外壳构建后仍未找到"
             exit 1
         }
     fi
@@ -1495,20 +1537,23 @@ run_edition() {
         print_info "已加载管理员口令环境变量（来自 config/secrets/.env）"
     fi
 
-    print_info "启动桌面启动器 edition=${run_edition} platform=$(go env GOOS)/$(go env GOARCH)"
-    print_info "  launcher: ${launcher_bin}"
+    print_info "启动 desktop edition=${run_edition} platform=$(go env GOOS)/$(go env GOARCH)"
+    print_info "  desktop: ${desktop_bin}"
     print_info "  sidecar: ${sidecar}"
     print_info "  data: 用户数据目录（与 lib/<edition> 开发库分离；见 apps/launcher/README）"
     # macOS bash 3.2 + set -u: empty "${arr[@]}" is "unbound variable"
     if [ ${#extra_args[@]} -gt 0 ]; then
-        exec "$launcher_bin" -edition="$run_edition" -bin="$sidecar" "${extra_args[@]}"
+        exec "$desktop_bin" -edition="$run_edition" -bin="$sidecar" "${extra_args[@]}"
     else
-        exec "$launcher_bin" -edition="$run_edition" -bin="$sidecar"
+        exec "$desktop_bin" -edition="$run_edition" -bin="$sidecar"
     fi
 }
 
 # ── Minimal 调试：精简 WebUI（vite build）+ centag-minimal 后端 ─────────────
+# $1: with_desktop (true|false)
 _debug_minimal() {
+    local with_desktop="${1:-false}"
+
     load_env
     detect_database_mode
     centag_export_debug_console_env
@@ -1522,6 +1567,10 @@ _debug_minimal() {
     check_go
     print_info "编译 minimal 发行版后端..."
     build_distribution "minimal"
+    if [ "$with_desktop" = "true" ]; then
+        print_info "编译 desktop 外壳..."
+        build_desktop_shell
+    fi
 
     check_node
     local webui_dir="${PROJECT_ROOT}/web"
@@ -1562,6 +1611,11 @@ _debug_minimal() {
     echo ""
     print_info "════════════════════════════════════════"
     print_info "  minimal 精简模式已启动"
+    if [ "$with_desktop" = "true" ]; then
+        print_info "  形态:        desktop（托盘 + sidecar）"
+    else
+        print_info "  形态:        cli（前台 sidecar）"
+    fi
     print_info "  前端:        WebUI (edition=minimal)"
     print_info "  访问地址:    http://localhost:$BACKEND_PORT/static/"
     print_info "  首次进入:    设置管理密码后登录"
@@ -1570,9 +1624,13 @@ _debug_minimal() {
     print_info "════════════════════════════════════════"
     echo ""
 
-    cd "$BIN_DIR"
-    CENTAG_EDITION=minimal ./centag-minimal
-    cd "$PROJECT_ROOT"
+    if [ "$with_desktop" = "true" ]; then
+        _debug_run_desktop minimal centag-minimal
+    else
+        cd "$BIN_DIR"
+        CENTAG_EDITION=minimal ./centag-minimal
+        cd "$PROJECT_ROOT"
+    fi
 }
 
 # Daemon
@@ -3373,10 +3431,10 @@ show_short_help() {
 
     # ── 服务管理 ──
     echo -e "  ${CYAN}── 服务管理 ──────────────────────────────────────────${NC}"
-    echo -e "  ${GREEN}run${NC}      <be|fe|personal|minimal> [--launcher]  运行服务"
+    echo -e "  ${GREEN}run${NC}      <be|fe|personal|minimal> [--desktop]  运行服务（cli|desktop）"
     echo -e "  ${GREEN}run${NC}      wrap [子命令...]     系统代理出口 CLI（PAC/CA）"
     echo -e "  ${GREEN}daemon${NC}                           后台守护进程模式（自动重启）"
-    echo -e "  ${GREEN}debug${NC} [personal|minimal]         开发模式（默认 personal）+ 前端热重载；Team → centag-pro"
+    echo -e "  ${GREEN}debug${NC} [personal|minimal] [--desktop]  开发模式（先构建+debug 启动；可选托盘）"
     echo -e "  ${GREEN}stop${NC}     <be|fe>               停止服务"
     echo -e "  ${GREEN}status${NC}                           查看服务状态"
     echo -e "  ${GREEN}logs${NC}                             查看服务日志"
@@ -3385,7 +3443,7 @@ show_short_help() {
     # ── 构建 ──
     echo -e "  ${CYAN}── 构建 ──────────────────────────────────────────────${NC}"
     echo -e "  ${GREEN}build${NC}    <all|be|fe>             构建项目（开发用）"
-    echo -e "  ${GREEN}build${NC}    <personal|minimal> [--launcher] [--wrap]  构建发行版（Team → centag-pro ./start.sh）"
+    echo -e "  ${GREEN}build${NC}    <personal|minimal> [--desktop] [--wrap]  构建发行版（Team → centag-pro ./start.sh）"
     echo -e "  ${GREEN}build${NC}    wrap                仅构建 centag-wrap"
     echo -e "  ${GREEN}docker${NC}   build <minimal|personal|team>   构建 Docker 镜像"
     echo -e "  ${GREEN}docker${NC}   run   <minimal|personal|team> [--reset]  运行 Docker 容器"
@@ -3498,7 +3556,7 @@ _help_build() {
     echo -e "       ${YELLOW}构建项目 / 发行版${NC}"
     echo ""
     echo -e "${CYAN}用法:${NC}"
-    echo -e "  ./start.sh build <目标> [--launcher] [--wrap]"
+    echo -e "  ./start.sh build <目标> [--desktop] [--wrap]"
     echo ""
     echo -e "${CYAN}开发构建:${NC}"
     echo -e "  ${GREEN}all${NC}             构建全部（后端 + 生产版前端） 【默认】"
@@ -3511,22 +3569,21 @@ _help_build() {
     echo -e "  ${GREEN}team${NC}      团队版（中间件外置：PG/向量等）"
     echo -e "  ${GREEN}wrap${NC}  仅构建本机/员工系统代理工具 centag-wrap"
     echo ""
-    echo -e "${CYAN}辅助选项:${NC}"
-    echo -e "  ${GREEN}--launcher${NC}       额外构建 lite 启动器（无 CGO；仅 personal/minimal）"
-    echo -e "  ${GREEN}--launcher-tray${NC}  额外构建托盘启动器（CGO/systray；仅 personal/minimal）"
+    echo -e "${CYAN}产品形态（cli | desktop）:${NC}"
+    echo -e "  默认构建 = ${GREEN}cli${NC}（centag-cli / 前台二进制）"
+    echo -e "  ${GREEN}--desktop${NC}        额外构建桌面外壳 centag-desktop（CGO/systray；仅 personal/minimal）"
     echo -e "             自动识别 darwin / linux / windows（GOOS/GOARCH）"
-    echo -e "             ${YELLOW}team 不支持 --launcher${NC}"
+    echo -e "             ${YELLOW}team 不支持 --desktop${NC}"
     echo -e "  ${GREEN}--wrap${NC}    额外构建 centag-wrap（可与 personal/minimal 同用）"
     echo -e "             产物: ~/.centag/bin/centag-wrap (+ var/cross/wrap/...)"
     echo ""
     echo -e "${CYAN}示例:${NC}"
-    echo -e "  ./start.sh build personal           # 普通个人版服务"
-    echo -e "  ./start.sh build personal --launcher         # 个人版 + lite 启动器"
-    echo -e "  ./start.sh build personal --launcher-tray    # 个人版 + 托盘启动器"
-    echo -e "  ./start.sh build personal --wrap         # 个人版 + 系统代理 CLI"
+    echo -e "  ./start.sh build personal              # CLI"
+    echo -e "  ./start.sh build personal --desktop    # CLI sidecar + desktop 外壳"
+    echo -e "  ./start.sh build personal --wrap       # CLI + 系统代理 CLI"
     echo -e "  # Team：cd ../centag-pro && ./start.sh build team（本仓不构建 team）"
-    echo -e "  ./start.sh build wrap                    # 仅构建 centag-wrap"
-    echo -e "  ./start.sh build minimal --launcher"
+    echo -e "  ./start.sh build wrap"
+    echo -e "  ./start.sh build minimal --desktop"
     echo -e "  ./start.sh build be"
     echo ""
     echo -e "${CYAN}真源命令（客户端 / 不经 start.sh）:${NC}"
@@ -3551,27 +3608,26 @@ _help_run() {
     echo -e "       ${YELLOW}启动服务（前台运行）${NC}"
     echo ""
     echo -e "${CYAN}用法:${NC}"
-    echo -e "  ./start.sh run <服务> [--launcher]"
+    echo -e "  ./start.sh run <服务> [--desktop]"
     echo -e "  ./start.sh run wrap [enable|disable|doctor|status|run|env] [选项...]"
     echo ""
     echo -e "${CYAN}服务:${NC}"
     echo -e "  ${GREEN}be${NC} | backend        启动后端服务 (端口 20060)"
     echo -e "  ${GREEN}fe${NC} | frontend      启动 Vue 开发服务器 (端口 5173)"
-    echo -e "  ${GREEN}personal${NC}           个人版发行包（前台）"
-    echo -e "  ${GREEN}minimal${NC}             minimal 发行包（前台）"
+    echo -e "  ${GREEN}personal${NC}           个人版发行包（前台 CLI）"
+    echo -e "  ${GREEN}minimal${NC}             minimal 发行包（前台 CLI）"
     echo -e "  ${GREEN}wrap${NC}            系统代理出口 CLI（缺省会先构建）"
     echo -e "  ${GREEN}all${NC}                全部（需两个终端分别启动 be/fe）"
     echo ""
-    echo -e "${CYAN}辅助选项:${NC}"
-    echo -e "  ${GREEN}--launcher${NC}       以 lite 启动器启动（浏览器 + sidecar；仅 personal/minimal）"
-    echo -e "  ${GREEN}--launcher-tray${NC}  以托盘启动器启动（菜单/托盘；仅 personal/minimal）"
+    echo -e "${CYAN}产品形态（cli | desktop）:${NC}"
+    echo -e "  默认 = ${GREEN}cli${NC}（前台 sidecar）"
+    echo -e "  ${GREEN}--desktop${NC}        以桌面外壳启动（菜单栏/托盘；仅 personal/minimal）"
     echo ""
     echo -e "${CYAN}示例:${NC}"
     echo -e "  ./start.sh run be"
-    echo -e "  ./start.sh run personal            # 普通个人版服务"
-    echo -e "  ./start.sh run personal --launcher          # lite 启动器"
-    echo -e "  ./start.sh run personal --launcher-tray     # 托盘启动器"
-    echo -e "  ./start.sh run minimal --launcher"
+    echo -e "  ./start.sh run personal              # CLI"
+    echo -e "  ./start.sh run personal --desktop    # desktop（托盘）"
+    echo -e "  ./start.sh run minimal --desktop"
     echo -e "  ./start.sh run wrap run --server http://192.168.1.10:20060 -- opencode"
     echo -e "  ./start.sh run wrap env --server http://192.168.1.10:20060"
     echo -e "  ./start.sh run wrap enable --server http://192.168.1.10:20060"
@@ -3608,12 +3664,14 @@ _help_daemon() {
 
 _help_debug() {
     echo -e "${GREEN}命令: debug${NC}"
-    echo -e "       ${YELLOW}开发调试模式${NC}"
+    echo -e "       ${YELLOW}开发调试模式（先构建再以 debug 启动）${NC}"
     echo ""
     echo -e "${CYAN}用法:${NC}"
-    echo -e "  ./start.sh debug              # 默认 personal"
-    echo -e "  ./start.sh debug minimal      # minimal 精简版"
-    echo -e "  ./start.sh debug personal     # 显式 personal（同默认）"
+    echo -e "  ./start.sh debug                       # 默认 personal CLI"
+    echo -e "  ./start.sh debug minimal               # minimal 精简版 CLI"
+    echo -e "  ./start.sh debug personal              # 显式 personal CLI"
+    echo -e "  ./start.sh debug personal --desktop    # 构建 sidecar+desktop，debug 开托盘"
+    echo -e "  ./start.sh debug minimal --desktop     # minimal + desktop"
     echo -e "  # Team：cd ../centag-pro && ./start.sh debug team"
     echo ""
     echo -e "${CYAN}发行版:${NC}"
@@ -3621,9 +3679,13 @@ _help_debug() {
     echo -e "  ${GREEN}minimal${NC}             精简 WebUI + centag-minimal"
     echo -e "  ${YELLOW}team${NC}                本仓拒绝；请: cd ../centag-pro && ./start.sh debug team"
     echo ""
+    echo -e "${CYAN}形态:${NC}"
+    echo -e "  ${GREEN}(默认) cli${NC}          前台 sidecar"
+    echo -e "  ${GREEN}--desktop${NC}           托盘外壳拉起 sidecar（仍为 debug 日志 + 前端 watch）"
+    echo ""
     echo -e "${CYAN}说明:${NC}"
-    echo -e "  风格与 build / run 一致：./start.sh debug <minimal|personal>"
-    echo -e "  均支持：后端 debug 日志 + 前端文件变更自动同步 + 一键 Ctrl+C 停止。"
+    echo -e "  风格与 build / run 一致：./start.sh debug <minimal|personal> [--desktop]"
+    echo -e "  均支持：先编译 → 后端 debug 日志 → 前端文件变更自动同步 → Ctrl+C 停止。"
 }
 
 _help_stop() {
@@ -4463,14 +4525,14 @@ main() {
         build)
             local target="${1:-all}"
             shift || true
-            local with_launcher=false
-            local with_launcher_tray=false
+            local with_desktop=false
             local with_wrap=false
             local unknown_args=()
             for arg in "$@"; do
                 case "$arg" in
-                    --launcher) with_launcher=true ;;
-                    --launcher-tray) with_launcher_tray=true; with_launcher=true ;;
+                    --desktop)
+                        with_desktop=true
+                        ;;
                     --wrap) with_wrap=true ;;
                     *)
                         unknown_args+=("$arg")
@@ -4479,14 +4541,14 @@ main() {
             done
             if [ ${#unknown_args[@]} -gt 0 ]; then
                 print_error "未知 build 参数: ${unknown_args[*]}"
-                echo "用法: $0 build <目标> [--launcher|--launcher-tray] [--wrap]"
+                echo "用法: $0 build <目标> [--desktop] [--wrap]"
                 exit 1
             fi
             target=$(normalize_type "$target")
             case "$target" in
                 backend|be)
-                    if $with_launcher; then
-                        print_error "--launcher 不能用于 build be"
+                    if $with_desktop; then
+                        print_error "--desktop 不能用于 build be"
                         exit 1
                     fi
                     if $with_wrap; then
@@ -4496,8 +4558,8 @@ main() {
                     build backend
                     ;;
                 frontend|fe|vue)
-                    if $with_launcher; then
-                        print_error "--launcher 不能用于 build fe"
+                    if $with_desktop; then
+                        print_error "--desktop 不能用于 build fe"
                         exit 1
                     fi
                     if $with_wrap; then
@@ -4507,8 +4569,8 @@ main() {
                     build webui
                     ;;
                 all)
-                    if $with_launcher; then
-                        print_error "--launcher 不能用于 build all；请用: build personal --launcher"
+                    if $with_desktop; then
+                        print_error "--desktop 不能用于 build all；请用: build personal --desktop"
                         exit 1
                     fi
                     if $with_wrap; then
@@ -4518,8 +4580,8 @@ main() {
                     build all
                     ;;
                 wrap)
-                    if $with_launcher; then
-                        print_error "--launcher 不能与 build wrap 同用"
+                    if $with_desktop; then
+                        print_error "--desktop 不能与 build wrap 同用"
                         exit 1
                     fi
                     # --wrap 与目标 wrap 等价，忽略重复开关
@@ -4528,12 +4590,8 @@ main() {
                     print_info "真源命令: cd apps/wrap && GOWORK=off go build -o centag-wrap ."
                     ;;
                 personal|minimal|team)
-                    if $with_launcher; then
-                        if $with_launcher_tray; then
-                            build_with_launcher "$target" tray
-                        else
-                            build_with_launcher "$target" lite
-                        fi
+                    if $with_desktop; then
+                        build_with_desktop "$target"
                     else
                         build dist "$(edition_to_dist "$target")"
                     fi
@@ -4545,7 +4603,7 @@ main() {
                 *)
                     print_error "未知构建目标: '$target'"
                     echo "支持的构建目标: all, be, fe, personal, minimal, wrap（Team → centag-pro）"
-                    echo "启动器: ./start.sh build personal --launcher  或  --launcher-tray"
+                    echo "产品形态: CLI（默认）| desktop → ./start.sh build personal --desktop"
                     echo "系统代理 CLI: ./start.sh build wrap  或  ./start.sh build personal --wrap"
                     exit 1
                     ;;
@@ -4647,7 +4705,7 @@ main() {
                 *)
                     print_error "未知运行目标: $svc"
                     echo "支持的运行目标: be, fe, personal, minimal, wrap"
-                    echo "启动器: ./start.sh run personal --launcher  或  ./start.sh run minimal --launcher"
+                    echo "desktop: ./start.sh run personal --desktop  或  ./start.sh run minimal --desktop"
                     echo "系统代理: ./start.sh run wrap enable|disable|doctor|status|run|env"
                     echo ""
                     show_all_mode_info

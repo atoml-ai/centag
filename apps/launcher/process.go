@@ -47,8 +47,16 @@ func startSidecar(ctx context.Context, cfg Config, binary, dataDir string) (*sid
 	cmd := exec.CommandContext(ctx, binary)
 	// Run with dataDir as CWD so relative ./data paths stay under the user data dir.
 	cmd.Dir = dataDir
-	cmd.Stdout = io.MultiWriter(logFile)
-	cmd.Stderr = io.MultiWriter(logFile)
+	// Default: logs only to sidecar file. Debug/dev (parent exported LOG_OUTPUT=both|stdout):
+	// also tee to the launcher console so `./start.sh debug … --desktop` stays useful.
+	outW := io.Writer(logFile)
+	errW := io.Writer(logFile)
+	if sidecarConsoleTeeEnabled() {
+		outW = io.MultiWriter(logFile, os.Stdout)
+		errW = io.MultiWriter(logFile, os.Stderr)
+	}
+	cmd.Stdout = outW
+	cmd.Stderr = errW
 	cmd.Env = buildSidecarEnv(cfg, binary, workDir, dataDir)
 
 	if err := cmd.Start(); err != nil {
@@ -64,15 +72,28 @@ func startSidecar(ctx context.Context, cfg Config, binary, dataDir string) (*sid
 	return proc, nil
 }
 
+func sidecarConsoleTeeEnabled() bool {
+	out := strings.ToLower(strings.TrimSpace(os.Getenv("LLM_PROXY_LOG_OUTPUT")))
+	if out == "both" || out == "stdout" || out == "console" {
+		return true
+	}
+	return strings.EqualFold(strings.TrimSpace(os.Getenv("LLM_PROXY_SERVER_MODE")), "debug")
+}
+
 func buildSidecarEnv(cfg Config, binary, workDir, dataDir string) []string {
 	env := append(os.Environ(),
 		"LLM_PROXY_SERVER_HOST=127.0.0.1",
 		fmt.Sprintf("LLM_PROXY_SERVER_PORT=%d", cfg.Port),
 		fmt.Sprintf("CENTAG_EDITION=%s", cfg.Edition),
 		fmt.Sprintf("LLM_PROXY_LOG_PATH=%s", filepath.Join(dataDir, "logs")),
-		"LLM_PROXY_LOG_OUTPUT=file",
-		"LLM_PROXY_LOG_FORMAT=json",
 	)
+	// Preserve parent overrides (e.g. start.sh debug → console/both); default to file/json.
+	if strings.TrimSpace(os.Getenv("LLM_PROXY_LOG_OUTPUT")) == "" {
+		env = append(env, "LLM_PROXY_LOG_OUTPUT=file")
+	}
+	if strings.TrimSpace(os.Getenv("LLM_PROXY_LOG_FORMAT")) == "" {
+		env = append(env, "LLM_PROXY_LOG_FORMAT=json")
+	}
 
 	staticPath := firstExistingDir(
 		filepath.Join(workDir, "static"),
