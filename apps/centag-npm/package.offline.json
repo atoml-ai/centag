@@ -1,6 +1,6 @@
 {
   "name": "@atomlai/centag-offline",
-  "version": "0.2.9",
+  "version": "0.3.0",
   "description": "Offline variant of @atomlai/centag: bundles platform Go binaries so no network is needed at install. Prefer @atomlai/centag for normal use.",
   "type": "module",
   "bin": {
