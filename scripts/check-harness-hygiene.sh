@@ -32,14 +32,15 @@ done
 #   launcher   — L1 menu + browser (optional; independent go.mod)
 #   wrap       — OS PAC/CA helper (system egress; in root go.work, embedded as `centag wrap`)
 #   wrap-npm   — npm distribution wrapper that downloads the wrap binary (no Go sources)
+#   centag-npm — npm distribution wrapper that downloads the centag CLI (no Go sources)
 if [[ -d apps ]]; then
   shopt -s nullglob
   for child in apps/*; do
     base="$(basename "$child")"
     case "$base" in
-      launcher|wrap|wrap-npm) ;;
+      launcher|wrap|wrap-npm|centag-npm) ;;
       *)
-        echo "UNEXPECTED PATH: $child (allowed under apps/: launcher, wrap, wrap-npm)"
+        echo "UNEXPECTED PATH: $child (allowed under apps/: launcher, wrap, wrap-npm, centag-npm)"
         fail=1
         ;;
     esac
