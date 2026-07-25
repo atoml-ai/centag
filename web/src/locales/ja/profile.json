@@ -1,6 +1,10 @@
 {
   "title": "プロフィール",
   "subtitle": "アカウント情報とAPIアクセスキーを管理",
+  "navBasic": "基本情報",
+  "navPassword": "パスワード",
+  "navApiKeys": "APIキー",
+  "navUsage": "利用統計",
   "basicInfo": "基本情報",
   "basicInfoDesc": "プロフィールと連絡先",
   "admin": "管理者",

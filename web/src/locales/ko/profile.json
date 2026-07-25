@@ -1,6 +1,10 @@
 {
   "title": "프로필",
   "subtitle": "계정 정보와 API 액세스 키를 관리합니다",
+  "navBasic": "기본정보",
+  "navPassword": "비밀번호",
+  "navApiKeys": "API키",
+  "navUsage": "사용통계",
   "basicInfo": "기본 정보",
   "basicInfoDesc": "개인 프로필 및 연락처",
   "admin": "관리자",

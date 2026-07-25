@@ -1,6 +1,10 @@
 {
   "title": "Profile",
   "subtitle": "Manage your account information and API access keys",
+  "navBasic": "Basic",
+  "navPassword": "Password",
+  "navApiKeys": "API Keys",
+  "navUsage": "Usage",
   "basicInfo": "Basic Info",
   "basicInfoDesc": "Personal profile and contact details",
   "admin": "Admin",

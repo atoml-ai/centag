@@ -1,22 +1,36 @@
 <template>
   <div class="profile-page">
-    <div class="page-header" style="margin-bottom:var(--spacing-lg)">
+    <div class="page-header">
       <h1 class="page-title">{{ $t('profile.title') }}</h1>
       <p class="page-description">{{ $t('profile.subtitle') }}</p>
     </div>
 
-    <el-row :gutter="24">
-      <el-col :xs="24" :lg="9">
-        <el-card shadow="never" class="p-card">
-          <template #header>
-            <div class="p-hd">
-              <span class="p-icon p-icon--info"><el-icon><User /></el-icon></span>
-              <div>
-                <div class="p-hd-title">{{ $t('profile.basicInfo') }}</div>
-                <div class="p-hd-sub">{{ $t('profile.basicInfoDesc') }}</div>
-              </div>
-            </div>
-          </template>
+    <div class="profile-layout">
+      <!-- 左侧导航（类 GitHub Settings） -->
+      <aside class="profile-nav" aria-label="Profile sections">
+        <nav class="nav-list">
+          <button
+            v-for="item in navItems"
+            :key="item.id"
+            type="button"
+            class="nav-item"
+            :class="{ 'is-active': activeSection === item.id }"
+            @click="selectSection(item.id)"
+          >
+            <el-icon class="nav-icon"><component :is="item.icon" /></el-icon>
+            <span class="nav-label">{{ $t(item.labelKey) }}</span>
+          </button>
+        </nav>
+      </aside>
+
+      <!-- 右侧内容 -->
+      <main class="profile-main">
+        <!-- 基本信息 -->
+        <section v-show="activeSection === 'basic'" class="section-panel">
+          <header class="section-header">
+            <h2 class="section-title">{{ $t('profile.basicInfo') }}</h2>
+            <p class="section-desc">{{ $t('profile.basicInfoDesc') }}</p>
+          </header>
 
           <div class="p-hero">
             <el-avatar :size="64" :style="avatarStyle">{{ avatarText }}</el-avatar>
@@ -31,12 +45,14 @@
             </div>
           </div>
 
-          <el-divider style="margin:20px 0" />
+          <el-divider />
 
-          <el-form :model="profileForm" label-width="90px">
+          <el-form :model="profileForm" label-width="100px" class="section-form">
             <el-form-item :label="$t('profile.username')">
               <el-input v-model="profileForm.username" disabled>
-                <template #suffix><el-icon style="color:var(--el-text-color-secondary)"><Lock /></el-icon></template>
+                <template #suffix>
+                  <el-icon style="color:var(--el-text-color-secondary)"><Lock /></el-icon>
+                </template>
               </el-input>
             </el-form-item>
             <el-form-item :label="$t('profile.displayName')">
@@ -46,91 +62,72 @@
               <el-input v-model="profileForm.email" :placeholder="$t('profile.emailPlaceholder')" />
             </el-form-item>
             <el-form-item>
-              <el-button type="primary" :loading="savingProfile" @click="saveProfile">{{ $t('profile.saveInfo') }}</el-button>
+              <el-button type="primary" :loading="savingProfile" @click="saveProfile">
+                {{ $t('profile.saveInfo') }}
+              </el-button>
             </el-form-item>
           </el-form>
-        </el-card>
+        </section>
 
-        <el-card shadow="never" class="p-card" style="margin-top:20px">
-          <template #header>
-            <div class="p-hd">
-              <span class="p-icon p-icon--pwd"><el-icon><Lock /></el-icon></span>
-              <div>
-                <div class="p-hd-title">{{ $t('profile.changePassword') }}</div>
-                <div class="p-hd-sub">{{ $t('profile.changePasswordDesc') }}</div>
-              </div>
-            </div>
-          </template>
+        <!-- 修改密码 -->
+        <section v-show="activeSection === 'password'" class="section-panel">
+          <header class="section-header">
+            <h2 class="section-title">{{ $t('profile.changePassword') }}</h2>
+            <p class="section-desc">{{ $t('profile.changePasswordDesc') }}</p>
+          </header>
 
-          <el-form :model="pwdForm" :rules="pwdRules" ref="pwdFormRef" label-width="90px">
+          <el-form
+            ref="pwdFormRef"
+            :model="pwdForm"
+            :rules="pwdRules"
+            label-width="100px"
+            class="section-form section-form--narrow"
+          >
             <el-form-item :label="$t('profile.currentPassword')" prop="old_password">
-              <el-input v-model="pwdForm.old_password" type="password" show-password :placeholder="$t('profile.currentPasswordPlaceholder')" />
+              <el-input
+                v-model="pwdForm.old_password"
+                type="password"
+                show-password
+                :placeholder="$t('profile.currentPasswordPlaceholder')"
+              />
             </el-form-item>
             <el-form-item :label="$t('profile.newPassword')" prop="new_password">
-              <el-input v-model="pwdForm.new_password" type="password" show-password :placeholder="$t('profile.newPasswordPlaceholder')" />
+              <el-input
+                v-model="pwdForm.new_password"
+                type="password"
+                show-password
+                :placeholder="$t('profile.newPasswordPlaceholder')"
+              />
             </el-form-item>
             <el-form-item :label="$t('profile.confirmPassword')" prop="confirm_password">
-              <el-input v-model="pwdForm.confirm_password" type="password" show-password :placeholder="$t('profile.confirmPasswordPlaceholder')" />
+              <el-input
+                v-model="pwdForm.confirm_password"
+                type="password"
+                show-password
+                :placeholder="$t('profile.confirmPasswordPlaceholder')"
+              />
             </el-form-item>
             <el-form-item>
-              <el-button type="warning" :loading="changingPwd" @click="changePassword">{{ $t('profile.updatePassword') }}</el-button>
+              <el-button type="warning" :loading="changingPwd" @click="changePassword">
+                {{ $t('profile.updatePassword') }}
+              </el-button>
             </el-form-item>
           </el-form>
-        </el-card>
+        </section>
 
-        <el-card shadow="never" class="p-card" style="margin-top:20px">
-          <template #header>
-            <div class="p-hd">
-              <span class="p-icon p-icon--tenant"><el-icon><OfficeBuilding /></el-icon></span>
-              <div>
-                <div class="p-hd-title">{{ $t('profile.resourceStats') }}</div>
-                <div class="p-hd-sub">{{ $t('profile.resourceStatsDesc') }}</div>
-              </div>
-              <el-tag v-if="tenant" :type="tenant.status === 'active' ? 'success' : 'warning'" size="small" style="margin-left:auto">
-                {{ tenant.status === 'active' ? $t('profile.active') : tenant.status === 'suspended' ? $t('profile.paused') : tenant.status }}
-              </el-tag>
+        <!-- API Key -->
+        <section v-show="activeSection === 'api-keys'" class="section-panel">
+          <header class="section-header section-header--row">
+            <div>
+              <h2 class="section-title">{{ $t('profile.apiKeyManagement') }}</h2>
+              <p class="section-desc">{{ $t('profile.apiKeyManagementDesc') }}</p>
             </div>
-          </template>
+            <el-button type="primary" size="small" @click="showCreateDialog = true">
+              <el-icon><Plus /></el-icon>{{ $t('profile.createKey') }}
+            </el-button>
+          </header>
 
-          <el-skeleton v-if="tenantLoading" :rows="4" animated />
-
-          <template v-else-if="tenant">
-            <el-descriptions :column="1" size="small" border>
-              <el-descriptions-item :label="$t('profile.tenantId')">
-                <code style="font-size:12px">{{ tenant.id }}</code>
-              </el-descriptions-item>
-              <el-descriptions-item :label="$t('profile.tenantName')">{{ tenant.name }}</el-descriptions-item>
-              <el-descriptions-item :label="$t('profile.todayRequests')">
-                <span class="stat-value">{{ tenant.used_today_requests || 0 }}</span>
-                <span v-if="tenant.daily_request_limit" class="stat-limit"> / {{ tenant.daily_request_limit }}</span>
-              </el-descriptions-item>
-              <el-descriptions-item :label="$t('profile.todayTokens')">
-                <span class="stat-value">{{ tenant.used_today_tokens || 0 }}</span>
-                <span v-if="tenant.daily_token_limit" class="stat-limit"> / {{ tenant.daily_token_limit }}</span>
-              </el-descriptions-item>
-            </el-descriptions>
-          </template>
-
-          <el-empty v-else :description="$t('profile.noTenantInfo')" :image-size="60" />
-        </el-card>
-      </el-col>
-
-      <el-col :xs="24" :lg="15">
-        <el-card shadow="never" class="p-card">
-          <template #header>
-            <div class="p-hd">
-              <span class="p-icon p-icon--key"><el-icon><Key /></el-icon></span>
-              <div>
-                <div class="p-hd-title">{{ $t('profile.apiKeyManagement') }}</div>
-                <div class="p-hd-sub">{{ $t('profile.apiKeyManagementDesc') }}</div>
-              </div>
-              <el-button type="primary" size="small" @click="showCreateDialog = true" style="margin-left:auto">
-                <el-icon><Plus /></el-icon>{{ $t('profile.createKey') }}
-              </el-button>
-            </div>
-          </template>
-
-          <el-alert type="info" :closable="false" show-icon style="margin-bottom:16px;border-radius:6px">
+          <el-alert type="info" :closable="false" show-icon class="section-alert">
             <template #title>{{ $t('profile.apiKeyHint') }}</template>
           </el-alert>
 
@@ -147,7 +144,9 @@
                     placement="top"
                   >
                     <el-button
-                      type="primary" link size="small"
+                      type="primary"
+                      link
+                      size="small"
                       class="copy-key-btn"
                       @click="handleCopyAPIKey(row)"
                     >
@@ -209,12 +208,62 @@
               </template>
             </el-table-column>
           </el-table>
-        </el-card>
-      </el-col>
-    </el-row>
+        </section>
 
-    <el-dialog v-model="showCreateDialog" :title="$t('profile.createApiKey')" width="440px" :close-on-click-modal="false" destroy-on-close>
-      <el-form :model="createKeyForm" :rules="createKeyRules" ref="createKeyFormRef" label-width="80px">
+        <!-- 资源统计 -->
+        <section v-show="activeSection === 'usage'" class="section-panel">
+          <header class="section-header section-header--row">
+            <div>
+              <h2 class="section-title">{{ $t('profile.resourceStats') }}</h2>
+              <p class="section-desc">{{ $t('profile.resourceStatsDesc') }}</p>
+            </div>
+            <el-tag
+              v-if="tenant"
+              :type="tenant.status === 'active' ? 'success' : 'warning'"
+              size="small"
+            >
+              {{
+                tenant.status === 'active'
+                  ? $t('profile.active')
+                  : tenant.status === 'suspended'
+                    ? $t('profile.paused')
+                    : tenant.status
+              }}
+            </el-tag>
+          </header>
+
+          <el-skeleton v-if="tenantLoading" :rows="4" animated />
+
+          <template v-else-if="tenant">
+            <el-descriptions :column="1" size="default" border class="usage-desc">
+              <el-descriptions-item :label="$t('profile.tenantId')">
+                <code class="tenant-id">{{ tenant.id }}</code>
+              </el-descriptions-item>
+              <el-descriptions-item :label="$t('profile.tenantName')">{{ tenant.name }}</el-descriptions-item>
+              <el-descriptions-item :label="$t('profile.todayRequests')">
+                <span class="stat-value">{{ tenant.used_today_requests || 0 }}</span>
+                <span v-if="tenant.daily_request_limit" class="stat-limit"> / {{ tenant.daily_request_limit }}</span>
+              </el-descriptions-item>
+              <el-descriptions-item :label="$t('profile.todayTokens')">
+                <span class="stat-value">{{ tenant.used_today_tokens || 0 }}</span>
+                <span v-if="tenant.daily_token_limit" class="stat-limit"> / {{ tenant.daily_token_limit }}</span>
+              </el-descriptions-item>
+            </el-descriptions>
+          </template>
+
+          <el-empty v-else :description="$t('profile.noTenantInfo')" :image-size="80" />
+        </section>
+      </main>
+    </div>
+
+    <el-dialog
+      v-model="showCreateDialog"
+      :title="$t('profile.createApiKey')"
+      width="440px"
+      :close-on-click-modal="false"
+      destroy-on-close
+    >
+      <el-form ref="createKeyFormRef" :model="createKeyForm" :rules="createKeyRules" label-width="80px">
         <el-form-item :label="$t('profile.name')" prop="name">
           <el-input v-model="createKeyForm.name" :placeholder="$t('profile.keyNamePlaceholder')" />
         </el-form-item>
@@ -231,24 +280,41 @@
       </el-form>
       <template #footer>
         <el-button @click="showCreateDialog = false">{{ $t('profile.cancel') }}</el-button>
-        <el-button type="primary" :loading="creatingKey" @click="createAPIKey">{{ $t('profile.createKeyButton') }}</el-button>
+        <el-button type="primary" :loading="creatingKey" @click="createAPIKey">
+          {{ $t('profile.createKeyButton') }}
+        </el-button>
       </template>
     </el-dialog>
 
-    <el-dialog v-model="showKeyDialog" :title="$t('profile.keyCreated')" width="540px" :close-on-click-modal="false" :close-on-press-escape="false" :show-close="false">
+    <el-dialog
+      v-model="showKeyDialog"
+      :title="$t('profile.keyCreated')"
+      width="540px"
+      :close-on-click-modal="false"
+      :close-on-press-escape="false"
+      :show-close="false"
+    >
       <el-alert type="warning" :closable="false" show-icon style="margin-bottom:16px;border-radius:6px">
         <template #title>{{ $t('profile.keyCreatedHint') }}</template>
       </el-alert>
       <div class="new-key-box">
         <code class="new-key">{{ newFullKey }}</code>
-        <el-button type="primary" plain size="small" @click="copyKey"><el-icon><CopyDocument /></el-icon>{{ $t('profile.copyKey') }}</el-button>
+        <el-button type="primary" plain size="small" @click="copyKey">
+          <el-icon><CopyDocument /></el-icon>{{ $t('profile.copyKey') }}
+        </el-button>
       </div>
       <template #footer>
         <el-button type="primary" @click="showKeyDialog = false">{{ $t('profile.savedAndClose') }}</el-button>
       </template>
     </el-dialog>
 
-    <el-dialog v-model="showRevealDialog" :title="$t('profile.fullApiKey')" width="540px" :close-on-click-modal="false" destroy-on-close>
+    <el-dialog
+      v-model="showRevealDialog"
+      :title="$t('profile.fullApiKey')"
+      width="540px"
+      :close-on-click-modal="false"
+      destroy-on-close
+    >
       <el-skeleton v-if="revealLoading" :rows="2" animated />
       <div v-else class="new-key-box">
         <code class="new-key">{{ revealedFullKey }}</code>
@@ -264,34 +330,71 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, watch, type Component } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { User, Lock, Key, Plus, CopyDocument, MoreFilled, Edit, Delete, View } from '@element-plus/icons-vue'
+import {
+  User, Lock, Key, Plus, CopyDocument, MoreFilled, Edit, Delete, View, OfficeBuilding,
+} from '@element-plus/icons-vue'
 import type { FormInstance, FormRules } from 'element-plus'
 import { useAuthStore } from '@/stores/auth'
 import {
   getProfile, updateProfile, changePassword as apiChangePassword,
-  listAPIKeys, getAPIKey, createAPIKey as apiCreateAPIKey, updateAPIKey, deleteAPIKey as apiDeleteAPIKey
+  listAPIKeys, getAPIKey, createAPIKey as apiCreateAPIKey, updateAPIKey, deleteAPIKey as apiDeleteAPIKey,
 } from '@/api/user'
 import type { APIKey } from '@/api/user'
 import {
   getCurrentTenant,
   getCurrentQuota,
   type Tenant,
-  type TenantQuota
+  type TenantQuota,
 } from '@/api/tenant'
 
 const { t } = useI18n()
-
+const route = useRoute()
+const router = useRouter()
 const authStore = useAuthStore()
+
+type ProfileSection = 'basic' | 'password' | 'api-keys' | 'usage'
+
+const navItems: Array<{ id: ProfileSection; labelKey: string; icon: Component }> = [
+  { id: 'basic', labelKey: 'profile.navBasic', icon: User },
+  { id: 'password', labelKey: 'profile.navPassword', icon: Lock },
+  { id: 'api-keys', labelKey: 'profile.navApiKeys', icon: Key },
+  { id: 'usage', labelKey: 'profile.navUsage', icon: OfficeBuilding },
+]
+
+const validSections = new Set<ProfileSection>(navItems.map(i => i.id))
+
+function parseSection(raw: unknown): ProfileSection {
+  const v = String(raw || '')
+  return validSections.has(v as ProfileSection) ? (v as ProfileSection) : 'basic'
+}
+
+const activeSection = ref<ProfileSection>(parseSection(route.query.section))
+
+function selectSection(id: ProfileSection) {
+  activeSection.value = id
+  router.replace({ query: { ...route.query, section: id } })
+}
+
+watch(
+  () => route.query.section,
+  (v) => {
+    const next = parseSection(v)
+    if (next !== activeSection.value) activeSection.value = next
+  }
+)
 
 const avatarText = computed(() => authStore.displayName.charAt(0).toUpperCase() || 'U')
 const avatarStyle = computed(() => ({
   background: authStore.isAdmin
     ? 'linear-gradient(135deg,#f093fb 0%,#f5576c 100%)'
     : 'linear-gradient(135deg,#4facfe 0%,#00f2fe 100%)',
-  color: '#fff', fontWeight: '700', fontSize: '24px'
+  color: '#fff',
+  fontWeight: '700',
+  fontSize: '24px',
 }))
 
 const profileForm = reactive({ username: '', display_name: '', email: '' })
@@ -300,11 +403,6 @@ const savingProfile = ref(false)
 const tenantLoading = ref(false)
 const tenant = ref<(Tenant & TenantQuota) | null>(null)
 const quota = ref<TenantQuota | null>(null)
-
-const formatDate = (date?: string) => {
-  if (!date) return '-'
-  return new Date(date).toLocaleString()
-}
 
 async function writeClipboard(text: string): Promise<boolean> {
   if (!text) return false
@@ -339,7 +437,7 @@ const loadTenantInfo = async () => {
   try {
     const [tenantRes, quotaRes] = await Promise.all([
       getCurrentTenant().catch(() => null),
-      getCurrentQuota().catch(() => null)
+      getCurrentQuota().catch(() => null),
     ])
     const detail = tenantRes && typeof tenantRes === 'object' ? tenantRes : null
     const quotaData = quotaRes ?? detail?.quota ?? null
@@ -348,19 +446,24 @@ const loadTenantInfo = async () => {
     }
     if (quotaData) quota.value = quotaData
   } catch (error) {
-    console.error('加载租户信息失败:', error)
+    console.error(t('profile.loadTenantFailed'), error)
   } finally {
     tenantLoading.value = false
   }
 }
 
 onMounted(async () => {
+  if (!route.query.section) {
+    router.replace({ query: { ...route.query, section: activeSection.value } })
+  }
   try {
     const u = await getProfile()
     profileForm.username = u.username
     profileForm.display_name = u.display_name
     profileForm.email = u.email
-  } catch (e: any) { ElMessage.error(e.message || t('profile.loadUserInfoFailed')) }
+  } catch (e: any) {
+    ElMessage.error(e.message || t('profile.loadUserInfoFailed'))
+  }
   loadAPIKeys()
   loadTenantInfo()
 })
@@ -368,11 +471,17 @@ onMounted(async () => {
 async function saveProfile() {
   savingProfile.value = true
   try {
-    const updated = await updateProfile({ display_name: profileForm.display_name, email: profileForm.email })
+    const updated = await updateProfile({
+      display_name: profileForm.display_name,
+      email: profileForm.email,
+    })
     authStore.updateUser(updated)
     ElMessage.success(t('profile.infoSaved'))
-  } catch (e: any) { ElMessage.error(e.message || t('profile.saveFailed')) }
-  finally { savingProfile.value = false }
+  } catch (e: any) {
+    ElMessage.error(e.message || t('profile.saveFailed'))
+  } finally {
+    savingProfile.value = false
+  }
 }
 
 const pwdFormRef = ref<FormInstance>()
@@ -380,38 +489,61 @@ const pwdForm = reactive({ old_password: '', new_password: '', confirm_password:
 const changingPwd = ref(false)
 const pwdRules: FormRules = {
   old_password: [{ required: true, message: t('profile.enterCurrentPassword'), trigger: 'blur' }],
-  new_password: [{ required: true, message: t('profile.enterNewPassword'), trigger: 'blur' }, { min: 6, message: t('profile.passwordMinLength'), trigger: 'blur' }],
+  new_password: [
+    { required: true, message: t('profile.enterNewPassword'), trigger: 'blur' },
+    { min: 6, message: t('profile.passwordMinLength'), trigger: 'blur' },
+  ],
   confirm_password: [
     { required: true, message: t('profile.confirmNewPassword'), trigger: 'blur' },
-    { validator: (_: any, v: string, cb: Function) => { v !== pwdForm.new_password ? cb(new Error(t('profile.passwordMismatch'))) : cb() }, trigger: 'blur' }
-  ]
+    {
+      validator: (_: any, v: string, cb: Function) => {
+        v !== pwdForm.new_password ? cb(new Error(t('profile.passwordMismatch'))) : cb()
+      },
+      trigger: 'blur',
+    },
+  ],
 }
+
 async function changePassword() {
   if (!pwdFormRef.value) return
   try {
     await pwdFormRef.value.validate()
     changingPwd.value = true
-    await apiChangePassword({ old_password: pwdForm.old_password, new_password: pwdForm.new_password })
+    await apiChangePassword({
+      old_password: pwdForm.old_password,
+      new_password: pwdForm.new_password,
+    })
     ElMessage.success(t('profile.passwordChanged'))
-    pwdForm.old_password = ''; pwdForm.new_password = ''; pwdForm.confirm_password = ''
+    pwdForm.old_password = ''
+    pwdForm.new_password = ''
+    pwdForm.confirm_password = ''
     setTimeout(() => authStore.logout(), 1800)
-  } catch (e: any) { if (e?.message) ElMessage.error(e.message) }
-  finally { changingPwd.value = false }
+  } catch (e: any) {
+    if (e?.message) ElMessage.error(e.message)
+  } finally {
+    changingPwd.value = false
+  }
 }
 
 const apiKeys = ref<APIKey[]>([])
 const loadingKeys = ref(false)
 async function loadAPIKeys() {
   loadingKeys.value = true
-  try { apiKeys.value = await listAPIKeys() }
-  catch (e: any) { ElMessage.error(e.message || t('profile.operationFailed')) }
-  finally { loadingKeys.value = false }
+  try {
+    apiKeys.value = await listAPIKeys()
+  } catch (e: any) {
+    ElMessage.error(e.message || t('profile.operationFailed'))
+  } finally {
+    loadingKeys.value = false
+  }
 }
 
 const showCreateDialog = ref(false)
 const createKeyFormRef = ref<FormInstance>()
 const createKeyForm = reactive({ name: '', expires_in: 0 })
-const createKeyRules: FormRules = { name: [{ required: true, message: t('profile.enterKeyName'), trigger: 'blur' }] }
+const createKeyRules: FormRules = {
+  name: [{ required: true, message: t('profile.enterKeyName'), trigger: 'blur' }],
+}
 const creatingKey = ref(false)
 const showKeyDialog = ref(false)
 const newFullKey = ref('')
@@ -424,13 +556,21 @@ async function createAPIKey() {
   try {
     await createKeyFormRef.value.validate()
     creatingKey.value = true
-    const created = await apiCreateAPIKey({ name: createKeyForm.name, expires_in: createKeyForm.expires_in > 0 ? createKeyForm.expires_in : undefined })
+    const created = await apiCreateAPIKey({
+      name: createKeyForm.name,
+      expires_in: createKeyForm.expires_in > 0 ? createKeyForm.expires_in : undefined,
+    })
     newFullKey.value = created.full_key
-    showCreateDialog.value = false; showKeyDialog.value = true
-    createKeyForm.name = ''; createKeyForm.expires_in = 0
+    showCreateDialog.value = false
+    showKeyDialog.value = true
+    createKeyForm.name = ''
+    createKeyForm.expires_in = 0
     loadAPIKeys()
-  } catch (e: any) { if (e?.message) ElMessage.error(e.message) }
-  finally { creatingKey.value = false }
+  } catch (e: any) {
+    if (e?.message) ElMessage.error(e.message)
+  } finally {
+    creatingKey.value = false
+  }
 }
 
 async function toggleKey(key: APIKey) {
@@ -438,15 +578,28 @@ async function toggleKey(key: APIKey) {
     await updateAPIKey(key.id, { enabled: !key.enabled })
     ElMessage.success(t('profile.keyDisabledEnabled'))
     loadAPIKeys()
-  } catch (e: any) { ElMessage.error(e.message || t('profile.operationFailed')) }
+  } catch (e: any) {
+    ElMessage.error(e.message || t('profile.operationFailed'))
+  }
 }
 
 async function deleteKey(key: APIKey) {
   try {
-    await ElMessageBox.confirm(t('profile.confirmDelete', { name: key.name }), t('profile.deleteConfirm'), { confirmButtonText: t('profile.deleteKey'), cancelButtonText: t('profile.cancel'), type: 'warning' })
+    await ElMessageBox.confirm(
+      t('profile.confirmDelete', { name: key.name }),
+      t('profile.deleteConfirm'),
+      {
+        confirmButtonText: t('profile.deleteKey'),
+        cancelButtonText: t('profile.cancel'),
+        type: 'warning',
+      }
+    )
     await apiDeleteAPIKey(key.id)
-    ElMessage.success(t('profile.keyDeleted')); loadAPIKeys()
-  } catch (e: any) { if (e !== 'cancel' && e?.message) ElMessage.error(e.message) }
+    ElMessage.success(t('profile.keyDeleted'))
+    loadAPIKeys()
+  } catch (e: any) {
+    if (e !== 'cancel' && e?.message) ElMessage.error(e.message)
+  }
 }
 
 async function copyKey() {
@@ -492,60 +645,172 @@ async function copyRevealedKey() {
 </script>
 
 <style scoped>
-.p-card { width: 100%; }
-
-.p-hd {
-  display: flex;
-  align-items: center;
-  gap: 12px;
+.profile-page {
+  max-width: 1100px;
+  margin: 0 auto;
+  width: 100%;
 }
 
-.p-icon {
-  width: 36px;
-  height: 36px;
-  border-radius: 8px;
+.page-header {
+  margin-bottom: 24px;
+}
+
+.page-title {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 600;
+}
+
+.page-description {
+  margin: 6px 0 0;
+  color: var(--el-text-color-secondary);
+  font-size: 0.875rem;
+}
+
+.profile-layout {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+
+.profile-nav {
+  position: sticky;
+  top: 16px;
+}
+
+.nav-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 10px;
+  background: var(--el-bg-color);
+}
+
+.nav-item {
   display: flex;
   align-items: center;
-  justify-content: center;
-  font-size: 17px;
+  gap: 10px;
+  width: 100%;
+  border: none;
+  background: transparent;
+  text-align: left;
+  padding: 10px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  color: var(--el-text-color-regular);
+  font-size: 0.875rem;
+  transition: background 0.15s, color 0.15s;
+}
+
+.nav-item:hover {
+  background: var(--el-fill-color-light);
+  color: var(--el-text-color-primary);
+}
+
+.nav-item.is-active {
+  background: var(--el-color-primary-light-9);
+  color: var(--el-color-primary);
+  font-weight: 600;
+}
+
+.nav-icon {
+  font-size: 16px;
   flex-shrink: 0;
 }
 
-.p-icon--info { background: rgba(79,172,254,.12); color: #4facfe; }
-.p-icon--pwd  { background: rgba(240,147,251,.12); color: #f5576c; }
-.p-icon--key  { background: rgba(102,126,234,.12); color: #667eea; }
-.p-icon--tenant { background: rgba(103,194,58,.12); color: #67c23a; }
+.profile-main {
+  min-width: 0;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 10px;
+  background: var(--el-bg-color);
+  padding: 24px;
+}
 
-.p-hd-title { font-size: .9375rem; font-weight: 600; color: var(--el-text-color-primary); }
-.p-hd-sub   { font-size: .8125rem; color: var(--el-text-color-secondary); margin-top: 2px; }
+.section-header {
+  margin-bottom: 20px;
+}
+
+.section-header--row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.section-title {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--el-text-color-primary);
+}
+
+.section-desc {
+  margin: 6px 0 0;
+  font-size: 0.8125rem;
+  color: var(--el-text-color-secondary);
+}
+
+.section-alert {
+  margin-bottom: 16px;
+  border-radius: 6px;
+}
+
+.section-form {
+  max-width: 520px;
+}
+
+.section-form--narrow {
+  max-width: 440px;
+}
 
 .p-hero {
   display: flex;
   align-items: center;
   gap: 16px;
 }
-.p-hero-name { font-size: 1.125rem; font-weight: 600; color: var(--el-text-color-primary); margin-bottom: 6px; }
-.p-hero-meta { display: flex; align-items: center; gap: 8px; }
-.p-hero-uname { font-size: .8125rem; color: var(--el-text-color-secondary); }
+
+.p-hero-name {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--el-text-color-primary);
+  margin-bottom: 6px;
+}
+
+.p-hero-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.p-hero-uname {
+  font-size: 0.8125rem;
+  color: var(--el-text-color-secondary);
+}
 
 .key-cell {
   display: flex;
   align-items: center;
   gap: 6px;
 }
+
 .masked-key {
-  font-family: 'Menlo','Monaco','Consolas',monospace;
-  font-size: .8125rem;
+  font-family: 'Menlo', 'Monaco', 'Consolas', monospace;
+  font-size: 0.8125rem;
   background: var(--el-fill-color-light);
   padding: 3px 8px;
   border-radius: 4px;
-  letter-spacing: .5px;
+  letter-spacing: 0.5px;
 }
+
 .copy-key-btn {
   opacity: 0.55;
-  transition: opacity .15s;
+  transition: opacity 0.15s;
   flex-shrink: 0;
 }
+
 .key-cell:hover .copy-key-btn {
   opacity: 1;
 }
@@ -559,29 +824,58 @@ async function copyRevealedKey() {
   padding: 14px 16px;
   border-radius: 8px;
 }
+
 .new-key {
   flex: 1;
-  font-family: 'Menlo','Monaco','Consolas',monospace;
-  font-size: .875rem;
+  font-family: 'Menlo', 'Monaco', 'Consolas', monospace;
+  font-size: 0.875rem;
   word-break: break-all;
   color: var(--el-color-success-dark-2);
   line-height: 1.6;
 }
 
-.stat-mini {
-  text-align: center;
-  padding: 8px;
-  background: var(--el-fill-color-lighter);
-  border-radius: 6px;
+.tenant-id {
+  font-size: 12px;
 }
-.stat-mini-value {
-  font-size: 18px;
+
+.stat-value {
   font-weight: 600;
-  color: var(--el-text-color-primary);
 }
-.stat-mini-label {
-  font-size: 11px;
+
+.stat-limit {
   color: var(--el-text-color-secondary);
-  margin-top: 4px;
+}
+
+.usage-desc {
+  max-width: 560px;
+}
+
+.text-muted {
+  color: var(--el-text-color-secondary);
+}
+
+@media (max-width: 768px) {
+  .profile-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .profile-nav {
+    position: static;
+  }
+
+  .nav-list {
+    flex-direction: row;
+    overflow-x: auto;
+    gap: 4px;
+  }
+
+  .nav-item {
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .profile-main {
+    padding: 16px;
+  }
 }
 </style>
