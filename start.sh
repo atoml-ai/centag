@@ -1193,11 +1193,15 @@ run() {
 
 # 前台调试：覆盖 secrets 里常见的 LLM_PROXY_LOG_OUTPUT=file（否则 zap 只写文件，终端看不到访问日志）
 # 插件 init 使用标准库 log，仍走 stderr，故此前会出现「只有 Plugin initialized、无 request 日志」
+# pprof：debug 默认开启 loopback :6060；显式 CENTAG_PPROF=false / LLM_PROXY_PPROF_ENABLED=false 可关闭
 centag_export_debug_console_env() {
     export LLM_PROXY_SERVER_MODE=debug
     export LLM_PROXY_LOG_LEVEL=debug
     export LLM_PROXY_LOG_FORMAT=console
     export LLM_PROXY_LOG_OUTPUT=both
+    if [ -z "${CENTAG_PPROF:-}" ] && [ -z "${LLM_PROXY_PPROF_ENABLED:-}" ]; then
+        export CENTAG_PPROF=true
+    fi
 }
 
 # 数据库模式检测（支持 PostgreSQL 和 SQLite）
@@ -1415,6 +1419,9 @@ debug() {
         print_info "  形态:        cli（前台 sidecar）"
     fi
     print_info "  访问地址:    http://localhost:$BACKEND_PORT"
+    if [ "${CENTAG_PPROF:-}" = "true" ] || [ "${LLM_PROXY_PPROF_ENABLED:-}" = "true" ] || [ "${LLM_PROXY_PPROF_ENABLED:-}" = "1" ]; then
+        print_info "  pprof:       http://127.0.0.1:6060/debug/pprof/（debug 默认开；CENTAG_PPROF=false 可关）"
+    fi
     print_info "  前端变化后:  刷新浏览器即可看到最新内容"
     print_info "  后端变化后:  下次执行 debug 会先自动编译；也可 ./start.sh build be 单独编译"
     print_info "  按 Ctrl+C 停止所有服务"
@@ -1618,6 +1625,9 @@ _debug_minimal() {
     fi
     print_info "  前端:        WebUI (edition=minimal)"
     print_info "  访问地址:    http://localhost:$BACKEND_PORT/static/"
+    if [ "${CENTAG_PPROF:-}" = "true" ] || [ "${LLM_PROXY_PPROF_ENABLED:-}" = "true" ] || [ "${LLM_PROXY_PPROF_ENABLED:-}" = "1" ]; then
+        print_info "  pprof:       http://127.0.0.1:6060/debug/pprof/（debug 默认开；CENTAG_PPROF=false 可关）"
+    fi
     print_info "  首次进入:    设置管理密码后登录"
     print_info "  页面:        概览 / 后端 / 策略 / 设置"
     print_info "  按 Ctrl+C 停止"
@@ -3686,6 +3696,7 @@ _help_debug() {
     echo -e "${CYAN}说明:${NC}"
     echo -e "  风格与 build / run 一致：./start.sh debug <minimal|personal> [--desktop]"
     echo -e "  均支持：先编译 → 后端 debug 日志 → 前端文件变更自动同步 → Ctrl+C 停止。"
+    echo -e "  debug 默认开启 pprof（http://127.0.0.1:6060/debug/pprof/）；关闭：CENTAG_PPROF=false"
 }
 
 _help_stop() {
