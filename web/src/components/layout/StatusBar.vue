@@ -169,7 +169,7 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 6px 16px;
+  padding: 6px var(--page-gutter);
   background: var(--shell-sidebar-bg, #f5f7fa);
   border-top: 1px solid var(--shell-sidebar-border, #e4e7ed);
   font-size: 0.75rem;

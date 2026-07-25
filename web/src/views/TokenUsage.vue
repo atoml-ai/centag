@@ -314,7 +314,8 @@ onMounted(() => {
 
 <style scoped>
 .token-usage {
-  padding: 20px;
+  width: 100%;
+  padding: 0 0 24px;
   display: flex;
   flex-direction: column;
   gap: 20px;

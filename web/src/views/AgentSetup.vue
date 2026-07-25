@@ -15,6 +15,7 @@
       <el-tab-pane :label="$t('agentSetup.quickSetup')" name="setup">
         <div class="section-block">
           <p class="section-hint">{{ $t('agentSetup.quickSetupHint') }}</p>
+
           <el-row :gutter="16">
             <el-col
               v-for="agent in agentTypes"
@@ -840,7 +841,9 @@ onMounted(() => {
 
 <style scoped>
 .agent-setup-page {
-  padding: 24px;
+  min-height: 100%;
+  width: 100%;
+  padding: 0 0 24px;
 }
 
 .page-header {

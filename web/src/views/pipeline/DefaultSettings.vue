@@ -121,7 +121,8 @@ onMounted(() => {
 
 <style scoped>
 .pipeline-default-settings {
-  padding: 20px;
+  width: 100%;
+  padding: 0 0 24px;
 }
 
 .page-header {

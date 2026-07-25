@@ -205,8 +205,8 @@ function formatTTL(seconds: number): string {
 
 <style scoped>
 .kv-browser {
-  padding: 16px;
-  max-width: 1200px;
+  width: 100%;
+  padding: 0 0 24px;
 }
 
 .card-header {

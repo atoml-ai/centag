@@ -825,7 +825,8 @@ onMounted(() => {
 
 <style scoped>
 .pipeline-modes-page {
-  padding: 20px;
+  width: 100%;
+  padding: 0 0 24px;
 }
 
 .header-with-toolbar {

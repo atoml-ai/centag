@@ -252,7 +252,8 @@ onMounted(() => {
 
 <style scoped>
 .pipeline-list {
-  padding: 20px;
+  width: 100%;
+  padding: 0 0 24px;
 }
 
 .page-header {

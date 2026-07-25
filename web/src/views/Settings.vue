@@ -139,9 +139,8 @@ async function changePassword() {
 
 <style scoped>
 .settings-page {
-  max-width: 800px;
-  margin: 0 auto;
-  padding: 24px;
+  width: 100%;
+  padding: 0 0 24px;
 }
 .page-header {
   margin-bottom: 20px;
