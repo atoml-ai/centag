@@ -11,6 +11,7 @@ import (
 	"centag/core/pkg/backend"
 	"centag/core/pkg/config"
 	"centag/core/pkg/logger"
+	"centag/core/pkg/pipeline/promptstrategy"
 )
 
 // TransparentForwardNode 是直连/透明/跳板三条流水线共用的出站节点。
@@ -24,6 +25,10 @@ type TransparentForwardNode struct {
 	FixedEgress bool
 	// InjectSystemPrompt 注入网关 system_prompt，替换客户端 system（直连 #d）
 	InjectSystemPrompt bool
+	// SystemPromptStrategy system prompt 策略（passthrough/append/replace）
+	SystemPromptStrategy promptstrategy.SystemMode
+	// AppendPosition append 模式下的插入位置
+	AppendPosition promptstrategy.AppendPosition
 }
 
 func NewTransparentForwardNode(config NodeConfig) (PipelineNode, error) {
@@ -65,6 +70,19 @@ func NewTransparentForwardNode(config NodeConfig) (PipelineNode, error) {
 		if v, ok := config.CustomConfig["inject_system_prompt"].(bool); ok {
 			node.InjectSystemPrompt = v
 		}
+		// 新字段：system_prompt_strategy（优先于 inject_system_prompt）
+		if s, ok := config.CustomConfig["system_prompt_strategy"].(string); ok {
+			node.SystemPromptStrategy = promptstrategy.ResolveSystemMode(s, nil)
+		} else {
+			// 兼容旧字段
+			node.SystemPromptStrategy = promptstrategy.ResolveSystemMode("", &node.InjectSystemPrompt)
+		}
+		if s, ok := config.CustomConfig["append_position"].(string); ok {
+			node.AppendPosition = promptstrategy.AppendPosition(strings.TrimSpace(s))
+		}
+	} else {
+		// 无 custom_config 时，使用默认映射
+		node.SystemPromptStrategy = promptstrategy.ResolveSystemMode("", &node.InjectSystemPrompt)
 	}
 	return node, nil
 }
@@ -135,7 +153,34 @@ func (n *TransparentForwardNode) Execute(ctx context.Context, input *NodeInput) 
 	}
 
 	// 直连注入 gateway system：仅在 chat messages 形态上替换；须在 Responses→Chat 之后。
-	if n.InjectSystemPrompt {
+	// 使用新的 promptstrategy 算子，支持 passthrough/append/replace 三种模式
+	if n.SystemPromptStrategy != promptstrategy.SystemModePassthrough {
+		systemPrompt := strings.TrimSpace(n.config.SystemPrompt)
+		if systemPrompt == "" {
+			if execCtx, ok := ctx.Value(executionContextKey{}).(*ExecutionContext); ok && execCtx != nil && execCtx.pipeline != nil {
+				systemPrompt = strings.TrimSpace(execCtx.pipeline.GlobalConfig.SystemPrompt)
+			}
+		}
+		if systemPrompt != "" && !looksLikeResponsesBody(body) {
+			// 解析 body 中的 messages
+			var messages []promptstrategy.Message
+			if rawMap, err := parseChatBody(body); err == nil {
+				messages = rawMap
+			}
+			// 应用策略
+			result, err := promptstrategy.ApplySystemStrategy(promptstrategy.SystemApplyInput{
+				Mode:           n.SystemPromptStrategy,
+				GatewayPrompt:  systemPrompt,
+				AppendPosition: n.AppendPosition,
+				Messages:       messages,
+				RawBody:        body,
+			})
+			if err == nil && result.Applied {
+				body = result.RawBody
+			}
+		}
+	} else if n.InjectSystemPrompt && n.SystemPromptStrategy == "" {
+		// 兼容旧逻辑：仅在 inject_system_prompt=true 且未配置新策略时执行
 		systemPrompt := strings.TrimSpace(n.config.SystemPrompt)
 		if systemPrompt == "" {
 			if execCtx, ok := ctx.Value(executionContextKey{}).(*ExecutionContext); ok && execCtx != nil && execCtx.pipeline != nil {
@@ -461,7 +506,11 @@ func (n *TransparentForwardNode) buildTransparentOutput(
 	} else {
 		outMeta["route_policy"] = "match_model"
 	}
-	if n.InjectSystemPrompt {
+	// 记录 system prompt 策略信息
+	if n.SystemPromptStrategy != promptstrategy.SystemModePassthrough {
+		outMeta["system_prompt_strategy"] = string(n.SystemPromptStrategy)
+		outMeta["inject_system_prompt"] = true
+	} else if n.InjectSystemPrompt {
 		outMeta["inject_system_prompt"] = true
 	}
 	if resolvedModel != "" {
@@ -984,4 +1033,42 @@ func (n *TransparentForwardNode) followRedirect(
 
 	// 达到最大重定向次数，返回最后一个响应
 	return lastResp, nil
+}
+
+// parseChatBody 从 chat JSON body 中解析 messages 为 promptstrategy.Message 列表
+func parseChatBody(body []byte) ([]promptstrategy.Message, error) {
+	if len(body) == 0 {
+		return nil, fmt.Errorf("empty body")
+	}
+
+	var raw map[string]interface{}
+	if err := json.Unmarshal(body, &raw); err != nil {
+		return nil, err
+	}
+
+	msgsRaw, ok := raw["messages"]
+	if !ok {
+		return nil, nil
+	}
+
+	msgsArr, ok := msgsRaw.([]interface{})
+	if !ok {
+		return nil, nil
+	}
+
+	messages := make([]promptstrategy.Message, 0, len(msgsArr))
+	for _, m := range msgsArr {
+		mm, ok := m.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		role, _ := mm["role"].(string)
+		content, _ := mm["content"].(string)
+		messages = append(messages, promptstrategy.Message{
+			Role:    role,
+			Content: content,
+		})
+	}
+
+	return messages, nil
 }

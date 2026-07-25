@@ -148,6 +148,10 @@ func KindForBuiltinType(nodeType NodeType) string {
 		return "proxy.transparent_forward"
 	case NodeTypeToolCallInjector:
 		return "inject.tool_call"
+	case NodeTypeUserPromptOps:
+		return "prompt.ops"
+	case NodeTypeOutputPostOps:
+		return "prompt.postprocess"
 	default:
 		return ""
 	}

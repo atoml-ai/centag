@@ -1081,3 +1081,194 @@ func TestTransparentForwardNode_Plain401AuthStillPassthrough(t *testing.T) {
 		t.Fatalf("status_code=%v", out.Metadata["status_code"])
 	}
 }
+
+func TestTransparentForwardNode_SystemPromptStrategy_Passthrough(t *testing.T) {
+	client := &capturingHTTPClient{
+		inner: &mockHTTPClient{
+			status: 200,
+			body:   `{"id":"ok"}`,
+		},
+	}
+	broker := &mockCapabilityBroker{}
+	broker.httpClient = client
+
+	node, err := NewTransparentForwardNode(NodeConfig{
+		CustomConfig: map[string]interface{}{
+			"inject_system_prompt":       true,
+			"system_prompt_strategy":     "passthrough",
+		},
+		SystemPrompt: "gateway system",
+	})
+	if err != nil {
+		t.Fatalf("NewTransparentForwardNode: %v", err)
+	}
+	tf := node.(*TransparentForwardNode)
+	tf.SetCapabilityBroker(broker)
+
+	rawBody := `{"model":"x","messages":[{"role":"system","content":"client system"},{"role":"user","content":"hello"}]}`
+	_, err = tf.Execute(context.Background(), &NodeInput{
+		Metadata: map[string]interface{}{
+			"target_url":       "https://api.example.com",
+			"request_path":     "/v1/chat/completions",
+			"raw_request_body": rawBody,
+		},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// 验证 body 未被修改
+	var body map[string]interface{}
+	json.Unmarshal([]byte(client.body), &body)
+	msgs := body["messages"].([]interface{})
+	if len(msgs) != 2 {
+		t.Errorf("expected 2 messages, got %d", len(msgs))
+	}
+	// 验证 system 消息未被替换
+	firstMsg := msgs[0].(map[string]interface{})
+	if firstMsg["content"] != "client system" {
+		t.Errorf("expected first message content='client system', got %v", firstMsg["content"])
+	}
+}
+
+func TestTransparentForwardNode_SystemPromptStrategy_Replace(t *testing.T) {
+	client := &capturingHTTPClient{
+		inner: &mockHTTPClient{
+			status: 200,
+			body:   `{"id":"ok"}`,
+		},
+	}
+	broker := &mockCapabilityBroker{}
+	broker.httpClient = client
+
+	node, err := NewTransparentForwardNode(NodeConfig{
+		CustomConfig: map[string]interface{}{
+			"system_prompt_strategy": "replace",
+		},
+		SystemPrompt: "gateway system",
+	})
+	if err != nil {
+		t.Fatalf("NewTransparentForwardNode: %v", err)
+	}
+	tf := node.(*TransparentForwardNode)
+	tf.SetCapabilityBroker(broker)
+
+	rawBody := `{"model":"x","messages":[{"role":"system","content":"client system"},{"role":"user","content":"hello"}]}`
+	out, err := tf.Execute(context.Background(), &NodeInput{
+		Metadata: map[string]interface{}{
+			"target_url":       "https://api.example.com",
+			"request_path":     "/v1/chat/completions",
+			"raw_request_body": rawBody,
+		},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if out.Metadata["system_prompt_strategy"] != "replace" {
+		t.Errorf("expected system_prompt_strategy=replace, got %v", out.Metadata["system_prompt_strategy"])
+	}
+	// 验证 body 被修改为 gateway system
+	var body map[string]interface{}
+	json.Unmarshal([]byte(client.body), &body)
+	msgs := body["messages"].([]interface{})
+	if len(msgs) != 2 {
+		t.Errorf("expected 2 messages, got %d", len(msgs))
+	}
+	firstMsg := msgs[0].(map[string]interface{})
+	if firstMsg["content"] != "gateway system" {
+		t.Errorf("expected first message content='gateway system', got %v", firstMsg["content"])
+	}
+}
+
+func TestTransparentForwardNode_SystemPromptStrategy_Append(t *testing.T) {
+	client := &capturingHTTPClient{
+		inner: &mockHTTPClient{
+			status: 200,
+			body:   `{"id":"ok"}`,
+		},
+	}
+	broker := &mockCapabilityBroker{}
+	broker.httpClient = client
+
+	node, err := NewTransparentForwardNode(NodeConfig{
+		CustomConfig: map[string]interface{}{
+			"system_prompt_strategy": "append",
+			"append_position":        "after_client",
+		},
+		SystemPrompt: "gateway system",
+	})
+	if err != nil {
+		t.Fatalf("NewTransparentForwardNode: %v", err)
+	}
+	tf := node.(*TransparentForwardNode)
+	tf.SetCapabilityBroker(broker)
+
+	rawBody := `{"model":"x","messages":[{"role":"system","content":"client system"},{"role":"user","content":"hello"}]}`
+	out, err := tf.Execute(context.Background(), &NodeInput{
+		Metadata: map[string]interface{}{
+			"target_url":       "https://api.example.com",
+			"request_path":     "/v1/chat/completions",
+			"raw_request_body": rawBody,
+		},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if out.Metadata["system_prompt_strategy"] != "append" {
+		t.Errorf("expected system_prompt_strategy=append, got %v", out.Metadata["system_prompt_strategy"])
+	}
+	// 验证 body 包含 client system + gateway system
+	var body map[string]interface{}
+	json.Unmarshal([]byte(client.body), &body)
+	msgs := body["messages"].([]interface{})
+	if len(msgs) != 3 {
+		t.Errorf("expected 3 messages, got %d", len(msgs))
+	}
+	firstMsg := msgs[0].(map[string]interface{})
+	if firstMsg["content"] != "client system" {
+		t.Errorf("expected first message content='client system', got %v", firstMsg["content"])
+	}
+	secondMsg := msgs[1].(map[string]interface{})
+	if secondMsg["content"] != "gateway system" {
+		t.Errorf("expected second message content='gateway system', got %v", secondMsg["content"])
+	}
+}
+
+func TestTransparentForwardNode_LegacyInjectSystemPrompt(t *testing.T) {
+	client := &capturingHTTPClient{
+		inner: &mockHTTPClient{
+			status: 200,
+			body:   `{"id":"ok"}`,
+		},
+	}
+	broker := &mockCapabilityBroker{}
+	broker.httpClient = client
+
+	// 使用旧字段 inject_system_prompt=true
+	node, err := NewTransparentForwardNode(NodeConfig{
+		CustomConfig: map[string]interface{}{
+			"inject_system_prompt": true,
+		},
+		SystemPrompt: "gateway system",
+	})
+	if err != nil {
+		t.Fatalf("NewTransparentForwardNode: %v", err)
+	}
+	tf := node.(*TransparentForwardNode)
+	tf.SetCapabilityBroker(broker)
+
+	rawBody := `{"model":"x","messages":[{"role":"system","content":"client system"},{"role":"user","content":"hello"}]}`
+	out, err := tf.Execute(context.Background(), &NodeInput{
+		Metadata: map[string]interface{}{
+			"target_url":       "https://api.example.com",
+			"request_path":     "/v1/chat/completions",
+			"raw_request_body": rawBody,
+		},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// 旧字段应该映射到 replace
+	if out.Metadata["inject_system_prompt"] != true {
+		t.Errorf("expected inject_system_prompt=true, got %v", out.Metadata["inject_system_prompt"])
+	}
+}

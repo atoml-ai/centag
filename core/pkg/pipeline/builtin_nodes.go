@@ -21,6 +21,8 @@ import (
 	"strings"
 	"text/template"
 	"time"
+
+	"centag/core/pkg/pipeline/promptstrategy"
 )
 
 // renderGoTemplate 是所有节点共用的 Go template 渲染辅助函数。
@@ -43,6 +45,10 @@ type GeneratorNode struct {
 	Temperature  float64
 	MaxTokens    int
 	SystemPrompt string
+	// SystemPromptStrategy system prompt 策略（passthrough/append/replace）
+	SystemPromptStrategy promptstrategy.SystemMode
+	// AppendPosition append 模式下的插入位置
+	AppendPosition promptstrategy.AppendPosition
 }
 
 func NewGeneratorNode(config NodeConfig) (PipelineNode, error) {
@@ -64,6 +70,16 @@ func NewGeneratorNode(config NodeConfig) (PipelineNode, error) {
 	}
 	if config.SystemPrompt != "" {
 		node.SystemPrompt = config.SystemPrompt
+	}
+
+	// 解析 system_prompt_strategy（从 custom_config）
+	if config.CustomConfig != nil {
+		if s, ok := config.CustomConfig["system_prompt_strategy"].(string); ok {
+			node.SystemPromptStrategy = promptstrategy.ResolveSystemMode(s, nil)
+		}
+		if s, ok := config.CustomConfig["append_position"].(string); ok {
+			node.AppendPosition = promptstrategy.AppendPosition(strings.TrimSpace(s))
+		}
 	}
 
 	return node, nil
@@ -141,17 +157,46 @@ func (n *GeneratorNode) Execute(ctx context.Context, input *NodeInput) (*NodeOut
 		}
 	}
 
-	// 如果有 pipeline 节点配置的 system_prompt，用它替换上游传入的 system 消息
-	// pipeline 节点的 system_prompt 是节点设计者精心编写的，应优先于上游通用上下文
-	// （如 TUI Agent 注入的 workspace context 会误导非编码场景的 LLM）
+	// 应用 system prompt 策略
+	// 优先级：节点配置的 system_prompt_strategy > 有 system_prompt 时默认 replace > 无 system_prompt 时 passthrough
 	if renderedSystemPrompt != "" {
-		filtered := make([]Message, 0, len(messages))
-		for _, msg := range messages {
-			if msg.Role != "system" {
-				filtered = append(filtered, msg)
+		strategy := n.SystemPromptStrategy
+		if strategy == "" || strategy == promptstrategy.SystemModePassthrough {
+			// 有 system_prompt 但未显式配置策略时，默认 replace（保持现有行为）
+			strategy = promptstrategy.SystemModeReplace
+		}
+		// 转换为 promptstrategy.Message 列体
+		psMessages := make([]promptstrategy.Message, len(messages))
+		for i, msg := range messages {
+			psMessages[i] = promptstrategy.Message{
+				Role:    msg.Role,
+				Content: msg.Content,
 			}
 		}
-		messages = append([]Message{{Role: "system", Content: renderedSystemPrompt}}, filtered...)
+		result, err := promptstrategy.ApplySystemStrategy(promptstrategy.SystemApplyInput{
+			Mode:           strategy,
+			GatewayPrompt:  renderedSystemPrompt,
+			AppendPosition: n.AppendPosition,
+			Messages:       psMessages,
+		})
+		if err == nil && result.Applied {
+			messages = make([]Message, len(result.Messages))
+			for i, msg := range result.Messages {
+				messages[i] = Message{
+					Role:    msg.Role,
+					Content: msg.Content,
+				}
+			}
+		} else {
+			// 降级到原有逻辑：直接替换
+			filtered := make([]Message, 0, len(messages))
+			for _, msg := range messages {
+				if msg.Role != "system" {
+					filtered = append(filtered, msg)
+				}
+			}
+			messages = append([]Message{{Role: "system", Content: renderedSystemPrompt}}, filtered...)
+		}
 	}
 
 	if logger != nil {
@@ -269,15 +314,46 @@ func (n *GeneratorNode) ExecuteStream(ctx context.Context, input *NodeInput) (<-
 			{Role: "user", Content: input.Content},
 		}
 	}
-	// 替换上游 system 消息为 pipeline 节点配置的 system_prompt（同非流式路径）
+
+	// 应用 system prompt 策略（流式路径与非流式路径对齐）
 	if renderedSystemPrompt != "" {
-		filtered := make([]Message, 0, len(messages))
-		for _, msg := range messages {
-			if msg.Role != "system" {
-				filtered = append(filtered, msg)
+		strategy := n.SystemPromptStrategy
+		if strategy == "" || strategy == promptstrategy.SystemModePassthrough {
+			// 有 system_prompt 但未显式配置策略时，默认 replace（保持现有行为）
+			strategy = promptstrategy.SystemModeReplace
+		}
+		// 转换为 promptstrategy.Message 列表
+		psMessages := make([]promptstrategy.Message, len(messages))
+		for i, msg := range messages {
+			psMessages[i] = promptstrategy.Message{
+				Role:    msg.Role,
+				Content: msg.Content,
 			}
 		}
-		messages = append([]Message{{Role: "system", Content: renderedSystemPrompt}}, filtered...)
+		result, err := promptstrategy.ApplySystemStrategy(promptstrategy.SystemApplyInput{
+			Mode:           strategy,
+			GatewayPrompt:  renderedSystemPrompt,
+			AppendPosition: n.AppendPosition,
+			Messages:       psMessages,
+		})
+		if err == nil && result.Applied {
+			messages = make([]Message, len(result.Messages))
+			for i, msg := range result.Messages {
+				messages[i] = Message{
+					Role:    msg.Role,
+					Content: msg.Content,
+				}
+			}
+		} else {
+			// 降级到原有逻辑：直接替换
+			filtered := make([]Message, 0, len(messages))
+			for _, msg := range messages {
+				if msg.Role != "system" {
+					filtered = append(filtered, msg)
+				}
+			}
+			messages = append([]Message{{Role: "system", Content: renderedSystemPrompt}}, filtered...)
+		}
 	}
 
 	if logger != nil {
@@ -1849,6 +1925,22 @@ func RegisterBuiltinNodes(registry *NodeRegistry) error {
 		return NewToolCallInjectorNode(config)
 	}
 	if err := registerBuiltinNodePlugin(registry, NodeTypeToolCallInjector, toolCallInjectorFactory, "工具调用注入节点", "在Pipeline中注入工具调用指令，支持条件触发和模板变量解析", nil); err != nil {
+		return err
+	}
+
+	// 注册用户 Prompt 操作节点
+	userPromptOpsFactory := func(config NodeConfig) (PipelineNode, error) {
+		return NewUserPromptOpsNode(config)
+	}
+	if err := registerBuiltinNodePlugin(registry, NodeTypeUserPromptOps, userPromptOpsFactory, "用户Prompt操作节点", "入站检查与优化：敏感词检测、密钥启发式、截断、空白折叠", nil); err != nil {
+		return err
+	}
+
+	// 注册输出后处理节点
+	outputPostOpsFactory := func(config NodeConfig) (PipelineNode, error) {
+		return NewOutputPostOpsNode(config)
+	}
+	if err := registerBuiltinNodePlugin(registry, NodeTypeOutputPostOps, outputPostOpsFactory, "输出后处理节点", "字符串级输出规范化：trim、strip fence、extract JSON、compact JSON", nil); err != nil {
 		return err
 	}
 

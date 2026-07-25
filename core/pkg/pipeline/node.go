@@ -29,7 +29,9 @@ const (
 	NodeTypeTokenUsage       NodeType = "token_usage"       // Phase 4: Token 计量节点
 	NodeTypeScheduler        NodeType = "scheduler"         // 智能调度节点
 	NodeTypeTransparentForward NodeType = "transparent_forward" // 透明 HTTP 转发节点
-	NodeTypeToolCallInjector NodeType = "tool_call_injector" // 工具调用注入节点
+	NodeTypeToolCallInjector   NodeType = "tool_call_injector"   // 工具调用注入节点
+	NodeTypeUserPromptOps     NodeType = "user_prompt_ops"      // 用户 Prompt 操作节点
+	NodeTypeOutputPostOps     NodeType = "output_post_ops"      // 输出后处理节点
 )
 
 func (nt NodeType) String() string {
@@ -42,7 +44,7 @@ func (nt NodeType) IsValid() bool {
 		NodeTypeRouter, NodeTypeAggregator,
 		NodeTypeMemory, NodeTypeAudit, NodeTypeOptimize, NodeTypeLoopController,
 		NodeTypeCache, NodeTypeTokenUsage, NodeTypeScheduler, NodeTypeTransparentForward,
-		NodeTypeToolCallInjector:
+		NodeTypeToolCallInjector, NodeTypeUserPromptOps, NodeTypeOutputPostOps:
 		return true
 	}
 	return false
