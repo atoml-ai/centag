@@ -590,6 +590,106 @@ var BuiltinNodeSchemas = map[NodeType]NodeTypeSchemas{
 			},
 		},
 	},
+	NodeTypeUserPromptOps: {
+		InputSchema: JSONSchema{
+			"type": "object",
+			"properties": map[string]interface{}{
+				"content":  map[string]interface{}{"type": "string"},
+				"messages": map[string]interface{}{"type": "array"},
+				"metadata": map[string]interface{}{"type": "object"},
+			},
+		},
+		OutputSchema: JSONSchema{
+			"type": "object",
+			"properties": map[string]interface{}{
+				"content":  map[string]interface{}{"type": "string"},
+				"messages": map[string]interface{}{"type": "array"},
+				"metadata": map[string]interface{}{
+					"type": "object",
+					"properties": map[string]interface{}{
+						"node_type": map[string]interface{}{"type": "string"},
+						"action":    map[string]interface{}{"type": "string"},
+					},
+				},
+			},
+		},
+		ConfigSchema: JSONSchema{
+			"type": "object",
+			"properties": map[string]interface{}{
+				"custom_config": map[string]interface{}{
+					"type": "object",
+					"properties": map[string]interface{}{
+						"check": map[string]interface{}{
+							"type": "object",
+							"properties": map[string]interface{}{
+								"enabled":        map[string]interface{}{"type": "boolean"},
+								"deny_patterns":  map[string]interface{}{"type": "array", "items": map[string]interface{}{"type": "string"}},
+								"on_hit":         map[string]interface{}{"type": "string", "enum": []interface{}{"log", "redact", "block"}},
+							},
+						},
+						"optimize": map[string]interface{}{
+							"type": "object",
+							"properties": map[string]interface{}{
+								"enabled":             map[string]interface{}{"type": "boolean"},
+								"max_user_chars":      map[string]interface{}{"type": "integer"},
+								"collapse_whitespace": map[string]interface{}{"type": "boolean"},
+							},
+						},
+					},
+				},
+			},
+		},
+	},
+	NodeTypeOutputPostOps: {
+		InputSchema: JSONSchema{
+			"type": "object",
+			"properties": map[string]interface{}{
+				"content":  map[string]interface{}{"type": "string"},
+				"metadata": map[string]interface{}{"type": "object"},
+			},
+		},
+		OutputSchema: JSONSchema{
+			"type": "object",
+			"properties": map[string]interface{}{
+				"content": map[string]interface{}{"type": "string"},
+				"metadata": map[string]interface{}{
+					"type": "object",
+					"properties": map[string]interface{}{
+						"node_type": map[string]interface{}{"type": "string"},
+						"ops_applied": map[string]interface{}{
+							"type":  "array",
+							"items": map[string]interface{}{"type": "string"},
+						},
+					},
+				},
+			},
+		},
+		ConfigSchema: JSONSchema{
+			"type": "object",
+			"properties": map[string]interface{}{
+				"custom_config": map[string]interface{}{
+					"type": "object",
+					"properties": map[string]interface{}{
+						"ops": map[string]interface{}{
+							"type": "array",
+							"items": map[string]interface{}{
+								"type": "string",
+								"enum": []interface{}{"trim_space", "strip_markdown_fence", "extract_json", "json_compact"},
+							},
+						},
+						"on_invalid_json": map[string]interface{}{
+							"type": "string",
+							"enum": []interface{}{"pass", "wrap_error_object"},
+						},
+						"stream_mode": map[string]interface{}{
+							"type": "string",
+							"enum": []interface{}{"skip", "buffer"},
+						},
+					},
+				},
+			},
+		},
+	},
 }
 
 func GetBuiltinSchemas(nodeType NodeType) NodeTypeSchemas {
