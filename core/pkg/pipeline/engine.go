@@ -1938,6 +1938,14 @@ func (e *PipelineEngine) prepareNodeInput(config PipelineNodeConfig, execCtx *Ex
 					"feedback":    result.Feedback,
 					"suggestions": result.Suggestions,
 				}
+				// 提升上游改写的 raw_request_body（user_prompt_ops 等），覆盖流水线原始 metadata
+				if result.Metadata != nil {
+					if raw, ok := result.Metadata["raw_request_body"]; ok && raw != nil {
+						if s, ok := raw.(string); ok && strings.TrimSpace(s) != "" {
+							input.Metadata["raw_request_body"] = s
+						}
+					}
+				}
 			}
 		}
 	}

@@ -140,7 +140,10 @@ func (n *UserPromptOpsNode) Execute(ctx context.Context, input *NodeInput) (*Nod
 		}
 	}
 	if syncedBody != nil {
-		metadata["raw_request_body"] = string(syncedBody)
+		rawStr := string(syncedBody)
+		metadata["raw_request_body"] = rawStr
+		// 同步到执行上下文，确保下游 transparent_forward 读到改写后的 body
+		n.promoteRawBodyToExecCtx(ctx, rawStr)
 	}
 	metadata["node_type"] = "user_prompt_ops"
 
@@ -194,11 +197,20 @@ func (n *UserPromptOpsNode) processMessages(messages []promptstrategy.Message, l
 
 	text := messages[lastUserIdx].Content
 
-	// 检查
+	// 检查：与 processContent / handleHit 对齐（log / redact / block）
 	if n.opsConfig.Check.Enabled {
 		hitAction := n.checkText(text)
 		if hitAction != "" {
-			return nil, n.handleHitError(hitAction, text)
+			switch hitAction {
+			case "block":
+				return nil, n.handleHitError(hitAction, text)
+			case "redact":
+				n.logHit(log, "redact", text)
+				messages[lastUserIdx].Content = "[REDACTED]"
+				text = messages[lastUserIdx].Content
+			default: // log：仅记录，继续后续优化
+				n.logHit(log, "log", text)
+			}
 		}
 	}
 
@@ -279,35 +291,52 @@ func (n *UserPromptOpsNode) handleHit(ctx context.Context, action, text string, 
 	case "block":
 		return nil, n.handleHitError(action, text)
 	case "redact":
-		if log != nil {
-			log.Info("[UserPromptOpsNode] deny pattern hit, redacting",
-				"action", redactPreview(text))
-		}
+		n.logHit(log, "redact", text)
 		// redact 时替换文本为占位符
 		return &NodeOutput{
 			Content:  "[REDACTED]",
 			Metadata: map[string]interface{}{"node_type": "user_prompt_ops", "action": "redact"},
 		}, nil
 	default: // log
-		if log != nil {
-			log.Info("[UserPromptOpsNode] deny pattern hit",
-				"action", redactPreview(text))
-		}
+		n.logHit(log, "log", text)
 		return &NodeOutput{Content: text}, nil
 	}
 }
 
 // handleHitError 处理命中错误（block 模式）
 func (n *UserPromptOpsNode) handleHitError(action, text string) error {
+	_ = text // 错误信息不含原文，避免密钥泄漏
 	return fmt.Errorf("prompt_strategy_blocked: %s (detected pattern in user prompt)", action)
 }
 
-// redactPreview 脱敏预览
-func redactPreview(text string) string {
-	if len(text) > 50 {
-		return text[:50] + "..."
+func (n *UserPromptOpsNode) logHit(log Logger, action, text string) {
+	if log == nil {
+		return
 	}
-	return text
+	log.Info("[UserPromptOpsNode] deny pattern hit",
+		"action", action,
+		"preview", redactPreview(text),
+	)
+}
+
+// redactPreview 脱敏预览（先 Mask 再截断）
+func redactPreview(text string) string {
+	masked := MaskSensitiveData(text)
+	return utils.TruncateString(masked, 80)
+}
+
+// promoteRawBodyToExecCtx 将改写后的 raw_request_body 写回执行上下文 metadata
+func (n *UserPromptOpsNode) promoteRawBodyToExecCtx(ctx context.Context, rawStr string) {
+	execCtx, ok := ctx.Value(executionContextKey{}).(*ExecutionContext)
+	if !ok || execCtx == nil {
+		return
+	}
+	execCtx.SetVariable("raw_request_body", rawStr)
+	if meta, ok := execCtx.GetVariable("metadata"); ok {
+		if m, ok := meta.(map[string]interface{}); ok && m != nil {
+			m["raw_request_body"] = rawStr
+		}
+	}
 }
 
 // getRawBody 从 input 或 execution context 获取 raw_request_body

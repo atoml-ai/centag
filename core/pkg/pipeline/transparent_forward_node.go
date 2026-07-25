@@ -179,20 +179,9 @@ func (n *TransparentForwardNode) Execute(ctx context.Context, input *NodeInput) 
 				body = result.RawBody
 			}
 		}
-	} else if n.InjectSystemPrompt && n.SystemPromptStrategy == "" {
-		// 兼容旧逻辑：仅在 inject_system_prompt=true 且未配置新策略时执行
-		systemPrompt := strings.TrimSpace(n.config.SystemPrompt)
-		if systemPrompt == "" {
-			if execCtx, ok := ctx.Value(executionContextKey{}).(*ExecutionContext); ok && execCtx != nil && execCtx.pipeline != nil {
-				systemPrompt = strings.TrimSpace(execCtx.pipeline.GlobalConfig.SystemPrompt)
-			}
-		}
-		if systemPrompt != "" {
-			if rewritten, ok := injectSystemPromptIntoChatBody(body, systemPrompt); ok {
-				body = rewritten
-			}
-		}
 	}
+	// 旧 injectSystemPromptIntoChatBody 已收敛为 ApplySystemStrategy 薄封装；
+	// NewTransparentForwardNode 总会 ResolveSystemMode，不再走平行分支。
 
 	req, err := http.NewRequestWithContext(ctx, method, targetURL, strings.NewReader(string(body)))
 	if err != nil {
@@ -894,8 +883,8 @@ func isResponsesAPIPath(path string) bool {
 	return strings.HasSuffix(path, "/responses")
 }
 
-// injectSystemPromptIntoChatBody 用网关 system_prompt 替换客户端 messages 中的 system 角色。
-// 不对 Responses 形态（input、无可用 messages）动手，避免污染后续转换判定。
+// injectSystemPromptIntoChatBody 兼容旧调用点：等价于 system_prompt_strategy=replace。
+// 不对 Responses 形态动手；非 system 消息字段（tool_calls / 多模态 content）由 ApplySystemStrategy 保真。
 func injectSystemPromptIntoChatBody(body []byte, systemPrompt string) ([]byte, bool) {
 	systemPrompt = strings.TrimSpace(systemPrompt)
 	if systemPrompt == "" || len(body) == 0 {
@@ -904,35 +893,15 @@ func injectSystemPromptIntoChatBody(body []byte, systemPrompt string) ([]byte, b
 	if looksLikeResponsesBody(body) {
 		return body, false
 	}
-	var raw map[string]interface{}
-	if err := json.Unmarshal(body, &raw); err != nil {
-		return body, false
-	}
-	msgs, ok := raw["messages"].([]interface{})
-	if !ok {
-		return body, false
-	}
-	filtered := make([]interface{}, 0, len(msgs)+1)
-	filtered = append(filtered, map[string]interface{}{
-		"role":    "system",
-		"content": systemPrompt,
+	result, err := promptstrategy.ApplySystemStrategy(promptstrategy.SystemApplyInput{
+		Mode:          promptstrategy.SystemModeReplace,
+		GatewayPrompt: systemPrompt,
+		RawBody:       body,
 	})
-	for _, m := range msgs {
-		mm, ok := m.(map[string]interface{})
-		if !ok {
-			continue
-		}
-		if role, _ := mm["role"].(string); strings.EqualFold(strings.TrimSpace(role), "system") {
-			continue
-		}
-		filtered = append(filtered, mm)
-	}
-	raw["messages"] = filtered
-	out, err := json.Marshal(raw)
-	if err != nil {
+	if err != nil || !result.Applied || len(result.RawBody) == 0 {
 		return body, false
 	}
-	return out, true
+	return result.RawBody, true
 }
 
 // buildMinimalChatBody 在无 raw_request_body（WebUI 测试场景）时，
