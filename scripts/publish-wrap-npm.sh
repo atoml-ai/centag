@@ -27,7 +27,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # shellcheck source=scripts/lib/centag-layout.sh
 source "${ROOT}/scripts/lib/centag-layout.sh"
 centag_layout_init
-PROXYCTL_DIR="${ROOT}/apps/wrap"
+WRAP_DIR="${ROOT}/apps/wrap"
 NPM_DIR="${ROOT}/apps/wrap-npm"
 VENDOR_DIR="${NPM_DIR}/bin/vendor"
 OUT_ROOT="${CENTAG_CROSS_DIR}/wrap"
@@ -55,7 +55,7 @@ for p in "${PLATFORMS[@]}"; do
   mkdir -p "$(dirname "$out")"
   echo "==> build ${p}"
   (
-    cd "${PROXYCTL_DIR}"
+    cd "${WRAP_DIR}"
     GOWORK=off CGO_ENABLED=0 GOOS="${goos}" GOARCH="${goarch}" \
       go build -trimpath -ldflags="-s -w" -o "${out}" .
   )

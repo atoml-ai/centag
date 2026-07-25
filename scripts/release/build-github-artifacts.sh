@@ -8,7 +8,7 @@
 #     centag-desktop-personal-macos-<arch>.{dmg,zip}
 #     centag-desktop-personal-windows-<arch>.zip
 #
-# install.sh defaults to CLI on every OS; use --desktop for tray packages.
+# install.sh defaults to CLI on every OS; use --desktop for desktop packages.
 # npm channel is separate (also full-matrix CLI).
 #
 # Usage:
@@ -72,7 +72,7 @@ VERSION="${VERSION#v}"
 OUT_DIR="${CENTAG_RELEASE_DIR}/${VERSION}"
 [[ -d "$OUT_DIR" ]] || fail "release dir missing after CLI build: $OUT_DIR"
 
-# 2) Host desktop tray package (darwin/windows only; optional)
+# 2) Host desktop package (darwin/windows only; optional)
 if [[ "$BUILD_DESKTOP" == "1" ]]; then
   case "$HOST_GOOS" in
     darwin|windows)

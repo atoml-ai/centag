@@ -8,7 +8,7 @@
 #   ├── bin/                 # PATH: centag wrapper, centag-<edition> symlink, centag-wrap
 #   ├── lib/<edition>/       # binary + static + config + runtime (storage/logs/certs)
 #   ├── var/                 # non-shipped intermediates (packages/release/cross)
-#   ├── wrap/ · proxyctl/    # runtime state (owned by those tools)
+#   ├── wrap/                # runtime state (owned by centag-wrap)
 #   └── env                  # optional PATH helper (written by install.sh)
 #
 # Usage:

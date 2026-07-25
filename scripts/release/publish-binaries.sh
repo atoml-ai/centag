@@ -107,7 +107,7 @@ curl -fsSL https://raw.githubusercontent.com/${REPO}/${TAG}/scripts/install.sh |
 \`\`\`
 
 \`\`\`bash
-# Win/mac tray desktop (optional)
+# Win/mac desktop (optional)
 curl -fsSL https://raw.githubusercontent.com/${REPO}/${TAG}/scripts/install.sh | bash -s -- --desktop ${VERSION}
 \`\`\`
 
@@ -117,7 +117,7 @@ npm install -g centag
 \`\`\`
 
 Default install root: \`~/.centag\`.  
-**GitHub / install.sh**: CLI by default on every OS; \`--desktop\` for tray on Win/mac.  
+**GitHub / install.sh**: CLI by default on every OS; \`--desktop\` for desktop on Win/mac.  
 **npm**: CLI on all platforms.
 
 ### Artifacts
@@ -141,5 +141,8 @@ else
     --notes "$NOTES" \
     "${ASSETS[@]}"
 fi
+
+# Drop obsolete proxyctl assets left from older uploads (--clobber only replaces same names).
+bash "${ROOT}/scripts/release/delete-legacy-release-assets.sh" --tag "$TAG" --repo "$REPO"
 
 log "OK release ${TAG} → https://github.com/${REPO}/releases/tag/${TAG}"

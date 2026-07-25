@@ -1,14 +1,12 @@
 #!/usr/bin/env bash
-# Build Centag desktop launcher (apps/launcher).
+# Build Centag desktop shell (apps/launcher) — product form: desktop.
 #
-# Default: lite (no CGO, cross-compile OK) → centag-launcher
-# Tray:    --tray / CENTAG_LAUNCHER_TRAY=1 (CGO + systray) → centag-launcher-tray
+#   --desktop / CENTAG_DESKTOP=1  → centag-desktop (CGO + systray)
+#   (no flag)                    → centag-launcher lite (dev only, not a product form)
 #
-# Output (install-compatible root):
-#   ~/.centag/var/cross/launcher/<goos>-<goarch>/centag-launcher[.exe]
-#   ~/.centag/bin/centag-launcher[.exe]   # host convenience (active variant)
-#
-# Override root: CENTAG_INSTALL_ROOT
+# Output:
+#   ~/.centag/var/cross/launcher/<goos>-<goarch>/centag-desktop[.exe]
+#   ~/.centag/bin/centag-desktop[.exe]
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -19,9 +17,9 @@ centag_layout_init
 LAUNCHER_DIR="${ROOT}/apps/launcher"
 CROSS_ROOT="${CENTAG_CROSS_DIR}/launcher"
 
-TRAY=0
-if [[ "${1:-}" == "--tray" ]] || [[ "${CENTAG_LAUNCHER_TRAY:-}" == "1" ]]; then
-  TRAY=1
+DESKTOP=0
+if [[ "${1:-}" == "--desktop" ]] || [[ "${CENTAG_DESKTOP:-}" == "1" ]]; then
+  DESKTOP=1
 fi
 
 if ! command -v go >/dev/null 2>&1; then
@@ -41,7 +39,7 @@ fi
 case "$GOOS" in
   darwin|linux|windows) ;;
   *)
-    echo "error: unsupported GOOS=$GOOS (launcher supports darwin|linux|windows)" >&2
+    echo "error: unsupported GOOS=$GOOS (desktop supports darwin|linux|windows)" >&2
     exit 1
     ;;
 esac
@@ -57,14 +55,14 @@ fi
 OUT_DIR="${CROSS_ROOT}/${GOOS}-${GOARCH}"
 mkdir -p "${OUT_DIR}" "${CENTAG_BIN_DIR}"
 
-if [[ "$TRAY" == "1" ]]; then
-  OUT_BIN="${OUT_DIR}/centag-launcher-tray${EXT}"
-  LATEST_BIN="${CENTAG_BIN_DIR}/centag-launcher-tray${EXT}"
-  echo "==> launcher tray host: ${HOST_OS}/${HOST_ARCH} → target ${GOOS}/${GOARCH} (CGO)" >&2
+if [[ "$DESKTOP" == "1" ]]; then
+  OUT_BIN="${OUT_DIR}/centag-desktop${EXT}"
+  LATEST_BIN="${CENTAG_BIN_DIR}/centag-desktop${EXT}"
+  echo "==> desktop shell host: ${HOST_OS}/${HOST_ARCH} → target ${GOOS}/${GOARCH} (CGO)" >&2
   if [[ "${GOOS}" != "$(go env GOOS)" || "${GOARCH}" != "$(go env GOARCH)" ]]; then
-    echo "    warn: tray/systray cross-compile often fails — prefer building on the target OS" >&2
+    echo "    warn: desktop/systray cross-compile often fails — prefer building on the target OS" >&2
   fi
-  echo "==> building centag-launcher-tray → ${OUT_BIN}" >&2
+  echo "==> building centag-desktop → ${OUT_BIN}" >&2
   (
     cd "${LAUNCHER_DIR}"
     GOWORK=off CGO_ENABLED=1 GOOS="${GOOS}" GOARCH="${GOARCH}" \
@@ -73,8 +71,8 @@ if [[ "$TRAY" == "1" ]]; then
 else
   OUT_BIN="${OUT_DIR}/centag-launcher${EXT}"
   LATEST_BIN="${CENTAG_BIN_DIR}/centag-launcher${EXT}"
-  echo "==> launcher lite host: ${HOST_OS}/${HOST_ARCH} → target ${GOOS}/${GOARCH} (CGO_ENABLED=0)" >&2
-  echo "==> building centag-launcher (lite) → ${OUT_BIN}" >&2
+  echo "==> launcher lite (dev only) host: ${HOST_OS}/${HOST_ARCH} → ${GOOS}/${GOARCH}" >&2
+  echo "==> building centag-launcher → ${OUT_BIN}" >&2
   (
     cd "${LAUNCHER_DIR}"
     GOWORK=off CGO_ENABLED=0 GOOS="${GOOS}" GOARCH="${GOARCH}" \
@@ -89,5 +87,4 @@ if [[ "$GOOS" == "$HOST_GOOS" && "$GOARCH" == "$HOST_GOARCH" ]]; then
   echo "OK: ${LATEST_BIN} (install bin/)" >&2
 fi
 echo "OK: ${OUT_BIN}" >&2
-# stdout: path only (for callers that capture)
 echo "${OUT_BIN}"

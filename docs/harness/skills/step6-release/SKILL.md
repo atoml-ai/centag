@@ -167,7 +167,7 @@ gh release view "v${VER}" --repo atoml-ai/centag 2>&1 | head -5 || true
 ## 禁止
 
 - 非版本分支上传正式 Release（除非用户明确要求 `CENTAG_RELEASE_ALLOW_ANY_BRANCH=1`）
-- 擅自扩大组件（minimal / launcher / 独立 wrap tarball）
+- 擅自扩大组件（minimal / 独立 wrap tarball；形态仅 cli|desktop）
 - 发版过程中改业务代码
 - 编造 token 或跳过 Gate 4
 

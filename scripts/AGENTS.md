@@ -22,9 +22,9 @@
 
 | 脚本 | 用途 |
 |------|------|
-| `install.sh` | 一键安装（`curl \| bash`；macOS/Windows→tray 桌面，Linux→CLI） |
-| `release/build-github-artifacts.sh` | GitHub 渠道产物（linux CLI + 本机 tray） |
-| `release/package-desktop.sh` | 本机 tray 桌面包（dmg/zip） |
+| `install.sh` | 一键安装（`curl \| bash`；默认 CLI；Win/mac 用 `--desktop`） |
+| `release/build-github-artifacts.sh` | GitHub 渠道产物（全平台 CLI + 本机 desktop） |
+| `release/package-desktop.sh` | 本机 desktop 包（dmg/zip） |
 | `release/build-artifacts.sh` | 纯 CLI 交叉编译（npm / linux 段） |
 | `release/publish-binaries.sh` | 构建并上传 GitHub Release |
 | `release/require-release-branch.sh` | 发版门禁：仅版本分支（`vX` / `feature/vX` / `release/vX`） |

@@ -79,7 +79,7 @@ jobs:
           path: .centag/var/release/${{ needs.guard-branch.outputs.version }}/
           if-no-files-found: error
 
-  # GitHub: macOS tray desktop (native CGO; optional via install.sh --desktop).
+  # GitHub: macOS desktop (native CGO; optional via install.sh --desktop).
   github-macos-desktop:
     needs: [guard-branch]
     runs-on: macos-14
@@ -99,7 +99,7 @@ jobs:
           cache: npm
           cache-dependency-path: web/package-lock.json
 
-      - name: Build macOS desktop (tray)
+      - name: Build macOS desktop
         run: |
           bash scripts/release/package-desktop.sh \
             --version "${{ needs.guard-branch.outputs.version }}" \
@@ -112,7 +112,7 @@ jobs:
           path: .centag/var/release/${{ needs.guard-branch.outputs.version }}/
           if-no-files-found: error
 
-  # GitHub: Windows tray desktop (native CGO; optional via install.sh --desktop).
+  # GitHub: Windows desktop (native CGO; optional via install.sh --desktop).
   github-windows-desktop:
     needs: [guard-branch]
     runs-on: windows-latest
@@ -136,7 +136,7 @@ jobs:
         shell: bash
         run: choco install zip -y || true
 
-      - name: Build Windows desktop (tray)
+      - name: Build Windows desktop
         shell: bash
         run: |
           bash scripts/release/package-desktop.sh \
@@ -218,7 +218,7 @@ jobs:
             echo "# GitHub / install.sh — CLI on all platforms (default)"
             echo "curl -fsSL https://raw.githubusercontent.com/${REPO}/${TAG}/scripts/install.sh | bash -s ${V} && . \"\$HOME/.centag/env\""
             echo ""
-            echo "# Win/mac tray desktop (optional)"
+            echo "# Win/mac desktop (optional)"
             echo "curl -fsSL https://raw.githubusercontent.com/${REPO}/${TAG}/scripts/install.sh | bash -s -- --desktop ${V}"
             echo ""
             echo "# npm — CLI on all platforms"
@@ -252,6 +252,9 @@ jobs:
               --notes-file "$NOTES_FILE" \
               "${UPLOAD[@]}"
           fi
+
+          # Drop obsolete proxyctl assets left from older uploads (--clobber only replaces same names).
+          bash "${GITHUB_WORKSPACE}/scripts/release/delete-legacy-release-assets.sh" --tag "$TAG" --repo "$REPO"
 
   # npm channel: unchanged — CLI for all platforms (separate from GitHub desktop).
   npm-publish:
