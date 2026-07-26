@@ -636,6 +636,7 @@ import {
 } from '@element-plus/icons-vue'
 import { isPersonalEdition } from '@/utils/edition'
 import { resolveApiBaseUrl } from '@/utils/apiBaseUrl'
+import { copyToClipboard } from '@/utils/clipboard'
 import { useAuthStore } from '@/stores/auth'
 import { listAPIKeys } from '@/api/user'
 import { getProxySetupStatus, type ProxySetupStatus } from '@/api/system-proxy'
@@ -1185,10 +1186,12 @@ async function writeToConfig() {
 }
 
 function copyText(text: string) {
-  navigator.clipboard.writeText(text).then(() => {
-    ElMessage.success(t('agentSetup.copiedToClipboard'))
-  }).catch(() => {
-    ElMessage.error(t('agentSetup.copyFailed'))
+  copyToClipboard(text).then(ok => {
+    if (ok) {
+      ElMessage.success(t('agentSetup.copiedToClipboard'))
+    } else {
+      ElMessage.error(t('agentSetup.copyFailed'))
+    }
   })
 }
 
