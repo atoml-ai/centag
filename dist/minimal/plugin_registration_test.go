@@ -11,7 +11,7 @@ import (
 
 func TestMinimalPluginRegistration(t *testing.T) {
 	assertExact(t, "backends", plugin.ListBackends(), []string{"anthropic", "ollama", "openai"})
-	assertExact(t, "protocols", plugin.ListProtocols(), []string{"anthropic", "openai"})
+	assertExact(t, "protocols", plugin.ListProtocols(), []string{"anthropic", "openai", "responses"})
 	assertExact(t, "databases", database.ListRegisteredPlugins(), nil)
 	assertExact(t, "storages", storageTypeStrings(storage.ListRegisteredTypes()), nil)
 	assertExact(t, "business", plugin.ListBusinessPlugins(), []string{"router"})

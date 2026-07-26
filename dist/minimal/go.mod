@@ -10,6 +10,7 @@ require (
 	centag/plugins/backend/openai v0.0.0
 	centag/plugins/protocol/anthropic v0.0.0
 	centag/plugins/protocol/openai v0.0.0
+	centag/plugins/protocol/openairesponses v0.0.0
 )
 
 require (
@@ -51,6 +52,7 @@ require (
 	golang.org/x/arch v0.3.0 // indirect
 	golang.org/x/crypto v0.48.0 // indirect
 	golang.org/x/net v0.50.0 // indirect
+	golang.org/x/sync v0.20.0 // indirect
 	golang.org/x/sys v0.42.0 // indirect
 	golang.org/x/text v0.34.0 // indirect
 	google.golang.org/protobuf v1.36.8 // indirect
@@ -70,4 +72,5 @@ replace (
 	centag/plugins/backend/openai => ../../plugins/backend/openai
 	centag/plugins/protocol/anthropic => ../../plugins/protocol/anthropic
 	centag/plugins/protocol/openai => ../../plugins/protocol/openai
+	centag/plugins/protocol/openairesponses => ../../plugins/protocol/openairesponses
 )
