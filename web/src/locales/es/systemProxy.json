@@ -101,7 +101,7 @@
     "runWithFlagsHint": "Si no usas variables de entorno, pasa --server / --token en la misma línea.",
     "envScriptComment": "Solo esta terminal; no escribir en archivos rc del shell",
     "optionalPac": "Opcional: PAC del sistema / Variables de entorno manuales",
-    "pacHint": "La mayoría de CLI no leen el PAC del sistema. PAC: {{url}}",
+    "pacHint": "La mayoría de CLI no leen el PAC del sistema. PAC: {url}",
     "pacEnable": "Habilitar PAC",
     "pacDisable": "Deshabilitar y restaurar",
     "manualProxy": "HTTPS_PROXY manual",

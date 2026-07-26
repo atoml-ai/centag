@@ -38,7 +38,7 @@
     "rulesLabel": "降级规则",
     "priorityPlaceholder": "优先级",
     "backendPlaceholder": "后端 ID",
-    "modelPlaceholder": "模型名（或 {{requested_model}}）",
+    "modelPlaceholder": "模型名（或 {'{{'}requested_model{'}}'}）",
     "timeoutPlaceholder": "超时(s)",
     "addRule": "添加规则",
     "cancel": "取消",

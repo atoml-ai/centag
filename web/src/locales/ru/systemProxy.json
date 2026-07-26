@@ -101,7 +101,7 @@
     "runWithFlagsHint": "Без переменных окружения передайте --server / --token в одной строке.",
     "envScriptComment": "Только текущий терминал; не писать в rc shell",
     "optionalPac": "Опционально: Системный PAC / Ручные переменные окружения",
-    "pacHint": "Большинство CLI не читают системный PAC. PAC: {{url}}",
+    "pacHint": "Большинство CLI не читают системный PAC. PAC: {url}",
     "pacEnable": "PAC включить",
     "pacDisable": "Отключить и восстановить",
     "manualProxy": "Ручной HTTPS_PROXY",

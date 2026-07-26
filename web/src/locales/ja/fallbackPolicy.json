@@ -38,7 +38,7 @@
     "rulesLabel": "フォールバックルール",
     "priorityPlaceholder": "優先度",
     "backendPlaceholder": "バックエンド ID",
-    "modelPlaceholder": "モデル名（または {{requested_model}}）",
+    "modelPlaceholder": "モデル名（または {'{{'}requested_model{'}}'}）",
     "timeoutPlaceholder": "タイムアウト(s)",
     "addRule": "ルールを追加",
     "cancel": "キャンセル",

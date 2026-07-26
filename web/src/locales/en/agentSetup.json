@@ -2,7 +2,28 @@
   "title": "Agent Config",
   "subtitle": "Connect Agent tools to Centag proxy: select pipeline, write config and verify",
   "quickSetup": "Quick Setup",
-  "quickSetupHint": "Click the Agent below to connect through the wizard (just select a pipeline; backend is determined internally).",
+  "quickSetupHint": "Each Agent may support two ways to connect: (1) write config via wizard; (2) wrap run (system-proxy hijack, no config edits). “Verified” sorts first within each group.",
+  "verified": "Verified",
+  "groupCli": "CLI",
+  "groupCliHint": "Terminal agents. Most can write local config; some also support wrap.",
+  "groupDesktop": "Desktop",
+  "groupDesktopHint": "Desktop apps connected by writing local config.",
+  "groupTui": "Built-in TUI",
+  "groupTuiHint": "In-process terminal agents; no local config files.",
+  "groupWeb": "Built-in Web",
+  "groupWebHint": "In-process browser automation agents; no local config files.",
+  "groupOther": "Other",
+  "groupOtherHint": "Uncategorized agents.",
+  "moreDetails": "More details",
+  "methodWriteConfig": "Write config",
+  "methodWriteConfigHint": "Pick a pipeline in the wizard and write the Agent’s local config.",
+  "writeConfigAction": "Write config",
+  "methodWrap": "wrap run",
+  "methodWrapHint": "No Agent config changes; run the command below (system-proxy hijack).",
+  "methodBuiltin": "In-process",
+  "methodBuiltinHint": "Built-in Agent — pick a pipeline in the wizard and use it directly.",
+  "copyWrapCommand": "Copy command",
+  "wrapHint": "Unlike write-config: wrap uses system-proxy hijack (no Agent config edits); shown here for easy verification.",
   "connectProxy": "Connect Proxy",
   "restoreDefault": "Restore Default",
   "providerConfig": "Provider Config",
@@ -96,7 +117,7 @@
     "claude-code": {
       "description": "Anthropic's official AI coding assistant CLI",
       "configMethod": "Writes ~/.claude/settings.json by merging env.ANTHROPIC_BASE_URL / ANTHROPIC_AUTH_TOKEN / ANTHROPIC_MODEL to point at Centag. First overwrite creates a .centag-bak backup.",
-      "installHint": "macOS/Linux: curl -fsSL https://claude.ai/install.sh | bash; or brew install --cask claude-code"
+      "installHint": "macOS/Linux: curl -fsSL https://claude.ai/install.sh {'|'} bash; or brew install --cask claude-code"
     },
     "claude-desktop": {
       "description": "Anthropic's official desktop client",
@@ -107,37 +128,42 @@
     "codex": {
       "description": "OpenAI's official AI coding assistant CLI (ChatGPT Codex)",
       "configMethod": "Overwrites ~/.codex/auth.json (OPENAI_API_KEY) and ~/.codex/config.toml (model_provider=custom, base_url → Centag, wire_api=responses).",
-      "installHint": "curl -fsSL https://chatgpt.com/codex/install.sh | sh; or npm i -g @openai/codex"
+      "installHint": "curl -fsSL https://chatgpt.com/codex/install.sh {'|'} sh; or npm i -g {'@'}openai/codex"
     },
     "gemini-cli": {
       "description": "Google's official AI coding assistant CLI",
       "configMethod": "Writes ~/.gemini/.env (GEMINI_API_KEY / GOOGLE_GEMINI_BASE_URL / GEMINI_MODEL) and merges settings.json security.auth.selectedType=gemini-api-key.",
-      "installHint": "npm i -g @google/gemini-cli; or brew install gemini-cli"
+      "installHint": "npm i -g {'@'}google/gemini-cli; or brew install gemini-cli"
     },
     "grok-build": {
       "description": "xAI Grok coding assistant CLI",
       "configMethod": "Overwrites ~/.grok/config.toml with [models] default=\"centag\" and [model.\"centag\"] fields (model / base_url / api_key / api_backend=responses).",
-      "installHint": "curl -fsSL https://x.ai/cli/install.sh | bash; or npm i -g @xai-official/grok"
+      "installHint": "curl -fsSL https://x.ai/cli/install.sh {'|'} bash; or npm i -g {'@'}xai-official/grok"
     },
     "opencode": {
       "description": "AI coding assistant (opencode.ai)",
       "configMethod": "Merges into ~/.config/opencode/opencode.json: upsert provider.centag and set default model. Other providers are preserved.",
-      "installHint": "curl -fsSL https://opencode.ai/install | bash; or npm i -g opencode-ai"
+      "installHint": "curl -fsSL https://opencode.ai/install {'|'} bash; or npm i -g opencode-ai"
     },
     "openclaw": {
       "description": "AI coding assistant (openclaw)",
       "configMethod": "Merges into ~/.openclaw/openclaw.json: upsert models.providers.centag and set agents.defaults.model.primary.",
       "installHint": "npm i -g openclaw"
     },
+    "pi": {
+      "description": "AI agent toolkit / coding agent CLI (pi.dev)",
+      "configMethod": "Merges into ~/.pi/agent/models.json: upsert providers.centag (api=openai-completions), and set settings.json defaultProvider/defaultModel.",
+      "installHint": "curl -fsSL https://pi.dev/install.sh {'|'} sh; or npm i -g --ignore-scripts {'@'}earendil-works/pi-coding-agent"
+    },
     "hermes": {
       "description": "Task-oriented AI agent framework",
       "configMethod": "Merges into ~/.hermes/config.yaml: update model defaults and upsert custom_providers entry name=centag.",
-      "installHint": "curl -fsSL https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.sh | bash; or pip install \"hermes-agent[web]\""
+      "installHint": "curl -fsSL https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.sh {'|'} bash; or pip install \"hermes-agent[web]\""
     },
     "codebuddy": {
       "description": "Tencent CodeBuddy Code CLI (OpenAI-compatible custom models)",
       "configMethod": "Merges into ~/.codebuddy/models.json. url must be a full …/v1/chat/completions path; OpenAI API format only.",
-      "installHint": "npm i -g @tencent-ai/codebuddy-code; or curl -fsSL https://www.codebuddy.cn/cli/install.sh | bash"
+      "installHint": "npm i -g {'@'}tencent-ai/codebuddy-code; or curl -fsSL https://www.codebuddy.cn/cli/install.sh {'|'} bash"
     },
     "workbuddy": {
       "description": "Tencent WorkBuddy desktop assistant (reads ~/.codebuddy/models.json)",

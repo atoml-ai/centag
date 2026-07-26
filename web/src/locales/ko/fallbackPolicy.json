@@ -38,7 +38,7 @@
     "rulesLabel": "폴백 규칙",
     "priorityPlaceholder": "우선순위",
     "backendPlaceholder": "백엔드 ID",
-    "modelPlaceholder": "모델명 (또는 {{requested_model}})",
+    "modelPlaceholder": "모델명 (또는 {'{{'}requested_model{'}}'})",
     "timeoutPlaceholder": "타임아웃(s)",
     "addRule": "규칙 추가",
     "cancel": "취소",

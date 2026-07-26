@@ -2,7 +2,28 @@
   "title": "Agent配置",
   "subtitle": "将 Agent 工具接入 Centag 代理：选择流水线、写入配置并验证生效",
   "quickSetup": "快速接入",
-  "quickSetupHint": "点击下方 Agent，通过向导接入 Centag 代理（只需选择流水线，后端由流水线内部指定）。",
+  "quickSetupHint": "每种 Agent 可能支持两种接入：① 写入配置（向导改本地配置）；② wrap 运行（系统代理劫持，无需改配置）。带「已验证」的组内优先展示。",
+  "verified": "已验证",
+  "groupCli": "CLI 终端",
+  "groupCliHint": "命令行 Agent。多数可写本地配置；部分另支持 wrap。",
+  "groupDesktop": "桌面应用",
+  "groupDesktopHint": "桌面客户端，通过写入本地配置接入。",
+  "groupTui": "内置 TUI",
+  "groupTuiHint": "进程内终端 Agent，不写本地配置文件。",
+  "groupWeb": "内置 Web",
+  "groupWebHint": "进程内浏览器自动化 Agent，不写本地配置文件。",
+  "groupOther": "其他",
+  "groupOtherHint": "未归类的 Agent。",
+  "moreDetails": "更多详情",
+  "methodWriteConfig": "写入配置",
+  "methodWriteConfigHint": "向导选择流水线，写入 Agent 本地配置后接入。",
+  "writeConfigAction": "写入配置",
+  "methodWrap": "wrap 运行",
+  "methodWrapHint": "无需改 Agent 配置；终端执行下方命令即可（系统代理劫持）。",
+  "methodBuiltin": "进程内接入",
+  "methodBuiltinHint": "内置 Agent，通过向导选择流水线后直接使用。",
+  "copyWrapCommand": "复制命令",
+  "wrapHint": "与「写入配置」不同：wrap 走系统代理劫持流量，无需改 Agent 配置；此处仅方便验证。",
   "connectProxy": "接入代理",
   "restoreDefault": "恢复默认",
   "providerConfig": "供应商配置",
@@ -96,7 +117,7 @@
     "claude-code": {
       "description": "Anthropic 官方的 AI 编程助手 CLI 工具",
       "configMethod": "写入 ~/.claude/settings.json：合并 env 中的 ANTHROPIC_BASE_URL / ANTHROPIC_AUTH_TOKEN / ANTHROPIC_MODEL 指向 Centag。首次覆盖会备份为 .centag-bak。",
-      "installHint": "macOS/Linux: curl -fsSL https://claude.ai/install.sh | bash；或 brew install --cask claude-code"
+      "installHint": "macOS/Linux: curl -fsSL https://claude.ai/install.sh {'|'} bash；或 brew install --cask claude-code"
     },
     "claude-desktop": {
       "description": "Anthropic 官方桌面客户端",
@@ -107,37 +128,42 @@
     "codex": {
       "description": "OpenAI 官方的 AI 编程助手 CLI (ChatGPT Codex)",
       "configMethod": "覆盖写入 ~/.codex/auth.json（OPENAI_API_KEY）与 ~/.codex/config.toml（model_provider=custom，base_url 指向 Centag，wire_api=responses）。",
-      "installHint": "curl -fsSL https://chatgpt.com/codex/install.sh | sh；或 npm i -g @openai/codex"
+      "installHint": "curl -fsSL https://chatgpt.com/codex/install.sh {'|'} sh；或 npm i -g {'@'}openai/codex"
     },
     "gemini-cli": {
       "description": "Google 官方的 AI 编程助手 CLI 工具",
       "configMethod": "写入 ~/.gemini/.env（GEMINI_API_KEY / GOOGLE_GEMINI_BASE_URL / GEMINI_MODEL），并合并 settings.json 的 security.auth.selectedType=gemini-api-key。",
-      "installHint": "npm i -g @google/gemini-cli；或 brew install gemini-cli"
+      "installHint": "npm i -g {'@'}google/gemini-cli；或 brew install gemini-cli"
     },
     "grok-build": {
       "description": "xAI Grok 编程助手 CLI",
       "configMethod": "覆盖写入 ~/.grok/config.toml：[models] default=\"centag\"，[model.\"centag\"] 内设置 model / base_url / api_key / api_backend=responses。",
-      "installHint": "curl -fsSL https://x.ai/cli/install.sh | bash；或 npm i -g @xai-official/grok"
+      "installHint": "curl -fsSL https://x.ai/cli/install.sh {'|'} bash；或 npm i -g {'@'}xai-official/grok"
     },
     "opencode": {
       "description": "AI 编程助手 (opencode.ai)",
       "configMethod": "合并写入 ~/.config/opencode/opencode.json：在 provider 中累加/更新 centag，并设置默认 model。不覆盖其它 provider。",
-      "installHint": "curl -fsSL https://opencode.ai/install | bash；或 npm i -g opencode-ai"
+      "installHint": "curl -fsSL https://opencode.ai/install {'|'} bash；或 npm i -g opencode-ai"
     },
     "openclaw": {
       "description": "AI 编程助手 (openclaw)",
       "configMethod": "合并写入 ~/.openclaw/openclaw.json：在 models.providers 中累加/更新 centag，并设置默认 primary 模型。",
       "installHint": "npm i -g openclaw"
     },
+    "pi": {
+      "description": "AI Agent 工具包 / Coding Agent CLI (pi.dev)",
+      "configMethod": "合并写入 ~/.pi/agent/models.json：在 providers 中累加/更新 centag（api=openai-completions），并设置 settings.json 的 defaultProvider/defaultModel。",
+      "installHint": "curl -fsSL https://pi.dev/install.sh {'|'} sh；或 npm i -g --ignore-scripts {'@'}earendil-works/pi-coding-agent"
+    },
     "hermes": {
       "description": "面向任务的 AI Agent 框架",
       "configMethod": "合并写入 ~/.hermes/config.yaml：更新 model 默认值，并在 custom_providers 中按 name=centag 累加/更新。",
-      "installHint": "curl -fsSL https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.sh | bash；或 pip install \"hermes-agent[web]\""
+      "installHint": "curl -fsSL https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.sh {'|'} bash；或 pip install \"hermes-agent[web]\""
     },
     "codebuddy": {
       "description": "腾讯云代码助手 CodeBuddy Code CLI（OpenAI 兼容自定义模型）",
       "configMethod": "合并写入 ~/.codebuddy/models.json。url 必须为完整路径 …/v1/chat/completions；仅支持 OpenAI 接口格式。",
-      "installHint": "npm i -g @tencent-ai/codebuddy-code；或 curl -fsSL https://www.codebuddy.cn/cli/install.sh | bash"
+      "installHint": "npm i -g {'@'}tencent-ai/codebuddy-code；或 curl -fsSL https://www.codebuddy.cn/cli/install.sh {'|'} bash"
     },
     "workbuddy": {
       "description": "腾讯云 WorkBuddy 桌面助理（自定义模型可读 ~/.codebuddy/models.json）",

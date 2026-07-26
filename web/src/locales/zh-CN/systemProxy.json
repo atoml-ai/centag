@@ -101,7 +101,7 @@
     "runWithFlagsHint": "不先设环境变量时，把 --server / --token 写在同一行。",
     "envScriptComment": "仅当前终端有效；勿写入 shell 配置文件",
     "optionalPac": "可选：系统 PAC / 手写环境变量",
-    "pacHint": "多数 CLI 不读系统 PAC。PAC：{{url}}",
+    "pacHint": "多数 CLI 不读系统 PAC。PAC：{url}",
     "pacEnable": "PAC 启用",
     "pacDisable": "停用恢复",
     "manualProxy": "手写 HTTPS_PROXY",

@@ -38,7 +38,7 @@
     "rulesLabel": "Правила резервирования",
     "priorityPlaceholder": "Приоритет",
     "backendPlaceholder": "ID бэкенда",
-    "modelPlaceholder": "Имя модели (или {{requested_model}})",
+    "modelPlaceholder": "Имя модели (или {'{{'}requested_model{'}}'})",
     "timeoutPlaceholder": "Тайм-аут(с)",
     "addRule": "Добавить правило",
     "cancel": "Отмена",
