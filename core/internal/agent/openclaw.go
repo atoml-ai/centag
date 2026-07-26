@@ -24,9 +24,11 @@ func (t *OpenClawTemplate) Meta() AgentSetupMeta {
 			"models.providers.centag.apiKey",
 			"models.providers.centag.api",
 		},
-		ConfigMethod: "合并写入 ~/.openclaw/openclaw.json：在 models.providers 中累加/更新 centag（baseUrl/apiKey/api=openai-completions），并设置 agents.defaults.model.primary。不覆盖其它 provider。",
-		InstallURL:   "https://www.npmjs.com/package/openclaw",
-		InstallHint:  "npm i -g openclaw",
+		ConfigMethod:  "合并写入 ~/.openclaw/openclaw.json：在 models.providers 中累加/更新 centag（baseUrl/apiKey/api=openai-completions），并设置 agents.defaults.model.primary。不覆盖其它 provider。",
+		InstallURL:    "https://www.npmjs.com/package/openclaw",
+		InstallHint:   "npm i -g openclaw",
+		AccessMethods: []AccessMethod{AccessWriteConfig, AccessWrapCLI},
+		CompanionCLI:  NewCLICompanion("openclaw", "https://www.npmjs.com/package/openclaw", "npm i -g openclaw"),
 	}
 }
 

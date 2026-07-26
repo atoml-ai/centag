@@ -89,13 +89,14 @@ func (t *TUIAgentTemplate) WriteConfig(info *BackendInfo) error { return nil }
 // Meta TUI Agent 无本地写配置接入
 func (t *TUIAgentTemplate) Meta() AgentSetupMeta {
 	return AgentSetupMeta{
-		Category:     AgentCategoryTUI,
-		WriteMode:    WriteModeNone,
-		ConfigPaths:  nil,
-		KeyFields:    nil,
-		ConfigMethod: "TUI Agent 不通过写入本地配置文件接入 Centag；由进程内路由/流水线绑定。",
-		InstallURL:   "",
-		InstallHint:  "内置能力，无需单独安装 CLI",
+		Category:      AgentCategoryTUI,
+		WriteMode:     WriteModeNone,
+		ConfigPaths:   nil,
+		KeyFields:     nil,
+		ConfigMethod:  "TUI Agent 不通过写入本地配置文件接入 Centag；由进程内路由/流水线绑定。",
+		InstallURL:    "",
+		InstallHint:   "内置能力，无需单独安装 CLI",
+		AccessMethods: []AccessMethod{AccessBuiltin},
 	}
 }
 
@@ -467,10 +468,11 @@ func (t *tuiConfigTemplate) DisplayName() string                { return t.displ
 func (t *tuiConfigTemplate) Description() string                { return t.description }
 func (t *tuiConfigTemplate) Meta() AgentSetupMeta {
 	return AgentSetupMeta{
-		Category:     AgentCategoryTUI,
-		WriteMode:    WriteModeNone,
-		ConfigMethod: "TUI Agent 不通过写入本地配置文件接入 Centag；由进程内路由/流水线绑定。",
-		InstallHint:  "内置能力，无需单独安装 CLI",
+		Category:      AgentCategoryTUI,
+		WriteMode:     WriteModeNone,
+		ConfigMethod:  "TUI Agent 不通过写入本地配置文件接入 Centag；由进程内路由/流水线绑定。",
+		InstallHint:   "内置能力，无需单独安装 CLI",
+		AccessMethods: []AccessMethod{AccessBuiltin},
 	}
 }
 func (t *tuiConfigTemplate) ConfigFiles(*BackendInfo) ([]ConfigFile, error) { return nil, nil }

@@ -487,6 +487,55 @@ func TestTemplateRegistry_MetaComplete(t *testing.T) {
 	}
 }
 
+func TestAccessMatrixComplete(t *testing.T) {
+	r := NewTemplateRegistry()
+	for _, at := range r.List() {
+		tmpl, ok := r.Get(at)
+		if !ok {
+			t.Fatalf("missing %s", at)
+		}
+		meta := tmpl.Meta().Normalize()
+		if len(meta.AccessMethods) == 0 {
+			t.Errorf("%s: access_methods empty after Normalize", at)
+		}
+		hasWrap := meta.HasAccess(AccessWrapCLI)
+		hasCLI := meta.CompanionCLI != nil && strings.TrimSpace(meta.CompanionCLI.Binary) != ""
+		if hasWrap != hasCLI {
+			t.Errorf("%s: wrap_cli=%v companion=%v", at, hasWrap, hasCLI)
+		}
+		if meta.HasAccess(AccessWriteConfig) {
+			if meta.WriteMode != WriteModeMerge && meta.WriteMode != WriteModeOverwrite {
+				t.Errorf("%s: write_config requires merge/overwrite, got %s", at, meta.WriteMode)
+			}
+		}
+		if meta.HasAccess(AccessUIGuide) && meta.UIGuide == nil {
+			t.Errorf("%s: ui_guide access without UIGuide payload", at)
+		}
+		if meta.HasAccess(AccessBuiltin) && meta.HasAccess(AccessWriteConfig) {
+			t.Errorf("%s: builtin should not also declare write_config", at)
+		}
+	}
+
+	trae := (&TraeTemplate{}).Meta().Normalize()
+	if trae.HasAccess(AccessWriteConfig) {
+		t.Fatal("trae must not declare write_config")
+	}
+	if trae.UIGuide == nil || trae.UIGuide.RequestURLKind != RequestURLOpenAIBase {
+		t.Fatal("trae request URL must be openai_base (…/v1)")
+	}
+	wb := (&WorkBuddyTemplate{}).Meta().Normalize()
+	if wb.UIGuide == nil || wb.UIGuide.RequestURLKind != RequestURLOpenAIBase {
+		t.Fatal("workbuddy request URL must default to openai_base (…/v1)")
+	}
+	if wb.UIGuide.URLHint == "" {
+		t.Fatal("workbuddy should hint that …/chat/completions also works")
+	}
+	cb := (&CodeBuddyTemplate{}).Meta().Normalize()
+	if !cb.HasAccess(AccessWriteConfig) || !cb.HasAccess(AccessWrapCLI) {
+		t.Fatalf("codebuddy should be write+wrap: %#v", cb.AccessMethods)
+	}
+}
+
 func TestProxyURL(t *testing.T) {
 	url := proxyURL("", 0)
 	if url != "http://localhost:20060/v1" {
@@ -627,22 +676,43 @@ func TestCodeBuddyWriteConfig_PreservesOtherModels(t *testing.T) {
 	}
 }
 
-func TestWorkBuddySharesCodeBuddyPath(t *testing.T) {
+func TestWorkBuddyUIGuide(t *testing.T) {
 	wb := &WorkBuddyTemplate{}
-	if wb.Meta().ConfigPaths[0] != codeBuddyModelsPath {
-		t.Fatal("workbuddy should share codebuddy models.json")
+	meta := wb.Meta().Normalize()
+	if meta.WriteMode != WriteModeNone {
+		t.Fatalf("write_mode=%s, want none", meta.WriteMode)
 	}
-	files, err := wb.ConfigFiles(testInfo())
+	if !meta.HasAccess(AccessUIGuide) || meta.HasAccess(AccessWriteConfig) || meta.HasAccess(AccessWrapCLI) {
+		t.Fatalf("access methods: %#v", meta.AccessMethods)
+	}
+	if meta.UIGuide == nil || meta.UIGuide.Summary == "" {
+		t.Fatal("expected UIGuide summary")
+	}
+	info := testInfo()
+	info.Model = "centag/p1"
+	files, err := wb.ConfigFiles(info)
 	if err != nil || len(files) != 1 {
 		t.Fatalf("files: %v %v", files, err)
+	}
+	if !strings.Contains(files[0].Content, "http://localhost:20060/v1") || !strings.Contains(files[0].Content, "centag/p1") {
+		t.Fatalf("guide incomplete: %s", files[0].Content)
+	}
+	if err := wb.WriteConfig(info); err != nil {
+		t.Fatal(err)
 	}
 }
 
 func TestTraeTemplate_MetaAndConfig(t *testing.T) {
 	tmpl := &TraeTemplate{}
-	meta := tmpl.Meta()
-	if meta.WriteMode != WriteModeMerge || meta.InstallURL == "" {
+	meta := tmpl.Meta().Normalize()
+	if meta.WriteMode != WriteModeNone || meta.InstallURL == "" {
 		t.Fatalf("bad meta: %+v", meta)
+	}
+	if !meta.HasAccess(AccessUIGuide) || meta.HasAccess(AccessWriteConfig) || meta.HasAccess(AccessWrapCLI) {
+		t.Fatalf("trae access methods: %#v", meta.AccessMethods)
+	}
+	if meta.UIGuide == nil || meta.UIGuide.Summary == "" {
+		t.Fatal("trae should provide UIGuide summary")
 	}
 	info := testInfo()
 	info.Model = "centag/direct-backend"
@@ -650,38 +720,44 @@ func TestTraeTemplate_MetaAndConfig(t *testing.T) {
 	if err != nil || len(files) == 0 {
 		t.Fatalf("config files: %v %v", files, err)
 	}
-	if !strings.Contains(files[0].Content, `"trae.customModels"`) {
-		t.Fatalf("missing trae.customModels: %s", files[0].Content)
+	content := files[0].Content
+	if !strings.Contains(content, `http://localhost:20060/v1`) {
+		t.Fatalf("guide should use OpenAI base …/v1: %s", content)
 	}
-	if !strings.Contains(files[0].Content, `http://localhost:20060/v1"`) {
-		t.Fatalf("base url should be /v1 without chat/completions: %s", files[0].Content)
+	if strings.Contains(content, "http://localhost:20060/v1/chat/completions") {
+		t.Fatalf("guide must not recommend chat/completions as primary URL: %s", content)
 	}
-	if strings.Contains(files[0].Content, `/v1/chat/completions`) {
-		t.Fatalf("trae baseUrl should not include chat/completions by default: %s", files[0].Content)
+	if meta.UIGuide == nil || meta.UIGuide.RequestURLKind != RequestURLOpenAIBase || meta.UIGuide.FullURLMode != "off" {
+		t.Fatalf("trae UIGuide url kind: %+v", meta.UIGuide)
+	}
+	if !strings.Contains(content, `centag/direct-backend`) {
+		t.Fatalf("guide should include model id: %s", content)
+	}
+	if !strings.Contains(content, `设置 → 模型`) && !strings.Contains(strings.ToLower(content), `settings`) {
+		t.Fatalf("guide should mention UI settings: %s", content)
+	}
+	if strings.Contains(content, `"trae.customModels"`) {
+		t.Fatalf("guide must not claim settings.json customModels works: %s", content)
 	}
 }
 
-func TestTraeWriteConfig_MergesCustomModels(t *testing.T) {
+func TestTraeWriteConfig_WritesSetupGuide(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	if runtime.GOOS == "windows" {
 		t.Setenv("USERPROFILE", home)
 		t.Setenv("APPDATA", filepath.Join(home, "AppData", "Roaming"))
 	}
-	var settings string
+	var guide string
 	switch runtime.GOOS {
 	case "darwin":
-		settings = filepath.Join(home, "Library", "Application Support", "Trae", "User", "settings.json")
+		guide = filepath.Join(home, "Library", "Application Support", "Trae", "CENTAG_SETUP.md")
 	case "windows":
-		settings = filepath.Join(home, "AppData", "Roaming", "Trae", "User", "settings.json")
+		guide = filepath.Join(home, "AppData", "Roaming", "Trae", "CENTAG_SETUP.md")
 	default:
-		settings = filepath.Join(home, ".config", "Trae", "User", "settings.json")
+		guide = filepath.Join(home, ".config", "Trae", "CENTAG_SETUP.md")
 	}
-	if err := os.MkdirAll(filepath.Dir(settings), 0755); err != nil {
-		t.Fatal(err)
-	}
-	// 创建父级 Trae 目录以触发「已安装」检测
-	if err := os.WriteFile(settings, []byte(`{"editor.fontSize":14,"trae.customModels":[{"id":"keep","modelId":"keep"}]}`), 0644); err != nil {
+	if err := os.MkdirAll(filepath.Dir(guide), 0755); err != nil {
 		t.Fatal(err)
 	}
 	info := testInfo()
@@ -689,12 +765,15 @@ func TestTraeWriteConfig_MergesCustomModels(t *testing.T) {
 	if err := (&TraeTemplate{}).WriteConfig(info); err != nil {
 		t.Fatal(err)
 	}
-	got, err := os.ReadFile(settings)
+	got, err := os.ReadFile(guide)
 	if err != nil {
 		t.Fatal(err)
 	}
 	s := string(got)
-	if !strings.Contains(s, `"keep"`) || !strings.Contains(s, `"centag/p1"`) {
-		t.Fatalf("merge failed: %s", s)
+	if !strings.Contains(s, "centag/p1") || !strings.Contains(s, "http://localhost:20060/v1") {
+		t.Fatalf("guide content incomplete: %s", s)
+	}
+	if strings.Contains(s, "http://localhost:20060/v1/chat/completions") {
+		t.Fatalf("written guide must not use chat/completions as primary URL: %s", s)
 	}
 }

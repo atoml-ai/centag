@@ -112,8 +112,13 @@ func TestWrapPresetByID(t *testing.T) {
 	if !ok || p.Argv[0] != "opencode" {
 		t.Fatalf("got %#v ok=%v", p, ok)
 	}
+	// Desktop GUI apps are not wrap targets; companion CLIs may be (codebuddy → CLI argv).
 	if _, ok := wrapPresetByID("claude-desktop"); ok {
-		t.Fatal("desktop presets must not be listed")
+		t.Fatal("desktop GUI presets must not be listed")
+	}
+	cb, ok := wrapPresetByID("codebuddy")
+	if !ok || len(cb.Argv) == 0 || cb.Argv[0] != "codebuddy" {
+		t.Fatalf("codebuddy should wrap CLI argv, got %#v ok=%v", cb, ok)
 	}
 }
 

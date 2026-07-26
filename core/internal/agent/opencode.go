@@ -23,10 +23,13 @@ func (t *OpenCodeTemplate) Meta() AgentSetupMeta {
 			"provider.centag.models",
 			"model",
 		},
-		ConfigMethod: "合并写入 ~/.config/opencode/opencode.json：在 provider 中累加/更新 centag（npm=@ai-sdk/openai-compatible，options.baseURL/apiKey），并设置默认 model=centag/<apiModel>。不覆盖其它 provider。",
-		InstallURL:   "https://opencode.ai",
-		InstallHint:  "curl -fsSL https://opencode.ai/install | bash；或 npm i -g opencode-ai",
-		Verified:     true,
+		ConfigMethod:  "合并写入 ~/.config/opencode/opencode.json：在 provider 中累加/更新 centag（npm=@ai-sdk/openai-compatible，options.baseURL/apiKey），并设置默认 model=centag/<apiModel>。不覆盖其它 provider。",
+		InstallURL:    "https://opencode.ai",
+		InstallHint:   "curl -fsSL https://opencode.ai/install | bash；或 npm i -g opencode-ai",
+		AccessMethods: []AccessMethod{AccessWriteConfig, AccessWrapCLI},
+		CompanionCLI:  NewCLICompanion("opencode", "https://opencode.ai", "curl -fsSL https://opencode.ai/install | bash；或 npm i -g opencode-ai"),
+		VerifiedWrite: true,
+		VerifiedWrap:  true,
 	}
 }
 

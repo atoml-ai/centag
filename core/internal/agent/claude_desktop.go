@@ -34,13 +34,14 @@ func (t *ClaudeDesktopTemplate) Meta() AgentSetupMeta {
 		pathList = []string{paths.normalConfig, paths.threepConfig, paths.profile, paths.meta}
 	}
 	return AgentSetupMeta{
-		Category:     AgentCategoryDesktop,
-		WriteMode:    WriteModeOverwrite,
-		ConfigPaths:  pathList,
-		KeyFields:    []string{"inferenceGatewayBaseUrl", "inferenceGatewayApiKey", "inferenceGatewayAuthScheme", "inferenceProvider", "deploymentMode"},
-		ConfigMethod: method,
-		InstallURL:   "https://claude.ai/download",
-		InstallHint:  "从官网下载 Claude Desktop 桌面应用（非 CLI）",
+		Category:      AgentCategoryDesktop,
+		WriteMode:     WriteModeOverwrite,
+		ConfigPaths:   pathList,
+		KeyFields:     []string{"inferenceGatewayBaseUrl", "inferenceGatewayApiKey", "inferenceGatewayAuthScheme", "inferenceProvider", "deploymentMode"},
+		ConfigMethod:  method,
+		InstallURL:    "https://claude.ai/download",
+		InstallHint:   "从官网下载 Claude Desktop 桌面应用（非 CLI）",
+		AccessMethods: []AccessMethod{AccessWriteConfig},
 	}
 }
 

@@ -28,10 +28,13 @@ func (t *PiTemplate) Meta() AgentSetupMeta {
 			"defaultProvider",
 			"defaultModel",
 		},
-		ConfigMethod: "合并写入 ~/.pi/agent/models.json：在 providers 中累加/更新 centag（baseUrl/apiKey/api=openai-completions）；并合并 settings.json 的 defaultProvider/defaultModel。不覆盖其它 provider。",
-		InstallURL:   "https://github.com/earendil-works/pi",
-		InstallHint:  "curl -fsSL https://pi.dev/install.sh | sh；或 npm i -g --ignore-scripts @earendil-works/pi-coding-agent",
-		Verified:     true,
+		ConfigMethod:  "合并写入 ~/.pi/agent/models.json：在 providers 中累加/更新 centag（baseUrl/apiKey/api=openai-completions）；并合并 settings.json 的 defaultProvider/defaultModel。不覆盖其它 provider。",
+		InstallURL:    "https://github.com/earendil-works/pi",
+		InstallHint:   "curl -fsSL https://pi.dev/install.sh | sh；或 npm i -g --ignore-scripts @earendil-works/pi-coding-agent",
+		AccessMethods: []AccessMethod{AccessWriteConfig, AccessWrapCLI},
+		CompanionCLI:  NewCLICompanion("pi", "https://github.com/earendil-works/pi", "curl -fsSL https://pi.dev/install.sh | sh；或 npm i -g --ignore-scripts @earendil-works/pi-coding-agent"),
+		VerifiedWrite: true,
+		VerifiedWrap:  true,
 	}
 }
 

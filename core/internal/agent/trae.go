@@ -9,51 +9,76 @@ import (
 )
 
 // TraeTemplate TRAE IDE 自定义模型接入
-// 官方优先 UI：设置 → 模型 → 自定义配置（OpenAI + Base URL）
+// 官方路径：设置 → 模型 → 添加模型 → 自定义配置（OpenAI）
 // 文档：https://docs.trae.ai/ide/models?_lang=zh / https://docs.trae.cn/ide/models
-// 文件写入：尽力合并 User/settings.json 的 trae.customModels（社区路径）。
+//
+// 请求地址填 OpenAI base …/v1，并关闭「完整 URL」（由 TRAE 拼接 /chat/completions）。
+// TRAE 3.x 自定义模型由 IDE UI 管理，不会读取 settings.json 的 trae.customModels。
 type TraeTemplate struct{}
 
 func (t *TraeTemplate) AgentType() AgentType { return AgentTrae }
 func (t *TraeTemplate) DisplayName() string  { return "TRAE" }
 func (t *TraeTemplate) Description() string {
-	return "字节跳动 TRAE IDE（自定义 OpenAI 兼容模型）"
+	return "字节跳动 TRAE IDE（自定义 OpenAI 兼容模型；需在 IDE 内添加）"
 }
 
 func (t *TraeTemplate) Meta() AgentSetupMeta {
-	paths := traeSettingsLogicalPaths()
 	return AgentSetupMeta{
-		Category:    AgentCategoryDesktop,
-		WriteMode:   WriteModeMerge,
-		ConfigPaths: paths,
-		KeyFields: []string{
-			"trae.customModels[].modelId",
-			"trae.customModels[].baseUrl",
-			"trae.customModels[].apiKey",
-			"trae.customModels[].provider",
+		Category:  AgentCategoryDesktop,
+		WriteMode: WriteModeNone,
+		ConfigPaths: []string{
+			traeSetupGuideLogicalPath(),
 		},
-		ConfigMethod: "推荐：设置 → 模型 → 添加模型 → 自定义配置；API 格式选 OpenAI；关闭「完整 URL」时 Base URL 填 http://host:port/v1（勿带 /chat/completions，否则会重复拼接）；模型 ID 填 centag/<pipeline>；API Key 填 Centag 密钥。一键写入会尽力合并到 Trae/Trae CN 的 User/settings.json → trae.customModels（需重启 IDE）。",
-		InstallURL:   "https://docs.trae.ai/ide/models?_lang=zh",
-		InstallHint:  "从 trae.ai / trae.cn 下载 IDE；模型配置见「内置模型 & 自定义模型」",
+		KeyFields: []string{
+			"API 格式=OpenAI",
+			"完整 URL=关闭",
+			"请求地址=…/v1",
+			"模型 ID=centag/<pipeline>",
+		},
+		ConfigMethod:  "TRAE：设置 → 模型 → 添加模型 → 自定义配置。API 格式 OpenAI；关闭「完整 URL」；请求地址填 http://host:port/v1；模型 ID 填 centag/<pipeline>。",
+		InstallURL:    "https://docs.trae.ai/ide/models?_lang=zh",
+		InstallHint:   "从 trae.ai / trae.cn 下载 IDE；自定义模型必须在 IDE「设置 → 模型」中添加",
+		AccessMethods: []AccessMethod{AccessUIGuide},
+		UIGuide: &UIGuide{
+			Title:          "在 TRAE 中填写自定义模型参数",
+			Summary:        "打开 设置 → 模型 → 添加模型 → 自定义配置。请求地址填 …/v1（关闭完整 URL），模型 ID 随流水线变化。",
+			DocURL:         "https://docs.trae.ai/ide/models?_lang=zh",
+			Steps:          []string{"设置 → 模型 → 添加模型 → 自定义配置"},
+			RequestURLKind: RequestURLOpenAIBase,
+			FullURLMode:    "off",
+			RestartHint:    "添加成功后若列表未刷新，完全退出并重启 TRAE",
+		},
+		VerifiedUI: true,
 	}
 }
 
-func traeSettingsLogicalPaths() []string {
+func traeSetupGuideLogicalPath() string {
+	switch runtime.GOOS {
+	case "darwin":
+		return "~/Library/Application Support/Trae/CENTAG_SETUP.md"
+	case "windows":
+		return "%APPDATA%/Trae/CENTAG_SETUP.md"
+	default:
+		return "~/.config/Trae/CENTAG_SETUP.md"
+	}
+}
+
+func traeAppSupportDirs() []string {
 	switch runtime.GOOS {
 	case "darwin":
 		return []string{
-			"~/Library/Application Support/Trae/User/settings.json",
-			"~/Library/Application Support/Trae CN/User/settings.json",
+			expandPath("~/Library/Application Support/Trae"),
+			expandPath("~/Library/Application Support/Trae CN"),
 		}
 	case "windows":
 		return []string{
-			"%APPDATA%/Trae/User/settings.json",
-			"%APPDATA%/Trae CN/User/settings.json",
+			expandAppDataPath("%APPDATA%/Trae"),
+			expandAppDataPath("%APPDATA%/Trae CN"),
 		}
 	default:
 		return []string{
-			"~/.config/Trae/User/settings.json",
-			"~/.config/Trae CN/User/settings.json",
+			expandPath("~/.config/Trae"),
+			expandPath("~/.config/Trae CN"),
 		}
 	}
 }
@@ -78,95 +103,117 @@ func traeModelID(info *BackendInfo) string {
 	return centagAPIModelID(defaultModel(info))
 }
 
-func (t *TraeTemplate) ConfigFiles(info *BackendInfo) ([]ConfigFile, error) {
+func traeSetupGuideContent(info *BackendInfo) string {
 	id := traeModelID(info)
 	base := proxyURL(info.Host, info.Port)
-	snippet := fmt.Sprintf(`{
-  "trae.customModels": [
-    {
-      "id": "%s",
-      "name": "Centag",
-      "displayName": "Centag",
-      "modelId": "%s",
-      "provider": "openai",
-      "apiProtocol": "openai",
-      "baseUrl": "%s",
-      "url": "%s",
-      "apiKey": "%s",
-      "useFullUrl": false
-    }
-  ]
-}`, id, id, base, base, info.APIKey)
+	return fmt.Sprintf(`# Centag × TRAE 接入说明
 
-	paths := traeSettingsLogicalPaths()
-	files := make([]ConfigFile, 0, len(paths))
-	for _, p := range paths {
-		files = append(files, ConfigFile{Path: p, Content: snippet})
-	}
-	return files, nil
+> TRAE 3.x 的自定义模型由 IDE「设置 → 模型」管理（云端同步），
+> **不会**读取 User/settings.json 里的 trae.customModels。
+> 请按下列步骤在 UI 中添加；本文件仅作参数备忘。
+
+## 在 TRAE 中添加自定义模型
+
+1. 打开 TRAE → 设置 → 模型 → 添加模型 → 自定义配置
+2. API 格式：OpenAI
+3. **关闭**「完整 URL」（由 TRAE 自动拼接 /chat/completions）
+4. 请求地址（Base）：%s
+5. 模型 ID：%s
+6. API Key：你的 Centag API Key（Web → 个人资料 → API Keys）
+7. 展示名称（可选）：Centag
+8. 点击添加；连接检测通过后，在对话模型列表中选择 Centag
+9. 若列表未刷新，请完全退出并重启 TRAE
+
+## 参数摘要
+
+| 项 | 值 |
+|---|---|
+| 完整 URL | 关闭 |
+| 请求地址 | %s |
+| 模型 ID | %s |
+
+## 常见问题
+
+- 只重启窗口不够时：菜单退出 TRAE 后再开
+- 请求失败：确认 Centag 已运行，且地址为 …/v1（不要填到 /chat/completions）
+- 若误开「完整 URL」，需改为 …/v1/chat/completions；推荐关闭完整 URL 只填 …/v1
+- 模型列表没有 Centag：说明尚未在 UI 中添加成功（settings.json 无效）
+`, base, id, base, id)
+}
+
+func (t *TraeTemplate) ConfigFiles(info *BackendInfo) ([]ConfigFile, error) {
+	return []ConfigFile{
+		{Path: traeSetupGuideLogicalPath(), Content: traeSetupGuideContent(info)},
+	}, nil
 }
 
 func (t *TraeTemplate) SetupCommand(info *BackendInfo) string {
 	id := traeModelID(info)
 	base := proxyURL(info.Host, info.Port)
-	return fmt.Sprintf(`# TRAE 自定义模型（推荐 UI）
+	return fmt.Sprintf(`# TRAE：必须在 IDE UI 添加自定义模型（settings.json 无效）
 # 设置 → 模型 → 添加模型 → 自定义配置
 # API 格式: OpenAI
 # 完整 URL: 关闭
-# 请求地址(Base): %s
+# 请求地址: %s
 # 模型 ID: %s
 # API Key: <Centag API Key>
-#
-# 或合并 User/settings.json 的 trae.customModels（见配置预览）
+# 然后完全退出并重启 TRAE
 `, base, id)
 }
 
 func (t *TraeTemplate) PlatformCommands(info *BackendInfo) PlatformCommands {
-	files, _ := t.ConfigFiles(info)
+	guide := traeSetupGuideContent(info)
+	script := "# See CENTAG_SETUP.md — configure TRAE via Settings → Models (UI)\n"
 	return PlatformCommands{
-		MacOS:   "#!/bin/bash\n" + generateShellCommands(files),
-		Linux:   "#!/bin/bash\n" + generateShellCommands(files),
-		Windows: generatePowerShellCommands(files),
+		MacOS:   "#!/bin/bash\n" + script + "#\n" + "# Guide preview:\n" + guide,
+		Linux:   "#!/bin/bash\n" + script + "#\n" + "# Guide preview:\n" + guide,
+		Windows: "# PowerShell\n" + script + "#\n" + "# Guide preview:\n" + guide,
 	}
 }
 
 func (t *TraeTemplate) VerifyCommand(info *BackendInfo) string {
-	return `# 在 TRAE 对话输入框右下角选择模型「Centag」并发起一次简单对话`
+	return `# 在 TRAE「设置 → 模型」确认已添加 Centag，对话输入框右下角选择该模型并发起一次简单对话`
 }
 
 func (t *TraeTemplate) Steps(info *BackendInfo) []ConfigStep {
 	id := traeModelID(info)
 	base := proxyURL(info.Host, info.Port)
 	return []ConfigStep{
-		{Title: "UI 添加自定义模型", Description: fmt.Sprintf("OpenAI 格式；Base URL=%s（关闭完整 URL）；模型 ID=%s", base, id)},
-		{Title: "或合并 settings.json", Description: "写入 Trae/Trae CN 的 User/settings.json → trae.customModels 后重启 IDE"},
+		{Title: "UI 添加自定义模型", Description: fmt.Sprintf("OpenAI；关闭完整 URL；请求地址=%s；模型 ID=%s", base, id)},
+		{Title: "重启 TRAE", Description: "完全退出 IDE 后重新打开，在模型列表中选择 Centag"},
 	}
 }
 
 func (t *TraeTemplate) WriteConfig(info *BackendInfo) error {
-	id := traeModelID(info)
-	base := proxyURL(info.Host, info.Port)
-	paths := traeSettingsLogicalPaths()
-
+	content := traeSetupGuideContent(info)
+	dirs := traeAppSupportDirs()
 	var wrote int
 	var lastErr error
-	for _, logical := range paths {
-		abs := expandAppDataPath(logical)
-		// 若父目录已存在（已安装对应版 IDE），则合并写入；否则跳过以免造空目录误导
-		parent := filepath.Dir(filepath.Dir(abs)) // .../Trae or .../Trae CN
-		if !fileExists(parent) && !fileExists(filepath.Dir(abs)) {
+	for _, dir := range dirs {
+		if !fileExists(dir) {
 			continue
 		}
-		if err := mergeTraeCustomModel(abs, id, "Centag", info.APIKey, base); err != nil {
+		path := filepath.Join(dir, "CENTAG_SETUP.md")
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			lastErr = err
+			continue
+		}
+		if err := os.WriteFile(path, []byte(content), 0644); err != nil {
 			lastErr = err
 			continue
 		}
 		wrote++
 	}
 	if wrote == 0 {
-		// 未检测到已安装目录时，写入国际版默认路径，便于用户首次安装后生效
-		fallback := expandAppDataPath(paths[0])
-		if err := mergeTraeCustomModel(fallback, id, "Centag", info.APIKey, base); err != nil {
+		// 未检测到已安装目录时，写入国际版默认路径
+		fallback := expandAppDataPath(traeSetupGuideLogicalPath())
+		if err := os.MkdirAll(filepath.Dir(fallback), 0755); err != nil {
+			if lastErr != nil {
+				return lastErr
+			}
+			return err
+		}
+		if err := os.WriteFile(fallback, []byte(content), 0644); err != nil {
 			if lastErr != nil {
 				return lastErr
 			}

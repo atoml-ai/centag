@@ -49,18 +49,25 @@ func resolveModelName(model string, pipelineID string, supportedModels []backend
 // ListAgentTypes 列出所有支持的 Agent 工具类型（含配置方法与安装指引）
 func (h *AgentHandler) ListAgentTypes(c *gin.Context) {
 	type agentInfo struct {
-		Type         string              `json:"type"`
-		DisplayName  string              `json:"display_name"`
-		Description  string              `json:"description"`
-		Category     agent.AgentCategory `json:"category"`
-		WriteMode    string              `json:"write_mode"`
-		ConfigPaths  []string            `json:"config_paths"`
-		KeyFields    []string            `json:"key_fields"`
-		ConfigMethod string              `json:"config_method"`
-		InstallURL   string              `json:"install_url"`
-		InstallHint  string              `json:"install_hint"`
-		Verified     bool                `json:"verified"`
-		WrapCommand  string              `json:"wrap_command,omitempty"`
+		Type           string               `json:"type"`
+		DisplayName    string               `json:"display_name"`
+		Description    string               `json:"description"`
+		Category       agent.AgentCategory  `json:"category"`
+		WriteMode      string               `json:"write_mode"`
+		ConfigPaths    []string             `json:"config_paths"`
+		KeyFields      []string             `json:"key_fields"`
+		ConfigMethod   string               `json:"config_method"`
+		InstallURL     string               `json:"install_url"`
+		InstallHint    string               `json:"install_hint"`
+		AccessMethods  []agent.AccessMethod `json:"access_methods,omitempty"`
+		CompanionCLI   *agent.CompanionCLI  `json:"companion_cli,omitempty"`
+		UIGuide        *agent.UIGuide       `json:"ui_guide,omitempty"`
+		VerifiedWrite  bool                 `json:"verified_write"`
+		VerifiedWrap   bool                 `json:"verified_wrap"`
+		VerifiedUI     bool                 `json:"verified_ui"`
+		Verified       bool                 `json:"verified"` // 任一方式已验证（兼容/排序）
+		WrapCommand    string               `json:"wrap_command,omitempty"`
+		GuideOnly      bool                 `json:"guide_only,omitempty"`
 	}
 	var list []agentInfo
 	for _, at := range h.registry.List() {
@@ -68,31 +75,53 @@ func (h *AgentHandler) ListAgentTypes(c *gin.Context) {
 		if !ok {
 			continue
 		}
-		meta := t.Meta()
+		meta := t.Meta().Normalize()
 		info := agentInfo{
-			Type:         string(at),
-			DisplayName:  t.DisplayName(),
-			Description:  t.Description(),
-			Category:     meta.Category,
-			WriteMode:    meta.WriteMode,
-			ConfigPaths:  meta.ConfigPaths,
-			KeyFields:    meta.KeyFields,
-			ConfigMethod: meta.ConfigMethod,
-			InstallURL:   meta.InstallURL,
-			InstallHint:  meta.InstallHint,
-			Verified:     meta.Verified,
+			Type:          string(at),
+			DisplayName:   t.DisplayName(),
+			Description:   t.Description(),
+			Category:      meta.Category,
+			WriteMode:     meta.WriteMode,
+			ConfigPaths:   meta.ConfigPaths,
+			KeyFields:     meta.KeyFields,
+			ConfigMethod:  meta.ConfigMethod,
+			InstallURL:    meta.InstallURL,
+			InstallHint:   meta.InstallHint,
+			AccessMethods: meta.AccessMethods,
+			CompanionCLI:  meta.CompanionCLI,
+			UIGuide:       meta.UIGuide,
+			VerifiedWrite: meta.VerifiedWrite,
+			VerifiedWrap:  meta.VerifiedWrap,
+			VerifiedUI:    meta.VerifiedUI,
+			Verified:      meta.AnyVerified(),
+			GuideOnly:     meta.GuideOnly(),
 		}
-		if preset, ok := wrapPresetByID(string(at)); ok {
-			if cmd, err := buildWrapRunUserCommand("", "", preset.Argv); err == nil {
-				info.WrapCommand = cmd
+		if meta.HasAccess(agent.AccessWrapCLI) {
+			if argv := meta.WrapArgv(); len(argv) > 0 {
+				if cmd, err := buildWrapRunUserCommand("", "", argv); err == nil {
+					info.WrapCommand = cmd
+				}
 			}
 		}
 		list = append(list, info)
 	}
-	// 已验证 Agent 靠前，同组内按 type 字典序
+	// 已验证方式更多的靠前，其次写配置已验证，再按 type
 	sort.Slice(list, func(i, j int) bool {
-		if list[i].Verified != list[j].Verified {
-			return list[i].Verified
+		score := func(a agentInfo) int {
+			n := 0
+			if a.VerifiedWrite {
+				n += 2
+			}
+			if a.VerifiedUI {
+				n += 2
+			}
+			if a.VerifiedWrap {
+				n++
+			}
+			return n
+		}
+		if si, sj := score(list[i]), score(list[j]); si != sj {
+			return si > sj
 		}
 		return list[i].Type < list[j].Type
 	})
@@ -213,11 +242,30 @@ func (h *AgentHandler) WriteConfig(c *gin.Context) {
 		return
 	}
 
+	meta := tmpl.Meta().Normalize()
+	msg := "配置已写入本地文件"
+	restart := meta.Category == agent.AgentCategoryDesktop && meta.HasAccess(agent.AccessWriteConfig)
+	guideExported := meta.GuideOnly()
+	if guideExported {
+		msg = "已导出接入说明（未改写代理配置）。请按 UI 指引在客户端内添加模型。"
+		if meta.UIGuide != nil && meta.UIGuide.ExportHint != "" {
+			msg = meta.UIGuide.ExportHint + " 已写入本地说明文件。"
+		}
+		if agentType == agent.AgentTrae {
+			msg = "已导出 TRAE 接入说明。请在 IDE「设置 → 模型 → 添加模型 → 自定义配置」按说明填写（完整 URL …/v1/chat/completions），然后完全退出并重启 TRAE。"
+		}
+		restart = true
+	} else if restart {
+		msg = "配置已写入本地文件。请完全退出并重启客户端后生效。"
+	}
+
 	c.JSON(http.StatusOK, agent.WriteConfigResponse{
-		AgentType: req.AgentType,
-		Success:   true,
-		Written:   files,
-		Message:   "配置已写入本地文件",
+		AgentType:       req.AgentType,
+		Success:         true,
+		Written:         files,
+		Message:         msg,
+		RestartRequired: restart,
+		GuideExported:   guideExported,
 	})
 }
 
