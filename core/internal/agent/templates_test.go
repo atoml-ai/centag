@@ -534,6 +534,36 @@ func TestAccessMatrixComplete(t *testing.T) {
 	if !cb.HasAccess(AccessWriteConfig) || !cb.HasAccess(AccessWrapCLI) {
 		t.Fatalf("codebuddy should be write+wrap: %#v", cb.AccessMethods)
 	}
+
+	for _, pair := range []struct {
+		name string
+		meta AgentSetupMeta
+	}{
+		{"hermes", (&HermesTemplate{}).Meta()},
+		{"openclaw", (&OpenClawTemplate{}).Meta()},
+		{"opencode", (&OpenCodeTemplate{}).Meta()},
+		{"pi", (&PiTemplate{}).Meta()},
+	} {
+		if !pair.meta.VerifiedWrite || !pair.meta.VerifiedWrap {
+			t.Errorf("%s: expected VerifiedWrite+VerifiedWrap, got write=%v wrap=%v",
+				pair.name, pair.meta.VerifiedWrite, pair.meta.VerifiedWrap)
+		}
+	}
+
+	oc := (&OpenClawTemplate{}).Meta().Normalize()
+	wantArgv := []string{"openclaw", "tui", "--local"}
+	gotArgv := oc.WrapArgv()
+	if len(gotArgv) != len(wantArgv) {
+		t.Fatalf("openclaw wrap argv: got %#v want %#v", gotArgv, wantArgv)
+	}
+	for i := range wantArgv {
+		if gotArgv[i] != wantArgv[i] {
+			t.Fatalf("openclaw wrap argv: got %#v want %#v", gotArgv, wantArgv)
+		}
+	}
+	if strings.TrimSpace(oc.CompanionCLI.Note) == "" {
+		t.Fatal("openclaw companion_cli.note should explain LaunchAgent / gateway stop")
+	}
 }
 
 func TestProxyURL(t *testing.T) {

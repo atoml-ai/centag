@@ -29,6 +29,8 @@ func (t *HermesTemplate) Meta() AgentSetupMeta {
 		InstallHint:   "curl -fsSL https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.sh | bash；或 pip install \"hermes-agent[web]\"",
 		AccessMethods: []AccessMethod{AccessWriteConfig, AccessWrapCLI},
 		CompanionCLI:  NewCLICompanion("hermes", "https://github.com/NousResearch/hermes-agent", "curl -fsSL https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.sh | bash；或 pip install \"hermes-agent[web]\""),
+		VerifiedWrite: true, // hermes-studio：写入配置已验证
+		VerifiedWrap:  true, // hermes-studio：wrap 方式已验证
 	}
 }
 
