@@ -232,6 +232,11 @@ func CreatePipelineFromTemplate(template PatternTemplate, overrides map[string]i
 		}
 	}
 
+	// 归一化所有节点：将顶层 Backend/Model 归入 Config
+	for i := range template.Nodes {
+		template.Nodes[i].Normalize()
+	}
+
 	pipeline := &AgentPatternPipeline{
 		SchemaVersion: template.SchemaVersion,
 		ID:            template.ID,
