@@ -64,9 +64,19 @@ func DetectAgentType(path, userAgent, explicitAgentType string) (agentType, dete
 		return "openclaw", detectByUserAgent
 	case strings.Contains(ua, "hermes"):
 		return "hermes", detectByUserAgent
+	case strings.Contains(ua, "pi-coding-agent"), strings.Contains(ua, "pi-agent"), matchPiUserAgent(ua):
+		return "pi", detectByUserAgent
 	default:
 		return "", ""
 	}
+}
+
+// matchPiUserAgent 识别 Pi CLI UA，避免误伤含 "api"/"rapid" 等词的客户端。
+func matchPiUserAgent(ua string) bool {
+	if ua == "pi" || strings.HasPrefix(ua, "pi/") || strings.HasPrefix(ua, "pi ") {
+		return true
+	}
+	return strings.Contains(ua, " pi/") || strings.Contains(ua, "pi-coding")
 }
 
 func normalizeAgentType(v string) string {
@@ -84,6 +94,8 @@ func normalizeAgentType(v string) string {
 		return "openclaw"
 	case "hermes":
 		return "hermes"
+	case "pi", "pi-coding-agent", "pi-agent":
+		return "pi"
 	default:
 		return ""
 	}

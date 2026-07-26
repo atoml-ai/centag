@@ -41,6 +41,28 @@ func TestDetectAgentType(t *testing.T) {
 			wantDetected: detectByUserAgent,
 		},
 		{
+			name:         "pi from user agent prefix",
+			path:         "/v1/chat/completions",
+			ua:           "pi/0.82.1",
+			wantType:     "pi",
+			wantDetected: detectByUserAgent,
+		},
+		{
+			name:         "pi from package user agent",
+			path:         "/v1/chat/completions",
+			ua:           "pi-coding-agent/0.82.1",
+			wantType:     "pi",
+			wantDetected: detectByUserAgent,
+		},
+		{
+			name:         "pi from explicit header",
+			path:         "/v1/chat/completions",
+			ua:           "curl/8.0",
+			explicit:     "pi",
+			wantType:     "pi",
+			wantDetected: detectByExplicit,
+		},
+		{
 			name:     "unknown returns empty",
 			path:     "/v1/chat/completions",
 			ua:       "my-client/1.0",

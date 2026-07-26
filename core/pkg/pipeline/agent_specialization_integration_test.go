@@ -71,8 +71,8 @@ func TestTemplateRegistry_Integrated(t *testing.T) {
 	// 验证 CLI Agent 类型仍存在
 	cliTypes := []agent.AgentType{
 		agent.AgentClaudeCode, agent.AgentClaudeDesktop, agent.AgentCodex,
-		agent.AgentGeminiCLI, agent.AgentOpenCode, agent.AgentOpenClaw, agent.AgentHermes,
-		agent.AgentCodeBuddy, agent.AgentWorkBuddy, agent.AgentTrae,
+		agent.AgentGeminiCLI, agent.AgentGrokBuild, agent.AgentOpenCode, agent.AgentOpenClaw,
+		agent.AgentPi, agent.AgentHermes, agent.AgentCodeBuddy, agent.AgentWorkBuddy, agent.AgentTrae,
 	}
 	for _, at := range cliTypes {
 		if _, ok := reg.Get(at); !ok {
@@ -91,10 +91,10 @@ func TestTemplateRegistry_Integrated(t *testing.T) {
 		}
 	}
 
-	// 验证 List 总数量（8 原 CLI + Grok + 3 新 + 2 TUI + 2 Web >= 14）
+	// 验证 List 总数量（CLI 含 Pi + TUI/Web >= 15）
 	allTypes := reg.List()
-	if len(allTypes) < 14 {
-		t.Errorf("expected >= 14 agent types, got %d: %v", len(allTypes), allTypes)
+	if len(allTypes) < 15 {
+		t.Errorf("expected >= 15 agent types, got %d: %v", len(allTypes), allTypes)
 	}
 }
 

@@ -304,6 +304,13 @@ func (m *AgentProviderManager) seedDefaultsLocked() {
 			Description: "OpenClaw 默认配置",
 		},
 		{
+			ID:          "pi",
+			AgentType:   "pi",
+			DisplayName: "Pi",
+			Enabled:     true,
+			Description: "Pi coding agent 默认配置",
+		},
+		{
 			ID:          "hermes",
 			AgentType:   "hermes",
 			DisplayName: "Hermes Agent",

@@ -11,6 +11,7 @@ const (
 	AgentGrokBuild     AgentType = "grok-build"
 	AgentOpenCode      AgentType = "opencode"
 	AgentOpenClaw      AgentType = "openclaw"
+	AgentPi            AgentType = "pi"
 	AgentHermes        AgentType = "hermes"
 	AgentCodeBuddy     AgentType = "codebuddy"
 	AgentWorkBuddy     AgentType = "workbuddy"
@@ -162,6 +163,8 @@ type AgentSetupMeta struct {
 	ConfigMethod string        `json:"config_method"` // 给人看的写入说明
 	InstallURL   string        `json:"install_url"`
 	InstallHint  string        `json:"install_hint"`
+	// Verified 表示该 Agent 已通过维护者本地验证，快速接入卡片优先展示。
+	Verified bool `json:"verified,omitempty"`
 }
 
 // AgentTemplate 各 Agent 工具的配置模板接口
@@ -201,6 +204,7 @@ func (r *TemplateRegistry) registerDefaults() {
 	r.Register(&GrokBuildTemplate{})
 	r.Register(&OpenCodeTemplate{})
 	r.Register(&OpenClawTemplate{})
+	r.Register(&PiTemplate{})
 	r.Register(&HermesTemplate{})
 	r.Register(&CodeBuddyTemplate{})
 	r.Register(&WorkBuddyTemplate{})
