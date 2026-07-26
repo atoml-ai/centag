@@ -129,23 +129,15 @@ func (n *TransparentForwardNode) Execute(ctx context.Context, input *NodeInput) 
 		return nil, fmt.Errorf("transparent_forward node %q: %w", n.id, err)
 	}
 
-	// Responses clients (OpenCode / Codex) POST {input:...} to /v1/responses, but
-	// configured backends are reached at /chat/completions which expects messages.
-	// 必须先于 inject_system_prompt：否则 inject 会在 Responses 体上凭空写入 messages=[system]，
-	// 导致 looksLikeResponsesBody 误判为已是 chat，responses_to_chat 桥接失败，
-	// 上游 chat SSE（含 centag-fallback-notice）会原样打给 /v1/responses 客户端。
-	responsesToChat := false
+	// Responses / Anthropic Messages 客户端 POST 到 /v1/responses 或 /v1/messages，
+	// 但配置后端出站统一为 /chat/completions。
+	// 必须先于 inject_system_prompt：否则 inject 会在异协议体上误写 messages，
+	// 导致桥接失败，上游 chat SSE 会原样打给非 chat 客户端。
+	bridgeToChat := false
+	anthropicToChat := false
 	if strings.Contains(targetURL, "/chat/completions") {
-		if rewritten, ok := convertResponsesBodyToChatCompletions(body); ok {
-			body = rewritten
-			responsesToChat = true
-		}
-		// 客户端走 /v1/responses 时，即使 body 已是 chat 形态，响应也必须走 FormatChunk，
-		// 不能 raw 透传 chat.completion.chunk。
-		if !responsesToChat && isResponsesAPIPath(requestPath) {
-			responsesToChat = true
-		}
-		// 无论是否走了 Responses 全文转换，都清洗 tools：
+		body, bridgeToChat, anthropicToChat = applyChatCompletionsRequestBridges(body, requestPath)
+		// 无论是否走了全文转换，都清洗 tools：
 		// 已是 chat 形态但带 flat/hosted tools 时，智谱会报 tools[0].function 不能为空。
 		if sanitized, ok := sanitizeChatCompletionsTools(body); ok {
 			body = sanitized
@@ -244,7 +236,7 @@ func (n *TransparentForwardNode) Execute(ctx context.Context, input *NodeInput) 
 	// 余额/额度不足：先尝试系统 fallback_model（同后端免费档或备用后端），再向上返回 error 供 FallbackGroups。
 	// 纯鉴权 401/403（无计费关键词）仍透传给客户端。
 	if config.IsBillingOrQuotaFailure(resp.StatusCode, bodyStr) {
-		if out, ok := n.retryWithSystemBillingFallback(ctx, client, method, meta, body, backendID, resolvedModel, clientModel, requestPath, responsesToChat); ok {
+		if out, ok := n.retryWithSystemBillingFallback(ctx, client, method, meta, body, backendID, resolvedModel, clientModel, requestPath, bridgeToChat, anthropicToChat); ok {
 			return out, nil
 		}
 		return nil, fmt.Errorf("transparent_forward node %q: backend=%s model=%s url=%s upstream returned %d: %s",
@@ -263,7 +255,7 @@ func (n *TransparentForwardNode) Execute(ctx context.Context, input *NodeInput) 
 			n.id, backendID, resolvedModel, targetURL, resp.StatusCode, truncateBody(respBody, 512))
 	}
 
-	return n.buildTransparentOutput(targetURL, resp.StatusCode, resp.Header.Get("Content-Type"), respBody, backendID, resolvedModel, clientModel, requestPath, responsesToChat, nil), nil
+	return n.buildTransparentOutput(targetURL, resp.StatusCode, resp.Header.Get("Content-Type"), respBody, backendID, resolvedModel, clientModel, requestPath, bridgeToChat, anthropicToChat, nil), nil
 }
 
 func isUpstreamModelOrPlaceholderError(body string) bool {
@@ -292,7 +284,7 @@ func (n *TransparentForwardNode) retryWithSystemBillingFallback(
 	meta map[string]interface{},
 	body []byte,
 	primaryBackend, primaryModel, clientModel, requestPath string,
-	responsesToChat bool,
+	bridgeToChat, anthropicToChat bool,
 ) (*NodeOutput, bool) {
 	// 只把「实际发出去的 model」标为失败。resolvedModel 可能已是免费档，但 body 仍是付费名。
 	failedModels := map[string]bool{}
@@ -310,7 +302,7 @@ func (n *TransparentForwardNode) retryWithSystemBillingFallback(
 		return nil, false
 	}
 	for _, cand := range cands {
-		out, ok := n.doBillingFallbackAttempt(ctx, client, method, meta, body, primaryBackend, primaryModel, clientModel, requestPath, responsesToChat, cand.backendID, cand.model)
+		out, ok := n.doBillingFallbackAttempt(ctx, client, method, meta, body, primaryBackend, primaryModel, clientModel, requestPath, bridgeToChat, anthropicToChat, cand.backendID, cand.model)
 		if ok {
 			return out, true
 		}
@@ -392,7 +384,7 @@ func (n *TransparentForwardNode) doBillingFallbackAttempt(
 	meta map[string]interface{},
 	body []byte,
 	primaryBackend, primaryModel, clientModel, requestPath string,
-	responsesToChat bool,
+	bridgeToChat, anthropicToChat bool,
 	fbBackend, fbModel string,
 ) (*NodeOutput, bool) {
 	retryBody := body
@@ -406,11 +398,16 @@ func (n *TransparentForwardNode) doBillingFallbackAttempt(
 	if err != nil || strings.TrimSpace(targetURL) == "" {
 		return nil, false
 	}
-	attemptResponsesToChat := responsesToChat
+	attemptBridge := bridgeToChat
+	attemptAnthropic := anthropicToChat
 	if strings.Contains(targetURL, "/chat/completions") {
-		if rewritten, ok := convertResponsesBodyToChatCompletions(retryBody); ok {
-			retryBody = rewritten
-			attemptResponsesToChat = true
+		var convertedAnthropic bool
+		retryBody, attemptBridge, convertedAnthropic = applyChatCompletionsRequestBridges(retryBody, requestPath)
+		if convertedAnthropic {
+			attemptAnthropic = true
+		}
+		if sanitized, ok := sanitizeChatCompletionsTools(retryBody); ok {
+			retryBody = sanitized
 		}
 	}
 
@@ -452,7 +449,7 @@ func (n *TransparentForwardNode) doBillingFallbackAttempt(
 		"fallback_to_model":             fbModel,
 		"fallback_used":                 true,
 	}
-	out := n.buildTransparentOutput(targetURL, resp.StatusCode, resp.Header.Get("Content-Type"), respBody, fbBackend, fbModel, clientModel, requestPath, attemptResponsesToChat, extra)
+	out := n.buildTransparentOutput(targetURL, resp.StatusCode, resp.Header.Get("Content-Type"), respBody, fbBackend, fbModel, clientModel, requestPath, attemptBridge, attemptAnthropic, extra)
 	AnnotateFallbackNotice(out)
 	return out, true
 }
@@ -463,7 +460,7 @@ func (n *TransparentForwardNode) buildTransparentOutput(
 	contentType string,
 	respBody []byte,
 	backendID, resolvedModel, clientModel, requestPath string,
-	responsesToChat bool,
+	bridgeToChat, anthropicToChat bool,
 	extraMeta map[string]interface{},
 ) *NodeOutput {
 	if contentType == "" {
@@ -520,16 +517,19 @@ func (n *TransparentForwardNode) buildTransparentOutput(
 	var toolCalls []ToolCall
 	finishReason := ""
 	reasoning := ""
-	if responsesToChat && statusCode < 400 {
+	if bridgeToChat && statusCode < 400 {
 		// 无论是否抽到正文，都必须关闭透传：否则 chat.completion SSE 会原样打给
-		// /v1/responses 客户端，OpenCode 等不到 response.* 事件会一直转圈。
+		// /v1/responses 或 /v1/messages 客户端，格式对不上会一直转圈或报错。
 		extracted := extractChatCompletionResult(respBody)
 		content = extracted.Text
 		reasoning = extracted.Reasoning
 		toolCalls = extracted.ToolCalls
 		finishReason = extracted.FinishReason
 		outMeta["raw_passthrough"] = false
-		outMeta["responses_to_chat"] = true
+		outMeta["responses_to_chat"] = true // 兼容既有 FormatChunk 判定
+		if anthropicToChat || isMessagesAPIPath(requestPath) {
+			outMeta["anthropic_to_chat"] = true
+		}
 		contentType = "text/plain"
 		outMeta["content_type"] = contentType
 		// 部分模型（如 deepseek）流式主要走 reasoning_content；正文为空时用推理文本兜底，避免空回复。
@@ -890,7 +890,7 @@ func injectSystemPromptIntoChatBody(body []byte, systemPrompt string) ([]byte, b
 	if systemPrompt == "" || len(body) == 0 {
 		return body, false
 	}
-	if looksLikeResponsesBody(body) {
+	if looksLikeResponsesBody(body) || looksLikeAnthropicMessagesBody(body) {
 		return body, false
 	}
 	result, err := promptstrategy.ApplySystemStrategy(promptstrategy.SystemApplyInput{
