@@ -92,7 +92,7 @@ func (p *Protocol) ParseRequest(c *gin.Context) (*plugin.ProxyRequest, error) {
 		Metadata:    make(map[string]interface{}),
 		RawBody:     rawBody, // [G1] map，供后端以原文为基础透传
 		Headers:     make(map[string]string),
-		System:      anthropicReq.System,
+		System:      anthropicReq.System.String(),
 	}
 
 	if anthropicReq.Temperature > 0 {
@@ -392,6 +392,58 @@ func (p *Protocol) ValidateRequest(req *plugin.ProxyRequest) error {
 
 // --- Anthropic Messages API 数据模型 ---
 
+// SystemPrompt Anthropic system 字段：官方允许 string 或 text content block 数组。
+// 归一化为文本供 ProxyRequest.System 使用；原始形态仍保留在 RawBody 中供透传。
+type SystemPrompt struct {
+	text string
+}
+
+// UnmarshalJSON 兼容 string / []ContentBlock / null。
+func (s *SystemPrompt) UnmarshalJSON(data []byte) error {
+	if string(data) == "null" {
+		s.text = ""
+		return nil
+	}
+
+	var str string
+	if err := json.Unmarshal(data, &str); err == nil {
+		s.text = str
+		return nil
+	}
+
+	var blocks []ContentBlock
+	if err := json.Unmarshal(data, &blocks); err == nil {
+		s.text = joinSystemTextBlocks(blocks)
+		return nil
+	}
+
+	return fmt.Errorf("system must be a string or array of content blocks")
+}
+
+// MarshalJSON 序列化为字符串形态（内部归一化表示）。
+func (s SystemPrompt) MarshalJSON() ([]byte, error) {
+	return json.Marshal(s.text)
+}
+
+// String 返回归一化后的 system 文本。
+func (s SystemPrompt) String() string {
+	return s.text
+}
+
+func joinSystemTextBlocks(blocks []ContentBlock) string {
+	parts := make([]string, 0, len(blocks))
+	for _, b := range blocks {
+		if b.Type != "" && b.Type != "text" {
+			continue
+		}
+		if b.Text == "" {
+			continue
+		}
+		parts = append(parts, b.Text)
+	}
+	return strings.Join(parts, "\n\n")
+}
+
 // MessagesRequest Anthropic Messages API 请求
 type MessagesRequest struct {
 	Model       string           `json:"model"`
@@ -400,7 +452,7 @@ type MessagesRequest struct {
 	Stream      bool             `json:"stream,omitempty"`
 	TopP        float64          `json:"top_p,omitempty"`
 	Temperature float64          `json:"temperature,omitempty"`
-	System      string           `json:"system,omitempty"`
+	System      SystemPrompt     `json:"system,omitempty"`
 	Tools       []ToolDefinition `json:"tools,omitempty"`
 	ToolChoice  interface{}      `json:"tool_choice,omitempty"`
 
@@ -506,10 +558,50 @@ type Citation struct {
 	EndBlockIndex   int `json:"end_block_index,omitempty"`
 }
 
+// MessageContent Anthropic message.content：官方允许 string 或 ContentBlock 数组。
+// 解析时归一为 Blocks，供内部转换使用；RawBody 仍保留原始形态。
+type MessageContent struct {
+	Blocks []ContentBlock
+}
+
+// UnmarshalJSON 兼容 string / []ContentBlock / null。
+func (mc *MessageContent) UnmarshalJSON(data []byte) error {
+	if string(data) == "null" {
+		mc.Blocks = nil
+		return nil
+	}
+
+	var str string
+	if err := json.Unmarshal(data, &str); err == nil {
+		if str == "" {
+			mc.Blocks = nil
+			return nil
+		}
+		mc.Blocks = []ContentBlock{{Type: "text", Text: str}}
+		return nil
+	}
+
+	var blocks []ContentBlock
+	if err := json.Unmarshal(data, &blocks); err == nil {
+		mc.Blocks = blocks
+		return nil
+	}
+
+	return fmt.Errorf("content must be a string or array of content blocks")
+}
+
+// MarshalJSON 序列化为 content block 数组。
+func (mc MessageContent) MarshalJSON() ([]byte, error) {
+	if mc.Blocks == nil {
+		return []byte("[]"), nil
+	}
+	return json.Marshal(mc.Blocks)
+}
+
 // Message 消息
 type Message struct {
 	Role    string         `json:"role"`
-	Content []ContentBlock `json:"content"`
+	Content MessageContent `json:"content"`
 }
 
 // Usage 使用量
@@ -529,7 +621,7 @@ func convertAnthropicMessages(messages []Message) []plugin.Message {
 		var content strings.Builder
 		var toolCalls []plugin.ToolCall
 
-		for _, block := range msg.Content {
+		for _, block := range msg.Content.Blocks {
 			switch block.Type {
 			case "text":
 				content.WriteString(block.Text)
@@ -563,7 +655,7 @@ func convertAnthropicMessages(messages []Message) []plugin.Message {
 // extractToolCallID 从消息中提取 tool_call_id（Anthropic 的 tool_result 消息）
 // [v0.2.8 G3] 修复：tool_result 的引用 id 在顶层 tool_use_id 字段，而非 input
 func extractToolCallID(msg Message) string {
-	for _, block := range msg.Content {
+	for _, block := range msg.Content.Blocks {
 		if block.Type == "tool_result" && block.ToolUseID != "" {
 			return block.ToolUseID
 		}
