@@ -34,7 +34,7 @@
               >
                 <div
                   class="agent-card"
-                  :class="{ 'agent-card--verified': agent.verified }"
+                  :class="{ 'agent-card--verified': agentHasAnyVerified(agent) }"
                 >
                   <div class="agent-card-head">
                     <div class="agent-icon">
@@ -45,73 +45,172 @@
                     <div class="agent-head-text">
                       <div class="agent-name">
                         <span class="agent-name-text">{{ agent.display_name }}</span>
-                        <el-tag v-if="agent.verified" size="small" type="success" effect="plain" class="verified-tag">
-                          {{ $t('agentSetup.verified') }}
-                        </el-tag>
                       </div>
                       <div class="agent-desc">{{ agentLocalized(agent, 'description') }}</div>
                     </div>
                   </div>
 
                   <div class="access-methods" @click.stop>
-                    <!-- 方式一：写入配置 -->
-                    <div v-if="agent.write_mode !== 'none'" class="access-method">
-                      <div class="access-method-head">
-                        <div class="access-method-titles">
-                          <span class="access-method-index">1</span>
-                          <div>
-                            <div class="access-method-title">{{ $t('agentSetup.methodWriteConfig') }}</div>
-                            <p class="access-method-hint">{{ $t('agentSetup.methodWriteConfigHint') }}</p>
+                    <template v-for="(method, idx) in agentAccessMethods(agent)" :key="method">
+                      <!-- 写入配置 -->
+                      <div v-if="method === 'write_config'" class="access-method">
+                        <div class="access-method-head">
+                          <div class="access-method-titles">
+                            <span class="access-method-index">{{ idx + 1 }}</span>
+                            <div>
+                              <div class="access-method-title">
+                                {{ $t('agentSetup.methodWriteConfig') }}
+                                <el-tag
+                                  size="small"
+                                  :type="agent.verified_write ? 'success' : 'info'"
+                                  effect="plain"
+                                  class="method-status-tag"
+                                >
+                                  {{ agent.verified_write ? $t('agentSetup.verified') : $t('agentSetup.unverified') }}
+                                </el-tag>
+                              </div>
+                              <p class="access-method-hint">
+                                {{ agent.verified_write
+                                  ? $t('agentSetup.methodWriteConfigHint')
+                                  : $t('agentSetup.methodWriteConfigUnverifiedHint') }}
+                              </p>
+                            </div>
+                          </div>
+                          <div class="access-method-actions">
+                            <el-button type="primary" size="small" @click="openWizard(agent)">
+                              {{ $t('agentSetup.writeConfigAction') }}
+                            </el-button>
+                            <el-button
+                              size="small"
+                              :loading="restoringAgent === agent.type"
+                              @click="restoreDefaults(agent)"
+                            >
+                              {{ $t('agentSetup.restoreDefault') }}
+                            </el-button>
                           </div>
                         </div>
-                        <el-button type="primary" size="small" @click="openWizard(agent)">
-                          {{ $t('agentSetup.writeConfigAction') }}
-                        </el-button>
                       </div>
-                    </div>
 
-                    <!-- 方式二：wrap 运行（无需改配置） -->
-                    <div v-if="agent.wrap_command" class="access-method">
-                      <div class="access-method-head">
-                        <div class="access-method-titles">
-                          <span class="access-method-index">{{ agent.write_mode !== 'none' ? '2' : '1' }}</span>
-                          <div>
-                            <div class="access-method-title">{{ $t('agentSetup.methodWrap') }}</div>
-                            <p class="access-method-hint">{{ $t('agentSetup.methodWrapHint') }}</p>
+                      <!-- UI 指引：只给可填参数（流水线驱动模型 ID） -->
+                      <div v-else-if="method === 'ui_guide'" class="access-method">
+                        <div class="access-method-head">
+                          <div class="access-method-titles">
+                            <span class="access-method-index">{{ idx + 1 }}</span>
+                            <div>
+                              <div class="access-method-title">
+                                {{ $t('agentSetup.methodUIGuide') }}
+                                <el-tag
+                                  size="small"
+                                  :type="agent.verified_ui ? 'success' : 'info'"
+                                  effect="plain"
+                                  class="method-status-tag"
+                                >
+                                  {{ agent.verified_ui ? $t('agentSetup.verified') : $t('agentSetup.unverified') }}
+                                </el-tag>
+                              </div>
+                              <p class="access-method-hint">
+                                {{ agent.ui_guide?.summary
+                                  || (agent.verified_ui
+                                    ? $t('agentSetup.methodUIGuideHint')
+                                    : $t('agentSetup.methodUIGuideUnverifiedHint')) }}
+                              </p>
+                            </div>
+                          </div>
+                          <div class="access-method-actions">
+                            <el-button type="primary" size="small" @click="openWizard(agent)">
+                              {{ $t('agentSetup.uiGuideAction') }}
+                            </el-button>
                           </div>
                         </div>
                       </div>
-                      <div class="wrap-cmd-row">
-                        <code class="wrap-cmd">{{ agent.wrap_command }}</code>
-                        <el-button
-                          class="wrap-copy-btn"
-                          link
-                          type="primary"
-                          :icon="DocumentCopy"
-                          :title="$t('agentSetup.copyWrapCommand')"
-                          @click="copyText(agent.wrap_command!)"
-                        />
-                      </div>
-                    </div>
 
-                    <!-- 内置 Agent：无本地配置、无 wrap -->
-                    <div
-                      v-if="agent.write_mode === 'none' && !agent.wrap_command"
-                      class="access-method"
-                    >
-                      <div class="access-method-head">
-                        <div class="access-method-titles">
-                          <span class="access-method-index">1</span>
-                          <div>
-                            <div class="access-method-title">{{ $t('agentSetup.methodBuiltin') }}</div>
-                            <p class="access-method-hint">{{ $t('agentSetup.methodBuiltinHint') }}</p>
+                      <!-- wrap CLI -->
+                      <div
+                        v-else-if="method === 'wrap_cli' && agent.wrap_command"
+                        class="access-method"
+                        :class="{ 'access-method--disabled': !wrapAvailable }"
+                      >
+                        <div class="access-method-head">
+                          <div class="access-method-titles">
+                            <span class="access-method-index">{{ idx + 1 }}</span>
+                            <div>
+                              <div class="access-method-title">
+                                {{ $t('agentSetup.methodWrap') }}
+                                <el-tag
+                                  size="small"
+                                  :type="agent.verified_wrap ? 'success' : 'info'"
+                                  effect="plain"
+                                  class="method-status-tag"
+                                >
+                                  {{ agent.verified_wrap ? $t('agentSetup.verified') : $t('agentSetup.unverified') }}
+                                </el-tag>
+                                <el-tag
+                                  v-if="proxySetupLoaded"
+                                  size="small"
+                                  :type="wrapAvailable ? 'success' : 'warning'"
+                                  effect="plain"
+                                  class="method-status-tag"
+                                >
+                                  {{ wrapAvailable ? $t('agentSetup.wrapReady') : $t('agentSetup.wrapUnavailable') }}
+                                </el-tag>
+                              </div>
+                              <p class="access-method-hint">
+                                {{ wrapMethodHint(agent) }}
+                              </p>
+                              <p v-if="companionInstallHint(agent)" class="wrap-install-hint">
+                                {{ $t('agentSetup.installCLIHint') }}：{{ companionInstallHint(agent) }}
+                              </p>
+                              <a
+                                v-if="agent.companion_cli?.install_url"
+                                class="wrap-dep-link"
+                                :href="agent.companion_cli.install_url"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                              >{{ $t('agentSetup.installGuide') }}</a>
+                              <p class="wrap-dep-line">
+                                {{ $t('agentSetup.wrapDependsOnSystemProxy') }}
+                                <a class="wrap-dep-link" href="/system-proxy" @click.prevent="goSystemProxy">
+                                  {{ $t('agentSetup.goSystemProxyPage') }}
+                                </a>
+                              </p>
+                            </div>
                           </div>
                         </div>
-                        <el-button type="primary" size="small" @click="openWizard(agent)">
-                          {{ $t('agentSetup.connectProxy') }}
-                        </el-button>
+                        <div v-if="wrapAvailable" class="wrap-cmd-row">
+                          <code class="wrap-cmd">{{ agent.wrap_command }}</code>
+                          <el-button
+                            class="wrap-copy-btn"
+                            link
+                            type="primary"
+                            :icon="DocumentCopy"
+                            :title="$t('agentSetup.copyWrapCommand')"
+                            @click="copyWrapCommand(agent.wrap_command!)"
+                          />
+                        </div>
+                        <div v-else class="wrap-unavailable">
+                          <p class="wrap-unavailable-text">{{ wrapUnavailableReason }}</p>
+                          <el-button type="warning" size="small" plain @click="goSystemProxy">
+                            {{ $t('agentSetup.goEnableSystemProxy') }}
+                          </el-button>
+                        </div>
                       </div>
-                    </div>
+
+                      <!-- 内置 -->
+                      <div v-else-if="method === 'builtin'" class="access-method">
+                        <div class="access-method-head">
+                          <div class="access-method-titles">
+                            <span class="access-method-index">{{ idx + 1 }}</span>
+                            <div>
+                              <div class="access-method-title">{{ $t('agentSetup.methodBuiltin') }}</div>
+                              <p class="access-method-hint">{{ $t('agentSetup.methodBuiltinHint') }}</p>
+                            </div>
+                          </div>
+                          <el-button type="primary" size="small" @click="openWizard(agent)">
+                            {{ $t('agentSetup.connectProxy') }}
+                          </el-button>
+                        </div>
+                      </div>
+                    </template>
                   </div>
 
                   <el-collapse class="agent-meta-collapse" @click.stop>
@@ -143,15 +242,6 @@
                           <span class="meta-fields">{{ agent.key_fields.join(', ') }}</span>
                         </div>
                         <p class="meta-method">{{ agentLocalized(agent, 'configMethod') || $t('agentSetup.noConfigMethod') }}</p>
-                        <div v-if="agent.write_mode !== 'none'" class="meta-actions">
-                          <el-button
-                            size="small"
-                            :loading="restoringAgent === agent.type"
-                            @click="restoreDefaults(agent)"
-                          >
-                            {{ $t('agentSetup.restoreDefault') }}
-                          </el-button>
-                        </div>
                       </div>
                     </el-collapse-item>
                   </el-collapse>
@@ -223,14 +313,21 @@
     >
       <el-steps :active="wizardStep" finish-status="success" align-center class="wizard-steps">
         <el-step :title="$t('agentSetup.selectPipeline')" :description="$t('agentSetup.decideRouteAndModel')" />
-        <el-step :title="$t('agentSetup.writeConfig')" :description="$t('agentSetup.applyToAgent')" />
-        <el-step :title="$t('agentSetup.verify')" :description="$t('agentSetup.confirmProxyAvailable')" />
+        <el-step
+          v-if="!isUIGuideOnlyWizard"
+          :title="$t('agentSetup.writeConfig')"
+          :description="$t('agentSetup.applyToAgent')"
+        />
+        <el-step
+          :title="isUIGuideOnlyWizard ? $t('agentSetup.uiGuideFillParams') : $t('agentSetup.verify')"
+          :description="isUIGuideOnlyWizard ? $t('agentSetup.uiGuideFillParamsDesc') : $t('agentSetup.confirmProxyAvailable')"
+        />
       </el-steps>
 
-      <!-- Step 1: 选择流水线 -->
+      <!-- Step 1: 选择流水线（UI 指引时同页展示可复制参数） -->
       <div v-show="wizardStep === 0" class="wizard-step" v-loading="loadingPipelines">
         <el-alert type="info" :closable="false" show-icon class="step-alert">
-          {{ $t('agentSetup.selectPipelineHint') }}
+          {{ isUIGuideOnlyWizard ? $t('agentSetup.uiGuidePipelineHint') : $t('agentSetup.selectPipelineHint') }}
         </el-alert>
 
         <el-alert
@@ -241,14 +338,19 @@
           class="step-alert"
         >
           <template #title>{{ $t('agentSetup.noApiKey') }}</template>
-          {{ $t('agentSetup.apiKeyAutoWrite') }}
-          {{ $t('agentSetup.apiKeyCreateFirst') }}
+          <template v-if="isUIGuideOnlyWizard">
+            {{ $t('agentSetup.uiGuideNeedApiKey') }}
+          </template>
+          <template v-else>
+            {{ $t('agentSetup.apiKeyAutoWrite') }}
+            {{ $t('agentSetup.apiKeyCreateFirst') }}
+          </template>
           <div class="alert-actions">
             <el-button type="warning" size="small" @click="goProfileForAPIKey">{{ $t('agentSetup.goToCreateApiKey') }}</el-button>
           </div>
         </el-alert>
         <el-alert
-          v-else-if="hasEnabledAPIKey === true"
+          v-else-if="hasEnabledAPIKey === true && !isUIGuideOnlyWizard"
           type="success"
           :closable="false"
           show-icon
@@ -284,7 +386,7 @@
             </el-option>
           </el-select>
 
-          <div v-if="selectedPipeline" class="pipeline-summary">
+          <div v-if="selectedPipeline && !isUIGuideOnlyWizard" class="pipeline-summary">
             <el-tag type="success" size="default">{{ $t('agentSetup.pipeline') }} {{ selectedPipelineName }}</el-tag>
             <el-tag type="info" size="default">
               <el-icon><Cpu /></el-icon>
@@ -292,11 +394,58 @@
             </el-tag>
             <span v-if="pipelineModel" class="model-hint">{{ $t('agentSetup.pipelineModelHint') }} {{ pipelineModel }}</span>
           </div>
+
+          <!-- UI 指引：可复制填表参数（模型 ID 随流水线变化） -->
+          <div v-if="isUIGuideOnlyWizard && selectedPipeline" class="ui-params-panel">
+            <div class="ui-params-header">
+              <h4 class="ui-params-title">{{ $t('agentSetup.uiGuideParamsTitle') }}</h4>
+              <p class="ui-params-summary">
+                {{ selectedAgentMeta?.ui_guide?.summary || $t('agentSetup.uiGuideParamsHint') }}
+              </p>
+            </div>
+            <div class="ui-params-list">
+              <div
+                v-for="row in uiGuideParamRows"
+                :key="row.label"
+                class="ui-param-item"
+              >
+                <div class="ui-param-item-main">
+                  <div class="ui-param-label">{{ row.label }}</div>
+                  <div class="ui-param-body">
+                    <code class="ui-param-value">{{ row.value }}</code>
+                    <div class="ui-param-actions">
+                      <el-button
+                        v-if="row.copyable"
+                        size="small"
+                        :icon="DocumentCopy"
+                        @click="copyText(row.value)"
+                      >
+                        {{ $t('agentSetup.copyValue') }}
+                      </el-button>
+                      <el-button
+                        v-if="row.action === 'goto_api_key'"
+                        size="small"
+                        type="primary"
+                        plain
+                        @click="goProfileForAPIKey"
+                      >
+                        {{ $t('agentSetup.goCopyApiKey') }}
+                      </el-button>
+                    </div>
+                  </div>
+                </div>
+                <p v-if="row.hint" class="ui-param-hint">{{ row.hint }}</p>
+              </div>
+            </div>
+            <p v-if="selectedAgentMeta?.ui_guide?.restart_hint" class="ui-params-footer">
+              {{ selectedAgentMeta.ui_guide.restart_hint }}
+            </p>
+          </div>
         </div>
       </div>
 
-      <!-- Step 2: 写入配置 -->
-      <div v-show="wizardStep === 1" class="wizard-step" v-loading="loadingConfig">
+      <!-- Step 2: 写入配置（仅 write_config Agent） -->
+      <div v-show="!isUIGuideOnlyWizard && wizardStep === 1" class="wizard-step" v-loading="loadingConfig">
         <el-alert type="info" :closable="false" show-icon class="step-alert">
           {{ $t('agentSetup.writeConfigHint', { agent: currentAgentName }) }}
           {{ $t('agentSetup.writeConfigKeySource') }}
@@ -332,7 +481,6 @@
             <el-tag>{{ $t('agentSetup.route') }} {{ configResult.backend_name }}</el-tag>
           </div>
 
-          <!-- 一键写入 -->
           <div class="config-section">
             <h4>{{ $t('agentSetup.oneClickConfig') }}</h4>
             <el-button type="primary" :loading="writingConfig" @click="writeToConfig">
@@ -343,9 +491,19 @@
               <span v-if="writeResult.success" style="color: #67c23a">✓ {{ writeResult.message }}</span>
               <span v-else style="color: #f56c6c">✗ {{ writeResult.message }}</span>
             </p>
+            <el-alert
+              v-if="writeResult?.success && (writeResult.restart_required || selectedAgentMeta?.category === 'desktop')"
+              type="warning"
+              :closable="false"
+              show-icon
+              class="step-alert"
+              style="margin-top: 12px"
+              :title="$t('agentSetup.restartClientTitle')"
+            >
+              {{ $t('agentSetup.restartClientHint') }}
+            </el-alert>
           </div>
 
-          <!-- 写入成功：只展示已写入预览，避免与「配置预览」重复 -->
           <div v-if="writeSucceeded && writePreviewFiles.length" class="config-section">
             <h4>{{ $t('agentSetup.configWritten') }}</h4>
             <el-collapse>
@@ -362,7 +520,6 @@
             </el-collapse>
           </div>
 
-          <!-- 未写入成功时：展示配置预览（脱敏）；团队版另提供命令作为备选 -->
           <template v-if="!writeSucceeded">
             <div v-if="sanitizedConfigFiles.length" class="config-section">
               <h4>{{ $t('agentSetup.configPreview') }}</h4>
@@ -409,19 +566,19 @@
         <el-empty v-else-if="!loadingConfig" :description="$t('agentSetup.configGenFailed')" />
       </div>
 
-      <!-- Step 3: 验证生效 -->
-      <div v-show="wizardStep === 2" class="wizard-step">
+      <!-- 最后一步：验证 -->
+      <div v-show="wizardStep === wizardLastStep" class="wizard-step">
         <el-result
           icon="success"
-          :title="$t('agentSetup.configReady')"
+          :title="isUIGuideOnlyWizard ? $t('agentSetup.uiGuideParamsReady') : $t('agentSetup.configReady')"
           :sub-title="$t('agentSetup.verifyHint', { agent: currentAgentName })"
         />
 
         <el-alert type="success" :closable="false" show-icon class="step-alert">
-          {{ $t('agentSetup.verifySuccessHint') }}
+          {{ isUIGuideOnlyWizard ? $t('agentSetup.uiGuideVerifyHint') : $t('agentSetup.verifySuccessHint') }}
         </el-alert>
 
-        <div v-if="configResult?.verify_cmd" class="config-section">
+        <div v-if="!isUIGuideOnlyWizard && configResult?.verify_cmd" class="config-section">
           <h4>{{ $t('agentSetup.verifyCommand') }}</h4>
           <p class="verify-desc">{{ $t('agentSetup.verifyCommandHint') }}</p>
           <div class="code-block">
@@ -433,7 +590,8 @@
         <div class="config-section">
           <h4>{{ $t('agentSetup.verifyChecklist') }}</h4>
           <ol class="verify-checklist">
-            <li>{{ $t('agentSetup.verifyChecklistStep1', { agent: currentAgentName }) }}</li>
+            <li v-if="isUIGuideOnlyWizard">{{ $t('agentSetup.uiGuideVerifyStep1') }}</li>
+            <li v-else>{{ $t('agentSetup.verifyChecklistStep1', { agent: currentAgentName }) }}</li>
             <li>{{ $t('agentSetup.verifyChecklistStep2') }}</li>
             <li>{{ $t('agentSetup.verifyChecklistStep3', { pipeline: selectedPipeline }) }}</li>
             <li>{{ $t('agentSetup.verifyChecklistStep4') }}</li>
@@ -449,7 +607,7 @@
               {{ $t('agentSetup.prevStep') }}
             </el-button>
             <el-button
-              v-if="wizardStep < 2"
+              v-if="wizardStep < wizardLastStep"
               type="primary"
               :loading="loadingConfig"
               :disabled="!canGoNext"
@@ -477,8 +635,10 @@ import {
   Monitor, ChatDotRound, DataLine, Connection, Cpu
 } from '@element-plus/icons-vue'
 import { isPersonalEdition } from '@/utils/edition'
+import { resolveApiBaseUrl } from '@/utils/apiBaseUrl'
 import { useAuthStore } from '@/stores/auth'
 import { listAPIKeys } from '@/api/user'
+import { getProxySetupStatus, type ProxySetupStatus } from '@/api/system-proxy'
 import api from '@/api'
 
 const { t, te } = useI18n()
@@ -504,6 +664,29 @@ const loadingConfig = ref(false)
 const writingConfig = ref(false)
 const restoringAgent = ref('')
 const platformTab = ref('macos')
+interface CompanionCLIInfo {
+  binary?: string
+  argv?: string[]
+  install_url?: string
+  install_hint?: string
+  note?: string
+}
+
+interface UIGuideInfo {
+  title?: string
+  summary?: string
+  doc_url?: string
+  steps?: string[]
+  fields?: Array<{ label: string; value: string; hint?: string }>
+  /** openai_base = …/v1（UI 指引默认）；chat_completions 仅兼容旧数据 */
+  request_url_kind?: 'openai_base' | 'chat_completions' | string
+  /** on / off；空则不展示「完整 URL」行 */
+  full_url_mode?: 'on' | 'off' | string
+  url_hint?: string
+  export_hint?: string
+  restart_hint?: string
+}
+
 interface AgentTypeInfo {
   type: string
   display_name: string
@@ -515,16 +698,45 @@ interface AgentTypeInfo {
   config_method?: string
   install_url?: string
   install_hint?: string
+  access_methods?: string[]
+  companion_cli?: CompanionCLIInfo
+  ui_guide?: UIGuideInfo
   verified?: boolean
+  verified_write?: boolean
+  verified_wrap?: boolean
+  verified_ui?: boolean
   wrap_command?: string
+  guide_only?: boolean
 }
 
 const agentTypes = ref<AgentTypeInfo[]>([])
 const pipelines = ref<Array<{ id: string; name: string; description?: string; nodes?: any[] }>>([])
 const configResult = ref<any>(null)
-const writeResult = ref<{ success: boolean; message: string; written?: Array<{ path: string; content: string }> } | null>(null)
+const writeResult = ref<{
+  success: boolean
+  message: string
+  written?: Array<{ path: string; content: string }>
+  restart_required?: boolean
+} | null>(null)
 /** null=未检测；true/false=是否有启用中的 API Key（列表级提示，最终以服务端解密结果为准） */
 const hasEnabledAPIKey = ref<boolean | null>(null)
+
+/** 系统代理 setup/status：wrap 依赖 MITM 已启 + 出口 Key 已配置 */
+const proxySetup = ref<ProxySetupStatus | null>(null)
+const proxySetupLoaded = ref(false)
+const wrapAvailable = computed(() =>
+  !!proxySetup.value?.mitm_enabled && !!proxySetup.value?.egress_api_key_configured
+)
+const wrapUnavailableReason = computed(() => {
+  if (!proxySetupLoaded.value) return t('agentSetup.wrapChecking')
+  if (!proxySetup.value) return t('agentSetup.wrapStatusUnknown')
+  const mitm = !!proxySetup.value.mitm_enabled
+  const egress = !!proxySetup.value.egress_api_key_configured
+  if (!mitm && !egress) return t('agentSetup.wrapNeedMitmAndEgress')
+  if (!mitm) return t('agentSetup.wrapNeedMitm')
+  if (!egress) return t('agentSetup.wrapNeedEgress')
+  return t('agentSetup.wrapUnavailable')
+})
 
 interface AgentGroup {
   id: string
@@ -533,11 +745,43 @@ interface AgentGroup {
   agents: AgentTypeInfo[]
 }
 
-/** 仅按形态分组；组内已验证优先 */
+function agentVerifyScore(a: AgentTypeInfo): number {
+  let n = 0
+  if (a.verified_write) n += 2
+  if (a.verified_ui) n += 2
+  if (a.verified_wrap) n += 1
+  return n
+}
+
+function agentHasAnyVerified(a: AgentTypeInfo): boolean {
+  return !!(a.verified_write || a.verified_wrap || a.verified_ui || a.verified)
+}
+
+/** 优先用后端 access_methods；旧接口按 write_mode / wrap 兼容推导 */
+function agentAccessMethods(agent: AgentTypeInfo | null | undefined): string[] {
+  if (!agent) return []
+  if (agent.access_methods?.length) return agent.access_methods
+  const methods: string[] = []
+  if (agent.write_mode && agent.write_mode !== 'none') methods.push('write_config')
+  if (agent.wrap_command) methods.push('wrap_cli')
+  if (!methods.length) methods.push('builtin')
+  return methods
+}
+
+function agentHasAccess(agent: AgentTypeInfo | null | undefined, method: string): boolean {
+  return agentAccessMethods(agent).includes(method)
+}
+
+function companionInstallHint(agent: AgentTypeInfo): string {
+  return agent.companion_cli?.install_hint || agent.install_hint || ''
+}
+
+/** 仅按形态分组；组内按验证完整度优先 */
 const agentGroups = computed<AgentGroup[]>(() => {
   const sortInGroup = (agents: AgentTypeInfo[]) =>
     [...agents].sort((a, b) => {
-      if (!!a.verified !== !!b.verified) return a.verified ? -1 : 1
+      const d = agentVerifyScore(b) - agentVerifyScore(a)
+      if (d !== 0) return d
       return a.type.localeCompare(b.type)
     })
 
@@ -578,16 +822,80 @@ const agentGroups = computed<AgentGroup[]>(() => {
 
 const isDesktopEdition = computed(() => isPersonalEdition())
 
-const wizardTitle = computed(() => {
-  if (!selectedAgentDisplay.value) return t('agentSetup.connectCentagProxy')
-  return `${t('agentSetup.connectCentagProxy')} — ${selectedAgentDisplay.value}`
-})
-
 const currentAgentName = computed(() => selectedAgentDisplay.value || selectedAgent.value || 'Agent')
 
 const selectedAgentMeta = computed(() =>
   agentTypes.value.find(a => a.type === selectedAgent.value) || null
 )
+
+/** 仅 UI 指引、无写配置：向导只展示可复制参数 */
+const isUIGuideOnlyWizard = computed(() => {
+  const meta = selectedAgentMeta.value
+  if (!meta) return false
+  if (meta.guide_only) return true
+  return agentHasAccess(meta, 'ui_guide') && !agentHasAccess(meta, 'write_config')
+})
+
+const wizardTitle = computed(() => {
+  if (!selectedAgentDisplay.value) return t('agentSetup.connectCentagProxy')
+  if (isUIGuideOnlyWizard.value) {
+    return `${t('agentSetup.uiGuideAction')} — ${selectedAgentDisplay.value}`
+  }
+  return `${t('agentSetup.connectCentagProxy')} — ${selectedAgentDisplay.value}`
+})
+
+const wizardLastStep = computed(() => (isUIGuideOnlyWizard.value ? 1 : 2))
+
+/** UI 指引统一推荐 OpenAI base …/v1（不带 /chat/completions） */
+const uiGuideRequestURL = computed(() => {
+  const origin = resolveApiBaseUrl({
+    host: typeof window !== 'undefined' ? window.location.hostname : '127.0.0.1',
+    port: 20060,
+  }).replace(/\/$/, '')
+  return `${origin}/v1`
+})
+
+const uiGuideModelID = computed(() =>
+  selectedPipeline.value ? `centag/${selectedPipeline.value}` : ''
+)
+
+interface UIGuideParamRow {
+  label: string
+  value: string
+  copyable?: boolean
+  hint?: string
+  action?: 'goto_api_key'
+}
+
+const uiGuideParamRows = computed((): UIGuideParamRow[] => {
+  if (!selectedPipeline.value) return []
+  const guide = selectedAgentMeta.value?.ui_guide
+  const rows: UIGuideParamRow[] = [
+    { label: t('agentSetup.uiParamApiFormat'), value: 'OpenAI', copyable: true },
+  ]
+  const fullMode = guide?.full_url_mode
+  if (fullMode === 'on' || fullMode === 'off') {
+    rows.push({
+      label: t('agentSetup.uiParamFullURL'),
+      value: fullMode === 'on' ? t('agentSetup.uiParamFullURLOn') : t('agentSetup.uiParamFullURLOff'),
+    })
+  }
+  rows.push({
+    label: t('agentSetup.uiParamRequestURLBase'),
+    value: uiGuideRequestURL.value,
+    copyable: true,
+    hint: guide?.url_hint || t('agentSetup.uiParamRequestURLHint'),
+  })
+  rows.push(
+    { label: t('agentSetup.uiParamModelID'), value: uiGuideModelID.value, copyable: true },
+    {
+      label: t('agentSetup.uiParamAPIKey'),
+      value: t('agentSetup.uiParamAPIKeyHint'),
+      action: 'goto_api_key',
+    },
+  )
+  return rows
+})
 
 const selectedPipelineName = computed(() => {
   const pipe = pipelines.value.find(p => p.id === selectedPipeline.value)
@@ -598,9 +906,14 @@ const writeSucceeded = computed(() => !!writeResult.value?.success)
 
 const canGoNext = computed(() => {
   if (wizardStep.value === 0) {
-    return !!selectedPipeline.value && pipelines.value.length > 0 && hasEnabledAPIKey.value !== false
+    if (!selectedPipeline.value || pipelines.value.length === 0) return false
+    // UI 指引：Key 在客户端填写，不强制本机已有可解密 Key
+    if (isUIGuideOnlyWizard.value) return true
+    return hasEnabledAPIKey.value !== false
   }
-  if (wizardStep.value === 1) return !!configResult.value && !loadingConfig.value
+  if (!isUIGuideOnlyWizard.value && wizardStep.value === 1) {
+    return !!configResult.value && !loadingConfig.value
+  }
   return true
 })
 
@@ -761,12 +1074,16 @@ function goPipelines() {
 async function nextStep() {
   if (wizardStep.value === 0) {
     if (!selectedPipeline.value) return
+    if (isUIGuideOnlyWizard.value) {
+      wizardStep.value = 1
+      return
+    }
     const ok = await generateConfig()
     if (!ok) return
     wizardStep.value = 1
     return
   }
-  if (wizardStep.value === 1 && configResult.value) {
+  if (!isUIGuideOnlyWizard.value && wizardStep.value === 1 && configResult.value) {
     wizardStep.value = 2
   }
 }
@@ -845,7 +1162,16 @@ async function writeToConfig() {
     })
     writeResult.value = res
     if (res.success) {
-      ElMessage.success(t('agentSetup.configWriteSuccess'))
+      ElMessage.success(res.message || t('agentSetup.configWriteSuccess'))
+      const needRestart =
+        !!res.restart_required || selectedAgentMeta.value?.category === 'desktop'
+      if (needRestart) {
+        await ElMessageBox.alert(
+          res.message || t('agentSetup.restartClientHint'),
+          t('agentSetup.restartClientTitle'),
+          { type: 'warning', confirmButtonText: t('agentSetup.gotIt') }
+        ).catch(() => { /* closed */ })
+      }
     } else {
       ElMessage.error(t('agentSetup.configWriteFailed') + res.message)
     }
@@ -864,6 +1190,44 @@ function copyText(text: string) {
   }).catch(() => {
     ElMessage.error(t('agentSetup.copyFailed'))
   })
+}
+
+function copyWrapCommand(text: string) {
+  if (!wrapAvailable.value) {
+    ElMessage.warning(wrapUnavailableReason.value)
+    return
+  }
+  copyText(text)
+}
+
+/** 桌面 Agent 的 wrap 启动的是配套 CLI，不是 .app */
+function wrapMethodHint(agent: AgentTypeInfo): string {
+  if (agent.companion_cli?.note) {
+    return agent.companion_cli.note
+  }
+  if (agent.category === 'desktop') {
+    return agent.verified_wrap
+      ? t('agentSetup.methodWrapDesktopCLIHint')
+      : t('agentSetup.methodWrapDesktopCLIUnverifiedHint')
+  }
+  return agent.verified_wrap
+    ? t('agentSetup.methodWrapHint')
+    : t('agentSetup.methodWrapUnverifiedHint')
+}
+
+function goSystemProxy() {
+  router.push('/system-proxy')
+}
+
+async function loadProxySetupStatus() {
+  proxySetupLoaded.value = false
+  try {
+    proxySetup.value = await getProxySetupStatus()
+  } catch {
+    proxySetup.value = null
+  } finally {
+    proxySetupLoaded.value = true
+  }
 }
 
 function agentIcon(type: string) {
@@ -966,6 +1330,7 @@ async function handleHotSwap(provider: AgentProviderConfig) {
 
 onMounted(() => {
   loadAgentTypes()
+  loadProxySetupStatus()
   if (isAdmin.value) {
     loadProviders()
   }
@@ -1118,12 +1483,6 @@ onMounted(() => {
   line-height: 1.3;
 }
 
-.verified-tag {
-  font-weight: 500;
-  height: 20px;
-  padding: 0 6px;
-}
-
 .agent-desc {
   color: #909399;
   font-size: 0.78rem;
@@ -1148,11 +1507,62 @@ onMounted(() => {
   border: 1px solid #eef0f4;
 }
 
+.access-method--disabled {
+  background: #fafafa;
+  border-style: dashed;
+}
+
+.method-status-tag {
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
+.wrap-dep-line {
+  margin: 4px 0 0;
+  font-size: 0.72rem;
+  line-height: 1.45;
+  color: #909399;
+}
+
+.wrap-dep-link {
+  color: var(--el-color-primary);
+  text-decoration: none;
+  margin-left: 2px;
+}
+
+.wrap-dep-link:hover {
+  text-decoration: underline;
+}
+
+.wrap-unavailable {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.wrap-unavailable-text {
+  margin: 0;
+  font-size: 0.75rem;
+  line-height: 1.45;
+  color: #909399;
+}
+
 .access-method-head {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 10px;
+}
+
+.access-method-actions {
+  flex-shrink: 0;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
 }
 
 .access-method-titles {
@@ -1190,6 +1600,135 @@ onMounted(() => {
   font-size: 0.72rem;
   color: #909399;
   line-height: 1.4;
+}
+
+.wrap-install-hint {
+  margin: 4px 0 0;
+  font-size: 0.72rem;
+  color: #606266;
+  line-height: 1.4;
+}
+
+.ui-params-panel {
+  margin-top: 20px;
+  padding: 18px 20px;
+  border-radius: 10px;
+  background: #fafbfc;
+  border: 1px solid #e4e7ed;
+}
+
+.ui-params-header {
+  margin-bottom: 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #ebeef5;
+}
+
+.ui-params-title {
+  margin: 0 0 6px;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #303133;
+  line-height: 1.4;
+}
+
+.ui-params-summary {
+  margin: 0;
+  font-size: 0.875rem;
+  color: #606266;
+  line-height: 1.55;
+}
+
+.ui-params-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ui-param-item {
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: #fff;
+  border: 1px solid #ebeef5;
+}
+
+.ui-param-item-main {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
+  gap: 12px 16px;
+  align-items: start;
+}
+
+.ui-param-label {
+  padding-top: 8px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #606266;
+  line-height: 1.4;
+}
+
+.ui-param-body {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.ui-param-value {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: #f5f7fa;
+  border: 1px solid #e4e7ed;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.875rem;
+  color: #303133;
+  line-height: 1.45;
+  word-break: break-all;
+  user-select: all;
+}
+
+.ui-param-actions {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ui-param-hint {
+  margin: 8px 0 0 112px;
+  font-size: 0.8125rem;
+  color: #909399;
+  line-height: 1.45;
+}
+
+.ui-params-footer {
+  margin: 14px 0 0;
+  padding-top: 12px;
+  border-top: 1px solid #ebeef5;
+  font-size: 0.875rem;
+  color: #909399;
+  line-height: 1.5;
+}
+
+@media (max-width: 640px) {
+  .ui-param-item-main {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+
+  .ui-param-label {
+    padding-top: 0;
+  }
+
+  .ui-param-body {
+    flex-wrap: wrap;
+  }
+
+  .ui-param-hint {
+    margin-left: 0;
+  }
 }
 
 .wrap-cmd-row {
@@ -1291,10 +1830,6 @@ onMounted(() => {
   flex-direction: column;
   align-items: flex-start;
   gap: 2px;
-}
-
-.meta-actions {
-  margin-top: 8px;
 }
 
 .meta-label {
