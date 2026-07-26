@@ -3,6 +3,72 @@
   "subtitle": "Подключите инструменты Agent к прокси Centag: выберите пайплайн, напишите конфиг и проверьте",
   "quickSetup": "Быстрая настройка",
   "quickSetupHint": "У каждого Agent показаны способы доступа по матрице возможностей: запись конфига, UI-гайд, wrap сопутствующего CLI или встроенный процесс.\nСпособы помечены «Проверено / Не проверено» — непроверено не значит недоступно. Как правило, запись адреса Centag, имени модели и API Key подходит любому Agent и является универсальным, стандартным способом; проверьте самостоятельно.",
+  "verified": "Проверено",
+  "unverified": "Не проверено",
+  "groupCli": "CLI",
+  "groupCliHint": "Терминальные агенты. Большинство могут писать локальный конфиг; у сопутствующих CLI доступен wrap.",
+  "groupDesktop": "Desktop",
+  "groupDesktopHint": "При поддержке — запись локального конфига; иначе следуйте UI-гайду в приложении. Сопутствующие CLI можно запускать через wrap (не .app).",
+  "groupTui": "Встроенный TUI",
+  "groupTuiHint": "Внутрипроцессные терминальные агенты; локальные конфиги не пишутся.",
+  "groupWeb": "Встроенный Web",
+  "groupWebHint": "Внутрипроцессные браузерные агенты; локальные конфиги не пишутся.",
+  "groupOther": "Прочее",
+  "groupOtherHint": "Агенты без категории.",
+  "moreDetails": "Подробнее",
+  "methodWriteConfig": "Запись конфига",
+  "methodWriteConfigHint": "Выберите пайплайн в мастере и запишите локальный конфиг Agent (проверено разработчиками).",
+  "methodWriteConfigUnverifiedHint": "Подключение через мастер доступно. «Не проверено» значит лишь, что разработчики лично не проверяли — не то, что способ недоступен.",
+  "writeConfigAction": "Записать конфиг",
+  "methodUIGuide": "Параметры UI",
+  "methodUIGuideHint": "Заполните поля пользовательской модели в приложении. После выбора пайплайна можно скопировать URL запроса и ID модели (проверено разработчиками).",
+  "methodUIGuideUnverifiedHint": "Заполните поля пользовательской модели в приложении. «Не проверено» значит лишь, что разработчики лично не проверяли — не то, что способ недоступен.",
+  "uiGuideAction": "Параметры",
+  "uiGuidePipelineHint": "После выбора пайплайна ID модели ниже станет centag/<id-пайплайна>. Скопируйте значения в форму пользовательской модели клиента.",
+  "uiGuideParamsTitle": "Заполните эти значения в клиенте",
+  "uiGuideParamsHint": "Откройте настройки пользовательской модели в клиенте и заполните таблицу ниже.",
+  "uiGuideFillParams": "Заполнить в клиенте",
+  "uiGuideFillParamsDesc": "Скопируйте значения и добавьте модель",
+  "uiGuideParamsReady": "Значения готовы",
+  "uiGuideVerifyHint": "После добавления и выбора модели в клиенте отправьте короткий чат и подтвердите его в журнале запросов Centag.",
+  "uiGuideVerifyStep1": "В клиенте «Настройки → Модели» добавьте пользовательскую модель и вставьте URL запроса и ID модели из предыдущего шага.",
+  "uiGuideNeedApiKey": "Сначала создайте Centag API Key и вставьте его в поле API Key клиента (автоматически не записывается).",
+  "uiParamApiFormat": "Формат API",
+  "uiParamFullURL": "Полный URL",
+  "uiParamFullURLOn": "Вкл.",
+  "uiParamFullURLOff": "Выкл.",
+  "uiParamRequestURL": "URL запроса",
+  "uiParamRequestURLBase": "URL запроса",
+  "uiParamRequestURLFull": "URL запроса (…/v1/chat/completions)",
+  "uiParamRequestURLHint": "Предпочтительно …/v1 (без /chat/completions). При ошибке клиента попробуйте …/v1/chat/completions.",
+  "uiParamModelID": "ID модели",
+  "uiParamAPIKey": "API Key",
+  "uiParamAPIKeyHint": "Ключ llmproxy_* из Профиль → API Keys",
+  "goCopyApiKey": "Скопировать API Key",
+  "copyValue": "Копировать",
+  "installCLIHint": "Установить сопутствующий CLI",
+  "methodWrap": "wrap run",
+  "methodWrapHint": "Без изменений конфига Agent; трафик перехватывается системным прокси (проверено разработчиками).",
+  "methodWrapUnverifiedHint": "Можно попробовать без изменений конфига Agent. «Не проверено» значит лишь, что разработчики лично не проверяли — не то, что способ недоступен.",
+  "methodWrapDesktopCLIHint": "wrap запускает сопутствующий CLI (не desktop .app) через системный прокси (проверено разработчиками). Сначала установите CLI.",
+  "methodWrapDesktopCLIUnverifiedHint": "wrap запускает сопутствующий CLI (не desktop .app). «Не проверено» не значит недоступно; установите CLI и подготовьте системный прокси.",
+  "wrapDependsOnSystemProxy": "Требуется работающий системный прокси (MITM + ключ egress).",
+  "goSystemProxyPage": "Открыть системный прокси",
+  "methodBuiltin": "Внутри процесса",
+  "methodBuiltinHint": "Встроенный Agent — выберите пайплайн в мастере и используйте сразу.",
+  "restartClientTitle": "Перезапустите клиент",
+  "restartClientHint": "После записи конфига полностью закройте и снова откройте клиент, чтобы новые настройки вступили в силу.",
+  "gotIt": "Понятно",
+  "copyWrapCommand": "Копировать команду",
+  "wrapHint": "В отличие от записи конфига: wrap перехватывает трафик системным прокси (без правок конфига Agent); показано здесь для удобной проверки.",
+  "wrapReady": "Готово",
+  "wrapUnavailable": "Недоступно",
+  "wrapChecking": "Проверка статуса системного прокси…",
+  "wrapStatusUnknown": "Не удалось загрузить статус системного прокси. Откройте «Системный прокси» и убедитесь, что MITM включён и настроен ключ egress.",
+  "wrapNeedMitm": "Системный прокси выключен (MITM не запущен). Включите его в «Системный прокси» перед использованием wrap.",
+  "wrapNeedEgress": "Ключ egress API не настроен. Завершите настройку ключа egress в «Системный прокси» перед использованием wrap.",
+  "wrapNeedMitmAndEgress": "Системный прокси не готов: запустите MITM и настройте ключ egress API в «Системный прокси».",
+  "goEnableSystemProxy": "Включить системный прокси",
   "connectProxy": "Подключить прокси",
   "restoreDefault": "Восстановить по умолчанию",
   "providerConfig": "Настройка провайдера",
@@ -91,5 +157,89 @@
   "writeModeMerge": "Слияние",
   "writeModeNone": "Без локального конфига",
   "installGuide": "Руководство по установке",
-  "noConfigMethod": "Описание метода конфигурации отсутствует"
+  "noConfigMethod": "Описание метода конфигурации отсутствует",
+  "agents": {
+    "claude-code": {
+      "description": "Официальный CLI AI-ассистента для кода от Anthropic",
+      "configMethod": "Пишет ~/.claude/settings.json, объединяя env.ANTHROPIC_BASE_URL / ANTHROPIC_AUTH_TOKEN / ANTHROPIC_MODEL на Centag. Первая перезапись создаёт резервную копию .centag-bak.",
+      "installHint": "macOS/Linux: curl -fsSL https://claude.ai/install.sh {'|'} bash; or brew install --cask claude-code"
+    },
+    "claude-desktop": {
+      "description": "Официальный десктоп-клиент Anthropic",
+      "configMethod": "На macOS/Windows: задаёт deploymentMode=3p для Claude + Claude-3p и записывает профиль шлюза Centag в configLibrary (inferenceGatewayBaseUrl / ApiKey / AuthScheme=bearer / inferenceProvider=gateway). Перезапустите Desktop для применения.",
+      "configMethodUnsupported": "Локальная запись для Claude Desktop на этой платформе не поддерживается (только macOS/Windows). Используйте быструю настройку на поддерживаемой системе.",
+      "installHint": "Скачайте приложение Claude Desktop с официального сайта (не CLI)"
+    },
+    "codex": {
+      "description": "Официальный CLI AI-ассистента для кода от OpenAI (ChatGPT Codex)",
+      "configMethod": "Перезаписывает ~/.codex/auth.json (OPENAI_API_KEY) и ~/.codex/config.toml (model_provider=custom, base_url → Centag, wire_api=responses).",
+      "installHint": "curl -fsSL https://chatgpt.com/codex/install.sh {'|'} sh; or npm i -g {'@'}openai/codex"
+    },
+    "gemini-cli": {
+      "description": "Официальный CLI AI-ассистента для кода от Google",
+      "configMethod": "Пишет ~/.gemini/.env (GEMINI_API_KEY / GOOGLE_GEMINI_BASE_URL / GEMINI_MODEL) и объединяет settings.json security.auth.selectedType=gemini-api-key.",
+      "installHint": "npm i -g {'@'}google/gemini-cli; or brew install gemini-cli"
+    },
+    "grok-build": {
+      "description": "CLI ассистента для кода xAI Grok",
+      "configMethod": "Перезаписывает ~/.grok/config.toml: [models] default=\"centag\" и поля [model.\"centag\"] (model / base_url / api_key / api_backend=responses).",
+      "installHint": "curl -fsSL https://x.ai/cli/install.sh {'|'} bash; or npm i -g {'@'}xai-official/grok"
+    },
+    "opencode": {
+      "description": "AI-ассистент для кода (opencode.ai)",
+      "configMethod": "Объединяет в ~/.config/opencode/opencode.json: upsert provider.centag и задаёт модель по умолчанию. Другие провайдеры сохраняются.",
+      "installHint": "curl -fsSL https://opencode.ai/install {'|'} bash; or npm i -g opencode-ai"
+    },
+    "openclaw": {
+      "description": "AI-ассистент для кода (openclaw)",
+      "configMethod": "Объединяет в ~/.openclaw/openclaw.json: upsert models.providers.centag и задаёт agents.defaults.model.primary.",
+      "installHint": "npm i -g openclaw",
+      "wrapHint": "Вызовы LLM OpenClaw идут через шлюз LaunchAgent; один только wrap `openclaw` трафик не перехватит. Сначала выполните `openclaw gateway stop`, затем скопируйте команду ниже (`tui --local` в том же процессе). Для тестов wrap укажите baseUrl на URL вендора не-Centag (запись конфига в Centag — отдельный путь)."
+    },
+    "pi": {
+      "description": "Набор инструментов AI-агента / CLI coding agent (pi.dev)",
+      "configMethod": "Объединяет в ~/.pi/agent/models.json: upsert providers.centag (api=openai-completions) и задаёт defaultProvider/defaultModel в settings.json.",
+      "installHint": "curl -fsSL https://pi.dev/install.sh {'|'} sh; or npm i -g --ignore-scripts {'@'}earendil-works/pi-coding-agent"
+    },
+    "hermes": {
+      "description": "Фреймворк AI-агентов, ориентированный на задачи",
+      "configMethod": "Объединяет в ~/.hermes/config.yaml: обновляет значения model по умолчанию и upsert запись custom_providers с name=centag.",
+      "installHint": "curl -fsSL https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.sh {'|'} bash; or pip install \"hermes-agent[web]\""
+    },
+    "codebuddy": {
+      "description": "Десктоп Tencent CodeBuddy; сопутствующий CodeBuddy Code CLI (codebuddy) использует общий models.json",
+      "configMethod": "Объединяет в ~/.codebuddy/models.json. url должен быть полным путём …/v1/chat/completions; общий для desktop и CLI.",
+      "installHint": "Desktop: download from site. CLI (for wrap): npm i -g {'@'}tencent-ai/codebuddy-code; or brew install codebuddy-code"
+    },
+    "workbuddy": {
+      "description": "Десктоп-ассистент Tencent WorkBuddy (заполните поля пользовательской модели в настройках)",
+      "configMethod": "В WorkBuddy «Настройки → Модели» добавьте пользовательский API: предпочтительно …/v1 (…/v1/chat/completions тоже работает); ID модели centag/<pipeline>.",
+      "installHint": "Скачайте десктоп-приложение с сайта CodeBuddy / WorkBuddy"
+    },
+    "trae": {
+      "description": "IDE ByteDance TRAE (пользовательские модели, совместимые с OpenAI; добавляются в IDE)",
+      "configMethod": "TRAE: Настройки → Модели → Добавить → Пользовательская. Формат OpenAI; Full URL выкл.; URL запроса = …/v1; ID модели = centag/<pipeline>.",
+      "installHint": "Скачайте с trae.ai / trae.cn; пользовательские модели добавляются в «Настройки → Модели»"
+    },
+    "coding-tui": {
+      "description": "Терминальный UI-агент для кодирования",
+      "configMethod": "TUI-агенты не пишут локальные конфиги; маршрутизация привязывается внутри процесса через пайплайны.",
+      "installHint": "Встроенная возможность; отдельная установка CLI не нужна"
+    },
+    "education-tui": {
+      "description": "Терминальный UI-агент для образования",
+      "configMethod": "TUI-агенты не пишут локальные конфиги; маршрутизация привязывается внутри процесса через пайплайны.",
+      "installHint": "Встроенная возможность; отдельная установка CLI не нужна"
+    },
+    "coding-web": {
+      "description": "Веб-агент автоматизации для кодирования",
+      "configMethod": "Web-агенты не пишут локальные конфиги; маршрутизация привязывается внутри процесса через браузерную автоматизацию.",
+      "installHint": "Встроенная возможность; отдельная установка CLI не нужна"
+    },
+    "education-web": {
+      "description": "Веб-агент автоматизации для образования",
+      "configMethod": "Web-агенты не пишут локальные конфиги; маршрутизация привязывается внутри процесса через браузерную автоматизацию.",
+      "installHint": "Встроенная возможность; отдельная установка CLI не нужна"
+    }
+  }
 }

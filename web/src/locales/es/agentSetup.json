@@ -3,6 +3,72 @@
   "subtitle": "Conecte herramientas Agent al proxy Centag: seleccione pipeline, escriba config y verifique",
   "quickSetup": "Configuración Rápida",
   "quickSetupHint": "Cada Agent muestra métodos de acceso según su matriz: escribir config, guía UI, wrap del CLI acompañante o proceso integrado.\nCada método se marca Verificado/No verificado — No verificado no significa no disponible. En general, escribir la URL, el modelo y la API Key de Centag es un enfoque universal y estándar para cualquier Agent; verifíquelo usted mismo.",
+  "verified": "Verificado",
+  "unverified": "No verificado",
+  "groupCli": "CLI",
+  "groupCliHint": "Agentes de terminal. La mayoría pueden escribir config local; los CLI acompañantes pueden usar wrap.",
+  "groupDesktop": "Escritorio",
+  "groupDesktopHint": "Escribe config local si está admitido; si no, sigue la guía UI en la app. Los CLI acompañantes pueden usar wrap (no el .app).",
+  "groupTui": "TUI integrado",
+  "groupTuiHint": "Agentes de terminal en proceso; no escriben archivos de config local.",
+  "groupWeb": "Web integrado",
+  "groupWebHint": "Agentes de automatización del navegador en proceso; no escriben archivos de config local.",
+  "groupOther": "Otros",
+  "groupOtherHint": "Agentes sin categoría.",
+  "moreDetails": "Más detalles",
+  "methodWriteConfig": "Escribir config",
+  "methodWriteConfigHint": "Elija un pipeline en el asistente y escriba la config local del Agent (verificado por desarrolladores).",
+  "methodWriteConfigUnverifiedHint": "Puede conectar con el asistente. No verificado solo significa que los desarrolladores no lo han comprobado personalmente — no que no esté disponible.",
+  "writeConfigAction": "Escribir config",
+  "methodUIGuide": "Valores de config UI",
+  "methodUIGuideHint": "Complete los campos de modelo personalizado en la app. Tras elegir un pipeline puede copiar la URL de solicitud y el ID del modelo (verificado por desarrolladores).",
+  "methodUIGuideUnverifiedHint": "Complete los campos de modelo personalizado en la app. No verificado solo significa que los desarrolladores no lo han comprobado personalmente — no que no esté disponible.",
+  "uiGuideAction": "Valores de config",
+  "uiGuidePipelineHint": "Tras elegir un pipeline, el ID del modelo abajo será centag/<id-pipeline>. Copie los valores al formulario de modelo personalizado del cliente.",
+  "uiGuideParamsTitle": "Rellene estos valores en el cliente",
+  "uiGuideParamsHint": "Abra la configuración de modelo personalizado en el cliente y complete la tabla inferior.",
+  "uiGuideFillParams": "Rellenar en el cliente",
+  "uiGuideFillParamsDesc": "Copie valores y añada el modelo",
+  "uiGuideParamsReady": "Valores listos",
+  "uiGuideVerifyHint": "Tras añadir y seleccionar el modelo en el cliente, envíe un chat breve y confírmelo en los registros de solicitudes de Centag.",
+  "uiGuideVerifyStep1": "En el cliente, Ajustes → Modelos, añada un modelo personalizado y pegue la URL de solicitud y el ID del modelo del paso anterior.",
+  "uiGuideNeedApiKey": "Cree primero una API Key de Centag y péguela en el campo API Key del cliente (no se escribe automáticamente).",
+  "uiParamApiFormat": "Formato API",
+  "uiParamFullURL": "URL completa",
+  "uiParamFullURLOn": "Activado",
+  "uiParamFullURLOff": "Desactivado",
+  "uiParamRequestURL": "URL de solicitud",
+  "uiParamRequestURLBase": "URL de solicitud",
+  "uiParamRequestURLFull": "URL de solicitud (…/v1/chat/completions)",
+  "uiParamRequestURLHint": "Prefiera …/v1 (sin /chat/completions). Si el cliente da error, pruebe …/v1/chat/completions.",
+  "uiParamModelID": "ID del modelo",
+  "uiParamAPIKey": "API Key",
+  "uiParamAPIKeyHint": "Clave llmproxy_* de Perfil → API Keys",
+  "goCopyApiKey": "Copiar API Key",
+  "copyValue": "Copiar",
+  "installCLIHint": "Instalar CLI acompañante",
+  "methodWrap": "wrap run",
+  "methodWrapHint": "Sin cambios en la config del Agent; el tráfico lo intercepta el proxy del sistema (verificado por desarrolladores).",
+  "methodWrapUnverifiedHint": "Puede probarlo sin cambios en la config del Agent. No verificado solo significa que los desarrolladores no lo han comprobado personalmente — no que no esté disponible.",
+  "methodWrapDesktopCLIHint": "wrap lanza el CLI acompañante (no el .app de escritorio) vía proxy del sistema (verificado por desarrolladores). Instale el CLI primero.",
+  "methodWrapDesktopCLIUnverifiedHint": "wrap lanza el CLI acompañante (no el .app de escritorio). No verificado no significa no disponible; instale el CLI y asegúrese de que el proxy del sistema esté listo.",
+  "wrapDependsOnSystemProxy": "Requiere que el servicio de proxy del sistema esté en ejecución (MITM + clave de egreso).",
+  "goSystemProxyPage": "Abrir proxy del sistema",
+  "methodBuiltin": "En proceso",
+  "methodBuiltinHint": "Agent integrado — elija un pipeline en el asistente y úselo directamente.",
+  "restartClientTitle": "Reinicie el cliente",
+  "restartClientHint": "Tras escribir la config, cierre por completo y vuelva a abrir el cliente para que la nueva configuración surta efecto.",
+  "gotIt": "Entendido",
+  "copyWrapCommand": "Copiar comando",
+  "wrapHint": "A diferencia de escribir config: wrap usa el proxy del sistema para interceptar tráfico (sin editar la config del Agent); se muestra aquí para facilitar la verificación.",
+  "wrapReady": "Listo",
+  "wrapUnavailable": "No disponible",
+  "wrapChecking": "Comprobando estado del proxy del sistema…",
+  "wrapStatusUnknown": "No se pudo cargar el estado del proxy del sistema. Abra Proxy del sistema y confirme que MITM está activado y hay una clave de egreso configurada.",
+  "wrapNeedMitm": "El proxy del sistema está desactivado (MITM no en ejecución). Actívelo en Proxy del sistema antes de usar wrap.",
+  "wrapNeedEgress": "La clave API de egreso no está configurada. Complete la configuración de la clave de egreso en Proxy del sistema antes de usar wrap.",
+  "wrapNeedMitmAndEgress": "El proxy del sistema no está listo: inicie MITM y configure una clave API de egreso en Proxy del sistema.",
+  "goEnableSystemProxy": "Activar proxy del sistema",
   "connectProxy": "Conectar Proxy",
   "restoreDefault": "Restaurar Predeterminado",
   "providerConfig": "Configuración de Proveedor",
@@ -91,5 +157,89 @@
   "writeModeMerge": "Fusionar",
   "writeModeNone": "Sin config local",
   "installGuide": "Guía de instalación",
-  "noConfigMethod": "Sin método de configuración documentado"
+  "noConfigMethod": "Sin método de configuración documentado",
+  "agents": {
+    "claude-code": {
+      "description": "CLI oficial del asistente de código con IA de Anthropic",
+      "configMethod": "Escribe ~/.claude/settings.json fusionando env.ANTHROPIC_BASE_URL / ANTHROPIC_AUTH_TOKEN / ANTHROPIC_MODEL hacia Centag. La primera sobrescritura crea una copia de seguridad .centag-bak.",
+      "installHint": "macOS/Linux: curl -fsSL https://claude.ai/install.sh {'|'} bash; or brew install --cask claude-code"
+    },
+    "claude-desktop": {
+      "description": "Cliente de escritorio oficial de Anthropic",
+      "configMethod": "En macOS/Windows: establece deploymentMode=3p en Claude + Claude-3p y escribe un perfil de gateway Centag en configLibrary (inferenceGatewayBaseUrl / ApiKey / AuthScheme=bearer / inferenceProvider=gateway). Reinicie Desktop para aplicar.",
+      "configMethodUnsupported": "La escritura local de Claude Desktop no es compatible en esta plataforma (solo macOS/Windows). Use la configuración con un clic en un sistema admitido.",
+      "installHint": "Descargue la app Claude Desktop del sitio oficial (no es un CLI)"
+    },
+    "codex": {
+      "description": "CLI oficial del asistente de código con IA de OpenAI (ChatGPT Codex)",
+      "configMethod": "Sobrescribe ~/.codex/auth.json (OPENAI_API_KEY) y ~/.codex/config.toml (model_provider=custom, base_url → Centag, wire_api=responses).",
+      "installHint": "curl -fsSL https://chatgpt.com/codex/install.sh {'|'} sh; or npm i -g {'@'}openai/codex"
+    },
+    "gemini-cli": {
+      "description": "CLI oficial del asistente de código con IA de Google",
+      "configMethod": "Escribe ~/.gemini/.env (GEMINI_API_KEY / GOOGLE_GEMINI_BASE_URL / GEMINI_MODEL) y fusiona settings.json security.auth.selectedType=gemini-api-key.",
+      "installHint": "npm i -g {'@'}google/gemini-cli; or brew install gemini-cli"
+    },
+    "grok-build": {
+      "description": "CLI del asistente de código xAI Grok",
+      "configMethod": "Sobrescribe ~/.grok/config.toml con [models] default=\"centag\" y campos [model.\"centag\"] (model / base_url / api_key / api_backend=responses).",
+      "installHint": "curl -fsSL https://x.ai/cli/install.sh {'|'} bash; or npm i -g {'@'}xai-official/grok"
+    },
+    "opencode": {
+      "description": "Asistente de código con IA (opencode.ai)",
+      "configMethod": "Fusiona en ~/.config/opencode/opencode.json: upsert de provider.centag y modelo predeterminado. Se conservan otros proveedores.",
+      "installHint": "curl -fsSL https://opencode.ai/install {'|'} bash; or npm i -g opencode-ai"
+    },
+    "openclaw": {
+      "description": "Asistente de código con IA (openclaw)",
+      "configMethod": "Fusiona en ~/.openclaw/openclaw.json: upsert de models.providers.centag y agents.defaults.model.primary.",
+      "installHint": "npm i -g openclaw",
+      "wrapHint": "Las llamadas LLM de OpenClaw las hace el gateway LaunchAgent; wrap de solo `openclaw` no interceptará el tráfico. Ejecute primero `openclaw gateway stop` y luego copie el comando de abajo (`tui --local` en proceso). Para pruebas wrap, apunte baseUrl a una URL de proveedor no Centag (escribir config a Centag es otra vía)."
+    },
+    "pi": {
+      "description": "Kit de herramientas de agente IA / CLI de agente de código (pi.dev)",
+      "configMethod": "Fusiona en ~/.pi/agent/models.json: upsert de providers.centag (api=openai-completions) y defaultProvider/defaultModel en settings.json.",
+      "installHint": "curl -fsSL https://pi.dev/install.sh {'|'} sh; or npm i -g --ignore-scripts {'@'}earendil-works/pi-coding-agent"
+    },
+    "hermes": {
+      "description": "Framework de agentes IA orientado a tareas",
+      "configMethod": "Fusiona en ~/.hermes/config.yaml: actualiza valores predeterminados de model y hace upsert de custom_providers con name=centag.",
+      "installHint": "curl -fsSL https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.sh {'|'} bash; or pip install \"hermes-agent[web]\""
+    },
+    "codebuddy": {
+      "description": "Escritorio Tencent CodeBuddy; el CLI acompañante CodeBuddy Code (codebuddy) comparte models.json",
+      "configMethod": "Fusiona en ~/.codebuddy/models.json. url debe ser una ruta completa …/v1/chat/completions; compartida por escritorio y CLI.",
+      "installHint": "Desktop: download from site. CLI (for wrap): npm i -g {'@'}tencent-ai/codebuddy-code; or brew install codebuddy-code"
+    },
+    "workbuddy": {
+      "description": "Asistente de escritorio Tencent WorkBuddy (rellene campos de modelo personalizado en Ajustes)",
+      "configMethod": "En WorkBuddy Ajustes → Modelos, añada una API personalizada: prefiera …/v1 (…/v1/chat/completions también sirve); ID del modelo centag/<pipeline>.",
+      "installHint": "Descargue la app de escritorio desde el sitio de CodeBuddy / WorkBuddy"
+    },
+    "trae": {
+      "description": "IDE ByteDance TRAE (modelos personalizados compatibles con OpenAI; añadir dentro del IDE)",
+      "configMethod": "TRAE: Ajustes → Modelos → Añadir → Personalizado. Formato OpenAI; Full URL OFF; URL de solicitud = …/v1; ID del modelo = centag/<pipeline>.",
+      "installHint": "Descargue desde trae.ai / trae.cn; los modelos personalizados deben añadirse en Ajustes → Modelos"
+    },
+    "coding-tui": {
+      "description": "Agente de UI de terminal orientado a código",
+      "configMethod": "Los agentes TUI no escriben archivos de config local; el enrutamiento se enlaza en proceso mediante pipelines.",
+      "installHint": "Capacidad integrada; no hace falta instalar un CLI aparte"
+    },
+    "education-tui": {
+      "description": "Agente de UI de terminal orientado a educación",
+      "configMethod": "Los agentes TUI no escriben archivos de config local; el enrutamiento se enlaza en proceso mediante pipelines.",
+      "installHint": "Capacidad integrada; no hace falta instalar un CLI aparte"
+    },
+    "coding-web": {
+      "description": "Agente de automatización web orientado a código",
+      "configMethod": "Los agentes Web no escriben archivos de config local; el enrutamiento se enlaza en proceso mediante automatización del navegador.",
+      "installHint": "Capacidad integrada; no hace falta instalar un CLI aparte"
+    },
+    "education-web": {
+      "description": "Agente de automatización web orientado a educación",
+      "configMethod": "Los agentes Web no escriben archivos de config local; el enrutamiento se enlaza en proceso mediante automatización del navegador.",
+      "installHint": "Capacidad integrada; no hace falta instalar un CLI aparte"
+    }
+  }
 }
