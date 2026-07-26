@@ -23,9 +23,11 @@ func (t *GeminiTemplate) Meta() AgentSetupMeta {
 			"GEMINI_MODEL",
 			"security.auth.selectedType",
 		},
-		ConfigMethod: "写入 ~/.gemini/.env（GEMINI_API_KEY / GOOGLE_GEMINI_BASE_URL / GEMINI_MODEL），并合并 settings.json 的 security.auth.selectedType=gemini-api-key。",
-		InstallURL:   "https://github.com/google-gemini/gemini-cli",
-		InstallHint:  "npm i -g @google/gemini-cli；或 brew install gemini-cli",
+		ConfigMethod:  "写入 ~/.gemini/.env（GEMINI_API_KEY / GOOGLE_GEMINI_BASE_URL / GEMINI_MODEL），并合并 settings.json 的 security.auth.selectedType=gemini-api-key。",
+		InstallURL:    "https://github.com/google-gemini/gemini-cli",
+		InstallHint:   "npm i -g @google/gemini-cli；或 brew install gemini-cli",
+		AccessMethods: []AccessMethod{AccessWriteConfig, AccessWrapCLI},
+		CompanionCLI:  NewCLICompanion("gemini", "https://github.com/google-gemini/gemini-cli", "npm i -g @google/gemini-cli；或 brew install gemini-cli"),
 	}
 }
 

@@ -322,7 +322,7 @@ func (m *AgentProviderManager) seedDefaultsLocked() {
 			AgentType:   "codebuddy",
 			DisplayName: "CodeBuddy",
 			Enabled:     true,
-			Description: "腾讯云 CodeBuddy Code CLI 默认配置",
+			Description: "腾讯云 CodeBuddy 桌面端默认配置",
 		},
 		{
 			ID:          "workbuddy",

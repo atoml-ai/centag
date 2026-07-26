@@ -23,9 +23,11 @@ func (t *GrokBuildTemplate) Meta() AgentSetupMeta {
 			`model."centag".api_key`,
 			`model."centag".api_backend`,
 		},
-		ConfigMethod: "覆盖写入 ~/.grok/config.toml：[models] default=\"centag\"，[model.\"centag\"] 内设置 model / base_url / api_key / api_backend=responses / context_window（对齐 cc-switch Grok Build）。",
-		InstallURL:   "https://x.ai/cli",
-		InstallHint:  "curl -fsSL https://x.ai/cli/install.sh | bash；或 npm i -g @xai-official/grok",
+		ConfigMethod:  "覆盖写入 ~/.grok/config.toml：[models] default=\"centag\"，[model.\"centag\"] 内设置 model / base_url / api_key / api_backend=responses / context_window（对齐 cc-switch Grok Build）。",
+		InstallURL:    "https://x.ai/cli",
+		InstallHint:   "curl -fsSL https://x.ai/cli/install.sh | bash；或 npm i -g @xai-official/grok",
+		AccessMethods: []AccessMethod{AccessWriteConfig, AccessWrapCLI},
+		CompanionCLI:  NewCLICompanion("grok", "https://x.ai/cli", "curl -fsSL https://x.ai/cli/install.sh | bash；或 npm i -g @xai-official/grok"),
 	}
 }
 

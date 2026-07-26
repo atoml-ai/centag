@@ -109,6 +109,10 @@ type WriteConfigResponse struct {
 	Success   bool         `json:"success"`
 	Written   []ConfigFile `json:"written,omitempty"`
 	Message   string       `json:"message,omitempty"`
+	// RestartRequired 写入后需重启对应客户端才能生效（桌面 IDE 等）。
+	RestartRequired bool `json:"restart_required,omitempty"`
+	// GuideExported 表示仅导出了 UI 接入说明，并未改写代理相关配置。
+	GuideExported bool `json:"guide_exported,omitempty"`
 }
 
 // RestoreConfigRequest 恢复 Agent 本地默认配置
@@ -163,8 +167,16 @@ type AgentSetupMeta struct {
 	ConfigMethod string        `json:"config_method"` // 给人看的写入说明
 	InstallURL   string        `json:"install_url"`
 	InstallHint  string        `json:"install_hint"`
-	// Verified 表示该 Agent 已通过维护者本地验证，快速接入卡片优先展示。
-	Verified bool `json:"verified,omitempty"`
+	// AccessMethods 显式接入能力（write_config / ui_guide / wrap_cli / builtin）。
+	AccessMethods []AccessMethod `json:"access_methods,omitempty"`
+	CompanionCLI  *CompanionCLI  `json:"companion_cli,omitempty"`
+	UIGuide       *UIGuide       `json:"ui_guide,omitempty"`
+	// VerifiedWrite 表示「写入配置」接入方式已通过维护者本地验证。
+	VerifiedWrite bool `json:"verified_write,omitempty"`
+	// VerifiedWrap 表示「wrap / 系统代理」接入方式已通过维护者本地验证。
+	VerifiedWrap bool `json:"verified_wrap,omitempty"`
+	// VerifiedUI 表示「UI 指引」接入方式已通过维护者本地验证。
+	VerifiedUI bool `json:"verified_ui,omitempty"`
 }
 
 // AgentTemplate 各 Agent 工具的配置模板接口

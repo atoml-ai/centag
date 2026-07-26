@@ -101,13 +101,14 @@ func (w *WebAgentTemplate) WriteConfig(info *BackendInfo) error { return nil }
 // Meta Web Agent 无本地写配置接入
 func (w *WebAgentTemplate) Meta() AgentSetupMeta {
 	return AgentSetupMeta{
-		Category:     AgentCategoryWeb,
-		WriteMode:    WriteModeNone,
-		ConfigPaths:  nil,
-		KeyFields:    nil,
-		ConfigMethod: "Web Agent 不通过写入本地配置文件接入 Centag；由浏览器自动化与进程内路由绑定。",
-		InstallURL:   "",
-		InstallHint:  "内置能力，无需单独安装 CLI",
+		Category:      AgentCategoryWeb,
+		WriteMode:     WriteModeNone,
+		ConfigPaths:   nil,
+		KeyFields:     nil,
+		ConfigMethod:  "Web Agent 不通过写入本地配置文件接入 Centag；由浏览器自动化与进程内路由绑定。",
+		InstallURL:    "",
+		InstallHint:   "内置能力，无需单独安装 CLI",
+		AccessMethods: []AccessMethod{AccessBuiltin},
 	}
 }
 
@@ -273,10 +274,11 @@ func (w *webConfigTemplate) DisplayName() string                           { ret
 func (w *webConfigTemplate) Description() string                           { return w.description }
 func (w *webConfigTemplate) Meta() AgentSetupMeta {
 	return AgentSetupMeta{
-		Category:     AgentCategoryWeb,
-		WriteMode:    WriteModeNone,
-		ConfigMethod: "Web Agent 不通过写入本地配置文件接入 Centag；由浏览器自动化与进程内路由绑定。",
-		InstallHint:  "内置能力，无需单独安装 CLI",
+		Category:      AgentCategoryWeb,
+		WriteMode:     WriteModeNone,
+		ConfigMethod:  "Web Agent 不通过写入本地配置文件接入 Centag；由浏览器自动化与进程内路由绑定。",
+		InstallHint:   "内置能力，无需单独安装 CLI",
+		AccessMethods: []AccessMethod{AccessBuiltin},
 	}
 }
 func (w *webConfigTemplate) ConfigFiles(*BackendInfo) ([]ConfigFile, error) { return nil, nil }

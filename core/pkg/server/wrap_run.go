@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 	"unicode"
+
+	"centag/core/internal/agent"
 )
 
 // wrapPreset is a CLI agent that can be launched via `centag wrap run`.
@@ -18,19 +20,20 @@ type wrapPreset struct {
 	Argv        []string `json:"argv"`
 }
 
-// wrapPresets lists supported wrap-launch targets (CLI/TUI only; no desktop GUI apps).
+// wrapPresets lists wrap-launch targets from Agent Meta CompanionCLI
+// (AccessWrapCLI). Desktop .app launchers are never listed — only companion CLI argv.
 func wrapPresets() []wrapPreset {
-	return []wrapPreset{
-		{ID: "opencode", DisplayName: "OpenCode", Description: "opencode.ai CLI", Argv: []string{"opencode"}},
-		{ID: "claude-code", DisplayName: "Claude Code", Description: "Anthropic Claude Code CLI", Argv: []string{"claude"}},
-		{ID: "codex", DisplayName: "Codex", Description: "OpenAI Codex CLI", Argv: []string{"codex"}},
-		{ID: "gemini-cli", DisplayName: "Gemini CLI", Description: "Google Gemini CLI", Argv: []string{"gemini"}},
-		{ID: "grok-build", DisplayName: "Grok", Description: "xAI Grok CLI", Argv: []string{"grok"}},
-		{ID: "hermes", DisplayName: "Hermes", Description: "Hermes Agent CLI", Argv: []string{"hermes"}},
-		{ID: "openclaw", DisplayName: "OpenClaw", Description: "OpenClaw CLI", Argv: []string{"openclaw"}},
-		{ID: "pi", DisplayName: "Pi", Description: "Pi coding agent CLI (pi.dev)", Argv: []string{"pi"}},
-		{ID: "codebuddy", DisplayName: "CodeBuddy", Description: "Tencent CodeBuddy CLI", Argv: []string{"codebuddy"}},
+	targets := agent.WrapLaunchTargets(agent.NewTemplateRegistry())
+	out := make([]wrapPreset, 0, len(targets))
+	for _, t := range targets {
+		out = append(out, wrapPreset{
+			ID:          t.ID,
+			DisplayName: t.DisplayName,
+			Description: t.Description,
+			Argv:        t.Argv,
+		})
 	}
+	return out
 }
 
 // parseWrapArgv resolves argv from request body fields.

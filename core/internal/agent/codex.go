@@ -26,9 +26,12 @@ func (t *CodexTemplate) Meta() AgentSetupMeta {
 			"model_providers.custom.base_url",
 			"wire_api",
 		},
-		ConfigMethod: "覆盖写入 ~/.codex/auth.json（OPENAI_API_KEY）与 ~/.codex/config.toml（model_provider=custom，[model_providers.custom].base_url 指向 Centag，wire_api=responses）。",
-		InstallURL:   "https://github.com/openai/codex",
-		InstallHint:  "curl -fsSL https://chatgpt.com/codex/install.sh | sh；或 npm i -g @openai/codex",
+		ConfigMethod:  "覆盖写入 ~/.codex/auth.json（OPENAI_API_KEY）与 ~/.codex/config.toml（model_provider=custom，[model_providers.custom].base_url 指向 Centag，wire_api=responses）。",
+		InstallURL:    "https://github.com/openai/codex",
+		InstallHint:   "curl -fsSL https://chatgpt.com/codex/install.sh | sh；或 npm i -g @openai/codex",
+		AccessMethods: []AccessMethod{AccessWriteConfig, AccessWrapCLI},
+		CompanionCLI:  NewCLICompanion("codex", "https://github.com/openai/codex", "curl -fsSL https://chatgpt.com/codex/install.sh | sh；或 npm i -g @openai/codex"),
+		VerifiedWrite: true, // wrap/系统代理方式尚未维护者验证
 	}
 }
 

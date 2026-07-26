@@ -24,9 +24,11 @@ func (t *HermesTemplate) Meta() AgentSetupMeta {
 			"custom_providers[].api_key",
 			"custom_providers[].api_mode",
 		},
-		ConfigMethod: "合并写入 ~/.hermes/config.yaml：更新 model.default/provider/base_url，并在 custom_providers 中按 name=centag 累加/更新条目（api_mode=chat_completions）。不删除其它 custom_providers。",
-		InstallURL:   "https://github.com/NousResearch/hermes-agent",
-		InstallHint:  "curl -fsSL https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.sh | bash；或 pip install \"hermes-agent[web]\"",
+		ConfigMethod:  "合并写入 ~/.hermes/config.yaml：更新 model.default/provider/base_url，并在 custom_providers 中按 name=centag 累加/更新条目（api_mode=chat_completions）。不删除其它 custom_providers。",
+		InstallURL:    "https://github.com/NousResearch/hermes-agent",
+		InstallHint:   "curl -fsSL https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.sh | bash；或 pip install \"hermes-agent[web]\"",
+		AccessMethods: []AccessMethod{AccessWriteConfig, AccessWrapCLI},
+		CompanionCLI:  NewCLICompanion("hermes", "https://github.com/NousResearch/hermes-agent", "curl -fsSL https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.sh | bash；或 pip install \"hermes-agent[web]\""),
 	}
 }
 
