@@ -128,6 +128,46 @@ func mergeOpenCodeProvider(path, baseURL, apiKey, apiModel, modelRef string) err
 	return writeJSONMap(path, root)
 }
 
+// mergePiProvider 合并 Pi ~/.pi/agent/models.json 的 providers.centag。
+func mergePiProvider(path, baseURL, apiKey, apiModel string) error {
+	root, err := readJSONMap(path)
+	if err != nil {
+		return err
+	}
+	providers, _ := root["providers"].(map[string]interface{})
+	if providers == nil {
+		providers = map[string]interface{}{}
+	}
+	providers["centag"] = map[string]interface{}{
+		"baseUrl": baseURL,
+		"apiKey":  apiKey,
+		"api":     "openai-completions",
+		"models": []interface{}{
+			map[string]interface{}{
+				"id":            apiModel,
+				"name":          apiModel,
+				"reasoning":     false,
+				"input":         []interface{}{"text"},
+				"contextWindow": 128000,
+				"maxTokens":     16384,
+			},
+		},
+	}
+	root["providers"] = providers
+	return writeJSONMap(path, root)
+}
+
+// mergePiSettings 合并 Pi ~/.pi/agent/settings.json 的默认 provider/model。
+func mergePiSettings(path, apiModel string) error {
+	root, err := readJSONMap(path)
+	if err != nil {
+		return err
+	}
+	root["defaultProvider"] = "centag"
+	root["defaultModel"] = apiModel
+	return writeJSONMap(path, root)
+}
+
 // mergeOpenClawProvider 合并 OpenClaw models.providers.centag 与默认 primary。
 func mergeOpenClawProvider(path, baseURL, apiKey, apiModel, modelRef string) error {
 	root, err := readJSONMap(path)

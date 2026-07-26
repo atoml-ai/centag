@@ -244,6 +244,98 @@ func TestOpenCodeTemplate_VerifyCommand(t *testing.T) {
 	}
 }
 
+func TestPiTemplate_UsesOpenAICompletionsAPI(t *testing.T) {
+	tmpl := &PiTemplate{}
+	info := testInfo()
+	info.Model = "centag/direct-backend"
+
+	files, err := tmpl.ConfigFiles(info)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(files) != 2 {
+		t.Fatalf("expected 2 files, got %d", len(files))
+	}
+	modelsContent := files[0].Content
+	if files[0].Path != "~/.pi/agent/models.json" {
+		t.Fatalf("models path = %s", files[0].Path)
+	}
+	if !strings.Contains(modelsContent, `"api": "openai-completions"`) {
+		t.Fatalf("pi models.json should use openai-completions, got: %s", modelsContent)
+	}
+	if !strings.Contains(modelsContent, `"id": "centag/direct-backend"`) {
+		t.Fatalf("pi models.json should set model id, got: %s", modelsContent)
+	}
+	settingsContent := files[1].Content
+	if files[1].Path != "~/.pi/agent/settings.json" {
+		t.Fatalf("settings path = %s", files[1].Path)
+	}
+	if !strings.Contains(settingsContent, `"defaultProvider": "centag"`) {
+		t.Fatalf("settings should set defaultProvider, got: %s", settingsContent)
+	}
+	if !strings.Contains(settingsContent, `"defaultModel": "centag/direct-backend"`) {
+		t.Fatalf("settings should set defaultModel, got: %s", settingsContent)
+	}
+	if tmpl.Meta().WriteMode != WriteModeMerge {
+		t.Fatal("pi should be merge")
+	}
+	wantVerify := `pi -p --model centag/centag/direct-backend "Hello, can you hear me?"`
+	if got := tmpl.VerifyCommand(info); got != wantVerify {
+		t.Fatalf("VerifyCommand = %q, want %q", got, wantVerify)
+	}
+}
+
+func TestPiWriteConfig_PreservesOtherProviders(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	if runtime.GOOS == "windows" {
+		t.Setenv("USERPROFILE", home)
+	}
+	modelsPath := filepath.Join(home, ".pi", "agent", "models.json")
+	settingsPath := filepath.Join(home, ".pi", "agent", "settings.json")
+	if err := os.MkdirAll(filepath.Dir(modelsPath), 0755); err != nil {
+		t.Fatal(err)
+	}
+	existingModels := `{"providers":{"other":{"baseUrl":"https://x","api":"openai-completions","models":[{"id":"m1"}]}}}`
+	if err := os.WriteFile(modelsPath, []byte(existingModels), 0644); err != nil {
+		t.Fatal(err)
+	}
+	existingSettings := `{"theme":"dark","defaultProvider":"other","defaultModel":"m1"}`
+	if err := os.WriteFile(settingsPath, []byte(existingSettings), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	info := testInfo()
+	info.Model = "centag/p1"
+	if err := (&PiTemplate{}).WriteConfig(info); err != nil {
+		t.Fatal(err)
+	}
+
+	modelsGot, err := os.ReadFile(modelsPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ms := string(modelsGot)
+	if !strings.Contains(ms, `"other"`) || !strings.Contains(ms, `"centag"`) {
+		t.Fatalf("models merge failed: %s", ms)
+	}
+
+	settingsGot, err := os.ReadFile(settingsPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ss := string(settingsGot)
+	if !strings.Contains(ss, `"theme": "dark"`) && !strings.Contains(ss, `"theme":"dark"`) {
+		t.Fatalf("settings should preserve theme: %s", ss)
+	}
+	if !strings.Contains(ss, `"defaultProvider": "centag"`) && !strings.Contains(ss, `"defaultProvider":"centag"`) {
+		t.Fatalf("settings should set defaultProvider: %s", ss)
+	}
+	if !strings.Contains(ss, `"defaultModel": "centag/p1"`) && !strings.Contains(ss, `"defaultModel":"centag/p1"`) {
+		t.Fatalf("settings should set defaultModel: %s", ss)
+	}
+}
+
 func TestOpenClawTemplate_UsesOpenAICompletionsAPI(t *testing.T) {
 	tmpl := &OpenClawTemplate{}
 	info := testInfo()

@@ -59,6 +59,8 @@ func (h *AgentHandler) ListAgentTypes(c *gin.Context) {
 		ConfigMethod string              `json:"config_method"`
 		InstallURL   string              `json:"install_url"`
 		InstallHint  string              `json:"install_hint"`
+		Verified     bool                `json:"verified"`
+		WrapCommand  string              `json:"wrap_command,omitempty"`
 	}
 	var list []agentInfo
 	for _, at := range h.registry.List() {
@@ -67,7 +69,7 @@ func (h *AgentHandler) ListAgentTypes(c *gin.Context) {
 			continue
 		}
 		meta := t.Meta()
-		list = append(list, agentInfo{
+		info := agentInfo{
 			Type:         string(at),
 			DisplayName:  t.DisplayName(),
 			Description:  t.Description(),
@@ -78,9 +80,20 @@ func (h *AgentHandler) ListAgentTypes(c *gin.Context) {
 			ConfigMethod: meta.ConfigMethod,
 			InstallURL:   meta.InstallURL,
 			InstallHint:  meta.InstallHint,
-		})
+			Verified:     meta.Verified,
+		}
+		if preset, ok := wrapPresetByID(string(at)); ok {
+			if cmd, err := buildWrapRunUserCommand("", "", preset.Argv); err == nil {
+				info.WrapCommand = cmd
+			}
+		}
+		list = append(list, info)
 	}
+	// 已验证 Agent 靠前，同组内按 type 字典序
 	sort.Slice(list, func(i, j int) bool {
+		if list[i].Verified != list[j].Verified {
+			return list[i].Verified
+		}
 		return list[i].Type < list[j].Type
 	})
 	c.JSON(http.StatusOK, gin.H{"agent_types": list})

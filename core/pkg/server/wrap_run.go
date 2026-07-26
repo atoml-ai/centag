@@ -28,6 +28,7 @@ func wrapPresets() []wrapPreset {
 		{ID: "grok-build", DisplayName: "Grok", Description: "xAI Grok CLI", Argv: []string{"grok"}},
 		{ID: "hermes", DisplayName: "Hermes", Description: "Hermes Agent CLI", Argv: []string{"hermes"}},
 		{ID: "openclaw", DisplayName: "OpenClaw", Description: "OpenClaw CLI", Argv: []string{"openclaw"}},
+		{ID: "pi", DisplayName: "Pi", Description: "Pi coding agent CLI (pi.dev)", Argv: []string{"pi"}},
 		{ID: "codebuddy", DisplayName: "CodeBuddy", Description: "Tencent CodeBuddy CLI", Argv: []string{"codebuddy"}},
 	}
 }
