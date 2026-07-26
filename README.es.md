@@ -17,8 +17,6 @@
   <a href="README.md">English</a> | <a href="README.zh-CN.md">简体中文</a> | <a href="README.ja.md">日本語</a> | <a href="README.ko.md">한국어</a> | <a href="README.ru.md">Русский</a> | Español
 </p>
 
-![Centag Architecture Flow](docs/assets/readme/hero-architecture.png)
-
 ---
 
 ## El problema que resolvemos
@@ -45,8 +43,6 @@ Un «relay» LLM típico solo reenvía la petición tal cual. Si cae una key, la
 ### Orquestación visual de pipelines
 
 Un relay solo reenvía. **Centag te deja diseñar el ciclo de vida completo de la petición** — un DAG en el lienzo con drag-and-drop; el pipeline *es* la estrategia.
-
-![Pipeline Architecture — Visual DAG Orchestration](docs/assets/readme/pipeline-canvas.png)
 
 **16 tipos de nodos integrados**, combinables a voluntad:
 
@@ -114,8 +110,6 @@ centag wrap doctor
 ### Ecosistema abierto de plugins
 
 Los nodos del pipeline son extensibles: plugins locales con Go SDK, o plugins HTTP remotos en cualquier lenguaje.
-
-![Plugin Ecosystem — Extend Everything](docs/assets/readme/node-plugins.png)
 
 ```go
 type NodePlugin interface {
@@ -189,13 +183,25 @@ UI de administración: http://localhost:20060 · Detener: `./start.sh docker dow
 
 ## Capturas
 
-| Lienzo de pipeline | Conexión Agent |
-|--------------------|----------------|
-| ![Pipeline Canvas](docs/assets/readme/pipeline-canvas.png) | ![Agent Setup](docs/assets/readme/agent-setup.png) |
+<p align="center">
+  <strong>Panel</strong><br/>
+  <img src="docs/assets/readme/screenshot-dashboard.png" alt="Panel" width="900" />
+</p>
 
-| Panel | Plugins de nodos |
-|-------|------------------|
-| ![Dashboard](docs/assets/readme/dashboard.png) | ![Node Plugins](docs/assets/readme/node-plugins.png) |
+<p align="center">
+  <strong>Editor visual de pipelines</strong><br/>
+  <img src="docs/assets/readme/screenshot-pipeline-visual-editor.png" alt="Editor visual de pipelines" width="900" />
+</p>
+
+<p align="center">
+  <strong>Configuración de Agent</strong><br/>
+  <img src="docs/assets/readme/screenshot-agent-config.png" alt="Configuración de Agent" width="900" />
+</p>
+
+<p align="center">
+  <strong>Uso de tokens y facturación</strong><br/>
+  <img src="docs/assets/readme/screenshot-token-usage.png" alt="Uso de tokens y facturación" width="900" />
+</p>
 
 ---
 

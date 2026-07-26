@@ -17,8 +17,6 @@
   <a href="README.md">English</a> | 简体中文 | <a href="README.ja.md">日本語</a> | <a href="README.ko.md">한국어</a> | <a href="README.ru.md">Русский</a> | <a href="README.es.md">Español</a>
 </p>
 
-![Centag Architecture Flow](docs/assets/readme/hero-architecture.png)
-
 ---
 
 ## 我们解决什么问题
@@ -45,8 +43,6 @@
 ### 可视化流水线编排
 
 中转站只会转发。**Centag 让你设计请求的完整生命周期**——在画布上拖拽编排 DAG，流水线就是策略。
-
-![Pipeline Architecture — Visual DAG Orchestration](docs/assets/readme/pipeline-canvas.png)
 
 **16 种内置节点**，自由组合：
 
@@ -114,8 +110,6 @@ centag wrap doctor
 ### 开放插件生态
 
 流水线节点可扩展：Go SDK 本地插件，或任意语言的远程 HTTP 插件。
-
-![Plugin Ecosystem — Extend Everything](docs/assets/readme/node-plugins.png)
 
 ```go
 type NodePlugin interface {
@@ -189,13 +183,25 @@ cp config/secrets/.env.example config/secrets/.env   # 按需修改密钥
 
 ## 截图
 
-| 流水线画布 | Agent 接入 |
-|-----------|-----------|
-| ![Pipeline Canvas](docs/assets/readme/pipeline-canvas.png) | ![Agent Setup](docs/assets/readme/agent-setup.png) |
+<p align="center">
+  <strong>仪表盘</strong><br/>
+  <img src="docs/assets/readme/screenshot-dashboard.png" alt="仪表盘" width="900" />
+</p>
 
-| 仪表盘 | 节点插件 |
-|--------|---------|
-| ![Dashboard](docs/assets/readme/dashboard.png) | ![Node Plugins](docs/assets/readme/node-plugins.png) |
+<p align="center">
+  <strong>流水线可视化编辑器</strong><br/>
+  <img src="docs/assets/readme/screenshot-pipeline-visual-editor.png" alt="流水线可视化编辑器" width="900" />
+</p>
+
+<p align="center">
+  <strong>Agent 配置</strong><br/>
+  <img src="docs/assets/readme/screenshot-agent-config.png" alt="Agent 配置" width="900" />
+</p>
+
+<p align="center">
+  <strong>Token 用量与计费</strong><br/>
+  <img src="docs/assets/readme/screenshot-token-usage.png" alt="Token 用量与计费" width="900" />
+</p>
 
 ---
 

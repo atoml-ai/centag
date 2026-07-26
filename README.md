@@ -17,8 +17,6 @@
   English | <a href="README.zh-CN.md">简体中文</a> | <a href="README.ja.md">日本語</a> | <a href="README.ko.md">한국어</a> | <a href="README.ru.md">Русский</a> | <a href="README.es.md">Español</a>
 </p>
 
-![Centag Architecture Flow](docs/assets/readme/hero-architecture.png)
-
 ---
 
 ## The Problem We Solve
@@ -45,8 +43,6 @@ A typical LLM “relay” only forwards requests as-is. When a key dies you swap
 ### Visual pipeline orchestration
 
 Relays only forward. **Centag lets you design the full request lifecycle** — drag-and-drop a DAG on the canvas; the pipeline *is* your strategy.
-
-![Pipeline Architecture — Visual DAG Orchestration](docs/assets/readme/pipeline-canvas.png)
 
 **16 built-in node types**, freely combinable:
 
@@ -114,8 +110,6 @@ centag wrap doctor
 ### Open plugin ecosystem
 
 Pipeline nodes are extensible: local Go SDK plugins, or remote HTTP plugins in any language.
-
-![Plugin Ecosystem — Extend Everything](docs/assets/readme/node-plugins.png)
 
 ```go
 type NodePlugin interface {
@@ -189,13 +183,25 @@ Admin UI: http://localhost:20060 · Stop: `./start.sh docker down`
 
 ## Screenshots
 
-| Pipeline Canvas | Agent Setup |
-|-----------------|-------------|
-| ![Pipeline Canvas](docs/assets/readme/pipeline-canvas.png) | ![Agent Setup](docs/assets/readme/agent-setup.png) |
+<p align="center">
+  <strong>Dashboard</strong><br/>
+  <img src="docs/assets/readme/screenshot-dashboard.png" alt="Dashboard" width="900" />
+</p>
 
-| Dashboard | Node Plugins |
-|-----------|-------------|
-| ![Dashboard](docs/assets/readme/dashboard.png) | ![Node Plugins](docs/assets/readme/node-plugins.png) |
+<p align="center">
+  <strong>Pipeline Visual Editor</strong><br/>
+  <img src="docs/assets/readme/screenshot-pipeline-visual-editor.png" alt="Pipeline Visual Editor" width="900" />
+</p>
+
+<p align="center">
+  <strong>Agent Config</strong><br/>
+  <img src="docs/assets/readme/screenshot-agent-config.png" alt="Agent Config" width="900" />
+</p>
+
+<p align="center">
+  <strong>Token Usage & Billing</strong><br/>
+  <img src="docs/assets/readme/screenshot-token-usage.png" alt="Token Usage & Billing" width="900" />
+</p>
 
 ---
 

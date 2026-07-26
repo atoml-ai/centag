@@ -17,8 +17,6 @@
   <a href="README.md">English</a> | <a href="README.zh-CN.md">简体中文</a> | <a href="README.ja.md">日本語</a> | <a href="README.ko.md">한국어</a> | Русский | <a href="README.es.md">Español</a>
 </p>
 
-![Centag Architecture Flow](docs/assets/readme/hero-architecture.png)
-
 ---
 
 ## Какую задачу решаем
@@ -45,8 +43,6 @@
 ### Визуальная оркестрация пайплайнов
 
 Ретранслятор только форвардит. **Centag даёт спроектировать полный жизненный цикл запроса** — DAG на холсте drag-and-drop; пайплайн и есть стратегия.
-
-![Pipeline Architecture — Visual DAG Orchestration](docs/assets/readme/pipeline-canvas.png)
 
 **16 встроенных типов узлов**, свободно комбинируемых:
 
@@ -114,8 +110,6 @@ centag wrap doctor
 ### Открытая экосистема плагинов
 
 Узлы пайплайна расширяемы: локальные плагины на Go SDK или удалённые HTTP-плагины на любом языке.
-
-![Plugin Ecosystem — Extend Everything](docs/assets/readme/node-plugins.png)
 
 ```go
 type NodePlugin interface {
@@ -189,13 +183,25 @@ cp config/secrets/.env.example config/secrets/.env   # при необходим
 
 ## Скриншоты
 
-| Холст пайплайна | Подключение Agent |
-|-----------------|-------------------|
-| ![Pipeline Canvas](docs/assets/readme/pipeline-canvas.png) | ![Agent Setup](docs/assets/readme/agent-setup.png) |
+<p align="center">
+  <strong>Панель</strong><br/>
+  <img src="docs/assets/readme/screenshot-dashboard.png" alt="Панель" width="900" />
+</p>
 
-| Панель | Плагины узлов |
-|--------|---------------|
-| ![Dashboard](docs/assets/readme/dashboard.png) | ![Node Plugins](docs/assets/readme/node-plugins.png) |
+<p align="center">
+  <strong>Визуальный редактор пайплайнов</strong><br/>
+  <img src="docs/assets/readme/screenshot-pipeline-visual-editor.png" alt="Визуальный редактор пайплайнов" width="900" />
+</p>
+
+<p align="center">
+  <strong>Настройка Agent</strong><br/>
+  <img src="docs/assets/readme/screenshot-agent-config.png" alt="Настройка Agent" width="900" />
+</p>
+
+<p align="center">
+  <strong>Использование токенов и биллинг</strong><br/>
+  <img src="docs/assets/readme/screenshot-token-usage.png" alt="Использование токенов и биллинг" width="900" />
+</p>
 
 ---
 

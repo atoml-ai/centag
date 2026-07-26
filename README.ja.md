@@ -17,8 +17,6 @@
   <a href="README.md">English</a> | <a href="README.zh-CN.md">简体中文</a> | 日本語 | <a href="README.ko.md">한국어</a> | <a href="README.ru.md">Русский</a> | <a href="README.es.md">Español</a>
 </p>
 
-![Centag Architecture Flow](docs/assets/readme/hero-architecture.png)
-
 ---
 
 ## 解決する課題
@@ -45,8 +43,6 @@
 ### ビジュアルパイプライン編成
 
 中継局は転送だけ。**Centag はリクエストのライフサイクル全体を設計できる**——キャンバス上で DAG をドラッグ＆ドロップし、パイプラインが戦略そのものです。
-
-![Pipeline Architecture — Visual DAG Orchestration](docs/assets/readme/pipeline-canvas.png)
 
 **16 種の内蔵ノード**を自由に組み合わせ：
 
@@ -114,8 +110,6 @@ centag wrap doctor
 ### オープンなプラグイン生態
 
 パイプラインノードは拡張可能：Go SDK のローカルプラグイン、または任意言語のリモート HTTP プラグイン。
-
-![Plugin Ecosystem — Extend Everything](docs/assets/readme/node-plugins.png)
 
 ```go
 type NodePlugin interface {
@@ -189,13 +183,25 @@ cp config/secrets/.env.example config/secrets/.env   # 必要に応じて編集
 
 ## スクリーンショット
 
-| パイプラインキャンバス | Agent 接続 |
-|-----------|-----------|
-| ![Pipeline Canvas](docs/assets/readme/pipeline-canvas.png) | ![Agent Setup](docs/assets/readme/agent-setup.png) |
+<p align="center">
+  <strong>ダッシュボード</strong><br/>
+  <img src="docs/assets/readme/screenshot-dashboard.png" alt="ダッシュボード" width="900" />
+</p>
 
-| ダッシュボード | ノードプラグイン |
-|--------|---------|
-| ![Dashboard](docs/assets/readme/dashboard.png) | ![Node Plugins](docs/assets/readme/node-plugins.png) |
+<p align="center">
+  <strong>パイプラインビジュアルエディタ</strong><br/>
+  <img src="docs/assets/readme/screenshot-pipeline-visual-editor.png" alt="パイプラインビジュアルエディタ" width="900" />
+</p>
+
+<p align="center">
+  <strong>Agent 設定</strong><br/>
+  <img src="docs/assets/readme/screenshot-agent-config.png" alt="Agent 設定" width="900" />
+</p>
+
+<p align="center">
+  <strong>Token 利用量と課金</strong><br/>
+  <img src="docs/assets/readme/screenshot-token-usage.png" alt="Token 利用量と課金" width="900" />
+</p>
 
 ---
 
