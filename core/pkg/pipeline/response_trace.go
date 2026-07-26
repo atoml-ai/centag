@@ -57,13 +57,14 @@ func ApplyResponseTraceBanner(out *PipelineOutput, pipelineID string) {
 		out.Content = banner
 		return
 	}
-	// responses→chat 桥接后 Content 是纯文本，必须走 FormatChunk；勿注入 chat.completion SSE。
-	if out.Metadata["responses_to_chat"] == true {
+	// responses/anthropic→chat 桥接后 Content 是纯文本，必须走 FormatChunk；勿注入 chat.completion SSE。
+	if out.Metadata["responses_to_chat"] == true || out.Metadata["anthropic_to_chat"] == true {
 		out.Content = banner + out.Content
 		return
 	}
-	// /v1/responses 客户端不能收到 chat.completion.chunk（含 centag-fallback-notice）。
-	if isResponsesAPIPath(firstMetaString(out.Metadata, "request_path")) {
+	// /v1/responses、/v1/messages 客户端不能收到 chat.completion.chunk（含 centag-fallback-notice）。
+	rp := firstMetaString(out.Metadata, "request_path")
+	if isResponsesAPIPath(rp) || isMessagesAPIPath(rp) {
 		out.Content = banner + out.Content
 		return
 	}

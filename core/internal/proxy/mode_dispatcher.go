@@ -719,8 +719,8 @@ func looksLikeOpenAISSE(body string) bool {
 }
 
 // shouldRawWriteTransparentStream：流式路径下是否原样写出 Content。
-// 显式 raw_passthrough=false / responses_to_chat 时必须走协议 FormatChunk
-// （OpenCode /v1/responses 不能收到 chat.completion.chunk，否则客户端一直转圈）。
+// 显式 raw_passthrough=false / responses_to_chat / anthropic_to_chat 时必须走协议 FormatChunk
+// （/v1/responses、/v1/messages 不能收到 chat.completion.chunk，否则客户端一直转圈或解析失败）。
 func shouldRawWriteTransparentStream(output *pipeline.PipelineOutput) bool {
 	if output == nil || strings.TrimSpace(output.Content) == "" {
 		return false
@@ -729,8 +729,14 @@ func shouldRawWriteTransparentStream(output *pipeline.PipelineOutput) bool {
 		if v, ok := output.Metadata["responses_to_chat"].(bool); ok && v {
 			return false
 		}
-		if rp, ok := output.Metadata["request_path"].(string); ok && strings.HasSuffix(strings.TrimRight(strings.TrimSpace(rp), "/"), "/responses") {
+		if v, ok := output.Metadata["anthropic_to_chat"].(bool); ok && v {
 			return false
+		}
+		if rp, ok := output.Metadata["request_path"].(string); ok {
+			trimmed := strings.TrimRight(strings.TrimSpace(rp), "/")
+			if strings.HasSuffix(trimmed, "/responses") || strings.HasSuffix(trimmed, "/messages") {
+				return false
+			}
 		}
 		if v, ok := output.Metadata["raw_passthrough"].(bool); ok {
 			return v

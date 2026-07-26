@@ -482,6 +482,72 @@ func TestTransparentForwardNode_ResponsesToChatCompletions(t *testing.T) {
 	}
 }
 
+func TestTransparentForwardNode_AnthropicMessagesToChat(t *testing.T) {
+	inner := &mockHTTPClient{
+		status: 200,
+		body: "data: {\"choices\":[{\"delta\":{\"content\":\"我是 DeepSeek\"}}]}\n\n" +
+			"data: [DONE]\n\n",
+	}
+	capturing := &capturingHTTPClient{inner: inner}
+	broker := &mockCapabilityBroker{httpClient: capturing}
+
+	prevEP := ResolveBackendEndpoint
+	t.Cleanup(func() { ResolveBackendEndpoint = prevEP })
+	ResolveBackendEndpoint = func(backendID string) (*BackendEndpoint, error) {
+		return &BackendEndpoint{BaseURL: "https://opencode.ai/zen/v1", APIKey: "sk-zen"}, nil
+	}
+
+	node, err := NewTransparentForwardNode(NodeConfig{})
+	if err != nil {
+		t.Fatalf("NewTransparentForwardNode: %v", err)
+	}
+	tf := node.(*TransparentForwardNode)
+	tf.BaseNode.id = "forward"
+	tf.SetCapabilityBroker(broker)
+
+	out, err := tf.Execute(context.Background(), &NodeInput{
+		Metadata: map[string]interface{}{
+			"backend_id":   "opencode-zen",
+			"request_path": "/v1/messages",
+			"raw_request_body": `{
+				"model":"claude-fable-5",
+				"max_tokens":1024,
+				"stream":true,
+				"system":[{"type":"text","text":"You are helpful"}],
+				"messages":[{"role":"user","content":[{"type":"text","text":"你使用的是什么大模型"}]}]
+			}`,
+		},
+	})
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if !strings.HasSuffix(inner.lastReq.URL.Path, "/chat/completions") {
+		t.Fatalf("url=%v", inner.lastReq.URL)
+	}
+	var upstream map[string]interface{}
+	if err := json.Unmarshal([]byte(capturing.body), &upstream); err != nil {
+		t.Fatalf("upstream body json: %v body=%s", err, capturing.body)
+	}
+	if _, hasSystem := upstream["system"]; hasSystem {
+		t.Fatalf("upstream body still has top-level system: %s", capturing.body)
+	}
+	if !strings.Contains(capturing.body, `"messages"`) {
+		t.Fatalf("upstream body missing messages: %s", capturing.body)
+	}
+	if !strings.Contains(capturing.body, `"role":"system"`) {
+		t.Fatalf("upstream body missing system role message: %s", capturing.body)
+	}
+	if out.Metadata["raw_passthrough"] != false {
+		t.Fatalf("raw_passthrough=%v, want false", out.Metadata["raw_passthrough"])
+	}
+	if out.Metadata["anthropic_to_chat"] != true {
+		t.Fatalf("anthropic_to_chat=%v", out.Metadata["anthropic_to_chat"])
+	}
+	if out.Content != "我是 DeepSeek" {
+		t.Fatalf("content=%q, want extracted assistant text", out.Content)
+	}
+}
+
 func TestTransparentForwardNode_ResponsesToChat_ReasoningOnlyStillDisablesPassthrough(t *testing.T) {
 	inner := &mockHTTPClient{
 		status: 200,
