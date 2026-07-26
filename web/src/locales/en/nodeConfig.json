@@ -80,7 +80,7 @@
   "operationRead": "Read",
   "operationWrite": "Write",
   "operationDelete": "Delete",
-  "strategy": "Strategy",
+  "strategyLabel": "Strategy",
   "strategyExact": "Exact Match",
   "strategySemantic": "Semantic Match",
   "strategyHybrid": "Hybrid Strategy",

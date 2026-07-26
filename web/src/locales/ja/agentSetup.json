@@ -3,6 +3,72 @@
   "subtitle": "Agent ツールを Centag プロキシに接続：パイプライン選択、設定書き込み、検証",
   "quickSetup": "クイックセットアップ",
   "quickSetupHint": "各 Agent は能力マトリクスに沿って、設定書き込み / UI 案内 / wrap で付属 CLI 起動 / 内蔵プロセスを表示します。\n各方式に「検証済み / 未検証」を付けます。未検証でも使えないわけではありません。一般に Centag の接続先・モデル名・API Key を書き込む方式は各 Agent に通用する標準的な方法なので、ご自身で確認してください。",
+  "verified": "検証済み",
+  "unverified": "未検証",
+  "groupCli": "CLI",
+  "groupCliHint": "ターミナル Agent。多くはローカル設定を書き込み可能。付属 CLI があれば wrap も利用できます。",
+  "groupDesktop": "デスクトップ",
+  "groupDesktopHint": "対応時はローカル設定を書き込み、そうでなければアプリ内 UI 案内に従います。付属 CLI は wrap 可能（.app 本体ではありません）。",
+  "groupTui": "内蔵 TUI",
+  "groupTuiHint": "プロセス内ターミナル Agent。ローカル設定ファイルは書きません。",
+  "groupWeb": "内蔵 Web",
+  "groupWebHint": "プロセス内ブラウザ自動化 Agent。ローカル設定ファイルは書きません。",
+  "groupOther": "その他",
+  "groupOtherHint": "未分類の Agent。",
+  "moreDetails": "詳細を見る",
+  "methodWriteConfig": "設定書き込み",
+  "methodWriteConfigHint": "ウィザードでパイプラインを選び、Agent のローカル設定を書き込みます（開発者検証済み）。",
+  "methodWriteConfigUnverifiedHint": "ウィザードから接続できます。未検証は開発者が未確認という意味であり、利用不可ではありません。",
+  "writeConfigAction": "設定書き込み",
+  "methodUIGuide": "UI 設定値",
+  "methodUIGuideHint": "アプリ内のカスタムモデル欄に入力します。パイプライン選択後にリクエスト URL とモデル ID をコピーできます（開発者検証済み）。",
+  "methodUIGuideUnverifiedHint": "アプリ内のカスタムモデル欄に入力してください。未検証は開発者が未確認という意味であり、利用不可ではありません。",
+  "uiGuideAction": "設定値",
+  "uiGuidePipelineHint": "パイプラインを選ぶと、下のモデル ID は centag/<パイプラインID> になります。クライアントのカスタムモデルフォームにコピーしてください。",
+  "uiGuideParamsTitle": "クライアントに次の値を入力",
+  "uiGuideParamsHint": "クライアントのカスタムモデル設定を開き、下表を記入してください。",
+  "uiGuideFillParams": "クライアントに記入",
+  "uiGuideFillParamsDesc": "値をコピーしてモデルを追加",
+  "uiGuideParamsReady": "値の準備完了",
+  "uiGuideVerifyHint": "クライアントでモデルを追加・選択したあと、短いチャットを送り、Centag のリクエストログで確認してください。",
+  "uiGuideVerifyStep1": "クライアントの「設定 → モデル」でカスタムモデルを追加し、前のステップのリクエスト URL とモデル ID を貼り付けてください。",
+  "uiGuideNeedApiKey": "先に Centag API Key を作成し、クライアントの API Key 欄に貼り付けてください（自動書き込みされません）。",
+  "uiParamApiFormat": "API 形式",
+  "uiParamFullURL": "完全 URL",
+  "uiParamFullURLOn": "オン",
+  "uiParamFullURLOff": "オフ",
+  "uiParamRequestURL": "リクエスト URL",
+  "uiParamRequestURLBase": "リクエスト URL",
+  "uiParamRequestURLFull": "リクエスト URL（…/v1/chat/completions）",
+  "uiParamRequestURLHint": "推奨は …/v1（/chat/completions なし）。エラーになる場合は …/v1/chat/completions を試してください。",
+  "uiParamModelID": "モデル ID",
+  "uiParamAPIKey": "API Key",
+  "uiParamAPIKeyHint": "プロフィール → API Keys の llmproxy_* キー",
+  "goCopyApiKey": "API Key をコピー",
+  "copyValue": "コピー",
+  "installCLIHint": "付属 CLI をインストール",
+  "methodWrap": "wrap 実行",
+  "methodWrapHint": "Agent 設定を変更せず、システムプロキシがトラフィックをハイジャックします（開発者検証済み）。",
+  "methodWrapUnverifiedHint": "Agent 設定を変更せずに試せます。未検証は開発者が未確認という意味であり、利用不可ではありません。",
+  "methodWrapDesktopCLIHint": "wrap はデスクトップ .app ではなく付属 CLI をシステムプロキシ経由で起動します（開発者検証済み）。先に CLI をインストールしてください。",
+  "methodWrapDesktopCLIUnverifiedHint": "wrap はデスクトップ .app ではなく付属 CLI を起動します。未検証でも利用不可ではありません。CLI を入れ、システムプロキシを用意してください。",
+  "wrapDependsOnSystemProxy": "システムプロキシサービスが稼働している必要があります（MITM + 出口キー）。",
+  "goSystemProxyPage": "システムプロキシを開く",
+  "methodBuiltin": "プロセス内",
+  "methodBuiltinHint": "内蔵 Agent — ウィザードでパイプラインを選び、そのまま使います。",
+  "restartClientTitle": "クライアントを再起動",
+  "restartClientHint": "設定書き込み後、クライアントを完全に終了して開き直すと新しい設定が有効になります。",
+  "gotIt": "了解",
+  "copyWrapCommand": "コマンドをコピー",
+  "wrapHint": "設定書き込みと異なり、wrap はシステムプロキシでトラフィックをハイジャックし、Agent 設定は変更しません。検証しやすいようここに表示します。",
+  "wrapReady": "利用可能",
+  "wrapUnavailable": "利用不可",
+  "wrapChecking": "システムプロキシの状態を確認中…",
+  "wrapStatusUnknown": "システムプロキシの状態を取得できません。システムプロキシを開き、MITM がオンで出口キーが設定されているか確認してください。",
+  "wrapNeedMitm": "システムプロキシがオフです（MITM 未稼働）。wrap を使う前にシステムプロキシで有効にしてください。",
+  "wrapNeedEgress": "出口 API キーが未設定です。wrap を使う前にシステムプロキシで出口キーを設定してください。",
+  "wrapNeedMitmAndEgress": "システムプロキシの準備ができていません：MITM を開始し、出口 API キーをシステムプロキシで設定してください。",
+  "goEnableSystemProxy": "システムプロキシを有効化",
   "connectProxy": "プロキシ接続",
   "restoreDefault": "デフォルトに戻す",
   "providerConfig": "プロバイダー設定",
@@ -91,5 +157,89 @@
   "writeModeMerge": "マージ追加",
   "writeModeNone": "ローカル設定なし",
   "installGuide": "インストール案内",
-  "noConfigMethod": "設定方法の説明はありません"
+  "noConfigMethod": "設定方法の説明はありません",
+  "agents": {
+    "claude-code": {
+      "description": "Anthropic 公式の AI コーディングアシスタント CLI",
+      "configMethod": "~/.claude/settings.json に env.ANTHROPIC_BASE_URL / ANTHROPIC_AUTH_TOKEN / ANTHROPIC_MODEL をマージして Centag を指します。初回上書き時に .centag-bak バックアップを作成します。",
+      "installHint": "macOS/Linux: curl -fsSL https://claude.ai/install.sh {'|'} bash; or brew install --cask claude-code"
+    },
+    "claude-desktop": {
+      "description": "Anthropic 公式デスクトップクライアント",
+      "configMethod": "macOS/Windows: Claude + Claude-3p に deploymentMode=3p を設定し、configLibrary に Centag gateway プロファイル（inferenceGatewayBaseUrl / ApiKey / AuthScheme=bearer / inferenceProvider=gateway）を書き込みます。Desktop を再起動して適用。",
+      "configMethodUnsupported": "このプラットフォームでは Claude Desktop のローカル書き込みは未対応です（macOS/Windows のみ）。対応 OS でワンクリック設定を使ってください。",
+      "installHint": "公式サイトから Claude Desktop アプリをダウンロード（CLI ではありません）"
+    },
+    "codex": {
+      "description": "OpenAI 公式の AI コーディングアシスタント CLI（ChatGPT Codex）",
+      "configMethod": "~/.codex/auth.json（OPENAI_API_KEY）と ~/.codex/config.toml（model_provider=custom、base_url → Centag、wire_api=responses）を上書きします。",
+      "installHint": "curl -fsSL https://chatgpt.com/codex/install.sh {'|'} sh; or npm i -g {'@'}openai/codex"
+    },
+    "gemini-cli": {
+      "description": "Google 公式の AI コーディングアシスタント CLI",
+      "configMethod": "~/.gemini/.env（GEMINI_API_KEY / GOOGLE_GEMINI_BASE_URL / GEMINI_MODEL）を書き込み、settings.json の security.auth.selectedType=gemini-api-key をマージします。",
+      "installHint": "npm i -g {'@'}google/gemini-cli; or brew install gemini-cli"
+    },
+    "grok-build": {
+      "description": "xAI Grok コーディングアシスタント CLI",
+      "configMethod": "~/.grok/config.toml を上書き：[models] default=\"centag\" と [model.\"centag\"]（model / base_url / api_key / api_backend=responses）。",
+      "installHint": "curl -fsSL https://x.ai/cli/install.sh {'|'} bash; or npm i -g {'@'}xai-official/grok"
+    },
+    "opencode": {
+      "description": "AI コーディングアシスタント（opencode.ai）",
+      "configMethod": "~/.config/opencode/opencode.json にマージ：provider.centag を upsert し、デフォルト model を設定。他プロバイダーは保持します。",
+      "installHint": "curl -fsSL https://opencode.ai/install {'|'} bash; or npm i -g opencode-ai"
+    },
+    "openclaw": {
+      "description": "AI コーディングアシスタント（openclaw）",
+      "configMethod": "~/.openclaw/openclaw.json にマージ：models.providers.centag を upsert し、agents.defaults.model.primary を設定。",
+      "installHint": "npm i -g openclaw",
+      "wrapHint": "OpenClaw の LLM 呼び出しは LaunchAgent ゲートウェイから行われ、単なる `openclaw` の wrap だけではトラフィックをハイジャックできません。先に `openclaw gateway stop` を実行し、下のコマンド（プロセス内 `tui --local`）をコピーしてください。wrap テストでは baseUrl を非 Centag のベンダー URL に向けてください（Centag への設定書き込みは別経路です）。"
+    },
+    "pi": {
+      "description": "AI エージェントツールキット / コーディングエージェント CLI（pi.dev）",
+      "configMethod": "~/.pi/agent/models.json にマージ：providers.centag（api=openai-completions）を upsert し、settings.json の defaultProvider/defaultModel を設定。",
+      "installHint": "curl -fsSL https://pi.dev/install.sh {'|'} sh; or npm i -g --ignore-scripts {'@'}earendil-works/pi-coding-agent"
+    },
+    "hermes": {
+      "description": "タスク指向の AI エージェントフレームワーク",
+      "configMethod": "~/.hermes/config.yaml にマージ：model のデフォルトを更新し、custom_providers に name=centag を upsert。",
+      "installHint": "curl -fsSL https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.sh {'|'} bash; or pip install \"hermes-agent[web]\""
+    },
+    "codebuddy": {
+      "description": "Tencent CodeBuddy デスクトップ；付属 CodeBuddy Code CLI（codebuddy）は models.json を共有",
+      "configMethod": "~/.codebuddy/models.json にマージ。url は完全な …/v1/chat/completions パスが必須。デスクトップと CLI で共有。",
+      "installHint": "Desktop: download from site. CLI (for wrap): npm i -g {'@'}tencent-ai/codebuddy-code; or brew install codebuddy-code"
+    },
+    "workbuddy": {
+      "description": "Tencent WorkBuddy デスクトップアシスタント（設定でカスタムモデル欄を記入）",
+      "configMethod": "WorkBuddy の設定 → モデルでカスタム API を追加：…/v1 を推奨（…/v1/chat/completions も可）；モデル ID は centag/<pipeline>。",
+      "installHint": "CodeBuddy / WorkBuddy サイトからデスクトップアプリをダウンロード"
+    },
+    "trae": {
+      "description": "ByteDance TRAE IDE（カスタム OpenAI 互換モデル；IDE 内で追加）",
+      "configMethod": "TRAE：設定 → モデル → 追加 → カスタム。OpenAI 形式；完全 URL を OFF；リクエスト URL = …/v1；モデル ID = centag/<pipeline>。",
+      "installHint": "trae.ai / trae.cn からダウンロード；カスタムモデルは「設定 → モデル」で追加が必要"
+    },
+    "coding-tui": {
+      "description": "コーディング向けターミナル UI Agent",
+      "configMethod": "TUI Agent はローカル設定ファイルを書きません。ルーティングはパイプライン経由でプロセス内にバインドされます。",
+      "installHint": "内蔵機能。別途 CLI のインストールは不要"
+    },
+    "education-tui": {
+      "description": "教育向けターミナル UI Agent",
+      "configMethod": "TUI Agent はローカル設定ファイルを書きません。ルーティングはパイプライン経由でプロセス内にバインドされます。",
+      "installHint": "内蔵機能。別途 CLI のインストールは不要"
+    },
+    "coding-web": {
+      "description": "コーディング向け Web 自動化 Agent",
+      "configMethod": "Web Agent はローカル設定ファイルを書きません。ルーティングはブラウザ自動化経由でプロセス内にバインドされます。",
+      "installHint": "内蔵機能。別途 CLI のインストールは不要"
+    },
+    "education-web": {
+      "description": "教育向け Web 自動化 Agent",
+      "configMethod": "Web Agent はローカル設定ファイルを書きません。ルーティングはブラウザ自動化経由でプロセス内にバインドされます。",
+      "installHint": "内蔵機能。別途 CLI のインストールは不要"
+    }
+  }
 }
