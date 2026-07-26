@@ -9,7 +9,7 @@ centag_layout_ensure_dirs minimal
 
 cd "$(dirname "$0")"
 
-TAGS="${BUILD_TAGS:-minimal,protocol_openai,protocol_anthropic,backend_openai,backend_ollama,backend_anthropic}"
+TAGS="${BUILD_TAGS:-minimal,protocol_openai,protocol_anthropic,protocol_openairesponses,backend_openai,backend_ollama,backend_anthropic}"
 export GOPROXY="${GOPROXY:-https://goproxy.cn,direct}"
 
 OUT="$(centag_server_bin_path minimal)"

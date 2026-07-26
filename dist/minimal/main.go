@@ -12,6 +12,7 @@ import (
 
 	_ "centag/plugins/protocol/anthropic"
 	_ "centag/plugins/protocol/openai"
+	_ "centag/plugins/protocol/openairesponses"
 )
 
 var (

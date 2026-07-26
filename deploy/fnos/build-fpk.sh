@@ -117,7 +117,8 @@ edition_to_runtime() {
 edition_build_tags() {
   case "$1" in
     minimal)
-      echo "minimal,protocol_openai,protocol_anthropic,backend_openai,backend_ollama,backend_anthropic"
+      # protocol_openairesponses：WebUI/OpenCode /v1/responses；与 setupMinimalRoutes 对齐
+      echo "minimal,protocol_openai,protocol_anthropic,protocol_openairesponses,backend_openai,backend_ollama,backend_anthropic"
       ;;
     personal|team)
       echo "protocol_openai,protocol_anthropic,protocol_gemini,protocol_openairesponses,backend_openai,backend_ollama,backend_anthropic,backend_gemini,backend_azure"

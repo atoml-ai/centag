@@ -452,7 +452,7 @@ _get_dist_tags() {
     local dist_name="$1"
     case "$dist_name" in
         minimal)
-            echo "minimal,protocol_openai,protocol_anthropic,backend_openai,backend_ollama,backend_anthropic"
+            echo "minimal,protocol_openai,protocol_anthropic,protocol_openairesponses,backend_openai,backend_ollama,backend_anthropic"
             ;;
         personal)
             echo "$_FULL_FEATURE_TAGS"
