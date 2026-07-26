@@ -17,8 +17,6 @@
   <a href="README.md">English</a> | <a href="README.zh-CN.md">简体中文</a> | <a href="README.ja.md">日本語</a> | 한국어 | <a href="README.ru.md">Русский</a> | <a href="README.es.md">Español</a>
 </p>
 
-![Centag Architecture Flow](docs/assets/readme/hero-architecture.png)
-
 ---
 
 ## 해결하는 문제
@@ -45,8 +43,6 @@
 ### 시각적 파이프라인 오케스트레이션
 
 중계소는 전달만 합니다. **Centag는 요청의 전체 생명주기를 설계하게 합니다**——캔버스에서 DAG를 드래그 앤 드롭하고, 파이프라인이 곧 전략입니다.
-
-![Pipeline Architecture — Visual DAG Orchestration](docs/assets/readme/pipeline-canvas.png)
 
 **내장 노드 16종**을 자유롭게 조합:
 
@@ -114,8 +110,6 @@ centag wrap doctor
 ### 개방형 플러그인 생태계
 
 파이프라인 노드는 확장 가능: Go SDK 로컬 플러그인, 또는 임의 언어의 원격 HTTP 플러그인.
-
-![Plugin Ecosystem — Extend Everything](docs/assets/readme/node-plugins.png)
 
 ```go
 type NodePlugin interface {
@@ -189,13 +183,25 @@ cp config/secrets/.env.example config/secrets/.env   # 필요 시 수정
 
 ## 스크린샷
 
-| 파이프라인 캔버스 | Agent 접속 |
-|-----------|-----------|
-| ![Pipeline Canvas](docs/assets/readme/pipeline-canvas.png) | ![Agent Setup](docs/assets/readme/agent-setup.png) |
+<p align="center">
+  <strong>대시보드</strong><br/>
+  <img src="docs/assets/readme/screenshot-dashboard.png" alt="대시보드" width="900" />
+</p>
 
-| 대시보드 | 노드 플러그인 |
-|--------|---------|
-| ![Dashboard](docs/assets/readme/dashboard.png) | ![Node Plugins](docs/assets/readme/node-plugins.png) |
+<p align="center">
+  <strong>파이프라인 시각 편집기</strong><br/>
+  <img src="docs/assets/readme/screenshot-pipeline-visual-editor.png" alt="파이프라인 시각 편집기" width="900" />
+</p>
+
+<p align="center">
+  <strong>Agent 설정</strong><br/>
+  <img src="docs/assets/readme/screenshot-agent-config.png" alt="Agent 설정" width="900" />
+</p>
+
+<p align="center">
+  <strong>Token 사용량 및 과금</strong><br/>
+  <img src="docs/assets/readme/screenshot-token-usage.png" alt="Token 사용량 및 과금" width="900" />
+</p>
 
 ---
 
