@@ -14,7 +14,7 @@
       <!-- Tab 1: 快速接入 -->
       <el-tab-pane :label="$t('agentSetup.quickSetup')" name="setup">
         <div class="section-block">
-          <p class="section-hint">{{ $t('agentSetup.quickSetupHint') }}</p>
+          <p class="section-hint section-hint--multiline">{{ $t('agentSetup.quickSetupHint') }}</p>
 
           <div
             v-for="group in agentGroups"
@@ -154,7 +154,7 @@
                                   {{ wrapAvailable ? $t('agentSetup.wrapReady') : $t('agentSetup.wrapUnavailable') }}
                                 </el-tag>
                               </div>
-                              <p class="access-method-hint">
+                              <p class="access-method-hint access-method-hint--multiline">
                                 {{ wrapMethodHint(agent) }}
                               </p>
                               <p v-if="companionInstallHint(agent)" class="wrap-install-hint">
@@ -1200,8 +1200,16 @@ function copyWrapCommand(text: string) {
   copyText(text)
 }
 
-/** 桌面 Agent 的 wrap 启动的是配套 CLI，不是 .app */
+/** 桌面 Agent 的 wrap 启动的是配套 CLI，不是 .app；个别 Agent（如 OpenClaw）可有专用说明 */
 function wrapMethodHint(agent: AgentTypeInfo): string {
+  if (agent.type) {
+    const key = `agentSetup.agents.${agent.type}.wrapHint`
+    try {
+      if (te(key) || te(key, 'en')) return t(key)
+    } catch {
+      /* fall through */
+    }
+  }
   if (agent.companion_cli?.note) {
     return agent.companion_cli.note
   }
@@ -1371,6 +1379,10 @@ onMounted(() => {
   color: #606266;
   font-size: 0.875rem;
   margin: 0 0 16px;
+}
+
+.section-hint--multiline {
+  white-space: pre-line;
 }
 
 .agent-group {
@@ -1600,6 +1612,10 @@ onMounted(() => {
   font-size: 0.72rem;
   color: #909399;
   line-height: 1.4;
+}
+
+.access-method-hint--multiline {
+  white-space: pre-line;
 }
 
 .wrap-install-hint {

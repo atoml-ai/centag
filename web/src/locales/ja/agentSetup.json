@@ -2,7 +2,7 @@
   "title": "Agent設定",
   "subtitle": "Agent ツールを Centag プロキシに接続：パイプライン選択、設定書き込み、検証",
   "quickSetup": "クイックセットアップ",
-  "quickSetupHint": "下の Agent をクリックしてウィザードで接続します（パイプラインを選択するだけでOK。バックエンドは内部で決定されます）。",
+  "quickSetupHint": "各 Agent は能力マトリクスに沿って、設定書き込み / UI 案内 / wrap で付属 CLI 起動 / 内蔵プロセスを表示します。\n各方式に「検証済み / 未検証」を付けます。未検証でも使えないわけではありません。一般に Centag の接続先・モデル名・API Key を書き込む方式は各 Agent に通用する標準的な方法なので、ご自身で確認してください。",
   "connectProxy": "プロキシ接続",
   "restoreDefault": "デフォルトに戻す",
   "providerConfig": "プロバイダー設定",
