@@ -132,6 +132,8 @@
     "lanIP": "本机局域网 IP",
     "lanIPPlaceholder": "如 192.168.1.50",
     "externalAddress": "对外访问地址",
+    "requireProxyAuth": "要求代理认证",
+    "requireProxyAuthHint": "关闭后局域网客户端无需发送 Proxy-Authorization（兼容 Bun/Opencode 等不支持代理认证的客户端）",
     "listenPort": "监听端口",
     "listenPortHint": "修改后需关闭再开启 MITM",
     "proxyMode": "代理模式",
@@ -199,6 +201,8 @@
   "message": {
     "lanEnabled": "局域网访问已开启",
     "lanDisabled": "已恢复为仅本机访问",
+    "proxyAuthEnabled": "代理认证已开启",
+    "proxyAuthDisabled": "代理认证已关闭（局域网客户端无需认证）",
     "saveFailed": "保存失败",
     "operationFailed": "操作失败",
     "mitmEnabled": "MITM 已启用（出口 Key 将自动绑定）",

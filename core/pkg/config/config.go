@@ -539,21 +539,25 @@ type SystemProxyConfig struct {
 	// Agents keep their upstream tokens; they never need to know about this key.
 	// Empty → resolve from LLM_PROXY_SYSTEM_PROXY_EGRESS_API_KEY / LLM_PROXY_DEFAULT_ADMIN_API_KEY.
 	EgressAPIKey string `json:"egress_api_key,omitempty"`
+	// RequireClientProxyAuth requires LAN clients to send Proxy-Authorization header.
+	// Disable for Bun-based agents (e.g. opencode) that don't extract auth from HTTPS_PROXY URL.
+	RequireClientProxyAuth bool `json:"require_client_proxy_auth"`
 }
 
 // GetDefaultSystemProxyConfig returns the default MITM proxy config.
 func GetDefaultSystemProxyConfig() SystemProxyConfig {
 	return SystemProxyConfig{
-		Enabled:         false,
-		ListenPort:      8081,
-		ListenAddr:      "127.0.0.1",
-		AdvertiseHost:   "",
-		AllowLANClients: false,
-		PACEnabled:      true,
-		CACertPath:      "./certs/ca.crt",
-		CAKeyPath:       "./certs/ca.key",
-		CertDir:         "./certs/domains",
-		CertValidDays:   90,
+		Enabled:                false,
+		ListenPort:             8081,
+		ListenAddr:             "127.0.0.1",
+		AdvertiseHost:          "",
+		AllowLANClients:        false,
+		PACEnabled:             true,
+		CACertPath:             "./certs/ca.crt",
+		CAKeyPath:              "./certs/ca.key",
+		CertDir:                "./certs/domains",
+		CertValidDays:          90,
+		RequireClientProxyAuth: true, // default: require auth for LAN clients
 		// Domains/PathPatterns: see mitm_default_domains.go (catalog + global providers).
 		Domains:      append([]string(nil), DefaultMITMDomains()...),
 		PathPatterns: append([]string(nil), DefaultMITMPathPatterns()...),

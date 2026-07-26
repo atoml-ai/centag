@@ -132,6 +132,8 @@
     "lanIP": "Local LAN IP",
     "lanIPPlaceholder": "e.g. 192.168.1.50",
     "externalAddress": "External Address",
+    "requireProxyAuth": "Require Proxy Auth",
+    "requireProxyAuthHint": "Disable for Bun/Opencode clients that don't support Proxy-Authorization header",
     "listenPort": "Listen Port",
     "listenPortHint": "Restart MITM after changing",
     "proxyMode": "Proxy Mode",
@@ -199,6 +201,8 @@
   "message": {
     "lanEnabled": "LAN access enabled",
     "lanDisabled": "Restored to local-only access",
+    "proxyAuthEnabled": "Proxy authentication enabled",
+    "proxyAuthDisabled": "Proxy authentication disabled (LAN clients can connect without auth)",
     "saveFailed": "Save failed",
     "operationFailed": "Operation failed",
     "mitmEnabled": "MITM enabled (Egress Key will auto-bind)",

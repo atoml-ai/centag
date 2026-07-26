@@ -163,6 +163,11 @@
           </div>
 
           <template v-if="allowLanClients">
+            <div class="switch-cell switch-cell-primary">
+              <span class="switch-label">{{ t('systemProxy.form.requireProxyAuth') }}</span>
+              <el-switch v-model="requireClientProxyAuth" :loading="savingLan" @change="saveLanConfig({ field: 'auth' })" />
+              <span class="form-hint">{{ t('systemProxy.form.requireProxyAuthHint') }}</span>
+            </div>
             <el-form label-width="110px" class="lan-form" size="small">
               <el-form-item :label="t('systemProxy.form.lanIP')" required>
                 <el-input v-model="advertiseHost" :placeholder="t('systemProxy.form.lanIPPlaceholder')" style="max-width: 220px" />
@@ -584,6 +589,13 @@
         </el-button>
       </template>
     </el-dialog>
+
+    <!-- 版本号 -->
+    <div class="version-footer">
+      <span class="version-text">Centag {{ version }}</span>
+      <span class="version-sep">·</span>
+      <span class="version-text">{{ buildTime }}</span>
+    </div>
     </div>
   </div>
 </template>
@@ -610,6 +622,7 @@ import {
   type ProxySetupStatus
 } from '@/api/system-proxy'
 import { listWrapPresets, type WrapPreset } from '@/api/wrap'
+import { copyToClipboard } from '@/utils/clipboard'
 
 const { t } = useI18n()
 
@@ -636,6 +649,8 @@ const detectingIP = ref(false)
 const ensuringEgress = ref(false)
 const bindingEgress = ref(false)
 const loadingKeys = ref(false)
+const version = ref('')
+const buildTime = ref('')
 /** 出口 Key 已就绪时隐藏手动补绑；失败时可展开 */
 const showEgressAdvanced = ref(false)
 /** 向导三步「更多选项」默认展开 */
@@ -645,6 +660,7 @@ const wizardMoreStep3 = ref(['step3-more'])
 const mainTab = ref('wizard')
 const setupStatus = ref<ProxySetupStatus | null>(null)
 const allowLanClients = ref(false)
+const requireClientProxyAuth = ref(true)
 const advertiseHost = ref('')
 const suggestedLanHosts = ref<string[]>([])
 const listenAddr = ref('127.0.0.1')
@@ -1063,7 +1079,7 @@ async function detectLanIP() {
   }
 }
 
-async function saveLanConfig() {
+async function saveLanConfig(opts?: { field?: 'lan' | 'auth' }) {
   if (allowLanClients.value) {
     const host = advertiseHost.value.trim()
     if (!host) {
@@ -1084,11 +1100,16 @@ async function saveLanConfig() {
         listen_port: listenPort.value,
         pac_enabled: status.value.pac_enabled,
         allow_lan_clients: allowLanClients.value,
+        require_client_proxy_auth: requireClientProxyAuth.value,
         listen_addr: allowLanClients.value ? listenAddr.value || '0.0.0.0' : '127.0.0.1',
         advertise_host: allowLanClients.value ? advertiseHost.value.trim() : ''
       }
     })
-    ElMessage.success(allowLanClients.value ? t('systemProxy.message.lanEnabled') : t('systemProxy.message.lanDisabled'))
+    if (opts?.field === 'auth') {
+      ElMessage.success(requireClientProxyAuth.value ? t('systemProxy.message.proxyAuthEnabled') : t('systemProxy.message.proxyAuthDisabled'))
+    } else {
+      ElMessage.success(allowLanClients.value ? t('systemProxy.message.lanEnabled') : t('systemProxy.message.lanDisabled'))
+    }
     await load()
   } catch (error: any) {
     ElMessage.error(t('systemProxy.message.saveFailed') + ': ' + error.message)
@@ -1107,6 +1128,7 @@ const load = async (opts?: { skipAutoEgress?: boolean }) => {
       status.value.pac_enabled = configData.system_proxy.pac_enabled
       listenPort.value = configData.system_proxy.listen_port || 8081
       allowLanClients.value = !!configData.system_proxy.allow_lan_clients
+      requireClientProxyAuth.value = configData.system_proxy.require_client_proxy_auth !== false
       advertiseHost.value = configData.system_proxy.advertise_host || ''
       listenAddr.value = configData.system_proxy.listen_addr || '127.0.0.1'
     }
@@ -1117,6 +1139,15 @@ const load = async (opts?: { skipAutoEgress?: boolean }) => {
     const proxyData = await api.get('/api/v1/proxy/status')
     status.value.pac_domains = proxyData.pac_domains || []
     status.value.pac_patterns = proxyData.pac_patterns || []
+
+    // 获取版本信息
+    try {
+      const statusRes = await api.get('/api/v1/status')
+      version.value = statusRes.version || ''
+      buildTime.value = statusRes.build_time || ''
+    } catch {
+      // ignore
+    }
 
     try {
       setupStatus.value = await getProxySetupStatus()
@@ -1312,10 +1343,10 @@ const downloadCACert = async () => {
 }
 
 const copyCommand = async (command: string) => {
-  try {
-    await navigator.clipboard.writeText(command)
+  const ok = await copyToClipboard(command)
+  if (ok) {
     ElMessage.success(t('systemProxy.message.copiedToClipboard'))
-  } catch {
+  } else {
     ElMessage.error(t('systemProxy.message.copyFailed'))
   }
 }
@@ -2016,5 +2047,21 @@ onBeforeUnmount(() => {
   .wizard-flow.is-row .step-head {
     flex-wrap: wrap;
   }
+}
+
+.version-footer {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 0 0;
+  margin-top: 24px;
+  border-top: 1px solid var(--el-border-color-lighter);
+  color: var(--el-text-color-secondary);
+  font-size: 0.875rem;
+}
+
+.version-sep {
+  color: var(--el-border-color);
 }
 </style>
