@@ -116,6 +116,8 @@ func (s *Server) setupMinimalRoutes(configHandler *MinimalConfigHandler, pluginR
 		v1.GET("/models", s.proxyHandler.ListModels)
 		v1.GET("/backends", s.proxyHandler.ListBackends)
 		v1.POST("/messages", s.proxyHandler.HandleChatCompletions)
+		// OpenCode / Codex wire_api=responses（需编译进 protocol_openairesponses）
+		v1.POST("/responses", s.proxyHandler.HandleChatCompletions)
 		v1.POST("/completions", s.proxyHandler.HandleChatCompletions)
 		v1.POST("/embeddings", s.proxyHandler.HandleChatCompletions)
 	}
@@ -129,16 +131,18 @@ func (s *Server) setupMinimalRoutes(configHandler *MinimalConfigHandler, pluginR
 			backends.GET("", s.backendHandler.ListBackends)
 			backends.GET("/types", s.backendHandler.ListBackendTypes)
 			backends.GET("/export", s.backendHandler.ExportBackends)
+			// 静态路径必须在 /:id 之前，否则会被当成 id（与完整版 setupRoutes 对齐）
+			backends.POST("/fetch-models", s.backendHandler.FetchModels)
+			backends.POST("/test", s.backendHandler.TestConnection)
+			backends.POST("/probe-all", s.backendHandler.ProbeAllBackends)
+			backends.POST("/probe-all-sse", s.backendHandler.ProbeAllBackendsSSE)
+			backends.POST("/import", s.backendHandler.ImportBackends)
 			backends.GET("/:id", s.backendHandler.GetBackend)
 			backends.GET("/:id/models", s.backendHandler.GetModels)
 			backends.POST("", s.backendHandler.CreateBackend)
 			backends.PUT("/:id", s.backendHandler.UpdateBackend)
 			backends.DELETE("/:id", s.backendHandler.DeleteBackend)
-			backends.POST("/test", s.backendHandler.TestConnection)
 			backends.POST("/:id/probe", s.backendHandler.ProbeBackend)
-			backends.POST("/probe-all", s.backendHandler.ProbeAllBackends)
-			backends.POST("/probe-all-sse", s.backendHandler.ProbeAllBackendsSSE)
-			backends.POST("/import", s.backendHandler.ImportBackends)
 		}
 
 		if s.pipelineHandler != nil {
