@@ -2,7 +2,7 @@
   "title": "Agent설정",
   "subtitle": "Agent 도구를 Centag 프록시에 연결: 파이프라인 선택, 설정 작성 및 검증",
   "quickSetup": "빠른 설정",
-  "quickSetupHint": "아래 Agent를 클릭하여 마법사로 연결하세요 (파이프라인만 선택하면 됩니다; 백엔드는 내부적으로 결정됩니다).",
+  "quickSetupHint": "각 Agent는 능력 매트릭스에 따라 설정 쓰기, UI 안내, wrap으로 동반 CLI 실행, 또는 내장 프로세스를 표시합니다.\n각 방식에 「검증됨 / 미검증」이 표시됩니다. 미검증이 사용 불가를 뜻하지는 않습니다. 일반적으로 Centag 접속 주소·모델명·API Key를 쓰는 방식은 모든 Agent에 적용되는 보편적·표준적인 방법이니 직접 확인해 주세요.",
   "connectProxy": "프록시 연결",
   "restoreDefault": "기본값 복원",
   "providerConfig": "공급자 설정",

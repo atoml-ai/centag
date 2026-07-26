@@ -2,7 +2,7 @@
   "title": "Agent Config",
   "subtitle": "Connect Agent tools to Centag proxy: select pipeline, write config and verify",
   "quickSetup": "Quick Setup",
-  "quickSetupHint": "Each Agent shows access methods from its capability matrix: write config, UI guide, wrap companion CLI, or built-in. Methods are marked Verified/Unverified — Unverified does not mean unavailable. Wrap also needs system proxy ready before you can copy the command.",
+  "quickSetupHint": "Each Agent shows access methods from its capability matrix: write config, UI guide, wrap companion CLI, or built-in.\nMethods are marked Verified/Unverified — Unverified does not mean unavailable. In general, writing Centag’s base URL, model name, and API Key into the Agent is a universal, standards-aligned approach that applies to every Agent; please verify it yourself.",
   "verified": "Verified",
   "unverified": "Unverified",
   "groupCli": "CLI",
@@ -193,7 +193,8 @@
     "openclaw": {
       "description": "AI coding assistant (openclaw)",
       "configMethod": "Merges into ~/.openclaw/openclaw.json: upsert models.providers.centag and set agents.defaults.model.primary.",
-      "installHint": "npm i -g openclaw"
+      "installHint": "npm i -g openclaw",
+      "wrapHint": "OpenClaw LLM calls are made by the LaunchAgent gateway; wrapping plain `openclaw` alone will not hijack traffic. Run `openclaw gateway stop` first, then copy the command below (`tui --local` in-process). For wrap tests, point baseUrl at a non-Centag vendor URL (write-config to Centag is a separate path)."
     },
     "pi": {
       "description": "AI agent toolkit / coding agent CLI (pi.dev)",

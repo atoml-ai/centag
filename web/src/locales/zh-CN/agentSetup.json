@@ -2,7 +2,7 @@
   "title": "Agent配置",
   "subtitle": "将 Agent 工具接入 Centag 代理：选择流水线、写入配置并验证生效",
   "quickSetup": "快速接入",
-  "quickSetupHint": "每种 Agent 按能力矩阵展示接入方式：写入配置、UI 指引、wrap 启动配套 CLI、或内置进程。各方式标注「已验证 / 未验证」——未验证不代表不可用；wrap 还需系统代理就绪才可复制命令。",
+  "quickSetupHint": "每种 Agent 按能力矩阵展示接入方式：写入配置、UI 指引、wrap 启动配套 CLI、或内置进程。\n各方式标注「已验证 / 未验证」——未验证不代表不可用，一般来说将 Centag 的接入地址和模型名及 API Key 写入方式是适用每个 Agent 的，它是非常通用和规范的，请自行验证。",
   "verified": "已验证",
   "unverified": "未验证",
   "groupCli": "CLI 终端",
@@ -193,7 +193,8 @@
     "openclaw": {
       "description": "AI 编程助手 (openclaw)",
       "configMethod": "合并写入 ~/.openclaw/openclaw.json：在 models.providers 中累加/更新 centag，并设置默认 primary 模型。",
-      "installHint": "npm i -g openclaw"
+      "installHint": "npm i -g openclaw",
+      "wrapHint": "OpenClaw 的 LLM 请求由 LaunchAgent 网关发出，仅 wrap `openclaw` 不会劫持流量。请先执行 openclaw gateway stop，再复制下方命令（同进程 tui --local）。测 wrap 时请把 baseUrl 指到非 Centag 的厂商地址（写入配置直连 Centag 是另一条路径）。"
     },
     "pi": {
       "description": "AI Agent 工具包 / Coding Agent CLI (pi.dev)",

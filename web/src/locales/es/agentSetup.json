@@ -2,7 +2,7 @@
   "title": "Config Agent",
   "subtitle": "Conecte herramientas Agent al proxy Centag: seleccione pipeline, escriba config y verifique",
   "quickSetup": "Configuración Rápida",
-  "quickSetupHint": "Haga clic en el Agent a continuación para conectar a través del asistente (solo seleccione un pipeline; el backend se determina internamente).",
+  "quickSetupHint": "Cada Agent muestra métodos de acceso según su matriz: escribir config, guía UI, wrap del CLI acompañante o proceso integrado.\nCada método se marca Verificado/No verificado — No verificado no significa no disponible. En general, escribir la URL, el modelo y la API Key de Centag es un enfoque universal y estándar para cualquier Agent; verifíquelo usted mismo.",
   "connectProxy": "Conectar Proxy",
   "restoreDefault": "Restaurar Predeterminado",
   "providerConfig": "Configuración de Proveedor",
