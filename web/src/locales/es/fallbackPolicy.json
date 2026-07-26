@@ -38,7 +38,7 @@
     "rulesLabel": "Reglas de respaldo",
     "priorityPlaceholder": "Prioridad",
     "backendPlaceholder": "ID de backend",
-    "modelPlaceholder": "Nombre del modelo (o {{requested_model}})",
+    "modelPlaceholder": "Nombre del modelo (o {'{{'}requested_model{'}}'})",
     "timeoutPlaceholder": "Tiempo de espera(s)",
     "addRule": "Agregar regla",
     "cancel": "Cancelar",

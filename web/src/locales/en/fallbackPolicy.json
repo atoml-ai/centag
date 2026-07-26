@@ -38,7 +38,7 @@
     "rulesLabel": "Fallback Rules",
     "priorityPlaceholder": "Priority",
     "backendPlaceholder": "Backend ID",
-    "modelPlaceholder": "Model name (or {{requested_model}})",
+    "modelPlaceholder": "Model name (or {'{{'}requested_model{'}}'})",
     "timeoutPlaceholder": "Timeout(s)",
     "addRule": "Add Rule",
     "cancel": "Cancel",

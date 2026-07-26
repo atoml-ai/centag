@@ -101,7 +101,7 @@
     "runWithFlagsHint": "環境変数を使わない場合は --server / --token を同一行に書きます。",
     "envScriptComment": "現在のターミナルのみ。shell 設定ファイルに書かない",
     "optionalPac": "オプション：システムPAC / 手動環境変数",
-    "pacHint": "ほとんどのCLIはシステムPACを読みません。PAC：{{url}}",
+    "pacHint": "ほとんどのCLIはシステムPACを読みません。PAC：{url}",
     "pacEnable": "PAC有効",
     "pacDisable": "無効にして復元",
     "manualProxy": "手動HTTPS_PROXY",

@@ -101,7 +101,7 @@
     "runWithFlagsHint": "Pass --server / --token on the same line when you skip env vars.",
     "envScriptComment": "Current terminal only; do not write into shell rc files",
     "optionalPac": "Optional: System PAC / Manual Environment Variables",
-    "pacHint": "Most CLIs don't read system PAC. PAC: {{url}}",
+    "pacHint": "Most CLIs don't read system PAC. PAC: {url}",
     "pacEnable": "PAC Enable",
     "pacDisable": "Disable & Restore",
     "manualProxy": "Manual HTTPS_PROXY",

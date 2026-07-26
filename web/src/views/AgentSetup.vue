@@ -16,74 +16,149 @@
         <div class="section-block">
           <p class="section-hint">{{ $t('agentSetup.quickSetupHint') }}</p>
 
-          <el-row :gutter="16">
-            <el-col
-              v-for="agent in agentTypes"
-              :key="agent.type"
-              :xs="24" :sm="12" :md="8"
-            >
-              <div class="agent-card" @click="openWizard(agent)">
-                <div class="agent-card-main">
-                  <div class="agent-icon">
-                    <el-icon :size="32">
-                      <component :is="agentIcon(agent.type)" />
-                    </el-icon>
-                  </div>
-                  <div class="agent-info">
-                    <div class="agent-name">
-                      {{ agent.display_name }}
-                      <el-tag v-if="agent.write_mode" size="small" type="info" class="write-mode-tag">
-                        {{ writeModeLabel(agent.write_mode) }}
-                      </el-tag>
+          <div
+            v-for="group in agentGroups"
+            :key="group.id"
+            class="agent-group"
+          >
+            <div class="agent-group-header">
+              <h3 class="agent-group-title">{{ group.title }}</h3>
+              <p v-if="group.hint" class="agent-group-hint">{{ group.hint }}</p>
+            </div>
+            <el-row :gutter="16" class="agent-card-row">
+              <el-col
+                v-for="agent in group.agents"
+                :key="agent.type"
+                :xs="24" :sm="12" :md="8"
+                class="agent-card-col"
+              >
+                <div
+                  class="agent-card"
+                  :class="{ 'agent-card--verified': agent.verified }"
+                >
+                  <div class="agent-card-head">
+                    <div class="agent-icon">
+                      <el-icon :size="20">
+                        <component :is="agentIcon(agent.type)" />
+                      </el-icon>
                     </div>
-                    <div class="agent-desc">{{ agentLocalized(agent, 'description') }}</div>
-                    <a
-                      v-if="agent.install_url"
-                      class="install-link"
-                      :href="agent.install_url"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      @click.stop
-                    >
-                      {{ $t('agentSetup.installGuide') }}
-                    </a>
-                    <div v-if="agentLocalized(agent, 'installHint')" class="install-hint">
-                      {{ agentLocalized(agent, 'installHint') }}
+                    <div class="agent-head-text">
+                      <div class="agent-name">
+                        <span class="agent-name-text">{{ agent.display_name }}</span>
+                        <el-tag v-if="agent.verified" size="small" type="success" effect="plain" class="verified-tag">
+                          {{ $t('agentSetup.verified') }}
+                        </el-tag>
+                      </div>
+                      <div class="agent-desc">{{ agentLocalized(agent, 'description') }}</div>
                     </div>
                   </div>
-                  <div class="agent-actions" @click.stop>
-                    <el-button type="primary" link @click="openWizard(agent)">
-                      {{ $t('agentSetup.connectProxy') }}
-                    </el-button>
-                    <el-button
-                      v-if="agent.write_mode !== 'none'"
-                      type="info"
-                      link
-                      :loading="restoringAgent === agent.type"
-                      @click="restoreDefaults(agent)"
+
+                  <div class="access-methods" @click.stop>
+                    <!-- 方式一：写入配置 -->
+                    <div v-if="agent.write_mode !== 'none'" class="access-method">
+                      <div class="access-method-head">
+                        <div class="access-method-titles">
+                          <span class="access-method-index">1</span>
+                          <div>
+                            <div class="access-method-title">{{ $t('agentSetup.methodWriteConfig') }}</div>
+                            <p class="access-method-hint">{{ $t('agentSetup.methodWriteConfigHint') }}</p>
+                          </div>
+                        </div>
+                        <el-button type="primary" size="small" @click="openWizard(agent)">
+                          {{ $t('agentSetup.writeConfigAction') }}
+                        </el-button>
+                      </div>
+                    </div>
+
+                    <!-- 方式二：wrap 运行（无需改配置） -->
+                    <div v-if="agent.wrap_command" class="access-method">
+                      <div class="access-method-head">
+                        <div class="access-method-titles">
+                          <span class="access-method-index">{{ agent.write_mode !== 'none' ? '2' : '1' }}</span>
+                          <div>
+                            <div class="access-method-title">{{ $t('agentSetup.methodWrap') }}</div>
+                            <p class="access-method-hint">{{ $t('agentSetup.methodWrapHint') }}</p>
+                          </div>
+                        </div>
+                      </div>
+                      <div class="wrap-cmd-row">
+                        <code class="wrap-cmd">{{ agent.wrap_command }}</code>
+                        <el-button
+                          class="wrap-copy-btn"
+                          link
+                          type="primary"
+                          :icon="DocumentCopy"
+                          :title="$t('agentSetup.copyWrapCommand')"
+                          @click="copyText(agent.wrap_command!)"
+                        />
+                      </div>
+                    </div>
+
+                    <!-- 内置 Agent：无本地配置、无 wrap -->
+                    <div
+                      v-if="agent.write_mode === 'none' && !agent.wrap_command"
+                      class="access-method"
                     >
-                      {{ $t('agentSetup.restoreDefault') }}
-                    </el-button>
+                      <div class="access-method-head">
+                        <div class="access-method-titles">
+                          <span class="access-method-index">1</span>
+                          <div>
+                            <div class="access-method-title">{{ $t('agentSetup.methodBuiltin') }}</div>
+                            <p class="access-method-hint">{{ $t('agentSetup.methodBuiltinHint') }}</p>
+                          </div>
+                        </div>
+                        <el-button type="primary" size="small" @click="openWizard(agent)">
+                          {{ $t('agentSetup.connectProxy') }}
+                        </el-button>
+                      </div>
+                    </div>
                   </div>
+
+                  <el-collapse class="agent-meta-collapse" @click.stop>
+                    <el-collapse-item :title="$t('agentSetup.moreDetails')" name="details">
+                      <div class="meta-block">
+                        <div class="meta-row">
+                          <span class="meta-label">{{ $t('agentSetup.writeMode') }}</span>
+                          <span>{{ writeModeLabel(agent.write_mode) }}</span>
+                        </div>
+                        <div v-if="agent.install_url || agentLocalized(agent, 'installHint')" class="meta-row meta-row-col">
+                          <span class="meta-label">{{ $t('agentSetup.installGuide') }}</span>
+                          <a
+                            v-if="agent.install_url"
+                            class="install-link"
+                            :href="agent.install_url"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >{{ agent.install_url }}</a>
+                          <span v-if="agentLocalized(agent, 'installHint')" class="install-hint">
+                            {{ agentLocalized(agent, 'installHint') }}
+                          </span>
+                        </div>
+                        <div v-if="agent.config_paths?.length" class="meta-row meta-row-col">
+                          <span class="meta-label">{{ $t('agentSetup.configPaths') }}</span>
+                          <code v-for="p in agent.config_paths" :key="p" class="meta-path">{{ p }}</code>
+                        </div>
+                        <div v-if="agent.key_fields?.length" class="meta-row meta-row-col">
+                          <span class="meta-label">{{ $t('agentSetup.keyFields') }}</span>
+                          <span class="meta-fields">{{ agent.key_fields.join(', ') }}</span>
+                        </div>
+                        <p class="meta-method">{{ agentLocalized(agent, 'configMethod') || $t('agentSetup.noConfigMethod') }}</p>
+                        <div v-if="agent.write_mode !== 'none'" class="meta-actions">
+                          <el-button
+                            size="small"
+                            :loading="restoringAgent === agent.type"
+                            @click="restoreDefaults(agent)"
+                          >
+                            {{ $t('agentSetup.restoreDefault') }}
+                          </el-button>
+                        </div>
+                      </div>
+                    </el-collapse-item>
+                  </el-collapse>
                 </div>
-                <el-collapse class="agent-meta-collapse" @click.stop>
-                  <el-collapse-item :title="$t('agentSetup.configMethod')" name="method">
-                    <div class="meta-block">
-                      <div v-if="agent.config_paths?.length" class="meta-row">
-                        <span class="meta-label">{{ $t('agentSetup.configPaths') }}</span>
-                        <code v-for="p in agent.config_paths" :key="p" class="meta-path">{{ p }}</code>
-                      </div>
-                      <div v-if="agent.key_fields?.length" class="meta-row">
-                        <span class="meta-label">{{ $t('agentSetup.keyFields') }}</span>
-                        <span class="meta-fields">{{ agent.key_fields.join(', ') }}</span>
-                      </div>
-                      <p class="meta-method">{{ agentLocalized(agent, 'configMethod') || $t('agentSetup.noConfigMethod') }}</p>
-                    </div>
-                  </el-collapse-item>
-                </el-collapse>
-              </div>
-            </el-col>
-          </el-row>
+              </el-col>
+            </el-row>
+          </div>
         </div>
       </el-tab-pane>
 
@@ -440,6 +515,8 @@ interface AgentTypeInfo {
   config_method?: string
   install_url?: string
   install_hint?: string
+  verified?: boolean
+  wrap_command?: string
 }
 
 const agentTypes = ref<AgentTypeInfo[]>([])
@@ -448,6 +525,56 @@ const configResult = ref<any>(null)
 const writeResult = ref<{ success: boolean; message: string; written?: Array<{ path: string; content: string }> } | null>(null)
 /** null=未检测；true/false=是否有启用中的 API Key（列表级提示，最终以服务端解密结果为准） */
 const hasEnabledAPIKey = ref<boolean | null>(null)
+
+interface AgentGroup {
+  id: string
+  title: string
+  hint: string
+  agents: AgentTypeInfo[]
+}
+
+/** 仅按形态分组；组内已验证优先 */
+const agentGroups = computed<AgentGroup[]>(() => {
+  const sortInGroup = (agents: AgentTypeInfo[]) =>
+    [...agents].sort((a, b) => {
+      if (!!a.verified !== !!b.verified) return a.verified ? -1 : 1
+      return a.type.localeCompare(b.type)
+    })
+
+  const sections: Array<{ id: string; cat: string; titleKey: string; hintKey: string }> = [
+    { id: 'cli', cat: 'cli', titleKey: 'agentSetup.groupCli', hintKey: 'agentSetup.groupCliHint' },
+    { id: 'desktop', cat: 'desktop', titleKey: 'agentSetup.groupDesktop', hintKey: 'agentSetup.groupDesktopHint' },
+    { id: 'tui', cat: 'tui', titleKey: 'agentSetup.groupTui', hintKey: 'agentSetup.groupTuiHint' },
+    { id: 'web', cat: 'web', titleKey: 'agentSetup.groupWeb', hintKey: 'agentSetup.groupWebHint' },
+  ]
+
+  const groups: AgentGroup[] = []
+  const known = new Set(sections.map(s => s.cat))
+  for (const s of sections) {
+    const agents = sortInGroup(
+      agentTypes.value.filter(a => (a.category || 'cli') === s.cat)
+    )
+    if (!agents.length) continue
+    groups.push({
+      id: s.id,
+      title: t(s.titleKey),
+      hint: t(s.hintKey),
+      agents,
+    })
+  }
+  const other = sortInGroup(
+    agentTypes.value.filter(a => !known.has(a.category || 'cli'))
+  )
+  if (other.length) {
+    groups.push({
+      id: 'other',
+      title: t('agentSetup.groupOther'),
+      hint: t('agentSetup.groupOtherHint'),
+      agents: other,
+    })
+  }
+  return groups
+})
 
 const isDesktopEdition = computed(() => isPersonalEdition())
 
@@ -748,6 +875,7 @@ function agentIcon(type: string) {
     'grok-build': Connection,
     'opencode': Connection,
     'openclaw': Connection,
+    'pi': Connection,
     'hermes': Connection,
     'codebuddy': Monitor,
     'workbuddy': Monitor,
@@ -780,8 +908,13 @@ function agentLocalized(
     if (te(unsupportedKey) || te(unsupportedKey, 'en')) return t(unsupportedKey)
   }
   const key = `agentSetup.agents.${agent.type}.${field}`
-  // 当前语言缺失时回退 en，避免显示后端硬编码中文
-  if (te(key) || te(key, 'en')) return t(key)
+  // 当前语言缺失时回退 en，避免显示后端硬编码中文。
+  // vue-i18n 会把未转义的 @ / | 当成链接/复数语法，解析失败时回退后端文案。
+  try {
+    if (te(key) || te(key, 'en')) return t(key)
+  } catch {
+    /* fall through */
+  }
   if (field === 'description') return agent.description || ''
   if (field === 'configMethod') return agent.config_method || ''
   return agent.install_hint || ''
@@ -875,35 +1008,79 @@ onMounted(() => {
   margin: 0 0 16px;
 }
 
-/* Agent cards */
-.agent-card {
-  border: 2px solid #e4e7ed;
-  border-radius: 12px;
-  padding: 16px 20px;
+.agent-group {
+  margin-bottom: 32px;
+  padding-top: 4px;
+}
+
+.agent-group + .agent-group {
+  border-top: 1px solid #ebeef5;
+  padding-top: 24px;
+}
+
+.agent-group-header {
+  margin-bottom: 14px;
+}
+
+.agent-group-title {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: #303133;
+}
+
+.agent-group-hint {
+  margin: 4px 0 0;
+  font-size: 0.8rem;
+  color: #909399;
+  line-height: 1.45;
+  max-width: 720px;
+}
+
+/* Agent cards — 纵向间距放在列上，避免 height:100% 把卡片 margin 顶没 */
+.agent-card-col {
   margin-bottom: 16px;
-  cursor: pointer;
-  transition: all 0.2s;
+}
+
+.agent-card {
+  height: 100%;
+  border: 1px solid #e4e7ed;
+  border-radius: 10px;
+  padding: 14px 16px 6px;
+  cursor: default;
+  transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
+  background: #fff;
+  box-sizing: border-box;
 }
 
 .agent-card:hover {
-  border-color: var(--el-color-primary-light-3);
-  background: #fafafa;
+  border-color: var(--el-color-primary-light-5);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.04);
 }
 
-.agent-card-main {
+.agent-card--verified {
+  border-color: var(--el-color-success-light-5);
+  background: linear-gradient(180deg, var(--el-color-success-light-9) 0%, #fff 48px);
+}
+
+.agent-card--verified:hover {
+  border-color: var(--el-color-success);
+}
+
+.agent-card-head {
   display: flex;
   align-items: flex-start;
-  gap: 16px;
+  gap: 10px;
 }
 
 .agent-icon {
-  width: 56px;
-  height: 56px;
-  border-radius: 12px;
-  background: #f0f2f5;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: #f5f7fa;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -912,41 +1089,144 @@ onMounted(() => {
 }
 
 .agent-card:hover .agent-icon {
-  background: var(--el-color-primary-light-8);
+  background: var(--el-color-primary-light-9);
   color: var(--el-color-primary);
 }
 
-.agent-info {
+.agent-card--verified .agent-icon {
+  background: var(--el-color-success-light-9);
+  color: var(--el-color-success);
+}
+
+.agent-head-text {
   flex: 1;
   min-width: 0;
 }
 
 .agent-name {
-  font-weight: 600;
-  font-size: 1rem;
-  margin-bottom: 4px;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   flex-wrap: wrap;
+  margin-bottom: 2px;
 }
 
-.write-mode-tag {
-  font-weight: 400;
+.agent-name-text {
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: #303133;
+  line-height: 1.3;
+}
+
+.verified-tag {
+  font-weight: 500;
+  height: 20px;
+  padding: 0 6px;
 }
 
 .agent-desc {
   color: #909399;
-  font-size: 0.8rem;
+  font-size: 0.78rem;
   line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.access-methods {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.access-method {
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #f8f9fb;
+  border: 1px solid #eef0f4;
+}
+
+.access-method-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.access-method-titles {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+}
+
+.access-method-index {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  margin-top: 1px;
+  border-radius: 50%;
+  background: #e4e7ed;
+  color: #606266;
+  font-size: 0.68rem;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+.access-method-title {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #303133;
+  line-height: 1.3;
+}
+
+.access-method-hint {
+  margin: 2px 0 0;
+  font-size: 0.72rem;
+  color: #909399;
+  line-height: 1.4;
+}
+
+.wrap-cmd-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: #fff;
+  border: 1px dashed #dcdfe6;
+}
+
+.wrap-cmd {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.72rem;
+  line-height: 1.35;
+  color: #303133;
+  word-break: break-all;
+  user-select: all;
+}
+
+.wrap-copy-btn {
+  flex-shrink: 0;
+  position: static;
+  padding: 0 2px;
+  height: auto;
+  min-height: 0;
 }
 
 .install-link {
   display: inline-block;
-  margin-top: 6px;
-  font-size: 0.8rem;
+  font-size: 0.78rem;
   color: var(--el-color-primary);
   text-decoration: none;
+  word-break: break-all;
 }
 
 .install-link:hover {
@@ -961,29 +1241,28 @@ onMounted(() => {
   word-break: break-all;
 }
 
-.agent-actions {
-  flex-shrink: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 2px;
-}
-
 .agent-meta-collapse {
   border: none;
-  --el-collapse-header-height: 36px;
+  margin-top: auto;
+  --el-collapse-header-height: 32px;
 }
 
 .agent-meta-collapse :deep(.el-collapse-item__header) {
-  font-size: 0.8rem;
-  color: #606266;
+  font-size: 0.78rem;
+  color: #909399;
   border: none;
   background: transparent;
+  height: 32px;
+  line-height: 32px;
 }
 
 .agent-meta-collapse :deep(.el-collapse-item__wrap) {
   border: none;
   background: transparent;
+}
+
+.agent-meta-collapse :deep(.el-collapse-item__content) {
+  padding-bottom: 8px;
 }
 
 .meta-block,
@@ -1006,6 +1285,16 @@ onMounted(() => {
   align-items: baseline;
   gap: 6px 8px;
   margin-bottom: 6px;
+}
+
+.meta-row-col {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+
+.meta-actions {
+  margin-top: 8px;
 }
 
 .meta-label {
