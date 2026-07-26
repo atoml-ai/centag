@@ -235,9 +235,9 @@ func TestConvertAnthropicMessages_TextOnly(t *testing.T) {
 	messages := []Message{
 		{
 			Role: "user",
-			Content: []ContentBlock{
+			Content: MessageContent{Blocks: []ContentBlock{
 				{Type: "text", Text: "Hello"},
-			},
+			}},
 		},
 	}
 	result := convertAnthropicMessages(messages)
@@ -253,10 +253,10 @@ func TestConvertAnthropicMessages_WithToolUse(t *testing.T) {
 	messages := []Message{
 		{
 			Role: "assistant",
-			Content: []ContentBlock{
+			Content: MessageContent{Blocks: []ContentBlock{
 				{Type: "text", Text: "Let me search"},
 				{Type: "tool_use", ID: "call_1", Name: "search", Input: map[string]interface{}{"q": "test"}},
-			},
+			}},
 		},
 	}
 	result := convertAnthropicMessages(messages)
@@ -302,6 +302,172 @@ func TestParseRequest_BasicMessage(t *testing.T) {
 	}
 	if req.Messages[0].Role != "user" {
 		t.Errorf("expected role user, got %s", req.Messages[0].Role)
+	}
+}
+
+func TestSystemPrompt_UnmarshalString(t *testing.T) {
+	var req MessagesRequest
+	err := json.Unmarshal([]byte(`{
+		"model": "claude-3-5-sonnet-20241022",
+		"max_tokens": 1024,
+		"messages": [],
+		"system": "You are helpful"
+	}`), &req)
+	if err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if req.System.String() != "You are helpful" {
+		t.Errorf("system: got %q, want %q", req.System.String(), "You are helpful")
+	}
+}
+
+func TestSystemPrompt_UnmarshalArray(t *testing.T) {
+	var req MessagesRequest
+	err := json.Unmarshal([]byte(`{
+		"model": "claude-3-5-sonnet-20241022",
+		"max_tokens": 1024,
+		"messages": [],
+		"system": [
+			{"type": "text", "text": "Part A"},
+			{"type": "text", "text": "Part B", "cache_control": {"type": "ephemeral"}}
+		]
+	}`), &req)
+	if err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	want := "Part A\n\nPart B"
+	if req.System.String() != want {
+		t.Errorf("system: got %q, want %q", req.System.String(), want)
+	}
+}
+
+func TestSystemPrompt_UnmarshalNull(t *testing.T) {
+	var req MessagesRequest
+	err := json.Unmarshal([]byte(`{
+		"model": "claude-3-5-sonnet-20241022",
+		"max_tokens": 1024,
+		"messages": [],
+		"system": null
+	}`), &req)
+	if err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if req.System.String() != "" {
+		t.Errorf("system: got %q, want empty", req.System.String())
+	}
+}
+
+func TestMessageContent_UnmarshalString(t *testing.T) {
+	var req MessagesRequest
+	err := json.Unmarshal([]byte(`{
+		"model": "claude-3-5-sonnet-20241022",
+		"max_tokens": 1024,
+		"messages": [
+			{"role": "user", "content": "hello string"},
+			{"role": "assistant", "content": [{"type": "text", "text": "hi blocks"}]}
+		]
+	}`), &req)
+	if err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(req.Messages) != 2 {
+		t.Fatalf("messages len=%d", len(req.Messages))
+	}
+	if len(req.Messages[0].Content.Blocks) != 1 || req.Messages[0].Content.Blocks[0].Text != "hello string" {
+		t.Fatalf("string content: %+v", req.Messages[0].Content.Blocks)
+	}
+	if len(req.Messages[1].Content.Blocks) != 1 || req.Messages[1].Content.Blocks[0].Text != "hi blocks" {
+		t.Fatalf("array content: %+v", req.Messages[1].Content.Blocks)
+	}
+
+	converted := convertAnthropicMessages(req.Messages)
+	if converted[0].Content != "hello string" || converted[1].Content != "hi blocks" {
+		t.Fatalf("converted=%+v", converted)
+	}
+}
+
+func TestParseRequest_MessageContentString(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	// 多轮对话常见：历史 assistant/user 用 string content，新消息用 block 数组
+	reqJSON := `{
+		"model": "claude-fable-5",
+		"max_tokens": 1024,
+		"stream": true,
+		"system": [{"type": "text", "text": "You are helpful"}],
+		"messages": [
+			{"role": "user", "content": "你是干嘛的"},
+			{"role": "assistant", "content": "我是编程助手"},
+			{"role": "user", "content": [{"type": "text", "text": "你使用的是什么大模型"}]}
+		]
+	}`
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest("POST", "/v1/messages", strings.NewReader(reqJSON))
+	c.Request.Header.Set("Content-Type", "application/json")
+
+	p := &Protocol{}
+	proxyReq, err := p.ParseRequest(c)
+	if err != nil {
+		t.Fatalf("ParseRequest failed: %v", err)
+	}
+	if len(proxyReq.Messages) != 3 {
+		t.Fatalf("messages len=%d, want 3", len(proxyReq.Messages))
+	}
+	if proxyReq.Messages[0].Content != "你是干嘛的" {
+		t.Errorf("msg0=%q", proxyReq.Messages[0].Content)
+	}
+	if proxyReq.Messages[1].Content != "我是编程助手" {
+		t.Errorf("msg1=%q", proxyReq.Messages[1].Content)
+	}
+	if proxyReq.Messages[2].Content != "你使用的是什么大模型" {
+		t.Errorf("msg2=%q", proxyReq.Messages[2].Content)
+	}
+}
+
+func TestParseRequest_SystemArray(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	reqJSON := `{
+		"model": "claude-3-5-sonnet-20241022",
+		"max_tokens": 1024,
+		"messages": [
+			{"role": "user", "content": [{"type": "text", "text": "Hello"}]}
+		],
+		"system": [
+			{"type": "text", "text": "You are OpenCode"},
+			{"type": "text", "text": "Be concise", "cache_control": {"type": "ephemeral"}}
+		]
+	}`
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest("POST", "/v1/messages", strings.NewReader(reqJSON))
+	c.Request.Header.Set("Content-Type", "application/json")
+
+	p := &Protocol{}
+	proxyReq, err := p.ParseRequest(c)
+	if err != nil {
+		t.Fatalf("ParseRequest failed: %v", err)
+	}
+
+	want := "You are OpenCode\n\nBe concise"
+	if proxyReq.System != want {
+		t.Errorf("System: got %q, want %q", proxyReq.System, want)
+	}
+
+	// RawBody 应保留原始 system 数组，供透传
+	rawBodyMap, ok := proxyReq.RawBody.(map[string]interface{})
+	if !ok {
+		t.Fatalf("RawBody should be map[string]interface{}, got %T", proxyReq.RawBody)
+	}
+	sys, ok := rawBodyMap["system"].([]interface{})
+	if !ok {
+		t.Fatalf("RawBody.system should remain array, got %T", rawBodyMap["system"])
+	}
+	if len(sys) != 2 {
+		t.Fatalf("RawBody.system length: got %d, want 2", len(sys))
 	}
 }
 
@@ -632,16 +798,16 @@ func TestToolUseID_Extraction(t *testing.T) {
 	messages := []Message{
 		{
 			Role: "assistant",
-			Content: []ContentBlock{
+			Content: MessageContent{Blocks: []ContentBlock{
 				{Type: "text", Text: "Let me check"},
 				{Type: "tool_use", ID: "toolu_01ABC123", Name: "get_weather", Input: map[string]interface{}{"location": "Paris"}},
-			},
+			}},
 		},
 		{
 			Role: "user",
-			Content: []ContentBlock{
+			Content: MessageContent{Blocks: []ContentBlock{
 				{Type: "tool_result", ToolUseID: "toolu_01ABC123", Text: "Sunny, 25°C"},
-			},
+			}},
 		},
 	}
 

@@ -68,6 +68,73 @@ func runAnthropicRequestParseTests(t *testing.T, runner *shared.ProtocolTestRunn
 		},
 	})
 
+	// message.content 字符串形态（多轮历史常见）
+	runner.RunRequestResponseTest(shared.TestCase{
+		Name: "message content字符串解析",
+		RequestJSON: `{
+			"model": "claude-3-5-sonnet-20241022",
+			"max_tokens": 1024,
+			"messages": [
+				{"role": "user", "content": "第一问"},
+				{"role": "assistant", "content": "第一答"},
+				{"role": "user", "content": [{"type": "text", "text": "第二问"}]}
+			]
+		}`,
+		ValidateReq: func(t *testing.T, req *plugin.ProxyRequest) {
+			if len(req.Messages) != 3 {
+				t.Fatalf("messages: got %d, want 3", len(req.Messages))
+			}
+			if req.Messages[0].Content != "第一问" || req.Messages[1].Content != "第一答" || req.Messages[2].Content != "第二问" {
+				t.Errorf("messages content mismatch: %+v", req.Messages)
+			}
+		},
+		MockResponse: &plugin.ProxyResponse{
+			Content:      "ok",
+			Model:        "claude-3-5-sonnet-20241022",
+			TokensUsed:   5,
+			FinishReason: "stop",
+		},
+		ValidateResp: func(t *testing.T, resp map[string]interface{}) {
+			shared.AssertField(t, resp, "type", "message")
+		},
+	})
+
+	// system 数组形态（OpenCode / Anthropic SDK 常见）
+	runner.RunRequestResponseTest(shared.TestCase{
+		Name: "system数组解析",
+		RequestJSON: `{
+			"model": "claude-3-5-sonnet-20241022",
+			"max_tokens": 1024,
+			"messages": [{"role": "user", "content": [{"type": "text", "text": "Hello"}]}],
+			"system": [
+				{"type": "text", "text": "You are helpful"},
+				{"type": "text", "text": "Be brief", "cache_control": {"type": "ephemeral"}}
+			]
+		}`,
+		ValidateReq: func(t *testing.T, req *plugin.ProxyRequest) {
+			want := "You are helpful\n\nBe brief"
+			if req.System != want {
+				t.Errorf("system: got %q, want %q", req.System, want)
+			}
+			raw, ok := req.RawBody.(map[string]interface{})
+			if !ok {
+				t.Fatalf("RawBody type = %T, want map", req.RawBody)
+			}
+			if _, ok := raw["system"].([]interface{}); !ok {
+				t.Errorf("RawBody.system should remain array for passthrough, got %T", raw["system"])
+			}
+		},
+		MockResponse: &plugin.ProxyResponse{
+			Content:      "Hello!",
+			Model:        "claude-3-5-sonnet-20241022",
+			TokensUsed:   10,
+			FinishReason: "stop",
+		},
+		ValidateResp: func(t *testing.T, resp map[string]interface{}) {
+			shared.AssertField(t, resp, "type", "message")
+		},
+	})
+
 	// 测试用例2: 工具调用
 	runner.RunRequestResponseTest(shared.TestCase{
 		Name: "工具调用解析",
