@@ -997,6 +997,7 @@ func New(cfg *config.Config) *Server {
 	configHandler.SetMitmToggle(srv.toggleMITM)
 	configHandler.SetMitmForceRestart(srv.forceRestartMITM)
 	configHandler.SetMitmSyncEgress(srv.syncMITMEgressAuth)
+	configHandler.SetMitmSyncClientProxyAuth(srv.syncMITMClientProxyAuth)
 	configHandler.SetProxyHandlerRefresh(srv.refreshProxyHandlerPAC)
 
 	// Commercial plugins (centag-pro) blank-import Register themselves.
@@ -1962,7 +1963,8 @@ func buildSystemProxyPACConfig(cfg *config.Config) *pac.Config {
 }
 
 func buildMITMConfig(cfg *config.Config, backendHost string) *mitm.Config {
-	requireProxyAuth := cfg.SystemProxy.AllowLANClients
+	// Use RequireClientProxyAuth config; fall back to AllowLANClients for backward compatibility
+	requireProxyAuth := cfg.SystemProxy.RequireClientProxyAuth
 	var validator mitm.ClientTokenValidator
 	if requireProxyAuth {
 		validator = func(token string) error {
@@ -1993,6 +1995,23 @@ func (s *Server) syncMITMEgressAuth() {
 	token := config.ResolveSystemProxyEgressAPIKey(&s.cfg.SystemProxy)
 	s.mitmServer.SetBackendAuthToken(token)
 	logger.Infof("MITM egress API key synced (configured=%v)", token != "")
+}
+
+func (s *Server) syncMITMClientProxyAuth() {
+	s.mitmMu.Lock()
+	defer s.mitmMu.Unlock()
+	if s.mitmServer == nil || s.cfg == nil {
+		return
+	}
+	required := s.cfg.SystemProxy.RequireClientProxyAuth
+	var validator mitm.ClientTokenValidator
+	if required {
+		validator = func(token string) error {
+			return auth.ValidateMITMProxyToken(context.Background(), token)
+		}
+	}
+	s.mitmServer.SetClientProxyAuth(required, validator)
+	logger.Infof("MITM client proxy auth synced: required=%v", required)
 }
 
 func (s *Server) refreshProxyHandlerPAC() {

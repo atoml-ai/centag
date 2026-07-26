@@ -35,6 +35,8 @@ type ConfigHandler struct {
 	mitmForceRestart func()
 	// mitmSyncEgress 将当前出口 API Key 热同步到运行中的 MITM
 	mitmSyncEgress func()
+	// mitmSyncClientProxyAuth 热更新 RequireClientProxyAuth 标志
+	mitmSyncClientProxyAuth func()
 	// proxyHandlerRefresh 刷新 PAC 生成器（advertise/listen 变更）
 	proxyHandlerRefresh func()
 }
@@ -71,6 +73,11 @@ func (h *ConfigHandler) SetMitmForceRestart(fn func()) {
 // SetMitmSyncEgress 注册 MITM 出口 Key 热同步回调
 func (h *ConfigHandler) SetMitmSyncEgress(fn func()) {
 	h.mitmSyncEgress = fn
+}
+
+// SetMitmSyncClientProxyAuth 注册 MITM 客户端认证热更新回调
+func (h *ConfigHandler) SetMitmSyncClientProxyAuth(fn func()) {
+	h.mitmSyncClientProxyAuth = fn
 }
 
 // SetProxyHandlerRefresh 注册 PAC 刷新回调
@@ -415,6 +422,8 @@ func (h *ConfigHandler) SaveAllConfig(c *gin.Context) {
 			cfg.SystemProxy.AdvertiseHost = req.SystemProxy.AdvertiseHost
 		}
 		// 出口 Key：非空且非掩码时更新（Agent 零改场景由 MITM 注入）
+		// RequireClientProxyAuth: 允许局域网客户端跳过代理认证
+		cfg.SystemProxy.RequireClientProxyAuth = req.SystemProxy.RequireClientProxyAuth
 		if k := strings.TrimSpace(req.SystemProxy.EgressAPIKey); k != "" && k != "***" {
 			cfg.SystemProxy.EgressAPIKey = k
 		}
@@ -542,6 +551,12 @@ func (h *ConfigHandler) SaveAllConfig(c *gin.Context) {
 	// 3b3. 出口 API Key 热同步到 MITM（Agent 零改：MITM 注入 Centag Key）
 	if req.SystemProxy != nil && cfg.SystemProxy.Enabled && h.mitmSyncEgress != nil {
 		h.mitmSyncEgress()
+	}
+
+	// 3b4. RequireClientProxyAuth 变更时热更新 MITM
+	if req.SystemProxy != nil && cfg.SystemProxy.Enabled && h.mitmSyncClientProxyAuth != nil {
+		h.mitmSyncClientProxyAuth()
+		logger.Infof("MITM RequireClientProxyAuth hot-updated: %v", cfg.SystemProxy.RequireClientProxyAuth)
 	}
 
 	// 3c. Host 代理端口变更 → 热重启 HTTP/HTTPS 监听器
