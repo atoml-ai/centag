@@ -28,7 +28,16 @@ func (t *OpenClawTemplate) Meta() AgentSetupMeta {
 		InstallURL:    "https://www.npmjs.com/package/openclaw",
 		InstallHint:   "npm i -g openclaw",
 		AccessMethods: []AccessMethod{AccessWriteConfig, AccessWrapCLI},
-		CompanionCLI:  NewCLICompanion("openclaw", "https://www.npmjs.com/package/openclaw", "npm i -g openclaw"),
+		// LLM 实际由 LaunchAgent 网关发出；wrap 默认 argv 用同进程 tui --local，避免只包一层 TUI 却劫持不到流量。
+		CompanionCLI: &CompanionCLI{
+			Binary:      "openclaw",
+			Argv:        []string{"openclaw", "tui", "--local"},
+			InstallURL:  "https://www.npmjs.com/package/openclaw",
+			InstallHint: "npm i -g openclaw",
+			Note:        "OpenClaw 的 LLM 请求由 LaunchAgent 网关发出，仅 wrap `openclaw` 不会劫持。请先执行 openclaw gateway stop，再复制下方命令（同进程 tui --local）。测 wrap 时请把 baseUrl 指到非 Centag 的厂商地址。",
+		},
+		VerifiedWrite: true,
+		VerifiedWrap:  true,
 	}
 }
 
