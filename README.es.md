@@ -1,115 +1,257 @@
 # Centag
 
-[English](README.md) | [简体中文](README.zh-CN.md) | [日本語](README.ja.md) | [한국어](README.ko.md) | [Русский](README.ru.md) | [Español](README.es.md)
+<p align="center">
+  <strong>Tu hub de proxy LLM — el pipeline es la estrategia</strong><br/>
+  Una pasarela proxy universal para grandes modelos. Gestiona de forma unificada todos los proveedores de backend, pools de API keys y estrategias de proxy personalizadas; define el comportamiento del Agent cliente con pipelines configurables y una arquitectura de plugins abierta.<br/>
+  <em>Puede funcionar como un relay, pero es mucho más que un relay.</em>
+</p>
 
-**Acceso proxy local en un clic** para Agents de coding, **gestión unificada** de backends y API keys, y **acciones de proxy configurables** por escenario (cambio, failover, pipelines)—sin reconfigurar cada herramienta por separado.
+<p align="center">
+  <a href="https://github.com/atoml-ai/centag/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="License" /></a>
+  <img src="https://img.shields.io/badge/go-1.25+-00ADD8?logo=go" alt="Go Version" />
+  <a href="https://github.com/atoml-ai/centag/releases"><img src="https://img.shields.io/github/v/release/atoml-ai/centag" alt="Release" /></a>
+  <a href="https://github.com/atoml-ai/centag/releases"><img src="https://img.shields.io/github/downloads/atoml-ai/centag/total" alt="Downloads" /></a>
+</p>
 
-Para desarrolladores individuales: instala Centag → conecta Agents con wrap o por configuración → administra backends y políticas en la Web.
+<p align="center">
+  <a href="README.md">English</a> | <a href="README.zh-CN.md">简体中文</a> | <a href="README.ja.md">日本語</a> | <a href="README.ko.md">한국어</a> | <a href="README.ru.md">Русский</a> | Español
+</p>
 
-## Instalación
+![Centag Architecture Flow](docs/assets/readme/hero-architecture.png)
 
-Elige un método. Después de instalar, ejecuta `centag` y abre **http://localhost:20060**.
+---
 
-### Opción 1: script de una línea (recomendado, sin Node.js)
+## El problema que resolvemos
+
+Un «relay» LLM típico solo reenvía la petición tal cual. Si cae una key, la cambias a mano; si el modelo no encaja, reconfiguras; cada Agent nuevo es otra ronda de ajustes. La estrategia vive en cada herramienta; la pasarela no tiene estrategia.
+
+**Centag no es solo un relay: es un hub de proxy orquestable.** Pools de backends, failover y degradación, enrutado por escenario y medición/facturación convergen en un mismo pipeline; el Agent casi no se entera.
+
+| Capacidad | Qué obtienes |
+|---|---|
+| **Gestión de pool de backends LLM** | OpenAI, Anthropic, Zhipu, Ollama y cualquier endpoint compatible en un solo sitio; varias keys y backends en la Web UI |
+| **Failover · matching · degradación** | Rotación de keys ante rate limit; cambio de backend ante fallo; mejor egress por capacidad de modelo y carga |
+| **Enrutado de modelos** | Cambia de modelo de backend en tiempo real según el tipo de pregunta — incluso en la misma sesión y tarea — sin reconfigurar el cliente |
+| **Cambio de escenario del Agent** | Coding, Q&A, etc.: cada escenario su pipeline — cambiar escenario = cambiar estrategia, el Agent no lo nota |
+| **Conexión rápida de Agents** | Escritura de config en un clic para Agents habituales; o proxy de proceso `centag wrap` sin cambios; guías en la Web UI si aún no hay one-click. La lista de soporte crece |
+| **Estrategia de System Prompt** | Passthrough, append o replace del system prompt del cliente — conservar la persona del Agent, superponer normas o forzar un prompt unificado a nivel de pipeline |
+| **Medición y facturación** | Tokens y coste por petición, backend y modelo |
+| **Acceso de alto rendimiento sin pérdida** | Forward transparente y SSE passthrough — compatible de protocolo, bajo overhead, mínima reescritura de la semántica upstream |
+
+---
+
+## Ventajas clave
+
+### Orquestación visual de pipelines
+
+Un relay solo reenvía. **Centag te deja diseñar el ciclo de vida completo de la petición** — un DAG en el lienzo con drag-and-drop; el pipeline *es* la estrategia.
+
+![Pipeline Architecture — Visual DAG Orchestration](docs/assets/readme/pipeline-canvas.png)
+
+**16 tipos de nodos integrados**, combinables a voluntad:
+
+| Nodo | Kind | Función |
+|------|------|---------|
+| Generator | `llm.generate` | Llamar a cualquier backend LLM para generar |
+| Router | `route.decide` | Ramificar por intención, palabra clave o clasificación LLM |
+| Scheduler | `scheduling.decide` | Programación y matching inteligente entre backends |
+| Transparent Forward | `proxy.transparent_forward` | Proxy HTTP crudo (SSE passthrough) |
+| Aggregator | `aggregate.merge` | Fusionar / votar / elegir lo mejor de generadores en paralelo |
+| Reviewer | `quality.review` | Puntuar y auditar respuestas upstream |
+| Memory | `memory.query` | Recuperar contexto de memoria cloud / vectores locales |
+| Audit | `audit.safety` | Moderación y filtros de seguridad |
+| Token Usage | `metrics.token_usage` | Seguimiento de tokens y coste |
+| Cache | `cache.access` | Caché lectura/escritura (exacta / semántica / híbrida) |
+| Processor | `content.transform` | Transformación y postproceso de contenido |
+| Tool Call | `inject.tool_call` | Inyectar herramientas Function Calling |
+| Prompt Ops | `prompt.ops` | Preproceso del user prompt |
+| Output Post-ops | `prompt.postprocess` | Postproceso de la salida |
+| Loop Controller | — | Control de bucles para workflows iterativos |
+| Plugin Node | *(remoto / negocio)* | Nodos propios vía HTTP o Go SDK |
+
+**Pipeline = estrategia.** Cambiar escenario → cambiar pipeline → el Agent no cambia ni una línea.
+
+| Escenario | Ejemplo de pipeline |
+|-----------|---------------------|
+| Asistente de código | Router → modelo especializado → code review |
+| Scheduling inteligente | Intención → matching por capacidad → failover |
+| Compliance empresarial | Safety → generate → PII redact → audit |
+| Soporte / RAG | Memoria o retrieval → generate → quality review |
+
+### Backends unificados y pools de keys
+
+| Capacidad | Detalle |
+|-----------|---------|
+| **Multi-backend** | Proveedores principales y endpoints compatibles con OpenAI, en una Web UI |
+| **Pool de API keys** | Varias keys por backend; rotación automática ante límites o caídas |
+| **Failover y degradación** | Key falla → siguiente; backend falla → siguiente |
+| **Matching inteligente** | Pesos, prioridades y capacidad de modelo para el mejor egress |
+| **Seguimiento de coste** | Tokens y dinero por petición, backend y modelo |
+
+### Conexión rápida de Agents — tres vías
+
+Conecta un Agent a Centag sin tocar el código de negocio. Elige según el nivel de adaptación:
+
+| Método | Ideal para | Detalle |
+|--------|------------|---------|
+| **Escritura de config en un clic** | Agents habituales ya adaptados | La Web UI escribe Base URL / API Key, listo para usar |
+| **Proxy de proceso centag wrap** | Cero cambios de config | Proxy transparente a nivel de proceso; el tráfico va a Centag sin tocar config ni código del Agent |
+| **Guía en la UI** | Agents aún sin one-click | Pasos en la página para apuntar manualmente a la pasarela |
+
+La lista de Agents habituales sigue creciendo; el resto puede usar la guía o wrap.
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/atoml-ai/centag/main/scripts/install.sh | bash
+# Arrancar Centag
+centag
+
+# Ejemplo wrap — sin cambiar la config del Agent
+centag wrap run -- opencode
+
+# Autocomprobación
+centag wrap doctor
 ```
 
-Instala en `~/.centag/` por defecto e intenta actualizar el PATH. Luego usa `centag` / `centag wrap`.
+### Ecosistema abierto de plugins
 
-### Opción 2: npm (si ya usas Node.js)
+Los nodos del pipeline son extensibles: plugins locales con Go SDK, o plugins HTTP remotos en cualquier lenguaje.
+
+![Plugin Ecosystem — Extend Everything](docs/assets/readme/node-plugins.png)
+
+```go
+type NodePlugin interface {
+    Descriptor() NodePluginDescriptor
+    ValidateConfig(config NodeConfig) error
+    Execute(ctx context.Context, req *NodeExecutionRequest) (*NodeExecutionResponse, error)
+}
+```
+
+Contrato del plugin remoto:
+
+```
+GET  /.well-known/centag-node-plugin.json   →  auto-descubrimiento
+POST /validate                               →  validación de config
+POST /execute                                →  ejecutar el nodo
+```
+
+---
+
+## Inicio rápido
 
 ```bash
-# Instalación global (paquete online; descarga el binario desde GitHub Releases)
+# 1. Instalar (elige uno)
+curl -fsSL https://raw.githubusercontent.com/atoml-ai/centag/main/scripts/install.sh | bash
+# o
 npm install -g @atomlai/centag
 
-# O probar sin cambiar rutas globales de npm
-npx --yes @atomlai/centag
+# 2. Arrancar
+centag
 
-# Paquete offline / red cerrada
-npm install -g @atomlai/centag-offline
+# 3. Web UI → http://localhost:20060 → añadir el primer backend
+
+# 4. Conectar un Agent (config en un clic, o wrap sin cambios)
+centag wrap run -- opencode
 ```
 
-Si `npm install -g` falla por permisos, usa `npx` o el script de arriba. Detalles: [apps/centag-npm/README.md](apps/centag-npm/README.md).
+Listo. El tráfico pasa por Centag: pools de backends compartidos, failover, enrutado de modelos, visibilidad de costes.
 
-### Opción 3: Docker (desde el código fuente)
+### Otros métodos de instalación
+
+<details>
+<summary>npm (sin cambiar rutas globales)</summary>
+
+```bash
+npx --yes @atomlai/centag
+```
+</details>
+
+<details>
+<summary>Offline / red cerrada</summary>
+
+```bash
+npm install -g @atomlai/centag-offline
+```
+</details>
+
+<details>
+<summary>Docker (desde el código fuente)</summary>
 
 ```bash
 git clone https://github.com/atoml-ai/centag.git
 cd centag
 cp config/secrets/.env.example config/secrets/.env   # edita secretos si hace falta
-./start.sh docker up                                 # por defecto: contenedor personal
+./start.sh docker up                                 # por defecto: personal
 ```
 
-La UI de administración sigue en http://localhost:20060. Detener: `./start.sh docker down`.
+UI de administración: http://localhost:20060 · Detener: `./start.sh docker down`
+</details>
 
 ---
-
-## Después de instalar: conectar un Agent
-
-Objetivo: seguir usando el Agent con normalidad, con el tráfico pasando por Centag (backends compartidos, failover, medición).
-
-1. **Abre la Web** → añade y activa al menos un backend (API key o endpoint compatible local).
-2. **Agent Setup** (menú Web) — asistente para generar/escribir configs; o
-3. **Proxy de proceso (recomendado — mínimos cambios en el Agent)**:
-
-```bash
-# Con Centag ya en marcha en local
-centag wrap run -- opencode
-# sustituye opencode por el comando de tu Agent
-
-# Comprobación
-centag wrap doctor
-```
-
-Nota: `centag wrap` **no** arranca la pasarela; solo dirige el tráfico del proceso del Agent hacia un Centag en ejecución. Guía: [system proxy egress](docs/guide/system-proxy-egress.md).
-
----
-
-## Por qué Centag
-
-| Lo que necesitas | Lo que hace Centag |
-|------------------|--------------------|
-| **Cambiar de backend rápido** | Gestión unificada; activar/cambiar en la Web sin reconfigurar cada Agent |
-| **Failover automático + pool de API keys** | Rotación de varias keys; cambio ante límites o fallos |
-| **Pipelines por escenario** | Modos configurables (passthrough, directo, scheduling, revisión…); cambiar escenario = cambiar política |
-| **Uso y facturación** | Seguimiento de tokens/coste para uso personal |
-
-En resumen: **una entrada para backends y políticas; el Agent solo escribe código.**
-
-## Capacidades
-
-1. **Backends / modelos + pools de API keys**  
-   Configura backends y modelos en la Web; **varias API keys en pool con rotación** cuando hay límites o fallos.
-
-2. **Editor visual de pipelines**  
-   Personaliza el comportamiento del proxy en un lienzo (forward, schedule, review…); cambia políticas por escenario sin tocar el código del Agent.
-
-3. **`centag wrap` — acceso no invasivo**  
-   Lanza Agents con wrap e importa el tráfico a Centag **sin cambiar la configuración del propio Agent**.
-
-4. **Configuración directa del Agent**  
-   Apunta el API Base / Key del Agent a Centag como una pasarela LLM normal (el asistente «Agent Setup» puede ayudar a escribir configs).
-
-Elige el camino: wrap con menos ediciones, o archivos de config con un endpoint compatible con OpenAI.
 
 ## Capturas
 
-| Panel | Agent Setup |
-|-------|-------------|
-| ![Dashboard](docs/assets/readme/dashboard.png) | ![Agent Setup](docs/assets/readme/agent-setup.png) |
+| Lienzo de pipeline | Conexión Agent |
+|--------------------|----------------|
+| ![Pipeline Canvas](docs/assets/readme/pipeline-canvas.png) | ![Agent Setup](docs/assets/readme/agent-setup.png) |
+
+| Panel | Plugins de nodos |
+|-------|------------------|
+| ![Dashboard](docs/assets/readme/dashboard.png) | ![Node Plugins](docs/assets/readme/node-plugins.png) |
+
+---
+
+## Modos de proxy — listos para usar
+
+Plantillas de pipeline por escenario (cambiar con atajos `#`):
+
+| Modo | Atajo | Descripción |
+|------|-------|-------------|
+| Scheduling inteligente | (por defecto) | Enrutado por compatibilidad de modelo y carga del backend |
+| Proxy transparente | `#t` | Reenvío tal cual — alto rendimiento sin pérdida, sin inyectar system prompt |
+| Backend directo | `#d` | Egress fijo + system prompt gestionado |
+| Fallback | `#f` | Degradación automática entre backends |
+| Router | `#r` | Enrutado multi-rama por intención (escenario / modelo) |
+| Auditoría | `#a` | Generate → quality audit → feedback |
+| Optimizar | `#o` | Generate → optimización de contenido |
+| Agregador | `#ag` | Generación multi-modelo en paralelo → merge |
+| Firewall de seguridad | `#sec` | Safety → generate → PII redact |
+| Pasarela RAG | `#rag` | Generación aumentada por recuperación con caché primero |
+| Geo routing | `#geo` | Enrutado regional por reglas |
+| Pi Agent | `#pi` | Tareas de código → sandbox; Q&A → LLM |
+| CI/CD Webhook | — | Disparar pipelines desde sistemas externos |
+
+Lo que más brilla son los **pipelines personalizados** — diseña tu propio DAG en el lienzo.
+
+---
 
 ## Documentación
 
-- [Índice de docs](docs/README.md)
-- [Variables de entorno](docs/guide/environment-variables.md)
-- [Proxy local / wrap](docs/guide/system-proxy-egress.md)
-- [Referencia de API](docs/api/API_REFERENCE.md)
+| Tema | Enlace |
+|------|--------|
+| Índice completo | [docs/README.md](docs/README.md) |
+| Estándar de plugins de pipeline | [docs/guide/pipeline-plugin-standard.md](docs/guide/pipeline-plugin-standard.md) |
+| Guía de plugins Processor | [docs/guide/processor-plugins.md](docs/guide/processor-plugins.md) |
+| Variables de pipeline | [docs/guide/pipeline-variables.md](docs/guide/pipeline-variables.md) |
+| Modos de proxy | [docs/guide/proxy-modes.md](docs/guide/proxy-modes.md) |
+| Configuración de backends | [docs/guide/backend-configuration.md](docs/guide/backend-configuration.md) |
+| Proxy local / wrap | [docs/guide/system-proxy-egress.md](docs/guide/system-proxy-egress.md) |
+| Variables de entorno | [docs/guide/environment-variables.md](docs/guide/environment-variables.md) |
+| Referencia de API | [docs/api/API_REFERENCE.md](docs/api/API_REFERENCE.md) |
+| Arquitectura | [docs/architecture/](docs/architecture/) |
+| Seguridad | [docs/security/](docs/security/) |
+
+---
 
 ## Comentarios y soporte
 
-Preguntas o sugerencias: [GitHub Issues](https://github.com/atoml-ai/centag/issues) o **centag@atoml.com**.
+¿Preguntas o sugerencias? Abre un [GitHub Issue](https://github.com/atoml-ai/centag/issues) o escribe a **centag@atoml.com**.
+
+---
+
+## Contribuir
+
+Invitamos a desarrolladores a construir y mantener Centag juntos. Bugs, funciones, documentación o adaptar más Agents — vía [Pull Requests](https://github.com/atoml-ai/centag/pulls) o [Issues](https://github.com/atoml-ai/centag/issues).
+
+---
 
 ## Licencia
 

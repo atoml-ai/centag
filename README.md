@@ -1,99 +1,123 @@
 # Centag
 
-[English](README.md) | [简体中文](README.zh-CN.md) | [日本語](README.ja.md) | [한국어](README.ko.md) | [Русский](README.ru.md) | [Español](README.es.md)
+<p align="center">
+  <strong>Your LLM Proxy Hub — Pipelines as Strategy</strong><br/>
+  A universal LLM proxy gateway. Unify backend providers, API key pools, and custom proxy strategies; define client Agent behavior with customizable pipelines and an open plugin architecture.<br/>
+  <em>It can act as a relay — but it is more than a relay.</em>
+</p>
 
----
+<p align="center">
+  <a href="https://github.com/atoml-ai/centag/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="License" /></a>
+  <img src="https://img.shields.io/badge/go-1.25+-00ADD8?logo=go" alt="Go Version" />
+  <a href="https://github.com/atoml-ai/centag/releases"><img src="https://img.shields.io/github/v/release/atoml-ai/centag" alt="Release" /></a>
+  <a href="https://github.com/atoml-ai/centag/releases"><img src="https://img.shields.io/github/downloads/atoml-ai/centag/total" alt="Downloads" /></a>
+</p>
 
-## ⚡ Your LLM Proxy Hub — Pipelines as Strategy
-
-**Stop wiring each Agent separately.** Centag gives you one gateway to manage every backend, API key, and proxy strategy — all wired together as visual, swappable pipelines.
+<p align="center">
+  English | <a href="README.zh-CN.md">简体中文</a> | <a href="README.ja.md">日本語</a> | <a href="README.ko.md">한국어</a> | <a href="README.ru.md">Русский</a> | <a href="README.es.md">Español</a>
+</p>
 
 ![Centag Architecture Flow](docs/assets/readme/hero-architecture.png)
 
-**One gateway. All backends. Pipelines are your strategy. Agents just write code.**
-
 ---
 
-## 🎯 The Problem We Solve
+## The Problem We Solve
 
-> **You've been there:**
->
-> - Five Agents, each configured with the same API key — one key dies, everything stops.
-> - Need a content audit for compliance? Rewrite every Agent's code.
-> - Switching between coding and translation scenarios? Reconfigure everything.
->
-> **Centag eliminates all of that.**
+A typical LLM “relay” only forwards requests as-is. When a key dies you swap it by hand; when the model is wrong you reconfigure; every new Agent means another round of setup — strategy lives in each tool, not in the gateway.
 
-| Your Real Need | Centag Does This |
+**Centag is not just a relay — it is an orchestratable proxy hub:** backend pools, failover and degradation, scenario routing, and metering all converge in one pipeline, with almost no Agent-side awareness.
+
+| Capability | What you get |
 |---|---|
-| **Switch backends instantly** | Manage all backends in one place — toggle in Web UI, zero Agent-side changes |
-| **Auto failover + Key pools** | Rotate multiple keys per backend; when one is rate-limited, the next takes over seamlessly |
-| **Strategy per scenario** | Build a pipeline for coding, another for translation, another for security — swap without touching Agent code |
-| **Usage & cost visibility** | Token and cost tracking so you always know what you're spending |
+| **Backend LLM pool management** | OpenAI, Anthropic, Zhipu, Ollama, and any compatible endpoint in one place; multi-key, multi-backend config in the Web UI |
+| **Auto failover · matching · degradation** | Rotate keys on rate limits; switch backends on failure; match the best egress by model capability and load |
+| **Model routing** | Switch backend models in real time by question type — even within the same session and task — with no client reconfiguration |
+| **Agent scenario switching** | Coding, Q&A, and other scenarios each get a pipeline — change scenario = change strategy, Agents stay unaware |
+| **Fast Agent onboarding** | One-click config write for common Agents; or zero-change `centag wrap` process proxy; UI setup guides for Agents not yet one-click ready. Supported list keeps growing |
+| **System Prompt strategy** | Passthrough, append, or replace the client system prompt — keep the Agent persona, layer gateway rules, or enforce a unified prompt at pipeline level |
+| **Metering & billing** | Track tokens and cost per request, backend, and model |
+| **High-performance lossless access** | Transparent forward and SSE passthrough — protocol-compatible, low overhead, minimal rewrite of upstream semantics |
 
 ---
 
-## ⭐ Why Centag
+## Why Centag
 
-### 🎨 Visual Pipeline Orchestration — The Killer Feature
+### Visual pipeline orchestration
 
-Most LLM proxies just route requests. **Centag lets you *design* the request lifecycle** as a visual DAG on a drag-and-drop canvas.
+Relays only forward. **Centag lets you design the full request lifecycle** — drag-and-drop a DAG on the canvas; the pipeline *is* your strategy.
 
 ![Pipeline Architecture — Visual DAG Orchestration](docs/assets/readme/pipeline-canvas.png)
 
-**16 built-in node types** you can combine freely:
+**16 built-in node types**, freely combinable:
 
-| Node | Kind | What It Does |
+| Node | Kind | What it does |
 |------|------|--------------|
-| 🤖 Generator | `llm.generate` | Call any LLM backend — the core generation node |
-| 🔄 Processor | `content.transform` | Translate, summarize, optimize content |
-| 🛡️ Reviewer | `quality.review` | Score and audit upstream answers |
-| 🔀 Router | `route.decide` | Branch by intent, keyword, or LLM classification |
-| ⚖️ Aggregator | `aggregate.merge` | Merge, vote, or pick the best from parallel generators |
-| 🧠 Memory | `memory.query` | Recall context from cloud memory / local vectors |
-| 🔒 Audit | `audit.safety` | Content moderation and safety filtering |
-| 💰 Token Usage | `metrics.token_usage` | Track token consumption and costs |
-| 📦 Cache | `cache.access` | Read/write cache (exact, semantic, or hybrid) |
-| ⏱️ Scheduler | `scheduling.decide` | Smart scheduling across backends |
-| 🔌 Transparent Forward | `proxy.transparent_forward` | Raw HTTP proxy with SSE passthrough |
-| 🛠️ Tool Call | `inject.tool_call` | Inject function-calling tools |
-| ✂️ Prompt Ops | `prompt.ops` | User prompt preprocessing |
-| 📝 Output Post-ops | `prompt.postprocess` | Output post-processing |
-| 🔄 Loop Controller | — | Loop control for iterative workflows |
-| 🔌 Plugin Node | *(remote / business)* | Your custom node via HTTP or Go SDK |
+| Generator | `llm.generate` | Call any LLM backend to generate content |
+| Router | `route.decide` | Branch by intent, keyword, or LLM classification |
+| Scheduler | `scheduling.decide` | Smart scheduling and matching across backends |
+| Transparent Forward | `proxy.transparent_forward` | Raw HTTP proxy (SSE passthrough) |
+| Aggregator | `aggregate.merge` | Merge / vote / pick best from parallel generators |
+| Reviewer | `quality.review` | Score and audit upstream answers |
+| Memory | `memory.query` | Recall context from cloud memory / local vectors |
+| Audit | `audit.safety` | Content moderation and safety filtering |
+| Token Usage | `metrics.token_usage` | Track token usage and cost |
+| Cache | `cache.access` | Cache read/write (exact / semantic / hybrid) |
+| Processor | `content.transform` | Content transform and post-processing |
+| Tool Call | `inject.tool_call` | Inject function-calling tools |
+| Prompt Ops | `prompt.ops` | User prompt preprocessing |
+| Output Post-ops | `prompt.postprocess` | Output post-processing |
+| Loop Controller | — | Loop control for iterative workflows |
+| Plugin Node | *(remote / business)* | Custom nodes via HTTP or Go SDK |
 
 **Pipeline = Strategy.** Switch scenario → switch pipeline → Agent unchanged.
 
-| Scenario | Pipeline |
-|----------|----------|
-| 🧑‍💻 Coding assistant | Router → Code-specialized model → Code review |
-| 🌐 Translation | Generator → Translator → Format check |
-| 🏢 Enterprise compliance | Security audit → Generator → PII redact → Compliance audit |
-| 🤖 Customer support | Memory recall → Generator → Multi-language translation |
+| Scenario | Pipeline example |
+|----------|------------------|
+| Coding assistant | Router → code-specialized model → code review |
+| Smart scheduling | Intent → model-capability match → failover |
+| Enterprise compliance | Safety audit → generate → PII redact → compliance audit |
+| Support / RAG | Memory or retrieval → generate → quality review |
 
----
+### Unified backends & key pools
 
-### 🧩 Open Plugin Ecosystem — Extend Everything
+| Capability | Details |
+|------------|---------|
+| **Multi-backend management** | Major providers and OpenAI-compatible endpoints, managed in one Web UI |
+| **API key pooling** | Multiple keys per backend; auto-rotate on rate limit or outage |
+| **Auto failover & degradation** | Key fails → next key; backend fails → next backend |
+| **Smart matching** | Weights, priorities, model-capability matching for the best egress |
+| **Cost tracking** | Tokens and cost per request, backend, and model |
 
-Centag's pipeline nodes are **not closed**. You can extend with three levels of plugins:
+### Fast Agent onboarding — three ways
+
+Connect an Agent to Centag without changing business code. Pick by adaptation level:
+
+| Method | Best for | Details |
+|--------|----------|---------|
+| **One-click config write** | Common Agents already adapted | Web UI writes Base URL / API Key, ready to use |
+| **centag wrap process proxy** | Zero config changes | Process-level transparent proxy; route traffic to Centag without touching Agent config or code |
+| **UI setup guide** | Agents not yet one-click | In-page step-by-step instructions to point at the gateway |
+
+Common Agents keep being added; others can use the guide or wrap first.
+
+```bash
+# Start Centag
+centag
+
+# wrap example — no Agent config changes
+centag wrap run -- opencode
+
+# Health check
+centag wrap doctor
+```
+
+### Open plugin ecosystem
+
+Pipeline nodes are extensible: local Go SDK plugins, or remote HTTP plugins in any language.
 
 ![Plugin Ecosystem — Extend Everything](docs/assets/readme/node-plugins.png)
 
-**Capability abstractions** — you declare *what* you need, not *how* to implement:
-
-| Capability | What It Means | Examples |
-|-----------|---------------|----------|
-| `memory` | Recall / store / search context | Cloud memory, remote HTTP, local vectors |
-| `token` | Token optimization | Smart truncation, semantic summarization |
-| `prompt` | Prompt processing | Template engine, dynamic enhancement |
-| `security` | Safety and compliance | Content moderation, PII redaction |
-| `router` | Intent classification and routing | Intent-based, load-balanced |
-| `monitor` | Cost / latency / quality tracking | Cost analysis, quality evaluation |
-
-**Write your own plugin in minutes:**
-
 ```go
-// Implement this interface — that's it
 type NodePlugin interface {
     Descriptor() NodePluginDescriptor
     ValidateConfig(config NodeConfig) error
@@ -101,48 +125,17 @@ type NodePlugin interface {
 }
 ```
 
-Or deploy a **remote plugin** as any HTTP service:
+Remote plugin contract:
 
 ```
-GET  /.well-known/centag-node-plugin.json   →  auto-discovered
-POST /validate                               →  config check
+GET  /.well-known/centag-node-plugin.json   →  auto-discovery
+POST /validate                               →  config validation
 POST /execute                                →  run the node
 ```
 
 ---
 
-### 🚀 centag wrap — Zero-Invasion Agent Access
-
-Your Agent works exactly as before. **Centag just routes the traffic.**
-
-```bash
-# Start Centag
-centag
-
-# Launch your Agent through Centag — that's all you need
-centag wrap run -- opencode
-
-# Health check
-centag wrap doctor
-```
-
-No config file changes. No environment variable edits. No Agent-side code modifications. `centag wrap` is a process-level proxy that injects routing transparently.
-
----
-
-### 🔑 Unified Backend & Key Management
-
-| Feature | Details |
-|---------|---------|
-| **Multi-backend management** | OpenAI, Anthropic, 智谱, Ollama, any OpenAI-compatible endpoint — all from one Web UI |
-| **API Key pooling** | Multiple keys per backend, auto-rotated when rate-limited or down |
-| **Failover** | Automatic fallback: key fails → next key; backend fails → next backend |
-| **Smart scheduling** | Weights, priorities, and model-capability matching for optimal routing |
-| **Cost tracking** | Token usage and cost per request, per backend, per model |
-
----
-
-## 🚀 Quickstart
+## Quickstart
 
 ```bash
 # 1. Install (pick one)
@@ -153,13 +146,13 @@ npm install -g @atomlai/centag
 # 2. Start
 centag
 
-# 3. Open Web UI → http://localhost:20060 → Add your first backend
+# 3. Open Web UI → http://localhost:20060 → add your first backend
 
-# 4. Connect an Agent (zero config)
+# 4. Connect an Agent (one-click config, or wrap with zero changes)
 centag wrap run -- opencode
 ```
 
-That's it. Your Agent traffic now flows through Centag with shared backends, failover, and cost visibility.
+Done. Traffic flows through Centag: shared backend pools, failover, model routing, cost visibility.
 
 ### Other install methods
 
@@ -185,7 +178,7 @@ npm install -g @atomlai/centag-offline
 ```bash
 git clone https://github.com/atoml-ai/centag.git
 cd centag
-cp config/secrets/.env.example config/secrets/.env   # edit secrets
+cp config/secrets/.env.example config/secrets/.env   # edit secrets as needed
 ./start.sh docker up                                 # default: personal
 ```
 
@@ -194,7 +187,7 @@ Admin UI: http://localhost:20060 · Stop: `./start.sh docker down`
 
 ---
 
-## 📸 Screenshots
+## Screenshots
 
 | Pipeline Canvas | Agent Setup |
 |-----------------|-------------|
@@ -206,33 +199,31 @@ Admin UI: http://localhost:20060 · Stop: `./start.sh docker down`
 
 ---
 
-## 🧩 17+ Proxy Modes — Ready to Use
+## Proxy modes — ready to use
 
-Centag ships with battle-tested pipeline templates for common scenarios:
+Built-in scenario pipeline templates (switch with `#` shortcuts):
 
-| Mode | Shortcut | What It Does |
+| Mode | Shortcut | What it does |
 |------|----------|--------------|
-| 🧠 Smart Scheduling | (default) | Intelligent routing based on model compatibility and backend load |
-| 📡 Transparent Proxy | `#t` | Pass through client requests as-is — no system prompt injection |
-| 🎯 Direct Backend | `#d` | Fixed egress with managed system prompt |
-| 🔄 Fallback | `#f` | Automatic failover across backends |
-| 🛡️ Audit | `#a` | Generate → quality audit → feedback |
-| ⚡ Optimize | `#o` | Generate → content optimization |
-| 🔀 Router | `#r` | Intent-aware multi-branch routing |
-| 🌐 Translate | `#l` | Generate → translate to target language |
-| ⚖️ Aggregator | `#ag` | Parallel multi-model generation → merge results |
-| 🔒 Security Firewall | `#sec` | Safety audit → generate → PII redaction |
-| 📚 RAG Gateway | `#rag` | Cache-first retrieval-augmented generation |
-| 🌍 Geo Routing | `#geo` | Rule-based region-to-backend routing |
-| 🤖 Pi Agent | `#pi` | Code tasks → sandbox; Q&A → LLM |
-| 💬 Multilingual Support | `#cs` | Memory recall → generate → translate |
-| 📞 CI/CD Webhook | — | Trigger pipelines from external systems |
+| Smart scheduling | (default) | Intelligent routing by model compatibility and backend load |
+| Transparent proxy | `#t` | Pass through as-is — high-performance lossless, no system prompt injection |
+| Direct backend | `#d` | Fixed egress + managed system prompt |
+| Fallback | `#f` | Automatic degradation across backends |
+| Router | `#r` | Intent-aware multi-branch routing (scenario / model auto-switch) |
+| Audit | `#a` | Generate → quality audit → feedback |
+| Optimize | `#o` | Generate → content optimization |
+| Aggregator | `#ag` | Parallel multi-model generation → merge |
+| Security firewall | `#sec` | Safety audit → generate → PII redact |
+| RAG gateway | `#rag` | Cache-first retrieval-augmented generation |
+| Geo routing | `#geo` | Rule-based region routing |
+| Pi Agent | `#pi` | Code tasks → sandbox; Q&A → LLM |
+| CI/CD Webhook | — | Trigger pipelines from external systems |
 
-**Custom pipelines** are where Centag truly shines — design your own DAG on the canvas.
+The real highlight is **custom pipelines** — design your own DAG on the canvas.
 
 ---
 
-## 📚 Documentation
+## Documentation
 
 | Topic | Link |
 |-------|------|
@@ -250,12 +241,18 @@ Centag ships with battle-tested pipeline templates for common scenarios:
 
 ---
 
-## 💬 Feedback & Support
+## Feedback & Support
 
-Questions, suggestions, or issues? Open a [GitHub Issue](https://github.com/atoml-ai/centag/issues) or email **centag@atoml.com**.
+Questions or suggestions? Open a [GitHub Issue](https://github.com/atoml-ai/centag/issues) or email **centag@atoml.com**.
 
 ---
 
-## 📄 License
+## Contributing
+
+Developers are welcome to help build and maintain Centag. Whether you fix bugs, add features, improve docs, or adapt more Agents — join via [Pull Requests](https://github.com/atoml-ai/centag/pulls) or [Issues](https://github.com/atoml-ai/centag/issues).
+
+---
+
+## License
 
 MIT License (open-source editions: `minimal` / `personal`)
