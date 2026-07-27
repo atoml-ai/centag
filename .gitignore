@@ -26,6 +26,7 @@ test_regex.go
 # Output — runtime & build artifacts (sources live under web/, config/, cmd/)
 var/
 !var/.gitkeep
+deploy/docker/data/
 # dist/ 仅提交发行版源码（minimal/gateway/team）；渠道构建物默认在 ~/.centag/var/packages/
 /dist/*.fpk
 /dist/minimal/minimal
