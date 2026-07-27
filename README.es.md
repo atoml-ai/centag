@@ -173,10 +173,42 @@ npm install -g @atomlai/centag-offline
 git clone https://github.com/atoml-ai/centag.git
 cd centag
 cp config/secrets/.env.example config/secrets/.env   # edita secretos si hace falta
-./start.sh docker up                                 # por defecto: personal
+./start.sh docker build personal                     # construir imagen
+./start.sh docker up personal                        # iniciar contenedor
 ```
 
 UI de administración: http://localhost:20060 · Detener: `./start.sh docker down`
+
+Los datos persistentes se almacenan en `deploy/docker/data/` (se crea automáticamente en el primer inicio).
+
+<details>
+<summary>Docker nativo (alternativa)</summary>
+
+```bash
+# Construir
+docker build -t centag-personal:latest \
+  --build-arg DIST_NAME=personal \
+  --build-arg INCLUDE_FRONTEND=true \
+  -f deploy/docker/Dockerfile.dist .
+
+# Ejecutar
+docker run -d --name centag \
+  --env-file config/secrets/.env \
+  -e CENTAG_EDITION=personal \
+  -e LLM_PROXY_DB_DRIVER=sqlite \
+  -e SQLITE_PATH=/app/storage/centag.db \
+  -e LLM_PROXY_LOG_OUTPUT=both \
+  -e LLM_PROXY_LOG_FORMAT=console \
+  -p 20060:20060 \
+  -v $(pwd)/deploy/docker/data/storage:/app/storage \
+  -v $(pwd)/deploy/docker/data/logs:/app/logs \
+  centag-personal:latest
+
+# Detener y eliminar
+docker stop centag && docker rm centag
+```
+
+</details>
 </details>
 
 ---
