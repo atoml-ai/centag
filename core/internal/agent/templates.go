@@ -3,6 +3,7 @@ package agent
 import (
 	"fmt"
 	"os"
+	"os/user"
 	"path/filepath"
 	"strings"
 )
@@ -60,10 +61,23 @@ func centagModelRef(model string) string {
 	return "centag/" + apiModel
 }
 
-// expandPath 将 ~ 展开为实际 home 目录
+// expandPath 将 ~ 展开为实际 home 目录。
+// 当 os.UserHomeDir() 为空时（如某些子进程缺少 HOME 环境变量），
+// 依次回退到 $HOME → user.Current().HomeDir，避免路径变成相对目录。
 func expandPath(p string) string {
 	if strings.HasPrefix(p, "~/") || p == "~" {
 		home, _ := os.UserHomeDir()
+		if home == "" {
+			home = os.Getenv("HOME")
+		}
+		if home == "" {
+			if u, err := user.Current(); err == nil {
+				home = u.HomeDir
+			}
+		}
+		if home == "" {
+			return p
+		}
 		return filepath.Join(home, p[2:])
 	}
 	return p
@@ -127,6 +141,9 @@ func backupPath(path string) string {
 func writeFiles(files []ConfigFile) error {
 	for _, f := range files {
 		path := resolveConfigPath(f.Path)
+		if strings.Contains(path, "~") {
+			return fmt.Errorf("无法解析 home 目录，请检查 HOME 环境变量: %s", f.Path)
+		}
 		dir := filepath.Dir(path)
 		if err := os.MkdirAll(dir, 0755); err != nil {
 			return fmt.Errorf("创建目录失败 %s: %w", dir, err)
