@@ -2,17 +2,16 @@
 
 ## 快速开始
 
-| Profile | 场景 | 命令 |
-|---------|------|------|
-| [`personal`](../config/profiles/personal/) | 个人全功能，默认 SQLite | `./start.sh profile personal up` |
-| [`cached`](../config/profiles/cached/) | 缓存加速 | `./start.sh profile cached up` |
-| [`agent-memory`](../config/profiles/agent-memory/) | Agent + 长记忆 | `./start.sh profile agent-memory up` |
+| 发行版 | 场景 | 命令 |
+|--------|------|------|
+| `personal` | 个人全功能，默认 SQLite | `./start.sh run personal` |
+| `minimal` | 轻量单机 / CLI | `./start.sh run minimal` |
+| Docker | 容器化部署 | `./start.sh docker up` |
 
-详见 [`config/profiles/README.md`](../config/profiles/README.md)。根 README：[`../README.md`](../README.md)。
+根 README：[`../README.md`](../README.md)。
 
 **架构说明**：
 - [发行版构建规格（Dist Profiles）](guide/dist-profiles.md)
-- [Deployment Profiles 与 Stack](guide/deployment-profiles-and-stack.md)
 - [deploy/stack 快速开始](../deploy/stack/docs/getting-started.md)
 - [业务插件外置](guide/external-business-plugins.md)
 
