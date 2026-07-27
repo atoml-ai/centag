@@ -31,6 +31,12 @@ func defaultModel(info *BackendInfo) string {
 	return "gpt-4o"
 }
 
+// isVirtualModel 判断模型名是否为 centag 虚拟模型（centag/<pipeline-id>）。
+// 虚拟模型只在 centag 内部识别，客户端（如 Claude Code）不认。
+func isVirtualModel(model string) bool {
+	return strings.HasPrefix(model, "centag/")
+}
+
 // centagAPIModelID 返回发给 Centag API 的 model id（与 /v1/models 的 id 一致）。
 func centagAPIModelID(model string) string {
 	model = strings.TrimSpace(model)
