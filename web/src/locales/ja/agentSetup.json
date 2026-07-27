@@ -161,7 +161,7 @@
   "agents": {
     "claude-code": {
       "description": "Anthropic 公式の AI コーディングアシスタント CLI",
-      "configMethod": "~/.claude/settings.json に env.ANTHROPIC_BASE_URL / ANTHROPIC_AUTH_TOKEN / ANTHROPIC_MODEL をマージして Centag を指します。初回上書き時に .centag-bak バックアップを作成します。",
+      "configMethod": "~/.claude/settings.json に env.ANTHROPIC_BASE_URL / ANTHROPIC_AUTH_TOKEN / ANTHROPIC_MODEL をマージして Centag を指します（URL はドメイン:ポートまで、/v1 は付けないでください；Claude Code は自動的に /v1/messages を付加します）。初回上書き時に .centag-bak バックアップを作成します。",
       "installHint": "macOS/Linux: curl -fsSL https://claude.ai/install.sh {'|'} bash; or brew install --cask claude-code"
     },
     "claude-desktop": {

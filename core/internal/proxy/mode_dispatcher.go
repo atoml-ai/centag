@@ -488,6 +488,13 @@ func (d *ModeDispatcher) writeResponse(
 		return nil
 	}
 
+	// Anthropic 客户端（Claude Code /v1/messages）必须拿到 Messages API 格式，
+	// 不能静默落成 chat.completion，否则客户端 schema 校验失败。
+	if isAnthropicProtocol(c) {
+		writeAnthropicMessagesJSON(c, output, responseModel, totalTokens)
+		return nil
+	}
+
 	// 构建 message：有 tool_calls 时输出 tool_calls（function calling），否则输出 content
 	message := gin.H{
 		"role": "assistant",
@@ -557,6 +564,31 @@ func isResponsesProtocol(c *gin.Context) bool {
 	return s == "responses-protocol"
 }
 
+func isAnthropicProtocol(c *gin.Context) bool {
+	if c == nil {
+		return false
+	}
+	name, _ := c.Get("protocol_plugin")
+	s, _ := name.(string)
+	return s == "anthropic-protocol"
+}
+
+func isGeminiProtocol(c *gin.Context) bool {
+	if c == nil {
+		return false
+	}
+	name, _ := c.Get("protocol_plugin")
+	s, _ := name.(string)
+	return s == "gemini-protocol"
+}
+
+func isOpenAIProtocol(c *gin.Context) bool {
+	if c == nil {
+		return true
+	}
+	return !isResponsesProtocol(c) && !isAnthropicProtocol(c) && !isGeminiProtocol(c)
+}
+
 // writeResponsesAPIJSON writes a non-stream OpenAI Responses API envelope.
 func writeResponsesAPIJSON(c *gin.Context, output *pipeline.PipelineOutput, model string, totalTokens int) {
 	items := make([]gin.H, 0, 1+len(output.ToolCalls))
@@ -611,6 +643,60 @@ func writeResponsesAPIJSON(c *gin.Context, output *pipeline.PipelineOutput, mode
 			"input_tokens":  totalTokens / 2,
 			"output_tokens": totalTokens / 2,
 			"total_tokens":  totalTokens,
+		},
+	})
+}
+
+// writeAnthropicMessagesJSON writes a non-stream Anthropic Messages API envelope.
+func writeAnthropicMessagesJSON(c *gin.Context, output *pipeline.PipelineOutput, model string, totalTokens int) {
+	contentBlocks := make([]gin.H, 0, 1+len(output.ToolCalls))
+	if output != nil && output.Content != "" {
+		contentBlocks = append(contentBlocks, gin.H{
+			"type": "text",
+			"text": output.Content,
+		})
+	}
+	for _, tc := range output.ToolCalls {
+		var input interface{}
+		if tc.Function.Arguments != "" {
+			_ = json.Unmarshal([]byte(tc.Function.Arguments), &input)
+		}
+		if input == nil {
+			input = map[string]interface{}{}
+		}
+		contentBlocks = append(contentBlocks, gin.H{
+			"type":  "tool_use",
+			"id":    tc.ID,
+			"name":  tc.Function.Name,
+			"input": input,
+		})
+	}
+	if len(contentBlocks) == 0 {
+		contentBlocks = append(contentBlocks, gin.H{"type": "text", "text": ""})
+	}
+
+	stopReason := "end_turn"
+	if output != nil {
+		switch output.FinishReason {
+		case "tool_calls":
+			stopReason = "tool_use"
+		case "length":
+			stopReason = "max_tokens"
+		case "stop", "":
+			stopReason = "end_turn"
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"id":         fmt.Sprintf("msg-%d", time.Now().UnixNano()),
+		"type":       "message",
+		"role":       "assistant",
+		"content":    contentBlocks,
+		"model":      model,
+		"stop_reason": stopReason,
+		"usage": gin.H{
+			"input_tokens":  totalTokens / 2,
+			"output_tokens": totalTokens / 2,
 		},
 	})
 }
@@ -901,7 +987,9 @@ func (d *ModeDispatcher) writeStreamResponse(
 		if result.Output != nil {
 			pipeline.ApplyResponseTraceBanner(result.Output, c.GetHeader("X-Pipeline-ID"))
 			finalOutput = result.Output
-			if shouldRawWriteTransparentStream(result.Output) {
+			// [二次防护] 即使 metadata 标记缺失，若客户端协议非 OpenAI，禁止直接透传上游 SSE/JSON，
+			// 否则 Anthropic/Responses/Gemini 客户端会解析失败或一直转圈。
+			if shouldRawWriteTransparentStream(result.Output) && isOpenAIProtocol(c) {
 				statusCode, contentType := transparentPassthroughStatusAndType(result.Output)
 				c.Header("Content-Type", contentType)
 				c.Status(statusCode)
@@ -970,7 +1058,8 @@ func (d *ModeDispatcher) writeStreamResponse(
 	}
 
 	// 透明透传兜底：仅 Output、无 chunk（streamEmitter 跳过 Adapt）时在此写出。
-	if finalOutput != nil && shouldRawWriteTransparentStream(finalOutput) && responseContent.Len() == 0 && !sseHeadersReady {
+	// [二次防护] 协议非 OpenAI 时禁止直接透传，避免客户端格式不匹配。
+	if finalOutput != nil && shouldRawWriteTransparentStream(finalOutput) && isOpenAIProtocol(c) && responseContent.Len() == 0 && !sseHeadersReady {
 		pipeline.ApplyResponseTraceBanner(finalOutput, c.GetHeader("X-Pipeline-ID"))
 		statusCode, contentType := transparentPassthroughStatusAndType(finalOutput)
 		c.Header("Content-Type", contentType)
