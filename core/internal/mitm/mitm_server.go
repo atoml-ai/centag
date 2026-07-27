@@ -211,6 +211,13 @@ func (s *Server) ShouldRouteToBackend(host, path string) bool {
 	if s == nil {
 		return false
 	}
+
+	// Exclude known vendor telemetry / health / non-LLM endpoints.
+	// These should not be converted to /v1/chat/completions nor forwarded to Centag.
+	if isKnownNonLLMPath(path) {
+		return false
+	}
+
 	hostWithoutPort := stripHostPort(host)
 
 	s.mu.RLock()
@@ -468,6 +475,20 @@ var knownLLMPathMarkers = []struct {
 	{"/models", "/v1/models"},
 }
 
+// isKnownNonLLMPath reports vendor-specific telemetry / health / asset endpoints
+// that live on LLM provider domains but must not be forwarded to Centag.
+func isKnownNonLLMPath(path string) bool {
+	// Anthropic telemetry batch ingest
+	if strings.Contains(path, "/event_logging/") {
+		return true
+	}
+	// xAI / Grok Build CLI changelogs / version checks
+	if strings.Contains(path, "/cli/changelogs/") || strings.Contains(path, "/cli/stable") {
+		return true
+	}
+	return false
+}
+
 // looksLikeLLMAPIPath reports whether path looks like an LLM provider API call.
 // Used together with domain whitelist — not for arbitrary internet traffic.
 func looksLikeLLMAPIPath(path string) bool {
@@ -492,7 +513,7 @@ func looksLikeLLMAPIPath(path string) bool {
 // Principle: once traffic is classified as LLM proxy, do NOT keep per-agent prefixes
 // (/zen, /openai, …); strip to Centag routes so every Agent hits the same gateway.
 func convertBackendPath(originalPath string) string {
-	if originalPath == "" {
+	if originalPath == "" || isKnownNonLLMPath(originalPath) {
 		return originalPath
 	}
 	// Already on Centag OpenAI-compatible surface.

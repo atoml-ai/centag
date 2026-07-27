@@ -27,6 +27,8 @@ func (t *GrokBuildTemplate) Meta() AgentSetupMeta {
 		InstallURL:    "https://x.ai/cli",
 		InstallHint:   "curl -fsSL https://x.ai/cli/install.sh | bash；或 npm i -g @xai-official/grok",
 		AccessMethods: []AccessMethod{AccessWriteConfig, AccessWrapCLI},
+		VerifiedWrite: true, // 写入配置方式已验证（Responses API 协议转换）
+		VerifiedWrap:  true, // wrap 方式已验证（MITM + xAI mock 端点）
 		CompanionCLI:  NewCLICompanion("grok", "https://x.ai/cli", "curl -fsSL https://x.ai/cli/install.sh | bash；或 npm i -g @xai-official/grok"),
 	}
 }

@@ -1743,6 +1743,14 @@ func (s *Server) setupRoutes() {
 	s.router.POST("/api/v1/openai/embeddings", llmChain(resourceGuard, agentDetectMw, proxyModeMw, llmProxyHandler.HandleOpenAIRequest)...)
 	s.router.GET("/api/v1/openai/models", llmChain(agentDetectMw, proxyModeMw, llmProxyHandler.HandleOpenAIRequest)...)
 
+	// xAI / Grok Build 私有端点 mock（wrap 模式兼容，避免 404 触发登录）
+	s.router.GET("/v1/settings", s.proxyHandler.HandleXAISettings)
+	s.router.GET("/v1/user", s.proxyHandler.HandleXAIUser)
+	s.router.GET("/v1/billing", s.proxyHandler.HandleXAIBilling)
+	s.router.GET("/v1/mcp/configs", s.proxyHandler.HandleXAIMCPConfigs)
+	s.router.GET("/v1/login-config", s.proxyHandler.HandleXAILoginConfig)
+	s.router.GET("/v1/bundle/archive", s.proxyHandler.HandleXAIBundleArchive)
+
 	// MCP (Model Context Protocol) 代理路由
 	if s.mcpProxyHandler != nil {
 		mcpGroup := s.router.Group("/v1/mcp", proxyAuth)
