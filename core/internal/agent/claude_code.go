@@ -23,10 +23,11 @@ func (t *ClaudeCodeTemplate) Meta() AgentSetupMeta {
 			"env.ANTHROPIC_AUTH_TOKEN",
 			"env.ANTHROPIC_MODEL",
 		},
-		ConfigMethod:  "写入 ~/.claude/settings.json：合并 env 中的 ANTHROPIC_BASE_URL / ANTHROPIC_AUTH_TOKEN / ANTHROPIC_MODEL 指向 Centag（对齐 cc-switch）。首次覆盖会备份为 .centag-bak。",
+      ConfigMethod:  "写入 ~/.claude/settings.json：合并 env 中的 ANTHROPIC_BASE_URL / ANTHROPIC_AUTH_TOKEN / ANTHROPIC_MODEL 指向 Centag（URL 只写到域名或端口，不要带 /v1 路径后缀；Claude Code 会自动拼接 /v1/messages）。首次覆盖会备份为 .centag-bak。",
 		InstallURL:    "https://code.claude.com/docs/en/install",
 		InstallHint:   "macOS/Linux: curl -fsSL https://claude.ai/install.sh | bash；或 brew install --cask claude-code",
 		AccessMethods: []AccessMethod{AccessWriteConfig, AccessWrapCLI},
+		VerifiedWrite: true, // 写入配置方式已验证（ Anthropic → OpenAI 协议转换）
 		VerifiedWrap:  true, // wrap 方式已验证
 		CompanionCLI:  NewCLICompanion("claude", "https://code.claude.com/docs/en/install", "macOS/Linux: curl -fsSL https://claude.ai/install.sh | bash；或 brew install --cask claude-code"),
 	}
