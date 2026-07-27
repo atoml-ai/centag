@@ -853,7 +853,10 @@ const employeeAPIBase = computed(() => {
 /** 本机局域网 IP 变更时，对外访问地址跟随（与探测按钮行为一致） */
 function syncEmployeeServerFromAdvertiseHost() {
   const host = advertiseHost.value.trim()
-  if (!host || host === 'localhost' || host === '127.0.0.1' || host === '::1') return
+  if (!host || host === 'localhost' || host === '127.0.0.1' || host === '::1') {
+    employeeServer.value = ''
+    return
+  }
   employeeServer.value = `http://${host}:${apiPort.value}`
 }
 
