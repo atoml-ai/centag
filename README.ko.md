@@ -173,10 +173,42 @@ npm install -g @atomlai/centag-offline
 git clone https://github.com/atoml-ai/centag.git
 cd centag
 cp config/secrets/.env.example config/secrets/.env   # 필요 시 수정
-./start.sh docker up                                 # 기본: personal
+./start.sh docker build personal                     # 이미지 빌드
+./start.sh docker up personal                        # 컨테이너 시작
 ```
 
 관리 UI: http://localhost:20060 · 중지: `./start.sh docker down`
+
+영구화 데이터는 `deploy/docker/data/` 디렉토리에 저장 (첫 시작 시 자동 생성)。
+
+<details>
+<summary>네이티브 Docker 명령어 (대체)</summary>
+
+```bash
+# 빌드
+docker build -t centag-personal:latest \
+  --build-arg DIST_NAME=personal \
+  --build-arg INCLUDE_FRONTEND=true \
+  -f deploy/docker/Dockerfile.dist .
+
+# 실행
+docker run -d --name centag \
+  --env-file config/secrets/.env \
+  -e CENTAG_EDITION=personal \
+  -e LLM_PROXY_DB_DRIVER=sqlite \
+  -e SQLITE_PATH=/app/storage/centag.db \
+  -e LLM_PROXY_LOG_OUTPUT=both \
+  -e LLM_PROXY_LOG_FORMAT=console \
+  -p 20060:20060 \
+  -v $(pwd)/deploy/docker/data/storage:/app/storage \
+  -v $(pwd)/deploy/docker/data/logs:/app/logs \
+  centag-personal:latest
+
+# 중지 및 삭제
+docker stop centag && docker rm centag
+```
+
+</details>
 </details>
 
 ---
