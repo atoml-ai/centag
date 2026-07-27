@@ -1,12 +1,14 @@
-//go:build unix
+//go:build !windows
 
 package main
 
 import (
 	"os"
-	"syscall"
+	"os/exec"
 )
 
 func stopProcess(p *os.Process) {
-	_ = p.Signal(syscall.SIGTERM)
+	_ = p.Kill()
 }
+
+func hideSidecarWindow(cmd *exec.Cmd) {}
