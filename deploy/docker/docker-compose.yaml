@@ -6,9 +6,7 @@ name: centag
 
 services:
   centag:
-    image: centag-personal:latest
-    pull_policy: if_not_present
-    platform: linux/amd64
+    image: centag-${CENTAG_EDITION:-personal}:latest
     container_name: centag
     restart: unless-stopped
     env_file:
@@ -19,23 +17,18 @@ services:
     networks:
       - centag-network
     volumes:
-      - centag_storage:/app/storage
-      - centag_logs:/app/logs
-      - ../../config/initdata:/app/config/initdata:ro
+      - ./data/storage:/app/storage
+      - ./data/logs:/app/logs
+      - ./data/plugins:/app/plugins
+      - ./data/bin/certs:/app/bin/certs
       - /etc/localtime:/etc/localtime:ro
-      - /etc/timezone:/etc/timezone:ro
+      - /etc/timezone:/etc/localtime:ro
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:20060/health"]
       interval: 30s
       timeout: 5s
       retries: 3
       start_period: 10s
-
-volumes:
-  centag_storage:
-    driver: local
-  centag_logs:
-    driver: local
 
 networks:
   centag-network:

@@ -2581,9 +2581,12 @@ docker_compose_invoke() {
 
 # Docker Compose 启动（本仓库 compose 仅含 centag；中间件见 deploy/stack）
 docker_up() {
-    if [ -n "${1:-}" ]; then
-        print_warn "已忽略多余参数「$1」：./start.sh docker up 不再接受 profile，中间件请使用 deploy/stack。"
+    local edition="${1:-personal}"
+    if [[ ! "$edition" =~ ^(personal|minimal)$ ]]; then
+        print_error "不支持的 edition: $edition（仅支持 personal / minimal）"
+        exit 1
     fi
+    local image="centag-${edition}:latest"
     check_docker
 
     if [ ! -f "$PROJECT_ROOT/config/secrets/.env" ]; then
@@ -2593,9 +2596,9 @@ docker_up() {
 
     load_env
 
-    if ! docker image inspect centag-personal:latest >/dev/null 2>&1; then
-        print_warn "主服务镜像 centag-personal:latest 不存在，正在构建..."
-        _dist_docker_build personal "" ""
+    if ! docker image inspect "$image" >/dev/null 2>&1; then
+        print_warn "主服务镜像 ${image} 不存在，正在构建..."
+        _dist_docker_build "$edition" "" ""
     fi
 
     # 检查 docker-compose 命令
@@ -2610,18 +2613,12 @@ docker_up() {
         exit 1
     fi
 
-    print_info "Docker Compose 说明:"
-    echo "  本仓库 deploy/docker/docker-compose.yaml 仅包含 centag 应用容器。"
-    echo "  PostgreSQL、Redis、Elasticsearch、Mem0 等请使用: ./start.sh stack …"
-    echo ""
-    print_info "示例:"
-    echo "  ./start.sh docker up              # 启动 Centag 容器（默认 personal）"
-    echo "  ./start.sh stack start base       # 启动基础中间件"
+    print_info "启动 Centag 容器: ${GREEN}${edition}${NC}"
     echo ""
 
     cd "$PROJECT_ROOT/deploy/docker"
 
-    docker_compose_invoke "$compose_cmd" up -d
+    CENTAG_EDITION="$edition" docker_compose_invoke "$compose_cmd" up -d
     cd "$PROJECT_ROOT"
 
     print_success "服务已启动"
@@ -3438,21 +3435,24 @@ _help_docker() {
     echo -e "  ./start.sh docker <子命令> [参数]"
     echo ""
     echo -e "${CYAN}Compose 操作:${NC}"
-    echo -e "  ${GREEN}up${NC}                   启动 Centag 容器（默认 personal）"
-    echo -e "  ${GREEN}down${NC}                 停止并清理容器"
-    echo -e "  ${GREEN}logs${NC} [service]       查看容器日志"
-    echo -e "  ${GREEN}status${NC}               查看容器状态"
-    echo -e "  ${GREEN}restart${NC} [service]    重启容器"
-    echo -e "  ${GREEN}debug${NC}                启动 Debug 模式（挂载本地 bin）"
-    echo -e "  ${GREEN}clean${NC}                清理所有容器/镜像/数据卷"
-    echo -e "  ${GREEN}pack${NC}                 打包镜像为 tar.gz"
+    echo -e "  ${GREEN}up${NC} [personal|minimal]   启动 Centag 容器（默认 personal）"
+    echo -e "  ${GREEN}down${NC}                    停止并清理容器"
+    echo -e "  ${GREEN}logs${NC} [service]          查看容器日志"
+    echo -e "  ${GREEN}status${NC}                  查看容器状态"
+    echo -e "  ${GREEN}restart${NC} [service]       重启容器"
+    echo -e "  ${GREEN}debug${NC}                   启动 Debug 模式（挂载本地 bin）"
+    echo -e "  ${GREEN}clean${NC}                   清理所有容器/镜像/数据卷"
+    echo -e "  ${GREEN}pack${NC}                    打包镜像为 tar.gz"
     echo ""
-    echo -e "${CYAN}发行版构建/运行（推荐用 build/run 代替）:${NC}"
-    echo -e "  ${GREEN}build${NC} <minimal|personal|team>   构建 Docker 镜像"
-    echo -e "  ${GREEN}run${NC}   <minimal|personal|team>   运行 Docker 容器"
+    echo -e "${CYAN}发行版构建/运行:${NC}"
+    echo -e "  ${GREEN}build${NC} <personal|minimal>   构建 Docker 镜像"
+    echo -e "  ${GREEN}run${NC}   <personal|minimal>   运行 Docker 容器"
     echo ""
-    echo -e "${YELLOW}提示:${NC} 推荐使用: ./start.sh build personal --docker"
-    echo -e "         或: ./start.sh run personal --docker"
+    echo -e "${CYAN}示例:${NC}"
+    echo -e "  ./start.sh docker build personal        # 构建镜像"
+    echo -e "  ./start.sh docker up personal           # 启动容器"
+    echo -e "  ./start.sh docker up minimal            # 启动 minimal 版"
+    echo -e "  ./start.sh docker down                  # 停止容器"
     echo ""
 }
 
