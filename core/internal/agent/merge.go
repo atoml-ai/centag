@@ -39,6 +39,9 @@ func readJSONMap(path string) (map[string]interface{}, error) {
 // writeJSONMap 原子写入格式化 JSON（先备份）。
 func writeJSONMap(path string, m map[string]interface{}) error {
 	path = expandPath(path)
+	if strings.Contains(path, "~") {
+		return fmt.Errorf("无法解析 home 目录，请检查 HOME 环境变量: %s", path)
+	}
 	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
 		return fmt.Errorf("创建目录失败 %s: %w", filepath.Dir(path), err)
 	}
