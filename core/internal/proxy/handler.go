@@ -113,6 +113,51 @@ func (h *Handler) SetDefaultPipelineResolver(resolver *DefaultPipelineResolver) 
 	logger.Infof("[Handler] DefaultPipelineResolver injected")
 }
 
+// ---- xAI / Grok Build mock handlers (wrap mode compat) ----
+
+// HandleXAISettings mocks xAI GET /v1/settings so Grok Build wrap mode
+// does not treat 404 as an auth failure.
+func (h *Handler) HandleXAISettings(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{"settings": gin.H{}})
+}
+
+// HandleXAIUser mocks xAI GET /v1/user?include=subscription.
+func (h *Handler) HandleXAIUser(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{
+		"id":    "user_mock",
+		"email": "user@example.com",
+		"subscription": gin.H{
+			"tier":   "premium",
+			"active": true,
+		},
+	})
+}
+
+// HandleXAIBilling mocks xAI GET /v1/billing?format=credits.
+func (h *Handler) HandleXAIBilling(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{"credits": 9999999})
+}
+
+// HandleXAIMCPConfigs mocks xAI GET /v1/mcp/configs.
+func (h *Handler) HandleXAIMCPConfigs(c *gin.Context) {
+	c.JSON(http.StatusOK, []gin.H{})
+}
+
+// HandleXAILoginConfig mocks xAI GET /v1/login-config.
+func (h *Handler) HandleXAILoginConfig(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{
+		"auth_method":     "api_key",
+		"requires_login":  false,
+		"sso_enabled":     false,
+		"login_url":       "",
+	})
+}
+
+// HandleXAIBundleArchive mocks xAI GET /v1/bundle/archive.
+func (h *Handler) HandleXAIBundleArchive(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{"archive_url": "", "version": "latest"})
+}
+
 // HandleChatCompletions 处理 Chat Completions 请求
 func (h *Handler) HandleChatCompletions(c *gin.Context) {
 	startTime := time.Now()
