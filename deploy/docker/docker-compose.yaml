@@ -6,14 +6,6 @@ name: centag
 
 services:
   centag:
-    build:
-      context: ../../
-      dockerfile: deploy/docker/Dockerfile.dist
-      args:
-        DIST_NAME: personal
-        INCLUDE_FRONTEND: "true"
-      additional_contexts:
-        initdata: ./initdata-empty
     image: centag-personal:latest
     pull_policy: if_not_present
     platform: linux/amd64
