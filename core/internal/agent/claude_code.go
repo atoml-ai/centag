@@ -37,10 +37,20 @@ func (t *ClaudeCodeTemplate) ConfigFiles(info *BackendInfo) ([]ConfigFile, error
 	content := fmt.Sprintf(`{
   "env": {
     "ANTHROPIC_BASE_URL": "%s",
+    "ANTHROPIC_AUTH_TOKEN": "%s"
+  }
+}`, url, info.APIKey)
+	// transparent-proxy / pipeline 模式：不写 ANTHROPIC_MODEL，让 Claude Code
+	// 使用默认模型（pipeline 会根据路由规则转发，不需要客户端指定 centag 虚拟模型）。
+	if model != "" && !isVirtualModel(model) {
+		content = fmt.Sprintf(`{
+  "env": {
+    "ANTHROPIC_BASE_URL": "%s",
     "ANTHROPIC_AUTH_TOKEN": "%s",
     "ANTHROPIC_MODEL": "%s"
   }
 }`, url, info.APIKey, model)
+	}
 	return []ConfigFile{
 		{Path: "~/.claude/settings.json", Content: content},
 	}, nil
@@ -81,9 +91,14 @@ func (t *ClaudeCodeTemplate) Steps(info *BackendInfo) []ConfigStep {
 func (t *ClaudeCodeTemplate) WriteConfig(info *BackendInfo) error {
 	url := proxyURL(info.Host, info.Port)
 	model := defaultModel(info)
-	return mergeClaudeSettingsEnv("~/.claude/settings.json", map[string]string{
-		"ANTHROPIC_BASE_URL":   url,
+	env := map[string]string{
+		"ANTHROPIC_BASE_URL": url,
 		"ANTHROPIC_AUTH_TOKEN": info.APIKey,
-		"ANTHROPIC_MODEL":      model,
-	})
+	}
+	// transparent-proxy / pipeline 模式：不写 ANTHROPIC_MODEL，让 Claude Code
+	// 使用默认模型（pipeline 会根据路由规则转发，不需要客户端指定 centag 虚拟模型）。
+	if model != "" && !isVirtualModel(model) {
+		env["ANTHROPIC_MODEL"] = model
+	}
+	return mergeClaudeSettingsEnv("~/.claude/settings.json", env)
 }
