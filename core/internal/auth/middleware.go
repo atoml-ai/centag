@@ -112,6 +112,12 @@ const apiKeyPrefix = "llmproxy_"
 func ProxyAuthMiddleware(cfg *AuthConfig) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		token := extractBearerToken(c)
+		// Claude Code / Anthropic SDK sends x-api-key header instead of Authorization Bearer
+		if token == "" {
+			if xAPIKey := strings.TrimSpace(c.GetHeader("x-api-key")); xAPIKey != "" {
+				token = xAPIKey
+			}
+		}
 		if token == "" {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
 				"success": false,

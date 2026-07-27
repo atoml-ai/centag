@@ -27,12 +27,27 @@ func (t *ClaudeCodeTemplate) Meta() AgentSetupMeta {
 		InstallURL:    "https://code.claude.com/docs/en/install",
 		InstallHint:   "macOS/Linux: curl -fsSL https://claude.ai/install.sh | bash；或 brew install --cask claude-code",
 		AccessMethods: []AccessMethod{AccessWriteConfig, AccessWrapCLI},
+		VerifiedWrap:  true, // wrap 方式已验证
 		CompanionCLI:  NewCLICompanion("claude", "https://code.claude.com/docs/en/install", "macOS/Linux: curl -fsSL https://claude.ai/install.sh | bash；或 brew install --cask claude-code"),
 	}
 }
 
+// claudeBaseURL 返回 Claude Code 专用 base URL（不带 /v1）。
+// Claude Code 自己拼 /v1/messages，所以 ANTHROPIC_BASE_URL 不能带 /v1。
+func claudeBaseURL(info *BackendInfo) string {
+	host := info.Host
+	if host == "" {
+		host = "localhost"
+	}
+	port := info.Port
+	if port == 0 {
+		port = 20060
+	}
+	return fmt.Sprintf("http://%s:%d", host, port)
+}
+
 func (t *ClaudeCodeTemplate) ConfigFiles(info *BackendInfo) ([]ConfigFile, error) {
-	url := proxyURL(info.Host, info.Port)
+	url := claudeBaseURL(info)
 	model := defaultModel(info)
 	content := fmt.Sprintf(`{
   "env": {
@@ -57,7 +72,7 @@ func (t *ClaudeCodeTemplate) ConfigFiles(info *BackendInfo) ([]ConfigFile, error
 }
 
 func (t *ClaudeCodeTemplate) SetupCommand(info *BackendInfo) string {
-	url := proxyURL(info.Host, info.Port)
+	url := claudeBaseURL(info)
 	model := defaultModel(info)
 	return fmt.Sprintf(`# Claude Code（settings.json env）
 # 编辑 ~/.claude/settings.json，合并：
@@ -81,7 +96,7 @@ func (t *ClaudeCodeTemplate) VerifyCommand(info *BackendInfo) string {
 }
 
 func (t *ClaudeCodeTemplate) Steps(info *BackendInfo) []ConfigStep {
-	url := proxyURL(info.Host, info.Port)
+	url := claudeBaseURL(info)
 	return []ConfigStep{
 		{Title: "合并 settings.json", Description: fmt.Sprintf("设置 env.ANTHROPIC_BASE_URL 指向 Centag: %s", url)},
 		{Title: "启动 Claude Code", Description: "在终端中运行 claude 命令", Code: "claude"},
@@ -89,10 +104,10 @@ func (t *ClaudeCodeTemplate) Steps(info *BackendInfo) []ConfigStep {
 }
 
 func (t *ClaudeCodeTemplate) WriteConfig(info *BackendInfo) error {
-	url := proxyURL(info.Host, info.Port)
+	url := claudeBaseURL(info)
 	model := defaultModel(info)
 	env := map[string]string{
-		"ANTHROPIC_BASE_URL": url,
+		"ANTHROPIC_BASE_URL":  url,
 		"ANTHROPIC_AUTH_TOKEN": info.APIKey,
 	}
 	// transparent-proxy / pipeline 模式：不写 ANTHROPIC_MODEL，让 Claude Code
