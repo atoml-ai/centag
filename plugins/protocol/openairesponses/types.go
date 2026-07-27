@@ -105,8 +105,9 @@ func (fc flexibleContent) PlainText() string {
 
 // contentPart 内容部分
 type contentPart struct {
-	Type string `json:"type"` // "input_text" / "output_text"
-	Text string `json:"text"`
+	Type        string   `json:"type"`        // "input_text" / "output_text"
+	Text        string   `json:"text"`
+	Annotations []string `json:"annotations"` // OpenAI 规范要求 output_text 必须包含 annotations（可为空数组）
 }
 
 // responsesResponse OpenAI Responses API 响应
@@ -137,8 +138,16 @@ type usageInfo struct {
 	OutputTokensDetails *tokenDetails `json:"output_tokens_details,omitempty"`
 }
 
+// tokenDetails 包含 OpenAI usage details 所有已知字段。
+// 由于部分客户端（如 Grok Build）使用严格的 serde 反序列化，
+// 缺失任何字段都会报错；因此全部显式置 0 并发送。
 type tokenDetails struct {
-	CachedTokens int `json:"cached_tokens,omitempty"`
+	CachedTokens             int `json:"cached_tokens"`
+	ReasoningTokens          int `json:"reasoning_tokens"`
+	AcceptedPredictionTokens int `json:"accepted_prediction_tokens"`
+	RejectedPredictionTokens int `json:"rejected_prediction_tokens"`
+	AudioTokens              int `json:"audio_tokens"`
+	TextTokens               int `json:"text_tokens"`
 }
 
 type responseError struct {
