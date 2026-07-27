@@ -1,5 +1,0 @@
-version: "2.0"
-description: >
-  首启无预置后端。请在 WebUI「添加 Provider」配置；
-  供应商参考目录见 config/profiles/_shared/initdata/backends-catalog.yaml（非运行时 seed）。
-backends: []

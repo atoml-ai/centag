@@ -1,2 +1,0 @@
-# 各发行版统一：初始化默认流水线 = 透明模式（不注入 system prompt）
-default_pipeline: transparent-proxy
