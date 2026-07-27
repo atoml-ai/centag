@@ -607,7 +607,7 @@ func writeResponsesAPIJSON(c *gin.Context, output *pipeline.PipelineOutput, mode
 			"role":   "assistant",
 			"status": "completed",
 			"content": []gin.H{
-				{"type": "output_text", "text": content},
+				{"type": "output_text", "text": content, "annotations": []string{}},
 			},
 		})
 	}
@@ -639,12 +639,29 @@ func writeResponsesAPIJSON(c *gin.Context, output *pipeline.PipelineOutput, mode
 		"model":      model,
 		"output":     items,
 		"created_at": time.Now().Unix(),
-		"usage": gin.H{
-			"input_tokens":  totalTokens / 2,
-			"output_tokens": totalTokens / 2,
-			"total_tokens":  totalTokens,
-		},
+		"usage":      buildResponsesUsage(totalTokens/2, totalTokens/2, totalTokens),
 	})
+}
+
+// buildResponsesUsage 构建 Responses API 规范的 usage 对象。
+// 由于部分客户端（如 Grok Build）使用严格的 serde 反序列化，
+// 缺失任何 usage details 字段都会报错；因此全部显式置 0 并发送。
+func buildResponsesUsage(inputTokens, outputTokens, totalTokens int) map[string]interface{} {
+	emptyDetails := map[string]interface{}{
+		"cached_tokens":              0,
+		"reasoning_tokens":           0,
+		"accepted_prediction_tokens": 0,
+		"rejected_prediction_tokens": 0,
+		"audio_tokens":               0,
+		"text_tokens":                0,
+	}
+	return map[string]interface{}{
+		"input_tokens":          inputTokens,
+		"output_tokens":         outputTokens,
+		"total_tokens":          totalTokens,
+		"input_tokens_details":  emptyDetails,
+		"output_tokens_details": emptyDetails,
+	}
 }
 
 // writeAnthropicMessagesJSON writes a non-stream Anthropic Messages API envelope.
@@ -1767,6 +1784,7 @@ func (f *responsesStreamFormatter) ensureResponse(sb *strings.Builder, model, re
 			"status":     "in_progress",
 			"model":      model,
 			"output":     []interface{}{},
+			"usage": buildResponsesUsage(0, 0, 0),
 		},
 	})
 }
@@ -1795,8 +1813,9 @@ func (f *responsesStreamFormatter) ensureMessage(sb *strings.Builder) {
 		"output_index":  f.messageOutIdx,
 		"content_index": 0,
 		"part": map[string]interface{}{
-			"type": "output_text",
-			"text": "",
+			"type":        "output_text",
+			"text":        "",
+			"annotations": []string{},
 		},
 	})
 }
@@ -1914,8 +1933,9 @@ func (f *responsesStreamFormatter) FormatDone(model string, usage map[string]int
 			"output_index":  f.messageOutIdx,
 			"content_index": 0,
 			"part": map[string]interface{}{
-				"type": "output_text",
-				"text": fullText,
+				"type":        "output_text",
+				"text":        fullText,
+				"annotations": []string{},
 			},
 		})
 		item := map[string]interface{}{
@@ -1925,8 +1945,9 @@ func (f *responsesStreamFormatter) FormatDone(model string, usage map[string]int
 			"status": "completed",
 			"content": []interface{}{
 				map[string]interface{}{
-					"type": "output_text",
-					"text": fullText,
+					"type":        "output_text",
+					"text":        fullText,
+					"annotations": []string{},
 				},
 			},
 		}
@@ -1961,14 +1982,15 @@ func (f *responsesStreamFormatter) FormatDone(model string, usage map[string]int
 }
 
 func (f *responsesStreamFormatter) BuildUsage(finalOutput *pipeline.PipelineOutput) map[string]interface{} {
+	inputTokens := 0
+	outputTokens := 0
+	totalTokens := 0
 	if finalOutput != nil && finalOutput.ExecutionLog != nil {
-		return map[string]interface{}{
-			"input_tokens":  finalOutput.ExecutionLog.TotalTokens / 2,
-			"output_tokens": finalOutput.ExecutionLog.TotalTokens / 2,
-			"total_tokens":  finalOutput.ExecutionLog.TotalTokens,
-		}
+		inputTokens = finalOutput.ExecutionLog.TotalTokens / 2
+		outputTokens = finalOutput.ExecutionLog.TotalTokens / 2
+		totalTokens = finalOutput.ExecutionLog.TotalTokens
 	}
-	return nil
+	return buildResponsesUsage(inputTokens, outputTokens, totalTokens)
 }
 
 // FormatError 输出 Responses 流式协议的 `response.failed` 事件。

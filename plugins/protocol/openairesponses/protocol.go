@@ -144,15 +144,17 @@ func (p *Protocol) HandleResponse(c *gin.Context, resp *plugin.ProxyResponse) er
 				ID:      "msg-" + generateID(),
 				Role:    "assistant",
 				Status:  "completed",
-				Content: []contentPart{{Type: "output_text", Text: resp.Content}},
+				Content: []contentPart{{Type: "output_text", Text: resp.Content, Annotations: []string{}}},
 			},
 		}
 	}
 
 	usage := &usageInfo{
-		InputTokens:  0,
-		OutputTokens: resp.TokensUsed,
-		TotalTokens:  resp.TokensUsed,
+		InputTokens:         0,
+		OutputTokens:          resp.TokensUsed,
+		TotalTokens:           resp.TokensUsed,
+		InputTokensDetails:  &tokenDetails{},
+		OutputTokensDetails: &tokenDetails{},
 	}
 
 	c.JSON(http.StatusOK, responsesResponse{
