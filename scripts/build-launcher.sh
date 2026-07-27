@@ -65,8 +65,12 @@ if [[ "$DESKTOP" == "1" ]]; then
   echo "==> building centag-desktop → ${OUT_BIN}" >&2
   (
     cd "${LAUNCHER_DIR}"
+    LDFLAGS="-s -w"
+    if [[ "${GOOS}" == "windows" ]]; then
+      LDFLAGS="${LDFLAGS} -H windowsgui"
+    fi
     GOWORK=off CGO_ENABLED=1 GOOS="${GOOS}" GOARCH="${GOARCH}" \
-      go build -tags tray -trimpath -ldflags="-s -w" -o "${OUT_BIN}" .
+      go build -tags tray -trimpath -ldflags="${LDFLAGS}" -o "${OUT_BIN}" .
   )
 else
   OUT_BIN="${OUT_DIR}/centag-launcher${EXT}"

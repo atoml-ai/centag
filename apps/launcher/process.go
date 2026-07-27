@@ -58,6 +58,7 @@ func startSidecar(ctx context.Context, cfg Config, binary, dataDir string) (*sid
 	cmd.Stdout = outW
 	cmd.Stderr = errW
 	cmd.Env = buildSidecarEnv(cfg, binary, workDir, dataDir)
+	hideSidecarWindow(cmd)
 
 	if err := cmd.Start(); err != nil {
 		_ = logFile.Close()
