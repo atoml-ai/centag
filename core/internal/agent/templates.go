@@ -62,20 +62,21 @@ func centagModelRef(model string) string {
 }
 
 // expandPath 将 ~ 展开为实际 home 目录。
-// 当 os.UserHomeDir() 为空时（如某些子进程缺少 HOME 环境变量），
-// 依次回退到 $HOME → user.Current().HomeDir，避免路径变成相对目录。
+// 当 os.UserHomeDir() 为空/无效时（如某些子进程缺少 HOME 环境变量），
+// 依次回退到 $HOME → user.Current().HomeDir；若全部无效则保留原路径（含 ~）。
 func expandPath(p string) string {
 	if strings.HasPrefix(p, "~/") || p == "~" {
 		home, _ := os.UserHomeDir()
-		if home == "" {
+		if home == "" || home == "." || home == ".." {
 			home = os.Getenv("HOME")
 		}
-		if home == "" {
+		if home == "" || home == "." || home == ".." {
 			if u, err := user.Current(); err == nil {
 				home = u.HomeDir
 			}
 		}
-		if home == "" {
+		// home 仍无效时保留原路径，让调用方识别到 ~ 未解析并给出友好错误。
+		if home == "" || home == "." || home == ".." {
 			return p
 		}
 		return filepath.Join(home, p[2:])
@@ -145,6 +146,9 @@ func writeFiles(files []ConfigFile) error {
 			return fmt.Errorf("无法解析 home 目录，请检查 HOME 环境变量: %s", f.Path)
 		}
 		dir := filepath.Dir(path)
+		if !filepath.IsAbs(dir) {
+			return fmt.Errorf("配置路径解析为相对路径（缺少 HOME 环境变量）: %s → %s", f.Path, dir)
+		}
 		if err := os.MkdirAll(dir, 0755); err != nil {
 			return fmt.Errorf("创建目录失败 %s: %w", dir, err)
 		}
