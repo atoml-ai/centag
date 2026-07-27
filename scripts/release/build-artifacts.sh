@@ -191,6 +191,13 @@ build_edition() {
       "${stage_parent}/${stage_name}/config/profiles/${edition}/initdata/pipeline-templates/team"
   fi
 
+  # Ship billing/pricing seed data (default pricing rules)
+  if [[ -d "${ROOT}/config/pricing" ]]; then
+    rm -rf "${stage_parent}/${stage_name}/config/pricing"
+    mkdir -p "${stage_parent}/${stage_name}/config/pricing"
+    cp -R "${ROOT}/config/pricing/." "${stage_parent}/${stage_name}/config/pricing/"
+  fi
+
   tarball="${OUT_DIR}/centag-cli-${edition}-${goos}-${goarch}.tar.gz"
   # Replace only this CLI artifact (do not touch desktop / other OS packages).
   rm -f "$tarball" \
