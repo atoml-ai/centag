@@ -1,8 +1,10 @@
 # Profile 入门手册
 
-本文档是 Centag **三种 Deployment Profile** 的基础入门指南，说明各模式的策略、启动依赖、中间件连接，以及默认流水线与后端初始化配置。
+> **注意**：Deployment Profiles 已迁移到 **centag-pro** 仓库。
+> 开源 centag 仅支持单容器部署（`docker up`）和本地开发（`run personal`/`run minimal`）。
+> 本文档保留作为架构参考。
 
-适合第一次使用 `./start.sh profile <name> up` 的读者。架构与命令细节另见 [Deployment Profiles 与 Stack 中间件](./deployment-profiles-and-stack.md)。
+本文档是 Centag **三种 Deployment Profile** 的基础入门指南，说明各模式的策略、启动依赖、中间件连接，以及默认流水线与后端初始化配置。
 
 ---
 

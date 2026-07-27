@@ -1,8 +1,10 @@
 # Deployment Profiles 与 Stack 中间件
 
-本文档说明 Centag **三种 Profile** 与 **deploy/stack** 的分层部署架构（Plan C/D，2026-06 落地）。
+> **注意**：Deployment Profiles（`profile` 命令）已迁移到 **centag-pro** 仓库。
+> 开源 centag 仅支持单容器部署（`docker up`）和本地开发（`run personal`/`run minimal`）。
+> 本文档保留作为架构参考。
 
-> **新手推荐先读**：[Profile 入门手册](./profile-getting-started.md) — 各 Profile 策略、依赖、中间件与 initdata 对照。
+本文档说明 Centag **三种 Profile** 与 **deploy/stack** 的分层部署架构（Plan C/D，2026-06 落地）。
 
 ---
 

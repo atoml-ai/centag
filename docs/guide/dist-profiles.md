@@ -20,9 +20,9 @@ Dist Profile 是 Centag 的**编译时插件子集**。能否真正注册，取�
 
 > **Open Core（现行）**：开源仓只含 `dist/minimal` 与 `dist/personal`，可完全独立构建。  
 > **Team**：主程序 `centag-pro/cmd/centag-team`，经 `extension.Plugin` / `bundle/team` 接入；**仅在** `centag-pro` 执行 `./start.sh build team`（开源仓不提供 build team 入口）。  
-> personal 与 team 部署差异仍见 `config/profiles/`；商业增值与后续高级能力只加在 pro 插件/前端 pack。
+> personal 与 team 部署差异见 `centag-pro` 仓库；商业增值与后续高级能力只加在 pro 插件/前端 pack。
 
-与之对应的是 **Config Profile**（`config/profiles/<name>/`）：部署蓝图（compose + manifest），在运行时决定行为。
+与之对应的是 **Edition**（发行版）：编译时决定插件子集和默认配置。
 
 ## 构建入口一览
 

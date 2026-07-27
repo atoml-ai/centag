@@ -77,7 +77,7 @@ func Run(version, buildTime string) {
 	logger.Infof("Version: %s, Build: %s", Version, BuildTime)
 	logger.Infof("Product edition: minimal")
 
-	// Minimal edition: default INITDATA_PATH to the profile-specific initdata
+	// Minimal edition: default INITDATA_PATH to the edition-specific initdata
 	// directory so that local/dev runs load the correct pipeline templates
 	// (e.g. transparent-proxy using generator/openai instead of the global
 	// transparent_forward template that requires a configured default backend).
