@@ -144,6 +144,13 @@ stage_sidecar_tree() {
     rm -rf "${dest}/config/profiles/${EDITION}/initdata/pipeline-templates/personal" \
       "${dest}/config/profiles/${EDITION}/initdata/pipeline-templates/team"
   fi
+
+  # Ship billing/pricing seed data (default pricing rules)
+  if [[ -d "${ROOT}/config/pricing" ]]; then
+    rm -rf "${dest}/config/pricing"
+    mkdir -p "${dest}/config/pricing"
+    cp -R "${ROOT}/config/pricing/." "${dest}/config/pricing/"
+  fi
 }
 
 build_desktop_shell() {

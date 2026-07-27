@@ -67,6 +67,7 @@ done
 # --- 2. Copy config/initdata seed data --------------------------------------
 echo "==> copying config seed data"
 INITDATA_SRC="${ROOT}/config/initdata"
+PRICING_SRC="${ROOT}/config/pricing"
 for p in "${PLATFORMS[@]}"; do
   dest="${VENDOR_DIR}/${p}/config"
   mkdir -p "${dest}"
@@ -81,6 +82,12 @@ for p in "${PLATFORMS[@]}"; do
     find "${dest}/initdata" \( -name 'README.md' -o -name 'AGENTS.md' \) -delete 2>/dev/null || true
     rm -rf "${dest}/initdata/pipeline-templates/personal"
     rm -rf "${dest}/initdata/pipeline-templates/team"
+  fi
+  # Copy pricing/billing rules seed data
+  if [[ -d "${PRICING_SRC}" ]]; then
+    rm -rf "${dest}/pricing"
+    mkdir -p "${dest}/pricing"
+    cp -R "${PRICING_SRC}/." "${dest}/pricing/"
   fi
 done
 
