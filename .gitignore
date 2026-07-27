@@ -170,6 +170,10 @@ secrets/.env
 **/admin.password.hash
 **/*.password.hash
 **/ca.key
+**/api_key_storage.secret
+
+# Runtime server data directory (generated at startup)
+core/pkg/server/data/
 
 # npm centag-npm build artifacts (cross-compiled binaries, generated during publish)
 apps/centag-npm/bin/vendor/
