@@ -17,5 +17,6 @@
   "pleaseConfirmPassword": "Please confirm password",
   "passwordMismatch": "Passwords do not match",
   "passwordMinLength": "Password must be at least 6 characters",
-  "operationFailed": "Operation failed"
+  "operationFailed": "Operation failed",
+  "defaultCredential": "Default credentials: admin / centag123"
 }

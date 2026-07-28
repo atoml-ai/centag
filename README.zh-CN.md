@@ -148,6 +148,9 @@ centag wrap run -- opencode
 
 搞定。流量经 Centag：共享后端池、自动容错、模型路由、成本可视。
 
+> **默认登录凭据：** 用户名 `admin` / 密码 `centag123`
+> （首次登录后建议修改；首次启动前可通过 `LLM_PROXY_ADMIN_PASSWORD` 覆盖）
+
 ### 其他安装方式
 
 <details>
