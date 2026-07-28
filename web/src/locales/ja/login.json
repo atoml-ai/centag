@@ -17,5 +17,6 @@
   "pleaseConfirmPassword": "パスワードを確認してください",
   "passwordMismatch": "パスワードが一致しません",
   "passwordMinLength": "パスワードは6文字以上必要です",
-  "operationFailed": "操作失敗"
+  "operationFailed": "操作失敗",
+  "defaultCredential": "デフォルト情報: admin / centag123"
 }

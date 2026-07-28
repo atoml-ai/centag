@@ -17,5 +17,6 @@
   "pleaseConfirmPassword": "请确认密码",
   "passwordMismatch": "两次密码不一致",
   "passwordMinLength": "密码至少 6 位",
-  "operationFailed": "操作失败"
+  "operationFailed": "操作失败",
+  "defaultCredential": "默认凭据：admin / centag123"
 }

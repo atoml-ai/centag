@@ -148,6 +148,9 @@ centag wrap run -- opencode
 
 완료. 트래픽은 Centag 경유: 공유 백엔드 풀, 자동 장애 대응, 모델 라우팅, 비용 가시화.
 
+> **기본 로그인 정보:** 사용자 이름 `admin` / 비밀번호 `centag123`
+> (첫 로그인 후 변경 권장; 첫 시작 전 `LLM_PROXY_ADMIN_PASSWORD`로 덮어쓰기 가능)
+
 ### 기타 설치 방법
 
 <details>

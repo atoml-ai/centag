@@ -65,6 +65,10 @@
           </el-button>
         </el-form-item>
       </el-form>
+
+      <p v-if="!isSetup" class="default-hint">
+        {{ t('login.defaultCredential') }}
+      </p>
     </div>
   </div>
 </template>
@@ -233,5 +237,13 @@ async function handleSubmit() {
 
 .login-btn:hover {
   opacity: 0.9;
+}
+
+.default-hint {
+  text-align: center;
+  font-size: 0.75rem;
+  color: #aaa;
+  margin-top: 20px;
+  line-height: 1.6;
 }
 </style>

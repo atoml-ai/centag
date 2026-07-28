@@ -17,5 +17,6 @@
   "pleaseConfirmPassword": "Подтвердите пароль",
   "passwordMismatch": "Пароли не совпадают",
   "passwordMinLength": "Пароль должен содержать минимум 6 символов",
-  "operationFailed": "Операция не удалась"
+  "operationFailed": "Операция не удалась",
+  "defaultCredential": "Логин по умолчанию: admin / centag123"
 }
