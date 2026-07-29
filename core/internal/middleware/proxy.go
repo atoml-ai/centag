@@ -510,12 +510,28 @@ func (h *LLMProxyHandler) HandleOpenAIRequest(c *gin.Context) {
 			targetURL = baseURL + "/api/generate"
 			logger.Info("Ollama backend: converting /v1/completions -> /api/generate")
 		default:
-			// 其他路径保持不变
-			targetURL = baseURL + c.Request.URL.Path
+			// 其他路径保持不变（避免 BaseURL 与路径前缀重复，仅精确 /v1 或 /v1/ 前缀）
+			path := c.Request.URL.Path
+			lowBase := strings.ToLower(baseURL)
+			if strings.HasSuffix(lowBase, "/v1") && (path == "/v1" || strings.HasPrefix(path, "/v1/")) {
+				path = path[3:]
+				if path == "" {
+					path = "/"
+				}
+			}
+			targetURL = baseURL + path
 		}
 	} else {
-		// OpenAI兼容后端，保持原路径
-		targetURL = baseURL + c.Request.URL.Path
+		// OpenAI兼容后端，保持原路径（避免 BaseURL 末尾 /v1 与请求路径前缀重复）
+		path := c.Request.URL.Path
+		lowBase := strings.ToLower(baseURL)
+		if strings.HasSuffix(lowBase, "/v1") && (path == "/v1" || strings.HasPrefix(path, "/v1/")) {
+			path = path[3:]
+			if path == "" {
+				path = "/"
+			}
+		}
+		targetURL = baseURL + path
 	}
 
 	// 转换请求体（如果是Ollama后端）
@@ -874,8 +890,18 @@ func isStreamRequest(r *http.Request) bool {
 func (h *LLMProxyHandler) forwardGetRequest(c *gin.Context, backendCfg *backend.BackendConfig) {
 	logger.Infof("Centag GET request to backend: %s (%s)", backendCfg.ID, backendCfg.Name)
 
-	// 构建目标URL
-	targetURL := strings.TrimSuffix(backendCfg.BaseURL, "/") + c.Request.URL.Path
+	// 构建目标URL（避免 BaseURL 末尾 /v1 与请求路径前缀重复）
+	baseURL := strings.TrimSuffix(backendCfg.BaseURL, "/")
+	path := c.Request.URL.Path
+	lowBase := strings.ToLower(baseURL)
+	// 精确匹配 /v1 或 /v1/...，避免误伤 /v1beta/... 等路径
+	if strings.HasSuffix(lowBase, "/v1") && (path == "/v1" || strings.HasPrefix(path, "/v1/")) {
+		path = path[3:]
+		if path == "" {
+			path = "/"
+		}
+	}
+	targetURL := baseURL + path
 	if c.Request.URL.RawQuery != "" {
 		targetURL += "?" + c.Request.URL.RawQuery
 	}

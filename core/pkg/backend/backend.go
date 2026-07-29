@@ -820,28 +820,35 @@ func healthCheckOllama(client *httpclient.Client, cfg *BackendConfig, headers ma
 
 // healthCheckOpenAI 检查 OpenAI 兼容后端健康状态
 func healthCheckOpenAI(client *httpclient.Client, cfg *BackendConfig, headers map[string]string) error {
-	baseURL := strings.TrimSuffix(cfg.BaseURL, "/")
-	// 尝试访问 models endpoint 来检查健康状态
-	healthURL := baseURL + "/v1/models"
+	// 使用 CandidateOpenAIAPIRoots 避免 BaseURL 末尾 /v1 导致路径重复
+	roots := CandidateOpenAIAPIRoots(cfg.BaseURL)
+	var lastErr error
+	for _, root := range roots {
+		healthURL := root + "/models"
+		resp, err := client.Do(context.Background(), &httpclient.RequestConfig{
+			Method:  "GET",
+			URL:     healthURL,
+			Headers: headers,
+		})
+		if err != nil {
+			lastErr = err
+			continue
+		}
 
-	resp, err := client.Do(context.Background(), &httpclient.RequestConfig{
-		Method:  "GET",
-		URL:     healthURL,
-		Headers: headers,
-	})
-	if err != nil {
-		return fmt.Errorf("failed to connect to OpenAI compatible backend: %w", err)
+		if resp.StatusCode == 401 || resp.StatusCode == 403 {
+			return fmt.Errorf("authentication failed (HTTP %d), please check API key", resp.StatusCode)
+		}
+
+		if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+			return nil
+		}
+		lastErr = fmt.Errorf("health check failed with status %d", resp.StatusCode)
+		continue
 	}
-
-	if resp.StatusCode == 401 || resp.StatusCode == 403 {
-		return fmt.Errorf("authentication failed (HTTP %d), please check API key", resp.StatusCode)
+	if lastErr != nil {
+		return fmt.Errorf("failed to connect to OpenAI compatible backend: %w", lastErr)
 	}
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return fmt.Errorf("health check failed with status %d", resp.StatusCode)
-	}
-
-	return nil
+	return fmt.Errorf("health check failed")
 }
 
 // TestConnection 测试后端连接
