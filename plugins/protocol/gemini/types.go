@@ -35,7 +35,8 @@ type geminiResponse struct {
 
 // candidate 候选
 type candidate struct {
-	Content       content `json:"content"`
+	Index        int     `json:"index,omitempty"`
+	Content      content `json:"content"`
 	FinishReason string  `json:"finishReason,omitempty"`
 }
 

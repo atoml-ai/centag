@@ -86,8 +86,20 @@ func extractBearerToken(c *gin.Context) string {
 	if strings.HasPrefix(header, "Bearer ") {
 		return strings.TrimPrefix(header, "Bearer ")
 	}
+	// Claude Code / Anthropic SDK sends x-api-key header instead of Authorization Bearer.
+	if xAPIKey := strings.TrimSpace(c.GetHeader("x-api-key")); xAPIKey != "" {
+		return xAPIKey
+	}
+	// Gemini CLI / Google GenAI SDK sends x-goog-api-key header for Gemini API requests.
+	if xGoogleAPIKey := strings.TrimSpace(c.GetHeader("x-goog-api-key")); xGoogleAPIKey != "" {
+		return xGoogleAPIKey
+	}
 	// Also accept token in query param for WebSocket / download use-cases.
-	return c.Query("token")
+	if token := c.Query("token"); token != "" {
+		return token
+	}
+	// Gemini API clients (including Gemini CLI) send the API key via ?key= query param.
+	return c.Query("key")
 }
 
 // ExtractBearerToken is the exported form of extractBearerToken for other packages.
@@ -112,12 +124,6 @@ const apiKeyPrefix = "llmproxy_"
 func ProxyAuthMiddleware(cfg *AuthConfig) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		token := extractBearerToken(c)
-		// Claude Code / Anthropic SDK sends x-api-key header instead of Authorization Bearer
-		if token == "" {
-			if xAPIKey := strings.TrimSpace(c.GetHeader("x-api-key")); xAPIKey != "" {
-				token = xAPIKey
-			}
-		}
 		if token == "" {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
 				"success": false,

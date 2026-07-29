@@ -705,11 +705,11 @@ func writeAnthropicMessagesJSON(c *gin.Context, output *pipeline.PipelineOutput,
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"id":         fmt.Sprintf("msg-%d", time.Now().UnixNano()),
-		"type":       "message",
-		"role":       "assistant",
-		"content":    contentBlocks,
-		"model":      model,
+		"id":          fmt.Sprintf("msg-%d", time.Now().UnixNano()),
+		"type":        "message",
+		"role":        "assistant",
+		"content":     contentBlocks,
+		"model":       model,
 		"stop_reason": stopReason,
 		"usage": gin.H{
 			"input_tokens":  totalTokens / 2,
@@ -838,6 +838,11 @@ func shouldRawWriteTransparentStream(output *pipeline.PipelineOutput) bool {
 		if rp, ok := output.Metadata["request_path"].(string); ok {
 			trimmed := strings.TrimRight(strings.TrimSpace(rp), "/")
 			if strings.HasSuffix(trimmed, "/responses") || strings.HasSuffix(trimmed, "/messages") {
+				return false
+			}
+			// Gemini API paths must be re-encoded by the gemini protocol formatter;
+			// raw OpenAI SSE/JSON cannot be passed to a Gemini client.
+			if strings.Contains(trimmed, "/v1beta/models/") {
 				return false
 			}
 		}
@@ -1784,7 +1789,7 @@ func (f *responsesStreamFormatter) ensureResponse(sb *strings.Builder, model, re
 			"status":     "in_progress",
 			"model":      model,
 			"output":     []interface{}{},
-			"usage": buildResponsesUsage(0, 0, 0),
+			"usage":      buildResponsesUsage(0, 0, 0),
 		},
 	})
 }

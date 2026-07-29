@@ -119,12 +119,30 @@ func TestGeminiTemplate(t *testing.T) {
 	tmpl := &GeminiTemplate{}
 	info := testInfo()
 
+	meta := tmpl.Meta()
+	if meta.WriteMode != WriteModeOverwrite {
+		t.Fatalf("write mode = %s", meta.WriteMode)
+	}
+	if !meta.VerifiedWrite {
+		t.Error("Gemini write config should be verified")
+	}
+	if !meta.VerifiedWrap {
+		t.Error("Gemini wrap should be verified")
+	}
+
 	cmd := tmpl.SetupCommand(info)
 	if !strings.Contains(cmd, "GEMINI_API_KEY") {
 		t.Error("missing GEMINI_API_KEY")
 	}
 	if !strings.Contains(cmd, "GOOGLE_GEMINI_BASE_URL") {
 		t.Error("missing GOOGLE_GEMINI_BASE_URL")
+	}
+	// GOOGLE_GEMINI_BASE_URL must NOT contain /v1, otherwise Gemini CLI appends /v1beta → /v1/v1beta 404.
+	if strings.Contains(cmd, "GOOGLE_GEMINI_BASE_URL=http://localhost:20060/v1") {
+		t.Error("base URL should not include /v1 suffix")
+	}
+	if !strings.Contains(cmd, "gemini-3.1-flash-lite") {
+		t.Error("expected default Gemini model")
 	}
 
 	files, err := tmpl.ConfigFiles(info)
@@ -135,6 +153,7 @@ func TestGeminiTemplate(t *testing.T) {
 		t.Fatalf("expected 2 files, got %d", len(files))
 	}
 	foundSettings := false
+	foundEnv := false
 	for _, f := range files {
 		if f.Path == "~/.gemini/settings.json" {
 			foundSettings = true
@@ -142,9 +161,97 @@ func TestGeminiTemplate(t *testing.T) {
 				t.Fatalf("settings should set gemini-api-key: %s", f.Content)
 			}
 		}
+		if f.Path == "~/.gemini/.env" {
+			foundEnv = true
+			if strings.Contains(f.Content, "GOOGLE_GEMINI_BASE_URL=http://localhost:20060/v1") {
+				t.Fatalf("env base URL should not include /v1 suffix: %s", f.Content)
+			}
+			if !strings.Contains(f.Content, "GEMINI_MODEL=gemini-3.1-flash-lite") {
+				t.Fatalf("env should use real Gemini model: %s", f.Content)
+			}
+		}
 	}
 	if !foundSettings {
 		t.Fatal("missing settings.json")
+	}
+	if !foundEnv {
+		t.Fatal("missing .env")
+	}
+}
+
+func TestGeminiTemplate_UsesExplicitGeminiModel(t *testing.T) {
+	tmpl := &GeminiTemplate{}
+	info := testInfo()
+	info.Model = "gemini-2.5-flash"
+
+	files, err := tmpl.ConfigFiles(info)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range files {
+		if f.Path == "~/.gemini/.env" && !strings.Contains(f.Content, "GEMINI_MODEL=gemini-2.5-flash") {
+			t.Fatalf("should use explicit gemini model: %s", f.Content)
+		}
+	}
+}
+
+func TestGeminiTemplate_DropsVirtualModel(t *testing.T) {
+	tmpl := &GeminiTemplate{}
+	info := testInfo()
+	info.Model = "centag/transparent-proxy"
+
+	files, err := tmpl.ConfigFiles(info)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range files {
+		if f.Path == "~/.gemini/.env" {
+			if strings.Contains(f.Content, "centag/transparent-proxy") {
+				t.Fatalf("should not use virtual model in Gemini config: %s", f.Content)
+			}
+			if !strings.Contains(f.Content, "GEMINI_MODEL=gemini-3.1-flash-lite") {
+				t.Fatalf("should fall back to default Gemini model: %s", f.Content)
+			}
+		}
+	}
+}
+
+func TestGeminiWriteConfig_MergesAuthSettings(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	if runtime.GOOS == "windows" {
+		t.Setenv("USERPROFILE", home)
+	}
+	envPath := filepath.Join(home, ".gemini", ".env")
+	settingsPath := filepath.Join(home, ".gemini", "settings.json")
+	if err := os.MkdirAll(filepath.Dir(settingsPath), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(settingsPath, []byte(`{"general":{"vimMode":true}}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	tmpl := &GeminiTemplate{}
+	if err := tmpl.WriteConfig(testInfo()); err != nil {
+		t.Fatal(err)
+	}
+	envData, err := os.ReadFile(envPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(envData), "/v1") {
+		t.Fatalf("env base URL should not include /v1: %s", envData)
+	}
+	settingsData, err := os.ReadFile(settingsPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(settingsData)
+	if !strings.Contains(got, "gemini-api-key") {
+		t.Fatalf("missing gemini-api-key auth: %s", got)
+	}
+	if !strings.Contains(got, "vimMode") {
+		t.Fatalf("should preserve existing settings keys: %s", got)
 	}
 }
 

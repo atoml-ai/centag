@@ -344,7 +344,139 @@ func isMessagesAPIPath(path string) bool {
 	return strings.HasSuffix(path, "/messages")
 }
 
-// applyChatCompletionsRequestBridges converts Responses / Anthropic Messages bodies
+// isGeminiAPIPath 判断请求路径是否为 Google Gemini API（/v1beta/models/...:generateContent）。
+func isGeminiAPIPath(path string) bool {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return false
+	}
+	return strings.Contains(path, "/v1beta/models/")
+}
+
+// looksLikeGeminiBody reports whether body is Google Gemini API shaped.
+func looksLikeGeminiBody(body []byte) bool {
+	if len(body) == 0 {
+		return false
+	}
+	var raw map[string]interface{}
+	if err := json.Unmarshal(body, &raw); err != nil || raw == nil {
+		return false
+	}
+	_, ok := raw["contents"].([]interface{})
+	return ok
+}
+
+// convertGeminiBodyToChatCompletions rewrites Gemini JSON (contents / systemInstruction /
+// generationConfig) into a chat/completions body.
+func convertGeminiBodyToChatCompletions(body []byte) ([]byte, bool) {
+	if !looksLikeGeminiBody(body) {
+		return body, false
+	}
+	var raw map[string]interface{}
+	if err := json.Unmarshal(body, &raw); err != nil || raw == nil {
+		return body, false
+	}
+
+	messages := make([]map[string]interface{}, 0, 8)
+	if sys, ok := raw["systemInstruction"].(map[string]interface{}); ok {
+		if text := geminiContentToPlainText(sys); text != "" {
+			messages = append(messages, map[string]interface{}{
+				"role":    "system",
+				"content": text,
+			})
+		}
+	}
+	messages = append(messages, geminiContentsToChatMessages(raw["contents"])...)
+	if len(messages) == 0 {
+		return body, false
+	}
+
+	out := map[string]interface{}{
+		"messages": messages,
+	}
+	if model, ok := raw["model"]; ok {
+		out["model"] = model
+	}
+	for _, k := range []string{
+		"stream", "temperature", "top_p", "user",
+		"presence_penalty", "frequency_penalty",
+		"stop", "n", "response_format",
+	} {
+		if v, ok := raw[k]; ok {
+			out[k] = v
+		}
+	}
+	if cfg, ok := raw["generationConfig"].(map[string]interface{}); ok {
+		if v, ok := cfg["temperature"]; ok {
+			out["temperature"] = v
+		}
+		if v, ok := cfg["topP"]; ok {
+			out["top_p"] = v
+		}
+		if v, ok := cfg["maxOutputTokens"]; ok {
+			out["max_tokens"] = v
+		}
+	}
+
+	encoded, err := json.Marshal(out)
+	if err != nil {
+		return body, false
+	}
+	return encoded, true
+}
+
+func geminiContentToPlainText(content interface{}) string {
+	switch c := content.(type) {
+	case string:
+		return c
+	case map[string]interface{}:
+		parts, ok := c["parts"].([]interface{})
+		if !ok {
+			return ""
+		}
+		var texts []string
+		for _, p := range parts {
+			pm, ok := p.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			if t, ok := pm["text"].(string); ok {
+				texts = append(texts, t)
+			}
+		}
+		return strings.Join(texts, "")
+	default:
+		return ""
+	}
+}
+
+func geminiContentsToChatMessages(contents interface{}) []map[string]interface{} {
+	arr, ok := contents.([]interface{})
+	if !ok {
+		return nil
+	}
+	out := make([]map[string]interface{}, 0, len(arr))
+	for _, item := range arr {
+		m, ok := item.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		role := strings.TrimSpace(stringMeta(m, "role"))
+		if role == "" {
+			role = "user"
+		}
+		if role == "model" {
+			role = "assistant"
+		}
+		out = append(out, map[string]interface{}{
+			"role":    role,
+			"content": geminiContentToPlainText(m),
+		})
+	}
+	return out
+}
+
+// applyChatCompletionsRequestBridges converts Responses / Anthropic Messages / Gemini bodies
 // into chat/completions when the outbound target is /chat/completions.
 func applyChatCompletionsRequestBridges(body []byte, requestPath string) (rewritten []byte, bridgeToChat bool, anthropicBridge bool) {
 	if rewritten, ok := convertResponsesBodyToChatCompletions(body); ok {
@@ -353,11 +485,17 @@ func applyChatCompletionsRequestBridges(body []byte, requestPath string) (rewrit
 	if rewritten, ok := convertAnthropicMessagesBodyToChatCompletions(body); ok {
 		return rewritten, true, true
 	}
+	if rewritten, ok := convertGeminiBodyToChatCompletions(body); ok {
+		return rewritten, true, false
+	}
 	if isResponsesAPIPath(requestPath) {
 		return body, true, false
 	}
 	if isMessagesAPIPath(requestPath) {
 		return body, true, true
+	}
+	if isGeminiAPIPath(requestPath) {
+		return body, true, false
 	}
 	return body, false, false
 }

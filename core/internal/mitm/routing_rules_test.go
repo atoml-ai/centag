@@ -1,8 +1,11 @@
 package mitm
 
 import (
+	"net"
 	"net/http"
+	"strings"
 	"testing"
+	"time"
 )
 
 func TestApplyBackendAuth_InjectsCentagKey(t *testing.T) {
@@ -69,6 +72,82 @@ func TestIsWhitelistedHost(t *testing.T) {
 	}
 	if s.isWhitelistedHost("openai.com") {
 		t.Fatal("parent of listed api.openai.com must not match")
+	}
+}
+
+func TestConvertBackendPath_PreservesV1Beta(t *testing.T) {
+	cases := []string{
+		"/v1beta/models/gemini-3.1-flash-lite:generateContent",
+		"/v1beta/models/gemini-3.1-flash-lite:streamGenerateContent",
+		"/v1beta/models",
+	}
+	for _, in := range cases {
+		if got := convertBackendPath(in); got != in {
+			t.Fatalf("convertBackendPath(%q)=%q, want %q (v1beta must be preserved)", in, got, in)
+		}
+	}
+}
+
+func TestResponseWriter_WritesValidHeaders(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	defer ln.Close()
+
+	gotCh := make(chan string, 1)
+	go func() {
+		conn, err := ln.Accept()
+		if err != nil {
+			return
+		}
+		defer conn.Close()
+
+		rw := &responseWriter{conn: conn}
+		rw.Header().Set("Content-Type", "application/json")
+		rw.Header().Set("Content-Length", "13")
+		rw.WriteHeader(http.StatusOK)
+		rw.Write([]byte(`{"ok":true}`))
+	}()
+
+	go func() {
+		conn, err := net.Dial("tcp", ln.Addr().String())
+		if err != nil {
+			return
+		}
+		defer conn.Close()
+		var b strings.Builder
+		buf := make([]byte, 256)
+		for {
+			n, err := conn.Read(buf)
+			if n > 0 {
+				b.Write(buf[:n])
+			}
+			if err != nil {
+				break
+			}
+			if b.Len() >= 64 {
+				break
+			}
+		}
+		gotCh <- b.String()
+	}()
+
+	var got string
+	select {
+	case got = <-gotCh:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timeout waiting for responseWriter output")
+	}
+
+	if !strings.Contains(got, "Content-Type: application/json") {
+		t.Fatalf("missing/wrong Content-Type header in raw response: %q", got)
+	}
+	if !strings.Contains(got, "Content-Length: 13") {
+		t.Fatalf("missing/wrong Content-Length header in raw response: %q", got)
+	}
+	if strings.Contains(got, "[application/json]") {
+		t.Fatalf("header value was serialized as slice: %q", got)
 	}
 }
 
