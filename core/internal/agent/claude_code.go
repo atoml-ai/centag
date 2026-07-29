@@ -14,6 +14,7 @@ func (t *ClaudeCodeTemplate) Description() string {
 func (t *ClaudeCodeTemplate) Meta() AgentSetupMeta {
 	return AgentSetupMeta{
 		Category:  AgentCategoryCLI,
+		Vendor:    VendorAnthropic,
 		WriteMode: WriteModeOverwrite,
 		ConfigPaths: []string{
 			"~/.claude/settings.json",

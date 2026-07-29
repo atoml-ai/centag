@@ -12,6 +12,7 @@ func (t *HermesTemplate) Description() string  { return "面向任务的 AI Agen
 func (t *HermesTemplate) Meta() AgentSetupMeta {
 	return AgentSetupMeta{
 		Category:  AgentCategoryCLI,
+		Vendor:    "Hermes",
 		WriteMode: WriteModeMerge,
 		ConfigPaths: []string{
 			"~/.hermes/config.yaml",

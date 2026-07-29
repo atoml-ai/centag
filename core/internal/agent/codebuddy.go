@@ -43,6 +43,7 @@ func (t *CodeBuddyTemplate) Description() string {
 func (t *CodeBuddyTemplate) Meta() AgentSetupMeta {
 	return AgentSetupMeta{
 		Category:  AgentCategoryDesktop,
+		Vendor:    "腾讯云",
 		WriteMode: WriteModeMerge,
 		ConfigPaths: []string{
 			codeBuddyModelsPath,
@@ -123,6 +124,7 @@ func (t *WorkBuddyTemplate) Description() string {
 func (t *WorkBuddyTemplate) Meta() AgentSetupMeta {
 	return AgentSetupMeta{
 		Category:  AgentCategoryDesktop,
+		Vendor:    "腾讯云",
 		WriteMode: WriteModeNone,
 		KeyFields: []string{
 			"API 格式=OpenAI",

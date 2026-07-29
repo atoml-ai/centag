@@ -15,6 +15,7 @@ func (t *PiTemplate) Description() string {
 func (t *PiTemplate) Meta() AgentSetupMeta {
 	return AgentSetupMeta{
 		Category:  AgentCategoryCLI,
+		Vendor:    "Pi",
 		WriteMode: WriteModeMerge,
 		ConfigPaths: []string{
 			"~/.pi/agent/models.json",

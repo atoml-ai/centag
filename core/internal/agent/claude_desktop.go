@@ -35,6 +35,7 @@ func (t *ClaudeDesktopTemplate) Meta() AgentSetupMeta {
 	}
 	return AgentSetupMeta{
 		Category:      AgentCategoryDesktop,
+		Vendor:        VendorAnthropic,
 		WriteMode:     WriteModeOverwrite,
 		ConfigPaths:   pathList,
 		KeyFields:     []string{"inferenceGatewayBaseUrl", "inferenceGatewayApiKey", "inferenceGatewayAuthScheme", "inferenceProvider", "deploymentMode"},

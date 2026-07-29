@@ -90,6 +90,7 @@ func (t *TUIAgentTemplate) WriteConfig(info *BackendInfo) error { return nil }
 func (t *TUIAgentTemplate) Meta() AgentSetupMeta {
 	return AgentSetupMeta{
 		Category:      AgentCategoryTUI,
+		Vendor:        "OpenCode",
 		WriteMode:     WriteModeNone,
 		ConfigPaths:   nil,
 		KeyFields:     nil,
@@ -469,6 +470,7 @@ func (t *tuiConfigTemplate) Description() string                { return t.descr
 func (t *tuiConfigTemplate) Meta() AgentSetupMeta {
 	return AgentSetupMeta{
 		Category:      AgentCategoryTUI,
+		Vendor:        "OpenCode",
 		WriteMode:     WriteModeNone,
 		ConfigMethod:  "TUI Agent 不通过写入本地配置文件接入 Centag；由进程内路由/流水线绑定。",
 		InstallHint:   "内置能力，无需单独安装 CLI",

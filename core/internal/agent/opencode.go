@@ -12,6 +12,7 @@ func (t *OpenCodeTemplate) Description() string  { return "AI 编程助手，支
 func (t *OpenCodeTemplate) Meta() AgentSetupMeta {
 	return AgentSetupMeta{
 		Category:  AgentCategoryCLI,
+		Vendor:    VendorOpenCode,
 		WriteMode: WriteModeMerge,
 		ConfigPaths: []string{
 			"~/.config/opencode/opencode.json",

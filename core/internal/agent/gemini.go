@@ -40,6 +40,7 @@ func geminiModel(info *BackendInfo) string {
 func (t *GeminiTemplate) Meta() AgentSetupMeta {
 	return AgentSetupMeta{
 		Category:  AgentCategoryCLI,
+		Vendor:    VendorGoogle,
 		WriteMode: WriteModeOverwrite,
 		ConfigPaths: []string{
 			"~/.gemini/.env",

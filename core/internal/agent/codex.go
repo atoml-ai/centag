@@ -14,6 +14,7 @@ func (t *CodexTemplate) Description() string {
 func (t *CodexTemplate) Meta() AgentSetupMeta {
 	return AgentSetupMeta{
 		Category:  AgentCategoryCLI,
+		Vendor:    VendorOpenAI,
 		WriteMode: WriteModeOverwrite,
 		ConfigPaths: []string{
 			"~/.codex/auth.json",
