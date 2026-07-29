@@ -100,7 +100,9 @@ func (t *ClaudeDesktopTemplate) ConfigFiles(info *BackendInfo) ([]ConfigFile, er
 	if paths == nil {
 		return nil, fmt.Errorf("Claude Desktop 配置写入仅支持 macOS / Windows")
 	}
-	url := proxyURL(info.Host, info.Port)
+	// Claude Desktop 3P 协议会在 baseUrl 后追加 /v1/models、/v1/chat/completions 等路径，
+	// 因此 baseUrl 不应带 /v1，避免路径重复。
+	url := proxyHostURL(info.Host, info.Port)
 	profile := fmt.Sprintf(`{
   "coworkEgressAllowedHosts": ["*"],
   "disableDeploymentModeChooser": true,
@@ -125,7 +127,7 @@ func (t *ClaudeDesktopTemplate) ConfigFiles(info *BackendInfo) ([]ConfigFile, er
 }
 
 func (t *ClaudeDesktopTemplate) SetupCommand(info *BackendInfo) string {
-	url := proxyURL(info.Host, info.Port)
+	url := proxyHostURL(info.Host, info.Port)
 	return fmt.Sprintf(`# Claude Desktop gateway profile（对齐 cc-switch Direct）
 # 设置 inferenceGatewayBaseUrl="%s"
 # 设置 inferenceGatewayApiKey="<Centag API Key>"
@@ -149,12 +151,13 @@ func (t *ClaudeDesktopTemplate) PlatformCommands(info *BackendInfo) PlatformComm
 }
 
 func (t *ClaudeDesktopTemplate) VerifyCommand(info *BackendInfo) string {
-	url := proxyURL(info.Host, info.Port)
-	return fmt.Sprintf(`curl -s %s/models -H "x-api-key: %s"`, url, info.APIKey)
+	// Claude Desktop 内部构造的模型列表请求路径为 /v1/models，verify 需保持一致
+	url := proxyHostURL(info.Host, info.Port)
+	return fmt.Sprintf(`curl -s %s/v1/models -H "x-api-key: %s"`, url, info.APIKey)
 }
 
 func (t *ClaudeDesktopTemplate) Steps(info *BackendInfo) []ConfigStep {
-	url := proxyURL(info.Host, info.Port)
+	url := proxyHostURL(info.Host, info.Port)
 	return []ConfigStep{
 		{Title: "写入 3P gateway profile", Description: fmt.Sprintf("Centag gateway: %s（需重启 Claude Desktop）", url)},
 	}
@@ -165,7 +168,9 @@ func (t *ClaudeDesktopTemplate) WriteConfig(info *BackendInfo) error {
 	if paths == nil {
 		return fmt.Errorf("Claude Desktop 配置写入仅支持 macOS / Windows")
 	}
-	url := proxyURL(info.Host, info.Port)
+	// Claude Desktop 3P 协议会在 baseUrl 后追加 /v1/models、/v1/chat/completions 等路径，
+	// 因此 baseUrl 不应带 /v1，避免路径重复。
+	url := proxyHostURL(info.Host, info.Port)
 
 	if err := mergeDeploymentMode(expandClaudeDesktopPath(paths.normalConfig), "3p"); err != nil {
 		return err

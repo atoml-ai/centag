@@ -592,21 +592,52 @@ func copyProxyRequestFields(req *plugin.ProxyRequest) *plugin.ProxyRequest {
 	}
 }
 
-// ListModels 列出当前可用的流水线，以 OpenAI models 格式返回。
+// ListModels 列出当前可用的流水线和后端模型，以 OpenAI models 格式返回。
 // 客户端应使用 id（如 centag/direct-backend）作为 chat/completions 的 model。
+// 同时返回后端实际模型名（如 glm-4-plus、claude-sonnet-5），满足标准 OpenAI 客户端发现模型的需求。
 func (h *Handler) ListModels(c *gin.Context) {
+	seen := make(map[string]bool)
 	pipelines := h.listModelsPipelines()
-	data := make([]gin.H, 0, len(pipelines))
+	// 预分配：流水线 + 估算的后端模型数
+	data := make([]gin.H, 0, len(pipelines)+128)
+
 	for _, p := range pipelines {
 		if p == nil || strings.TrimSpace(p.ID) == "" {
 			continue
 		}
+		id := "centag/" + p.ID
+		seen[id] = true
 		data = append(data, gin.H{
-			"id":       "centag/" + p.ID,
+			"id":       id,
 			"object":   "model",
 			"created":  0,
 			"owned_by": "centag",
 		})
+	}
+
+	// 追加后端实际模型名，供标准 OpenAI 客户端（如 Claude Desktop 3P gateway）发现可用模型
+	if mgr := backend.GetManager(); mgr != nil {
+		for _, b := range mgr.List() {
+			if b == nil || !b.Enabled {
+				continue
+			}
+			for _, m := range b.SupportedModels {
+				name := strings.TrimSpace(m.RequestedModel)
+				if name == "" {
+					continue
+				}
+				if seen[name] {
+					continue
+				}
+				seen[name] = true
+				data = append(data, gin.H{
+					"id":       name,
+					"object":   "model",
+					"created":  0,
+					"owned_by": b.Name,
+				})
+			}
+		}
 	}
 
 	c.JSON(200, gin.H{

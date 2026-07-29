@@ -10,13 +10,18 @@ import (
 
 // proxyURL 构建 Centag OpenAI 兼容 base（…/v1）
 func proxyURL(host string, port int) string {
+	return proxyHostURL(host, port) + "/v1"
+}
+
+// proxyHostURL 构建 Centag 主机地址（不含路径后缀），供需要自行拼接路径的客户端使用。
+func proxyHostURL(host string, port int) string {
 	if host == "" {
 		host = "localhost"
 	}
 	if port == 0 {
 		port = 20060
 	}
-	return fmt.Sprintf("http://%s:%d/v1", host, port)
+	return fmt.Sprintf("http://%s:%d", host, port)
 }
 
 // chatCompletionsURL 构建完整 chat/completions 路径（CodeBuddy models.json 要求）
