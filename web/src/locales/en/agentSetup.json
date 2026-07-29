@@ -13,6 +13,7 @@
   "groupTuiHint": "In-process terminal agents; no local config files.",
   "groupWeb": "Built-in Web",
   "groupWebHint": "In-process browser automation agents; no local config files.",
+  "filterPlaceholder": "Search agent name or description…",
   "groupOther": "Other",
   "groupOtherHint": "Uncategorized agents.",
   "moreDetails": "More details",

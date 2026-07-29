@@ -13,6 +13,7 @@
   "groupTuiHint": "进程内终端 Agent，不写本地配置文件。",
   "groupWeb": "内置 Web",
   "groupWebHint": "进程内浏览器自动化 Agent，不写本地配置文件。",
+  "filterPlaceholder": "搜索 Agent 名称或描述…",
   "groupOther": "其他",
   "groupOtherHint": "未归类的 Agent。",
   "moreDetails": "更多详情",
