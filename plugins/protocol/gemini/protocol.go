@@ -132,14 +132,19 @@ func (p *Protocol) ParseRequest(c *gin.Context) (*plugin.ProxyRequest, error) {
 
 // HandleResponse 处理 ProxyResponse 为 Gemini 格式
 func (p *Protocol) HandleResponse(c *gin.Context, resp *plugin.ProxyResponse) error {
+	finishReason := resp.FinishReason
+	if finishReason == "" {
+		finishReason = "STOP"
+	}
 	geminiResp := geminiResponse{
 		Candidates: []candidate{
 			{
+				Index: 0,
 				Content: content{
 					Role:  "model",
 					Parts: []part{{Text: resp.Content}},
 				},
-				FinishReason: resp.FinishReason,
+				FinishReason: finishReason,
 			},
 		},
 	}
@@ -155,13 +160,19 @@ func (p *Protocol) FormatStreamChunk(model string, chunk *plugin.StreamChunk, ch
 		return ""
 	}
 
+	finishReason := chunk.FinishReason
+	if finishReason == "" && chunkIndex > 0 {
+		// Only the final chunk typically carries a finish reason; leave earlier chunks empty.
+	}
 	streamChunk := geminiStreamChunk{
 		Candidates: []candidate{
 			{
+				Index: 0,
 				Content: content{
 					Role:  "model",
 					Parts: []part{{Text: chunk.Content}},
 				},
+				FinishReason: finishReason,
 			},
 		},
 	}

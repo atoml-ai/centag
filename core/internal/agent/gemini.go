@@ -1,6 +1,9 @@
 package agent
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 // GeminiTemplate Gemini CLI 配置模板（对齐 cc-switch：.env + settings.json）
 type GeminiTemplate struct{}
@@ -8,6 +11,31 @@ type GeminiTemplate struct{}
 func (t *GeminiTemplate) AgentType() AgentType { return AgentGeminiCLI }
 func (t *GeminiTemplate) DisplayName() string  { return "Gemini CLI" }
 func (t *GeminiTemplate) Description() string  { return "Google 官方的 AI 编程助手 CLI 工具" }
+
+// geminiBaseURL 返回 Gemini CLI 专用 base URL（不带 /v1）。
+// Gemini CLI 内部会拼 /v1beta/models/...，所以 GOOGLE_GEMINI_BASE_URL 不能带 /v1。
+func geminiBaseURL(info *BackendInfo) string {
+	host := info.Host
+	if host == "" {
+		host = "localhost"
+	}
+	port := info.Port
+	if port == 0 {
+		port = 20060
+	}
+	return fmt.Sprintf("http://%s:%d", host, port)
+}
+
+// geminiModel 返回 Gemini CLI 可用的真实模型名。
+// 不使用 centag/<pipeline> 虚拟模型，因为 Gemini CLI 只认 Google 模型名。
+func geminiModel(info *BackendInfo) string {
+	model := strings.TrimSpace(info.Model)
+	// 如果用户明确指定了 Gemini 模型，直接采用；否则用默认轻量模型。
+	if strings.HasPrefix(model, "gemini-") {
+		return model
+	}
+	return "gemini-3.1-flash-lite"
+}
 
 func (t *GeminiTemplate) Meta() AgentSetupMeta {
 	return AgentSetupMeta{
@@ -23,17 +51,19 @@ func (t *GeminiTemplate) Meta() AgentSetupMeta {
 			"GEMINI_MODEL",
 			"security.auth.selectedType",
 		},
-		ConfigMethod:  "写入 ~/.gemini/.env（GEMINI_API_KEY / GOOGLE_GEMINI_BASE_URL / GEMINI_MODEL），并合并 settings.json 的 security.auth.selectedType=gemini-api-key。",
+		ConfigMethod:  "写入 ~/.gemini/.env（GEMINI_API_KEY / GOOGLE_GEMINI_BASE_URL / GEMINI_MODEL），并合并 settings.json 的 security.auth.selectedType=gemini-api-key。URL 只写到 host:port，不要带 /v1。",
 		InstallURL:    "https://github.com/google-gemini/gemini-cli",
 		InstallHint:   "npm i -g @google/gemini-cli；或 brew install gemini-cli",
 		AccessMethods: []AccessMethod{AccessWriteConfig, AccessWrapCLI},
+		VerifiedWrite: true, // 写入配置方式已验证（Gemini API → 内部协议转换）
+		VerifiedWrap:  true, // wrap 方式已验证
 		CompanionCLI:  NewCLICompanion("gemini", "https://github.com/google-gemini/gemini-cli", "npm i -g @google/gemini-cli；或 brew install gemini-cli"),
 	}
 }
 
 func (t *GeminiTemplate) ConfigFiles(info *BackendInfo) ([]ConfigFile, error) {
-	url := proxyURL(info.Host, info.Port)
-	model := defaultModel(info)
+	url := geminiBaseURL(info)
+	model := geminiModel(info)
 	envContent := fmt.Sprintf(`GEMINI_API_KEY=%s
 GOOGLE_GEMINI_BASE_URL=%s
 GEMINI_MODEL=%s
@@ -52,8 +82,8 @@ GEMINI_MODEL=%s
 }
 
 func (t *GeminiTemplate) SetupCommand(info *BackendInfo) string {
-	url := proxyURL(info.Host, info.Port)
-	model := defaultModel(info)
+	url := geminiBaseURL(info)
+	model := geminiModel(info)
 	return fmt.Sprintf(`# Gemini CLI 一键配置
 mkdir -p ~/.gemini
 cat > ~/.gemini/.env << 'EOF'
@@ -79,7 +109,7 @@ func (t *GeminiTemplate) VerifyCommand(info *BackendInfo) string {
 }
 
 func (t *GeminiTemplate) Steps(info *BackendInfo) []ConfigStep {
-	url := proxyURL(info.Host, info.Port)
+	url := geminiBaseURL(info)
 	return []ConfigStep{
 		{Title: "配置 .env", Description: fmt.Sprintf("写入 ~/.gemini/.env: %s", url)},
 		{Title: "配置 auth 类型", Description: "settings.json → security.auth.selectedType=gemini-api-key"},
@@ -88,8 +118,8 @@ func (t *GeminiTemplate) Steps(info *BackendInfo) []ConfigStep {
 }
 
 func (t *GeminiTemplate) WriteConfig(info *BackendInfo) error {
-	url := proxyURL(info.Host, info.Port)
-	model := defaultModel(info)
+	url := geminiBaseURL(info)
+	model := geminiModel(info)
 	envContent := fmt.Sprintf(`GEMINI_API_KEY=%s
 GOOGLE_GEMINI_BASE_URL=%s
 GEMINI_MODEL=%s

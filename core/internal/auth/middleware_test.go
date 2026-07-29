@@ -258,3 +258,45 @@ func TestCheckAPIKeyLimits_AllPassWithHeaders(t *testing.T) {
 		t.Error("missing budget header")
 	}
 }
+
+// ── extractBearerToken ───────────────────────────────────────────────────────
+
+func TestExtractBearerToken_AcceptsQueryParamKey(t *testing.T) {
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1beta/models/gemini-2.5-flash:generateContent?key=llmproxy_test_key", nil)
+	if got := extractBearerToken(c); got != "llmproxy_test_key" {
+		t.Errorf("expected query key 'llmproxy_test_key', got %q", got)
+	}
+}
+
+func TestExtractBearerToken_BearerOverridesQueryKey(t *testing.T) {
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1beta/models/gemini-2.5-flash:generateContent?key=query-key", nil)
+	c.Request.Header.Set("Authorization", "Bearer bearer-key")
+	if got := extractBearerToken(c); got != "bearer-key" {
+		t.Errorf("expected bearer token 'bearer-key', got %q", got)
+	}
+}
+
+func TestExtractBearerToken_AcceptsXGoogApiKeyHeader(t *testing.T) {
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1beta/models/gemini-2.5-flash:generateContent", nil)
+	c.Request.Header.Set("x-goog-api-key", "llmproxy_test_key")
+	if got := extractBearerToken(c); got != "llmproxy_test_key" {
+		t.Errorf("expected x-goog-api-key 'llmproxy_test_key', got %q", got)
+	}
+}
+
+func TestExtractBearerToken_BearerOverridesXGoogApiKey(t *testing.T) {
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1beta/models/gemini-2.5-flash:generateContent", nil)
+	c.Request.Header.Set("Authorization", "Bearer bearer-key")
+	c.Request.Header.Set("x-goog-api-key", "goog-key")
+	if got := extractBearerToken(c); got != "bearer-key" {
+		t.Errorf("expected bearer token 'bearer-key', got %q", got)
+	}
+}

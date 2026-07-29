@@ -87,7 +87,7 @@ func LoadBootstrap() *BootstrapConfig {
 			Host:         envStr("LLM_PROXY_SERVER_HOST", "0.0.0.0"),
 			Mode:         envStr("LLM_PROXY_SERVER_MODE", "release"),
 			ExternalURL:  envStr("LLM_PROXY_EXTERNAL_URL", ""),
-			Edition:      envStr("CENTAG_EDITION", "team"),
+			Edition:      envStr("CENTAG_EDITION", "personal"),
 			PprofEnabled: envBoolFirst(false, "CENTAG_PPROF", "LLM_PROXY_PPROF_ENABLED"),
 		},
 		Log: LogConfig{

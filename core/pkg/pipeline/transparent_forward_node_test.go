@@ -548,6 +548,73 @@ func TestTransparentForwardNode_AnthropicMessagesToChat(t *testing.T) {
 	}
 }
 
+func TestTransparentForwardNode_GeminiToChat(t *testing.T) {
+	inner := &mockHTTPClient{
+		status: 200,
+		body:   `{"choices":[{"message":{"role":"assistant","content":"你好"}}]}`,
+	}
+	capturing := &capturingHTTPClient{inner: inner}
+	broker := &mockCapabilityBroker{httpClient: capturing}
+
+	prevEP := ResolveBackendEndpoint
+	t.Cleanup(func() { ResolveBackendEndpoint = prevEP })
+	ResolveBackendEndpoint = func(backendID string) (*BackendEndpoint, error) {
+		return &BackendEndpoint{BaseURL: "https://opencode.ai/zen/v1", APIKey: "sk-zen"}, nil
+	}
+
+	node, err := NewTransparentForwardNode(NodeConfig{})
+	if err != nil {
+		t.Fatalf("NewTransparentForwardNode: %v", err)
+	}
+	tf := node.(*TransparentForwardNode)
+	tf.BaseNode.id = "forward"
+	tf.SetCapabilityBroker(broker)
+
+	out, err := tf.Execute(context.Background(), &NodeInput{
+		Metadata: map[string]interface{}{
+			"backend_id":   "opencode-zen",
+			"request_path": "/v1beta/models/gemini-3.1-flash-lite:generateContent",
+			"raw_request_body": `{
+				"contents":[{"role":"user","parts":[{"text":"你好"}]}],
+				"generationConfig":{"temperature":0.7,"maxOutputTokens":1024}
+			}`,
+		},
+	})
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if !strings.HasSuffix(inner.lastReq.URL.Path, "/chat/completions") {
+		t.Fatalf("url=%v", inner.lastReq.URL)
+	}
+	var upstream map[string]interface{}
+	if err := json.Unmarshal([]byte(capturing.body), &upstream); err != nil {
+		t.Fatalf("upstream body json: %v body=%s", err, capturing.body)
+	}
+	if _, hasContents := upstream["contents"]; hasContents {
+		t.Fatalf("upstream body still has Gemini contents: %s", capturing.body)
+	}
+	if !strings.Contains(capturing.body, `"messages"`) {
+		t.Fatalf("upstream body missing messages: %s", capturing.body)
+	}
+	msgs, _ := upstream["messages"].([]interface{})
+	if len(msgs) != 1 {
+		t.Fatalf("messages count=%d, want 1", len(msgs))
+	}
+	msg, _ := msgs[0].(map[string]interface{})
+	if msg["role"] != "user" || msg["content"] != "你好" {
+		t.Fatalf("message=%v, want user/你好", msg)
+	}
+	if upstream["temperature"] != 0.7 {
+		t.Fatalf("temperature=%v, want 0.7", upstream["temperature"])
+	}
+	if out.Metadata["raw_passthrough"] != false {
+		t.Fatalf("raw_passthrough=%v, want false", out.Metadata["raw_passthrough"])
+	}
+	if out.Content != "你好" {
+		t.Fatalf("content=%q, want extracted assistant text", out.Content)
+	}
+}
+
 func TestTransparentForwardNode_ResponsesToChat_ReasoningOnlyStillDisablesPassthrough(t *testing.T) {
 	inner := &mockHTTPClient{
 		status: 200,
@@ -1160,8 +1227,8 @@ func TestTransparentForwardNode_SystemPromptStrategy_Passthrough(t *testing.T) {
 
 	node, err := NewTransparentForwardNode(NodeConfig{
 		CustomConfig: map[string]interface{}{
-			"inject_system_prompt":       true,
-			"system_prompt_strategy":     "passthrough",
+			"inject_system_prompt":   true,
+			"system_prompt_strategy": "passthrough",
 		},
 		SystemPrompt: "gateway system",
 	})

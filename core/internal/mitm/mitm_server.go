@@ -21,11 +21,11 @@ import (
 
 // Server MITM代理服务器
 type Server struct {
-	addr          string
-	certManager   *cert.CertManager
-	backendAddr   string // 后端LLM Proxy地址
-	httpServer    *http.Server
-	tlsConfig     *tls.Config
+	addr             string
+	certManager      *cert.CertManager
+	backendAddr      string // 后端LLM Proxy地址
+	httpServer       *http.Server
+	tlsConfig        *tls.Config
 	mu               sync.RWMutex
 	targetDomains    map[string]bool // 需要代理的目标域名（热更新）
 	pathPatterns     []string        // 需要代理的路径模式（热更新）
@@ -518,6 +518,11 @@ func convertBackendPath(originalPath string) string {
 	}
 	// Already on Centag OpenAI-compatible surface.
 	if strings.HasPrefix(originalPath, "/v1/") || originalPath == "/v1" {
+		return originalPath
+	}
+	// Preserve /v1beta/ prefix for Google Gemini API (centag routes
+	// POST /v1beta/models/*action directly — do NOT strip "beta").
+	if strings.HasPrefix(originalPath, "/v1beta/") {
 		return originalPath
 	}
 	// Generic: …/v1/foo → /v1/foo (covers /zen/v1/…, /openai/v1/…, /gateway/v1/…)
