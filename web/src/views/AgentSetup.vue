@@ -16,6 +16,16 @@
         <div class="section-block">
           <p class="section-hint section-hint--multiline">{{ $t('agentSetup.quickSetupHint') }}</p>
 
+          <div class="agent-filter-bar">
+            <el-input
+              v-model="filterText"
+              :placeholder="$t('agentSetup.filterPlaceholder')"
+              clearable
+              prefix-icon="Search"
+              class="agent-filter-input"
+            />
+          </div>
+
           <div
             v-for="group in agentGroups"
             :key="group.id"
@@ -29,7 +39,7 @@
               <el-col
                 v-for="agent in group.agents"
                 :key="agent.type"
-                :xs="24" :sm="12" :md="8"
+                :xs="24" :sm="12" :md="12"
                 class="agent-card-col"
               >
                 <div
@@ -631,7 +641,7 @@ import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useRouter } from 'vue-router'
 import {
-  Link, DocumentCopy, Plus,
+  Link, DocumentCopy, Plus, Search,
   Monitor, ChatDotRound, DataLine, Connection, Cpu
 } from '@element-plus/icons-vue'
 import { isPersonalEdition } from '@/utils/edition'
@@ -665,6 +675,7 @@ const loadingConfig = ref(false)
 const writingConfig = ref(false)
 const restoringAgent = ref('')
 const platformTab = ref('macos')
+const filterText = ref('')
 interface CompanionCLIInfo {
   binary?: string
   argv?: string[]
@@ -693,6 +704,7 @@ interface AgentTypeInfo {
   display_name: string
   description: string
   category?: string
+  vendor?: string
   write_mode?: string
   config_paths?: string[]
   key_fields?: string[]
@@ -777,8 +789,17 @@ function companionInstallHint(agent: AgentTypeInfo): string {
   return agent.companion_cli?.install_hint || agent.install_hint || ''
 }
 
-/** 仅按形态分组；组内按验证完整度优先 */
+/** 品牌分组顺序 */
+const vendorOrder = [
+  'Anthropic', 'OpenAI', 'Google', 'xAI',
+  '腾讯云', '字节跳动',
+  'OpenCode', 'OpenClaw', 'Pi', 'Hermes',
+]
+
+/** 按品牌分组；隐藏内置 agent（tui/web）；支持搜索过滤 */
 const agentGroups = computed<AgentGroup[]>(() => {
+  const q = filterText.value.trim().toLowerCase()
+
   const sortInGroup = (agents: AgentTypeInfo[]) =>
     [...agents].sort((a, b) => {
       const d = agentVerifyScore(b) - agentVerifyScore(a)
@@ -786,29 +807,27 @@ const agentGroups = computed<AgentGroup[]>(() => {
       return a.type.localeCompare(b.type)
     })
 
-  const sections: Array<{ id: string; cat: string; titleKey: string; hintKey: string }> = [
-    { id: 'cli', cat: 'cli', titleKey: 'agentSetup.groupCli', hintKey: 'agentSetup.groupCliHint' },
-    { id: 'desktop', cat: 'desktop', titleKey: 'agentSetup.groupDesktop', hintKey: 'agentSetup.groupDesktopHint' },
-    { id: 'tui', cat: 'tui', titleKey: 'agentSetup.groupTui', hintKey: 'agentSetup.groupTuiHint' },
-    { id: 'web', cat: 'web', titleKey: 'agentSetup.groupWeb', hintKey: 'agentSetup.groupWebHint' },
-  ]
+  // 过滤：排除内置 agent，按关键字搜索
+  const filtered = agentTypes.value.filter(a => {
+    if (a.category === 'tui' || a.category === 'web') return false
+    if (!q) return true
+    const name = (a.display_name || a.type || '').toLowerCase()
+    const desc = (a.description || '').toLowerCase()
+    const vendor = (a.vendor || '').toLowerCase()
+    return name.includes(q) || desc.includes(q) || vendor.includes(q)
+  })
 
   const groups: AgentGroup[] = []
-  const known = new Set(sections.map(s => s.cat))
-  for (const s of sections) {
-    const agents = sortInGroup(
-      agentTypes.value.filter(a => (a.category || 'cli') === s.cat)
-    )
+  const knownVendors = new Set(vendorOrder)
+
+  for (const v of vendorOrder) {
+    const agents = sortInGroup(filtered.filter(a => a.vendor === v))
     if (!agents.length) continue
-    groups.push({
-      id: s.id,
-      title: t(s.titleKey),
-      hint: t(s.hintKey),
-      agents,
-    })
+    groups.push({ id: v, title: v, hint: '', agents })
   }
+
   const other = sortInGroup(
-    agentTypes.value.filter(a => !known.has(a.category || 'cli'))
+    filtered.filter(a => !knownVendors.has(a.vendor || ''))
   )
   if (other.length) {
     groups.push({
@@ -1388,18 +1407,27 @@ onMounted(() => {
   white-space: pre-line;
 }
 
+.agent-filter-bar {
+  margin-bottom: 16px;
+  max-width: 400px;
+}
+
+.agent-filter-input {
+  width: 100%;
+}
+
 .agent-group {
-  margin-bottom: 32px;
-  padding-top: 4px;
+  margin-bottom: 24px;
+  padding-top: 2px;
 }
 
 .agent-group + .agent-group {
   border-top: 1px solid #ebeef5;
-  padding-top: 24px;
+  padding-top: 16px;
 }
 
 .agent-group-header {
-  margin-bottom: 14px;
+  margin-bottom: 10px;
 }
 
 .agent-group-title {
@@ -1410,7 +1438,7 @@ onMounted(() => {
 }
 
 .agent-group-hint {
-  margin: 4px 0 0;
+  margin: 2px 0 0;
   font-size: 0.8rem;
   color: #909399;
   line-height: 1.45;
@@ -1419,19 +1447,19 @@ onMounted(() => {
 
 /* Agent cards — 纵向间距放在列上，避免 height:100% 把卡片 margin 顶没 */
 .agent-card-col {
-  margin-bottom: 16px;
+  margin-bottom: 12px;
 }
 
 .agent-card {
   height: 100%;
   border: 1px solid #e4e7ed;
-  border-radius: 10px;
-  padding: 14px 16px 6px;
+  border-radius: 8px;
+  padding: 10px 14px 4px;
   cursor: default;
   transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 6px;
   background: #fff;
   box-sizing: border-box;
 }
@@ -1453,13 +1481,13 @@ onMounted(() => {
 .agent-card-head {
   display: flex;
   align-items: flex-start;
-  gap: 10px;
+  gap: 8px;
 }
 
 .agent-icon {
-  width: 36px;
-  height: 36px;
-  border-radius: 8px;
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
   background: #f5f7fa;
   display: flex;
   align-items: center;
@@ -1486,25 +1514,25 @@ onMounted(() => {
 .agent-name {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   flex-wrap: wrap;
-  margin-bottom: 2px;
+  margin-bottom: 1px;
 }
 
 .agent-name-text {
   font-weight: 600;
-  font-size: 0.95rem;
+  font-size: 1rem;
   color: #303133;
   line-height: 1.3;
 }
 
 .agent-desc {
   color: #909399;
-  font-size: 0.78rem;
-  line-height: 1.4;
+  font-size: 0.82rem;
+  line-height: 1.35;
   display: -webkit-box;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
+  -webkit-line-clamp: 1;
+  line-clamp: 1;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
@@ -1512,12 +1540,12 @@ onMounted(() => {
 .access-methods {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 4px;
 }
 
 .access-method {
-  padding: 8px 10px;
-  border-radius: 8px;
+  padding: 5px 8px;
+  border-radius: 6px;
   background: #f8f9fb;
   border: 1px solid #eef0f4;
 }
@@ -1568,7 +1596,7 @@ onMounted(() => {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 10px;
+  gap: 8px;
 }
 
 .access-method-actions {
@@ -1577,25 +1605,25 @@ onMounted(() => {
   flex-wrap: wrap;
   justify-content: flex-end;
   align-items: center;
-  gap: 8px;
+  gap: 4px;
 }
 
 .access-method-titles {
   display: flex;
   align-items: flex-start;
-  gap: 8px;
+  gap: 6px;
   min-width: 0;
 }
 
 .access-method-index {
   flex-shrink: 0;
-  width: 18px;
-  height: 18px;
-  margin-top: 1px;
+  width: 16px;
+  height: 16px;
+  margin-top: 2px;
   border-radius: 50%;
   background: #e4e7ed;
   color: #606266;
-  font-size: 0.68rem;
+  font-size: 0.7rem;
   font-weight: 600;
   display: inline-flex;
   align-items: center;
@@ -1604,17 +1632,17 @@ onMounted(() => {
 }
 
 .access-method-title {
-  font-size: 0.82rem;
+  font-size: 0.85rem;
   font-weight: 600;
   color: #303133;
   line-height: 1.3;
 }
 
 .access-method-hint {
-  margin: 2px 0 0;
-  font-size: 0.72rem;
+  margin: 1px 0 0;
+  font-size: 0.75rem;
   color: #909399;
-  line-height: 1.4;
+  line-height: 1.35;
 }
 
 .access-method-hint--multiline {
@@ -1802,7 +1830,7 @@ onMounted(() => {
 .agent-meta-collapse {
   border: none;
   margin-top: auto;
-  --el-collapse-header-height: 32px;
+  --el-collapse-header-height: 26px;
 }
 
 .agent-meta-collapse :deep(.el-collapse-item__header) {
@@ -1810,8 +1838,8 @@ onMounted(() => {
   color: #909399;
   border: none;
   background: transparent;
-  height: 32px;
-  line-height: 32px;
+  height: 26px;
+  line-height: 26px;
 }
 
 .agent-meta-collapse :deep(.el-collapse-item__wrap) {
@@ -1820,7 +1848,7 @@ onMounted(() => {
 }
 
 .agent-meta-collapse :deep(.el-collapse-item__content) {
-  padding-bottom: 8px;
+  padding-bottom: 4px;
 }
 
 .meta-block,

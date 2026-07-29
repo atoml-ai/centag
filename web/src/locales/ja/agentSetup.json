@@ -13,6 +13,7 @@
   "groupTuiHint": "プロセス内ターミナル Agent。ローカル設定ファイルは書きません。",
   "groupWeb": "内蔵 Web",
   "groupWebHint": "プロセス内ブラウザ自動化 Agent。ローカル設定ファイルは書きません。",
+  "filterPlaceholder": "Agent 名や説明を検索…",
   "groupOther": "その他",
   "groupOtherHint": "未分類の Agent。",
   "moreDetails": "詳細を見る",
