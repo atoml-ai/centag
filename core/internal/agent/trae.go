@@ -25,6 +25,7 @@ func (t *TraeTemplate) Description() string {
 func (t *TraeTemplate) Meta() AgentSetupMeta {
 	return AgentSetupMeta{
 		Category:  AgentCategoryDesktop,
+		Vendor:    "字节跳动",
 		WriteMode: WriteModeNone,
 		ConfigPaths: []string{
 			traeSetupGuideLogicalPath(),

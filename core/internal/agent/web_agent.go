@@ -102,6 +102,7 @@ func (w *WebAgentTemplate) WriteConfig(info *BackendInfo) error { return nil }
 func (w *WebAgentTemplate) Meta() AgentSetupMeta {
 	return AgentSetupMeta{
 		Category:      AgentCategoryWeb,
+		Vendor:        "OpenCode",
 		WriteMode:     WriteModeNone,
 		ConfigPaths:   nil,
 		KeyFields:     nil,
@@ -275,6 +276,7 @@ func (w *webConfigTemplate) Description() string                           { ret
 func (w *webConfigTemplate) Meta() AgentSetupMeta {
 	return AgentSetupMeta{
 		Category:      AgentCategoryWeb,
+		Vendor:        "OpenCode",
 		WriteMode:     WriteModeNone,
 		ConfigMethod:  "Web Agent 不通过写入本地配置文件接入 Centag；由浏览器自动化与进程内路由绑定。",
 		InstallHint:   "内置能力，无需单独安装 CLI",

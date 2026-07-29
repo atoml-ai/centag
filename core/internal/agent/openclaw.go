@@ -14,6 +14,7 @@ func (t *OpenClawTemplate) Description() string {
 func (t *OpenClawTemplate) Meta() AgentSetupMeta {
 	return AgentSetupMeta{
 		Category:  AgentCategoryCLI,
+		Vendor:    VendorOpenClaw,
 		WriteMode: WriteModeMerge,
 		ConfigPaths: []string{
 			"~/.openclaw/openclaw.json",

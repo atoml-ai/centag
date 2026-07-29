@@ -12,6 +12,7 @@ func (t *GrokBuildTemplate) Description() string  { return "xAI Grok 编程助�
 func (t *GrokBuildTemplate) Meta() AgentSetupMeta {
 	return AgentSetupMeta{
 		Category:  AgentCategoryCLI,
+		Vendor:    VendorXAI,
 		WriteMode: WriteModeOverwrite,
 		ConfigPaths: []string{
 			"~/.grok/config.toml",
