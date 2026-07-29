@@ -1283,6 +1283,7 @@ debug() {
 
     # 覆盖 secrets 中的 edition；对齐 ~/.centag/lib/personal
     centag_set_edition personal
+    export INITDATA_PATH="${PROJECT_ROOT}/config/initdata"
 
     # ── 清理所有残留进程（保证前台独占）──────────────────────────
     cleanup_residual_processes
@@ -1454,6 +1455,7 @@ run_edition() {
     fi
 
     load_env
+    export INITDATA_PATH="${PROJECT_ROOT}/config/initdata"
 
     if ! $with_desktop; then
         print_info "启动 ${run_edition} CLI: ${sidecar}"
