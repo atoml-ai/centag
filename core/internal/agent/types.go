@@ -159,8 +159,23 @@ const (
 )
 
 // AgentSetupMeta Agent 接入元数据（卡片展示 / 调试用）
+// 预定义的 Vendor 品牌常量。新增 Agent 时请复用这些常量，或按需追加。
+const (
+	VendorAnthropic  = "Anthropic"
+	VendorOpenAI     = "OpenAI"
+	VendorGoogle     = "Google"
+	VendorXAI       = "xAI"
+	VendorTencent   = "腾讯云"
+	VendorByteDance = "字节跳动"
+	VendorOpenCode  = "OpenCode"
+	VendorOpenClaw  = "OpenClaw"
+	VendorPi        = "Pi"
+	VendorHermes    = "Hermes"
+)
+
 type AgentSetupMeta struct {
 	Category     AgentCategory `json:"category"`
+	Vendor       string        `json:"vendor"` // 品牌分组，使用本文件顶部的 VendorXxx 常量
 	WriteMode    string        `json:"write_mode"` // overwrite | merge | none
 	ConfigPaths  []string      `json:"config_paths"`
 	KeyFields    []string      `json:"key_fields"`
