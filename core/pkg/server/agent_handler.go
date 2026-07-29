@@ -53,6 +53,7 @@ func (h *AgentHandler) ListAgentTypes(c *gin.Context) {
 		DisplayName    string               `json:"display_name"`
 		Description    string               `json:"description"`
 		Category       agent.AgentCategory  `json:"category"`
+		Vendor         string               `json:"vendor"`
 		WriteMode      string               `json:"write_mode"`
 		ConfigPaths    []string             `json:"config_paths"`
 		KeyFields      []string             `json:"key_fields"`
@@ -81,6 +82,7 @@ func (h *AgentHandler) ListAgentTypes(c *gin.Context) {
 			DisplayName:   t.DisplayName(),
 			Description:   t.Description(),
 			Category:      meta.Category,
+			Vendor:        meta.Vendor,
 			WriteMode:     meta.WriteMode,
 			ConfigPaths:   meta.ConfigPaths,
 			KeyFields:     meta.KeyFields,
