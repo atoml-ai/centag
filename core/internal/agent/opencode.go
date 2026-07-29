@@ -6,8 +6,8 @@ import "fmt"
 type OpenCodeTemplate struct{}
 
 func (t *OpenCodeTemplate) AgentType() AgentType { return AgentOpenCode }
-func (t *OpenCodeTemplate) DisplayName() string  { return "OpenCode" }
-func (t *OpenCodeTemplate) Description() string  { return "AI 编程助手 (opencode.ai)" }
+func (t *OpenCodeTemplate) DisplayName() string  { return "OpenCode（CLI/Desktop）" }
+func (t *OpenCodeTemplate) Description() string  { return "AI 编程助手，支持 CLI 与 Desktop 模式 (opencode.ai)" }
 
 func (t *OpenCodeTemplate) Meta() AgentSetupMeta {
 	return AgentSetupMeta{
