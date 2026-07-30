@@ -17,10 +17,10 @@ services:
     networks:
       - centag-network
     volumes:
-      - ./data/storage:/app/storage
-      - ./data/logs:/app/logs
-      - ./data/plugins:/app/plugins
-      - ./data/bin/certs:/app/bin/certs
+      - centag-storage:/app/storage
+      - centag-logs:/app/logs
+      - centag-plugins:/app/plugins
+      - centag-certs:/app/bin/certs
       - /etc/localtime:/etc/localtime:ro
       - /etc/timezone:/etc/localtime:ro
     healthcheck:
@@ -29,6 +29,12 @@ services:
       timeout: 5s
       retries: 3
       start_period: 10s
+
+volumes:
+  centag-storage:
+  centag-logs:
+  centag-plugins:
+  centag-certs:
 
 networks:
   centag-network:

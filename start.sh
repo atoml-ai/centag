@@ -21,7 +21,7 @@ readonly NC='\033[0m'
 
 # Project config
 readonly PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-readonly BACKEND_PORT=20060
+BACKEND_PORT=20060
 
 cd "$PROJECT_ROOT" || exit 1
 
@@ -84,34 +84,63 @@ kill_port() {
 
     print_info "Checking port $port for running processes..."
 
+    # Docker-aware: if port is mapped by a container, stop it gracefully
+    if command -v docker >/dev/null 2>&1 && docker ps --format '{{.Names}}' 2>/dev/null | grep -q .; then
+        local container_on_port
+        container_on_port=$(docker ps --filter "publish=$port" --format '{{.Names}}' 2>/dev/null | head -1)
+        if [ -n "$container_on_port" ]; then
+            print_warn "Port $port is used by Docker container: $container_on_port"
+            print_info "Stopping container $container_on_port..."
+            if docker stop "$container_on_port" >/dev/null 2>&1; then
+                print_success "Container $container_on_port stopped"
+                return 0
+            fi
+        fi
+    fi
+
     # 方法1: 使用 lsof (最可靠)
     if command -v lsof >/dev/null 2>&1; then
         pids=$(lsof -ti ":$port" 2>/dev/null || true)
 
         if [ -n "$pids" ]; then
-            print_warn "Found processes on port $port (lsof): $pids"
-            found=1
-
-            # 尝试正常终止
+            # Filter out Docker proxy/hyperkit PIDs to avoid killing Docker
+            local filtered_pids=""
             for pid in $pids; do
-                if kill -0 "$pid" 2>/dev/null; then
-                    print_info "Sending TERM signal to PID $pid..."
-                    kill -TERM "$pid" 2>/dev/null || true
+                local comm
+                comm=$(ps -p "$pid" -o comm= 2>/dev/null || true)
+                if echo "$comm" | grep -qiE "docker|com\.docker|vpnkit|hyperkit"; then
+                    print_info "Skipping Docker-related PID $pid ($comm)"
+                else
+                    filtered_pids="$filtered_pids $pid"
                 fi
             done
+            pids="$filtered_pids"
 
-            # 等待进程退出
-            sleep 2
+            if [ -n "$pids" ]; then
+                print_warn "Found processes on port $port (lsof): $pids"
+                found=1
 
-            # 检查是否还存活,强制杀死
-            for pid in $pids; do
-                if kill -0 "$pid" 2>/dev/null; then
-                    print_warn "Process $pid still alive, forcing kill..."
-                    kill -9 "$pid" 2>/dev/null || true
-                fi
-            done
+                # 尝试正常终止
+                for pid in $pids; do
+                    if kill -0 "$pid" 2>/dev/null; then
+                        print_info "Sending TERM signal to PID $pid..."
+                        kill -TERM "$pid" 2>/dev/null || true
+                    fi
+                done
 
-            sleep 1
+                # 等待进程退出
+                sleep 2
+
+                # 检查是否还存活,强制杀死
+                for pid in $pids; do
+                    if kill -0 "$pid" 2>/dev/null; then
+                        print_warn "Process $pid still alive, forcing kill..."
+                        kill -9 "$pid" 2>/dev/null || true
+                    fi
+                done
+
+                sleep 1
+            fi
         fi
     fi
 
@@ -181,19 +210,55 @@ kill_port() {
 }
 
 # 清理后端端口，失败时中止并打印占用进程信息。
-kill_backend_port_or_exit() {
-    if kill_port "$BACKEND_PORT"; then
-        return 0
-    fi
-    print_error "端口 $BACKEND_PORT 清理失败，已中止启动，避免新旧进程混跑。"
-    if command -v lsof >/dev/null 2>&1; then
-        local occupied
-        occupied=$(lsof -nP -iTCP:"$BACKEND_PORT" -sTCP:LISTEN 2>/dev/null || true)
-        if [ -n "$occupied" ]; then
-            print_warn "当前占用端口的进程："
-            echo "$occupied"
+resolve_backend_port() {
+    local port=$BACKEND_PORT
+    local max_attempts=10
+
+    for ((i=0; i<=max_attempts; i++)); do
+        local candidate=$((port + i))
+        local in_use=false
+
+        if command -v lsof >/dev/null 2>&1 && lsof -ti ":$candidate" 2>/dev/null | grep -q .; then
+            local pids
+            pids=$(lsof -ti ":$candidate" 2>/dev/null)
+            local docker_only=true
+
+            for pid in $pids; do
+                local comm
+                comm=$(ps -p "$pid" -o comm= 2>/dev/null || true)
+                if echo "$comm" | grep -qiE "docker|com\.docker|vpnkit|hyperkit"; then
+                    # Docker 进程，尝试停止对应容器
+                    local container
+                    container=$(docker ps --filter "publish=$candidate" --format '{{.Names}}' 2>/dev/null | head -1)
+                    if [ -n "$container" ]; then
+                        print_info "端口 $candidate 被容器 $container 占用，正在停止..."
+                        docker stop "$container" >/dev/null 2>&1 || true
+                        sleep 1
+                    else
+                        docker_only=false
+                    fi
+                else
+                    docker_only=false
+                fi
+            done
+
+            if ! $docker_only; then
+                # 有非 Docker 进程占用，尝试切换端口
+                in_use=true
+            fi
+            # 如果全是 Docker 进程，上面已停容器，端口已释放，不标记 in_use
         fi
-    fi
+
+        if ! $in_use; then
+            if [ "$candidate" -ne "$BACKEND_PORT" ]; then
+                print_warn "端口 $BACKEND_PORT 已被占用，自动切换到端口 $candidate"
+                BACKEND_PORT=$candidate
+            fi
+            return 0
+        fi
+    done
+
+    print_error "端口 $port-$((port+max_attempts)) 均被占用，请手动释放后重试"
     return 1
 }
 
@@ -1151,7 +1216,7 @@ stack_cmd() {
 # Run
 run() {
     load_env
-    kill_backend_port_or_exit || return 1
+    resolve_backend_port || return 1
     [ ! -f "$BIN_DIR/$SERVER_BIN" ] && build
     print_test_examples
     cd "$BIN_DIR"
@@ -1254,6 +1319,13 @@ detect_database_mode() {
 debug() {
     local edition="${1:-personal}"
     local with_desktop="${2:-false}"
+    local with_docker="${3:-false}"
+
+    # ── Docker 调试模式（前台容器）────────────────────────────
+    if $with_docker; then
+        _debug_docker "$edition"
+        return
+    fi
 
     # ── minimal 分支：精简 WebUI + centag-minimal ─────────────────
     if [ "$edition" = "minimal" ]; then
@@ -1290,7 +1362,7 @@ debug() {
 
     rm -f "$BIN_DIR/storage/centag.pid" 2>/dev/null || true
 
-    kill_backend_port_or_exit || return 1
+    resolve_backend_port || return 1
 
     check_go
     print_info "编译后端 (edition=personal)..."
@@ -1509,7 +1581,7 @@ _debug_minimal() {
 
     cleanup_residual_processes
     rm -f "$BIN_DIR/storage/centag.pid" 2>/dev/null || true
-    kill_backend_port_or_exit || return 1
+    resolve_backend_port || return 1
 
     check_go
     print_info "编译 minimal 发行版后端..."
@@ -1583,6 +1655,64 @@ _debug_minimal() {
     fi
 }
 
+# ── Docker 调试模式：构建镜像并前台运行容器 ─────────────────────────
+# $1: edition (personal|minimal)
+_debug_docker() {
+    local edition="$1"
+    local dist_name
+    dist_name="$(edition_to_dist "$edition")"
+
+    load_env
+
+    print_info "Docker 调试模式: ${edition}"
+    echo ""
+
+    # 确保 Docker 可用
+    check_docker
+
+    # 构建 Docker 镜像
+    _dist_docker_build "$dist_name" "" ""
+
+    # 自动寻找可用端口（如果被容器占用则先停容器）
+    resolve_backend_port
+
+    local tag="centag-${dist_name}:latest"
+    local mitm_port="${LLM_PROXY_SYSTEM_PROXY_PORT:-8081}"
+
+    # 确保数据卷存在
+    docker volume inspect "centag-${dist_name}-storage" >/dev/null 2>&1 || docker volume create "centag-${dist_name}-storage"
+    docker volume inspect "centag-${dist_name}-logs" >/dev/null 2>&1 || docker volume create "centag-${dist_name}-logs"
+    docker volume inspect "centag-${dist_name}-certs" >/dev/null 2>&1 || docker volume create "centag-${dist_name}-certs"
+
+    echo ""
+    print_info "════════════════════════════════════════"
+    print_info "  Docker 调试模式已启动"
+    print_info "  产品版本:    ${edition}"
+    print_info "  访问地址:    http://localhost:${BACKEND_PORT}"
+    print_info "  按 Ctrl+C 停止容器"
+    print_info "════════════════════════════════════════"
+    echo ""
+
+    exec docker run -it --rm \
+        --name "centag-${dist_name}" \
+        --env-file "${PROJECT_ROOT}/config/secrets/.env" \
+        -e CENTAG_EDITION="${dist_name}" \
+        -e CENTAG_IN_DOCKER=1 \
+        -e CENTAG_DATA_DIR=/app/storage \
+        -e LLM_PROXY_DB_DRIVER=sqlite \
+        -e SQLITE_PATH=/app/storage/centag.db \
+        -e MEMORY_STORE_ROOT=/app/storage/memory-store \
+        -e LLM_PROXY_LOG_OUTPUT=both \
+        -e LLM_PROXY_LOG_FORMAT=console \
+        -e LLM_PROXY_LOG_PATH=/app/logs \
+        -p "${BACKEND_PORT}:20060" \
+        -p "${mitm_port}:8081" \
+        -v "centag-${dist_name}-storage:/app/storage" \
+        -v "centag-${dist_name}-logs:/app/logs" \
+        -v "centag-${dist_name}-certs:/app/bin/certs" \
+        "$tag"
+}
+
 # Daemon
 daemon() {
     load_env
@@ -1595,7 +1725,7 @@ daemon-debug() {
     load_env
     detect_database_mode
     centag_export_debug_console_env
-    kill_backend_port_or_exit || return 1
+    resolve_backend_port || return 1
     [ ! -f "$BIN_DIR/$SERVER_BIN" ] && build backend >/dev/null 2>&1
     print_test_examples
     print_info "Starting with daemon in debug mode from: $BIN_DIR..."
@@ -2302,7 +2432,7 @@ test() {
 # 启动后端服务（前台）
 start_backend_foreground() {
     load_env
-    kill_backend_port_or_exit || return 1
+    resolve_backend_port || return 1
     [ ! -f "$BIN_DIR/$SERVER_BIN" ] && build backend >/dev/null 2>&1
     print_test_examples
     cd "$BIN_DIR"
@@ -2314,7 +2444,7 @@ start_backend_foreground() {
 # 启动后端服务（后台/守护进程）
 start_backend_background() {
     load_env
-    kill_backend_port_or_exit || return 1
+    resolve_backend_port || return 1
     [ ! -f "$BIN_DIR/$SERVER_BIN" ] && build backend >/dev/null 2>&1
     print_test_examples
     print_info "Starting daemon from: $BIN_DIR..."
@@ -2332,7 +2462,7 @@ _run_all_dev() {
     detect_database_mode
     centag_export_debug_console_env
 
-    kill_backend_port_or_exit || return 1
+    resolve_backend_port || return 1
     [ ! -f "$BIN_DIR/$SERVER_BIN" ] && build backend >/dev/null 2>&1
 
     print_info "Starting backend in background (port: $BACKEND_PORT)..."
@@ -2522,6 +2652,23 @@ _dist_docker_run() {
 
     load_env
 
+    # 自动寻找可用端口
+    local max_attempts=10
+    for ((i=0; i<=max_attempts; i++)); do
+        local candidate=$((port + i))
+        if ! command -v lsof >/dev/null 2>&1 || ! lsof -ti ":$candidate" 2>/dev/null | grep -q .; then
+            if [ "$candidate" -ne "$port" ]; then
+                print_warn "端口 $port 已被占用，自动切换到端口 $candidate"
+                port=$candidate
+            fi
+            break
+        fi
+        if [ "$i" -eq "$max_attempts" ]; then
+            print_error "端口 $port-$((port+max_attempts)) 均被占用，请手动释放后重试"
+            return 1
+        fi
+    done
+
     print_info "启动容器: ${tag} (端口 ${port})..."
     # 覆盖 secrets 里常见的 LLM_PROXY_LOG_OUTPUT=file：否则 zap 只写
     # /app/bin/logs，docker logs 只能看到 entrypoint/插件 std 初始化行。
@@ -2532,25 +2679,23 @@ _dist_docker_run() {
     #   二进制在 /app/bin/centag，相对路径 ./storage 会落到 /app/bin/storage（不可持久）。
     #   必须用绝对 SQLITE_PATH=/app/storage/centag.db，并挂载宿主机目录。
     local mitm_port="${LLM_PROXY_SYSTEM_PROXY_PORT:-8081}"
-    local data_root="${PROJECT_ROOT}/var/docker-data/${dist_name}"
-    mkdir -p "${data_root}/storage" "${data_root}/logs" "${data_root}/certs" "${data_root}/storage/memory-store"
-
     if [ "$reset_data" = "true" ]; then
-        print_warn "重置 ${dist_name} 本地数据: ${data_root}/storage"
-        rm -f "${data_root}/storage/centag.db" "${data_root}/storage/admin.password.hash"
-        print_info "已删除旧数据库/密码文件，容器将重新 seed"
+        print_warn "重置 ${dist_name} 数据卷..."
+        docker volume rm -f "centag-${dist_name}-storage" "centag-${dist_name}-logs" "centag-${dist_name}-certs" 2>/dev/null || true
+        print_info "已删除数据卷，容器将重新 seed"
     fi
 
-    print_info "持久化目录: ${data_root}/{storage,logs,certs}"
-    print_info "  - SQLite:  ${data_root}/storage/centag.db"
-    print_info "  - 配置:    personal→SQLite system_config；minimal→storage/proxy-config.yaml"
-    print_info "  - MITM CA: ${data_root}/certs/"
-    local docker_run_tty_flags=""
-    if [ -t 0 ]; then
-        docker_run_tty_flags="-it"
-    fi
+    # 确保数据卷存在
+    docker volume inspect "centag-${dist_name}-storage" >/dev/null 2>&1 || docker volume create "centag-${dist_name}-storage"
+    docker volume inspect "centag-${dist_name}-logs" >/dev/null 2>&1 || docker volume create "centag-${dist_name}-logs"
+    docker volume inspect "centag-${dist_name}-certs" >/dev/null 2>&1 || docker volume create "centag-${dist_name}-certs"
 
-    exec docker run --rm ${docker_run_tty_flags} \
+    print_info "数据卷:"
+    print_info "  - centag-${dist_name}-storage (SQLite + 配置)"
+    print_info "  - centag-${dist_name}-logs"
+    print_info "  - centag-${dist_name}-certs (MITM CA)"
+    print_info "启动容器 (后台): centag-${dist_name}"
+    docker run -d --rm \
         --name "centag-${dist_name}" \
         --env-file "${PROJECT_ROOT}/config/secrets/.env" \
         -e CENTAG_EDITION="${dist_name}" \
@@ -2564,10 +2709,15 @@ _dist_docker_run() {
         -e LLM_PROXY_LOG_PATH=/app/logs \
         -p "${port}:20060" \
         -p "${mitm_port}:8081" \
-        -v "${data_root}/storage:/app/storage" \
-        -v "${data_root}/logs:/app/logs" \
-        -v "${data_root}/certs:/app/bin/certs" \
+        -v "centag-${dist_name}-storage:/app/storage" \
+        -v "centag-${dist_name}-logs:/app/logs" \
+        -v "centag-${dist_name}-certs:/app/bin/certs" \
         "$tag"
+
+    echo ""
+    print_success "容器 centag-${dist_name} 已后台启动"
+    print_info "查看日志: docker logs -f centag-${dist_name}"
+    print_info "停止容器: docker stop centag-${dist_name}"
 }
 
 # Docker Compose：附加 config/secrets/.env 作为「项目级」变量，供 compose 文件中 ${VAR} 插值（与容器内 env_file 无关）
@@ -3325,7 +3475,7 @@ _help_debug() {
     echo -e "       ${YELLOW}开发调试模式（先构建再以 debug 启动）${NC}"
     echo ""
     echo -e "${CYAN}用法:${NC}"
-    echo -e "  ./start.sh debug [personal|minimal] [--desktop]"
+    echo -e "  ./start.sh debug [personal|minimal] [--desktop|--docker]"
     echo ""
     echo -e "${CYAN}发行版:${NC}"
     echo -e "  ${GREEN}personal${NC}           CENTAG_EDITION=personal + 开源全功能二进制（默认）"
@@ -3335,12 +3485,15 @@ _help_debug() {
     echo -e "${CYAN}形态:${NC}"
     echo -e "  ${GREEN}(默认) cli${NC}          前台 sidecar"
     echo -e "  ${GREEN}--desktop${NC}           托盘外壳拉起 sidecar（仍为 debug 日志 + 前端 watch）"
+    echo -e "  ${GREEN}--docker${NC}            构建并前台运行 Docker 容器（端口自动清理）"
     echo ""
     echo -e "${CYAN}示例:${NC}"
     echo -e "  ./start.sh debug                      # personal CLI"
     echo -e "  ./start.sh debug minimal              # minimal CLI"
     echo -e "  ./start.sh debug personal --desktop   # personal + desktop"
     echo -e "  ./start.sh debug minimal --desktop    # minimal + desktop"
+    echo -e "  ./start.sh debug personal --docker    # personal Docker 容器（前台）"
+    echo -e "  ./start.sh debug minimal --docker     # minimal Docker 容器（前台）"
 }
 
 _help_stop() {
@@ -3348,18 +3501,21 @@ _help_stop() {
     echo -e "       ${YELLOW}停止运行中的服务${NC}"
     echo ""
     echo -e "${CYAN}用法:${NC}"
-    echo -e "  ./start.sh stop [目标]"
+    echo -e "  ./start.sh stop [目标] [--docker]"
     echo ""
     echo -e "${CYAN}目标:${NC}"
     echo -e "  ${GREEN}be${NC} | backend     仅停止后端服务"
     echo -e "  ${GREEN}fe${NC} | frontend   仅停止 Vue 开发服务器"
     echo -e "  ${GREEN}daemon${NC}          仅停止守护进程"
     echo -e "  ${GREEN}all${NC}             停止所有服务 【默认】"
+    echo -e "  ${GREEN}personal${NC} | ${GREEN}minimal${NC} ${YELLOW}--docker${NC}  停止 Docker 容器"
     echo ""
     echo -e "${CYAN}示例:${NC}"
     echo -e "  ./start.sh stop              # 停止所有服务"
     echo -e "  ./start.sh stop be           # 仅停止后端"
     echo -e "  ./start.sh stop daemon       # 仅停止守护进程"
+    echo -e "  ./start.sh stop personal --docker  # 停止 Docker 容器"
+    echo -e "  ./start.sh stop minimal --docker   # 停止 minimal Docker 容器"
 }
 
 _help_status() {
@@ -3784,7 +3940,7 @@ wizard_run_mode() {
                     echo ""
                     if wizard_confirm "是否现在启动?" "y"; then
                         load_env
-                        kill_backend_port_or_exit || continue
+                        resolve_backend_port || continue
                         [ ! -f "$BIN_DIR/$SERVER_BIN" ] && build backend >/dev/null 2>&1
                         cd "$BIN_DIR"
                         nohup ./"$SERVER_BIN" > logs/centag.log 2>&1 &
@@ -3805,7 +3961,7 @@ wizard_run_mode() {
                     echo ""
                     if wizard_confirm "是否现在启动?" "y"; then
                         load_env
-                        kill_backend_port_or_exit || continue
+                        resolve_backend_port || continue
                         [ ! -f "$BIN_DIR/$SERVER_BIN" ] && build backend >/dev/null 2>&1
                         cd "$BIN_DIR"
                         nohup ./"$SERVER_BIN" > logs/centag.log 2>&1 &
@@ -3832,7 +3988,7 @@ wizard_run_mode() {
                             print_info "请在另一个终端运行: ./start.sh run frontend"
                             echo ""
                             load_env
-                            kill_backend_port_or_exit || continue
+                            resolve_backend_port || continue
                             [ ! -f "$BIN_DIR/$SERVER_BIN" ] && build backend >/dev/null 2>&1
                             print_test_examples
                             cd "$BIN_DIR"
@@ -3876,7 +4032,7 @@ wizard_run_mode() {
                     if wizard_confirm "是否现在启动?" "y"; then
                         load_env
                         centag_export_debug_console_env
-                        kill_backend_port_or_exit || continue
+                        resolve_backend_port || continue
                         [ ! -f "$BIN_DIR/$SERVER_BIN" ] && build backend >/dev/null 2>&1
                         print_test_examples
                         cd "$BIN_DIR"
@@ -3892,7 +4048,7 @@ wizard_run_mode() {
                     if wizard_confirm "是否现在启动?" "y"; then
                         load_env
                         centag_export_debug_console_env
-                        kill_backend_port_or_exit || continue
+                        resolve_backend_port || continue
                         [ ! -f "$BIN_DIR/$SERVER_BIN" ] && build backend >/dev/null 2>&1
                         print_test_examples
                         cd "$BIN_DIR"
@@ -3914,7 +4070,7 @@ wizard_run_mode() {
                             echo ""
                             load_env
                             centag_export_debug_console_env
-                            kill_backend_port_or_exit || continue
+                            resolve_backend_port || continue
                             [ ! -f "$BIN_DIR/$SERVER_BIN" ] && build backend >/dev/null 2>&1
                             print_test_examples
                             cd "$BIN_DIR"
@@ -4350,40 +4506,68 @@ main() {
         debug)
             local edition="personal"
             local with_desktop=false
+            local with_docker=false
             for arg in "$@"; do
                 case "$arg" in
                     --desktop) with_desktop=true ;;
+                    --docker) with_docker=true ;;
                     personal|minimal) edition="$arg" ;;
                 esac
             done
-            debug "$edition" "$with_desktop"
+            debug "$edition" "$with_desktop" "$with_docker"
             ;;
 
         # ── 停止 ───────────────────────────────────────────────────────
         stop)
             local svc="${1:-all}"
-            case "$svc" in
-                backend|be)
-                    _stop_backend_only
-                    ;;
-                frontend|fe|vue)
-                    kill_port 5173
-                    print_success "Vue dev server stopped"
-                    ;;
-                daemon)
-                    daemon-stop
-                    ;;
-                all|"")
-                    stop
-                    kill_port 5173
-                    print_success "All services stopped"
-                    ;;
-                *)
-                    print_error "未知停止目标: $svc"
-                    echo "支持: be, fe, daemon, all"
-                    exit 1
-                    ;;
-            esac
+            shift || true
+
+            local with_docker=false
+            for arg in "$@"; do
+                case "$arg" in
+                    --docker) with_docker=true ;;
+                    *) ;;
+                esac
+            done
+
+            if $with_docker; then
+                local container="centag-${svc}"
+                if docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^${container}$"; then
+                    print_info "停止 Docker 容器: ${container}"
+                    docker stop "${container}"
+                    print_success "容器 ${container} 已停止"
+                else
+                    print_warn "容器 ${container} 未运行"
+                fi
+            else
+                case "$svc" in
+                    backend|be)
+                        _stop_backend_only
+                        ;;
+                    frontend|fe|vue)
+                        kill_port 5173
+                        print_success "Vue dev server stopped"
+                        ;;
+                    daemon)
+                        daemon-stop
+                        ;;
+                    personal|minimal)
+                        print_error "停止发行版 $svc 请使用 --docker 参数"
+                        echo "用法: $0 stop $svc --docker"
+                        exit 1
+                        ;;
+                    all|"")
+                        stop
+                        kill_port 5173
+                        print_success "All services stopped"
+                        ;;
+                    *)
+                        print_error "未知停止目标: $svc"
+                        echo "支持: be, fe, daemon, all, personal --docker, minimal --docker"
+                        exit 1
+                        ;;
+                esac
+            fi
             ;;
 
         # ── 状态和日志 ─────────────────────────────────────────────────

@@ -45,7 +45,7 @@ ARG BUILD_TIME=unknown
 ARG BUILD_TAGS=
 
 ENV CGO_ENABLED=0 \
-    GOPROXY=https://goproxy.cn,direct \
+    GOPROXY=https://goproxy.cn,https://proxy.golang.org,https://goproxy.io,direct \
     GOTOOLCHAIN=local \
     LANG=C.UTF-8
 
