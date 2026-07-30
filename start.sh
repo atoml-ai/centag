@@ -209,7 +209,7 @@ kill_port() {
     return 0
 }
 
-# 清理后端端口，失败时中止并打印占用进程信息。
+# 自动寻找可用端口（递增策略，不删除占用进程/容器）
 resolve_backend_port() {
     local port=$BACKEND_PORT
     local max_attempts=10
@@ -218,35 +218,27 @@ resolve_backend_port() {
         local candidate=$((port + i))
         local in_use=false
 
-        if command -v lsof >/dev/null 2>&1 && lsof -ti ":$candidate" 2>/dev/null | grep -q .; then
-            local pids
-            pids=$(lsof -ti ":$candidate" 2>/dev/null)
-            local docker_only=true
-
-            for pid in $pids; do
-                local comm
-                comm=$(ps -p "$pid" -o comm= 2>/dev/null || true)
-                if echo "$comm" | grep -qiE "docker|com\.docker|vpnkit|hyperkit"; then
-                    # Docker 进程，尝试停止对应容器
-                    local container
-                    container=$(docker ps --filter "publish=$candidate" --format '{{.Names}}' 2>/dev/null | head -1)
-                    if [ -n "$container" ]; then
-                        print_info "端口 $candidate 被容器 $container 占用，正在停止..."
-                        docker stop "$container" >/dev/null 2>&1 || true
-                        sleep 1
-                    else
-                        docker_only=false
-                    fi
-                else
-                    docker_only=false
-                fi
-            done
-
-            if ! $docker_only; then
-                # 有非 Docker 进程占用，尝试切换端口
+        # Docker 容器映射优先检测（避免 Docker Desktop 残留进程导致误判）
+        if command -v docker >/dev/null 2>&1; then
+            if docker ps --filter "publish=$candidate" --format '{{.Names}}' 2>/dev/null | grep -q .; then
                 in_use=true
             fi
-            # 如果全是 Docker 进程，上面已停容器，端口已释放，不标记 in_use
+        fi
+
+        if ! $in_use && command -v lsof >/dev/null 2>&1; then
+            if lsof -ti ":$candidate" 2>/dev/null | grep -q .; then
+                # 检查是否只有 Docker 代理进程残留（无对应运行容器）
+                local has_non_docker=false
+                for pid in $(lsof -ti ":$candidate" 2>/dev/null); do
+                    local comm
+                    comm=$(ps -p "$pid" -o comm= 2>/dev/null || true)
+                    if ! echo "$comm" | grep -qiE "docker|com\.docker|vpnkit|hyperkit"; then
+                        has_non_docker=true
+                        break
+                    fi
+                done
+                $has_non_docker && in_use=true
+            fi
         fi
 
         if ! $in_use; then
@@ -2652,11 +2644,32 @@ _dist_docker_run() {
 
     load_env
 
-    # 自动寻找可用端口
+    # 自动寻找可用端口（优先 Docker 检测，避免残留进程导致误判）
     local max_attempts=10
     for ((i=0; i<=max_attempts; i++)); do
         local candidate=$((port + i))
-        if ! command -v lsof >/dev/null 2>&1 || ! lsof -ti ":$candidate" 2>/dev/null | grep -q .; then
+        local in_use=false
+
+        if command -v docker >/dev/null 2>&1; then
+            if docker ps --filter "publish=$candidate" --format '{{.Names}}' 2>/dev/null | grep -q .; then
+                in_use=true
+            fi
+        fi
+
+        if ! $in_use && command -v lsof >/dev/null 2>&1 && lsof -ti ":$candidate" 2>/dev/null | grep -q .; then
+            local has_non_docker=false
+            for pid in $(lsof -ti ":$candidate" 2>/dev/null); do
+                local comm
+                comm=$(ps -p "$pid" -o comm= 2>/dev/null || true)
+                if ! echo "$comm" | grep -qiE "docker|com\.docker|vpnkit|hyperkit"; then
+                    has_non_docker=true
+                    break
+                fi
+            done
+            $has_non_docker && in_use=true
+        fi
+
+        if ! $in_use; then
             if [ "$candidate" -ne "$port" ]; then
                 print_warn "端口 $port 已被占用，自动切换到端口 $candidate"
                 port=$candidate
