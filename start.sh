@@ -1665,7 +1665,14 @@ _debug_docker() {
     # 构建 Docker 镜像
     _dist_docker_build "$dist_name" "" ""
 
-    # 自动寻找可用端口（如果被容器占用则先停容器）
+    # 移除旧容器（避免 docker run --name 冲突）
+    if docker ps -a --format '{{.Names}}' 2>/dev/null | grep -q "^centag-${dist_name}$"; then
+        print_info "移除旧容器 centag-${dist_name}..."
+        docker rm -f "centag-${dist_name}" >/dev/null 2>&1 || true
+        sleep 1
+    fi
+
+    # 自动寻找可用端口
     resolve_backend_port
 
     local tag="centag-${dist_name}:latest"
@@ -2644,43 +2651,16 @@ _dist_docker_run() {
 
     load_env
 
-    # 自动寻找可用端口（优先 Docker 检测，避免残留进程导致误判）
-    local max_attempts=10
-    for ((i=0; i<=max_attempts; i++)); do
-        local candidate=$((port + i))
-        local in_use=false
+    # 确保没有同名容器残留（否则 docker run --name 冲突）
+    if docker ps -a --format '{{.Names}}' 2>/dev/null | grep -q "^centag-${dist_name}$"; then
+        print_info "移除旧容器 centag-${dist_name}..."
+        docker rm -f "centag-${dist_name}" >/dev/null 2>&1 || true
+        sleep 1  # 等待端口释放
+    fi
 
-        if command -v docker >/dev/null 2>&1; then
-            if docker ps --filter "publish=$candidate" --format '{{.Names}}' 2>/dev/null | grep -q .; then
-                in_use=true
-            fi
-        fi
-
-        if ! $in_use && command -v lsof >/dev/null 2>&1 && lsof -ti ":$candidate" 2>/dev/null | grep -q .; then
-            local has_non_docker=false
-            for pid in $(lsof -ti ":$candidate" 2>/dev/null); do
-                local comm
-                comm=$(ps -p "$pid" -o comm= 2>/dev/null || true)
-                if ! echo "$comm" | grep -qiE "docker|com\.docker|vpnkit|hyperkit"; then
-                    has_non_docker=true
-                    break
-                fi
-            done
-            $has_non_docker && in_use=true
-        fi
-
-        if ! $in_use; then
-            if [ "$candidate" -ne "$port" ]; then
-                print_warn "端口 $port 已被占用，自动切换到端口 $candidate"
-                port=$candidate
-            fi
-            break
-        fi
-        if [ "$i" -eq "$max_attempts" ]; then
-            print_error "端口 $port-$((port+max_attempts)) 均被占用，请手动释放后重试"
-            return 1
-        fi
-    done
+    # 共享 resolve_backend_port 统一端口检测逻辑
+    resolve_backend_port
+    port=$BACKEND_PORT
 
     print_info "启动容器: ${tag} (端口 ${port})..."
     # 覆盖 secrets 里常见的 LLM_PROXY_LOG_OUTPUT=file：否则 zap 只写
