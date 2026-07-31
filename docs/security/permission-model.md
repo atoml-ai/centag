@@ -276,4 +276,3 @@ permissions:
 ---
 
 *最后更新：2026-05-05*
-*维护者：见 ../../docs/harness/AGENTS.md*

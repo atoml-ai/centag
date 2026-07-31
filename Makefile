@@ -161,7 +161,7 @@ lint:
 	golangci-lint run
 	@echo "Lint complete"
 
-# Harness 文档/包列表卫生检查（CI 同名步骤）
+# 仓库布局/包列表卫生检查（CI 同名步骤）
 harness-check:
 	@bash scripts/check-harness-hygiene.sh
 
@@ -209,7 +209,7 @@ help:
 	@echo "  make install      - Install dependencies"
 	@echo "  make fmt          - Format code"
 	@echo "  make lint         - Run linter"
-	@echo "  make harness-check - Harness doc / go list hygiene (scripts/check-harness-hygiene.sh)"
+	@echo "  make harness-check - Repo layout / go list hygiene (scripts/check-harness-hygiene.sh)"
 	@echo "  make package-list - List packaging targets (desktop/github/cli/fnos/...)"
 	@echo "  make package      - Package for TARGET (default fnos); see ./start.sh package list"
 	@echo ""

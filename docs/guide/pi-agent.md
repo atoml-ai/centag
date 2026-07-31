@@ -242,6 +242,5 @@ curl http://localhost:20062/api/health
 
 - [代理模式详细说明](proxy-modes.md)
 - [Pipeline 插件架构](../../archive/deprecated/docs/guide/PIPELINE-PLUGIN-ARCHITECTURE-GUIDE.md)（已归档）
-- [模式行为矩阵](mode-behavior-matrix.md)
 - [Processor 插件](processor-plugins.md)
 - [Pi Sandbox 操作手册](../../deploy/stack/docs/pi-sandbox-guide.md)

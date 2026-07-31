@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Lightweight harness hygiene for Centag layout (web/, scripts/, bin/ as build output).
+# Lightweight repo hygiene for Centag layout (web/, scripts/, bin/ as build output).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -14,10 +14,7 @@ require_file() {
   fi
 }
 
-require_file "docs/harness/AGENTS.md"
-require_file "docs/harness/ARCHITECTURE.md"
 require_file ".golangci.yml"
-require_file "docs/versions/README.md"
 
 # Forbidden legacy / non-product trees at repo root
 for d in tooling var webui desktop; do
@@ -65,8 +62,8 @@ if command -v go >/dev/null 2>&1; then
 fi
 
 if [[ "$fail" -ne 0 ]]; then
-  echo "harness-check FAILED"
+  echo "repo-hygiene check FAILED"
   exit 1
 fi
 
-echo "harness-check OK"
+echo "repo-hygiene check OK"

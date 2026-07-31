@@ -69,7 +69,7 @@ personal **故意不**把 `deploy/stack/.env` 注入容器，避免 `POSTGRES_*`
 
 - **目标**：全功能二进制 + 单容器默认 SQLite，用线上大模型 API 快速跑通；需要时再外接 PG / 向量等。
 - **原则**：默认零 stack 依赖；entrypoint 见 `sqlite` 驱动时不等待 PostgreSQL。
-- **与 team**：插件集合对齐；差别在部署默认依赖。详见 [`dist-profiles.md`](dist-profiles.md)。
+- **与 team**：插件集合对齐；差别在部署默认依赖。
 
 ### 3.2 启动后依赖
 
@@ -414,7 +414,6 @@ docker exec centag-personal-app tail -f /app/logs/centag.log
 | 文档 | 说明 |
 |------|------|
 | [config/profiles/README.md](../../config/profiles/README.md) | Profile 选择与命令速查 |
-| [deployment-profiles-and-stack.md](./deployment-profiles-and-stack.md) | 与 stack 的分层架构 |
 | [config/profiles/TESTING.md](../../config/profiles/TESTING.md) | 验证手册 |
 | [config/profiles/personal/README.md](../../config/profiles/personal/README.md) | personal 详细配置 |
 | [config/profiles/cached/README.md](../../config/profiles/cached/README.md) | cached 详细配置 |

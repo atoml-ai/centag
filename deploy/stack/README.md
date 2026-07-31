@@ -38,7 +38,7 @@ git submodule update --init
 ./start.sh stack status
 ```
 
-架构说明：centag [`docs/guide/deployment-profiles-and-stack.md`](../docs/guide/deployment-profiles-and-stack.md)
+架构说明：centag [Profile 入门](../docs/guide/profile-getting-started.md)
 
 ### 在子模块内
 

@@ -277,7 +277,6 @@ docker stop centag && docker rm centag
 | 本机代理 / wrap | [docs/guide/system-proxy-egress.md](docs/guide/system-proxy-egress.md) |
 | 环境变量 | [docs/guide/environment-variables.md](docs/guide/environment-variables.md) |
 | API 参考 | [docs/api/API_REFERENCE.md](docs/api/API_REFERENCE.md) |
-| 架构 | [docs/architecture/](docs/architecture/) |
 | 安全 | [docs/security/](docs/security/) |
 
 ---

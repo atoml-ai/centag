@@ -137,5 +137,4 @@ opencode
 ## 相关
 
 - 主命令：`centag wrap …`（逻辑真源 `apps/wrap`）  
-- Web：配置页 →「本机代理出口」  
-- 技术方案：`docs/versions/v0.2.5/本机系统代理出口/技术方案.md`
+- Web：配置页 →「本机代理出口」

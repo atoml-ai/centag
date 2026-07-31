@@ -129,5 +129,4 @@ flowchart LR
 ## Related Documentation
 
 - [Proxy Modes](proxy-modes.md)
-- [Mode Behavior Matrix](mode-behavior-matrix.md)
 - [Pipeline Variables](pipeline-variables.md)

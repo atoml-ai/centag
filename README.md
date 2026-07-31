@@ -277,7 +277,6 @@ The real highlight is **custom pipelines** — design your own DAG on the canvas
 | Local proxy / wrap | [docs/guide/system-proxy-egress.md](docs/guide/system-proxy-egress.md) |
 | Environment variables | [docs/guide/environment-variables.md](docs/guide/environment-variables.md) |
 | API reference | [docs/api/API_REFERENCE.md](docs/api/API_REFERENCE.md) |
-| Architecture | [docs/architecture/](docs/architecture/) |
 | Security | [docs/security/](docs/security/) |
 
 ---

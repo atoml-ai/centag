@@ -58,7 +58,7 @@ cd /path/to/centag
 ./start.sh stack status
 ```
 
-详见 centag 文档：[`docs/guide/deployment-profiles-and-stack.md`](../../docs/guide/deployment-profiles-and-stack.md)。
+详见 centag 文档：[Profile 入门](../../docs/guide/profile-getting-started.md)。
 
 ### 在 centag-stack 子模块内
 

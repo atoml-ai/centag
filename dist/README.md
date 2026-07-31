@@ -26,4 +26,4 @@ export CENTAG_ROOT=../centag
 `centag-pro` 与本仓 **使用相同分支名**（例如本仓 `feature/v0.2.7` → pro 也必须是 `feature/v0.2.7`）。  
 开发/发版时两侧同时开同名分支；pro 的 `build-team.sh` 在分支不一致时会警告（`CENTAG_PRO_STRICT_BRANCH=1` 时失败）。
 
-架构说明见 `docs/versions/v0.2.7/commercialization-layered/技术方案.md`。
+架构说明见 [centag-pro](https://github.com/atoml-ai/centag-pro) 仓内 `docs/versions/v0.2.7/commercialization-layered/技术方案.md`（闭源）。

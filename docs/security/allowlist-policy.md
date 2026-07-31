@@ -266,4 +266,3 @@ plugin_security:
 ---
 
 *最后更新：2026-05-06*
-*维护者：见 ../../docs/harness/AGENTS.md*

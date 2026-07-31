@@ -273,4 +273,3 @@ curl -X POST http://localhost:20060/api/v1/pipelines/node-plugins/test-network/e
 ---
 
 *最后更新：2026-05-06*
-*维护者：见 ../../docs/harness/AGENTS.md*

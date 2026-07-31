@@ -270,7 +270,7 @@ intent:
   confidence_threshold: 0.55
 ```
 
-`llm_classify` 模式下，`routes` 的 key 是**类别名**（如 `code`）而非常规关键词（如 `python`）；LLM 调用失败时自动 fallback 到 `default_route`。详见 `docs/guide/mode-behavior-matrix.md` 第 7 节。
+`llm_classify` 模式下，`routes` 的 key 是**类别名**（如 `code`）而非常规关键词（如 `python`）；LLM 调用失败时自动 fallback 到 `default_route`。
 
 #### 能力槽：新增分类 + 配置模型
 

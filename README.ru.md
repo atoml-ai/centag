@@ -277,7 +277,6 @@ docker stop centag && docker rm centag
 | Локальный прокси / wrap | [docs/guide/system-proxy-egress.md](docs/guide/system-proxy-egress.md) |
 | Переменные окружения | [docs/guide/environment-variables.md](docs/guide/environment-variables.md) |
 | Справочник API | [docs/api/API_REFERENCE.md](docs/api/API_REFERENCE.md) |
-| Архитектура | [docs/architecture/](docs/architecture/) |
 | Безопасность | [docs/security/](docs/security/) |
 
 ---

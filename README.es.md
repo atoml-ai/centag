@@ -277,7 +277,6 @@ Lo que más brilla son los **pipelines personalizados** — diseña tu propio DA
 | Proxy local / wrap | [docs/guide/system-proxy-egress.md](docs/guide/system-proxy-egress.md) |
 | Variables de entorno | [docs/guide/environment-variables.md](docs/guide/environment-variables.md) |
 | Referencia de API | [docs/api/API_REFERENCE.md](docs/api/API_REFERENCE.md) |
-| Arquitectura | [docs/architecture/](docs/architecture/) |
 | Seguridad | [docs/security/](docs/security/) |
 
 ---

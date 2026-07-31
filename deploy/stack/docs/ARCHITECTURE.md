@@ -78,7 +78,7 @@ middleware/          services/mem0/          services/pi-sandbox/
 | cached | `postgresql ollama` | 应用连 stack PG |
 | agent-memory | `postgresql qdrant ollama mem0` | 应用 + Pi；中间件全走 stack |
 
-Profile `up` 调用 `stack_ensure_services`（见 `profiles/_shared/profile-stack.sh`）。详见 centag [`docs/guide/deployment-profiles-and-stack.md`](../../docs/guide/deployment-profiles-and-stack.md)。
+Profile `up` 调用 `stack_ensure_services`（见 `profiles/_shared/profile-stack.sh`）。详见 centag [Profile 入门](../../docs/guide/profile-getting-started.md)。
 
 ## 5. 网络
 

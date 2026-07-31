@@ -1,7 +1,7 @@
 # Docker Compose 部署指南
 
 > **2026-06 真源**：本仓库 **`docker/docker-compose.yaml` 仅包含 Centag**。中间件由 **`deploy/stack`** 编排。  
-> **推荐**：场景化部署用 **`./start.sh profile <name> up`**（自动 `stack ensure` + 应用层），见 [`guide/deployment-profiles-and-stack.md`](../guide/deployment-profiles-and-stack.md)。  
+> **推荐**：场景化部署用 **`./start.sh profile <name> up`**（自动 `stack ensure` + 应用层），见 [Profile 入门](../../docs/guide/profile-getting-started.md)。  
 > 本文档描述 **路径 A**：手动 stack + `./start.sh docker up`。
 
 ## 概述

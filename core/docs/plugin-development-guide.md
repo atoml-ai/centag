@@ -155,8 +155,6 @@ go build ./...
 
 在 `dist/` 中创建发行版，通过 `_ import` + 对应 `-tags` 触发插件注册。
 
-完整矩阵与 personal/team 定位见 [`docs/guide/dist-profiles.md`](../../docs/guide/dist-profiles.md)。
-
 ```go
 // dist/mydist/main.go
 package main

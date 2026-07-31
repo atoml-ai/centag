@@ -14,7 +14,7 @@ Centag Stack 是 **与 Centag 主项目配套的可选服务集合**，每个服
 | [AGENTS.md](AGENTS.md) | AI 编码智能体入口 |
 | [CONVENTIONS.md](CONVENTIONS.md) | 编码规范 |
 
-**Centag 侧（Profile + Stack 协作）**：[`../docs/guide/deployment-profiles-and-stack.md`](../docs/guide/deployment-profiles-and-stack.md)
+**Centag 侧（Profile + Stack 协作）**：[`../../docs/guide/profile-getting-started.md`](../../docs/guide/profile-getting-started.md)
 
 ## 服务包一览
 
