@@ -41,7 +41,7 @@
             :total="sessions.length"
             :page-sizes="[5, 10, 20]"
             layout="total, sizes, prev, pager, next, jumper"
-            small
+            size="small"
             background
           />
         </div>

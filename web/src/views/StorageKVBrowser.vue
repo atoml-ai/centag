@@ -66,7 +66,7 @@
           layout="prev, pager, next"
           :total="total"
           background
-          small
+          size="small"
         />
       </div>
     </el-card>

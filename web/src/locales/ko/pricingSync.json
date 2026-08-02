@@ -1,0 +1,63 @@
+{
+  "title": "가격 동기화",
+  "help": "구성된 백엔드(로컬 모델 제외)를 자동 감지하고 공식 가격 페이지 / LiteLLM 레지스트리에서 가격을 가져와 확인 대기 배치를 생성합니다. 항목을 선택한 후 \"선택 항목 적용\"을 클릭하면 가격이 과금 규칙에 기록됩니다.",
+  "refresh": "새로고침",
+  "fetchAndSync": "가져와서 동기화",
+  "emptyText": "동기화 배치가 아직 없습니다",
+  "table": {
+    "id": "ID",
+    "source": "소스",
+    "status": "상태",
+    "createdAt": "생성 시간",
+    "error": "오류",
+    "actions": "작업",
+    "review": "검토",
+    "delete": "삭제"
+  },
+  "status": {
+    "pending": "대기 중",
+    "applied": "적용됨",
+    "rejected": "거부됨"
+  },
+  "currency": "통화",
+  "usd": "USD",
+  "cny": "CNY",
+  "review": {
+    "title": "동기화 배치 검토",
+    "emptyText": "제안 항목이 없습니다",
+    "backend": "백엔드",
+    "model": "모델",
+    "inputPrice": "입력 가격",
+    "outputPrice": "출력 가격",
+    "resolution": "해석 상태",
+    "resolved": "해석됨",
+    "unresolved": "미해석",
+    "source": "소스",
+    "status": "상태",
+    "selected": "선택됨",
+    "unselected": "선택 안 됨",
+    "cancel": "닫기",
+    "apply": "선택 항목 적용",
+    "reject": "배치 거부",
+    "priceHint": "모든 가격은 USD로 저장됩니다. 위안화 공식 소스는 환율 7.2로 환산되어 저장됩니다. 통화 전환은 표시에만 영향을 주며 과금 규칙은 변경하지 않습니다.",
+    "resolvedCount": "해석됨 {count}",
+    "unresolvedCount": "미해석 {count}",
+    "selectedCount": "선택됨 {count}",
+    "unresolvedTip": "미해석 모델은 선택할 수 없습니다 (공식 가격 페이지 / LiteLLM 레지스트리에 가격이 없습니다).",
+    "usageTip": "사용 방법: 적용할 항목을 선택 → \"선택 항목 적용\"으로 과금 규칙에 기록합니다. \"배치 거부\"는 배치 전체를 폐기합니다."
+  },
+  "message": {
+    "loadFailed": "동기화 배치를 불러오지 못했습니다",
+    "syncSuccess": "가격 동기화를 실행하고 배치를 생성했습니다",
+    "syncFailed": "가격 동기화에 실패했습니다",
+    "applySuccess": "{count}개 가격을 적용했습니다",
+    "applySkipped": "{count}개를 적용하고 미해석 {skipped}개를 건너뛰었습니다",
+    "applyFailed": "가격 적용에 실패했습니다",
+    "rejectSuccess": "배치를 거부했습니다",
+    "rejectFailed": "배치 거부에 실패했습니다",
+    "deleteSuccess": "배치를 삭제했습니다",
+    "noProposed": "동기화할 가격이 없습니다 (로컬이 아닌 백엔드를 먼저 구성하세요)"
+  },
+  "confirmDelete": "이 동기화 배치를 삭제하시겠습니까?",
+  "confirmDeleteTitle": "삭제 확인"
+}

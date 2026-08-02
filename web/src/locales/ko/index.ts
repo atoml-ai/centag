@@ -32,6 +32,9 @@ import pipelineModes from './pipelineModes.json'
 import nodeConfig from './nodeConfig.json'
 import homePipelineCard from './homePipelineCard.json'
 import billingRulesDialog from './billingRulesDialog.json'
+import pricingSync from './pricingSync.json'
+import personalConfig from './personalConfig.json'
+import personalUsage from './personalUsage.json'
 import modelSelector from './modelSelector.json'
 import pipelineNode from './pipelineNode.json'
 import securitySettingsDialog from './securitySettingsDialog.json'
@@ -96,6 +99,9 @@ const ko = {
   pipelineModes,
   homePipelineCard,
   billingRulesDialog,
+  pricingSync,
+  personalConfig,
+  personalUsage,
   nodeConfig,
   modelSelector,
   pipelineNode,

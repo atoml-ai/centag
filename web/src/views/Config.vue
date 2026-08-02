@@ -209,6 +209,128 @@
           </header>
           <FallbackPolicyView embedded />
         </section>
+
+        <!-- 系统更新 -->
+        <section v-if="isTeamAdmin" v-show="activeSection === 'system-update'" class="section-panel">
+          <div class="su-section-hd">
+            <span class="su-section-icon upload-color"><el-icon><Upload /></el-icon></span>
+            <div>
+              <div class="su-section-title">{{ t('config.systemUpdateTitle') }}</div>
+              <div class="su-section-sub">{{ t('config.systemUpdateDesc') }}</div>
+            </div>
+            <div style="margin-left:auto">
+              <el-button :loading="suLoadingHistory" @click="suLoadHistory">
+                <el-icon><Refresh /></el-icon>{{ t('config.systemUpdateRefresh') }}
+              </el-button>
+            </div>
+          </div>
+
+          <el-row :gutter="24">
+            <el-col :xs="24">
+              <el-card shadow="never" class="su-card">
+                <template #header>
+                  <div class="su-card-hd">
+                    <span class="su-section-icon upload-color"><el-icon><Upload /></el-icon></span>
+                    <div>
+                      <div class="su-section-title">{{ t('config.systemUpdateUploadTitle') }}</div>
+                      <div class="su-section-sub">{{ t('config.systemUpdateUploadDesc') }}</div>
+                    </div>
+                  </div>
+                </template>
+
+                <el-upload
+                  ref="suUploadRef"
+                  drag
+                  :auto-upload="false"
+                  :limit="1"
+                  accept=".tar.gz,.tgz"
+                  :on-change="suHandleFileChange"
+                  :on-exceed="suHandleExceed"
+                  :on-remove="() => (suSelectedFile = null)"
+                >
+                  <el-icon style="font-size:48px;color:#667eea;opacity:.75"><UploadFilled /></el-icon>
+                  <div style="margin-top:12px;color:var(--el-text-color-regular)">
+                    {{ t('config.systemUpdateDragTip') }}
+                  </div>
+                  <div style="margin-top:6px;font-size:12px;color:var(--el-text-color-secondary)">
+                    {{ t('config.systemUpdateFileHint') }}
+                  </div>
+                </el-upload>
+
+                <el-button
+                  type="primary"
+                  size="large"
+                  :loading="suUpdating"
+                  :disabled="!suSelectedFile"
+                  @click="suDoUpdate"
+                  style="width:100%;margin-top:16px"
+                >
+                  {{ suUpdating ? t('config.systemUpdateUpdating') : t('config.systemUpdateStart') }}
+                </el-button>
+
+                <div v-if="suUpdateLog" class="su-log">
+                  <div class="su-log-hd"><el-icon><Document /></el-icon> {{ t('config.systemUpdateOutput') }}</div>
+                  <pre class="su-log-body">{{ suUpdateLog }}</pre>
+                </div>
+              </el-card>
+            </el-col>
+
+            <el-col :xs="24">
+              <el-card shadow="never" class="su-card">
+                <template #header>
+                  <div class="su-card-hd">
+                    <span class="su-section-icon history-color"><el-icon><Clock /></el-icon></span>
+                    <div>
+                      <div class="su-section-title">{{ t('config.systemUpdateHistoryTitle') }}</div>
+                      <div class="su-section-sub">{{ t('config.systemUpdateHistoryDesc') }}</div>
+                    </div>
+                  </div>
+                </template>
+
+                <el-table
+                  :data="suHistory"
+                  v-loading="suLoadingHistory"
+                  :empty-text="t('config.systemUpdateNoRecords')"
+                  stripe
+                  size="large"
+                >
+                  <el-table-column :label="t('config.systemUpdateVersion')" prop="version" min-width="100">
+                    <template #default="{ row }">
+                      <code class="ver-badge">{{ row.version || '—' }}</code>
+                    </template>
+                  </el-table-column>
+                  <el-table-column :label="t('config.systemUpdateTime')" prop="time" min-width="140" />
+                  <el-table-column :label="t('config.systemUpdateStatus')" width="90" align="center">
+                    <template #default="{ row }">
+                      <el-tag :type="row.success ? 'success' : 'danger'" size="small" effect="light">
+                        {{ row.success ? t('config.systemUpdateSuccess') : t('config.systemUpdateFailed') }}
+                      </el-tag>
+                    </template>
+                  </el-table-column>
+                  <el-table-column :label="t('config.systemUpdateAction')" width="80" align="center">
+                    <template #default="{ row }">
+                      <el-dropdown trigger="click">
+                        <el-button type="primary" link>
+                          <el-icon><MoreFilled /></el-icon>
+                        </el-button>
+                        <template #dropdown>
+                          <el-dropdown-menu>
+                            <el-dropdown-item v-if="row.can_rollback" @click="suRollback(row)">
+                              <el-icon><RefreshLeft /></el-icon>{{ t('config.systemUpdateRollback') }}
+                            </el-dropdown-item>
+                            <el-dropdown-item :divided="row.can_rollback" @click="suDeleteRecord(row)">
+                              <el-icon><Delete /></el-icon>{{ t('config.systemUpdateDelete') }}
+                            </el-dropdown-item>
+                          </el-dropdown-menu>
+                        </template>
+                      </el-dropdown>
+                    </template>
+                  </el-table-column>
+                </el-table>
+              </el-card>
+            </el-col>
+          </el-row>
+        </section>
       </main>
     </div>
   </div>
@@ -218,13 +340,15 @@
 import { ref, computed, onMounted, watch, type Component } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { ElMessage } from 'element-plus'
-import { Refresh, Check, Monitor, Connection, Switch, ArrowRight } from '@element-plus/icons-vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { Refresh, Check, Monitor, Connection, Switch, ArrowRight, Upload, UploadFilled, Clock, Document, RefreshLeft, Delete, MoreFilled } from '@element-plus/icons-vue'
 import { getConfig, saveConfig } from '@/api'
 import { useEdition } from '@/composables/useEdition'
 import { useAuthStore } from '@/stores/auth'
 import { getCapabilities } from '@/utils/capabilities'
+import api from '@/api/index'
 import FallbackPolicyView from '@/views/FallbackPolicy.vue'
+import type { UploadInstance, UploadFile } from 'element-plus'
 
 const route = useRoute()
 const router = useRouter()
@@ -232,13 +356,21 @@ const authStore = useAuthStore()
 const { edition } = useEdition()
 const { t } = useI18n()
 
-type ConfigSection = 'overview' | 'http' | 'fallback'
+type ConfigSection = 'overview' | 'http' | 'fallback' | 'system-update'
 
-const navItems: Array<{ id: ConfigSection; labelKey: string; icon: Component }> = [
-  { id: 'overview', labelKey: 'config.navOverview', icon: Monitor },
-  { id: 'http', labelKey: 'config.navHttp', icon: Connection },
-  { id: 'fallback', labelKey: 'config.navFallback', icon: Switch },
-]
+const isTeamAdmin = computed(() => edition.value === 'team' && authStore.isAdmin)
+
+const navItems = computed(() => {
+  const items: Array<{ id: ConfigSection; labelKey: string; icon: Component }> = [
+    { id: 'overview', labelKey: 'config.navOverview', icon: Monitor },
+    { id: 'http', labelKey: 'config.navHttp', icon: Connection },
+    { id: 'fallback', labelKey: 'config.navFallback', icon: Switch },
+  ]
+  if (isTeamAdmin.value) {
+    items.push({ id: 'system-update', labelKey: 'config.navSystemUpdate', icon: Upload })
+  }
+  return items
+})
 
 const loading = ref(false)
 const saving = ref(false)
@@ -248,7 +380,7 @@ const showSystemProxyLink = computed(
   () => getCapabilities(edition.value, authStore.isAdmin).localProxy
 )
 /** 降级策略子页有独立保存，隐藏顶部「保存配置」避免误解 */
-const showConfigActions = computed(() => activeSection.value !== 'fallback')
+const showConfigActions = computed(() => activeSection.value !== 'fallback' && activeSection.value !== 'system-update')
 
 function selectSection(id: ConfigSection) {
   activeSection.value = id
@@ -256,6 +388,8 @@ function selectSection(id: ConfigSection) {
     router.replace({ query: { tab: 'overview' } })
   } else if (id === 'http') {
     router.replace({ query: { tab: 'resilience', sub: 'http' } })
+  } else if (id === 'system-update') {
+    router.replace({ query: { tab: 'resilience', sub: 'system-update' } })
   } else {
     router.replace({ query: { tab: 'resilience', sub: 'fallback' } })
   }
@@ -266,6 +400,10 @@ function applyRouteQuery() {
   const sub = String(route.query.sub || '')
   if (sub === 'fallback') {
     activeSection.value = 'fallback'
+    return
+  }
+  if (sub === 'system-update') {
+    activeSection.value = 'system-update'
     return
   }
   if (sub === 'http' || tab === 'resilience') {
@@ -410,6 +548,79 @@ onMounted(() => {
   applyRouteQuery()
   void load()
 })
+
+// ── 系统更新 ──────────────────────────────────────────────────────────────────
+
+const suUploadRef = ref<UploadInstance>()
+const suSelectedFile = ref<File | null>(null)
+const suUpdating = ref(false)
+const suUpdateLog = ref('')
+const suHistory = ref<Array<{ version: string; time: string; success: boolean; can_rollback: boolean; history_file?: string }>>([])
+const suLoadingHistory = ref(false)
+
+function suHandleFileChange(file: UploadFile) { suSelectedFile.value = file.raw ?? null }
+function suHandleExceed() { ElMessage.warning(t('config.systemUpdateOnlyOne')) }
+
+async function suDoUpdate() {
+  if (!suSelectedFile.value) return
+  suUpdating.value = true; suUpdateLog.value = ''
+  const fd = new FormData()
+  fd.append('package', suSelectedFile.value)
+  try {
+    const resp = await api.post('/api/v1/system/update', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
+    suUpdateLog.value = typeof resp === 'string' ? resp : JSON.stringify(resp, null, 2)
+    ElMessage.success(t('config.systemUpdateSuccessMsg'))
+    suUploadRef.value?.clearFiles(); suSelectedFile.value = null
+    suLoadHistory()
+  } catch (e: any) {
+    ElMessage.error(e.message || t('config.systemUpdateFailedMsg')); suUpdateLog.value = e.message || t('config.systemUpdateFailedMsg')
+  } finally { suUpdating.value = false }
+}
+
+async function suLoadHistory() {
+  suLoadingHistory.value = true
+  try {
+    const data = await api.get('/api/v1/system/update/history')
+    const rawList = Array.isArray(data) ? data : (data?.history || [])
+    suHistory.value = rawList.map((row: any) => ({
+      version: row.version || '—',
+      time: formatSuTime(row.start_time || row.end_time || ''),
+      success: !!row.success,
+      can_rollback: !!row.success && !!row.history_file,
+      history_file: row.history_file,
+    }))
+  } catch { suHistory.value = [] }
+  finally { suLoadingHistory.value = false }
+}
+
+async function suRollback(item: typeof suHistory.value[number]) {
+  if (!item.history_file) { ElMessage.error(t('config.systemUpdateMissingFile')); return }
+  try {
+    await ElMessageBox.confirm(t('config.systemUpdateRollbackConfirm', { version: item.version }), t('config.systemUpdateRollbackTitle'), { confirmButtonText: t('config.systemUpdateRollbackBtn'), cancelButtonText: t('config.cancel'), type: 'warning' })
+    const fd = new FormData()
+    fd.append('history_file', item.history_file)
+    await api.post('/api/v1/system/rollback', fd)
+    ElMessage.success(t('config.systemUpdateRollbackSuccess')); suLoadHistory()
+  } catch (e: any) { if (e !== 'cancel' && e?.message) ElMessage.error(e.message) }
+}
+
+async function suDeleteRecord(item: typeof suHistory.value[number]) {
+  if (!item.history_file) { ElMessage.error(t('config.systemUpdateMissingFile')); return }
+  try {
+    await ElMessageBox.confirm(t('config.systemUpdateDeleteConfirm'), t('config.systemUpdateDeleteTitle'), { confirmButtonText: t('config.delete'), cancelButtonText: t('config.cancel'), type: 'warning' })
+    const fd = new FormData()
+    fd.append('history_file', item.history_file)
+    await api.post('/api/v1/system/delete-update', fd)
+    ElMessage.success(t('config.systemUpdateDeleteSuccess')); suLoadHistory()
+  } catch (e: any) { if (e !== 'cancel' && e?.message) ElMessage.error(e.message) }
+}
+
+function formatSuTime(raw: string): string {
+  if (!raw) return '—'
+  const dt = new Date(raw)
+  if (Number.isNaN(dt.getTime())) return raw
+  return dt.toLocaleString()
+}
 </script>
 
 <style scoped>
@@ -713,5 +924,93 @@ onMounted(() => {
   .overview-panel {
     max-width: none;
   }
+}
+
+/* ── 系统更新 ──────────────────────────────────────────────────────────────── */
+.su-section-hd {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.su-card { width: 100%; }
+
+.su-card-hd {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.su-section-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.upload-color {
+  background: rgba(102,126,234,.12);
+  color: #667eea;
+}
+
+.history-color {
+  background: rgba(16,185,129,.12);
+  color: #10b981;
+}
+
+.su-section-title {
+  font-size: .9375rem;
+  font-weight: 600;
+  color: var(--el-text-color-primary);
+}
+
+.su-section-sub {
+  font-size: .8125rem;
+  color: var(--el-text-color-secondary);
+  margin-top: 2px;
+}
+
+.su-log {
+  margin-top: 16px;
+  border: 1px solid var(--el-border-color-light);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.su-log-hd {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  background: var(--el-fill-color-light);
+  font-size: .8125rem;
+  font-weight: 500;
+  color: var(--el-text-color-secondary);
+  border-bottom: 1px solid var(--el-border-color-light);
+}
+
+.su-log-body {
+  padding: 12px 14px;
+  margin: 0;
+  font-size: .8125rem;
+  font-family: 'Menlo', 'Monaco', 'Consolas', monospace;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 200px;
+  overflow-y: auto;
+  color: var(--el-text-color-regular);
+}
+
+.ver-badge {
+  font-family: monospace;
+  font-size: .8125rem;
+  background: var(--el-fill-color-light);
+  padding: 2px 8px;
+  border-radius: 4px;
 }
 </style>

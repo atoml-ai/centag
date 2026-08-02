@@ -23,6 +23,8 @@
   "tokenUsage": "Usage & Billing",
   "conversations": "Conversations",
   "billing": "Billing Rules",
+  "personalConfig": "Personal Config",
+  "personalUsage": "Usage & Self-Limit",
   "cost": "Cost Dashboard",
   "memory": "Cloud Memory",
   "config": "System Config",

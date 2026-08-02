@@ -1,8 +1,8 @@
 {
   "dashboard": "首页",
-  "backends": "后端",
+  "backends": "后端配置",
   "fallbackPolicies": "降级策略",
-  "pipelines": "策略",
+  "pipelines": "策略管理",
   "agentSetup": "Agent配置",
   "agentProviders": "Agent 供应商",
   "nodePlugins": "节点插件",
@@ -11,6 +11,7 @@
   "tokenUsage": "用量统计",
   "billingRules": "计费规则",
   "costDashboard": "成本看板",
+  "pricingSync": "价格同步",
   "abComparison": "A/B 对比",
   "logs": "日志",
   "cache": "缓存监控",
@@ -31,9 +32,12 @@
   "more": "更多",
   "system": "系统",
   "storageConfig": "存储配置",
+  "cacheManagement": "缓存管理",
   "proxyStrategy": "代理策略",
+  "strategyManagement": "策略管理",
   "application": "应用",
   "cacheAndMemory": "缓存与记忆",
   "systemAdmin": "系统管理",
+  "userTenantManagement": "用户与租户",
   "overview": "概览"
 }

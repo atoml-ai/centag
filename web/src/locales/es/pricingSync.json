@@ -1,0 +1,63 @@
+{
+  "title": "Sincronización de precios",
+  "help": "Detecta automáticamente los backends configurados (excepto modelos locales), obtiene precios de las páginas oficiales / del registro LiteLLM y crea lotes pendientes de confirmación. Marque los elementos y pulse «Aplicar selección» para escribir los precios en las reglas de facturación.",
+  "refresh": "Actualizar",
+  "fetchAndSync": "Obtener y sincronizar",
+  "emptyText": "Aún no hay lotes de sincronización",
+  "table": {
+    "id": "ID",
+    "source": "Fuente",
+    "status": "Estado",
+    "createdAt": "Creado",
+    "error": "Error",
+    "actions": "Acciones",
+    "review": "Revisar",
+    "delete": "Eliminar"
+  },
+  "status": {
+    "pending": "Pendiente",
+    "applied": "Aplicado",
+    "rejected": "Rechazado"
+  },
+  "currency": "Moneda",
+  "usd": "USD",
+  "cny": "CNY",
+  "review": {
+    "title": "Revisar lote de sincronización",
+    "emptyText": "No hay elementos propuestos",
+    "backend": "Backend",
+    "model": "Modelo",
+    "inputPrice": "Precio de entrada",
+    "outputPrice": "Precio de salida",
+    "resolution": "Resolución",
+    "resolved": "Resuelto",
+    "unresolved": "Sin resolver",
+    "source": "Fuente",
+    "status": "Estado",
+    "selected": "Seleccionado",
+    "unselected": "No seleccionado",
+    "cancel": "Cerrar",
+    "apply": "Aplicar selección",
+    "reject": "Rechazar lote",
+    "priceHint": "Todos los precios se almacenan en USD; las fuentes oficiales en yuanes se convierten con el tipo de cambio 7.2. Cambiar la moneda solo afecta a la visualización, no a las reglas de facturación.",
+    "resolvedCount": "Resueltos {count}",
+    "unresolvedCount": "Sin resolver {count}",
+    "selectedCount": "Seleccionados {count}",
+    "unresolvedTip": "Los modelos sin resolver no se pueden seleccionar (no hay precio en la página oficial / registro LiteLLM).",
+    "usageTip": "Cómo usar: marque los elementos → «Aplicar selección» escribe los precios en las reglas; «Rechazar lote» descarta el lote completo."
+  },
+  "message": {
+    "loadFailed": "No se pudieron cargar los lotes",
+    "syncSuccess": "Sincronización ejecutada, lote creado",
+    "syncFailed": "Error al sincronizar precios",
+    "applySuccess": "Precios aplicados: {count}",
+    "applySkipped": "Precios aplicados: {count}, omitidos sin resolver: {skipped}",
+    "applyFailed": "No se pudieron aplicar los precios",
+    "rejectSuccess": "Lote rechazado",
+    "rejectFailed": "No se pudo rechazar el lote",
+    "deleteSuccess": "Lote eliminado",
+    "noProposed": "No hay precios que sincronizar (configure backends no locales primero)"
+  },
+  "confirmDelete": "¿Eliminar este lote de sincronización?",
+  "confirmDeleteTitle": "Confirmar eliminación"
+}

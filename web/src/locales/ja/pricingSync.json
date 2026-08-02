@@ -1,0 +1,63 @@
+{
+  "title": "価格同期",
+  "help": "設定済みバックエンド（ローカルモデル除く）を自動検出し、公式価格ページ / LiteLLM レジストリから価格を取得して、確認待ちバッチを生成します。項目を選択して「選択を適用」をクリックすると、価格が課金ルールに書き込まれます。",
+  "refresh": "更新",
+  "fetchAndSync": "取得して同期",
+  "emptyText": "同期バッチはまだありません",
+  "table": {
+    "id": "ID",
+    "source": "ソース",
+    "status": "ステータス",
+    "createdAt": "作成日時",
+    "error": "エラー",
+    "actions": "操作",
+    "review": "確認",
+    "delete": "削除"
+  },
+  "status": {
+    "pending": "未確定",
+    "applied": "適用済み",
+    "rejected": "却下済み"
+  },
+  "currency": "通貨",
+  "usd": "USD",
+  "cny": "CNY",
+  "review": {
+    "title": "同期バッチの確認",
+    "emptyText": "提案項目がありません",
+    "backend": "バックエンド",
+    "model": "モデル",
+    "inputPrice": "入力価格",
+    "outputPrice": "出力価格",
+    "resolution": "解析状態",
+    "resolved": "解決済み",
+    "unresolved": "未解決",
+    "source": "ソース",
+    "status": "ステータス",
+    "selected": "選択済み",
+    "unselected": "未選択",
+    "cancel": "閉じる",
+    "apply": "選択を適用",
+    "reject": "バッチを却下",
+    "priceHint": "価格はすべて USD で保存されます。人民元の公式ソースはレート 7.2 で換算済みです。通貨の切り替えは表示のみに影響し、課金ルールは変更されません。",
+    "resolvedCount": "解決済み {count}",
+    "unresolvedCount": "未解決 {count}",
+    "selectedCount": "選択済み {count}",
+    "unresolvedTip": "未解決のモデルは選択できません（公式価格ページ / LiteLLM レジストリに価格がありません）。",
+    "usageTip": "使い方: 適用する項目を選択 → 「選択を適用」で課金ルールに書き込みます。「バッチを却下」でバッチ全体を破棄します。"
+  },
+  "message": {
+    "loadFailed": "同期バッチの読み込みに失敗しました",
+    "syncSuccess": "価格同期を実行し、バッチを作成しました",
+    "syncFailed": "価格同期に失敗しました",
+    "applySuccess": "{count} 件の価格を適用しました",
+    "applySkipped": "{count} 件を適用し、未解決の {skipped} 件をスキップしました",
+    "applyFailed": "価格の適用に失敗しました",
+    "rejectSuccess": "バッチを却下しました",
+    "rejectFailed": "バッチの却下に失敗しました",
+    "deleteSuccess": "バッチを削除しました",
+    "noProposed": "同期する価格がありません（非ローカルバックエンドを先に設定してください）"
+  },
+  "confirmDelete": "この同期バッチを削除しますか？",
+  "confirmDeleteTitle": "確認"
+}

@@ -23,9 +23,15 @@
         </el-radio-group>
       </div>
 
+      <el-tabs v-model="activePriceType" class="price-type-tabs" @tab-change="onPriceTypeChange">
+        <el-tab-pane :label="t('billingRulesDialog.tabAll')" name="all" />
+        <el-tab-pane :label="t('billingRulesDialog.tabCost')" name="cost" />
+        <el-tab-pane :label="t('billingRulesDialog.tabRevenue')" name="revenue" />
+      </el-tabs>
+
       <el-table
         v-loading="loading"
-        :data="rules"
+        :data="filteredRules"
         stripe
         size="small"
         :empty-text="t('billingRulesDialog.emptyText')"
@@ -35,6 +41,13 @@
         <el-table-column prop="name" :label="t('billingRulesDialog.table.name')" min-width="120" />
         <el-table-column prop="backend_id" :label="t('billingRulesDialog.table.backend')" width="120" />
         <el-table-column prop="model" :label="t('billingRulesDialog.table.model')" width="140" />
+        <el-table-column prop="price_type" :label="t('billingRulesDialog.table.priceType')" width="90">
+          <template #default="{ row }">
+            <el-tag :type="row.price_type === 'revenue' ? 'warning' : 'info'" size="small">
+              {{ row.price_type || 'cost' }}
+            </el-tag>
+          </template>
+        </el-table-column>
         <el-table-column :label="t('billingRulesDialog.table.inputPrice', { unit: priceUnit })" width="110">
           <template #default="{ row }">{{ formatPrice(row.input_price_per_m) }}</template>
         </el-table-column>
@@ -61,6 +74,12 @@
     <el-dialog v-model="formVisible" :title="editingId ? t('billingRulesDialog.form.editTitle') : t('billingRulesDialog.form.createTitle')" width="520px" append-to-body>
       <el-form :model="form" label-width="110px">
         <el-form-item :label="t('billingRulesDialog.form.name')"><el-input v-model="form.name" /></el-form-item>
+        <el-form-item :label="t('billingRulesDialog.form.priceType')">
+          <el-select v-model="form.price_type" :placeholder="t('billingRulesDialog.form.priceTypePlaceholder')">
+            <el-option label="Cost" value="cost" />
+            <el-option label="Revenue" value="revenue" />
+          </el-select>
+        </el-form-item>
         <el-form-item :label="t('billingRulesDialog.form.backendId')">
           <el-input v-model="form.backend_id" :placeholder="t('billingRulesDialog.form.backendPlaceholder')" />
         </el-form-item>
@@ -122,8 +141,14 @@ const importText = ref('')
 const editingId = ref<number | null>(null)
 const displayCurrency = ref<DisplayCurrency>(getDisplayCurrency())
 const usdToCny = ref(7.2)
+const activePriceType = ref('all')
 
 const priceUnit = computed(() => (displayCurrency.value === 'CNY' ? '¥' : '$'))
+
+const filteredRules = computed(() => {
+  if (activePriceType.value === 'all') return rules.value
+  return rules.value.filter(r => (r.price_type || 'cost') === activePriceType.value)
+})
 
 const form = reactive<PricingRule>({
   name: '',
@@ -133,7 +158,8 @@ const form = reactive<PricingRule>({
   output_price_per_m: 0,
   priority: 100,
   enabled: true,
-  currency: 'USD'
+  currency: 'USD',
+  price_type: 'cost'
 })
 
 function resetForm() {
@@ -145,6 +171,7 @@ function resetForm() {
   form.priority = 100
   form.enabled = true
   form.currency = 'USD'
+  form.price_type = 'cost'
 }
 
 function formatPrice(usd: number | undefined | null): string {
@@ -155,6 +182,10 @@ function onDisplayCurrencyChange(v: DisplayCurrency | string | number | boolean 
   const c = v === 'CNY' ? 'CNY' : 'USD'
   displayCurrency.value = c
   setDisplayCurrency(c)
+}
+
+function onPriceTypeChange() {
+  // Table filtering is handled by computed property
 }
 
 async function loadFx() {
@@ -284,6 +315,10 @@ async function doExport() {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+  margin-bottom: 12px;
+  flex-shrink: 0;
+}
+.price-type-tabs {
   margin-bottom: 12px;
   flex-shrink: 0;
 }

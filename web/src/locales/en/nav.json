@@ -11,6 +11,7 @@
   "tokenUsage": "Token Usage",
   "billingRules": "Billing Rules",
   "costDashboard": "Cost Dashboard",
+  "pricingSync": "Pricing Sync",
   "abComparison": "A/B Comparison",
   "logs": "Logs",
   "cache": "Cache",
@@ -31,9 +32,12 @@
   "more": "More",
   "system": "System",
   "storageConfig": "Storage Config",
+  "cacheManagement": "Cache Management",
   "proxyStrategy": "Proxy Strategy",
+  "strategyManagement": "Strategy Management",
   "application": "Application",
   "cacheAndMemory": "Cache & Memory",
   "systemAdmin": "System Admin",
+  "userTenantManagement": "Users & Tenants",
   "overview": "Overview"
 }

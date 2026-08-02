@@ -11,6 +11,7 @@
   "tokenUsage": "Uso de tokens",
   "billingRules": "Reglas de facturación",
   "costDashboard": "Panel de costos",
+  "pricingSync": "Sincronización de precios",
   "abComparison": "Comparación A/B",
   "logs": "Registros",
   "cache": "Monitoreo de caché",
@@ -31,9 +32,12 @@
   "more": "Más",
   "system": "Sistema",
   "storageConfig": "Configuración de almacenamiento",
+  "cacheManagement": "Gestión de caché",
   "proxyStrategy": "Estrategia de proxy",
+  "strategyManagement": "Gestión de estrategias",
   "application": "Aplicación",
   "cacheAndMemory": "Caché y memoria",
   "systemAdmin": "Administración del sistema",
+  "userTenantManagement": "Usuarios e inquilinos",
   "overview": "Resumen"
 }

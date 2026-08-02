@@ -48,9 +48,12 @@ function run() {
         layout: 'team',
         liteChatDrawer: true,
         accessQuickLinks: false,
-        backends: true,
-        pipelines: true,
-        usageBilling: false
+        backends: false,
+        pipelines: false,
+        usageBilling: true,
+        opsStats: true,
+        pipelineCreateButton: false,
+        teamAccessInStatus: true
       }
     },
     {

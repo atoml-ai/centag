@@ -2,61 +2,28 @@ import type { NavItem } from './types'
 import {
   backendsNav,
   pipelinesNav,
-  fallbackPolicyNav,
   costDashboardNav,
   dashboardNav,
-  storageConfigNavGroup,
+  cacheManagementNavGroup,
   navGroup,
   configNav,
+  userTenantGroup,
+  proxyStrategyGroup,
   appGroup,
   cacheMemoryGroup,
   accessGroup,
-  systemAdminGroup,
-  proxyStrategyGroup
+  systemAdminGroup
 } from './shared'
 
 /**
- * 团队超管：人 + 共享资源 + 存储配置；流水线测试对话在首页抽屉（非侧栏）。
+ * 团队超管：人 + 共用资源 + 存储配置；流水线测试对话在首页抽屉（非侧栏）。
  */
 export const NAV_MENU_TEAM_ADMIN: NavItem[] = [
   dashboardNav('nav.overview'),
-  navGroup(
-    'shared-resources',
-    'nav.proxyStrategy',
-    'Connection',
-    [
-      backendsNav({ labelKey: 'nav.backends', requiresAdmin: true }),
-      pipelinesNav({ labelKey: 'nav.pipelines', requiresAdmin: true }),
-      fallbackPolicyNav({ requiresAdmin: true }),
-      storageConfigNavGroup()
-    ],
-    '/backends'
-  ),
-  navGroup(
-    'user-admin',
-    'nav.systemAdmin',
-    'UserFilled',
-    [
-      {
-        id: 'system-users',
-        labelKey: 'nav.users',
-        icon: 'UserFilled',
-        path: '/system/users',
-        requiresAdmin: true,
-        requiresTeam: true
-      },
-      {
-        id: 'tenants',
-        labelKey: 'nav.tenants',
-        icon: 'OfficeBuilding',
-        path: '/tenants',
-        requiresAdmin: true,
-        requiresTeam: true
-      },
-      costDashboardNav()
-    ],
-    '/system/users'
-  ),
+  backendsNav({ labelKey: 'nav.backends', requiresAdmin: true }),
+  pipelinesNav({ labelKey: 'nav.pipelines', requiresAdmin: true }),
+  cacheManagementNavGroup(),
+  userTenantGroup(),
   navGroup(
     'system-admin',
     'nav.system',
@@ -64,17 +31,10 @@ export const NAV_MENU_TEAM_ADMIN: NavItem[] = [
     [
       configNav({ requiresAdmin: true }),
       {
-        id: 'billing-rules',
-        labelKey: 'nav.billingRules',
-        icon: 'Coin',
-        path: '/billing',
-        requiresAdmin: true
-      },
-      {
-        id: 'system-update',
-        labelKey: 'nav.systemUpdate',
-        icon: 'Upload',
-        path: '/system/update',
+        id: 'ab-comparison',
+        labelKey: 'nav.abComparison',
+        icon: 'DataAnalysis',
+        path: '/ab-comparison',
         requiresAdmin: true,
         requiresTeam: true
       }

@@ -91,8 +91,29 @@ function run() {
       name: 'team_admin ops',
       edition: 'team',
       isAdmin: true,
-      mustHave: ['dashboard', 'shared-resources', 'backends', 'pipelines', 'storage-config', 'system-users'],
-      mustNot: ['chat', 'access', 'memory', 'usage', 'local-proxy']
+      mustHave: [
+        'dashboard',
+        'backends',
+        'pipelines',
+        'cache-management',
+        'user-tenant',
+        'system-users',
+        'tenants',
+        'cost-dashboard',
+        'pricing-sync',
+        'config-basic',
+        'ab-comparison'
+      ],
+      mustNot: [
+        'chat',
+        'access',
+        'memory',
+        'usage',
+        'local-proxy',
+        'more',
+        'shared-resources',
+        'storage-config'
+      ]
     },
     {
       name: 'minimal short',

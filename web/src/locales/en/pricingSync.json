@@ -1,0 +1,63 @@
+{
+  "title": "Pricing Sync",
+  "help": "Automatically detects configured backends (excluding local models), fetches prices from official pricing pages / the LiteLLM registry, and creates batches pending confirmation. Select items and click \"Apply Selected\" to write prices into billing rules.",
+  "refresh": "Refresh",
+  "fetchAndSync": "Fetch & Sync",
+  "emptyText": "No sync batches yet",
+  "table": {
+    "id": "ID",
+    "source": "Source",
+    "status": "Status",
+    "createdAt": "Created At",
+    "error": "Error",
+    "actions": "Actions",
+    "review": "Review",
+    "delete": "Delete"
+  },
+  "status": {
+    "pending": "Pending",
+    "applied": "Applied",
+    "rejected": "Rejected"
+  },
+  "currency": "Currency",
+  "usd": "USD",
+  "cny": "CNY",
+  "review": {
+    "title": "Review Sync Batch",
+    "emptyText": "No proposed items",
+    "backend": "Backend",
+    "model": "Model",
+    "inputPrice": "Input price",
+    "outputPrice": "Output price",
+    "resolution": "Resolution",
+    "resolved": "Resolved",
+    "unresolved": "Unresolved",
+    "source": "Source",
+    "status": "Status",
+    "selected": "Selected",
+    "unselected": "Unselected",
+    "cancel": "Close",
+    "apply": "Apply Selected",
+    "reject": "Reject Batch",
+    "priceHint": "All prices are stored in USD; CNY official sources are converted using the 7.2 rate. Switching currency only affects this display and does not modify billing rules.",
+    "resolvedCount": "Resolved {count}",
+    "unresolvedCount": "Unresolved {count}",
+    "selectedCount": "Selected {count}",
+    "unresolvedTip": "Unresolved models cannot be selected (no price in the official pricing page / LiteLLM registry).",
+    "usageTip": "How to use: select the items to apply, then click \"Apply Selected\" to write billing rules; \"Reject Batch\" discards the whole batch."
+  },
+  "message": {
+    "loadFailed": "Failed to load sync batches",
+    "syncSuccess": "Pricing sync triggered, batch created",
+    "syncFailed": "Pricing sync failed",
+    "applySuccess": "Applied {count} price(s)",
+    "applySkipped": "Applied {count} price(s), skipped {skipped} unresolved",
+    "applyFailed": "Failed to apply prices",
+    "rejectSuccess": "Batch rejected",
+    "rejectFailed": "Failed to reject batch",
+    "deleteSuccess": "Batch deleted",
+    "noProposed": "No prices to sync (configure non-local backends first)"
+  },
+  "confirmDelete": "Delete this sync batch?",
+  "confirmDeleteTitle": "Confirm Delete"
+}

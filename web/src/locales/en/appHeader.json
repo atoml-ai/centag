@@ -3,6 +3,7 @@
   "user": "Regular User",
   "profile": "Profile",
   "systemConfig": "System Settings",
+  "systemUpdate": "System Update",
   "logout": "Logout",
   "logoutConfirm": "Are you sure you want to logout?",
   "logoutTitle": "Logout",

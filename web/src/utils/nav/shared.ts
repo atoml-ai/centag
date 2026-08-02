@@ -192,7 +192,55 @@ export function storageConfigNavGroup(options?: {
   if (includeDataStores) children.push(dataStoresNav())
   children.push(cacheNav())
   if (includeEvaluation) children.push(evaluationNav())
-  return navGroup('storage-config', 'nav.storageConfig', 'FolderOpened', children, children[0]?.path)
+  return navGroup('storage-config', 'nav.cacheManagement', 'FolderOpened', children, children[0]?.path)
+}
+
+/** 缓存管理：缓存 + 存储 + 数据存储 + 缓存评估（team admin 专用） */
+export function cacheManagementNavGroup(): NavItem {
+  const children: NavItem[] = [
+    cacheNav(),
+    storageNav(),
+    dataStoresNav(),
+    evaluationNav()
+  ]
+  return navGroup('cache-management', 'nav.cacheManagement', 'FolderOpened', children, children[0]?.path)
+}
+
+/** 用户与租户管理：用户管理 + 租户管理 + 成本看板（team admin 专用） */
+export function userTenantGroup(): NavItem {
+  return navGroup(
+    'user-tenant',
+    'nav.userTenantManagement',
+    'UserFilled',
+    [
+      {
+        id: 'system-users',
+        labelKey: 'nav.users',
+        icon: 'UserFilled',
+        path: '/system/users',
+        requiresAdmin: true,
+        requiresTeam: true
+      },
+      {
+        id: 'tenants',
+        labelKey: 'nav.tenants',
+        icon: 'OfficeBuilding',
+        path: '/tenants',
+        requiresAdmin: true,
+        requiresTeam: true
+      },
+      costDashboardNav(),
+      {
+        id: 'pricing-sync',
+        labelKey: 'nav.pricingSync',
+        icon: 'Coin',
+        path: '/billing/pricing-sync',
+        requiresAdmin: true,
+        requiresTeam: true
+      }
+    ],
+    '/system/users'
+  )
 }
 
 /**

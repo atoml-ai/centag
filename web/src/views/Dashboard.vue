@@ -983,8 +983,8 @@ onMounted(() => {
 }
 
 .dash-main--team {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  grid-template-areas: "status backends pipelines";
+  grid-template-columns: 1fr;
+  grid-template-areas: "status";
 }
 
 .dash-card--status { grid-area: status; }

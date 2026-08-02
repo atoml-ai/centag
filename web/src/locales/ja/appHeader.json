@@ -3,6 +3,7 @@
   "user": "一般ユーザー",
   "profile": "プロフィール",
   "systemConfig": "システム設定",
+  "systemUpdate": "システム更新",
   "logout": "ログアウト",
   "logoutConfirm": "ログアウトしてもよろしいですか？",
   "logoutTitle": "ログアウト",

@@ -23,6 +23,8 @@
   "tokenUsage": "用量与计费",
   "conversations": "会话记录",
   "billing": "计费规则",
+  "personalConfig": "个人配置",
+  "personalUsage": "用量与自我限额",
   "cost": "成本看板",
   "memory": "云记忆管理",
   "config": "系统配置",

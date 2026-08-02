@@ -33,6 +33,8 @@ export interface Capabilities {
   navEvaluation: boolean
   /** 独立「降级策略」导航（已并入系统配置韧性页，默认 false） */
   navFallbackPolicy: boolean
+  /** 运行统计板块（team admin 概览） */
+  opsStats: boolean
   memoryQuery: boolean
   /** 记忆同步/重建等写运维（personal；非 team_user） */
   memoryFull: boolean
@@ -75,7 +77,8 @@ const WORKER_CAPS: Omit<Capabilities, 'role'> = {
   systemConfig: true,
   myTenant: false,
   userAdmin: false,
-  liteHome: true
+  liteHome: true,
+  opsStats: false
 }
 
 /**
@@ -132,13 +135,14 @@ export function getCapabilities(edition: Edition, isAdmin = false): Capabilities
     }
   }
 
-  // team_admin：运维面 + 共用资源；测试对话仍开；无本机代理/记忆查询/业务用量
+  // team_admin：运维面 + 共用资源；测试对话仍开；无本机代理/记忆查询
+  // 概览页：隐藏后端/流水线配置（有独立页面），显示运行统计和计量计费
   return {
     role,
     manageBackends: true,
     managePipelines: true,
-    homeBackendsPanel: true,
-    homePipelinesPanel: true,
+    homeBackendsPanel: false,
+    homePipelinesPanel: false,
     navBackendsPage: true,
     navPipelinesPage: true,
     pipelineTestChat: true,
@@ -149,14 +153,15 @@ export function getCapabilities(edition: Edition, isAdmin = false): Capabilities
     navHostProxyTools: false,
     navDataStores: true,
     navEvaluation: true,
-    navFallbackPolicy: true,
+    navFallbackPolicy: false,
     memoryQuery: false,
     memoryFull: false,
-    usageBilling: false,
+    usageBilling: true,
     agentSetup: false,
     systemConfig: true,
     myTenant: false,
     userAdmin: true,
-    liteHome: false
+    liteHome: false,
+    opsStats: true
   }
 }

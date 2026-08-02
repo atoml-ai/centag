@@ -80,10 +80,13 @@ function run() {
         storageConfig: true,
         localProxy: false,
         memoryQuery: false,
-        navFallbackPolicy: true,
-        usageBilling: false,
+        navFallbackPolicy: false,
+        usageBilling: true,
         userAdmin: true,
-        liteHome: false
+        liteHome: false,
+        opsStats: true,
+        homeBackendsPanel: false,
+        homePipelinesPanel: false
       }
     },
     {

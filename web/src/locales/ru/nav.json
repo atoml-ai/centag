@@ -11,6 +11,7 @@
   "tokenUsage": "Использование токенов",
   "billingRules": "Правила биллинга",
   "costDashboard": "Панель затрат",
+  "pricingSync": "Синхронизация цен",
   "abComparison": "A/B сравнение",
   "logs": "Журналы",
   "cache": "Мониторинг кеша",
@@ -31,9 +32,12 @@
   "more": "Еще",
   "system": "Система",
   "storageConfig": "Настройки хранилища",
+  "cacheManagement": "Управление кешем",
   "proxyStrategy": "Стратегия прокси",
+  "strategyManagement": "Управление стратегиями",
   "application": "Приложение",
   "cacheAndMemory": "Кеш и память",
   "systemAdmin": "Системное управление",
+  "userTenantManagement": "Пользователи и тенанты",
   "overview": "Обзор"
 }

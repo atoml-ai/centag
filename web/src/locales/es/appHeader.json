@@ -3,6 +3,7 @@
   "user": "Usuario normal",
   "profile": "Perfil",
   "systemConfig": "Configuración del sistema",
+  "systemUpdate": "Actualización del sistema",
   "logout": "Cerrar sesión",
   "logoutConfirm": "¿Está seguro de cerrar sesión?",
   "logoutTitle": "Cerrar sesión",

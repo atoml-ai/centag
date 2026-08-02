@@ -73,7 +73,7 @@ export function sectionsFromCapabilities(caps: Capabilities): DashboardSections 
     headerActions: false,
     serviceStatus: true,
     serviceStatusCompact: false,
-    teamAccessInStatus: false,
+    teamAccessInStatus: true,
     pluginsStorage: false,
     proxyControls: false,
     accessPanel: false,
@@ -81,11 +81,11 @@ export function sectionsFromCapabilities(caps: Capabilities): DashboardSections 
     accessCompact: false,
     backends: caps.homeBackendsPanel,
     pipelines: caps.homePipelinesPanel,
-    pipelineCreateButton: true,
-    usageBilling: false,
+    pipelineCreateButton: false,
+    usageBilling: caps.usageBilling,
     usageEphemeralHint: false,
     liteChatDrawer: caps.pipelineTestChat,
-    opsStats: false
+    opsStats: caps.opsStats
   }
 }
 

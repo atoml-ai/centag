@@ -11,6 +11,7 @@
   "tokenUsage": "トークン使用量",
   "billingRules": "請求ルール",
   "costDashboard": "コストダッシュボード",
+  "pricingSync": "価格同期",
   "abComparison": "A/B比較",
   "logs": "ログ",
   "cache": "キャッシュ監視",
@@ -31,9 +32,12 @@
   "more": "その他",
   "system": "システム",
   "storageConfig": "ストレージ設定",
+  "cacheManagement": "キャッシュ管理",
   "proxyStrategy": "プロキシ戦略",
+  "strategyManagement": "戦略管理",
   "application": "アプリケーション",
   "cacheAndMemory": "キャッシュとメモリ",
   "systemAdmin": "システム管理",
+  "userTenantManagement": "ユーザーとテナント",
   "overview": "概要"
 }

@@ -53,8 +53,7 @@ export const TEAM_ONLY_ROUTE_PREFIXES = [
   '/ab-comparison',
   '/tenants',
   '/my-tenant',
-  '/system/users',
-  '/system/update'
+  '/system/users'
 ] as const
 
 /**

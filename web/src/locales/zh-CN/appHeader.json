@@ -3,6 +3,7 @@
   "user": "普通用户",
   "profile": "个人中心",
   "systemConfig": "系统设置",
+  "systemUpdate": "系统更新",
   "logout": "退出登录",
   "logoutConfirm": "确定要退出登录吗？",
   "logoutTitle": "退出登录",

@@ -1,0 +1,63 @@
+{
+  "title": "价格同步",
+  "help": "自动探测已配置的后端（排除本地模型），从官方定价页 / LiteLLM 注册表获取价格，生成待确认批次。勾选条目后点击「应用所选」，价格写入计费规则。",
+  "refresh": "刷新",
+  "fetchAndSync": "抓取并同步",
+  "emptyText": "暂无同步批次",
+  "table": {
+    "id": "ID",
+    "source": "来源",
+    "status": "状态",
+    "createdAt": "创建时间",
+    "error": "错误",
+    "actions": "操作",
+    "review": "审核",
+    "delete": "删除"
+  },
+  "status": {
+    "pending": "待确认",
+    "applied": "已应用",
+    "rejected": "已拒绝"
+  },
+  "currency": "币种",
+  "usd": "USD",
+  "cny": "CNY",
+  "review": {
+    "title": "审核同步批次",
+    "emptyText": "无建议条目",
+    "backend": "后端",
+    "model": "模型",
+    "inputPrice": "输入价",
+    "outputPrice": "输出价",
+    "resolution": "解析状态",
+    "resolved": "已解析",
+    "unresolved": "未解析",
+    "source": "来源",
+    "status": "状态",
+    "selected": "已勾选",
+    "unselected": "未勾选",
+    "cancel": "关闭",
+    "apply": "应用所选",
+    "reject": "拒绝批次",
+    "priceHint": "价格统一以 USD 存储；人民币官方源已按汇率 7.2 换算为 USD。切换币种仅影响当前显示，不修改计费规则。",
+    "resolvedCount": "已解析 {count}",
+    "unresolvedCount": "未解析 {count}",
+    "selectedCount": "已勾选 {count}",
+    "unresolvedTip": "未解析的模型无法勾选（官方定价页 / LiteLLM 注册表中无该模型价格）。",
+    "usageTip": "使用方式：勾选要应用的条目 → 点击「应用所选」写入计费规则；「拒绝批次」将放弃整个批次。"
+  },
+  "message": {
+    "loadFailed": "加载同步批次失败",
+    "syncSuccess": "价格同步已触发，批次已创建",
+    "syncFailed": "价格同步失败",
+    "applySuccess": "已应用 {count} 条价格",
+    "applySkipped": "已应用 {count} 条价格，跳过 {skipped} 条未解析",
+    "applyFailed": "应用价格失败",
+    "rejectSuccess": "批次已拒绝",
+    "rejectFailed": "拒绝批次失败",
+    "deleteSuccess": "批次已删除",
+    "noProposed": "没有可同步的价格（请先配置非本地后端）"
+  },
+  "confirmDelete": "确定删除该同步批次？",
+  "confirmDeleteTitle": "确认删除"
+}

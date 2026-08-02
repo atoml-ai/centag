@@ -11,6 +11,7 @@
   "tokenUsage": "토큰 사용량",
   "billingRules": "과금 규칙",
   "costDashboard": "비용 대시보드",
+  "pricingSync": "가격 동기화",
   "abComparison": "A/B 비교",
   "logs": "로그",
   "cache": "캐시 모니터링",
@@ -31,9 +32,12 @@
   "more": "더보기",
   "system": "시스템",
   "storageConfig": "스토리지 설정",
+  "cacheManagement": "캐시 관리",
   "proxyStrategy": "프록시 전략",
+  "strategyManagement": "전략 관리",
   "application": "애플리케이션",
   "cacheAndMemory": "캐시 및 메모리",
   "systemAdmin": "시스템 관리",
+  "userTenantManagement": "사용자 및 테넌트",
   "overview": "개요"
 }
