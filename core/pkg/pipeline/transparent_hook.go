@@ -4,8 +4,9 @@ import "centag/core/pkg/backend"
 
 // BackendEndpoint describes a resolved upstream API endpoint.
 type BackendEndpoint struct {
-	BaseURL string
-	APIKey  string
+	BaseURL     string
+	APIKey      string
+	AccountPool *backend.AccountPoolConfig
 }
 
 // ResolveBackendEndpoint resolves backend_id to base URL and API key (wired in server).

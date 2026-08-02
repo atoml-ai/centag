@@ -2,11 +2,13 @@ package pipeline
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"strings"
+	"sync"
 
 	"centag/core/pkg/backend"
 	"centag/core/pkg/config"
@@ -29,6 +31,49 @@ type TransparentForwardNode struct {
 	SystemPromptStrategy promptstrategy.SystemMode
 	// AppendPosition append 模式下的插入位置
 	AppendPosition promptstrategy.AppendPosition
+}
+
+// accountSelectorStore 跨请求共享的账户池选择器。
+// 引擎每次请求都会 CreateFromConfig 重建节点实例（executeNode），
+// 因此选择器若挂在节点上会被反复重置，round_robin/least_usage/sticky_session
+// 都会退化为恒选第一个健康账户。这里提升为按 backend 共享的全局状态。
+var (
+	accountSelectorStoreMu sync.Mutex
+	accountSelectorStore   = map[string]accountSelectorEntry{}
+)
+
+type accountSelectorEntry struct {
+	selector *backend.AccountPoolSelector
+	shape    string
+}
+
+// accountPoolShape 计算账户池指纹；池形态变化（增删账户/权重/策略）时重建选择器。
+func accountPoolShape(pool *backend.AccountPoolConfig) string {
+	if pool == nil {
+		return ""
+	}
+	h := sha256.New()
+	h.Write([]byte(strings.ToLower(strings.TrimSpace(pool.Strategy))))
+	for _, acc := range pool.Accounts {
+		fmt.Fprintf(h, "|%s:%d:%v", acc.ID, acc.Weight, acc.Enabled)
+	}
+	return fmt.Sprintf("%x", h.Sum(nil))
+}
+
+// getAccountSelector 获取指定后端的共享选择器；未配置账户池时返回 nil。
+func getAccountSelector(backendID string, pool *backend.AccountPoolConfig) *backend.AccountPoolSelector {
+	if pool == nil || strings.TrimSpace(backendID) == "" {
+		return nil
+	}
+	shape := accountPoolShape(pool)
+	accountSelectorStoreMu.Lock()
+	defer accountSelectorStoreMu.Unlock()
+	if e, ok := accountSelectorStore[backendID]; ok && e.shape == shape {
+		return e.selector
+	}
+	sel := backend.NewAccountPoolSelector()
+	accountSelectorStore[backendID] = accountSelectorEntry{selector: sel, shape: shape}
+	return sel
 }
 
 func NewTransparentForwardNode(config NodeConfig) (PipelineNode, error) {
@@ -175,18 +220,14 @@ func (n *TransparentForwardNode) Execute(ctx context.Context, input *NodeInput) 
 	// 旧 injectSystemPromptIntoChatBody 已收敛为 ApplySystemStrategy 薄封装；
 	// NewTransparentForwardNode 总会 ResolveSystemMode，不再走平行分支。
 
-	req, err := http.NewRequestWithContext(ctx, method, targetURL, strings.NewReader(string(body)))
+	client, err := n.getHTTPClient(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("transparent_forward node %q: build request: %w", n.id, err)
+		return nil, fmt.Errorf("transparent_forward node %q: %w", n.id, err)
 	}
-	req.Header.Set("Content-Type", "application/json")
-	// 已解析到配置后端时，优先用后端 API Key 鉴权上游。
-	// 客户端 Authorization 是 Centag 网关鉴权（JWT / 网关 API Key），不能原样转发给上游，
-	// 否则会出现直连正常、透明模式 AuthError: Invalid API key。
-	// 无托管后端（高级旁路绝对 URL）时才透传 forward_authorization。
-	if auth := resolveTransparentUpstreamAuth(backendID, meta); auth != "" {
-		req.Header.Set("Authorization", auth)
-	}
+
+	// 账户池：429 / 计费额度超限（401/402/403 + credits 关键词）时在账户间故障转移；
+	// 未配置账户池时回退到单 Key（resolveTransparentUpstreamAuth）。
+	pool := resolveTransparentAccountPool(backendID)
 
 	logger.Info("transparent_forward outbound",
 		logger.GetField("node_id", n.id),
@@ -194,68 +235,147 @@ func (n *TransparentForwardNode) Execute(ctx context.Context, input *NodeInput) 
 		logger.GetField("model", resolvedModel),
 		logger.GetField("fixed_egress", n.FixedEgress),
 		logger.GetField("target_url", targetURL),
+		logger.GetField("account_pool", pool != nil),
 	)
 
-	client, err := n.getHTTPClient(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("transparent_forward node %q: %w", n.id, err)
+	maxAttempts := 1
+	if pool != nil && len(pool.Accounts) > 1 {
+		maxAttempts = len(pool.Accounts)
 	}
+	sessionKey := backend.ExtractSessionKey(ctx, body, stringMeta(meta, "session_id"))
+	selector := getAccountSelector(backendID, pool)
 
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("transparent_forward node %q: upstream request failed: %w", n.id, err)
-	}
-	defer resp.Body.Close()
+	var (
+		statusCode  int
+		contentType string
+		respBody    []byte
+	)
+	for attempt := 0; attempt < maxAttempts; attempt++ {
+		attemptReq, reqErr := http.NewRequestWithContext(ctx, method, targetURL, strings.NewReader(string(body)))
+		if reqErr != nil {
+			return nil, fmt.Errorf("transparent_forward node %q: build request: %w", n.id, reqErr)
+		}
+		attemptReq.Header.Set("Content-Type", "application/json")
 
-	// [+] 处理 301/302 重定向
-	if (resp.StatusCode == 301 || resp.StatusCode == 302) && n.RedirectPolicy != "never" {
-		location := resp.Header.Get("Location")
-		if location != "" {
-			// smart 模式：仅 GET/HEAD 跟随
-			if n.RedirectPolicy == "smart" && method != http.MethodGet && method != http.MethodHead {
-				// 不跟随，直接透传
+		// 已解析到配置后端时，优先用后端 API Key 鉴权上游。
+		// 客户端 Authorization 是 Centag 网关鉴权（JWT / 网关 API Key），不能原样转发给上游，
+		// 否则会出现直连正常、透明模式 AuthError: Invalid API key。
+		// 无托管后端（高级旁路绝对 URL）时才透传 forward_authorization。
+		auth := resolveTransparentUpstreamAuth(backendID, meta)
+		accountID := ""
+		if pool != nil && selector != nil {
+			if result, selErr := selector.SelectAccountForRequest(ctx, pool, sessionKey); selErr == nil {
+				auth = "Bearer " + backend.NormalizeOpenAICompatibleAPIKey(result.Key)
+				accountID = result.Account.ID
 			} else {
-				// 跟随重定向
-				resp.Body.Close()
-				resp, err = n.followRedirect(ctx, req, location, client, method, body)
-				if err != nil {
-					return nil, fmt.Errorf("transparent_forward node %q: redirect failed: %w", n.id, err)
-				}
-				defer resp.Body.Close()
+				// 池内账户全部处于临时禁用冷却（429/401）时，退化为单 Key 出站，
+				// 避免整条请求因「no healthy accounts」直接失败，也保证计费降级仍可发出。
+				logger.Warn("transparent_forward account pool select failed, degrading to single key",
+					logger.GetField("node_id", n.id),
+					logger.GetField("backend_id", backendID),
+					logger.GetField("error", selErr.Error()),
+				)
+				accountID = ""
 			}
 		}
-	}
+		if auth != "" {
+			attemptReq.Header.Set("Authorization", auth)
+		}
 
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("transparent_forward node %q: read response: %w", n.id, err)
+		currentResp, doErr := client.Do(attemptReq)
+		if doErr != nil {
+			return nil, fmt.Errorf("transparent_forward node %q: upstream request failed: %w", n.id, doErr)
+		}
+
+		// [+] 处理 301/302 重定向
+		if (currentResp.StatusCode == 301 || currentResp.StatusCode == 302) && n.RedirectPolicy != "never" {
+			location := currentResp.Header.Get("Location")
+			if location != "" {
+				// smart 模式：仅 GET/HEAD 跟随
+				if n.RedirectPolicy != "smart" || (method == http.MethodGet || method == http.MethodHead) {
+					// 跟随重定向
+					currentResp.Body.Close()
+					currentResp, doErr = n.followRedirect(ctx, attemptReq, location, client, method, body)
+					if doErr != nil {
+						return nil, fmt.Errorf("transparent_forward node %q: redirect failed: %w", n.id, doErr)
+					}
+				}
+			}
+		}
+
+		currentBody, readErr := io.ReadAll(currentResp.Body)
+		currentResp.Body.Close()
+		if readErr != nil {
+			return nil, fmt.Errorf("transparent_forward node %q: read response: %w", n.id, readErr)
+		}
+
+		// 429 或计费/额度超限（401/402/403/429 + credits 关键词）且账户池存在 → 禁用当前账户并换下一个。
+		// accountID 为空（已退化为单 Key）时不进入轮换，直接透传结果走后续计费降级。
+		if retryableAccountFailure(currentResp.StatusCode, string(currentBody)) && pool != nil && accountID != "" && attempt < maxAttempts-1 {
+			logger.Info("transparent_forward rotate account",
+				logger.GetField("node_id", n.id),
+				logger.GetField("backend_id", backendID),
+				logger.GetField("account_id", accountID),
+				logger.GetField("status_code", currentResp.StatusCode),
+				logger.GetField("attempt", attempt+1),
+				logger.GetField("max_attempts", maxAttempts),
+			)
+			if accountID != "" {
+				selector.DisableAccountTemporarily(pool, accountID)
+			}
+			continue
+		}
+
+		statusCode = currentResp.StatusCode
+		contentType = currentResp.Header.Get("Content-Type")
+		respBody = currentBody
+		break
 	}
 
 	bodyStr := string(respBody)
 
-	// 余额/额度不足：先尝试系统 fallback_model（同后端免费档或备用后端），再向上返回 error 供 FallbackGroups。
+	// 余额/额度不足：先尝试账户池内其他账户（上面已轮换），耗尽后再走系统 fallback_model
+	// （同后端免费档或备用后端），最后向上返回 error 供 FallbackGroups。
 	// 纯鉴权 401/403（无计费关键词）仍透传给客户端。
-	if config.IsBillingOrQuotaFailure(resp.StatusCode, bodyStr) {
+	if config.IsBillingOrQuotaFailure(statusCode, bodyStr) {
 		if out, ok := n.retryWithSystemBillingFallback(ctx, client, method, meta, body, backendID, resolvedModel, clientModel, requestPath, bridgeToChat, anthropicToChat); ok {
 			return out, nil
 		}
 		return nil, fmt.Errorf("transparent_forward node %q: backend=%s model=%s url=%s upstream returned %d: %s",
-			n.id, backendID, resolvedModel, targetURL, resp.StatusCode, truncateBody(respBody, 512))
+			n.id, backendID, resolvedModel, targetURL, statusCode, truncateBody(respBody, 512))
 	}
 
 	// 对可重试的 HTTP 错误码返回 error，触发上层重试/降级逻辑。
-	if config.IsRetryableStatusCode(resp.StatusCode) {
+	if config.IsRetryableStatusCode(statusCode) {
 		return nil, fmt.Errorf("transparent_forward node %q: backend=%s model=%s url=%s upstream returned %d: %s",
-			n.id, backendID, resolvedModel, targetURL, resp.StatusCode, truncateBody(respBody, 512))
+			n.id, backendID, resolvedModel, targetURL, statusCode, truncateBody(respBody, 512))
 	}
 
 	// 模型不存在 / 占位符未解析等：必须返回 error，避免策略降级把错误 JSON 当成成功。
-	if resp.StatusCode >= 400 && isUpstreamModelOrPlaceholderError(bodyStr) {
+	if statusCode >= 400 && isUpstreamModelOrPlaceholderError(bodyStr) {
 		return nil, fmt.Errorf("transparent_forward node %q: backend=%s model=%s url=%s upstream returned %d: %s",
-			n.id, backendID, resolvedModel, targetURL, resp.StatusCode, truncateBody(respBody, 512))
+			n.id, backendID, resolvedModel, targetURL, statusCode, truncateBody(respBody, 512))
 	}
 
-	return n.buildTransparentOutput(targetURL, resp.StatusCode, resp.Header.Get("Content-Type"), respBody, backendID, resolvedModel, clientModel, requestPath, bridgeToChat, anthropicToChat, nil), nil
+	return n.buildTransparentOutput(targetURL, statusCode, contentType, respBody, backendID, resolvedModel, clientModel, requestPath, bridgeToChat, anthropicToChat, nil), nil
+}
+
+// retryableAccountFailure 判断是否应触发账户池故障转移：
+// 429 限流，或 401/402/403 且命中计费/额度关键词（IsBillingOrQuotaFailure 已含 429）。
+func retryableAccountFailure(statusCode int, body string) bool {
+	return statusCode == http.StatusTooManyRequests || config.IsBillingOrQuotaFailure(statusCode, body)
+}
+
+// resolveTransparentAccountPool 解析后端账户池；无托管后端或未配置账户池时返回 nil。
+func resolveTransparentAccountPool(backendID string) *backend.AccountPoolConfig {
+	if ResolveBackendEndpoint == nil || strings.TrimSpace(backendID) == "" {
+		return nil
+	}
+	ep, err := ResolveBackendEndpoint(backendID)
+	if err != nil || ep == nil {
+		return nil
+	}
+	return ep.AccountPool
 }
 
 func isUpstreamModelOrPlaceholderError(body string) bool {

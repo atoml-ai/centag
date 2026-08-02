@@ -201,9 +201,17 @@ func (d *ModeDispatcher) executeStreamToOutput(
 	if finalOutput == nil {
 		finalOutput = &pipeline.PipelineOutput{}
 	}
-	finalOutput.Content = aggResult.Content
-	finalOutput.ReasoningContent = aggResult.ReasoningContent
-	finalOutput.FinishReason = aggResult.FinishReason
+	// 透明 raw_passthrough 节点只下发 Output、不下发 chunk（streamEmitter 分支），
+	// 聚合器结果为空；此时保留 finalOutput 的原始透传内容，避免非流式响应被清空。
+	if aggResult.Content != "" {
+		finalOutput.Content = aggResult.Content
+	}
+	if aggResult.ReasoningContent != "" {
+		finalOutput.ReasoningContent = aggResult.ReasoningContent
+	}
+	if aggResult.FinishReason != "" {
+		finalOutput.FinishReason = aggResult.FinishReason
+	}
 	if len(aggResult.ToolCalls) > 0 {
 		finalOutput.ToolCalls = pluginToolCallsToPipeline(aggResult.ToolCalls)
 	}
@@ -751,6 +759,9 @@ func attachTransparentRequestMetadata(c *gin.Context, metadata map[string]interf
 	}
 	metadata["request_path"] = c.Request.URL.Path
 	metadata["request_method"] = c.Request.Method
+	if sid := strings.TrimSpace(c.GetHeader("X-Session-ID")); sid != "" {
+		metadata["session_id"] = sid
+	}
 	// MITM 会把 Centag egress Key 写入 Authorization，原厂 Key 放在 X-Original-Authorization。
 	// 透明转发打 Centag 后端时用后端 Key；跳板/固定出站用后端 Key 改写鉴权。
 	if orig := strings.TrimSpace(c.GetHeader("X-Original-Authorization")); orig != "" {

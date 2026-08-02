@@ -15,8 +15,9 @@ func wireTransparentBackend(backendMgr *backend.Manager) {
 			return nil, err
 		}
 		return &pipeline.BackendEndpoint{
-			BaseURL: cfg.BaseURL,
-			APIKey:  cfg.APIKey,
+			BaseURL:     cfg.BaseURL,
+			APIKey:      cfg.APIKey,
+			AccountPool: cfg.AccountPool,
 		}, nil
 	}
 	pipeline.ListEnabledBackendsForMatch = func() []*backend.BackendConfig {
