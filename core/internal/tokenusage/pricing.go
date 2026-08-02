@@ -21,13 +21,15 @@ func SetPricingService(s billinginternal.PricingService) {
 
 // PricingBreakdown is the detailed estimate used when writing usage rows.
 type PricingBreakdown struct {
-	TotalCost     float64
-	InputCost     float64
-	OutputCost    float64
-	Currency      string
-	PricingRuleID int64
-	Source        string
-	PriceType     billingpkg.PriceType
+	TotalCost       float64
+	InputCost       float64
+	OutputCost      float64
+	Currency        string
+	PricingRuleID   int64
+	Source          string
+	PriceType       billingpkg.PriceType
+	InputPricePerM  float64 // USD per 1M tokens
+	OutputPricePerM float64 // USD per 1M tokens
 }
 
 // EstimateCost computes prompt + completion cost.
@@ -47,13 +49,15 @@ func EstimateCostDetailed(backendID, model string, promptTokens, completionToken
 		bd, err := pricingSvc.EstimateCost(context.Background(), backendID, model, promptTokens, completionTokens)
 		if err == nil && bd != nil {
 			return PricingBreakdown{
-				TotalCost:     bd.TotalCost,
-				InputCost:     bd.InputCost,
-				OutputCost:    bd.OutputCost,
-				Currency:      bd.Currency,
-				PricingRuleID: bd.PricingRuleID,
-				Source:        bd.Source,
-				PriceType:     bd.PriceType,
+				TotalCost:       bd.TotalCost,
+				InputCost:       bd.InputCost,
+				OutputCost:      bd.OutputCost,
+				Currency:        bd.Currency,
+				PricingRuleID:   bd.PricingRuleID,
+				Source:          bd.Source,
+				PriceType:       bd.PriceType,
+				InputPricePerM:  bd.InputPricePerM,
+				OutputPricePerM: bd.OutputPricePerM,
 			}
 		}
 	}
@@ -66,11 +70,13 @@ func EstimateCostDetailed(backendID, model string, promptTokens, completionToken
 		currency = billinginternal.DefaultPricingCurrency
 	}
 	return PricingBreakdown{
-		TotalCost:  total,
-		InputCost:  in,
-		OutputCost: out,
-		Currency:   currency,
-		Source:     billinginternal.PriceSourceLegacyTable,
+		TotalCost:       total,
+		InputCost:       in,
+		OutputCost:      out,
+		Currency:        currency,
+		Source:          billinginternal.PriceSourceLegacyTable,
+		InputPricePerM:  price.InputPrice,
+		OutputPricePerM: price.OutputPrice,
 	}
 }
 
@@ -83,13 +89,15 @@ func EstimateCostByType(backendID, model string, promptTokens, completionTokens 
 		bd, err := pricingSvc.EstimateCostByType(context.Background(), backendID, model, promptTokens, completionTokens, priceType)
 		if err == nil && bd != nil {
 			return PricingBreakdown{
-				TotalCost:     bd.TotalCost,
-				InputCost:     bd.InputCost,
-				OutputCost:    bd.OutputCost,
-				Currency:      bd.Currency,
-				PricingRuleID: bd.PricingRuleID,
-				Source:        bd.Source,
-				PriceType:     priceType,
+				TotalCost:       bd.TotalCost,
+				InputCost:       bd.InputCost,
+				OutputCost:      bd.OutputCost,
+				Currency:        bd.Currency,
+				PricingRuleID:   bd.PricingRuleID,
+				Source:          bd.Source,
+				PriceType:       priceType,
+				InputPricePerM:  bd.InputPricePerM,
+				OutputPricePerM: bd.OutputPricePerM,
 			}
 		}
 	}

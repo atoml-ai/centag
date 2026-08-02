@@ -1381,7 +1381,8 @@ func (s *Server) setupRoutes() {
 
 	// 代理类 API 共用：JWT 或 API Key（与 OpenAI 兼容路由一致）
 	dbPlugin := database.Get().Plugin()
-	isDesktop := dbPlugin.Name() == "sqlite"
+	// 仅单机 personal 版（SQLite）跳过预算/模型/限速检查；team/minimal 即便 SQLite 也须强制
+	isDesktop := dbPlugin.Name() == "sqlite" && s.edition.IsPersonal()
 	proxyAuth := auth.ProxyAuthMiddleware(&auth.AuthConfig{
 		RateLimiter: auth.NewRateLimiter(s.cfg.Redis),
 		IsDesktop:   isDesktop,

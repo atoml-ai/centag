@@ -87,6 +87,9 @@ type TokenUsage struct {
 	// UserID 用户 ID
 	UserID int64 `json:"user_id"`
 
+	// APIKeyID 使用的虚拟 Key ID（API Key 认证时）
+	APIKeyID int64 `json:"api_key_id,omitempty"`
+
 	// TenantID 租户 ID（team；单用户可为空）
 	TenantID string `json:"tenant_id,omitempty"`
 

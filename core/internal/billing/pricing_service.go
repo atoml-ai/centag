@@ -174,14 +174,16 @@ func (s *DefaultPricingService) EstimateCost(ctx context.Context, backendID, mod
 	in := float64(inputTokens) / 1_000_000 * info.InputPricePerM
 	out := float64(outputTokens) / 1_000_000 * info.OutputPricePerM
 	return &CostBreakdown{
-		InputCost:     in,
-		OutputCost:    out,
-		TotalCost:     in + out,
-		Currency:      info.Currency,
-		InputTokens:   inputTokens,
-		OutputTokens:  outputTokens,
-		PricingRuleID: info.PricingRuleID,
-		Source:        info.Source,
+		InputCost:       in,
+		OutputCost:      out,
+		TotalCost:       in + out,
+		Currency:        info.Currency,
+		InputTokens:     inputTokens,
+		OutputTokens:    outputTokens,
+		PricingRuleID:   info.PricingRuleID,
+		Source:          info.Source,
+		InputPricePerM:  info.InputPricePerM,
+		OutputPricePerM: info.OutputPricePerM,
 	}, nil
 }
 
@@ -310,15 +312,17 @@ func (s *DefaultPricingService) EstimateCostByType(ctx context.Context, backendI
 	in := float64(inputTokens) / 1_000_000 * info.InputPricePerM
 	out := float64(outputTokens) / 1_000_000 * info.OutputPricePerM
 	return &CostBreakdown{
-		InputCost:     in,
-		OutputCost:    out,
-		TotalCost:     in + out,
-		Currency:      info.Currency,
-		InputTokens:   inputTokens,
-		OutputTokens:  outputTokens,
-		PricingRuleID: info.PricingRuleID,
-		Source:        info.Source,
-		PriceType:     priceType,
+		InputCost:       in,
+		OutputCost:      out,
+		TotalCost:       in + out,
+		Currency:        info.Currency,
+		InputTokens:     inputTokens,
+		OutputTokens:    outputTokens,
+		PricingRuleID:   info.PricingRuleID,
+		Source:          info.Source,
+		PriceType:       priceType,
+		InputPricePerM:  info.InputPricePerM,
+		OutputPricePerM: info.OutputPricePerM,
 	}, nil
 }
 

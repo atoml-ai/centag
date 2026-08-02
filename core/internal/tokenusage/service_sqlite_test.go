@@ -3,11 +3,14 @@ package tokenusage
 import (
 	"context"
 	"database/sql"
+	"math"
 	"testing"
 	"time"
 
 	_ "modernc.org/sqlite"
 )
+
+func abs(f float64) float64 { return math.Abs(f) }
 
 func setupSQLiteTokenUsageDB(t *testing.T) *sql.DB {
 	t.Helper()
@@ -15,6 +18,9 @@ func setupSQLiteTokenUsageDB(t *testing.T) *sql.DB {
 	if err != nil {
 		t.Fatalf("open sqlite: %v", err)
 	}
+	// :memory: SQLite is per-connection; pin to a single connection so the
+	// same database is visible across the pool (BeginTx / QueryRow / etc.).
+	db.SetMaxOpenConns(1)
 	schema := `
 	CREATE TABLE users (id INTEGER PRIMARY KEY, username TEXT NOT NULL);
 	INSERT INTO users (id, username) VALUES (1, 'admin');
@@ -189,9 +195,10 @@ func setupSQLiteTokenUsageDBWithAPIKeys(t *testing.T) *sql.DB {
 	return db
 }
 
-// TestRecordUsage_UsedUSD_SQLiteSkip verifies that on SQLite driver,
-// RecordUsage with api_key_id>0 and cost>0 does NOT crash but skips the writeback.
-func TestRecordUsage_UsedUSD_SQLiteSkip(t *testing.T) {
+// TestRecordUsage_UsedUSD_SQLiteWriteback verifies that on SQLite driver,
+// RecordUsage with api_key_id>0 and cost>0 writes back used_usd (money-based
+// quota must work for the team edition which runs on SQLite).
+func TestRecordUsage_UsedUSD_SQLiteWriteback(t *testing.T) {
 	db := setupSQLiteTokenUsageDBWithAPIKeys(t)
 	defer db.Close()
 
@@ -212,13 +219,35 @@ func TestRecordUsage_UsedUSD_SQLiteSkip(t *testing.T) {
 		t.Fatalf("RecordUsage with api_key_id on sqlite: %v", err)
 	}
 
-	// used_usd should remain unchanged (writeback skipped for SQLite driver)
+	// used_usd should be incremented (money-based quota on SQLite team edition)
 	var usedUSD float64
 	if err := db.QueryRow(`SELECT used_usd FROM api_keys WHERE id = 1`).Scan(&usedUSD); err != nil {
 		t.Fatalf("query used_usd: %v", err)
 	}
-	if usedUSD != 0 {
-		t.Errorf("used_usd should be 0 on SQLite driver (writeback skipped), got %f", usedUSD)
+	if abs(usedUSD-0.05) > 1e-6 {
+		t.Errorf("used_usd should be 0.05 after writeback on SQLite driver, got %f", usedUSD)
+	}
+
+	// Second usage accumulates
+	if err := svc.RecordUsage(context.Background(), &UsageRecord{
+		UserID:           1,
+		APIKeyID:         1,
+		BackendID:        "deepseek",
+		Model:            "deepseek-v4-flash",
+		PromptTokens:     10,
+		CompletionTokens: 5,
+		TotalTokens:      15,
+		CostUSD:          0.02,
+		RequestID:        "req-usd-2",
+		Success:          true,
+	}); err != nil {
+		t.Fatalf("RecordUsage second: %v", err)
+	}
+	if err := db.QueryRow(`SELECT used_usd FROM api_keys WHERE id = 1`).Scan(&usedUSD); err != nil {
+		t.Fatalf("query used_usd: %v", err)
+	}
+	if abs(usedUSD-0.07) > 1e-6 {
+		t.Errorf("used_usd should be 0.07 after second writeback, got %f", usedUSD)
 	}
 
 	// Detail row should be inserted

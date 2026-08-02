@@ -22,6 +22,7 @@ func (a *tokenUsageHookAdapter) OnTokenUsed(ctx context.Context, usage *hooks.To
 	}
 	rec := &tokenusage.UsageRecord{
 		UserID:           usage.UserID,
+		APIKeyID:         usage.APIKeyID,
 		BackendID:        usage.Backend,
 		Model:            usage.Model,
 		PromptTokens:     usage.InputTokens,

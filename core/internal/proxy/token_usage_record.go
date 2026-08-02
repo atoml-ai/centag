@@ -5,11 +5,11 @@ import (
 	"encoding/json"
 	"strings"
 
-	"github.com/gin-gonic/gin"
 	"centag/core/internal/auth"
 	"centag/core/internal/tokenusage"
 	"centag/core/pkg/hooks"
 	"centag/core/pkg/pipeline"
+	"github.com/gin-gonic/gin"
 )
 
 // maybeRecordTokenUsage persists usage for proxy requests when the pipeline has no
@@ -62,6 +62,7 @@ func maybeRecordTokenUsage(c *gin.Context, output *pipeline.PipelineOutput, fall
 	clientIP := c.ClientIP()
 	usage := &hooks.TokenUsage{
 		UserID:       userID,
+		APIKeyID:     auth.GetAPIKeyID(c),
 		TenantID:     auth.GetTenantID(c),
 		RequestID:    c.GetHeader("X-Request-ID"),
 		SessionID:    strings.TrimSpace(c.GetHeader("X-Session-ID")),

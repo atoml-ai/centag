@@ -127,6 +127,12 @@ func (s *Service) RecordUsage(ctx context.Context, record *UsageRecord) error {
 		if record.PricingRuleID == 0 {
 			record.PricingRuleID = bd.PricingRuleID
 		}
+		if record.CostInputPrice == 0 {
+			record.CostInputPrice = bd.InputPricePerM
+		}
+		if record.CostOutputPrice == 0 {
+			record.CostOutputPrice = bd.OutputPricePerM
+		}
 	}
 
 	normalizedAgentType := normalizeAgentType(record.AgentType)
@@ -179,10 +185,11 @@ func (s *Service) RecordUsage(ctx context.Context, record *UsageRecord) error {
 		return err
 	}
 
-	// 3. 回写虚拟 Key 已用额度（仅 PostgreSQL Team 版）
-	if record.APIKeyID > 0 && s.isPostgres() && record.CostUSD > 0 {
-		updateQuery := s.q(`UPDATE api_keys SET used_usd = used_usd + $2 WHERE id = $1`)
-		_, err = tx.ExecContext(ctx, updateQuery, record.APIKeyID, record.CostUSD)
+	// 3. 回写虚拟 Key 已用额度（金额口径，SQLite/PostgreSQL 均生效）
+	// 注意：占位符须按文本出现顺序递增（$1/$2），q() 在 SQLite 下按顺序转成 ? 才不致错位
+	if record.APIKeyID > 0 && record.CostUSD > 0 {
+		updateQuery := s.q(`UPDATE api_keys SET used_usd = used_usd + $1 WHERE id = $2`)
+		_, err = tx.ExecContext(ctx, updateQuery, record.CostUSD, record.APIKeyID)
 		if err != nil {
 			return err
 		}

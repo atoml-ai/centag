@@ -12,7 +12,8 @@ const (
 	CtxKeyUserID   = "auth_user_id"
 	CtxKeyUsername = "auth_username"
 	CtxKeyRole     = "auth_role"
-	CtxKeyTenantID = "auth_tenant_id" // 多租户：当前请求的租户 ID
+	CtxKeyTenantID = "auth_tenant_id"  // 多租户：当前请求的租户 ID
+	CtxKeyAPIKeyID = "auth_api_key_id" // API Key 认证时：命中的虚拟 Key 主键
 )
 
 var ErrUnauthenticated = errors.New("unauthenticated")
@@ -57,6 +58,20 @@ func GetTenantID(c *gin.Context) string {
 	}
 	tid, _ := v.(string)
 	return tid
+}
+
+// GetAPIKeyID extracts the authenticated virtual API key ID from the Gin context.
+// Returns 0 when the request was authenticated via JWT or unauthenticated.
+func GetAPIKeyID(c *gin.Context) int64 {
+	v, exists := c.Get(CtxKeyAPIKeyID)
+	if !exists {
+		return 0
+	}
+	id, ok := v.(int64)
+	if !ok {
+		return 0
+	}
+	return id
 }
 
 // IsAdmin reports whether the request is from an admin user.

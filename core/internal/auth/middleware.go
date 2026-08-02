@@ -193,6 +193,8 @@ func ProxyAuthMiddleware(cfg *AuthConfig) gin.HandlerFunc {
 				defer cancel()
 				_ = db.APIKeyStore().UpdateLastUsed(ctx, keyID, time.Now())
 			}()
+			// Expose the API key ID so usage recording can attribute billing to the key.
+			c.Set(CtxKeyAPIKeyID, key.ID)
 
 			c.Next()
 			return
