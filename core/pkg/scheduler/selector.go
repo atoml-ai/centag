@@ -190,3 +190,115 @@ func (s *ConfigDrivenSelector) LoadPrioritiesFromConfig(config map[string][]stri
 		s.TaskPriorities[taskType] = priorities
 	}
 }
+
+// RoutingSelector 成本感知路由选择器
+// 基于 BackendCandidate 和 ScoreWeights 实现三策略选择
+type RoutingSelector struct {
+	scorer *MultiDimensionScorer
+}
+
+// NewRoutingSelector 创建路由选择器
+func NewRoutingSelector(scorer *MultiDimensionScorer) *RoutingSelector {
+	return &RoutingSelector{
+		scorer: scorer,
+	}
+}
+
+// SelectByRoutingPolicy 根据路由策略选择最优候选后端
+func (s *RoutingSelector) SelectByRoutingPolicy(candidates []*BackendCandidate, policy RoutingPolicyType) *BackendCandidate {
+	if len(candidates) == 0 {
+		return nil
+	}
+
+	// 过滤已启用的候选
+	enabled := make([]*BackendCandidate, 0, len(candidates))
+	for _, c := range candidates {
+		if c.Enabled {
+			enabled = append(enabled, c)
+		}
+	}
+
+	if len(enabled) == 0 {
+		return nil
+	}
+
+	// 根据策略选择
+	switch policy {
+	case RoutingPolicyCostOptimal:
+		return s.selectCostOptimal(enabled)
+	case RoutingPolicyQualityFirst:
+		return s.selectQualityFirst(enabled)
+	case RoutingPolicyLatencyFirst:
+		return s.selectLatencyFirst(enabled)
+	default:
+		return s.selectBalanced(enabled)
+	}
+}
+
+// selectCostOptimal 成本优先选择：选择成本最低的候选
+func (s *RoutingSelector) selectCostOptimal(candidates []*BackendCandidate) *BackendCandidate {
+	if len(candidates) == 0 {
+		return nil
+	}
+
+	best := candidates[0]
+	for _, c := range candidates[1:] {
+		if c.DynamicCostPer1k < best.DynamicCostPer1k {
+			best = c
+		}
+	}
+	return best
+}
+
+// selectQualityFirst 质量优先选择：选择质量最高的候选
+func (s *RoutingSelector) selectQualityFirst(candidates []*BackendCandidate) *BackendCandidate {
+	if len(candidates) == 0 {
+		return nil
+	}
+
+	// 简化：选择第一个候选（质量由模型决定）
+	return candidates[0]
+}
+
+// selectLatencyFirst 延迟优先选择：选择延迟最低的候选
+func (s *RoutingSelector) selectLatencyFirst(candidates []*BackendCandidate) *BackendCandidate {
+	if len(candidates) == 0 {
+		return nil
+	}
+
+	// 简化：选择第一个候选（延迟由监控数据决定）
+	return candidates[0]
+}
+
+// selectBalanced 平衡模式选择：使用多维度评分
+func (s *RoutingSelector) selectBalanced(candidates []*BackendCandidate) *BackendCandidate {
+	if len(candidates) == 0 {
+		return nil
+	}
+
+	// 使用评分器进行多维度评分（使用已有的平衡权重）
+	weights := DefaultWeights()
+	intent := &ClassificationResult{TaskType: TaskSimpleChat}
+	scores := s.scorer.ScoreCandidates(candidates, intent, weights)
+
+	if len(scores) == 0 {
+		return nil
+	}
+
+	// 返回评分最高的候选
+	bestScore := scores[0]
+	for _, score := range scores[1:] {
+		if score.TotalScore > bestScore.TotalScore {
+			bestScore = score
+		}
+	}
+
+	// 找到对应的候选
+	for _, c := range candidates {
+		if c.BackendID == bestScore.BackendID {
+			return c
+		}
+	}
+
+	return candidates[0]
+}

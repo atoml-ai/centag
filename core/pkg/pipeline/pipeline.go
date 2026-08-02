@@ -19,6 +19,20 @@ type AgentPatternPipeline struct {
 	Nodes         []PipelineNodeConfig   `json:"nodes" yaml:"nodes"`
 	GlobalConfig  GlobalPipelineConfig   `json:"global_config" yaml:"global_config"`
 	Metadata      map[string]interface{} `json:"metadata,omitempty" yaml:"metadata,omitempty"`
+	// RoutingPolicy 路由策略（cost_optimal / balanced / quality_first / latency_first）
+	RoutingPolicy string `json:"routing_policy,omitempty" yaml:"routing_policy,omitempty"`
+	// PipelinePricing 流水线级别定价配置
+	PipelinePricing *PipelinePricing `json:"pipeline_pricing,omitempty" yaml:"pipeline_pricing,omitempty"`
+}
+
+// PipelinePricing 流水线级别定价配置
+type PipelinePricing struct {
+	// CostPriceType 成本侧价格类型（默认 "cost"）
+	CostPriceType string `json:"cost_price_type,omitempty" yaml:"cost_price_type,omitempty"`
+	// RevenuePriceType 营收侧价格类型（默认 "revenue"）
+	RevenuePriceType string `json:"revenue_price_type,omitempty" yaml:"revenue_price_type,omitempty"`
+	// EnableDualPricing 是否启用双侧定价
+	EnableDualPricing bool `json:"enable_dual_pricing,omitempty" yaml:"enable_dual_pricing,omitempty"`
 }
 
 // RouteConfig 分支路由配置

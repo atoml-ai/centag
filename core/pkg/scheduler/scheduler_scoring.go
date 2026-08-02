@@ -1,6 +1,7 @@
 package scheduler
 
 import (
+	"fmt"
 	"strings"
 
 	"centag/core/pkg/backend"
@@ -137,4 +138,47 @@ func (s *Scheduler) SetScorerDefaultWeights(weights map[string]int) {
 		w.Match = float64(v) / 100.0
 	}
 	s.scorer.SetDefaultWeights(w)
+}
+
+// RecommendByRoutingPolicy 使用成本感知路由选择候选后端
+func (s *Scheduler) RecommendByRoutingPolicy(candidates []*BackendCandidate, policy RoutingPolicyType) *ScheduleDecision {
+	decision := &ScheduleDecision{Alternatives: make([]BackendAlternative, 0)}
+
+	if len(candidates) == 0 {
+		decision.Reason = "无可用候选后端"
+		return decision
+	}
+
+	// 创建路由选择器
+	selector := NewRoutingSelector(s.scorer)
+	best := selector.SelectByRoutingPolicy(candidates, policy)
+
+	if best == nil {
+		decision.Reason = "路由选择失败"
+		return decision
+	}
+
+	decision.RecommendedBackendID = best.BackendID
+	decision.RecommendedModel = best.Model
+	decision.EstimatedCost = best.DynamicCostPer1k
+	decision.Reason = fmt.Sprintf("路由策略: %s, 选择后端: %s, 成本: %.6f 元/1K tokens",
+		policy, best.BackendID, best.DynamicCostPer1k)
+
+	// 添加备选方案（其他候选）
+	for _, c := range candidates {
+		if c.BackendID != best.BackendID && c.Enabled {
+			decision.Alternatives = append(decision.Alternatives, BackendAlternative{
+				BackendID:   c.BackendID,
+				BackendName: c.Model,
+				Model:       c.Model,
+				Score:       c.DynamicCostPer1k,
+				Reason:      fmt.Sprintf("成本: %.6f 元/1K tokens", c.DynamicCostPer1k),
+			})
+			if len(decision.Alternatives) >= 3 {
+				break
+			}
+		}
+	}
+
+	return decision
 }

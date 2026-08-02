@@ -453,3 +453,84 @@ func (s *MultiDimensionScorer) CalculatePriceScore(backendID, model string) floa
 func (s *MultiDimensionScorer) GetWeightsForIntent(intent *ClassificationResult) DimensionWeights {
 	return s.getWeightsForIntent(intent)
 }
+
+// ScoreCandidate 对候选后端进行成本感知评分
+func (s *MultiDimensionScorer) ScoreCandidate(candidate *BackendCandidate, intent *ClassificationResult, weights DimensionWeights) *BackendScore {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	score := &BackendScore{
+		BackendID:   candidate.BackendID,
+		BackendName: candidate.Model,
+		Weights:     weights,
+	}
+
+	// 成本评分（基于动态成本）
+	if candidate.DynamicCostPer1k > 0 {
+		// 根据动态成本计算价格评分
+		// 假设：免费=1.0，0.01元以下=0.9，0.01-0.05元=0.8，0.05-0.1元=0.6，0.1-0.5元=0.4，0.5元以上=0.2
+		switch {
+		case candidate.DynamicCostPer1k <= 0:
+			score.Dimensions.PriceScore = 1.0
+		case candidate.DynamicCostPer1k <= 0.01:
+			score.Dimensions.PriceScore = 0.9
+		case candidate.DynamicCostPer1k <= 0.05:
+			score.Dimensions.PriceScore = 0.8
+		case candidate.DynamicCostPer1k <= 0.1:
+			score.Dimensions.PriceScore = 0.6
+		case candidate.DynamicCostPer1k <= 0.5:
+			score.Dimensions.PriceScore = 0.4
+		default:
+			score.Dimensions.PriceScore = 0.2
+		}
+		score.EstimatedCost = candidate.DynamicCostPer1k
+	} else {
+		// 无动态成本，使用静态价格表
+		score.Dimensions.PriceScore = s.calculatePriceScore(candidate.BackendID, candidate.Model)
+		score.EstimatedCost = s.priceTable.EstimateCost(candidate.BackendID, candidate.Model, 0, 0)
+	}
+
+	// 性能评分
+	score.Dimensions.PerformanceScore = s.perfCollector.GetPerformanceScore(candidate.BackendID)
+
+	// 质量评分（基于候选后端）
+	score.Dimensions.QualityScore = 0.8 // 默认质量为 0.8
+
+	// 延迟评分
+	score.Dimensions.LatencyScore = s.latencyMonitor.GetLatencyScore(candidate.BackendID)
+
+	// 隐私评分
+	score.Dimensions.PrivacyScore = 0.5 // 默认为云端
+
+	// 匹配度评分
+	score.Dimensions.MatchScore = 0.7 // 默认匹配度
+
+	// 计算加权总分
+	score.TotalScore = s.calculateWeightedTotal(score.Dimensions, weights)
+
+	// 生成评分理由
+	score.Reason = s.generateReason(score)
+
+	return score
+}
+
+// ScoreCandidates 对多个候选后端进行评分并排序
+func (s *MultiDimensionScorer) ScoreCandidates(candidates []*BackendCandidate, intent *ClassificationResult, weights DimensionWeights) []*BackendScore {
+	if len(candidates) == 0 {
+		return []*BackendScore{}
+	}
+
+	scores := make([]*BackendScore, 0, len(candidates))
+	for _, candidate := range candidates {
+		if !candidate.Enabled {
+			continue
+		}
+		score := s.ScoreCandidate(candidate, intent, weights)
+		scores = append(scores, score)
+	}
+
+	// 按总分排序
+	sortScores(scores)
+
+	return scores
+}

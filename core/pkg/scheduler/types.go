@@ -141,3 +141,85 @@ func (u UrgencyLevel) String() string {
 		return "未知"
 	}
 }
+
+// BackendCandidate 候选后端（用于成本感知路由）
+type BackendCandidate struct {
+	BackendID        string  `json:"backend_id"`
+	Model            string  `json:"model"`
+	DynamicCostPer1k float64 `json:"dynamic_cost_per_1k"` // 动态成本（元/1K tokens）
+	PriceType        string  `json:"price_type"`           // "cost" 或 "revenue"
+	Tier             int     `json:"tier"`                 // 价格层级（0=免费，1=低价，2=中价，3=高价）
+	Enabled          bool    `json:"enabled"`
+}
+
+// ScoreWeights 评分权重（用于成本感知路由）
+type ScoreWeights struct {
+	Cost      float64 `json:"cost"`       // 成本权重（0-1）
+	Quality   float64 `json:"quality"`    // 质量权重（0-1）
+	Latency   float64 `json:"latency"`    // 延迟权重（0-1）
+	Match     float64 `json:"match"`      // 匹配度权重（0-1）
+}
+
+// RoutingPolicyType 路由策略类型
+type RoutingPolicyType string
+
+const (
+	RoutingPolicyCostOptimal  RoutingPolicyType = "cost_optimal"  // 成本优先
+	RoutingPolicyBalanced     RoutingPolicyType = "balanced"      // 平衡模式
+	RoutingPolicyQualityFirst RoutingPolicyType = "quality_first" // 质量优先
+	RoutingPolicyLatencyFirst RoutingPolicyType = "latency_first" // 延迟优先
+)
+
+// DefaultScoreWeights 返回默认权重（平衡模式）
+func DefaultScoreWeights() ScoreWeights {
+	return ScoreWeights{
+		Cost:    0.25,
+		Quality: 0.35,
+		Latency: 0.20,
+		Match:   0.20,
+	}
+}
+
+// CostOptimalWeights 返回成本优先权重
+func CostOptimalWeights() ScoreWeights {
+	return ScoreWeights{
+		Cost:    0.50,
+		Quality: 0.20,
+		Latency: 0.15,
+		Match:   0.15,
+	}
+}
+
+// QualityFirstWeights 返回质量优先权重
+func QualityFirstWeights() ScoreWeights {
+	return ScoreWeights{
+		Cost:    0.10,
+		Quality: 0.55,
+		Latency: 0.15,
+		Match:   0.20,
+	}
+}
+
+// LatencyFirstWeights 返回延迟优先权重
+func LatencyFirstWeights() ScoreWeights {
+	return ScoreWeights{
+		Cost:    0.15,
+		Quality: 0.25,
+		Latency: 0.45,
+		Match:   0.15,
+	}
+}
+
+// GetScoreWeightsByPolicy 根据路由策略获取权重
+func GetScoreWeightsByPolicy(policy RoutingPolicyType) ScoreWeights {
+	switch policy {
+	case RoutingPolicyCostOptimal:
+		return CostOptimalWeights()
+	case RoutingPolicyQualityFirst:
+		return QualityFirstWeights()
+	case RoutingPolicyLatencyFirst:
+		return LatencyFirstWeights()
+	default:
+		return DefaultScoreWeights()
+	}
+}
