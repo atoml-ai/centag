@@ -26,6 +26,8 @@ type UsageRecord struct {
 	CostUSD          float64 `json:"cost_usd"` // USD amount (column name historical)
 	InputCost        float64 `json:"input_cost"`
 	OutputCost       float64 `json:"output_cost"`
+	CostInputPrice   float64 `json:"cost_input_price"`  // 成本侧 input 单价（USD per 1M tokens）
+	CostOutputPrice  float64 `json:"cost_output_price"` // 成本侧 output 单价（USD per 1M tokens）
 	PricingRuleID    int64   `json:"pricing_rule_id"`
 	Success          bool    `json:"success"`
 	TenantID         string  `json:"tenant_id"`
@@ -143,14 +145,15 @@ func (s *Service) RecordUsage(ctx context.Context, record *UsageRecord) error {
 	}
 	insertQuery := s.q(`
 		INSERT INTO token_usage 
-		(user_id, api_key_id, backend_id, model, prompt_tokens, completion_tokens, total_tokens, cost_usd, input_cost, output_cost, pricing_rule_id, success, tenant_id, dept_tag, request_id, agent_type)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+		(user_id, api_key_id, backend_id, model, prompt_tokens, completion_tokens, total_tokens, cost_usd, input_cost, output_cost, cost_input_price, cost_output_price, pricing_rule_id, success, tenant_id, dept_tag, request_id, agent_type)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
 	`)
 	_, err = tx.ExecContext(ctx, insertQuery,
 		record.UserID, record.APIKeyID, record.BackendID, record.Model,
 		record.PromptTokens, record.CompletionTokens, record.TotalTokens,
-		record.CostUSD, record.InputCost, record.OutputCost, ruleID,
-		success, nullIfEmpty(record.TenantID), nullIfEmpty(record.DeptTag),
+		record.CostUSD, record.InputCost, record.OutputCost,
+		record.CostInputPrice, record.CostOutputPrice,
+		ruleID, success, nullIfEmpty(record.TenantID), nullIfEmpty(record.DeptTag),
 		record.RequestID, normalizedAgentType,
 	)
 	if err != nil {
@@ -170,7 +173,7 @@ func (s *Service) RecordUsage(ctx context.Context, record *UsageRecord) error {
 	_, err = tx.ExecContext(ctx, upsertQuery,
 		record.UserID, record.BackendID, record.Model, normalizedAgentType, dateStr,
 		record.PromptTokens, record.CompletionTokens, record.TotalTokens,
-		record.CostUSD,
+		record.CostUSD, record.CostInputPrice, record.CostOutputPrice,
 	)
 	if err != nil {
 		return err
@@ -192,28 +195,32 @@ func (s *Service) recordUsageDailyUpsertSQL() string {
 	if s.isPostgres() {
 		return `
 		INSERT INTO token_usage_daily 
-		(user_id, backend_id, model, agent_type, date, total_prompt_tokens, total_completion_tokens, total_tokens, total_cost_usd, request_count)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 1)
+		(user_id, backend_id, model, agent_type, date, total_prompt_tokens, total_completion_tokens, total_tokens, total_cost_usd, cost_input_price, cost_output_price, request_count)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 1)
 		ON CONFLICT (user_id, backend_id, model, agent_type, date)
 		DO UPDATE SET
 			total_prompt_tokens = token_usage_daily.total_prompt_tokens + $6,
 			total_completion_tokens = token_usage_daily.total_completion_tokens + $7,
 			total_tokens = token_usage_daily.total_tokens + $8,
 			total_cost_usd = token_usage_daily.total_cost_usd + $9,
+			cost_input_price = token_usage_daily.cost_input_price + $10,
+			cost_output_price = token_usage_daily.cost_output_price + $11,
 			request_count = token_usage_daily.request_count + 1,
 			updated_at = CURRENT_TIMESTAMP
 	`
 	}
 	return `
 		INSERT INTO token_usage_daily 
-		(user_id, backend_id, model, agent_type, date, total_prompt_tokens, total_completion_tokens, total_tokens, total_cost_usd, request_count)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+		(user_id, backend_id, model, agent_type, date, total_prompt_tokens, total_completion_tokens, total_tokens, total_cost_usd, cost_input_price, cost_output_price, request_count)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
 		ON CONFLICT (user_id, backend_id, model, agent_type, date)
 		DO UPDATE SET
 			total_prompt_tokens = token_usage_daily.total_prompt_tokens + excluded.total_prompt_tokens,
 			total_completion_tokens = token_usage_daily.total_completion_tokens + excluded.total_completion_tokens,
 			total_tokens = token_usage_daily.total_tokens + excluded.total_tokens,
 			total_cost_usd = token_usage_daily.total_cost_usd + excluded.total_cost_usd,
+			cost_input_price = token_usage_daily.cost_input_price + excluded.cost_input_price,
+			cost_output_price = token_usage_daily.cost_output_price + excluded.cost_output_price,
 			request_count = token_usage_daily.request_count + 1,
 			updated_at = CURRENT_TIMESTAMP
 	`

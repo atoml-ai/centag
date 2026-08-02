@@ -33,6 +33,8 @@ func setupSQLiteTokenUsageDB(t *testing.T) *sql.DB {
 		cost_usd REAL DEFAULT 0,
 		input_cost REAL DEFAULT 0,
 		output_cost REAL DEFAULT 0,
+		cost_input_price REAL DEFAULT 0,
+		cost_output_price REAL DEFAULT 0,
 		pricing_rule_id INTEGER,
 		success INTEGER NOT NULL DEFAULT 1,
 		dept_tag TEXT,
@@ -49,6 +51,8 @@ func setupSQLiteTokenUsageDB(t *testing.T) *sql.DB {
 		total_completion_tokens INTEGER DEFAULT 0,
 		total_tokens INTEGER DEFAULT 0,
 		total_cost_usd REAL DEFAULT 0,
+		cost_input_price REAL DEFAULT 0,
+		cost_output_price REAL DEFAULT 0,
 		request_count INTEGER DEFAULT 0,
 		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		UNIQUE(user_id, backend_id, model, agent_type, date)
