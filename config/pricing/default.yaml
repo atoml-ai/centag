@@ -1,13 +1,16 @@
-version: "1.0"
+version: "2.0"
 currency: "USD"
 usd_to_cny: 7.2
-updated_at: "2026-07-18T00:00:00Z"
+updated_at: "2026-07-30T00:00:00Z"
 
 # Prices are USD per 1M tokens. Display may convert to CNY via usd_to_cny.
+# price_type: "cost" (成本价) or "revenue" (收入价)
+# Personal 版默认只关心成本价，allowed_* 为空时默认全部可用
 rules:
   - name: "Ollama 本地"
     backend_id: "ollama-local"
     model: "*"
+    price_type: "cost"
     input_price_per_m: 0
     output_price_per_m: 0
     priority: 0
@@ -16,6 +19,7 @@ rules:
   - name: "PPIO DeepSeek V3.2"
     backend_id: "ppinfra"
     model: "deepseek-v3.2"
+    price_type: "cost"
     input_price_per_m: 0.1389
     output_price_per_m: 0.1389
     priority: 100
@@ -24,6 +28,7 @@ rules:
   - name: "PPIO Qwen3.5-Plus"
     backend_id: "ppinfra"
     model: "qwen3.5-plus"
+    price_type: "cost"
     input_price_per_m: 0.2083
     output_price_per_m: 0.2083
     priority: 100
@@ -32,6 +37,7 @@ rules:
   - name: "PPIO GLM-5"
     backend_id: "ppinfra"
     model: "glm-5"
+    price_type: "cost"
     input_price_per_m: 0.6944
     output_price_per_m: 0.6944
     priority: 100
@@ -40,6 +46,7 @@ rules:
   - name: "PPIO Kimi K2.5"
     backend_id: "ppinfra"
     model: "kimi-k2.5"
+    price_type: "cost"
     input_price_per_m: 1.1111
     output_price_per_m: 1.1111
     priority: 100
@@ -48,6 +55,7 @@ rules:
   - name: "PPIO MiniMax M2.5"
     backend_id: "ppinfra"
     model: "minimax-m2.5"
+    price_type: "cost"
     input_price_per_m: 0.2778
     output_price_per_m: 0.2778
     priority: 100
@@ -56,6 +64,7 @@ rules:
   - name: "智谱 GLM-5"
     backend_id: "bigmodel"
     model: "glm-5"
+    price_type: "cost"
     input_price_per_m: 2.7778
     output_price_per_m: 2.7778
     priority: 100
@@ -64,6 +73,7 @@ rules:
   - name: "智谱 GLM-4.7"
     backend_id: "bigmodel"
     model: "glm-4.7"
+    price_type: "cost"
     input_price_per_m: 0.6944
     output_price_per_m: 0.6944
     priority: 100
@@ -72,6 +82,7 @@ rules:
   - name: "智谱 GLM-4-Flash"
     backend_id: "bigmodel"
     model: "glm-4-flash"
+    price_type: "cost"
     input_price_per_m: 0.0694
     output_price_per_m: 0.0694
     priority: 100
@@ -80,6 +91,7 @@ rules:
   - name: "智谱 GLM-4-FlashX"
     backend_id: "bigmodel"
     model: "glm-4-flashx"
+    price_type: "cost"
     input_price_per_m: 0.1389
     output_price_per_m: 0.1389
     priority: 100

@@ -92,6 +92,7 @@ type Server struct {
 	tokenUsageHandler   *TokenUsageHandler
 	costHandler         *CostHandler
 	billingRulesHandler *BillingRulesHandler
+	personalBillingHandler *PersonalBillingHandler
 	pricingService      billing.PricingService
 	memoryHandler       *MemoryHandler
 	modeManager          *proxymode.ModeManager
@@ -620,6 +621,7 @@ func New(cfg *config.Config) *Server {
 	var tokenUsageHandler *TokenUsageHandler
 	var costHandler *CostHandler
 	var billingRulesHandler *BillingRulesHandler
+	var personalBillingHandler *PersonalBillingHandler
 	var pricingService billing.PricingService
 	var abEvalAdmin abevalapi.AdminService
 	if db := database.Get().GetDB(); db != nil {
@@ -646,6 +648,7 @@ func New(cfg *config.Config) *Server {
 		pricingService = billing.NewPricingService(ruleStore)
 		tokenusage.SetPricingService(pricingService)
 		billingRulesHandler = NewBillingRulesHandler(ruleStore, pricingService)
+		personalBillingHandler = NewPersonalBillingHandler(ruleStore)
 	}
 
 	ed := edition.Parse(cfg.Server.Edition)
@@ -949,6 +952,7 @@ func New(cfg *config.Config) *Server {
 		tokenUsageHandler:    tokenUsageHandler,
 		costHandler:          costHandler,
 		billingRulesHandler: billingRulesHandler,
+		personalBillingHandler: personalBillingHandler,
 		pricingService:      pricingService,
 		memoryHandler:       memoryHandler,
 		strategyHandler:      strategyHandler,
@@ -1299,6 +1303,11 @@ func (s *Server) setupRoutes() {
 			userAPI.GET("/token-usage/daily", s.tokenUsageHandler.GetDailyUsage)
 			userAPI.GET("/token-usage/models", s.tokenUsageHandler.GetModelStats)
 			userAPI.GET("/token-usage/backends", s.tokenUsageHandler.GetBackendStats)
+		}
+
+		// Personal 计费配置只读 API
+		if s.personalBillingHandler != nil {
+			s.personalBillingHandler.RegisterPersonalBillingRoutes(userAPI)
 		}
 
 		// 对话记录浏览

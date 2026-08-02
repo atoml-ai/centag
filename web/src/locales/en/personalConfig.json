@@ -1,0 +1,43 @@
+{
+  "title": "Personal Configuration",
+  "refresh": "Refresh",
+  "editYaml": "Edit YAML",
+  "description": "View and edit your local pricing configuration. Changes are saved to your local YAML file and take effect immediately.",
+  "emptyText": "No configuration loaded.",
+  "allowedResources": "Allowed Resources",
+  "allowedBackends": "Allowed Backends",
+  "allowedModels": "Allowed Models",
+  "allowedPriceTypes": "Allowed Price Types",
+  "allAllowed": "All allowed (no restrictions)",
+  "table": {
+    "name": "Name",
+    "backend": "Backend",
+    "model": "Model",
+    "priceType": "Type",
+    "inputPrice": "Input Price ($)",
+    "outputPrice": "Output Price ($)",
+    "priority": "Priority",
+    "enabled": "Enabled",
+    "enabledYes": "Yes",
+    "enabledNo": "No"
+  },
+  "editor": {
+    "title": "Edit YAML Configuration",
+    "format": "Format",
+    "validate": "Validate",
+    "reset": "Reset to Default",
+    "placeholder": "Paste your YAML configuration here...",
+    "cancel": "Cancel",
+    "save": "Save",
+    "validYaml": "YAML is valid",
+    "invalidYaml": "Invalid YAML syntax",
+    "missingVersion": "Missing 'version' field",
+    "missingRules": "Missing 'pricing_rules' array",
+    "invalidConfig": "Invalid configuration format"
+  },
+  "message": {
+    "loadFailed": "Failed to load configuration",
+    "saveSuccess": "Configuration saved successfully",
+    "saveFailed": "Failed to save configuration"
+  }
+}

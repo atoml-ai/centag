@@ -1,0 +1,35 @@
+{
+  "title": "利用状況と自己制限",
+  "startDate": "開始日",
+  "endDate": "終了日",
+  "refresh": "更新",
+  "totalTokens": "合計トークン",
+  "inputTokens": "入力トークン",
+  "outputTokens": "出力トークン",
+  "totalCost": "総費用",
+  "emptyText": "利用記録がありません。",
+  "table": {
+    "date": "日付",
+    "model": "モデル",
+    "backend": "バックエンド",
+    "inputTokens": "入力",
+    "outputTokens": "出力",
+    "inputPrice": "入力単価",
+    "outputPrice": "出力単価",
+    "totalCost": "費用"
+  },
+  "selfLimit": {
+    "title": "自己制限（読み取り専用）",
+    "readonly": "表示のみ",
+    "dailyTokenLimit": "1日トークン制限",
+    "monthlyBudgetLimit": "月間予算制限",
+    "enabled": "自己制限が有効",
+    "enabledYes": "はい",
+    "enabledNo": "いいえ",
+    "notSet": "未設定",
+    "description": "自己制限はローカル価格 YAML ファイルで設定します。設定を編集して制限を指定してください。これらの制限は個人の追跡用であり、ハード制限は強制されません。"
+  },
+  "message": {
+    "loadFailed": "利用データの読み込みに失敗しました"
+  }
+}

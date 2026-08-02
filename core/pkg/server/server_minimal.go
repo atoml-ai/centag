@@ -316,6 +316,7 @@ func NewMinimal(cfg *config.Config) *Server {
 	var tokenUsageHandler *TokenUsageHandler
 	var costHandler *CostHandler
 	var billingRulesHandler *BillingRulesHandler
+	var personalBillingHandler *PersonalBillingHandler
 	var pricingService billing.PricingService
 	if tokenSvc, err := tokenusage.NewEphemeralService(); err != nil {
 		logger.Warnf("[hooks] ephemeral token meter init failed: %v", err)
@@ -343,6 +344,7 @@ func NewMinimal(cfg *config.Config) *Server {
 		pricingService = billing.NewPricingService(memStore)
 		tokenusage.SetPricingService(pricingService)
 		billingRulesHandler = NewBillingRulesHandler(memStore, pricingService)
+		personalBillingHandler = NewPersonalBillingHandler(memStore)
 	}
 
 	var conversationHandler *ConversationHandler
@@ -378,6 +380,7 @@ func NewMinimal(cfg *config.Config) *Server {
 		tokenUsageHandler:       tokenUsageHandler,
 		costHandler:             costHandler,
 		billingRulesHandler:     billingRulesHandler,
+		personalBillingHandler:  personalBillingHandler,
 		pricingService:          pricingService,
 		conversationHandler:     conversationHandler,
 		edition:                 edition.Minimal,

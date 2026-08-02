@@ -173,6 +173,11 @@ func (s *Server) setupMinimalRoutes(configHandler *MinimalConfigHandler, pluginR
 			userAPI.GET("/token-usage/daily", s.handleMinimalTokenUsageDaily)
 		}
 
+		// Personal 计费配置只读 API
+		if s.personalBillingHandler != nil {
+			s.personalBillingHandler.RegisterPersonalBillingRoutes(userAPI)
+		}
+
 		if s.billingRulesHandler != nil {
 			billingRules := protected.Group("/admin/billing/rules")
 			{

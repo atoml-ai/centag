@@ -1,0 +1,43 @@
+{
+  "title": "個人設定",
+  "refresh": "更新",
+  "editYaml": "YAML を編集",
+  "description": "ローカル価格設定を表示・編集します。変更はローカル YAML ファイルに保存され、すぐに反映されます。",
+  "emptyText": "設定がありません。",
+  "allowedResources": "許可リソース",
+  "allowedBackends": "許可バックエンド",
+  "allowedModels": "許可モデル",
+  "allowedPriceTypes": "許可価格タイプ",
+  "allAllowed": "すべて許可（制限なし）",
+  "table": {
+    "name": "名前",
+    "backend": "バックエンド",
+    "model": "モデル",
+    "priceType": "タイプ",
+    "inputPrice": "入力価格 ($)",
+    "outputPrice": "出力価格 ($)",
+    "priority": "優先度",
+    "enabled": "有効",
+    "enabledYes": "はい",
+    "enabledNo": "いいえ"
+  },
+  "editor": {
+    "title": "YAML 設定を編集",
+    "format": "フォーマット",
+    "validate": "検証",
+    "reset": "デフォルトに戻す",
+    "placeholder": "ここに YAML 設定を貼り付け...",
+    "cancel": "キャンセル",
+    "save": "保存",
+    "validYaml": "YAML は有効です",
+    "invalidYaml": "YAML 構文が無効です",
+    "missingVersion": "'version' フィールドがありません",
+    "missingRules": "'pricing_rules' 配列がありません",
+    "invalidConfig": "設定形式が無効です"
+  },
+  "message": {
+    "loadFailed": "設定の読み込みに失敗しました",
+    "saveSuccess": "設定を保存しました",
+    "saveFailed": "設定の保存に失敗しました"
+  }
+}

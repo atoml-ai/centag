@@ -1,0 +1,35 @@
+{
+  "title": "用量与自我限额",
+  "startDate": "开始日期",
+  "endDate": "结束日期",
+  "refresh": "刷新",
+  "totalTokens": "总 Token 数",
+  "inputTokens": "输入 Token",
+  "outputTokens": "输出 Token",
+  "totalCost": "总费用",
+  "emptyText": "暂无用量记录。",
+  "table": {
+    "date": "日期",
+    "model": "模型",
+    "backend": "后端",
+    "inputTokens": "输入",
+    "outputTokens": "输出",
+    "inputPrice": "输入单价",
+    "outputPrice": "输出单价",
+    "totalCost": "费用"
+  },
+  "selfLimit": {
+    "title": "自我限额（只读）",
+    "readonly": "仅查看",
+    "dailyTokenLimit": "每日 Token 限额",
+    "monthlyBudgetLimit": "每月预算限额",
+    "enabled": "自我限额已启用",
+    "enabledYes": "是",
+    "enabledNo": "否",
+    "notSet": "未设置",
+    "description": "自我限额在本地定价 YAML 文件中配置。编辑配置以设置您自己的限额。这些限额仅用于个人跟踪，不会强制执行硬性限制。"
+  },
+  "message": {
+    "loadFailed": "加载用量数据失败"
+  }
+}

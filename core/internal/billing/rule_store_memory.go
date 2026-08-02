@@ -175,3 +175,51 @@ func (s *MemoryRuleStore) CountRules(ctx context.Context) (int, error) {
 	defer s.mu.RUnlock()
 	return len(s.rules), nil
 }
+
+// ListRulesByType 按价格类型过滤规则
+func (s *MemoryRuleStore) ListRulesByType(ctx context.Context, priceType PriceType) ([]*PricingRule, error) {
+	_ = ctx
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]*PricingRule, 0)
+	for _, r := range s.rules {
+		if r.PriceType == priceType {
+			cp := *r
+			out = append(out, &cp)
+		}
+	}
+	return out, nil
+}
+
+// GetRuleByModelAndType 按后端、模型和价格类型获取规则
+func (s *MemoryRuleStore) GetRuleByModelAndType(ctx context.Context, backendID, model string, priceType PriceType) (*PricingRule, error) {
+	_ = ctx
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	var best *PricingRule
+	bestPriority := -1 << 30
+
+	for _, r := range s.rules {
+		if r == nil || !r.Enabled {
+			continue
+		}
+		if r.PriceType != priceType {
+			continue
+		}
+		if !wildcardMatch(r.BackendID, backendID) || !wildcardMatch(r.Model, model) {
+			continue
+		}
+		if r.Priority > bestPriority {
+			best = r
+			bestPriority = r.Priority
+		}
+	}
+
+	if best == nil {
+		return nil, fmt.Errorf("no pricing rule found for %s/%s type=%s", backendID, model, priceType)
+	}
+
+	cp := *best
+	return &cp, nil
+}

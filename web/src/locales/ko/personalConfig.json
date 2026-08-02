@@ -1,0 +1,43 @@
+{
+  "title": "개인 설정",
+  "refresh": "새로고침",
+  "editYaml": "YAML 편집",
+  "description": "로컬 가격 설정을 확인하고 편집합니다. 변경 사항은 로컬 YAML 파일에 저장되며 즉시 적용됩니다.",
+  "emptyText": "설정이 없습니다.",
+  "allowedResources": "허용 리소스",
+  "allowedBackends": "허용 백엔드",
+  "allowedModels": "허용 모델",
+  "allowedPriceTypes": "허용 가격 유형",
+  "allAllowed": "모두 허용 (제한 없음)",
+  "table": {
+    "name": "이름",
+    "backend": "백엔드",
+    "model": "모델",
+    "priceType": "유형",
+    "inputPrice": "입력 가격 ($)",
+    "outputPrice": "출력 가격 ($)",
+    "priority": "우선순위",
+    "enabled": "활성화",
+    "enabledYes": "예",
+    "enabledNo": "아니요"
+  },
+  "editor": {
+    "title": "YAML 설정 편집",
+    "format": "포맷",
+    "validate": "검증",
+    "reset": "기본값으로 재설정",
+    "placeholder": "여기에 YAML 설정을 붙여넣으세요...",
+    "cancel": "취소",
+    "save": "저장",
+    "validYaml": "YAML이 유효합니다",
+    "invalidYaml": "YAML 구문이 유효하지 않습니다",
+    "missingVersion": "'version' 필드가 없습니다",
+    "missingRules": "'pricing_rules' 배열이 없습니다",
+    "invalidConfig": "설정 형식이 유효하지 않습니다"
+  },
+  "message": {
+    "loadFailed": "설정을 불러오지 못했습니다",
+    "saveSuccess": "설정을 저장했습니다",
+    "saveFailed": "설정 저장에 실패했습니다"
+  }
+}

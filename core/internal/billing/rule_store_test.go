@@ -83,6 +83,7 @@ func setupPricingRulesSQLite(t *testing.T) *sql.DB {
 			name TEXT NOT NULL,
 			backend_id TEXT NOT NULL,
 			model TEXT NOT NULL,
+			price_type TEXT DEFAULT 'cost',
 			input_price_per_m REAL NOT NULL,
 			output_price_per_m REAL NOT NULL,
 			currency TEXT DEFAULT 'USD',

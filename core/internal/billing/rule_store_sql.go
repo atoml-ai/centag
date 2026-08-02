@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"regexp"
 	"time"
+
+	"centag/core/pkg/billing"
 )
 
 var pgPlaceholderRe = regexp.MustCompile(`\$\d+`)
@@ -30,9 +32,9 @@ func (s *SQLRuleStore) q(query string) string {
 	return pgPlaceholderRe.ReplaceAllString(query, "?")
 }
 
-func (s *SQLRuleStore) ListRules(ctx context.Context) ([]*PricingRule, error) {
+func (s *SQLRuleStore) ListRules(ctx context.Context) ([]*billing.PricingRule, error) {
 	query := s.q(`
-		SELECT id, name, backend_id, model, input_price_per_m, output_price_per_m,
+		SELECT id, name, backend_id, model, price_type, input_price_per_m, output_price_per_m,
 		       COALESCE(currency, 'USD'), priority, enabled, created_at, updated_at
 		FROM pricing_rules
 		ORDER BY priority DESC, id ASC
@@ -42,7 +44,7 @@ func (s *SQLRuleStore) ListRules(ctx context.Context) ([]*PricingRule, error) {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []*PricingRule
+	var out []*billing.PricingRule
 	for rows.Next() {
 		r, err := scanPricingRule(rows)
 		if err != nil {
@@ -53,9 +55,9 @@ func (s *SQLRuleStore) ListRules(ctx context.Context) ([]*PricingRule, error) {
 	return out, rows.Err()
 }
 
-func (s *SQLRuleStore) GetRule(ctx context.Context, id int64) (*PricingRule, error) {
+func (s *SQLRuleStore) GetRule(ctx context.Context, id int64) (*billing.PricingRule, error) {
 	query := s.q(`
-		SELECT id, name, backend_id, model, input_price_per_m, output_price_per_m,
+		SELECT id, name, backend_id, model, price_type, input_price_per_m, output_price_per_m,
 		       COALESCE(currency, 'USD'), priority, enabled, created_at, updated_at
 		FROM pricing_rules WHERE id = $1
 	`)
@@ -67,7 +69,7 @@ func (s *SQLRuleStore) GetRule(ctx context.Context, id int64) (*PricingRule, err
 	return r, err
 }
 
-func (s *SQLRuleStore) CreateRule(ctx context.Context, rule *PricingRule) error {
+func (s *SQLRuleStore) CreateRule(ctx context.Context, rule *billing.PricingRule) error {
 	if rule == nil {
 		return fmt.Errorf("rule is nil")
 	}
@@ -79,22 +81,22 @@ func (s *SQLRuleStore) CreateRule(ctx context.Context, rule *PricingRule) error 
 	if s.isPostgres() {
 		query := `
 			INSERT INTO pricing_rules
-			(name, backend_id, model, input_price_per_m, output_price_per_m, currency, priority, enabled, created_at, updated_at)
-			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+			(name, backend_id, model, price_type, input_price_per_m, output_price_per_m, currency, priority, enabled, created_at, updated_at)
+			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
 			RETURNING id
 		`
 		return s.db.QueryRowContext(ctx, query,
-			rule.Name, rule.BackendID, rule.Model,
+			rule.Name, rule.BackendID, rule.Model, rule.PriceType,
 			rule.InputPricePerM, rule.OutputPricePerM, rule.Currency,
 			rule.Priority, rule.Enabled, now, now,
 		).Scan(&rule.ID)
 	}
 	res, err := s.db.ExecContext(ctx, `
 		INSERT INTO pricing_rules
-		(name, backend_id, model, input_price_per_m, output_price_per_m, currency, priority, enabled, created_at, updated_at)
-		VALUES (?,?,?,?,?,?,?,?,?,?)
+		(name, backend_id, model, price_type, input_price_per_m, output_price_per_m, currency, priority, enabled, created_at, updated_at)
+		VALUES (?,?,?,?,?,?,?,?,?,?,?)
 	`,
-		rule.Name, rule.BackendID, rule.Model,
+		rule.Name, rule.BackendID, rule.Model, rule.PriceType,
 		rule.InputPricePerM, rule.OutputPricePerM, rule.Currency,
 		rule.Priority, boolToInt(rule.Enabled), now.Format(time.RFC3339), now.Format(time.RFC3339),
 	)
@@ -111,7 +113,7 @@ func (s *SQLRuleStore) CreateRule(ctx context.Context, rule *PricingRule) error 
 	return nil
 }
 
-func (s *SQLRuleStore) UpdateRule(ctx context.Context, id int64, rule *PricingRule) error {
+func (s *SQLRuleStore) UpdateRule(ctx context.Context, id int64, rule *billing.PricingRule) error {
 	if rule == nil {
 		return fmt.Errorf("rule is nil")
 	}
@@ -125,13 +127,13 @@ func (s *SQLRuleStore) UpdateRule(ctx context.Context, id int64, rule *PricingRu
 	}
 	query := s.q(`
 		UPDATE pricing_rules SET
-			name = $1, backend_id = $2, model = $3,
-			input_price_per_m = $4, output_price_per_m = $5, currency = $6,
-			priority = $7, enabled = $8, updated_at = $9
-		WHERE id = $10
+			name = $1, backend_id = $2, model = $3, price_type = $4,
+			input_price_per_m = $5, output_price_per_m = $6, currency = $7,
+			priority = $8, enabled = $9, updated_at = $10
+		WHERE id = $11
 	`)
 	res, err := s.db.ExecContext(ctx, query,
-		rule.Name, rule.BackendID, rule.Model,
+		rule.Name, rule.BackendID, rule.Model, rule.PriceType,
 		rule.InputPricePerM, rule.OutputPricePerM, rule.Currency,
 		rule.Priority, enabled, updatedAt, id,
 	)
@@ -186,15 +188,15 @@ func (s *SQLRuleStore) ImportFromYAML(ctx context.Context, data []byte) error {
 		if s.isPostgres() {
 			_, err = tx.ExecContext(ctx, `
 				INSERT INTO pricing_rules
-				(name, backend_id, model, input_price_per_m, output_price_per_m, currency, priority, enabled, created_at, updated_at)
-				VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
-			`, r.Name, r.BackendID, r.Model, r.InputPricePerM, r.OutputPricePerM, r.Currency, r.Priority, r.Enabled, now, now)
+				(name, backend_id, model, price_type, input_price_per_m, output_price_per_m, currency, priority, enabled, created_at, updated_at)
+				VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+			`, r.Name, r.BackendID, r.Model, r.PriceType, r.InputPricePerM, r.OutputPricePerM, r.Currency, r.Priority, r.Enabled, now, now)
 		} else {
 			_, err = tx.ExecContext(ctx, `
 				INSERT INTO pricing_rules
-				(name, backend_id, model, input_price_per_m, output_price_per_m, currency, priority, enabled, created_at, updated_at)
-				VALUES (?,?,?,?,?,?,?,?,?,?)
-			`, r.Name, r.BackendID, r.Model, r.InputPricePerM, r.OutputPricePerM, r.Currency, r.Priority, boolToInt(r.Enabled), now.Format(time.RFC3339), now.Format(time.RFC3339))
+				(name, backend_id, model, price_type, input_price_per_m, output_price_per_m, currency, priority, enabled, created_at, updated_at)
+				VALUES (?,?,?,?,?,?,?,?,?,?,?)
+			`, r.Name, r.BackendID, r.Model, r.PriceType, r.InputPricePerM, r.OutputPricePerM, r.Currency, r.Priority, boolToInt(r.Enabled), now.Format(time.RFC3339), now.Format(time.RFC3339))
 		}
 		if err != nil {
 			return err
@@ -212,7 +214,7 @@ func (s *SQLRuleStore) ExportToYAML(ctx context.Context) ([]byte, error) {
 		Version:  "1.0",
 		Currency: DefaultPricingCurrency,
 		USDToCNY: USDToCNY(),
-		Rules:    make([]PricingRule, 0, len(rules)),
+		Rules:    make([]billing.PricingRule, 0, len(rules)),
 	}
 	for _, r := range rules {
 		cp := *r
@@ -250,16 +252,72 @@ func EnsureSeededFromYAML(ctx context.Context, store RuleStore, yamlPath string)
 	return store.ImportFromYAML(ctx, data)
 }
 
+// ListRulesByType 按价格类型过滤规则
+func (s *SQLRuleStore) ListRulesByType(ctx context.Context, priceType billing.PriceType) ([]*billing.PricingRule, error) {
+	query := s.q(`
+		SELECT id, name, backend_id, model, price_type, input_price_per_m, output_price_per_m,
+		       COALESCE(currency, 'USD'), priority, enabled, created_at, updated_at
+		FROM pricing_rules
+		WHERE price_type = $1
+		ORDER BY priority DESC, id ASC
+	`)
+	rows, err := s.db.QueryContext(ctx, query, priceType)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []*billing.PricingRule
+	for rows.Next() {
+		r, err := scanPricingRule(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}
+
+// GetRuleByModelAndType 按后端、模型和价格类型获取规则
+func (s *SQLRuleStore) GetRuleByModelAndType(ctx context.Context, backendID, model string, priceType billing.PriceType) (*billing.PricingRule, error) {
+	rules, err := s.ListRulesByType(ctx, priceType)
+	if err != nil {
+		return nil, err
+	}
+
+	var best *billing.PricingRule
+	bestPriority := -1 << 30
+
+	for _, r := range rules {
+		if r == nil || !r.Enabled {
+			continue
+		}
+		if !wildcardMatch(r.BackendID, backendID) || !wildcardMatch(r.Model, model) {
+			continue
+		}
+		if r.Priority > bestPriority {
+			best = r
+			bestPriority = r.Priority
+		}
+	}
+
+	if best == nil {
+		return nil, fmt.Errorf("no pricing rule found for %s/%s type=%s", backendID, model, priceType)
+	}
+
+	cp := *best
+	return &cp, nil
+}
+
 type scannable interface {
 	Scan(dest ...any) error
 }
 
-func scanPricingRule(row scannable) (*PricingRule, error) {
-	var r PricingRule
+func scanPricingRule(row scannable) (*billing.PricingRule, error) {
+	var r billing.PricingRule
 	var enabled any
 	var createdAt, updatedAt any
 	err := row.Scan(
-		&r.ID, &r.Name, &r.BackendID, &r.Model,
+		&r.ID, &r.Name, &r.BackendID, &r.Model, &r.PriceType,
 		&r.InputPricePerM, &r.OutputPricePerM, &r.Currency,
 		&r.Priority, &enabled, &createdAt, &updatedAt,
 	)

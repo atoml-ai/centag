@@ -1,0 +1,35 @@
+{
+  "title": "사용량 및 자체 한도",
+  "startDate": "시작 날짜",
+  "endDate": "종료 날짜",
+  "refresh": "새로고침",
+  "totalTokens": "총 토큰",
+  "inputTokens": "입력 토큰",
+  "outputTokens": "출력 토큰",
+  "totalCost": "총 비용",
+  "emptyText": "사용 기록이 없습니다.",
+  "table": {
+    "date": "날짜",
+    "model": "모델",
+    "backend": "백엔드",
+    "inputTokens": "입력",
+    "outputTokens": "출력",
+    "inputPrice": "입력 단가",
+    "outputPrice": "출력 단가",
+    "totalCost": "비용"
+  },
+  "selfLimit": {
+    "title": "자체 한도 (읽기 전용)",
+    "readonly": "보기 전용",
+    "dailyTokenLimit": "일일 토큰 한도",
+    "monthlyBudgetLimit": "월별 예산 한도",
+    "enabled": "자체 한도 활성화됨",
+    "enabledYes": "예",
+    "enabledNo": "아니요",
+    "notSet": "설정되지 않음",
+    "description": "자체 한도는 로컬 가격 YAML 파일에서 구성합니다. 구성을 편집하여 한도를 설정하세요. 이러한 한도는 개인 추적용이며 하드 제한을 강제하지 않습니다."
+  },
+  "message": {
+    "loadFailed": "사용량 데이터를 불러오지 못했습니다"
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "title": "Usage & Self-Limit",
+  "startDate": "Start Date",
+  "endDate": "End Date",
+  "refresh": "Refresh",
+  "totalTokens": "Total Tokens",
+  "inputTokens": "Input Tokens",
+  "outputTokens": "Output Tokens",
+  "totalCost": "Total Cost",
+  "emptyText": "No usage records.",
+  "table": {
+    "date": "Date",
+    "model": "Model",
+    "backend": "Backend",
+    "inputTokens": "Input",
+    "outputTokens": "Output",
+    "inputPrice": "Input Price",
+    "outputPrice": "Output Price",
+    "totalCost": "Cost"
+  },
+  "selfLimit": {
+    "title": "Self Limit (Read-only)",
+    "readonly": "View Only",
+    "dailyTokenLimit": "Daily Token Limit",
+    "monthlyBudgetLimit": "Monthly Budget Limit",
+    "enabled": "Self Limit Enabled",
+    "enabledYes": "Yes",
+    "enabledNo": "No",
+    "notSet": "Not set",
+    "description": "Self limits are configured in your local pricing YAML file. Edit the configuration to set your own limits. These limits are for personal tracking and do not enforce hard restrictions."
+  },
+  "message": {
+    "loadFailed": "Failed to load usage data"
+  }
+}

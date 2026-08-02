@@ -1,0 +1,43 @@
+{
+  "title": "Configuración personal",
+  "refresh": "Actualizar",
+  "editYaml": "Editar YAML",
+  "description": "Vea y edite su configuración de precios local. Los cambios se guardan en su archivo YAML local y se aplican de inmediato.",
+  "emptyText": "No hay configuración cargada.",
+  "allowedResources": "Recursos permitidos",
+  "allowedBackends": "Backends permitidos",
+  "allowedModels": "Modelos permitidos",
+  "allowedPriceTypes": "Tipos de precio permitidos",
+  "allAllowed": "Permitido todo (sin restricciones)",
+  "table": {
+    "name": "Nombre",
+    "backend": "Backend",
+    "model": "Modelo",
+    "priceType": "Tipo",
+    "inputPrice": "Precio de entrada ($)",
+    "outputPrice": "Precio de salida ($)",
+    "priority": "Prioridad",
+    "enabled": "Habilitado",
+    "enabledYes": "Sí",
+    "enabledNo": "No"
+  },
+  "editor": {
+    "title": "Editar configuración YAML",
+    "format": "Formato",
+    "validate": "Validar",
+    "reset": "Restablecer a valores predeterminados",
+    "placeholder": "Pegue su configuración YAML aquí...",
+    "cancel": "Cancelar",
+    "save": "Guardar",
+    "validYaml": "YAML válido",
+    "invalidYaml": "Sintaxis YAML no válida",
+    "missingVersion": "Falta el campo 'version'",
+    "missingRules": "Falta la matriz 'pricing_rules'",
+    "invalidConfig": "Formato de configuración no válido"
+  },
+  "message": {
+    "loadFailed": "No se pudo cargar la configuración",
+    "saveSuccess": "Configuración guardada correctamente",
+    "saveFailed": "No se pudo guardar la configuración"
+  }
+}

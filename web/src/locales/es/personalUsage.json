@@ -1,0 +1,35 @@
+{
+  "title": "Uso y autolímite",
+  "startDate": "Fecha inicial",
+  "endDate": "Fecha final",
+  "refresh": "Actualizar",
+  "totalTokens": "Tokens totales",
+  "inputTokens": "Tokens de entrada",
+  "outputTokens": "Tokens de salida",
+  "totalCost": "Coste total",
+  "emptyText": "No hay registros de uso.",
+  "table": {
+    "date": "Fecha",
+    "model": "Modelo",
+    "backend": "Backend",
+    "inputTokens": "Entrada",
+    "outputTokens": "Salida",
+    "inputPrice": "Precio de entrada",
+    "outputPrice": "Precio de salida",
+    "totalCost": "Coste"
+  },
+  "selfLimit": {
+    "title": "Autolímite (solo lectura)",
+    "readonly": "Solo vista",
+    "dailyTokenLimit": "Límite diario de tokens",
+    "monthlyBudgetLimit": "Presupuesto mensual",
+    "enabled": "Autolímite habilitado",
+    "enabledYes": "Sí",
+    "enabledNo": "No",
+    "notSet": "No establecido",
+    "description": "Los autolímites se configuran en el archivo YAML de precios local. Edite la configuración para establecer sus propios límites. Estos límites son solo para seguimiento personal y no imponen restricciones estrictas."
+  },
+  "message": {
+    "loadFailed": "No se pudieron cargar los datos de uso"
+  }
+}

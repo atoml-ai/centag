@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	billingpkg "centag/core/pkg/billing"
 	"gopkg.in/yaml.v3"
 )
 
@@ -39,6 +40,7 @@ type pricingRuleYAML struct {
 	Name            string  `yaml:"name"`
 	BackendID       string  `yaml:"backend_id"`
 	Model           string  `yaml:"model"`
+	PriceType       string  `yaml:"price_type,omitempty"`
 	InputPricePerM  float64 `yaml:"input_price_per_m"`
 	OutputPricePerM float64 `yaml:"output_price_per_m"`
 	Currency        string  `yaml:"currency,omitempty"`
@@ -91,6 +93,7 @@ func ParsePricingYAML(data []byte) (*PricingRulesFile, error) {
 			Name:            r.Name,
 			BackendID:       r.BackendID,
 			Model:           r.Model,
+			PriceType:       billingpkg.PriceType(r.PriceType),
 			InputPricePerM:  r.InputPricePerM,
 			OutputPricePerM: r.OutputPricePerM,
 			Currency:        currency,
