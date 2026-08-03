@@ -74,6 +74,7 @@
         size="large"
         highlight-current-row
         row-key="id"
+        :row-class-name="pipelineRowClass"
         @selection-change="handleSelectionChange"
       >
         <el-table-column type="selection" width="50" />
@@ -120,9 +121,15 @@
             </div>
           </template>
         </el-table-column>
-        <el-table-column prop="name" :label="t('pipelineModes.table.name')" min-width="140" sortable>
+        <el-table-column prop="name" :label="t('pipelineModes.table.name')" min-width="160" sortable>
           <template #default="{ row }">
-            <span style="font-weight: 500">{{ row.name }}</span>
+            <div style="display: flex; align-items: center; gap: 6px;">
+              <span style="font-weight: 500">{{ row.name }}</span>
+              <el-tag v-if="row.id === defaultPipelineId" type="success" size="small" effect="light">
+                <el-icon style="margin-right: 2px; vertical-align: -2px;"><StarFilled /></el-icon>
+                {{ t('pipelineModes.table.defaultPipeline') }}
+              </el-tag>
+            </div>
           </template>
         </el-table-column>
         <el-table-column prop="description" :label="t('pipelineModes.table.description')" min-width="200" show-overflow-tooltip sortable />
@@ -132,9 +139,27 @@
           </template>
         </el-table-column>
         <el-table-column prop="version" :label="t('pipelineModes.table.version')" width="80" align="center" sortable />
-        <el-table-column :label="t('pipelineModes.table.actions')" width="300" align="center" fixed="right">
+        <el-table-column :label="t('pipelineModes.table.actions')" width="480" align="center" fixed="right">
           <template #default="{ row }">
             <div class="action-btns">
+              <el-tooltip :content="row.id === defaultPipelineId ? t('pipelineModes.table.currentDefault') : t('pipelineModes.table.setDefault')" placement="top">
+                <el-button
+                  circle
+                  size="small"
+                  type="success"
+                  :plain="row.id !== defaultPipelineId"
+                  :loading="settingDefaultId === row.id"
+                  :disabled="row.id === defaultPipelineId"
+                  @click="handleSetDefault(row)"
+                >
+                  <el-icon><StarFilled /></el-icon>
+                </el-button>
+              </el-tooltip>
+              <el-tooltip :content="t('pipelineModes.table.test')" placement="top">
+                <el-button circle size="small" type="primary" plain @click="openPipelineTest(row)">
+                  <el-icon><ChatDotRound /></el-icon>
+                </el-button>
+              </el-tooltip>
               <el-tooltip v-if="canConfigureCapabilitySlots(row)" :content="t('pipelineModes.table.configureModel')" placement="top">
                 <el-button
                   circle
@@ -198,6 +223,18 @@
                   </el-button>
                 </template>
               </PipelineFeatureGuard>
+              <el-tooltip :content="t('pipelineModes.table.clone')" placement="top">
+                <el-button
+                  circle
+                  size="small"
+                  type="info"
+                  plain
+                  :loading="cloningId === row.id"
+                  @click="handleClone(row)"
+                >
+                  <el-icon><CopyDocument /></el-icon>
+                </el-button>
+              </el-tooltip>
               <PipelineFeatureGuard
                 feature="pipelineDelete"
                 :pipeline="row"
@@ -250,6 +287,12 @@
       v-model="historyVisible"
       :pipeline-id="historyPipelineId"
       :pipeline-name="historyPipelineName"
+    />
+
+    <!-- 流水线 AI 对话测试对话框 -->
+    <PipelineTestDialog
+      v-model="testVisible"
+      :pipeline="testPipeline"
     />
 
     <!-- 从模板创建弹窗 -->
@@ -320,14 +363,17 @@ import { ref, onMounted, computed, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Search, SetUp, Refresh, Plus, Edit, Delete, DocumentCopy, Upload, Timer, Check, Download, WarningFilled, CircleClose, Select, Connection } from '@element-plus/icons-vue'
+import { Search, SetUp, Refresh, Plus, Edit, Delete, DocumentCopy, Upload, Timer, Check, Download, WarningFilled, CircleClose, Select, Connection, StarFilled, ChatDotRound, CopyDocument } from '@element-plus/icons-vue'
 import * as yaml from 'js-yaml'
 import {
   getPipelines,
   createPipeline,
   updatePipeline,
   deletePipeline,
+  clonePipeline,
   getPipelineTemplates,
+  getPipelineDefaults,
+  updatePipelineDefaults,
   parsePipelinesResponse,
   type Pipeline,
   type AgentPatternPipeline
@@ -338,6 +384,7 @@ import PipelineFeatureGuard from '@/components/pipeline/PipelineFeatureGuard.vue
 import CapabilitySlotsDialog from '@/components/pipeline/CapabilitySlotsDialog.vue'
 import type { PipelineCreateInfo } from '@/components/pipeline/PipelineCreateDialog.vue'
 import ExecutionHistory from '@/components/pipeline/ExecutionHistory.vue'
+import PipelineTestDialog from '@/components/pipeline/PipelineTestDialog.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useUserResourceAccess } from '@/composables/useUserResourceAccess'
 import { resolvePipelineFeatureSupport } from '@/utils/pipeline/features'
@@ -373,7 +420,17 @@ const historyVisible = ref(false)
 const historyPipelineId = ref('')
 const historyPipelineName = ref('')
 
+const defaultPipelineId = ref('')
+const settingDefaultId = ref('')
+const cloningId = ref('')
+const testVisible = ref(false)
+const testPipeline = ref<Pipeline | null>(null)
+
 type PipelineRow = Pipeline & { shortcutLoading?: boolean; _originalShortcutCode?: string }
+
+function pipelineRowClass({ row }: { row: PipelineRow }) {
+  return row.id === defaultPipelineId.value ? 'is-default-pipeline-row' : ''
+}
 
 const filteredPipelines = computed(() => {
   if (!searchText.value.trim()) return pipelines.value
@@ -437,6 +494,7 @@ const handleBatchDelete = async () => {
       await deletePipeline(id)
     }
     pipelines.value = pipelines.value.filter(p => !ids.includes(p.id))
+    await refreshDefaultPipeline()
     ElMessage.success(t('pipelineModes.message.batchDeleteSuccess', { count: ids.length }))
     selectedPipelines.value = []
   } catch (error: any) {
@@ -562,6 +620,12 @@ const templateList = computed(() => {
     .sort((a, b) => a.id.localeCompare(b.id))
 })
 
+async function refreshDefaultPipeline() {
+  const d = await getPipelineDefaults().catch(() => null)
+  const data = (d as { data?: { default_pipeline_id?: string } } | null)?.data ?? d
+  defaultPipelineId.value = (data as { default_pipeline_id?: string } | null)?.default_pipeline_id || ''
+}
+
 const loadData = async () => {
   loading.value = true
   try {
@@ -572,12 +636,32 @@ const loadData = async () => {
       p._originalShortcutCode = (p.shortcut_code || '')
     })
     pipelines.value = list
+    await refreshDefaultPipeline()
   } catch (error: any) {
     ElMessage.error(t('pipelineModes.message.loadFailed') + '：' + error.message)
     pipelines.value = []
   } finally {
     loading.value = false
   }
+}
+
+const handleSetDefault = async (row: Pipeline) => {
+  if (settingDefaultId.value || row.id === defaultPipelineId.value) return
+  settingDefaultId.value = row.id
+  try {
+    await updatePipelineDefaults({ default_pipeline_id: row.id })
+    defaultPipelineId.value = row.id
+    ElMessage.success(t('pipelineModes.message.setDefaultSuccess', { name: row.name || row.id }))
+  } catch (error: any) {
+    ElMessage.error(t('pipelineModes.message.setDefaultFailed') + '：' + (error.response?.data?.error || error.message || error))
+  } finally {
+    settingDefaultId.value = ''
+  }
+}
+
+const openPipelineTest = (row: Pipeline) => {
+  testPipeline.value = row
+  testVisible.value = true
 }
 
 const loadAllData = async () => {
@@ -799,6 +883,22 @@ const handleEditorClosed = () => {
   }
 }
 
+const handleClone = async (row: Pipeline) => {
+  try {
+    cloningId.value = row.id
+    const res = await clonePipeline(row.id)
+    const data = res.data?.data || res.data
+    if (data?.id) {
+      ElMessage.success(t('pipelineModes.message.cloneSuccess', { name: data.name || data.id }))
+      await loadData()
+    }
+  } catch (error: any) {
+    ElMessage.error(t('pipelineModes.message.cloneFailed') + '：' + (error.response?.data?.error || error.message || error))
+  } finally {
+    cloningId.value = ''
+  }
+}
+
 const handleDelete = async (row: Pipeline) => {
   try {
     await ElMessageBox.confirm(t('pipelineModes.message.deleteConfirm', { name: row.name }), t('pipelineModes.message.deleteTitle'), {
@@ -810,6 +910,9 @@ const handleDelete = async (row: Pipeline) => {
     await deletePipeline(deletedId)
     pipelines.value = pipelines.value.filter(p => p.id !== deletedId)
     selectedPipelines.value = selectedPipelines.value.filter(p => p.id !== deletedId)
+    if (defaultPipelineId.value === deletedId) {
+      await refreshDefaultPipeline()
+    }
     ElMessage.success(t('pipelineModes.message.deleteSuccess'))
   } catch (error: any) {
     if (error === 'cancel' || error === 'close') return
@@ -879,6 +982,15 @@ onMounted(() => {
   justify-content: center;
   align-items: center;
   gap: 6px;
+}
+
+/* 默认流水线行绿色高亮 */
+:deep(.el-table__row.is-default-pipeline-row > td.el-table__cell) {
+  background-color: #f0fdf4;
+}
+
+:deep(.el-table--enable-row-hover .el-table__body tr.is-default-pipeline-row:hover > td.el-table__cell) {
+  background-color: #e8f8ee;
 }
 
 </style>
