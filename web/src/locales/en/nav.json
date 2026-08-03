@@ -12,6 +12,7 @@
   "billingRules": "Billing Rules",
   "costDashboard": "Cost Dashboard",
   "pricingSync": "Pricing Sync",
+  "groups": "Groups",
   "abComparison": "A/B Comparison",
   "logs": "Logs",
   "cache": "Cache",
@@ -23,9 +24,7 @@
   "systemProxy": "System Proxy",
   "clashRules": "Clash Rules",
   "config": "System Config",
-  "myTenant": "My Tenant",
   "users": "Users",
-  "tenants": "Tenants",
   "systemUpdate": "System Update",
   "usage": "Usage",
   "access": "Access",
@@ -38,6 +37,7 @@
   "application": "Application",
   "cacheAndMemory": "Cache & Memory",
   "systemAdmin": "System Admin",
-  "userTenantManagement": "Users & Tenants",
-  "overview": "Overview"
+  "overview": "Overview",
+  "userGroupManagement": "Users & Groups",
+  "myBilling": "My Billing"
 }

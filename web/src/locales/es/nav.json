@@ -12,6 +12,7 @@
   "billingRules": "Reglas de facturación",
   "costDashboard": "Panel de costos",
   "pricingSync": "Sincronización de precios",
+  "groups": "Grupos",
   "abComparison": "Comparación A/B",
   "logs": "Registros",
   "cache": "Monitoreo de caché",
@@ -23,9 +24,7 @@
   "systemProxy": "Proxy sistema",
   "clashRules": "Reglas de Clash",
   "config": "Configuración del sistema",
-  "myTenant": "Mi inquilino",
   "users": "Gestión de usuarios",
-  "tenants": "Gestión de inquilinos",
   "systemUpdate": "Actualización del sistema",
   "usage": "Uso",
   "access": "Acceso",
@@ -38,6 +37,7 @@
   "application": "Aplicación",
   "cacheAndMemory": "Caché y memoria",
   "systemAdmin": "Administración del sistema",
-  "userTenantManagement": "Usuarios e inquilinos",
-  "overview": "Resumen"
+  "overview": "Resumen",
+  "userGroupManagement": "Usuarios y grupos",
+  "myBilling": "Mi facturación"
 }

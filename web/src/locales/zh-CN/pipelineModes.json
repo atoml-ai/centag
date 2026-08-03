@@ -27,7 +27,12 @@
     "edit": "编辑",
     "history": "历史",
     "export": "导出",
-    "delete": "删除"
+    "clone": "复制流水线",
+    "delete": "删除",
+    "defaultPipeline": "默认",
+    "currentDefault": "当前默认流水线",
+    "setDefault": "设为默认流水线",
+    "test": "AI 对话测试"
   },
   "templateDialog": {
     "title": "从模板创建流水线",
@@ -70,6 +75,24 @@
     "exportFailed": "导出失败",
     "batchExportSuccess": "已导出 {count} 个流水线（ZIP）",
     "batchExportFailed": "批量导出失败",
-    "pipelineNotFound": "流水线 {id} 不存在"
+    "pipelineNotFound": "流水线 {id} 不存在",
+    "setDefaultSuccess": "已将「{name}」设为默认流水线",
+    "setDefaultFailed": "设置默认流水线失败",
+    "cloneSuccess": "已复制流水线「{name}」",
+    "cloneFailed": "复制失败"
+  },
+  "test": {
+    "title": "对话测试：{name}",
+    "desc": "通过本流水线发起一次 AI 对话测试，验证各节点的模型链路是否正常。",
+    "promptPlaceholder": "输入测试问题，例如：你好，请介绍一下你自己",
+    "run": "开始测试",
+    "result": "测试结果",
+    "running": "运行中",
+    "failed": "失败",
+    "success": "成功",
+    "waiting": "正在等待 AI 响应...",
+    "curlTitle": "API 调用 (curl)",
+    "copyCurl": "复制 curl",
+    "curlCopied": "curl 命令已复制"
   }
 }

@@ -12,6 +12,7 @@
   "billingRules": "计费规则",
   "costDashboard": "成本看板",
   "pricingSync": "价格同步",
+  "groups": "组管理",
   "abComparison": "A/B 对比",
   "logs": "日志",
   "cache": "缓存监控",
@@ -23,9 +24,7 @@
   "systemProxy": "系统代理",
   "clashRules": "Clash 规则",
   "config": "系统配置",
-  "myTenant": "我的租户",
   "users": "用户管理",
-  "tenants": "租户管理",
   "systemUpdate": "系统更新",
   "usage": "用量",
   "access": "接入",
@@ -38,6 +37,7 @@
   "application": "应用",
   "cacheAndMemory": "缓存与记忆",
   "systemAdmin": "系统管理",
-  "userTenantManagement": "用户与租户",
-  "overview": "概览"
+  "overview": "概览",
+  "userGroupManagement": "用户与组管理",
+  "myBilling": "我的计费"
 }

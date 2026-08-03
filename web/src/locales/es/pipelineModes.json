@@ -27,7 +27,11 @@
     "edit": "Editar",
     "history": "Historial",
     "export": "Exportar",
-    "delete": "Eliminar"
+    "delete": "Eliminar",
+    "defaultPipeline": "Por defecto",
+    "currentDefault": "Pipeline por defecto actual",
+    "setDefault": "Establecer como pipeline por defecto",
+    "test": "Prueba de Chat AI"
   },
   "templateDialog": {
     "title": "Crear Pipeline desde Plantilla",
@@ -70,6 +74,19 @@
     "exportFailed": "Error al exportar",
     "batchExportSuccess": "Exportados {count} pipelines (ZIP)",
     "batchExportFailed": "Error al exportar en lote",
-    "pipelineNotFound": "Pipeline {id} no encontrado"
+    "pipelineNotFound": "Pipeline {id} no encontrado",
+    "setDefaultSuccess": "\"{name}\" establecido como pipeline por defecto",
+    "setDefaultFailed": "Error al establecer el pipeline por defecto"
+  },
+  "test": {
+    "title": "Prueba de Chat: {name}",
+    "desc": "Ejecute una prueba de chat AI a través de este pipeline para verificar la cadena de modelos de cada nodo.",
+    "promptPlaceholder": "Ingrese una pregunta de prueba, ej. Hola, preséntate",
+    "run": "Iniciar Prueba",
+    "result": "Resultado",
+    "running": "Ejecutando",
+    "failed": "Falló",
+    "success": "Éxito",
+    "waiting": "Esperando respuesta de AI..."
   }
 }

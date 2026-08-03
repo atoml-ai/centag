@@ -27,7 +27,12 @@
     "edit": "Edit",
     "history": "History",
     "export": "Export",
-    "delete": "Delete"
+    "clone": "Copy Pipeline",
+    "delete": "Delete",
+    "defaultPipeline": "Default",
+    "currentDefault": "Current default pipeline",
+    "setDefault": "Set as default pipeline",
+    "test": "AI Chat Test"
   },
   "templateDialog": {
     "title": "Create Pipeline from Template",
@@ -70,6 +75,24 @@
     "exportFailed": "Export failed",
     "batchExportSuccess": "Exported {count} pipelines (ZIP)",
     "batchExportFailed": "Batch export failed",
-    "pipelineNotFound": "Pipeline {id} not found"
+    "pipelineNotFound": "Pipeline {id} not found",
+    "setDefaultSuccess": "Set \"{name}\" as the default pipeline",
+    "setDefaultFailed": "Failed to set default pipeline",
+    "cloneSuccess": "Pipeline \"{name}\" copied",
+    "cloneFailed": "Copy failed"
+  },
+  "test": {
+    "title": "Chat Test: {name}",
+    "desc": "Run an AI chat test through this pipeline to verify the model chain of each node.",
+    "promptPlaceholder": "Enter a test question, e.g. Hello, introduce yourself",
+    "run": "Run Test",
+    "result": "Result",
+    "running": "Running",
+    "failed": "Failed",
+    "success": "Success",
+    "waiting": "Waiting for AI response...",
+    "curlTitle": "API Call (curl)",
+    "copyCurl": "Copy curl",
+    "curlCopied": "curl command copied"
   }
 }

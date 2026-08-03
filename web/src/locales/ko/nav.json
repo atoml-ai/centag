@@ -12,6 +12,7 @@
   "billingRules": "과금 규칙",
   "costDashboard": "비용 대시보드",
   "pricingSync": "가격 동기화",
+  "groups": "그룹",
   "abComparison": "A/B 비교",
   "logs": "로그",
   "cache": "캐시 모니터링",
@@ -23,9 +24,7 @@
   "systemProxy": "시스템 프록시",
   "clashRules": "Clash 규칙",
   "config": "시스템 설정",
-  "myTenant": "내 테넌트",
   "users": "사용자 관리",
-  "tenants": "테넌트 관리",
   "systemUpdate": "시스템 업데이트",
   "usage": "사용량",
   "access": "접속",
@@ -38,6 +37,7 @@
   "application": "애플리케이션",
   "cacheAndMemory": "캐시 및 메모리",
   "systemAdmin": "시스템 관리",
-  "userTenantManagement": "사용자 및 테넌트",
-  "overview": "개요"
+  "overview": "개요",
+  "userGroupManagement": "사용자 및 그룹",
+  "myBilling": "내 결제"
 }

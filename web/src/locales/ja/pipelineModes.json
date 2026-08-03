@@ -27,7 +27,11 @@
     "edit": "編集",
     "history": "履歴",
     "export": "エクスポート",
-    "delete": "削除"
+    "delete": "削除",
+    "defaultPipeline": "デフォルト",
+    "currentDefault": "現在のデフォルトパイプライン",
+    "setDefault": "デフォルトに設定",
+    "test": "AIチャットテスト"
   },
   "templateDialog": {
     "title": "テンプレートからパイプラインを作成",
@@ -70,6 +74,19 @@
     "exportFailed": "エクスポート失敗",
     "batchExportSuccess": "{count} 個のパイプラインをエクスポート（ZIP）",
     "batchExportFailed": "一括エクスポート失敗",
-    "pipelineNotFound": "パイプライン {id} が見つかりません"
+    "pipelineNotFound": "パイプライン {id} が見つかりません",
+    "setDefaultSuccess": "「{name}」をデフォルトパイプラインに設定しました",
+    "setDefaultFailed": "デフォルトパイプラインの設定に失敗"
+  },
+  "test": {
+    "title": "チャットテスト：{name}",
+    "desc": "このパイプラインでAIチャットテストを実行し、各ノードのモデルチェーンを検証します。",
+    "promptPlaceholder": "テスト質問を入力してください（例：こんにちは、自己紹介してください）",
+    "run": "テスト開始",
+    "result": "テスト結果",
+    "running": "実行中",
+    "failed": "失敗",
+    "success": "成功",
+    "waiting": "AI応答を待っています..."
   }
 }
