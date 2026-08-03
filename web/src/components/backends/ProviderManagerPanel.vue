@@ -157,7 +157,7 @@
     <BackendEditorDialog
       ref="editorRef"
       v-model="editorVisible"
-      @saved="emit('refresh')"
+      @saved="handleEditorSaved"
     />
 
     <input
@@ -255,6 +255,12 @@ async function loadDefaultBackend() {
   } catch {
     /* ignore */
   }
+}
+
+// 新增/编辑后端后同步默认后端与模型（否则新设的默认卡片要刷新才变绿）
+async function handleEditorSaved() {
+  await loadDefaultBackend()
+  emit('refresh')
 }
 
 function toggleSelect(id: string, checked: boolean) {
