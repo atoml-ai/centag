@@ -38,8 +38,8 @@ func (h *ConversationHandler) ListSessions(c *gin.Context) {
 		Offset:   queryInt(c, "offset", 0),
 	}
 	if h.edition.IsTeam() {
-		q.TenantID = auth.GetTenantID(c)
-		// team users only see own sessions unless admin+user_id query (optional)
+		// 组模型（036）：会话按 user_id 隔离，租户字段不再作为作用域。
+		// team 用户仅看自己的会话，管理员可通过 ?user_id= 查询指定用户。
 		if auth.IsAdmin(c) {
 			if raw := c.Query("user_id"); raw != "" {
 				if id, err := strconv.ParseInt(raw, 10, 64); err == nil {
@@ -140,10 +140,8 @@ func (h *ConversationHandler) ListCategories(c *gin.Context) {
 		return
 	}
 	userID, _ := auth.GetUserID(c)
+	// 组模型（036）：租户不再作为作用域，会话按 user_id 归类。
 	tenantID := ""
-	if h.edition.IsTeam() {
-		tenantID = auth.GetTenantID(c)
-	}
 	cats, err := h.store.ListCategories(c.Request.Context(), userID, tenantID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})

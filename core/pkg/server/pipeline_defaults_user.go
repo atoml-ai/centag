@@ -74,11 +74,8 @@ func (s *Server) updatePipelineDefaultsForUser(c *gin.Context) {
 	}
 
 	if s.pipelineHandler != nil && s.pipelineHandler.pipelineRegistry != nil {
-		tenantID := ""
-		if user.TenantID != nil {
-			tenantID = *user.TenantID
-		}
-		pipelines := useraccess.FilterPipelines(user, s.pipelineHandler.pipelineRegistry.ListByTenant(tenantID))
+		own := ownTenantID(user)
+		pipelines := useraccess.FilterPipelinesFor(user, s.pipelineHandler.pipelineRegistry.ListByTenant(own), policyForUser(c.Request.Context(), user))
 		ok := false
 		for _, p := range pipelines {
 			if p != nil && p.ID == pid {

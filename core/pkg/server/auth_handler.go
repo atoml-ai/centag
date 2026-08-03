@@ -65,10 +65,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	}
 
 	// Issue access token (include tenant ID for multi-tenant isolation).
-	tenantID := ""
-	if user.TenantID != nil {
-		tenantID = *user.TenantID
-	}
+	tenantID := ownTenantID(user)
 	accessToken, err := auth.IssueAccessToken(user.ID, user.Username, string(user.Role), tenantID)
 	if err != nil {
 		logger.Errorf("login: issue access token: %v", err)
@@ -158,10 +155,7 @@ func (h *AuthHandler) Refresh(c *gin.Context) {
 		zap.Int64("user_id", user.ID),
 		zap.String("username", user.Username))
 
-	tenantID := ""
-	if user.TenantID != nil {
-		tenantID = *user.TenantID
-	}
+	tenantID := ownTenantID(user)
 	accessToken, err := auth.IssueAccessToken(user.ID, user.Username, string(user.Role), tenantID)
 	if err != nil {
 		RespondInternalError(c, "could not issue token")
@@ -170,6 +164,7 @@ func (h *AuthHandler) Refresh(c *gin.Context) {
 
 	rawRefresh, refreshHash, err := auth.GenerateRefreshToken()
 	if err != nil {
+		logger.Errorf("login: generate refresh token: %v", err)
 		RespondInternalError(c, "could not generate refresh token")
 		return
 	}
