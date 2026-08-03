@@ -273,10 +273,10 @@ function formatTime(iso: string) {
 }
 
 async function copyUrl(url: string) {
-  try {
-    await navigator.clipboard.writeText(url)
+  const { copyToClipboard } = await import('@/utils/clipboard')
+  if (await copyToClipboard(url)) {
     ElMessage.success(t('clashRules.message.copySuccess'))
-  } catch {
+  } else {
     ElMessage.warning(t('clashRules.message.copyFailed'))
   }
 }

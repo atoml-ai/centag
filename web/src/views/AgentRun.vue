@@ -128,10 +128,10 @@ function onCustomInput() {
 async function copyCommand() {
   const cmd = previewCommand.value
   if (!cmd) return
-  try {
-    await navigator.clipboard.writeText(cmd)
+  const { copyToClipboard } = await import('@/utils/clipboard')
+  if (await copyToClipboard(cmd)) {
     ElMessage.success(t('agentRun.copied'))
-  } catch {
+  } else {
     ElMessage.error(t('agentRun.copyFailed'))
   }
 }

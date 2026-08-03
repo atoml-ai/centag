@@ -187,10 +187,12 @@ async function deleteKey(key: string) {
   }
 }
 
-function copyValue() {
+async function copyValue() {
   if (formattedValue.value) {
-    navigator.clipboard.writeText(formattedValue.value)
-    ElMessage.success(t('storageKVBrowser.copiedToClipboard'))
+    const { copyToClipboard } = await import('@/utils/clipboard')
+    if (await copyToClipboard(formattedValue.value)) {
+      ElMessage.success(t('storageKVBrowser.copiedToClipboard'))
+    }
   }
 }
 

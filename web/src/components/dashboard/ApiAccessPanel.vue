@@ -75,10 +75,10 @@ const selectedUrl = computed(() =>
 
 async function copySelected() {
   const label = selectedEndpoint.value?.label || t('apiAccessPanel.endpointLabel')
-  try {
-    await navigator.clipboard.writeText(selectedUrl.value)
+  const { copyToClipboard } = await import('@/utils/clipboard')
+  if (await copyToClipboard(selectedUrl.value)) {
     ElMessage.success(t('apiAccessPanel.copySuccess', { label }))
-  } catch {
+  } else {
     ElMessage.error(t('apiAccessPanel.copyFailed'))
   }
 }

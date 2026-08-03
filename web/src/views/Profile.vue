@@ -221,50 +221,6 @@
             </el-table-column>
           </el-table>
         </section>
-
-        <!-- 资源统计 -->
-        <section v-show="activeSection === 'usage'" class="section-panel">
-          <header class="section-header section-header--row">
-            <div>
-              <h2 class="section-title">{{ $t('profile.resourceStats') }}</h2>
-              <p class="section-desc">{{ $t('profile.resourceStatsDesc') }}</p>
-            </div>
-            <el-tag
-              v-if="tenant"
-              :type="tenant.status === 'active' ? 'success' : 'warning'"
-              size="small"
-            >
-              {{
-                tenant.status === 'active'
-                  ? $t('profile.active')
-                  : tenant.status === 'suspended'
-                    ? $t('profile.paused')
-                    : tenant.status
-              }}
-            </el-tag>
-          </header>
-
-          <el-skeleton v-if="tenantLoading" :rows="4" animated />
-
-          <template v-else-if="tenant">
-            <el-descriptions :column="1" size="default" border class="usage-desc">
-              <el-descriptions-item :label="$t('profile.tenantId')">
-                <code class="tenant-id">{{ tenant.id }}</code>
-              </el-descriptions-item>
-              <el-descriptions-item :label="$t('profile.tenantName')">{{ tenant.name }}</el-descriptions-item>
-              <el-descriptions-item :label="$t('profile.todayRequests')">
-                <span class="stat-value">{{ tenant.used_today_requests || 0 }}</span>
-                <span v-if="tenant.daily_request_limit" class="stat-limit"> / {{ tenant.daily_request_limit }}</span>
-              </el-descriptions-item>
-              <el-descriptions-item :label="$t('profile.todayTokens')">
-                <span class="stat-value">{{ tenant.used_today_tokens || 0 }}</span>
-                <span v-if="tenant.daily_token_limit" class="stat-limit"> / {{ tenant.daily_token_limit }}</span>
-              </el-descriptions-item>
-            </el-descriptions>
-          </template>
-
-          <el-empty v-else :description="$t('profile.noTenantInfo')" :image-size="80" />
-        </section>
       </main>
     </div>
 
@@ -347,7 +303,7 @@ import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
-  User, Lock, Key, Plus, CopyDocument, MoreFilled, Edit, Delete, View, OfficeBuilding,
+  User, Lock, Key, Plus, CopyDocument, MoreFilled, Edit, Delete, View,
 } from '@element-plus/icons-vue'
 import type { FormInstance, FormRules } from 'element-plus'
 import { useAuthStore } from '@/stores/auth'
@@ -356,25 +312,18 @@ import {
   listAPIKeys, getAPIKey, createAPIKey as apiCreateAPIKey, updateAPIKey, deleteAPIKey as apiDeleteAPIKey,
 } from '@/api/user'
 import type { APIKey } from '@/api/user'
-import {
-  getCurrentTenant,
-  getCurrentQuota,
-  type Tenant,
-  type TenantQuota,
-} from '@/api/tenant'
 
 const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
 
-type ProfileSection = 'basic' | 'password' | 'api-keys' | 'usage'
+type ProfileSection = 'basic' | 'password' | 'api-keys'
 
 const navItems: Array<{ id: ProfileSection; labelKey: string; icon: Component }> = [
   { id: 'basic', labelKey: 'profile.navBasic', icon: User },
   { id: 'password', labelKey: 'profile.navPassword', icon: Lock },
   { id: 'api-keys', labelKey: 'profile.navApiKeys', icon: Key },
-  { id: 'usage', labelKey: 'profile.navUsage', icon: OfficeBuilding },
 ]
 
 const validSections = new Set<ProfileSection>(navItems.map(i => i.id))
@@ -412,56 +361,14 @@ const avatarStyle = computed(() => ({
 const profileForm = reactive({ username: '', display_name: '', email: '' })
 const savingProfile = ref(false)
 
-const tenantLoading = ref(false)
-const tenant = ref<(Tenant & TenantQuota) | null>(null)
-const quota = ref<TenantQuota | null>(null)
-
 async function writeClipboard(text: string): Promise<boolean> {
-  if (!text) return false
-  try {
-    await navigator.clipboard.writeText(text)
-    return true
-  } catch {
-    try {
-      const ta = document.createElement('textarea')
-      ta.value = text
-      ta.setAttribute('readonly', '')
-      ta.style.position = 'fixed'
-      ta.style.left = '-9999px'
-      document.body.appendChild(ta)
-      ta.select()
-      const ok = document.execCommand('copy')
-      document.body.removeChild(ta)
-      return ok
-    } catch {
-      return false
-    }
-  }
+  const { copyToClipboard } = await import('@/utils/clipboard')
+  return copyToClipboard(text)
 }
 
 const copyText = async (text: string) => {
   if (await writeClipboard(text)) ElMessage.success(t('profile.copied'))
   else ElMessage.warning(t('profile.copyFailed'))
-}
-
-const loadTenantInfo = async () => {
-  tenantLoading.value = true
-  try {
-    const [tenantRes, quotaRes] = await Promise.all([
-      getCurrentTenant().catch(() => null),
-      getCurrentQuota().catch(() => null),
-    ])
-    const detail = tenantRes && typeof tenantRes === 'object' ? tenantRes : null
-    const quotaData = quotaRes ?? detail?.quota ?? null
-    if (detail?.tenant) {
-      tenant.value = { ...detail.tenant, ...(quotaData ?? {}) }
-    }
-    if (quotaData) quota.value = quotaData
-  } catch (error) {
-    console.error(t('profile.loadTenantFailed'), error)
-  } finally {
-    tenantLoading.value = false
-  }
 }
 
 onMounted(async () => {
@@ -477,7 +384,6 @@ onMounted(async () => {
     ElMessage.error(e.message || t('profile.loadUserInfoFailed'))
   }
   loadAPIKeys()
-  loadTenantInfo()
 })
 
 async function saveProfile() {
@@ -893,22 +799,6 @@ async function copyRevealedKey() {
   word-break: break-all;
   color: var(--el-color-success-dark-2);
   line-height: 1.6;
-}
-
-.tenant-id {
-  font-size: 12px;
-}
-
-.stat-value {
-  font-weight: 600;
-}
-
-.stat-limit {
-  color: var(--el-text-color-secondary);
-}
-
-.usage-desc {
-  max-width: 560px;
 }
 
 .text-muted {

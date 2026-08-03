@@ -611,20 +611,20 @@ const defaultBackendSummary = computed(() => {
 async function copyExternalUrl() {
   const url = status.value.external_url
   if (!url) return
-  try {
-    await navigator.clipboard.writeText(url)
+  const { copyToClipboard } = await import('@/utils/clipboard')
+  if (await copyToClipboard(url)) {
     ElMessage.success(t('dashboard.copiedExternalAddress'))
-  } catch {
+  } else {
     ElMessage.error(t('dashboard.copyFailed'))
   }
 }
 
 async function copyEndpoint(ep: { label: string; path: string }) {
   const url = baseUrl.value + ep.path
-  try {
-    await navigator.clipboard.writeText(url)
+  const { copyToClipboard } = await import('@/utils/clipboard')
+  if (await copyToClipboard(url)) {
     ElMessage.success(t('dashboard.copiedExternalAddress'))
-  } catch {
+  } else {
     ElMessage.error(t('dashboard.copyFailed'))
   }
 }

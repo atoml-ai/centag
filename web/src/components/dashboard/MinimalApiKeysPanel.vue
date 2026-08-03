@@ -118,10 +118,10 @@ async function copyKey(key: string) {
     ElMessage.warning(t('minimalApiKeysPanel.copyNoPlaintext'))
     return
   }
-  try {
-    await navigator.clipboard.writeText(key)
+  const { copyToClipboard } = await import('@/utils/clipboard')
+  if (await copyToClipboard(key)) {
     ElMessage.success(t('minimalApiKeysPanel.copySuccess'))
-  } catch {
+  } else {
     ElMessage.warning(t('minimalApiKeysPanel.copyFailed'))
   }
 }

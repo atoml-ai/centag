@@ -573,10 +573,10 @@ const downloadCACert = async () => {
 }
 
 const copyCommand = async (command: string) => {
-  try {
-    await navigator.clipboard.writeText(command)
+  const { copyToClipboard } = await import('@/utils/clipboard')
+  if (await copyToClipboard(command)) {
     ElMessage.success(t('hostProxy.message.copiedToClipboard'))
-  } catch (error) {
+  } else {
     ElMessage.error(t('hostProxy.message.copyFailed'))
   }
 }

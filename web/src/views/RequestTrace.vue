@@ -188,11 +188,8 @@ function formatTime(ts: string) {
 
 async function copyRequestId() {
   if (!trace.value?.request_id) return
-  try {
-    await navigator.clipboard.writeText(trace.value.request_id)
-  } catch {
-    /* ignore */
-  }
+  const { copyToClipboard } = await import('@/utils/clipboard')
+  await copyToClipboard(trace.value.request_id)
 }
 
 function exportTrace() {

@@ -734,9 +734,11 @@ const fetchModelsNow = async () => {
   }
 }
 
-const copyBackendId = (id: string) => {
-  navigator.clipboard.writeText(id)
-  ElMessage.success(t('backendEditor.backendIdCopied'))
+const copyBackendId = async (id: string) => {
+  const { copyToClipboard } = await import('@/utils/clipboard')
+  if (await copyToClipboard(id)) {
+    ElMessage.success(t('backendEditor.backendIdCopied'))
+  }
 }
 
 function getPendingApiKey(backendId: string): string | undefined {
