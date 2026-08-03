@@ -109,14 +109,11 @@ func (h *PipelineHandler) syncModesFromRegistry() {
 	logger.Infof("Pipeline modes synced to ModeManager: %d shortcuts", n)
 }
 
-// getTenantID returns the tenant ID from the request context.
-// Returns empty string for single-user mode or admin access.
+// getTenantID 在组模型（036）下不再作为资源作用域，恒返回空字符串。
+// 普通用户流水线的可见性由 effective policy（AllowPipelines）过滤；
+// 用户自有（遗留 tenant 副本）流水线按 ownTenantID 匹配。
 func (h *PipelineHandler) getTenantID(c *gin.Context) string {
-	scope := auth.GetScopedAccess(c)
-	if scope == auth.AccessGlobal {
-		return "" // admin: no tenant filter, global access
-	}
-	return auth.GetTenantID(c)
+	return ""
 }
 
 // requirePipelineAccess validates pipeline access for the given scope.
@@ -136,14 +133,9 @@ func (h *PipelineHandler) requirePipelineAccess(c *gin.Context, pipelineID strin
 			}
 		}
 	default:
-		tenantID := h.getTenantID(c)
-		if tenantID != "" {
-			// Normal user: only allow access to their tenant's pipelines + system defaults.
-			p = h.pipelineRegistry.GetByTenant(tenantID, pipelineID)
-		} else {
-			// Single-user mode: global access.
-			p = h.pipelineRegistry.Get(pipelineID)
-		}
+		// 组模型（036）：租户不再是作用域。自有（遗留租户副本）流水线按用户记录
+		// 匹配，其余为系统预设。
+		p = h.pipelineRegistry.GetByTenant(ownTenantID(h.accessUser(c)), pipelineID)
 	}
 
 	if p == nil {
@@ -154,7 +146,7 @@ func (h *PipelineHandler) requirePipelineAccess(c *gin.Context, pipelineID strin
 		return nil, fmt.Errorf("access denied")
 	}
 	if user := h.accessUser(c); user != nil {
-		filtered := useraccess.FilterPipelines(user, []*pipeline.AgentPatternPipeline{p})
+		filtered := useraccess.FilterPipelinesFor(user, []*pipeline.AgentPatternPipeline{p}, policyForUser(c.Request.Context(), user))
 		if len(filtered) == 0 {
 			c.JSON(http.StatusForbidden, gin.H{
 				"success": false,
@@ -232,10 +224,10 @@ func (h *PipelineHandler) recordExecution(pipelineID string, input *pipeline.Pip
 	}()
 }
 
-// ListPipelines 列出所有流水线（租户隔离）
+// ListPipelines 列出所有流水线（组模型 policy 过滤）
 // GET /api/v1/pipelines
 // - 管理员：返回全部流水线
-// - 普通用户：仅返回自己租户的流水线 + 系统预设
+// - 普通用户：自有（遗留租户副本）流水线 + policy 允许的系统预设
 func (h *PipelineHandler) ListPipelines(c *gin.Context) {
 	scope := auth.GetScopedAccess(c)
 	var pipelines []*pipeline.AgentPatternPipeline
@@ -245,15 +237,12 @@ func (h *PipelineHandler) ListPipelines(c *gin.Context) {
 		// Admin: 返回所有流水线（全局 + 所有租户专属）
 		pipelines = h.pipelineRegistry.ListAll()
 	default:
-		tenantID := h.getTenantID(c)
-		if tenantID != "" {
-			pipelines = h.pipelineRegistry.ListByTenant(tenantID)
-		} else {
-			pipelines = h.pipelineRegistry.List()
-		}
+		// 组模型（036）：不再按 auth 租户过滤；ListByTenant(own) 合并系统预设
+		// 与用户自有（遗留租户副本），后续按 effective policy 过滤。
+		pipelines = h.pipelineRegistry.ListByTenant(ownTenantID(h.accessUser(c)))
 	}
 	if user := h.accessUser(c); user != nil {
-		pipelines = useraccess.FilterPipelines(user, pipelines)
+		pipelines = useraccess.FilterPipelinesFor(user, pipelines, policyForUser(c.Request.Context(), user))
 	}
 
 	// 注入 RouteConfig：使前端能获取到完整的 RouteConfig 信息
@@ -295,19 +284,20 @@ func (h *PipelineHandler) GetPipeline(c *gin.Context) {
 	})
 }
 
-// CreatePipeline 创建流水线（租户隔离）
+// CreatePipeline 创建流水线
 // POST /api/v1/pipelines?overwrite=true
 // - overwrite=true（默认）：允许覆盖已有流水线
 // - overwrite=false：如果流水线已存在则返回冲突错误
 // - 管理员：创建全局流水线
-// - 普通用户：自动绑定到当前租户
+// - 普通用户：自动绑定到自己的（遗留租户别名）空间；无 tenant_id 时创建系统预设
 func (h *PipelineHandler) CreatePipeline(c *gin.Context) {
-	tenantID := h.getTenantID(c)
-	if tenantID != "" {
-		if user := h.accessUser(c); user != nil && !user.CanAddOwnPipelines {
+	tenantID := ""
+	if user := h.accessUser(c); user != nil {
+		if !user.CanAddOwnPipelines {
 			c.JSON(http.StatusForbidden, gin.H{"success": false, "error": "adding or modifying own pipelines is disabled for this user"})
 			return
 		}
+		tenantID = ownTenantID(user)
 	}
 
 	var req pipeline.AgentPatternPipeline
@@ -371,7 +361,7 @@ func (h *PipelineHandler) CreatePipeline(c *gin.Context) {
 	})
 }
 
-// UpdatePipeline 更新流水线（租户隔离）
+// UpdatePipeline 更新流水线（角色感知）
 // PUT /api/v1/pipelines/:id
 func (h *PipelineHandler) UpdatePipeline(c *gin.Context) {
 	id := c.Param("id")
@@ -385,12 +375,13 @@ func (h *PipelineHandler) UpdatePipeline(c *gin.Context) {
 	if err != nil {
 		return
 	}
-	tenantID := h.getTenantID(c)
-	if tenantID != "" {
-		if user := h.accessUser(c); user != nil && !user.CanAddOwnPipelines {
+	tenantID := ""
+	if user := h.accessUser(c); user != nil {
+		if !user.CanAddOwnPipelines {
 			c.JSON(http.StatusForbidden, gin.H{"success": false, "error": "adding or modifying own pipelines is disabled for this user"})
 			return
 		}
+		tenantID = ownTenantID(user)
 		if existing.TenantID == "" {
 			c.JSON(http.StatusForbidden, gin.H{"success": false, "error": "cannot modify system pipeline"})
 			return
@@ -461,7 +452,7 @@ func (h *PipelineHandler) UpdatePipeline(c *gin.Context) {
 	})
 }
 
-// DeletePipeline 删除流水线（租户隔离）
+// DeletePipeline 删除流水线（角色感知）
 // DELETE /api/v1/pipelines/:id
 func (h *PipelineHandler) DeletePipeline(c *gin.Context) {
 	id := c.Param("id")
@@ -476,12 +467,13 @@ func (h *PipelineHandler) DeletePipeline(c *gin.Context) {
 		return
 	}
 
-	tenantID := h.getTenantID(c)
-	if tenantID != "" {
-		if user := h.accessUser(c); user != nil && !user.CanAddOwnPipelines {
+	tenantID := ""
+	if user := h.accessUser(c); user != nil {
+		if !user.CanAddOwnPipelines {
 			c.JSON(http.StatusForbidden, gin.H{"success": false, "error": "adding or modifying own pipelines is disabled for this user"})
 			return
 		}
+		tenantID = ownTenantID(user)
 		if existing != nil && existing.TenantID == "" {
 			c.JSON(http.StatusForbidden, gin.H{"success": false, "error": "cannot delete system pipeline"})
 			return
@@ -508,6 +500,93 @@ func (h *PipelineHandler) DeletePipeline(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "pipeline deleted",
+	})
+}
+
+// ClonePipeline 从已有流水线复制一份到当前用户空间
+// POST /api/v1/pipelines/:id/clone
+// - 管理员：复制为全局流水线（新 ID，不覆盖原流水线）
+// - 普通用户：复制为用户自有流水线（TenantID = own）
+// - 原流水线可以是系统预设或其他用户可见的流水线
+// - 新流水线 ID 默认为 "{原ID}-copy-{时间戳}"，也可通过请求体自定义
+func (h *PipelineHandler) ClonePipeline(c *gin.Context) {
+	srcID := c.Param("id")
+	if srcID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "pipeline id is required"})
+		return
+	}
+
+	// 1. 读取源流水线（需要有访问权限）
+	src, err := h.requirePipelineAccess(c, srcID)
+	if err != nil {
+		return // error already written
+	}
+
+	// 2. 深拷贝源流水线
+	data, err := json.Marshal(src)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": "failed to clone pipeline"})
+		return
+	}
+	var clone pipeline.AgentPatternPipeline
+	if err := json.Unmarshal(data, &clone); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": "failed to clone pipeline"})
+		return
+	}
+
+	// 3. 生成新 ID（支持请求体自定义）
+	var req struct {
+		ID   string `json:"id"`
+		Name string `json:"name"`
+	}
+	_ = c.ShouldBindJSON(&req)
+
+	if req.ID != "" {
+		clone.ID = req.ID
+	} else {
+		clone.ID = fmt.Sprintf("%s-copy-%d", srcID, time.Now().UnixMilli())
+	}
+	if req.Name != "" {
+		clone.Name = req.Name
+	} else {
+		clone.Name = fmt.Sprintf("%s (副本)", src.Name)
+	}
+
+	// 4. 设置租户作用域
+	tenantID := ""
+	if user := h.accessUser(c); user != nil {
+		if !user.CanAddOwnPipelines {
+			c.JSON(http.StatusForbidden, gin.H{"success": false, "error": "adding or modifying own pipelines is disabled for this user"})
+			return
+		}
+		tenantID = ownTenantID(user)
+	}
+
+	// 清除系统流水线的 TenantID 和快捷码，确保复制后归属到当前用户
+	clone.TenantID = ""
+	clone.ShortcutCode = fmt.Sprintf("_clone_%d", time.Now().UnixMilli())
+	clone.Version = "1.0"
+
+	// 5. 注册
+	if tenantID != "" {
+		err = h.pipelineRegistry.RegisterForTenant(tenantID, &clone)
+	} else {
+		err = h.pipelineRegistry.Register(&clone)
+	}
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": err.Error()})
+		return
+	}
+
+	// 清除存储钩子缓存
+	if h.engine != nil {
+		h.engine.InvalidateStorageHookCache(clone.ID)
+	}
+	h.syncModesFromRegistry()
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data":    &clone,
 	})
 }
 
@@ -955,6 +1034,7 @@ func (h *PipelineHandler) RegisterPipelineRoutes(router *gin.RouterGroup) {
 		pipelines.DELETE("/:id", h.DeletePipeline)
 		pipelines.POST("/:id/auto-build", h.AutoBuildPipeline)
 		pipelines.POST("/:id/auto-build/rollback", h.AutoBuildRollback)
+		pipelines.POST("/:id/clone", h.ClonePipeline)
 		pipelines.POST("/:id/execute", h.ExecutePipeline)
 		pipelines.POST("/:id/validate", h.ValidatePipeline)
 		pipelines.GET("/:id/export", h.ExportPipeline)
