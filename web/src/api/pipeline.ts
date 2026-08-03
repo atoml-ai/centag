@@ -176,6 +176,11 @@ export function deletePipeline(id: string) {
   return api.delete(`/api/v1/pipelines/${id}`)
 }
 
+// 复制流水线（从系统/其他流水线克隆到当前用户空间）
+export function clonePipeline(id: string, data?: { id?: string; name?: string }) {
+  return api.post(`/api/v1/pipelines/${id}/clone`, data || {})
+}
+
 // 执行流水线（超时 120s，与后端 global_config.timeout 对齐）
 export function executePipeline(id: string, data: any) {
   return api.post(`/api/v1/pipelines/${id}/execute`, data, { timeout: 120000 })
