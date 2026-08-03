@@ -33,7 +33,8 @@ CREATE TABLE IF NOT EXISTS token_usage (
 	pricing_rule_id INTEGER,
 	success INTEGER NOT NULL DEFAULT 1,
 	dept_tag TEXT,
-	agent_type TEXT
+	agent_type TEXT,
+	group_id TEXT
 );
 CREATE TABLE IF NOT EXISTS token_usage_daily (
 	id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -50,6 +51,7 @@ CREATE TABLE IF NOT EXISTS token_usage_daily (
 	cost_output_price REAL DEFAULT 0,
 	request_count INTEGER DEFAULT 0,
 	updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+	group_id TEXT,
 	UNIQUE(user_id, backend_id, model, agent_type, date)
 );
 `

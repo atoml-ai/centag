@@ -22,7 +22,7 @@ func setupSQLiteTokenUsageDB(t *testing.T) *sql.DB {
 	// same database is visible across the pool (BeginTx / QueryRow / etc.).
 	db.SetMaxOpenConns(1)
 	schema := `
-	CREATE TABLE users (id INTEGER PRIMARY KEY, username TEXT NOT NULL);
+	CREATE TABLE users (id INTEGER PRIMARY KEY, username TEXT NOT NULL, group_id TEXT);
 	INSERT INTO users (id, username) VALUES (1, 'admin');
 	CREATE TABLE token_usage (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -44,7 +44,8 @@ func setupSQLiteTokenUsageDB(t *testing.T) *sql.DB {
 		pricing_rule_id INTEGER,
 		success INTEGER NOT NULL DEFAULT 1,
 		dept_tag TEXT,
-		agent_type TEXT
+		agent_type TEXT,
+		group_id TEXT
 	);
 	CREATE TABLE token_usage_daily (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -61,6 +62,7 @@ func setupSQLiteTokenUsageDB(t *testing.T) *sql.DB {
 		cost_output_price REAL DEFAULT 0,
 		request_count INTEGER DEFAULT 0,
 		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		group_id TEXT,
 		UNIQUE(user_id, backend_id, model, agent_type, date)
 	);
 	`

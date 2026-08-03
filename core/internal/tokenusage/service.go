@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -12,6 +13,45 @@ import (
 type Service struct {
 	db     *sql.DB
 	driver string // database.Init 的插件名：postgresql
+
+	groupColMu      sync.Mutex
+	groupColMissing bool // cached: users.group_id absent (open-core), skip future lookups
+}
+
+// groupIDForUser resolves the user's group (036). Returns "" on any failure so
+// metering never blocks (open-core has no users.group_id column).
+func (s *Service) groupIDForUser(ctx context.Context, userID int64) (string, error) {
+	if userID <= 0 {
+		return "", nil
+	}
+	s.groupColMu.Lock()
+	missing := s.groupColMissing
+	s.groupColMu.Unlock()
+	if missing {
+		return "", nil
+	}
+
+	query := s.q(`SELECT group_id FROM users WHERE id = $1`)
+	var groupID sql.NullString
+	err := s.db.QueryRowContext(ctx, query, userID).Scan(&groupID)
+	if err != nil {
+		// open-core / pre-036 schema: fail open, remember once to avoid per-request errors
+		if isMissingColumn(err) {
+			s.groupColMu.Lock()
+			s.groupColMissing = true
+			s.groupColMu.Unlock()
+			return "", nil
+		}
+		return "", err
+	}
+	return groupID.String, nil
+}
+
+func isMissingColumn(err error) bool {
+	msg := err.Error()
+	return strings.Contains(msg, "no such column") ||
+		strings.Contains(msg, "no such table") ||
+		strings.Contains(msg, "column") && strings.Contains(msg, "does not exist")
 }
 
 // UsageRecord Token 使用记录
@@ -31,6 +71,7 @@ type UsageRecord struct {
 	PricingRuleID    int64   `json:"pricing_rule_id"`
 	Success          bool    `json:"success"`
 	TenantID         string  `json:"tenant_id"`
+	GroupID          string  `json:"group_id"` // 036: resolved group (shared metering pool), "" when single-user
 	DeptTag          string  `json:"dept_tag"`
 	RequestID        string  `json:"request_id"`
 	ClientIP         string  `json:"client_ip"`
@@ -137,6 +178,14 @@ func (s *Service) RecordUsage(ctx context.Context, record *UsageRecord) error {
 
 	normalizedAgentType := normalizeAgentType(record.AgentType)
 
+	// D1 (036): each row records the resolved group so group cost = SUM(cost_usd)
+	// WHERE group_id and shared-pool gates can sum per group. Resolve before the
+	// tx to avoid holding a pool connection (SQLite single-conn pools deadlock).
+	groupID := record.GroupID
+	if groupID == "" {
+		groupID, _ = s.groupIDForUser(ctx, record.UserID)
+	}
+
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -151,15 +200,16 @@ func (s *Service) RecordUsage(ctx context.Context, record *UsageRecord) error {
 	}
 	insertQuery := s.q(`
 		INSERT INTO token_usage 
-		(user_id, api_key_id, backend_id, model, prompt_tokens, completion_tokens, total_tokens, cost_usd, input_cost, output_cost, cost_input_price, cost_output_price, pricing_rule_id, success, tenant_id, dept_tag, request_id, agent_type)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+		(user_id, api_key_id, backend_id, model, prompt_tokens, completion_tokens, total_tokens, cost_usd, input_cost, output_cost, cost_input_price, cost_output_price, pricing_rule_id, success, tenant_id, group_id, dept_tag, request_id, agent_type)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
 	`)
 	_, err = tx.ExecContext(ctx, insertQuery,
 		record.UserID, record.APIKeyID, record.BackendID, record.Model,
 		record.PromptTokens, record.CompletionTokens, record.TotalTokens,
 		record.CostUSD, record.InputCost, record.OutputCost,
 		record.CostInputPrice, record.CostOutputPrice,
-		ruleID, success, nullIfEmpty(record.TenantID), nullIfEmpty(record.DeptTag),
+		ruleID, success, nullIfEmpty(record.TenantID), nullIfEmpty(groupID),
+		nullIfEmpty(record.DeptTag),
 		record.RequestID, normalizedAgentType,
 	)
 	if err != nil {
@@ -180,6 +230,7 @@ func (s *Service) RecordUsage(ctx context.Context, record *UsageRecord) error {
 		record.UserID, record.BackendID, record.Model, normalizedAgentType, dateStr,
 		record.PromptTokens, record.CompletionTokens, record.TotalTokens,
 		record.CostUSD, record.CostInputPrice, record.CostOutputPrice,
+		nullIfEmpty(groupID),
 	)
 	if err != nil {
 		return err
@@ -202,8 +253,8 @@ func (s *Service) recordUsageDailyUpsertSQL() string {
 	if s.isPostgres() {
 		return `
 		INSERT INTO token_usage_daily 
-		(user_id, backend_id, model, agent_type, date, total_prompt_tokens, total_completion_tokens, total_tokens, total_cost_usd, cost_input_price, cost_output_price, request_count)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 1)
+		(user_id, backend_id, model, agent_type, date, total_prompt_tokens, total_completion_tokens, total_tokens, total_cost_usd, cost_input_price, cost_output_price, group_id, request_count)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 1)
 		ON CONFLICT (user_id, backend_id, model, agent_type, date)
 		DO UPDATE SET
 			total_prompt_tokens = token_usage_daily.total_prompt_tokens + $6,
@@ -218,8 +269,8 @@ func (s *Service) recordUsageDailyUpsertSQL() string {
 	}
 	return `
 		INSERT INTO token_usage_daily 
-		(user_id, backend_id, model, agent_type, date, total_prompt_tokens, total_completion_tokens, total_tokens, total_cost_usd, cost_input_price, cost_output_price, request_count)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+		(user_id, backend_id, model, agent_type, date, total_prompt_tokens, total_completion_tokens, total_tokens, total_cost_usd, cost_input_price, cost_output_price, group_id, request_count)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
 		ON CONFLICT (user_id, backend_id, model, agent_type, date)
 		DO UPDATE SET
 			total_prompt_tokens = token_usage_daily.total_prompt_tokens + excluded.total_prompt_tokens,
