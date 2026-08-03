@@ -10,8 +10,9 @@ import (
 	_ "centag/plugins/database/sqlite"
 )
 
-// 验证新环境：迁移(含 010/017) + 首轮 Seed 后租户表与管理员租户记录齐全。
-func TestFreshInitCreatesAdminTenant(t *testing.T) {
+// 验证新环境：迁移 + 首轮 Seed 后管理员创建成功，且组模型（036）下不再
+// 预建租户记录、不再回写 admin.tenant_id。
+func TestFreshInitCreatesAdminNoTenant(t *testing.T) {
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "fresh.db")
 
@@ -32,24 +33,8 @@ func TestFreshInitCreatesAdminTenant(t *testing.T) {
 	if err != nil {
 		t.Fatalf("get admin user: %v", err)
 	}
-	if admin.TenantID == nil || *admin.TenantID == "" {
-		t.Fatal("admin user missing tenant_id after seed")
-	}
-
-	tenant, err := db.TenantStore().GetTenantByID(ctx, *admin.TenantID)
-	if err != nil {
-		t.Fatalf("get tenant: %v", err)
-	}
-	if tenant.UserID != admin.ID {
-		t.Fatalf("tenant user_id = %d, want %d", tenant.UserID, admin.ID)
-	}
-
-	quota, err := db.TenantStore().GetTenantQuota(ctx, tenant.ID)
-	if err != nil {
-		t.Fatalf("get tenant quota: %v", err)
-	}
-	if quota.DailyTokenLimit == 0 {
-		t.Fatal("expected default daily token limit")
+	if admin.TenantID != nil {
+		t.Fatalf("admin user should have no tenant_id after seed (group model), got %q", *admin.TenantID)
 	}
 
 	// 二次启动应跳过 seed，不重复创建
@@ -60,7 +45,7 @@ func TestFreshInitCreatesAdminTenant(t *testing.T) {
 	if err != nil {
 		t.Fatalf("list tenants: %v", err)
 	}
-	if len(tenants) != 1 {
-		t.Fatalf("tenant count = %d, want 1", len(tenants))
+	if len(tenants) != 0 {
+		t.Fatalf("tenant count = %d, want 0 (no tenant provisioning in group model)", len(tenants))
 	}
 }

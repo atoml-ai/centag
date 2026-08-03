@@ -95,12 +95,9 @@ func Seed(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("bootstrap: create admin user: %w", err)
 	}
+	// 组模型（036）：不再为管理员预建租户；users.tenant_id 仅为过渡别名，
+	// 管理员（全局访问）不再关联租户。
 	logger.Infof("bootstrap: 已创建管理员用户 username=%q id=%d", adminUser.Username, adminUser.ID)
-
-	if _, err := database.ProvisionUserTenant(ctx, db, adminUser); err != nil {
-		return fmt.Errorf("bootstrap: provision admin tenant: %w", err)
-	}
-	logger.Infof("bootstrap: 已为管理员创建租户 tenant_id=%q", *adminUser.TenantID)
 
 	if err := SeedDefaultAdminAPIKeyFromConfig(ctx, db, adminUser); err != nil {
 		return fmt.Errorf("bootstrap: seed default admin api key: %w", err)
