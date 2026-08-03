@@ -4,13 +4,29 @@ package useraccess
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 
 	"centag/core/internal/edition"
 	"centag/core/pkg/backend"
 	"centag/core/pkg/database"
+	"centag/core/pkg/groupmodel"
 	"centag/core/pkg/pipeline"
 )
+
+// userOwnerScope returns the user's own resource scope for ownership checks.
+// Under the group model (036), when the user has no legacy TenantID (typical
+// for team-admin-created users), a synthetic scope "user:{id}" is generated
+// so the user can create/edit/delete their own backends and pipelines.
+func userOwnerScope(user *database.User) string {
+	if user == nil {
+		return ""
+	}
+	if user.TenantID != nil && *user.TenantID != "" {
+		return *user.TenantID
+	}
+	return fmt.Sprintf("user:%d", user.ID)
+}
 
 // Applies reports whether whitelist / self-service flags apply to this user.
 func Applies(ed edition.Edition, user *database.User) bool {
@@ -80,11 +96,17 @@ func CanUseSharedBackend(user *database.User, backendID string) bool {
 	if user == nil {
 		return false
 	}
+	// Wildcard: "*" in the allowlist grants access to all backends.
+	for _, id := range user.AllowedBackendIDs {
+		if strings.TrimSpace(id) == "*" {
+			return true
+		}
+	}
 	return containsID(user.AllowedBackendIDs, backendID)
 }
 
 // CanUseSharedModel reports whether a shared-backend model is allowed.
-// Empty whitelist ⇒ no shared models.
+// Empty whitelist ⇒ no shared models.  A wildcard "*" in the list allows all models.
 func CanUseSharedModel(user *database.User, modelID string) bool {
 	if user == nil {
 		return false
@@ -92,6 +114,12 @@ func CanUseSharedModel(user *database.User, modelID string) bool {
 	modelID = strings.TrimSpace(modelID)
 	if modelID == "" {
 		return false
+	}
+	// Wildcard: "*" in the allowlist grants access to all models.
+	for _, id := range user.AllowedModelIDs {
+		if strings.TrimSpace(id) == "*" {
+			return true
+		}
 	}
 	if containsID(user.AllowedModelIDs, modelID) {
 		return true
@@ -107,26 +135,38 @@ func CanUseSharedModel(user *database.User, modelID string) bool {
 }
 
 // CanUseSharedPipeline reports whether a system pipeline is allowed.
+// A wildcard "*" in the list allows all pipelines.
 func CanUseSharedPipeline(user *database.User, pipelineID string) bool {
 	if user == nil {
 		return false
 	}
+	// Wildcard: "*" in the allowlist grants access to all pipelines.
+	for _, id := range user.AllowedPipelineIDs {
+		if strings.TrimSpace(id) == "*" {
+			return true
+		}
+	}
 	return containsID(user.AllowedPipelineIDs, pipelineID)
 }
 
-// FilterBackends keeps tenant-owned backends and allowed+enabled system backends.
-// For allowed system backends, SupportedModels are dual-filtered by allowed models.
+// FilterBackends keeps the user's own scope-scoped backends and allowed+enabled
+// system backends. For allowed system backends, SupportedModels are dual-filtered
+// by allowed models.
 func FilterBackends(user *database.User, list []*backend.BackendConfig) []*backend.BackendConfig {
 	if user == nil {
 		return nil
 	}
+	own := userOwnerScope(user)
 	out := make([]*backend.BackendConfig, 0, len(list))
 	for _, b := range list {
 		if b == nil {
 			continue
 		}
 		if b.TenantID != "" {
-			out = append(out, b)
+			// Include only the user's own scope-scoped backends (not other users').
+			if b.TenantID == own {
+				out = append(out, b)
+			}
 			continue
 		}
 		if !b.Enabled || !CanUseSharedBackend(user, b.ID) {
@@ -169,21 +209,114 @@ func ModelAllowedOnBackend(user *database.User, cfg *backend.BackendConfig, mode
 	return CanUseSharedModel(user, model)
 }
 
-// FilterPipelines keeps tenant-owned pipelines and allowed system pipelines.
+// FilterPipelines keeps the user's own scope-scoped pipelines and allowed
+// system pipelines.
 func FilterPipelines(user *database.User, list []*pipeline.AgentPatternPipeline) []*pipeline.AgentPatternPipeline {
 	if user == nil {
 		return nil
 	}
+	own := userOwnerScope(user)
 	out := make([]*pipeline.AgentPatternPipeline, 0, len(list))
 	for _, p := range list {
 		if p == nil {
 			continue
 		}
 		if p.TenantID != "" {
-			out = append(out, p)
+			// Include only the user's own scope-scoped pipelines (not other users').
+			if p.TenantID == own {
+				out = append(out, p)
+			}
 			continue
 		}
 		if CanUseSharedPipeline(user, p.ID) {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+// FilterBackendsFor and FilterPipelinesFor resolve resource visibility for a
+// Team normal user under the group model (036): when an active plan is
+// resolved, the effective policy allowlists govern visibility; otherwise they
+// fall back to the legacy per-user whitelists.
+func FilterBackendsFor(user *database.User, list []*backend.BackendConfig, pol *groupmodel.EffectivePolicy) []*backend.BackendConfig {
+	if pol != nil && pol.HasPlan {
+		return FilterBackendsByPolicy(user, list, pol)
+	}
+	return FilterBackends(user, list)
+}
+
+func FilterPipelinesFor(user *database.User, list []*pipeline.AgentPatternPipeline, pol *groupmodel.EffectivePolicy) []*pipeline.AgentPatternPipeline {
+	if pol != nil && pol.HasPlan {
+		return FilterPipelinesByPolicy(user, list, pol)
+	}
+	return FilterPipelines(user, list)
+}
+
+// FilterBackendsByPolicy keeps the user's own scope-scoped backends plus
+// policy-allowed, enabled system backends. Empty policy allowlist = all system
+// backends allowed; model mappings are dual-filtered.
+func FilterBackendsByPolicy(user *database.User, list []*backend.BackendConfig, pol *groupmodel.EffectivePolicy) []*backend.BackendConfig {
+	if user == nil {
+		return nil
+	}
+	own := userOwnerScope(user)
+	out := make([]*backend.BackendConfig, 0, len(list))
+	for _, b := range list {
+		if b == nil {
+			continue
+		}
+		if b.TenantID != "" {
+			if b.TenantID == own {
+				out = append(out, b)
+			}
+			continue
+		}
+		if !b.Enabled || !pol.IsAllowedBackend(b.ID) {
+			continue
+		}
+		cp := *b
+		cp.SupportedModels = filterModelMappingsByPolicy(pol, b.SupportedModels)
+		out = append(out, &cp)
+	}
+	return out
+}
+
+func filterModelMappingsByPolicy(pol *groupmodel.EffectivePolicy, maps []backend.ModelMapping) []backend.ModelMapping {
+	if len(maps) == 0 || pol == nil || len(pol.AllowModels) == 0 {
+		return maps
+	}
+	out := make([]backend.ModelMapping, 0, len(maps))
+	for _, m := range maps {
+		req := strings.TrimSpace(m.RequestedModel)
+		act := strings.TrimSpace(m.ActualModel)
+		if (req != "" && pol.IsAllowedModel(req)) || (act != "" && pol.IsAllowedModel(act)) {
+			out = append(out, m)
+		}
+	}
+	return out
+}
+
+// FilterPipelinesByPolicy keeps the user's own scope-scoped pipelines plus
+// policy-allowed system pipelines. Empty policy allowlist = all system
+// pipelines allowed.
+func FilterPipelinesByPolicy(user *database.User, list []*pipeline.AgentPatternPipeline, pol *groupmodel.EffectivePolicy) []*pipeline.AgentPatternPipeline {
+	if user == nil {
+		return nil
+	}
+	own := userOwnerScope(user)
+	out := make([]*pipeline.AgentPatternPipeline, 0, len(list))
+	for _, p := range list {
+		if p == nil {
+			continue
+		}
+		if p.TenantID != "" {
+			if p.TenantID == own {
+				out = append(out, p)
+			}
+			continue
+		}
+		if pol.IsAllowedPipeline(p.ID) {
 			out = append(out, p)
 		}
 	}
