@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"strings"
 
+	"centag/core/pkg/database"
+	"centag/core/pkg/groupmodel"
 	"centag/core/pkg/useraccess"
 
 	"github.com/gin-gonic/gin"
@@ -15,6 +17,15 @@ import (
 // teamResourceModelGuard rejects proxy requests whose model is not allowed
 // for the current Team normal user (dual backend+model whitelist).
 func (s *Server) teamResourceModelGuard() gin.HandlerFunc {
+	// Under the group model (036) the allowlists live in the user's effective
+	// policy (group_plans / user_plans), not the legacy users.allowed_* columns.
+	// A 30s TTL cache is acceptable; admin mutations also invalidate their own
+	// resolver instance in centag-pro.
+	var resolver *groupmodel.Resolver
+	if dbm := database.Get(); dbm != nil && dbm.GetDB() != nil {
+		resolver = groupmodel.NewResolver(dbm.GetDB(), dbm.DriverName())
+	}
+
 	return func(c *gin.Context) {
 		user := s.loadAccessUser(c)
 		if user == nil || s.backendHandler == nil || s.backendHandler.backendManager == nil {
@@ -22,15 +33,21 @@ func (s *Server) teamResourceModelGuard() gin.HandlerFunc {
 			return
 		}
 
+		// 036: when the user has an active plan, enforce the effective policy
+		// allowlists (group or custom mode) instead of the legacy columns.
+		if resolver != nil {
+			if pol, err := resolver.Resolve(c.Request.Context(), user.ID); err == nil && pol != nil && pol.HasPlan {
+				s.enforcePolicyAllowLists(c, pol)
+				return
+			}
+		}
+
 		model := peekRequestModel(c)
 		// Pipeline-as-model: centag/<id> 或兼容 pipeline.<id>
 		if pid, ok := pipelineIDFromModel(model); ok {
 			if pid != "" && !useraccess.CanUseSharedPipeline(user, pid) {
 				// Allow if it is a tenant-owned pipeline (not in shared whitelist).
-				tenantID := ""
-				if user.TenantID != nil {
-					tenantID = *user.TenantID
-				}
+				tenantID := ownTenantID(user)
 				if tenantID == "" || s.pipelineHandler == nil || s.pipelineHandler.pipelineRegistry == nil {
 					RespondError(c, http.StatusForbidden, "pipeline not allowed for this user")
 					c.Abort()
@@ -47,10 +64,7 @@ func (s *Server) teamResourceModelGuard() gin.HandlerFunc {
 			return
 		}
 
-		tenantID := ""
-		if user.TenantID != nil {
-			tenantID = *user.TenantID
-		}
+		tenantID := ownTenantID(user)
 		backends := s.backendHandler.backendManager.ListByTenant(tenantID)
 		if !useraccess.CanServeModel(user, backends, model) {
 			RespondError(c, http.StatusForbidden, "model or backend not allowed for this user")
@@ -59,6 +73,29 @@ func (s *Server) teamResourceModelGuard() gin.HandlerFunc {
 		}
 		c.Next()
 	}
+}
+
+// enforcePolicyAllowLists enforces the effective policy's pipeline/model
+// allowlists (empty = all allowed). Backend allowlists are already enforced by
+// the centag-pro UserPlanEnforcer on the same request chain.
+func (s *Server) enforcePolicyAllowLists(c *gin.Context, pol *groupmodel.EffectivePolicy) {
+	model := peekRequestModel(c)
+	if pid, ok := pipelineIDFromModel(model); ok {
+		if pid != "" && !pol.IsAllowedPipeline(pid) {
+			RespondError(c, http.StatusForbidden, "pipeline not allowed for this user")
+			c.Abort()
+			return
+		}
+		c.Next()
+		return
+	}
+	norm := strings.TrimSpace(model)
+	if norm != "" && norm != "auto" && !pol.IsAllowedModel(norm) {
+		RespondError(c, http.StatusForbidden, "model not allowed for this user")
+		c.Abort()
+		return
+	}
+	c.Next()
 }
 
 func peekRequestModel(c *gin.Context) string {
