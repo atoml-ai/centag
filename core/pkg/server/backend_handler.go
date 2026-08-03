@@ -9,7 +9,6 @@ import (
 	"strings"
 	"time"
 
-	"centag/core/internal/auth"
 	"centag/core/internal/edition"
 	"centag/core/pkg/backend"
 	"centag/core/pkg/circuitbreaker"
@@ -44,32 +43,20 @@ func (h *BackendHandler) accessUser(c *gin.Context) *database.User {
 	return loadTeamNormalUser(c, h.edition)
 }
 
-// getTenantID 返回当前请求的租户隔离范围。
-// - 管理员 → 返回 ""（全局访问，无租户过滤）
-// - 普通用户有 tenant_id → 返回 tenant_id（仅看自己租户）
-// - 单用户模式 → 返回 ""（向后兼容全局访问）
+// getTenantID 在组模型（036）下不再作为资源作用域，恒返回空字符串。
+// 普通用户资源的可见性由 effective policy（AllowBackends）过滤；
+// 遗留 tenant_id 字段仅作为过渡别名（用户自有资源匹配用 ownTenantID）。
 func (h *BackendHandler) getTenantID(c *gin.Context) string {
-	scope := auth.GetScopedAccess(c)
-	if scope == auth.AccessGlobal {
-		return "" // admin: no tenant filter, global access
-	}
-	return auth.GetTenantID(c)
+	return ""
 }
 
-// ListBackends 列出所有后端配置（租户隔离 + 角色感知）
+// ListBackends 列出所有后端配置（角色感知）
 // - 管理员: 返回全部后端
-// - 普通用户: 租户自建 + 白名单内且启用的系统后端（空白名单=无系统后端）
+// - 普通用户: 自有后端 + 组模型 policy 允许且启用的系统后端
 func (h *BackendHandler) ListBackends(c *gin.Context) {
-	tenantID := h.getTenantID(c)
-
-	var backends []*backend.BackendConfig
-	if tenantID != "" {
-		backends = h.backendManager.ListByTenant(tenantID)
-	} else {
-		backends = h.backendManager.List()
-	}
+	backends := h.backendManager.List()
 	if user := h.accessUser(c); user != nil {
-		backends = useraccess.FilterBackends(user, backends)
+		backends = useraccess.FilterBackendsFor(user, backends, policyForUser(c.Request.Context(), user))
 	}
 
 	// 转换为响应格式（包含 has_api_key 标记，但不暴露实际 api_key）
@@ -83,17 +70,11 @@ func (h *BackendHandler) ListBackends(c *gin.Context) {
 // ExportBackends 导出所有后端配置
 // 支持 ?desensitize=true 参数，导出时脱敏 api_key（仅返回 has_api_key 标记）
 func (h *BackendHandler) ExportBackends(c *gin.Context) {
-	tenantID := h.getTenantID(c)
 	desensitize := c.Query("desensitize") == "true"
 
-	var backends []*backend.BackendConfig
-	if tenantID != "" {
-		backends = h.backendManager.ListByTenant(tenantID)
-	} else {
-		backends = h.backendManager.List()
-	}
+	backends := h.backendManager.List()
 	if user := h.accessUser(c); user != nil {
-		backends = useraccess.FilterBackends(user, backends)
+		backends = useraccess.FilterBackendsFor(user, backends, policyForUser(c.Request.Context(), user))
 	}
 
 	// 脱敏处理
@@ -135,7 +116,6 @@ func (h *BackendHandler) ImportBackends(c *gin.Context) {
 		return
 	}
 
-	tenantID := h.getTenantID(c)
 	imported := 0
 	skipped := 0
 	for _, cfg := range req.Backends {
@@ -145,13 +125,7 @@ func (h *BackendHandler) ImportBackends(c *gin.Context) {
 		if cfg.ID == "" {
 			cfg.ID = generateBackendID(cfg.Type, cfg.Name, cfg.BaseURL)
 		}
-		if tenantID != "" {
-			cfg.TenantID = tenantID
-			if _, err := h.backendManager.GetByTenant(tenantID, cfg.ID); err == nil {
-				skipped++
-				continue
-			}
-		} else if _, err := h.backendManager.Get(cfg.ID); err == nil {
+		if _, err := h.backendManager.Get(cfg.ID); err == nil {
 			skipped++
 			continue
 		}
@@ -168,24 +142,17 @@ func (h *BackendHandler) ImportBackends(c *gin.Context) {
 	RespondSuccess(c, gin.H{"imported": imported, "skipped": skipped})
 }
 
-// GetBackend 获取单个后端配置（租户隔离）
+// GetBackend 获取单个后端配置
 func (h *BackendHandler) GetBackend(c *gin.Context) {
 	id := c.Param("id")
-	tenantID := h.getTenantID(c)
 
-	var cfg *backend.BackendConfig
-	var err error
-	if tenantID != "" {
-		cfg, err = h.backendManager.GetByTenant(tenantID, id)
-	} else {
-		cfg, err = h.backendManager.Get(id)
-	}
+	cfg, err := h.backendManager.Get(id)
 	if err != nil {
 		RespondNotFound(c, err.Error())
 		return
 	}
 	if user := h.accessUser(c); user != nil {
-		filtered := useraccess.FilterBackends(user, []*backend.BackendConfig{cfg})
+		filtered := useraccess.FilterBackendsFor(user, []*backend.BackendConfig{cfg}, policyForUser(c.Request.Context(), user))
 		if len(filtered) == 0 {
 			RespondError(c, http.StatusForbidden, "backend not found or access denied")
 			return
@@ -196,7 +163,7 @@ func (h *BackendHandler) GetBackend(c *gin.Context) {
 	RespondSuccess(c, cfg.ToResponse())
 }
 
-// CreateBackend 创建后端配置（自动注入租户ID）
+// CreateBackend 创建后端配置
 func (h *BackendHandler) CreateBackend(c *gin.Context) {
 	if user := h.accessUser(c); user != nil && !user.CanAddOwnBackends {
 		RespondError(c, http.StatusForbidden, "adding or modifying own backends is disabled for this user")
@@ -216,10 +183,12 @@ func (h *BackendHandler) CreateBackend(c *gin.Context) {
 	// 新建后端默认启用
 	cfg.Enabled = true
 
-	// 注入租户ID（多租户隔离）
-	tenantID := h.getTenantID(c)
-	if tenantID != "" {
-		cfg.TenantID = tenantID
+	// 组模型（036）：普通用户新建后端归属到自有遗留租户别名（ownTenantID），
+	// 与 Update/Delete 的自有校验及 policy 过滤保持一致；
+	// 管理员新建后端为系统后端（TenantID 为空）。
+	cfg.TenantID = ""
+	if user := h.accessUser(c); user != nil {
+		cfg.TenantID = ownTenantID(user)
 	}
 
 	if err := h.backendManager.Add(&cfg); err != nil {
@@ -235,10 +204,9 @@ func (h *BackendHandler) CreateBackend(c *gin.Context) {
 	RespondCreated(c, cfg)
 }
 
-// UpdateBackend 更新后端配置（租户隔离验证）
+// UpdateBackend 更新后端配置（角色感知：普通用户仅可改自有后端）
 func (h *BackendHandler) UpdateBackend(c *gin.Context) {
 	id := c.Param("id")
-	tenantID := h.getTenantID(c)
 
 	var cfg backend.BackendConfig
 	if !BindJSON(c, &cfg) {
@@ -247,23 +215,22 @@ func (h *BackendHandler) UpdateBackend(c *gin.Context) {
 
 	cfg.ID = id // 确保ID匹配
 
-	// 注入租户ID（防止越权修改其他租户的后端）
-	if tenantID != "" {
-		if user := h.accessUser(c); user != nil && !user.CanAddOwnBackends {
+	// 组模型（036）：普通用户仅可修改自有（遗留租户别名）后端，禁止改系统/他人后端
+	if user := h.accessUser(c); user != nil {
+		if !user.CanAddOwnBackends {
 			RespondError(c, http.StatusForbidden, "adding or modifying own backends is disabled for this user")
 			return
 		}
-		// 先验证当前租户是否有权限访问该后端
-		existing, err := h.backendManager.GetByTenant(tenantID, id)
+		existing, err := h.backendManager.Get(id)
 		if err != nil {
 			RespondError(c, http.StatusForbidden, "backend not found or access denied: "+err.Error())
 			return
 		}
-		if existing.TenantID == "" {
-			RespondError(c, http.StatusForbidden, "cannot modify system backend")
+		if own := ownTenantID(user); own == "" || existing.TenantID != own {
+			RespondError(c, http.StatusForbidden, "cannot modify system or another user's backend")
 			return
 		}
-		cfg.TenantID = tenantID
+		cfg.TenantID = existing.TenantID
 		// 保留原有的 API Key 如果请求中没有提供新的
 		if cfg.APIKey == "" && existing.APIKey != "" {
 			cfg.APIKey = existing.APIKey
@@ -286,24 +253,27 @@ func (h *BackendHandler) UpdateBackend(c *gin.Context) {
 	RespondSuccess(c, cfg)
 }
 
-// DeleteBackend 删除后端配置（租户隔离验证）
+// DeleteBackend 删除后端配置（角色感知：普通用户仅可删自有后端）
 func (h *BackendHandler) DeleteBackend(c *gin.Context) {
 	id := c.Param("id")
-	tenantID := h.getTenantID(c)
 
-	if tenantID != "" {
-		if user := h.accessUser(c); user != nil && !user.CanAddOwnBackends {
+	if user := h.accessUser(c); user != nil {
+		if !user.CanAddOwnBackends {
 			RespondError(c, http.StatusForbidden, "adding or modifying own backends is disabled for this user")
+			return
+		}
+		existing, err := h.backendManager.Get(id)
+		if err != nil {
+			RespondNotFound(c, err.Error())
+			return
+		}
+		if own := ownTenantID(user); own == "" || existing.TenantID != own {
+			RespondError(c, http.StatusForbidden, "cannot delete system or another user's backend")
 			return
 		}
 	}
 
-	var err error
-	if tenantID != "" {
-		err = h.backendManager.DeleteByTenant(tenantID, id)
-	} else {
-		err = h.backendManager.Delete(id)
-	}
+	err := h.backendManager.Delete(id)
 	if err != nil {
 		if strings.Contains(err.Error(), "cannot delete system backend") {
 			RespondError(c, http.StatusForbidden, err.Error())
@@ -638,7 +608,7 @@ func (h *BackendHandler) GetModels(c *gin.Context) {
 		return
 	}
 	if user := h.accessUser(c); user != nil {
-		filtered := useraccess.FilterBackends(user, []*backend.BackendConfig{cfg})
+		filtered := useraccess.FilterBackendsFor(user, []*backend.BackendConfig{cfg}, policyForUser(c.Request.Context(), user))
 		if len(filtered) == 0 {
 			RespondError(c, http.StatusForbidden, "backend not found or access denied")
 			return
@@ -669,9 +639,14 @@ func (h *BackendHandler) GetModels(c *gin.Context) {
 	// 根据类型过滤模型
 	filteredModels := filterModelsByType(models, modelType)
 	if user := h.accessUser(c); user != nil && cfg.TenantID == "" {
+		pol := policyForUser(c.Request.Context(), user)
 		kept := make([]string, 0, len(filteredModels))
 		for _, m := range filteredModels {
-			if useraccess.CanUseSharedModel(user, m) {
+			if pol != nil && pol.HasPlan {
+				if pol.IsAllowedModel(m) {
+					kept = append(kept, m)
+				}
+			} else if useraccess.CanUseSharedModel(user, m) {
 				kept = append(kept, m)
 			}
 		}
@@ -1346,9 +1321,9 @@ func (h *BackendHandler) getBackendConfig(c *gin.Context, tenantID, backendID st
 		return nil, err
 	}
 
-	// 访问控制
+	// 访问控制（组模型 policy 感知）
 	if user := h.accessUser(c); user != nil {
-		filtered := useraccess.FilterBackends(user, []*backend.BackendConfig{cfg})
+		filtered := useraccess.FilterBackendsFor(user, []*backend.BackendConfig{cfg}, policyForUser(c.Request.Context(), user))
 		if len(filtered) == 0 {
 			RespondError(c, http.StatusForbidden, "backend not found or access denied")
 			return nil, fmt.Errorf("access denied")
