@@ -26,6 +26,7 @@
 #     --edition E        minimal | personal | team（默认 packaging.env / minimal）
 #     --admin-password P 管理员密码（写入 runtime.env）
 #     --admin-username U 管理员用户名（默认 admin）
+#     --license-key K    商业许可证（team 等 SKU；写入 runtime.env，缺失时 team 构建直接失败）
 #     --output DIR       指定输出目录（默认 ~/.centag/var/packages/）
 #     --image-prefix P   镜像名前缀
 #     --install          打包后自动安装到 fnOS
@@ -65,6 +66,7 @@ SKIP_BUILD=false
 INSTALL_AFTER=false
 ADMIN_PASSWORD_CLI=""
 ADMIN_USERNAME_CLI=""
+LICENSE_KEY_CLI=""
 
 # macOS 无 md5sum，需兼容 md5 / openssl
 file_md5() {
@@ -194,6 +196,31 @@ resolve_admin_credentials() {
   fi
 }
 
+# 商业许可证（team 等 SKU 运行时校验 CENTAG_LICENSE_KEY）
+resolve_license_key() {
+  local secrets="${REPO_ROOT}/config/secrets/.env"
+  LICENSE_KEY=""
+  if [ -n "${LICENSE_KEY_CLI}" ]; then
+    LICENSE_KEY="${LICENSE_KEY_CLI}"
+  elif [ -n "${PACKAGE_LICENSE_KEY:-}" ]; then
+    LICENSE_KEY="${PACKAGE_LICENSE_KEY}"
+  else
+    LICENSE_KEY="$(read_env_key "$secrets" "CENTAG_LICENSE_KEY" 2>/dev/null || true)"
+  fi
+  if [ -n "${LICENSE_KEY}" ]; then
+    echo "[OK] 许可证已解析（--license-key / PACKAGE_LICENSE_KEY / secrets CENTAG_LICENSE_KEY）"
+  else
+    echo "[WARN] 未解析到 CENTAG_LICENSE_KEY；team 运行时商业门禁将不启用"
+    if [ "$EDITION" = "team" ] && [ "${CENTAG_ALLOW_NO_LICENSE:-0}" != "1" ]; then
+      echo "[ERROR] team 发行版必须提供 CENTAG_LICENSE_KEY。"
+      echo "        缺少许可证时 team 商业门禁不启用，/api/v1/admin/* 等路由不会注册（表现为 404）。"
+      echo "        请通过 --license-key / PACKAGE_LICENSE_KEY / config/secrets/.env 提供；"
+      echo "        仅测试用的无许可证构建可设置 CENTAG_ALLOW_NO_LICENSE=1。"
+      exit 1
+    fi
+  fi
+}
+
 shell_single_quote() {
   # 安全写入可被 `set -a; . file` 加载的单引号字符串
   local s="$1"
@@ -228,6 +255,9 @@ write_runtime_env() {
     # 必须写入：否则 seed 的 Key 只有哈希，Web 无法复制完整密钥
     if [ -n "${API_KEY_STORAGE_SECRET:-}" ]; then
       echo "LLM_PROXY_API_KEY_STORAGE_SECRET=$(shell_single_quote "${API_KEY_STORAGE_SECRET}")"
+    fi
+    if [ -n "${LICENSE_KEY:-}" ]; then
+      echo "CENTAG_LICENSE_KEY=$(shell_single_quote "${LICENSE_KEY}")"
     fi
   } > "${dest_dir}/runtime.env"
   chmod 600 "${dest_dir}/runtime.env"
@@ -333,6 +363,10 @@ while [[ $# -gt 0 ]]; do
       ADMIN_USERNAME_CLI="$2"
       shift 2
       ;;
+    --license-key)
+      LICENSE_KEY_CLI="$2"
+      shift 2
+      ;;
     --skip-build)
       SKIP_BUILD=true
       shift
@@ -382,6 +416,7 @@ esac
 mkdir -p "$OUTPUT_DIR"
 
 resolve_admin_credentials
+resolve_license_key
 
 echo "============================================"
 echo " Centag fnOS 打包工具"
@@ -497,15 +532,27 @@ elif [ "$MODE" = "native" ]; then
   mkdir -p "${APP_DIR}/config/initdata"
 
   DIST_DIR="${REPO_ROOT}/dist/${DIST_NAME}"
-  if [ ! -d "${DIST_DIR}" ]; then
-    echo "[ERROR] 发行版目录不存在: ${DIST_DIR}"
-    exit 1
-  fi
 
   # Staging for fpk uses install-compatible lib/<edition> (may differ from host GOARCH).
   centag_layout_use_edition "${DIST_NAME}"
   local_server_bin="$(centag_server_bin_path "${DIST_NAME}")"
   local_static_dir="${CENTAG_STATIC_DIR}"
+
+  if [ ! -d "${DIST_DIR}" ]; then
+    if [ "$SKIP_BUILD" = true ]; then
+      # 预构建产物模式：不要求 dist/<edition>，直接用布局产物（team 在 centag-pro 构建）
+      echo "[WARN] 发行版目录不存在: ${DIST_DIR}（--skip-build：使用布局产物 ${local_server_bin} / ${local_static_dir}）"
+    elif [ "$DIST_NAME" = "team" ]; then
+      echo "[ERROR] team 发行版目录在开源仓不存在（商业化分层已删 dist/team）。"
+      echo "  Team 的 fnOS 包请在 centag-pro 构建："
+      echo "  cd ../centag-pro && export CENTAG_ROOT=${REPO_ROOT}"
+      echo "  ./start.sh package cli fnos ${GOARCH} --edition team"
+      exit 1
+    else
+      echo "[ERROR] 发行版目录不存在: ${DIST_DIR}"
+      exit 1
+    fi
+  fi
 
   if [ "$SKIP_BUILD" = false ]; then
     echo "[1/5] 构建 Go 后端 edition=${EDITION} dist=${DIST_NAME} (${GOARCH})..."

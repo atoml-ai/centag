@@ -19,6 +19,7 @@ export CENTAG_ROOT=../centag
 ./start.sh build team     # → bin/centag-team（对齐开源 ./start.sh build <sku>）
 ./start.sh build fe       # Team 前端 pack
 ./start.sh build all      # 后端 + 前端
+./start.sh package cli fnos amd64 --edition team   # Team fnOS (.fpk) 打包（本仓）
 ```
 
 ### 分支同步
