@@ -8,6 +8,7 @@ import { getCapabilities } from '../capabilities'
 import { buildMoreNavChildren, buildWorkerNav } from './shared'
 import { NAV_MENU_TEAM_ADMIN } from './team'
 import { NAV_MENU_MINIMAL } from './minimal'
+import { filterNavMenu } from './visibility'
 import type { NavItem } from './types'
 import type { Edition } from '../edition'
 
@@ -18,7 +19,11 @@ function assert(cond: unknown, msg: string) {
 function getNavMenu(edition: Edition, isAdmin = false): NavItem[] {
   if (edition === 'minimal') return NAV_MENU_MINIMAL
   if (edition === 'team' && isAdmin) return NAV_MENU_TEAM_ADMIN
-  return buildWorkerNav(getCapabilities(edition, isAdmin))
+  // 与运行时 useNavigation 一致：按 edition/isAdmin 做可见性过滤
+  return filterNavMenu(buildWorkerNav(getCapabilities(edition, isAdmin)), {
+    isAdmin,
+    edition
+  })
 }
 
 function flattenNavMenu(menu: NavItem[]): NavItem[] {
@@ -56,6 +61,7 @@ function run() {
         'pipelines',
         'personal-config',
         'my-tenant',
+        'my-billing',
         'local-proxy',
         'more',
         'config-basic',
@@ -73,7 +79,7 @@ function run() {
       name: 'team_user worker',
       edition: 'team',
       isAdmin: false,
-      mustHave: ['dashboard', 'usage', 'access', 'memory', 'more', 'my-tenant', 'logs'],
+      mustHave: ['dashboard', 'usage', 'access', 'memory', 'more', 'my-billing', 'logs'],
       mustNot: [
         'chat',
         'backends',
@@ -98,7 +104,6 @@ function run() {
         'cache-management',
         'user-tenant',
         'system-users',
-        'tenants',
         'cost-dashboard',
         'pricing-sync',
         'config-basic',
@@ -109,6 +114,7 @@ function run() {
         'access',
         'memory',
         'usage',
+        'my-billing',
         'local-proxy',
         'more',
         'shared-resources',

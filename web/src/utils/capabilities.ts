@@ -42,7 +42,6 @@ export interface Capabilities {
   agentSetup: boolean
   /** 系统配置入口（personal：右上角用户菜单，非顶栏） */
   systemConfig: boolean
-  myTenant: boolean
   userAdmin: boolean
   /** lite 干活首页 vs team 运维概览 */
   liteHome: boolean
@@ -75,7 +74,6 @@ const WORKER_CAPS: Omit<Capabilities, 'role'> = {
   usageBilling: true,
   agentSetup: true,
   systemConfig: true,
-  myTenant: false,
   userAdmin: false,
   liteHome: true,
   opsStats: false
@@ -130,8 +128,7 @@ export function getCapabilities(edition: Edition, isAdmin = false): Capabilities
       navEvaluation: false,
       navFallbackPolicy: false,
       memoryFull: false,
-      systemConfig: false,
-      myTenant: true
+      systemConfig: false
     }
   }
 
@@ -159,7 +156,6 @@ export function getCapabilities(edition: Edition, isAdmin = false): Capabilities
     usageBilling: true,
     agentSetup: false,
     systemConfig: true,
-    myTenant: false,
     userAdmin: true,
     liteHome: false,
     opsStats: true

@@ -130,10 +130,6 @@ function run() {
     resolveEditionRouteRedirect('/system/users', 'personal', true) === '/dashboard',
     'edition: personal /system/users blocked'
   )
-  assert(
-    resolveEditionRouteRedirect('/tenants', 'personal', true) === '/dashboard',
-    'edition: personal /tenants blocked'
-  )
 
   console.log('edition.route.selftest: OK')
 }

@@ -44,8 +44,7 @@ function run() {
         navFallbackPolicy: false,
         systemConfig: true,
         localProxy: true,
-        liteHome: true,
-        myTenant: false
+        liteHome: true
       }
     },
     {
@@ -62,7 +61,6 @@ function run() {
         memoryFull: false,
         navHostProxyTools: false,
         navFallbackPolicy: false,
-        myTenant: true,
         systemConfig: false,
         localProxy: true,
         liteHome: true

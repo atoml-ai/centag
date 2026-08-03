@@ -51,8 +51,6 @@ export function syncEditionFromStatus(status: { edition?: string } | null | unde
 /** Team product UI (E3 pack). `/cost` excluded per D1 — personal may use cost API/UI. */
 export const TEAM_ONLY_ROUTE_PREFIXES = [
   '/ab-comparison',
-  '/tenants',
-  '/my-tenant',
   '/system/users'
 ] as const
 
@@ -70,7 +68,6 @@ export const TEAM_ADMIN_ALLOWED_ROUTE_PREFIXES = [
   '/evaluation',
   '/system/users',
   '/system/update',
-  '/tenants',
   '/config',
   '/cost',
   '/billing',

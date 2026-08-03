@@ -166,7 +166,11 @@ export function usageNavGroup(): NavItem {
     'usage',
     'nav.usage',
     'TrendCharts',
-    [tokenUsageNav('nav.tokenUsage'), conversationsNav()],
+    [
+      tokenUsageNav('nav.tokenUsage'),
+      conversationsNav(),
+      { id: 'my-billing', labelKey: 'nav.myBilling', icon: 'Wallet', path: '/my-billing', requiresTeam: true }
+    ],
     '/token-usage'
   )
 }
@@ -206,11 +210,11 @@ export function cacheManagementNavGroup(): NavItem {
   return navGroup('cache-management', 'nav.cacheManagement', 'FolderOpened', children, children[0]?.path)
 }
 
-/** 用户与租户管理：用户管理 + 租户管理 + 成本看板（team admin 专用） */
+/** 用户与组管理：用户管理 + 成本看板 + 价格同步 + 组管理（team admin 专用） */
 export function userTenantGroup(): NavItem {
   return navGroup(
     'user-tenant',
-    'nav.userTenantManagement',
+    'nav.userGroupManagement',
     'UserFilled',
     [
       {
@@ -221,20 +225,20 @@ export function userTenantGroup(): NavItem {
         requiresAdmin: true,
         requiresTeam: true
       },
-      {
-        id: 'tenants',
-        labelKey: 'nav.tenants',
-        icon: 'OfficeBuilding',
-        path: '/tenants',
-        requiresAdmin: true,
-        requiresTeam: true
-      },
       costDashboardNav(),
       {
         id: 'pricing-sync',
         labelKey: 'nav.pricingSync',
         icon: 'Coin',
         path: '/billing/pricing-sync',
+        requiresAdmin: true,
+        requiresTeam: true
+      },
+      {
+        id: 'groups',
+        labelKey: 'nav.groups',
+        icon: 'Coin',
+        path: '/billing/groups',
         requiresAdmin: true,
         requiresTeam: true
       }
@@ -271,15 +275,6 @@ export function buildMoreNavChildren(caps: Capabilities): NavItem[] {
   moreChildren.push(logsNav())
 
   const systemChildren: NavItem[] = []
-  if (caps.myTenant) {
-    systemChildren.push({
-      id: 'my-tenant',
-      labelKey: 'nav.myTenant',
-      icon: 'OfficeBuilding',
-      path: '/my-tenant',
-      requiresTeam: true
-    })
-  }
   // 系统配置：personal 走右上角用户菜单，不进「更多」
   if (caps.systemConfig && caps.role !== 'personal') {
     systemChildren.push(configNav())
@@ -368,7 +363,6 @@ export function personalMoreGroup(options?: { teamUser?: boolean }): NavItem {
     usageBilling: true,
     agentSetup: true,
     systemConfig: !options?.teamUser,
-    myTenant: !!options?.teamUser,
     userAdmin: false,
     liteHome: true
   })
@@ -437,18 +431,11 @@ export function accessGroup(options?: { adminOnly?: boolean }): NavItem {
   }
 }
 
-/** 系统管理：团队 Web 含租户/更新；桌面版用户菜单为子集（配置项全员可见） */
+/** 系统管理：团队 Web 含用户管理/更新；桌面版用户菜单为子集（配置项全员可见） */
 export function systemAdminGroup(options?: { teamExtras?: boolean; relaxedAccess?: boolean }): NavItem {
   const admin = !(options?.relaxedAccess ?? false)
   const leafAdmin = admin ? ({ requiresAdmin: true } as LeafOpts) : undefined
   const children: NavItem[] = [
-    {
-      id: 'my-tenant',
-      labelKey: 'nav.myTenant',
-      icon: 'OfficeBuilding',
-      path: '/my-tenant',
-      requiresTeam: true
-    },
     configNav(leafAdmin),
     {
       id: 'system-users',
@@ -461,14 +448,6 @@ export function systemAdminGroup(options?: { teamExtras?: boolean; relaxedAccess
   ]
   if (options?.teamExtras) {
     children.push(
-      {
-        id: 'tenants',
-        labelKey: 'nav.tenants',
-        icon: 'OfficeBuilding',
-        path: '/tenants',
-        requiresAdmin: true,
-        requiresTeam: true
-      },
       {
         id: 'system-update',
         labelKey: 'nav.systemUpdate',
