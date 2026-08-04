@@ -44,7 +44,8 @@ func TestTeamEditionOnly_TeamAllows(t *testing.T) {
 }
 
 func TestTeamAdminWriteOnly_TeamNormalForbidden(t *testing.T) {
-	// Sensitive ops (export/import / proxy save) still require admin in team.
+	// Sensitive ops (export/import 等) still require admin in team.
+	// 注：PUT /config/proxy 已改为普通用户写个人默认，不再挂此中间件。
 	gin.SetMode(gin.TestMode)
 	s := &Server{edition: edition.Team}
 	r := gin.New()

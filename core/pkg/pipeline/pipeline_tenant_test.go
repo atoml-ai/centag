@@ -64,6 +64,21 @@ func TestPipelineRegistry_GetByTenant_NotFound(t *testing.T) {
 	assert.Nil(t, p)
 }
 
+func TestPipelineRegistry_ExistsAnywhere_IncludesTenant(t *testing.T) {
+	r := NewPipelineRegistry()
+	err := r.RegisterForTenant("user:2", &AgentPatternPipeline{
+		ID: "transparent-proxy-copy-1", Name: "Mine", Version: "1.0",
+		Nodes:        []PipelineNodeConfig{{ID: "n1", Type: NodeTypeGenerator, Backend: "b", Model: "m"}},
+		GlobalConfig: DefaultGlobalConfig(),
+	})
+	assert.NoError(t, err)
+
+	assert.True(t, r.ExistsAnywhere("transparent-proxy-copy-1"))
+	assert.False(t, r.ExistsAnywhere("missing"))
+	// Get (system-only) must not see tenant-only copy
+	assert.Nil(t, r.Get("transparent-proxy-copy-1"))
+}
+
 // TestPipelineRegistry_ListByTenant_Merge 验证列表合并逻辑
 func TestPipelineRegistry_ListByTenant_Merge(t *testing.T) {
 	r := NewPipelineRegistry()

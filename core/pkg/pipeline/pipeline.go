@@ -3,6 +3,7 @@ package pipeline
 import (
 	"fmt"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 )
@@ -214,6 +215,27 @@ func (p *AgentPatternPipeline) Validate() error {
 	// 检测循环依赖
 	if err := p.detectCycle(); err != nil {
 		return err
+	}
+
+	// 验证降级组（FallbackGroups）引用合法性
+	for gi, fg := range p.GlobalConfig.FallbackGroups {
+		if fg.PrimaryNodeID == "" {
+			return fmt.Errorf("fallback group %d: primary_node_id is required", gi)
+		}
+		if !nodeIDs[fg.PrimaryNodeID] {
+			return fmt.Errorf("fallback group %d: primary node %s not found", gi, fg.PrimaryNodeID)
+		}
+		if len(fg.FallbackNodes) == 0 {
+			return fmt.Errorf("fallback group %d: fallback_nodes is empty for primary %s", gi, fg.PrimaryNodeID)
+		}
+		for _, fbID := range fg.FallbackNodes {
+			if !nodeIDs[fbID] {
+				return fmt.Errorf("fallback group %d: fallback node %s not found", gi, fbID)
+			}
+			if fbID == fg.PrimaryNodeID {
+				return fmt.Errorf("fallback group %d: fallback node %s cannot be the primary node", gi, fbID)
+			}
+		}
 	}
 
 	return nil
@@ -463,6 +485,8 @@ func (r *PipelineRegistry) RegisterForTenant(tenantID string, pipeline *AgentPat
 
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	// 租户专属覆盖同 ID 的系统预设（仅对该租户可见）；勿删除全局副本，
+	// 否则其他用户/管理员会失去系统预设回退（见 GetByTenant / List）。
 	if r.tenantPipelines[tenantID] == nil {
 		r.tenantPipelines[tenantID] = make(map[string]*AgentPatternPipeline)
 	}
@@ -501,6 +525,25 @@ func (r *PipelineRegistry) OwnsInTenant(tenantID, pipelineID string) bool {
 	if tenantPipes, ok := r.tenantPipelines[tenantID]; ok {
 		_, exists := tenantPipes[pipelineID]
 		return exists
+	}
+	return false
+}
+
+// ExistsAnywhere reports whether pipelineID exists in the system registry or any tenant map.
+// Used by mode→pipeline resolution (HasPipeline) which must see user private clones.
+func (r *PipelineRegistry) ExistsAnywhere(pipelineID string) bool {
+	if r == nil || strings.TrimSpace(pipelineID) == "" {
+		return false
+	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	if _, ok := r.pipelines[pipelineID]; ok {
+		return true
+	}
+	for _, tenantPipes := range r.tenantPipelines {
+		if _, ok := tenantPipes[pipelineID]; ok {
+			return true
+		}
 	}
 	return false
 }

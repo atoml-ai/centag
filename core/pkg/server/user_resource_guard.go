@@ -43,7 +43,7 @@ func (s *Server) teamResourceModelGuard() gin.HandlerFunc {
 		}
 
 		model := peekRequestModel(c)
-		// Pipeline-as-model: centag/<id> 或兼容 pipeline.<id>
+		// Pipeline-as-model: centag/<id>、pipeline.<id>，或 #shortcut / #u... 快捷码
 		if pid, ok := pipelineIDFromModel(model); ok {
 			if pid != "" && !useraccess.CanUseSharedPipeline(user, pid) {
 				// Allow if it is a tenant-owned pipeline (not in shared whitelist).
@@ -59,6 +59,15 @@ func (s *Server) teamResourceModelGuard() gin.HandlerFunc {
 					c.Abort()
 					return
 				}
+			}
+			c.Next()
+			return
+		}
+		if shortcut, ok := shortcutCodeFromModel(model); ok {
+			if !s.canUsePipelineShortcut(user, shortcut) {
+				RespondError(c, http.StatusForbidden, "pipeline not allowed for this user")
+				c.Abort()
+				return
 			}
 			c.Next()
 			return
@@ -82,6 +91,16 @@ func (s *Server) enforcePolicyAllowLists(c *gin.Context, pol *groupmodel.Effecti
 	model := peekRequestModel(c)
 	if pid, ok := pipelineIDFromModel(model); ok {
 		if pid != "" && !pol.IsAllowedPipeline(pid) {
+			RespondError(c, http.StatusForbidden, "pipeline not allowed for this user")
+			c.Abort()
+			return
+		}
+		c.Next()
+		return
+	}
+	if shortcut, ok := shortcutCodeFromModel(model); ok {
+		user := s.loadAccessUser(c)
+		if !s.canUsePipelineShortcut(user, shortcut) {
 			RespondError(c, http.StatusForbidden, "pipeline not allowed for this user")
 			c.Abort()
 			return
@@ -129,4 +148,34 @@ func pipelineIDFromModel(model string) (string, bool) {
 	default:
 		return "", false
 	}
+}
+
+// shortcutCodeFromModel 识别 #t / #u801600974 等流水线快捷码（可带后续参数）。
+func shortcutCodeFromModel(model string) (string, bool) {
+	model = strings.TrimSpace(model)
+	if !strings.HasPrefix(model, "#") {
+		return "", false
+	}
+	code := strings.TrimSpace(strings.SplitN(model, " ", 2)[0])
+	if code == "#" {
+		return "", false
+	}
+	return code, true
+}
+
+func (s *Server) canUsePipelineShortcut(user *database.User, shortcut string) bool {
+	if user == nil || s == nil || s.pipelineHandler == nil || s.pipelineHandler.pipelineRegistry == nil {
+		return false
+	}
+	own := ownTenantID(user)
+	for _, p := range s.pipelineHandler.pipelineRegistry.ListByTenant(own) {
+		if p == nil || strings.TrimSpace(p.ShortcutCode) != shortcut {
+			continue
+		}
+		if p.TenantID != "" && p.TenantID == own {
+			return true
+		}
+		return useraccess.CanUseSharedPipeline(user, p.ID)
+	}
+	return false
 }

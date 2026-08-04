@@ -94,22 +94,21 @@ const (
 
 // GetScopedAccess determines the data access scope for the current request.
 // Rules:
-//   - Admin → always global access (can see/manage all tenants' data).
-//   - Normal user with tenant_id → tenant-scoped access.
-//   - Normal user without tenant_id (single-user mode) → global access for backward-compat.
+//   - Admin → always global access (system-level resources; handlers must not
+//     expose other users' private backends/pipelines).
+//   - Authenticated non-admin → tenant/user-scoped access. Under the group model
+//     (036) normal users often have an empty JWT tenant_id; handlers synthesize
+//     ownership via ownTenantID ("user:{id}") so AccessTenant still applies.
 //   - Unauthenticated → denied.
 func GetScopedAccess(c *gin.Context) ScopedAccess {
 	if IsAdmin(c) {
 		return AccessGlobal
 	}
-	tid := GetTenantID(c)
-	if tid != "" {
-		return AccessTenant
-	}
-	// Single-user mode: user has role but no tenant_id yet.
-	// Treat as global to avoid breaking existing deployments.
+	// Any authenticated non-admin is scoped. Do NOT fall back to AccessGlobal
+	// when tenant_id is empty — that made Team normal users create/list as if
+	// they were admins (pipelines registered globally, invisible after policy filter).
 	if GetRole(c) != "" {
-		return AccessGlobal
+		return AccessTenant
 	}
 	return AccessDenied
 }

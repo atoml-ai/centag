@@ -109,10 +109,13 @@ func (h *PipelineHandler) syncModesFromRegistry() {
 	logger.Infof("Pipeline modes synced to ModeManager: %d shortcuts", n)
 }
 
-// getTenantID 在组模型（036）下不再作为资源作用域，恒返回空字符串。
-// 普通用户流水线的可见性由 effective policy（AllowPipelines）过滤；
-// 用户自有（遗留 tenant 副本）流水线按 ownTenantID 匹配。
+// getTenantID 返回当前请求的资源作用域：
+// - Team 普通用户 → ownTenantID（遗留 tenant_id 或合成 user:{id}）
+// - 管理员 → ""（系统级）
 func (h *PipelineHandler) getTenantID(c *gin.Context) string {
+	if user := h.accessUser(c); user != nil {
+		return ownTenantID(user)
+	}
 	return ""
 }
 
@@ -122,20 +125,13 @@ func (h *PipelineHandler) requirePipelineAccess(c *gin.Context, pipelineID strin
 	scope := auth.GetScopedAccess(c)
 
 	var p *pipeline.AgentPatternPipeline
-	switch scope {
-	case auth.AccessGlobal:
-		// Admin: search all locations (global + all tenants)
-		// Use ListAll() which returns merged results, then find by ID
-		for _, tp := range h.pipelineRegistry.ListAll() {
-			if tp.ID == pipelineID {
-				p = tp
-				break
-			}
-		}
-	default:
-		// 组模型（036）：租户不再是作用域。自有（遗留租户副本）流水线按用户记录
-		// 匹配，其余为系统预设。
-		p = h.pipelineRegistry.GetByTenant(ownTenantID(h.accessUser(c)), pipelineID)
+	if user := h.accessUser(c); user != nil {
+		p = h.pipelineRegistry.GetByTenant(ownTenantID(user), pipelineID)
+	} else if scope == auth.AccessGlobal {
+		// Admin: 仅系统级流水线
+		p = h.pipelineRegistry.Get(pipelineID)
+	} else {
+		p = h.pipelineRegistry.GetByTenant("", pipelineID)
 	}
 
 	if p == nil {
@@ -224,25 +220,19 @@ func (h *PipelineHandler) recordExecution(pipelineID string, input *pipeline.Pip
 	}()
 }
 
-// ListPipelines 列出所有流水线（组模型 policy 过滤）
+// ListPipelines 列出流水线（组模型 policy 过滤）
 // GET /api/v1/pipelines
-// - 管理员：返回全部流水线
-// - 普通用户：自有（遗留租户副本）流水线 + policy 允许的系统预设
+// - 管理员：仅系统流水线（不暴露用户私有副本）
+// - 普通用户：自有流水线 + policy 允许的系统预设
 func (h *PipelineHandler) ListPipelines(c *gin.Context) {
-	scope := auth.GetScopedAccess(c)
 	var pipelines []*pipeline.AgentPatternPipeline
 
-	switch scope {
-	case auth.AccessGlobal:
-		// Admin: 返回所有流水线（全局 + 所有租户专属）
-		pipelines = h.pipelineRegistry.ListAll()
-	default:
-		// 组模型（036）：不再按 auth 租户过滤；ListByTenant(own) 合并系统预设
-		// 与用户自有（遗留租户副本），后续按 effective policy 过滤。
-		pipelines = h.pipelineRegistry.ListByTenant(ownTenantID(h.accessUser(c)))
-	}
 	if user := h.accessUser(c); user != nil {
+		pipelines = h.pipelineRegistry.ListByTenant(ownTenantID(user))
 		pipelines = useraccess.FilterPipelinesFor(user, pipelines, policyForUser(c.Request.Context(), user))
+	} else {
+		// Admin / 其它：仅系统级
+		pipelines = h.pipelineRegistry.List()
 	}
 
 	// 注入 RouteConfig：使前端能获取到完整的 RouteConfig 信息
@@ -288,8 +278,8 @@ func (h *PipelineHandler) GetPipeline(c *gin.Context) {
 // POST /api/v1/pipelines?overwrite=true
 // - overwrite=true（默认）：允许覆盖已有流水线
 // - overwrite=false：如果流水线已存在则返回冲突错误
-// - 管理员：创建全局流水线
-// - 普通用户：自动绑定到自己的（遗留租户别名）空间；无 tenant_id 时创建系统预设
+// - 管理员：创建全局（系统级）流水线
+// - 普通用户：自动绑定到 ownTenantID（遗留 tenant_id 或合成 user:{id}）
 func (h *PipelineHandler) CreatePipeline(c *gin.Context) {
 	tenantID := ""
 	if user := h.accessUser(c); user != nil {
@@ -562,9 +552,9 @@ func (h *PipelineHandler) ClonePipeline(c *gin.Context) {
 		tenantID = ownTenantID(user)
 	}
 
-	// 清除系统流水线的 TenantID 和快捷码，确保复制后归属到当前用户
+	// 清除系统流水线的 TenantID；快捷码需合法 # 前缀，才能同步进 ModeManager
 	clone.TenantID = ""
-	clone.ShortcutCode = fmt.Sprintf("_clone_%d", time.Now().UnixMilli())
+	clone.ShortcutCode = fmt.Sprintf("#u%d", time.Now().UnixMilli()%1_000_000_000)
 	clone.Version = "1.0"
 
 	// 5. 注册
@@ -634,10 +624,14 @@ func (h *PipelineHandler) ExecutePipeline(c *gin.Context) {
 	// 获取流水线配置的全局超时，默认 10 分钟兜底。
 	const defaultPipelineTimeout = 10 * time.Minute
 	execTimeout := defaultPipelineTimeout
-	if p := h.engine.GetPipelineConfig(id); p != nil && p.GlobalConfig.Timeout > 0 {
+	lookupCtx := context.Background()
+	if user := h.accessUser(c); user != nil {
+		lookupCtx = pipeline.WithOwnerScope(lookupCtx, ownTenantID(user))
+	}
+	if p := h.engine.LookupPipeline(lookupCtx, id); p != nil && p.GlobalConfig.Timeout > 0 {
 		execTimeout = time.Duration(p.GlobalConfig.Timeout) * time.Second
 	}
-	execCtx, cancel := context.WithTimeout(context.Background(), execTimeout)
+	execCtx, cancel := context.WithTimeout(lookupCtx, execTimeout)
 	defer cancel()
 
 	output, err := h.engine.Execute(execCtx, id, input)
