@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"centag/core/internal/auth"
 	"centag/core/internal/edition"
 	"centag/core/pkg/backend"
 	"centag/core/pkg/circuitbreaker"
@@ -43,20 +44,25 @@ func (h *BackendHandler) accessUser(c *gin.Context) *database.User {
 	return loadTeamNormalUser(c, h.edition)
 }
 
-// getTenantID 在组模型（036）下不再作为资源作用域，恒返回空字符串。
-// 普通用户资源的可见性由 effective policy（AllowBackends）过滤；
-// 遗留 tenant_id 字段仅作为过渡别名（用户自有资源匹配用 ownTenantID）。
+// getTenantID 返回当前请求的资源作用域：
+// - Team 普通用户 → ownTenantID（遗留 tenant_id 或合成 user:{id}）
+// - 管理员 / Personal → ""（系统级）
 func (h *BackendHandler) getTenantID(c *gin.Context) string {
+	if user := h.accessUser(c); user != nil {
+		return ownTenantID(user)
+	}
 	return ""
 }
 
-// ListBackends 列出所有后端配置（角色感知）
-// - 管理员: 返回全部后端
+// ListBackends 列出后端配置（角色感知）
+// - 管理员: 仅系统后端（TenantID 为空），不暴露用户私有后端
 // - 普通用户: 自有后端 + 组模型 policy 允许且启用的系统后端
 func (h *BackendHandler) ListBackends(c *gin.Context) {
 	backends := h.backendManager.List()
 	if user := h.accessUser(c); user != nil {
 		backends = useraccess.FilterBackendsFor(user, backends, policyForUser(c.Request.Context(), user))
+	} else if h.edition.IsTeam() && auth.IsAdmin(c) {
+		backends = filterSystemBackends(backends)
 	}
 
 	// 转换为响应格式（包含 has_api_key 标记，但不暴露实际 api_key）
@@ -67,6 +73,16 @@ func (h *BackendHandler) ListBackends(c *gin.Context) {
 	RespondSuccess(c, responses)
 }
 
+func filterSystemBackends(list []*backend.BackendConfig) []*backend.BackendConfig {
+	out := make([]*backend.BackendConfig, 0, len(list))
+	for _, b := range list {
+		if b != nil && b.TenantID == "" {
+			out = append(out, b)
+		}
+	}
+	return out
+}
+
 // ExportBackends 导出所有后端配置
 // 支持 ?desensitize=true 参数，导出时脱敏 api_key（仅返回 has_api_key 标记）
 func (h *BackendHandler) ExportBackends(c *gin.Context) {
@@ -75,6 +91,8 @@ func (h *BackendHandler) ExportBackends(c *gin.Context) {
 	backends := h.backendManager.List()
 	if user := h.accessUser(c); user != nil {
 		backends = useraccess.FilterBackendsFor(user, backends, policyForUser(c.Request.Context(), user))
+	} else if h.edition.IsTeam() && auth.IsAdmin(c) {
+		backends = filterSystemBackends(backends)
 	}
 
 	// 脱敏处理
@@ -116,6 +134,10 @@ func (h *BackendHandler) ImportBackends(c *gin.Context) {
 		return
 	}
 
+	own := ""
+	if user := h.accessUser(c); user != nil {
+		own = ownTenantID(user)
+	}
 	imported := 0
 	skipped := 0
 	for _, cfg := range req.Backends {
@@ -125,6 +147,7 @@ func (h *BackendHandler) ImportBackends(c *gin.Context) {
 		if cfg.ID == "" {
 			cfg.ID = generateBackendID(cfg.Type, cfg.Name, cfg.BaseURL)
 		}
+		cfg.TenantID = own
 		if _, err := h.backendManager.Get(cfg.ID); err == nil {
 			skipped++
 			continue
@@ -1080,8 +1103,13 @@ func (h *BackendHandler) ListBackendAccounts(c *gin.Context) {
 		return
 	}
 
-	if cfg.AccountPool == nil {
-		RespondSuccess(c, []interface{}{})
+	if cfg.AccountPool == nil || len(cfg.AccountPool.Accounts) == 0 {
+		// 无真实账户池时返回空列表（勿合成假 account id）。
+		// 前端凭 has_api_key 展示本地占位 Key；若此处合成 key-1，保存会误走 PUT → 404 account pool not found。
+		RespondSuccess(c, gin.H{
+			"accounts": []backend.BackendAccount{},
+			"strategy": "round_robin",
+		})
 		return
 	}
 
@@ -1181,33 +1209,32 @@ func (h *BackendHandler) UpdateBackendAccount(c *gin.Context) {
 		return
 	}
 
-	if cfg.AccountPool == nil {
-		RespondNotFound(c, "account pool not found")
-		return
-	}
-
 	var acc backend.BackendAccount
 	if !BindJSON(c, &acc) {
 		return
 	}
-
-	// 确保 ID 一致
 	acc.ID = accountID
 
-	// 更新账户
+	// 无池或账户不存在时按 upsert：先建池/追加，避免前端误 PUT 得到 404
+	if cfg.AccountPool == nil {
+		cfg.AccountPool = &backend.AccountPoolConfig{
+			Strategy: "round_robin",
+			Accounts: []backend.BackendAccount{},
+		}
+	}
 	if err := backend.UpdateAccount(cfg.AccountPool, acc); err != nil {
-		RespondNotFound(c, err.Error())
-		return
+		if addErr := backend.AddAccount(cfg.AccountPool, acc); addErr != nil {
+			RespondBadRequest(c, addErr.Error())
+			return
+		}
 	}
 
-	// 保存
 	if err := h.backendManager.Save(); err != nil {
 		logger.Errorf("update account for backend %s: %v", backendID, err)
 		RespondInternalError(c, "failed to save account")
 		return
 	}
 
-	// 返回掩码后的账户
 	masked := acc
 	masked.APIKey = ""
 	RespondSuccess(c, masked)
@@ -1273,6 +1300,51 @@ func (h *BackendHandler) ResetAccountBreaker(c *gin.Context) {
 	// 前端可以调用此 API 来通知后端重置熔断器状态
 	logger.Infof("reset breaker for backend %s account %s", backendID, accountID)
 	RespondSuccess(c, gin.H{"reset": true})
+}
+
+// UpdateAccountPool 更新账户池元数据（目前支持 strategy；不覆盖账户列表）。
+func (h *BackendHandler) UpdateAccountPool(c *gin.Context) {
+	backendID := c.Param("id")
+	tenantID := h.getTenantID(c)
+
+	cfg, err := h.getBackendConfig(c, tenantID, backendID)
+	if err != nil {
+		return
+	}
+	if cfg.AccountPool == nil || len(cfg.AccountPool.Accounts) == 0 {
+		RespondBadRequest(c, "account pool is empty; add accounts first")
+		return
+	}
+
+	var req struct {
+		Strategy string `json:"strategy"`
+	}
+	if !BindJSON(c, &req) {
+		return
+	}
+	strategy := strings.TrimSpace(req.Strategy)
+	if strategy == "" {
+		RespondBadRequest(c, "strategy is required")
+		return
+	}
+	cfg.AccountPool.Strategy = strategy
+	backend.NormalizeAccountPool(cfg.AccountPool)
+	if err := backend.ValidateAccountPool(cfg.AccountPool); err != nil {
+		RespondBadRequest(c, err.Error())
+		return
+	}
+	if err := h.backendManager.Update(cfg); err != nil {
+		RespondBadRequest(c, err.Error())
+		return
+	}
+	if err := h.backendManager.Save(); err != nil {
+		RespondInternalError(c, "Failed to save config: "+err.Error())
+		return
+	}
+	RespondSuccess(c, gin.H{
+		"strategy": cfg.AccountPool.Strategy,
+		"accounts": len(cfg.AccountPool.Accounts),
+	})
 }
 
 // GetAccountPoolStats 获取账户池统计信息

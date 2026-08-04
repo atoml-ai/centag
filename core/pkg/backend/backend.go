@@ -115,6 +115,9 @@ type BackendConfigResponse struct {
 	Weight   int `json:"weight,omitempty"`
 	Priority int `json:"priority,omitempty"`
 
+	// 空 = 系统后端；非空 = 用户私有后端（ownTenantID）
+	TenantID string `json:"tenant_id,omitempty"`
+
 	// 账户池信息（只读，用于 UI 展示）
 	AccountPoolSummary *AccountPoolSummary `json:"account_pool_summary,omitempty"`
 }
@@ -134,7 +137,7 @@ func (c *BackendConfig) ToResponse() *BackendConfigResponse {
 		Name:            c.Name,
 		Type:            c.Type,
 		BaseURL:         c.BaseURL,
-		HasAPIKey:       c.APIKey != "",
+		HasAPIKey:       c.APIKey != "" || (c.AccountPool != nil && len(c.AccountPool.Accounts) > 0),
 		Enabled:         c.Enabled,
 		Timeout:         c.Timeout,
 		MaxRetries:      c.MaxRetries,
@@ -150,6 +153,7 @@ func (c *BackendConfig) ToResponse() *BackendConfigResponse {
 		UpdatedAt:       c.UpdatedAt,
 		Weight:          c.Weight,
 		Priority:        c.Priority,
+		TenantID:        c.TenantID,
 	}
 
 	// 账户池摘要
@@ -354,6 +358,27 @@ func (m *Manager) Update(cfg *BackendConfig) error {
 		cfg.HealthStatus = old.HealthStatus
 	}
 	cfg.APIKey = NormalizeOpenAICompatibleAPIKey(cfg.APIKey)
+
+	// 账户池：未传则保留；传入时对空 api_key 的账户从旧池按 id 补全，避免保存策略/权重时把密钥冲掉。
+	if cfg.AccountPool == nil && old.AccountPool != nil {
+		cfg.AccountPool = old.AccountPool
+	} else if cfg.AccountPool != nil && old.AccountPool != nil {
+		for i := range cfg.AccountPool.Accounts {
+			if strings.TrimSpace(cfg.AccountPool.Accounts[i].APIKey) != "" {
+				cfg.AccountPool.Accounts[i].APIKey = NormalizeOpenAICompatibleAPIKey(cfg.AccountPool.Accounts[i].APIKey)
+				continue
+			}
+			if oldAcc, err := GetAccountByID(old.AccountPool, cfg.AccountPool.Accounts[i].ID); err == nil && oldAcc != nil {
+				cfg.AccountPool.Accounts[i].APIKey = oldAcc.APIKey
+			}
+		}
+	}
+	if cfg.AccountPool != nil {
+		NormalizeAccountPool(cfg.AccountPool)
+		if err := ValidateAccountPool(cfg.AccountPool); err != nil {
+			return err
+		}
+	}
 
 	m.backends[cfg.ID] = cfg
 	return nil

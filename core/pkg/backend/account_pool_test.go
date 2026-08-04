@@ -35,6 +35,32 @@ func TestAccountPoolSelector_RoundRobin(t *testing.T) {
 	}
 }
 
+func TestAccountPoolSelector_WeightedRoundRobin(t *testing.T) {
+	selector := NewAccountPoolSelector()
+	pool := &AccountPoolConfig{
+		Strategy: "round_robin",
+		Accounts: []BackendAccount{
+			{ID: "heavy", APIKey: "sk-h", Enabled: true, Weight: 3},
+			{ID: "light", APIKey: "sk-l", Enabled: true, Weight: 1},
+		},
+	}
+	selected := map[string]int{}
+	for i := 0; i < 8; i++ {
+		result, err := selector.SelectAccountForRequest(context.Background(), pool, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		selected[result.Account.ID]++
+	}
+	// weight 3:1 → roughly 6:2 over 8 picks
+	if selected["heavy"] < selected["light"] {
+		t.Fatalf("weighted pick = %#v, heavy should be selected more often", selected)
+	}
+	if selected["heavy"] < 5 || selected["light"] > 3 {
+		t.Fatalf("weighted pick = %#v, want ~6:2", selected)
+	}
+}
+
 func TestAccountPoolSelector_LeastUsage(t *testing.T) {
 	selector := NewAccountPoolSelector()
 
@@ -601,9 +627,7 @@ func TestAccountPoolLeastUsageConsistency(t *testing.T) {
 	}
 }
 
-// TestAccountPoolWeightedSelection 验证加权选择在流式/非流式路径的一致性
-// 注意：当前实现是简单的轮询，权重字段保留但未在选择逻辑中使用
-// 此测试验证轮询行为的一致性
+// TestAccountPoolWeightedSelection 验证加权轮询：count/weight 最小优先（weight 2:1 → 约 4:2）
 func TestAccountPoolWeightedSelection(t *testing.T) {
 	selector := NewAccountPoolSelector()
 
@@ -615,22 +639,26 @@ func TestAccountPoolWeightedSelection(t *testing.T) {
 		},
 	}
 
-	// 选择 6 次
 	results := make([]string, 0, 6)
+	counts := map[string]int{}
 	for i := 0; i < 6; i++ {
 		result, err := selector.SelectAccountForRequest(context.Background(), pool, "")
 		if err != nil {
 			t.Fatalf("request %d: unexpected error: %v", i, err)
 		}
 		results = append(results, result.Account.ID)
+		counts[result.Account.ID]++
 	}
 
-	// 验证轮询行为（key-1 和 key-2 交替选择）
-	expected := []string{"key-1", "key-2", "key-1", "key-2", "key-1", "key-2"}
+	// count/weight：并列时取列表顺序靠前者 → key-1,key-2,key-1,key-1,key-2,key-1（4:2）
+	expected := []string{"key-1", "key-2", "key-1", "key-1", "key-2", "key-1"}
 	for i, id := range results {
 		if id != expected[i] {
-			t.Errorf("request %d: expected %s, got %s", i, expected[i], id)
+			t.Errorf("request %d: expected %s, got %s (all=%v)", i, expected[i], id, results)
 		}
+	}
+	if counts["key-1"] != 4 || counts["key-2"] != 2 {
+		t.Fatalf("weighted counts = %#v, want key-1=4 key-2=2", counts)
 	}
 }
 

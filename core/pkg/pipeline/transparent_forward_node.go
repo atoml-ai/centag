@@ -167,7 +167,7 @@ func (n *TransparentForwardNode) Execute(ctx context.Context, input *NodeInput) 
 	}
 
 	clientModel := extractJSONModel(body)
-	backendID, resolvedModel, body := n.resolveTransparentRoute(meta, body, clientModel)
+	backendID, resolvedModel, body := n.resolveTransparentRoute(ctx, meta, body, clientModel)
 
 	targetURL, err := n.resolveTargetURL(meta, backendID, requestPath)
 	if err != nil {
@@ -225,18 +225,9 @@ func (n *TransparentForwardNode) Execute(ctx context.Context, input *NodeInput) 
 		return nil, fmt.Errorf("transparent_forward node %q: %w", n.id, err)
 	}
 
-	// 账户池：429 / 计费额度超限（401/402/403 + credits 关键词）时在账户间故障转移；
+	// 账户池：429 / 纯鉴权 401（坏 Key）/ 计费额度超限时在账户间故障转移；
 	// 未配置账户池时回退到单 Key（resolveTransparentUpstreamAuth）。
 	pool := resolveTransparentAccountPool(backendID)
-
-	logger.Info("transparent_forward outbound",
-		logger.GetField("node_id", n.id),
-		logger.GetField("backend_id", backendID),
-		logger.GetField("model", resolvedModel),
-		logger.GetField("fixed_egress", n.FixedEgress),
-		logger.GetField("target_url", targetURL),
-		logger.GetField("account_pool", pool != nil),
-	)
 
 	maxAttempts := 1
 	if pool != nil && len(pool.Accounts) > 1 {
@@ -278,6 +269,21 @@ func (n *TransparentForwardNode) Execute(ctx context.Context, input *NodeInput) 
 				accountID = ""
 			}
 		}
+		poolStrategy := ""
+		if pool != nil {
+			poolStrategy = pool.Strategy
+		}
+		logger.Info("transparent_forward outbound",
+			logger.GetField("node_id", n.id),
+			logger.GetField("backend_id", backendID),
+			logger.GetField("model", resolvedModel),
+			logger.GetField("fixed_egress", n.FixedEgress),
+			logger.GetField("target_url", targetURL),
+			logger.GetField("account_pool", pool != nil),
+			logger.GetField("account_id", accountID),
+			logger.GetField("pool_strategy", poolStrategy),
+			logger.GetField("attempt", attempt+1),
+		)
 		if auth != "" {
 			attemptReq.Header.Set("Authorization", auth)
 		}
@@ -309,7 +315,7 @@ func (n *TransparentForwardNode) Execute(ctx context.Context, input *NodeInput) 
 			return nil, fmt.Errorf("transparent_forward node %q: read response: %w", n.id, readErr)
 		}
 
-		// 429 或计费/额度超限（401/402/403/429 + credits 关键词）且账户池存在 → 禁用当前账户并换下一个。
+		// 429 / 纯鉴权 401 / 计费额度超限且账户池存在 → 临时禁用当前账户并换下一个。
 		// accountID 为空（已退化为单 Key）时不进入轮换，直接透传结果走后续计费降级。
 		if retryableAccountFailure(currentResp.StatusCode, string(currentBody)) && pool != nil && accountID != "" && attempt < maxAttempts-1 {
 			logger.Info("transparent_forward rotate account",
@@ -341,29 +347,32 @@ func (n *TransparentForwardNode) Execute(ctx context.Context, input *NodeInput) 
 		if out, ok := n.retryWithSystemBillingFallback(ctx, client, method, meta, body, backendID, resolvedModel, clientModel, requestPath, bridgeToChat, anthropicToChat); ok {
 			return out, nil
 		}
-		return nil, fmt.Errorf("transparent_forward node %q: backend=%s model=%s url=%s upstream returned %d: %s",
-			n.id, backendID, resolvedModel, targetURL, statusCode, truncateBody(respBody, 512))
+		return nil, newTransparentUpstreamError(n.id, backendID, resolvedModel, targetURL, statusCode, bodyStr)
 	}
 
 	// 对可重试的 HTTP 错误码返回 error，触发上层重试/降级逻辑。
 	if config.IsRetryableStatusCode(statusCode) {
-		return nil, fmt.Errorf("transparent_forward node %q: backend=%s model=%s url=%s upstream returned %d: %s",
-			n.id, backendID, resolvedModel, targetURL, statusCode, truncateBody(respBody, 512))
+		return nil, newTransparentUpstreamError(n.id, backendID, resolvedModel, targetURL, statusCode, bodyStr)
 	}
 
 	// 模型不存在 / 占位符未解析等：必须返回 error，避免策略降级把错误 JSON 当成成功。
 	if statusCode >= 400 && isUpstreamModelOrPlaceholderError(bodyStr) {
-		return nil, fmt.Errorf("transparent_forward node %q: backend=%s model=%s url=%s upstream returned %d: %s",
-			n.id, backendID, resolvedModel, targetURL, statusCode, truncateBody(respBody, 512))
+		return nil, newTransparentUpstreamError(n.id, backendID, resolvedModel, targetURL, statusCode, bodyStr)
 	}
 
 	return n.buildTransparentOutput(targetURL, statusCode, contentType, respBody, backendID, resolvedModel, clientModel, requestPath, bridgeToChat, anthropicToChat, nil), nil
 }
 
 // retryableAccountFailure 判断是否应触发账户池故障转移：
-// 429 限流，或 401/402/403 且命中计费/额度关键词（IsBillingOrQuotaFailure 已含 429）。
+// - 429 限流
+// - 401 上游鉴权失败（含 plain Invalid API key：多 Key 池内同请求换下一把）
+// - 401/402/403 + 计费/额度关键词（IsBillingOrQuotaFailure）
+// 无账户池或池内仅一把 Key 时，调用方不会进入轮换，纯 401 仍透传给客户端。
 func retryableAccountFailure(statusCode int, body string) bool {
-	return statusCode == http.StatusTooManyRequests || config.IsBillingOrQuotaFailure(statusCode, body)
+	if statusCode == http.StatusTooManyRequests || statusCode == http.StatusUnauthorized {
+		return true
+	}
+	return config.IsBillingOrQuotaFailure(statusCode, body)
 }
 
 // resolveTransparentAccountPool 解析后端账户池；无托管后端或未配置账户池时返回 nil。
@@ -417,7 +426,7 @@ func (n *TransparentForwardNode) retryWithSystemBillingFallback(
 	if t := strings.TrimSpace(primaryModel); t != "" && strings.EqualFold(t, bodyModel) {
 		failedModels[strings.ToLower(t)] = true
 	}
-	cands := billingFallbackCandidates(primaryBackend, failedModels)
+	cands := billingFallbackCandidatesContext(ctx, primaryBackend, failedModels)
 	if len(cands) == 0 {
 		return nil, false
 	}
@@ -436,8 +445,12 @@ type billingFallbackCandidate struct {
 }
 
 func billingFallbackCandidates(primaryBackend string, failedModels map[string]bool) []billingFallbackCandidate {
+	return billingFallbackCandidatesContext(context.Background(), primaryBackend, failedModels)
+}
+
+func billingFallbackCandidatesContext(ctx context.Context, primaryBackend string, failedModels map[string]bool) []billingFallbackCandidate {
 	primaryBackend = strings.TrimSpace(primaryBackend)
-	fbBackend, fbModel := ResolveVirtualVars("{{system.fallback_backend}}", "{{system.fallback_model}}")
+	fbBackend, fbModel := ResolveVirtualVarsContext(ctx, "{{system.fallback_backend}}", "{{system.fallback_model}}")
 	fbBackend = strings.TrimSpace(fbBackend)
 	fbModel = strings.TrimSpace(fbModel)
 	if fbBackend == "" {
@@ -704,6 +717,7 @@ func (n *TransparentForwardNode) resolveTargetURL(meta map[string]interface{}, b
 // 3) miss / unspecified → system default backend, else first usable enabled backend
 // On hit: keep client model string when it already equals ActualModel; else rewrite to ActualModel.
 func (n *TransparentForwardNode) resolveTransparentRoute(
+	ctx context.Context,
 	meta map[string]interface{},
 	body []byte,
 	clientModel string,
@@ -711,6 +725,11 @@ func (n *TransparentForwardNode) resolveTransparentRoute(
 	outBody = body
 
 	pinnedBackend := strings.TrimSpace(stringMeta(meta, "backend_id"))
+	preferredBackend, preferredModel := "", ""
+	if ov, ok := config.ProxyDefaultsFromContext(ctx); ok {
+		preferredBackend = strings.TrimSpace(ov.DefaultBackendID)
+		preferredModel = strings.TrimSpace(ov.DefaultModel)
+	}
 
 	if n.FixedEgress {
 		// 直连固定出站：只用节点配置的后端与模型，忽略请求头或 Agent 注入的 X-Backend-ID。
@@ -719,10 +738,24 @@ func (n *TransparentForwardNode) resolveTransparentRoute(
 		if rawBackend != "" && !strings.Contains(rawBackend, "{{") {
 			backendID = rawBackend
 		} else {
-			backendID = resolveFallbackBackendID(rawBackend, "")
+			// {{system.fallback_backend}} 必须解析为系统降级后端，不能被「我的默认后端」抢占，
+			// 否则 primary=quota 失败后 forward_fallback 仍打回同一个不可用后端。
+			pin := preferredBackend
+			if strings.Contains(rawBackend, "fallback_backend") {
+				pin = ""
+			}
+			backendID = resolveFallbackBackendID(ctx, rawBackend, pin)
 		}
 		if backendID != "" {
-			resolvedModel, outBody = applyFallbackModel(outBody, backendID, n.config.Model)
+			modelHint := n.config.Model
+			// fallback 节点用系统/节点模型；仅 default_backend 类节点才回落「我的默认模型」
+			if preferredModel != "" && (modelHint == "" || strings.Contains(modelHint, "{{system.default_model}}")) {
+				modelHint = preferredModel
+			}
+			if strings.Contains(strings.TrimSpace(n.config.Model), "fallback_model") {
+				modelHint = n.config.Model
+			}
+			resolvedModel, outBody = applyFallbackModel(ctx, outBody, backendID, modelHint)
 		}
 		return backendID, resolvedModel, outBody
 	}
@@ -736,8 +769,19 @@ func (n *TransparentForwardNode) resolveTransparentRoute(
 			}
 			// pinned backend but model miss → keep backend, use default/preferred model
 			backendID = pinnedBackend
-			resolvedModel, outBody = applyFallbackModel(outBody, backendID, n.config.Model)
+			resolvedModel, outBody = applyFallbackModel(ctx, outBody, backendID, n.config.Model)
 			return backendID, resolvedModel, outBody
+		}
+
+		// Team 用户「我的默认后端」优先：仅当客户端模型能在该后端命中时钉死，
+		// 避免 deepseek-*-free 被跨后端匹配到 opencode-zen；若模型明确属于其它后端（如 glm-4-flash），
+		// 则继续跨后端匹配，不能强行改写到默认后端的默认模型。
+		if preferredBackend != "" {
+			if mapping := matchModelOnBackend(clientModel, preferredBackend); mapping != nil {
+				backendID = preferredBackend
+				resolvedModel, outBody = applyClientModelRewrite(outBody, clientModel, mapping)
+				return backendID, resolvedModel, outBody
+			}
 		}
 
 		if matchedBackend, mapping := matchClientModelAcrossBackends(clientModel); matchedBackend != nil && mapping != nil {
@@ -745,26 +789,55 @@ func (n *TransparentForwardNode) resolveTransparentRoute(
 			resolvedModel, outBody = applyClientModelRewrite(outBody, clientModel, mapping)
 			return backendID, resolvedModel, outBody
 		}
+
+		// 客户端模型无处可匹配：回落到我的默认后端 + 默认模型
+		if preferredBackend != "" {
+			backendID = preferredBackend
+			modelHint := preferredModel
+			if modelHint == "" {
+				modelHint = n.config.Model
+			}
+			resolvedModel, outBody = applyFallbackModel(ctx, outBody, backendID, modelHint)
+			return backendID, resolvedModel, outBody
+		}
 	}
 
-	// Fallback: node/system default → first usable enabled backend
-	backendID = resolveFallbackBackendID(n.config.Backend, pinnedBackend)
+	// Fallback: 用户默认 → 节点/系统默认 → first usable enabled backend
+	backendID = resolveFallbackBackendID(ctx, n.config.Backend, firstNonEmpty(pinnedBackend, preferredBackend))
 	if backendID != "" {
-		resolvedModel, outBody = applyFallbackModel(outBody, backendID, n.config.Model)
+		modelHint := n.config.Model
+		if preferredModel != "" && (modelHint == "" || strings.Contains(modelHint, "{{")) {
+			modelHint = preferredModel
+		}
+		resolvedModel, outBody = applyFallbackModel(ctx, outBody, backendID, modelHint)
 	}
 	return backendID, resolvedModel, outBody
 }
 
+func firstNonEmpty(vals ...string) string {
+	for _, v := range vals {
+		if strings.TrimSpace(v) != "" {
+			return strings.TrimSpace(v)
+		}
+	}
+	return ""
+}
+
 // resolveFallbackBackendID resolves {{system.default_backend}} / empty to a concrete backend.
 // When DefaultBackendID is unset, falls back to the first usable enabled backend.
-func resolveFallbackBackendID(nodeBackend, pinnedBackend string) string {
+func resolveFallbackBackendID(ctx context.Context, nodeBackend, pinnedBackend string) string {
 	candidates := []string{
 		strings.TrimSpace(pinnedBackend),
 		strings.TrimSpace(nodeBackend),
 	}
 	for _, c := range candidates {
-		if c == "" || strings.Contains(c, "{{system.") {
-			resolved, _ := ResolveVirtualVars(c, "")
+		// 空候选必须跳过：ResolveVirtualVarsContext("") 会当成 default_backend，
+		// 从而在解析 {{system.fallback_backend}} 之前错误返回用户/系统默认后端。
+		if c == "" {
+			continue
+		}
+		if strings.Contains(c, "{{system.") {
+			resolved, _ := ResolveVirtualVarsContext(ctx, c, "")
 			c = strings.TrimSpace(resolved)
 		}
 		if c != "" && !strings.Contains(c, "{{system.") {
@@ -789,11 +862,11 @@ func resolveFallbackBackendID(nodeBackend, pinnedBackend string) string {
 	return firstEnabled
 }
 
-func applyFallbackModel(body []byte, backendID, nodeModel string) (resolved string, out []byte) {
+func applyFallbackModel(ctx context.Context, body []byte, backendID, nodeModel string) (resolved string, out []byte) {
 	out = body
-	_, resolved = ResolveVirtualVars(backendID, nodeModel)
+	_, resolved = ResolveVirtualVarsContext(ctx, backendID, nodeModel)
 	if resolved == "" {
-		_, resolved = ResolveVirtualVars("{{system.default_backend}}", "{{system.default_model}}")
+		_, resolved = ResolveVirtualVarsContext(ctx, "{{system.default_backend}}", "{{system.default_model}}")
 	}
 	if resolved == "" && ListEnabledBackendsForMatch != nil {
 		for _, cfg := range ListEnabledBackendsForMatch() {

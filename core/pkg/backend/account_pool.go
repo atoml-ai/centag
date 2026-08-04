@@ -101,7 +101,7 @@ func (s *AccountPoolSelector) SelectAccountForRequest(
 	}, nil
 }
 
-// selectRoundRobin 轮询选择
+// selectRoundRobin 轮询选择（支持 weight：按 count/weight 最小优先，实现加权轮询）
 func (s *AccountPoolSelector) selectRoundRobin(accounts []BackendAccount) BackendAccount {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -110,25 +110,24 @@ func (s *AccountPoolSelector) selectRoundRobin(accounts []BackendAccount) Backen
 		return BackendAccount{}
 	}
 
-	// 找到请求次数最少的账户
-	minCount := -1
+	minScore := -1.0
 	selected := accounts[0]
-
 	for _, acc := range accounts {
-		count := s.counters[acc.ID]
-		if minCount == -1 || count < minCount {
-			minCount = count
+		w := acc.Weight
+		if w <= 0 {
+			w = 1
+		}
+		score := float64(s.counters[acc.ID]) / float64(w)
+		if minScore < 0 || score < minScore {
+			minScore = score
 			selected = acc
 		}
 	}
-
 	return selected
 }
 
-// selectLeastUsage 最少使用选择
+// selectLeastUsage 最少使用选择（与 round_robin 相同计数模型，亦尊重 weight）
 func (s *AccountPoolSelector) selectLeastUsage(accounts []BackendAccount) BackendAccount {
-	// least_usage 与 round_robin 在简单计数模式下行为相同
-	// 区别在于 least_usage 可以考虑窗口内请求量
 	return s.selectRoundRobin(accounts)
 }
 

@@ -904,6 +904,65 @@ func TestInjectSystemPromptIntoChatBody_SkipsResponsesShape(t *testing.T) {
 	}
 }
 
+func TestTransparentForwardNode_FallbackBackendNotStolenByUserDefault(t *testing.T) {
+	prevCfg := config.Get()
+	config.Set(&config.Config{
+		Proxy: config.ProxyConfig{
+			DefaultBackendID:  "quota-primary",
+			DefaultModel:      "quota-model",
+			FallbackBackendID: "deepseek",
+			FallbackModel:     "deepseek-v4-flash",
+		},
+	})
+	t.Cleanup(func() { config.Set(prevCfg) })
+
+	var hitBackend string
+	prevEP := ResolveBackendEndpoint
+	t.Cleanup(func() { ResolveBackendEndpoint = prevEP })
+	ResolveBackendEndpoint = func(backendID string) (*BackendEndpoint, error) {
+		hitBackend = backendID
+		base := "https://api.deepseek.com/v1"
+		if backendID == "quota-primary" {
+			base = "http://127.0.0.1:9/v1"
+		}
+		return &BackendEndpoint{BaseURL: base, APIKey: "sk"}, nil
+	}
+
+	inner := &mockHTTPClient{status: 200, body: `{"id":"ok","choices":[{"message":{"content":"fb-ok"}}]}`}
+	broker := &mockCapabilityBroker{httpClient: inner}
+	node, err := NewTransparentForwardNode(NodeConfig{
+		Backend: "{{system.fallback_backend}}",
+		Model:   "{{system.fallback_model}}",
+		CustomConfig: map[string]interface{}{
+			"route_policy": "fixed",
+			"is_fallback":  true,
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	tf := node.(*TransparentForwardNode)
+	tf.BaseNode.id = "forward_fallback"
+	tf.SetCapabilityBroker(broker)
+
+	ctx := config.WithProxyDefaults(context.Background(), config.ProxyDefaults{
+		DefaultBackendID: "quota-primary",
+		DefaultModel:     "quota-model",
+	})
+	_, err = tf.Execute(ctx, &NodeInput{
+		Metadata: map[string]interface{}{
+			"request_path":     "/v1/chat/completions",
+			"raw_request_body": `{"model":"quota-model","messages":[{"role":"user","content":"hi"}]}`,
+		},
+	})
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if hitBackend != "deepseek" {
+		t.Fatalf("fallback node hit backend %q, want deepseek (must not use user default quota-primary)", hitBackend)
+	}
+}
+
 func TestTransparentForwardNode_FixedEgressIgnoresPinnedBackendID(t *testing.T) {
 	prevCfg := config.Get()
 	config.Set(&config.Config{
@@ -997,6 +1056,7 @@ func TestTransparentForwardNode_RedirectPolicyConfig(t *testing.T) {
 type sequenceHTTPClient struct {
 	calls  int
 	bodies []string
+	auths  []string
 	resps  []struct {
 		status int
 		body   string
@@ -1008,6 +1068,7 @@ func (s *sequenceHTTPClient) Do(req *http.Request) (*http.Response, error) {
 		b, _ := io.ReadAll(req.Body)
 		s.bodies = append(s.bodies, string(b))
 	}
+	s.auths = append(s.auths, req.Header.Get("Authorization"))
 	idx := s.calls
 	s.calls++
 	if idx >= len(s.resps) {
@@ -1212,6 +1273,83 @@ func TestTransparentForwardNode_Plain401AuthStillPassthrough(t *testing.T) {
 	}
 	if out.Metadata["status_code"] != 401 {
 		t.Fatalf("status_code=%v", out.Metadata["status_code"])
+	}
+}
+
+func TestTransparentForwardNode_AccountPoolRotatesOnPlain401(t *testing.T) {
+	prevEP := ResolveBackendEndpoint
+	t.Cleanup(func() { ResolveBackendEndpoint = prevEP })
+	pool := &backend.AccountPoolConfig{
+		Strategy: "round_robin",
+		Accounts: []backend.BackendAccount{
+			{ID: "key-bad", APIKey: "sk-bad", Enabled: true, Weight: 1},
+			{ID: "key-good", APIKey: "sk-good", Enabled: true, Weight: 1},
+		},
+	}
+	ResolveBackendEndpoint = func(backendID string) (*BackendEndpoint, error) {
+		return &BackendEndpoint{
+			BaseURL:     "https://api.example.com/v1",
+			APIKey:      "sk-fallback",
+			AccountPool: pool,
+		}, nil
+	}
+
+	seq := &sequenceHTTPClient{
+		resps: []struct {
+			status int
+			body   string
+		}{
+			{401, `{"error":{"type":"AuthError","message":"Invalid API key."}}`},
+			{200, `{"id":"ok","choices":[{"message":{"content":"hi"}}]}`},
+		},
+	}
+	broker := &mockCapabilityBroker{httpClient: seq}
+
+	node, err := NewTransparentForwardNode(NodeConfig{
+		Backend: "zen-pool-401",
+		CustomConfig: map[string]interface{}{
+			"route_policy": "fixed",
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	tf := node.(*TransparentForwardNode)
+	tf.BaseNode.id = "forward"
+	tf.SetCapabilityBroker(broker)
+
+	out, err := tf.Execute(context.Background(), &NodeInput{
+		Metadata: map[string]interface{}{
+			"request_path":     "/v1/chat/completions",
+			"raw_request_body": `{"model":"mimo-v2.5-free","messages":[{"role":"user","content":"hi"}]}`,
+		},
+	})
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if seq.calls != 2 {
+		t.Fatalf("calls=%d want 2 (rotate after plain 401)", seq.calls)
+	}
+	if len(seq.auths) != 2 || seq.auths[0] == seq.auths[1] {
+		t.Fatalf("auths=%v, want two different pool keys", seq.auths)
+	}
+	if seq.auths[0] != "Bearer sk-bad" || seq.auths[1] != "Bearer sk-good" {
+		t.Fatalf("auths=%v, want Bearer sk-bad then Bearer sk-good", seq.auths)
+	}
+	if out.Metadata["status_code"] != 200 {
+		t.Fatalf("status_code=%v want 200 after rotate", out.Metadata["status_code"])
+	}
+}
+
+func TestRetryableAccountFailure_Plain401(t *testing.T) {
+	if !retryableAccountFailure(401, `{"error":{"type":"AuthError","message":"Invalid API key."}}`) {
+		t.Fatal("plain 401 should be retryable for account pool rotation")
+	}
+	if !retryableAccountFailure(429, `rate limit`) {
+		t.Fatal("429 should be retryable")
+	}
+	if retryableAccountFailure(404, `not found`) {
+		t.Fatal("404 should not be retryable for account pool")
 	}
 }
 
