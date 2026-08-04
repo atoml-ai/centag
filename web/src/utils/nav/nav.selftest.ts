@@ -105,7 +105,7 @@ function run() {
         'user-tenant',
         'system-users',
         'cost-dashboard',
-        'pricing-sync',
+        'billing-rules',
         'config-basic',
         'ab-comparison'
       ],

@@ -32,6 +32,7 @@ import pipelineModes from './pipelineModes.json'
 import nodeConfig from './nodeConfig.json'
 import homePipelineCard from './homePipelineCard.json'
 import billingRulesDialog from './billingRulesDialog.json'
+import billingRules from './billingRules.json'
 import pricingSync from './pricingSync.json'
 import personalConfig from './personalConfig.json'
 import personalUsage from './personalUsage.json'
@@ -99,6 +100,7 @@ const ru = {
   pipelineModes,
   homePipelineCard,
   billingRulesDialog,
+  billingRules,
   pricingSync,
   personalConfig,
   personalUsage,

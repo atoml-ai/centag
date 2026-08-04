@@ -1,6 +1,6 @@
 {
   "dialogTitle": "Billing Rules",
-  "description": "Configure unit prices by backend + model (USD / 1M tokens). Import/export YAML defaults to USD; display can be switched to CNY (conversion only, does not modify source).",
+  "description": "Shows unit prices only for configured backends and their models (USD / 1M tokens). Orphan rules for missing backends are pruned on load. Import/export YAML defaults to USD; display can switch to CNY (conversion only).",
   "refresh": "Refresh",
   "importYaml": "Import YAML",
   "export": "Export",

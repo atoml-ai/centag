@@ -1,5 +1,26 @@
 {
   "title": "請求ルール",
-  "subtitle": "モデル価格設定とインポート/エクスポート（YAML、デフォルトUSD）。管理者のみ。",
-  "openDialog": "請求ルールを開く"
+  "subtitle": "バックエンドとモデルごとに有効な単価を管理します。価格同期は補助ツールです。単価はデフォルトで USD / 1M tokens。",
+  "openDialog": "請求ルールを開く",
+  "openFullPage": "請求ルールページを開く",
+  "tabRules": "請求ルール",
+  "tabSync": "価格同期",
+  "syncTabHint": "外部ソースから提案価格を取得し、確認後に請求ルールへ反映",
+  "savePrices": "単価を保存",
+  "prunedOrphans": "未設定バックエンドの課金ルールを {count} 件削除しました",
+  "redirectTitle": "価格同期は統合されました",
+  "redirectSubtitle": "請求ルールページの「価格同期」タブをご利用ください。",
+  "redirectAction": "請求ルールへ",
+  "filters": {
+    "searchPlaceholder": "バックエンド / モデル / 名前を検索",
+    "backend": "バックエンド",
+    "tierAll": "すべて",
+    "tierFree": "無料",
+    "tierPaid": "有料"
+  },
+  "group": {
+    "total": "{count} 件",
+    "free": "無料 {count}",
+    "paid": "有料 {count}"
+  }
 }

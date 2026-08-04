@@ -1,5 +1,26 @@
 {
   "title": "计费规则",
-  "subtitle": "配置模型单价与导入导出（YAML，默认 USD）。仅管理员可管理。",
-  "openDialog": "打开计费规则"
+  "subtitle": "按后端与模型管理当前生效单价；价格同步仅作辅助拉取建议价。单价默认 USD / 1M tokens。",
+  "openDialog": "打开计费规则",
+  "openFullPage": "打开完整计费规则页",
+  "tabRules": "计费规则",
+  "tabSync": "价格同步",
+  "syncTabHint": "从外部来源拉取建议价，确认后写入计费规则",
+  "savePrices": "保存单价",
+  "prunedOrphans": "已清理 {count} 条未配置后端的计费规则",
+  "redirectTitle": "价格同步已合并",
+  "redirectSubtitle": "请在「计费规则」页的「价格同步」标签中使用该功能。",
+  "redirectAction": "前往计费规则",
+  "filters": {
+    "searchPlaceholder": "搜索后端 / 模型 / 名称",
+    "backend": "后端",
+    "tierAll": "全部档位",
+    "tierFree": "免费",
+    "tierPaid": "收费"
+  },
+  "group": {
+    "total": "{count} 条",
+    "free": "免费 {count}",
+    "paid": "收费 {count}"
+  }
 }

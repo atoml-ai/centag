@@ -210,7 +210,7 @@ export function cacheManagementNavGroup(): NavItem {
   return navGroup('cache-management', 'nav.cacheManagement', 'FolderOpened', children, children[0]?.path)
 }
 
-/** 用户与组管理：用户管理 + 成本看板 + 价格同步 + 组管理（team admin 专用） */
+/** 用户与组管理：用户管理 + 成本看板 + 计费规则 + 组管理（team admin 专用） */
 export function userTenantGroup(): NavItem {
   return navGroup(
     'user-tenant',
@@ -227,10 +227,10 @@ export function userTenantGroup(): NavItem {
       },
       costDashboardNav(),
       {
-        id: 'pricing-sync',
-        labelKey: 'nav.pricingSync',
+        id: 'billing-rules',
+        labelKey: 'nav.billingRules',
         icon: 'Coin',
-        path: '/billing/pricing-sync',
+        path: '/billing',
         requiresAdmin: true,
         requiresTeam: true
       },

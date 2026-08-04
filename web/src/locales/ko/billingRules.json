@@ -1,5 +1,26 @@
 {
   "title": "과금 규칙",
-  "subtitle": "모델 가격 설정 및 가져오기/내보내기 (YAML, 기본 USD). 관리자만 가능.",
-  "openDialog": "과금 규칙 열기"
+  "subtitle": "백엔드와 모델별 현재 단가를 관리합니다. 가격 동기화는 보조 도구입니다. 단가 기본 단위는 USD / 1M tokens입니다.",
+  "openDialog": "과금 규칙 열기",
+  "openFullPage": "전체 과금 규칙 페이지 열기",
+  "tabRules": "과금 규칙",
+  "tabSync": "가격 동기화",
+  "syncTabHint": "외부 소스에서 제안 가격을 가져온 뒤 확인하여 과금 규칙에 반영",
+  "savePrices": "단가 저장",
+  "prunedOrphans": "미구성 백엔드 과금 규칙 {count}개를 정리했습니다",
+  "redirectTitle": "가격 동기화가 통합되었습니다",
+  "redirectSubtitle": "과금 규칙 페이지의 「가격 동기화」 탭을 사용하세요.",
+  "redirectAction": "과금 규칙으로 이동",
+  "filters": {
+    "searchPlaceholder": "백엔드 / 모델 / 이름 검색",
+    "backend": "백엔드",
+    "tierAll": "전체",
+    "tierFree": "무료",
+    "tierPaid": "유료"
+  },
+  "group": {
+    "total": "{count}개",
+    "free": "무료 {count}",
+    "paid": "유료 {count}"
+  }
 }

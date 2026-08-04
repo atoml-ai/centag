@@ -9,7 +9,7 @@
       mode="full"
       :hint="pageHint"
       show-billing-button
-      @open-billing="billingVisible = true"
+      @open-billing="openBillingRules"
     />
 
     <el-row :gutter="20" class="chart-row">
@@ -56,14 +56,13 @@
       </el-col>
     </el-row>
 
-    <BillingRulesDialog v-model="billingVisible" @saved="onBillingSaved" />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useRoute, useRouter } from 'vue-router'
+import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useEdition } from '@/composables/useEdition'
 import { ElMessage } from 'element-plus'
@@ -74,7 +73,6 @@ import { GridComponent, TooltipComponent, LegendComponent, DataZoomComponent } f
 import VChart from 'vue-echarts'
 import * as tokenApi from '@/api/token-usage'
 import UsageMetricsSummary from '@/components/usage/UsageMetricsSummary.vue'
-import BillingRulesDialog from '@/components/dashboard/BillingRulesDialog.vue'
 
 echarts.use([
   CanvasRenderer,
@@ -89,7 +87,6 @@ echarts.use([
 
 const { t } = useI18n()
 
-const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
 const { isTeam } = useEdition()
@@ -102,7 +99,11 @@ const pageHint = computed(() =>
 )
 
 const metricsRef = ref<InstanceType<typeof UsageMetricsSummary> | null>(null)
-const billingVisible = ref(false)
+
+function openBillingRules() {
+  if (!canManageBilling.value) return
+  router.push('/billing')
+}
 
 const chartDays = ref('30')
 const dailyStats = ref<any[]>([])
@@ -284,27 +285,7 @@ const loadBackendStats = async () => {
   }
 }
 
-function onBillingSaved() {
-  metricsRef.value?.reload()
-}
-
-function syncBillingQuery() {
-  if (!canManageBilling.value) return
-  if (route.query.billing === '1' || route.query.billing === 'true') {
-    billingVisible.value = true
-  }
-}
-
-watch(billingVisible, (open) => {
-  if (!open && (route.query.billing === '1' || route.query.billing === 'true')) {
-    const q = { ...route.query }
-    delete q.billing
-    router.replace({ path: '/token-usage', query: q })
-  }
-})
-
 onMounted(() => {
-  syncBillingQuery()
   metricsRef.value?.reload()
   loadDailyUsage()
   loadModelStats()

@@ -1,21 +1,12 @@
 version: "2.0"
 currency: "USD"
 usd_to_cny: 7.2
-updated_at: "2026-07-30T00:00:00Z"
+updated_at: "2026-08-04T00:00:00Z"
 
 # Prices are USD per 1M tokens. Display may convert to CNY via usd_to_cny.
 # price_type: "cost" (成本价) or "revenue" (收入价)
-# Personal 版默认只关心成本价，allowed_* 为空时默认全部可用
+# 仅作空库种子示例；线上请按实际后端配置维护，勿为不存在的后端预置规则。
 rules:
-  - name: "Ollama 本地"
-    backend_id: "ollama-local"
-    model: "*"
-    price_type: "cost"
-    input_price_per_m: 0
-    output_price_per_m: 0
-    priority: 0
-    enabled: true
-
   - name: "PPIO DeepSeek V3.2"
     backend_id: "ppinfra"
     model: "deepseek-v3.2"
@@ -58,41 +49,5 @@ rules:
     price_type: "cost"
     input_price_per_m: 0.2778
     output_price_per_m: 0.2778
-    priority: 100
-    enabled: true
-
-  - name: "智谱 GLM-5"
-    backend_id: "bigmodel"
-    model: "glm-5"
-    price_type: "cost"
-    input_price_per_m: 2.7778
-    output_price_per_m: 2.7778
-    priority: 100
-    enabled: true
-
-  - name: "智谱 GLM-4.7"
-    backend_id: "bigmodel"
-    model: "glm-4.7"
-    price_type: "cost"
-    input_price_per_m: 0.6944
-    output_price_per_m: 0.6944
-    priority: 100
-    enabled: true
-
-  - name: "智谱 GLM-4-Flash"
-    backend_id: "bigmodel"
-    model: "glm-4-flash"
-    price_type: "cost"
-    input_price_per_m: 0.0694
-    output_price_per_m: 0.0694
-    priority: 100
-    enabled: true
-
-  - name: "智谱 GLM-4-FlashX"
-    backend_id: "bigmodel"
-    model: "glm-4-flashx"
-    price_type: "cost"
-    input_price_per_m: 0.1389
-    output_price_per_m: 0.1389
     priority: 100
     enabled: true

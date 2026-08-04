@@ -5,22 +5,21 @@
       mode="compact"
       :hint="hint || t('minimalUsagePanel.hint')"
       show-billing-button
-      @open-billing="billingVisible = true"
+      @open-billing="openBillingRules"
     />
     <SessionBrowser ref="sessionsRef" mode="compact" />
-    <BillingRulesDialog v-model="billingVisible" @saved="onBillingSaved" />
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref } from 'vue'
+import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import UsageMetricsSummary from '@/components/usage/UsageMetricsSummary.vue'
 import SessionBrowser from '@/components/usage/SessionBrowser.vue'
-import BillingRulesDialog from '@/components/dashboard/BillingRulesDialog.vue'
-
-import { useI18n } from 'vue-i18n'
 
 const { t } = useI18n()
+const router = useRouter()
 
 withDefaults(
   defineProps<{
@@ -33,10 +32,9 @@ withDefaults(
 
 const metricsRef = ref<InstanceType<typeof UsageMetricsSummary> | null>(null)
 const sessionsRef = ref<InstanceType<typeof SessionBrowser> | null>(null)
-const billingVisible = ref(false)
 
-function onBillingSaved() {
-  metricsRef.value?.reload()
+function openBillingRules() {
+  router.push('/billing')
 }
 
 async function reload() {
