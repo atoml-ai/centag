@@ -6,6 +6,26 @@ import (
 	"testing"
 )
 
+func TestExtractChatCompletionResult_ReasoningFields(t *testing.T) {
+	body := `{
+		"id":"x","object":"chat.completion","choices":[{
+			"index":0,"finish_reason":"stop",
+			"message":{"role":"assistant","content":null,"reasoning":"hello from zen","reasoning_content":""}
+		}]
+	}`
+	got := extractChatCompletionResult([]byte(body))
+	if got.Reasoning != "hello from zen" {
+		t.Fatalf("reasoning=%q", got.Reasoning)
+	}
+	ds := `{
+		"choices":[{"message":{"role":"assistant","content":"","reasoning_content":"think then answer"}}]
+	}`
+	got = extractChatCompletionResult([]byte(ds))
+	if got.Reasoning != "think then answer" {
+		t.Fatalf("reasoning_content=%q", got.Reasoning)
+	}
+}
+
 func TestConvertResponsesBodyToChatCompletions_OpenCodeShape(t *testing.T) {
 	in := `{
 		"model":"gpt-5.6-luna",

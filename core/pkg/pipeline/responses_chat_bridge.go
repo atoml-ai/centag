@@ -586,6 +586,24 @@ func extractChatCompletionResult(body []byte) chatCompletionExtract {
 	return extractChatCompletionResultFromJSON(body)
 }
 
+// firstNonEmptyJSONString returns the first non-empty string among values.
+// Handles JSON null and non-string types without treating them as present.
+func firstNonEmptyJSONString(vals ...interface{}) string {
+	for _, v := range vals {
+		switch t := v.(type) {
+		case string:
+			if s := strings.TrimSpace(t); s != "" {
+				return t
+			}
+		case json.Number:
+			if s := strings.TrimSpace(t.String()); s != "" {
+				return s
+			}
+		}
+	}
+	return ""
+}
+
 // extractChatCompletionText pulls assistant text only (compat helper).
 func extractChatCompletionText(body []byte) string {
 	return extractChatCompletionResult(body).Text
@@ -609,23 +627,15 @@ func extractChatCompletionResultFromJSON(body []byte) chatCompletionExtract {
 		out.FinishReason = strings.TrimSpace(fr)
 	}
 	if msg, ok := first["message"].(map[string]interface{}); ok && msg != nil {
-		if c, ok := msg["content"].(string); ok {
-			out.Text = c
-		}
-		if r, ok := msg["reasoning_content"].(string); ok {
-			out.Reasoning = r
-		}
+		out.Text = firstNonEmptyJSONString(msg["content"])
+		out.Reasoning = firstNonEmptyJSONString(msg["reasoning_content"], msg["reasoning"])
 		out.ToolCalls = parseChatToolCalls(msg["tool_calls"])
 	}
 	if out.Text == "" {
 		if delta, ok := first["delta"].(map[string]interface{}); ok {
-			if c, ok := delta["content"].(string); ok {
-				out.Text = c
-			}
+			out.Text = firstNonEmptyJSONString(delta["content"])
 			if out.Reasoning == "" {
-				if r, ok := delta["reasoning_content"].(string); ok {
-					out.Reasoning = r
-				}
+				out.Reasoning = firstNonEmptyJSONString(delta["reasoning_content"], delta["reasoning"])
 			}
 			if len(out.ToolCalls) == 0 {
 				out.ToolCalls = parseChatToolCalls(delta["tool_calls"])
@@ -675,19 +685,19 @@ func extractChatCompletionResultFromSSE(body []byte) chatCompletionExtract {
 			finishReason = strings.TrimSpace(fr)
 		}
 		if delta, ok := first["delta"].(map[string]interface{}); ok && delta != nil {
-			if c, ok := delta["content"].(string); ok && c != "" {
+			if c := firstNonEmptyJSONString(delta["content"]); c != "" {
 				text.WriteString(c)
 			}
-			if r, ok := delta["reasoning_content"].(string); ok && r != "" {
+			if r := firstNonEmptyJSONString(delta["reasoning_content"], delta["reasoning"]); r != "" {
 				reasoning.WriteString(r)
 			}
 			mergeStreamingToolCallDeltas(delta["tool_calls"], byIndex, &order)
 		}
 		if msg, ok := first["message"].(map[string]interface{}); ok && msg != nil {
-			if c, ok := msg["content"].(string); ok && c != "" {
+			if c := firstNonEmptyJSONString(msg["content"]); c != "" {
 				text.WriteString(c)
 			}
-			if r, ok := msg["reasoning_content"].(string); ok && r != "" {
+			if r := firstNonEmptyJSONString(msg["reasoning_content"], msg["reasoning"]); r != "" {
 				reasoning.WriteString(r)
 			}
 			for _, tc := range parseChatToolCalls(msg["tool_calls"]) {
