@@ -260,6 +260,8 @@ func (s *Server) handleGetProxyConfig(c *gin.Context) {
 		"data": gin.H{
 			"default_backend_id":    backendID,
 			"default_model":         model,
+			"fallback_backend_id":   cfg.Proxy.FallbackBackendID,
+			"fallback_model":        cfg.Proxy.FallbackModel,
 			"response_trace_banner": cfg.Proxy.ResponseTraceBanner,
 			"scope":                 scope,
 		},
@@ -278,6 +280,8 @@ func (s *Server) handleSaveProxyConfig(c *gin.Context) {
 	var req struct {
 		DefaultBackendID    *string `json:"default_backend_id"`
 		DefaultModel        *string `json:"default_model"`
+		FallbackBackendID   *string `json:"fallback_backend_id"`
+		FallbackModel       *string `json:"fallback_model"`
 		ResponseTraceBanner *bool   `json:"response_trace_banner"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -296,6 +300,12 @@ func (s *Server) handleSaveProxyConfig(c *gin.Context) {
 	if req.DefaultModel != nil {
 		cfg.Proxy.DefaultModel = strings.TrimSpace(*req.DefaultModel)
 	}
+	if req.FallbackBackendID != nil {
+		cfg.Proxy.FallbackBackendID = strings.TrimSpace(*req.FallbackBackendID)
+	}
+	if req.FallbackModel != nil {
+		cfg.Proxy.FallbackModel = strings.TrimSpace(*req.FallbackModel)
+	}
 	if req.ResponseTraceBanner != nil {
 		cfg.Proxy.ResponseTraceBanner = *req.ResponseTraceBanner
 	}
@@ -312,8 +322,8 @@ func (s *Server) handleSaveProxyConfig(c *gin.Context) {
 		return
 	}
 
-	logger.Infof("[ProxyConfig] Updated default_backend_id=%q default_model=%q response_trace_banner=%v",
-		cfg.Proxy.DefaultBackendID, cfg.Proxy.DefaultModel, cfg.Proxy.ResponseTraceBanner)
+	logger.Infof("[ProxyConfig] Updated default_backend_id=%q default_model=%q fallback_backend_id=%q fallback_model=%q response_trace_banner=%v",
+		cfg.Proxy.DefaultBackendID, cfg.Proxy.DefaultModel, cfg.Proxy.FallbackBackendID, cfg.Proxy.FallbackModel, cfg.Proxy.ResponseTraceBanner)
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
@@ -321,6 +331,8 @@ func (s *Server) handleSaveProxyConfig(c *gin.Context) {
 		"data": gin.H{
 			"default_backend_id":    cfg.Proxy.DefaultBackendID,
 			"default_model":         cfg.Proxy.DefaultModel,
+			"fallback_backend_id":   cfg.Proxy.FallbackBackendID,
+			"fallback_model":        cfg.Proxy.FallbackModel,
 			"response_trace_banner": cfg.Proxy.ResponseTraceBanner,
 			"scope":                 "system",
 		},
