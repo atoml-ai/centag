@@ -86,6 +86,20 @@ package_service() {
   local source_bin="${CENTAG_EDITION_LIB}/${CENTAG_SERVER_BIN}"
   local source_static="${CENTAG_STATIC_DIR}"
   local out_dir="${CENTAG_PACKAGES_DIR}"
+  local edition="${CENTAG_PACKAGE_EDITION:-team}"
+  local goos="${GOOS:-$(go env GOOS 2>/dev/null || uname -s | tr '[:upper:]' '[:lower:]')}"
+  local goarch="${GOARCH:-$(go env GOARCH 2>/dev/null || uname -m)}"
+
+  case "$goos" in
+    darwin|linux|windows) ;;
+    Darwin) goos="darwin" ;;
+    Linux) goos="linux" ;;
+    MINGW*|MSYS*|CYGWIN*|Windows_NT) goos="windows" ;;
+  esac
+  case "$goarch" in
+    x86_64|amd64) goarch="amd64" ;;
+    aarch64|arm64) goarch="arm64" ;;
+  esac
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -109,6 +123,18 @@ package_service() {
         out_dir="${2:-}"
         shift 2
         ;;
+      --edition)
+        edition="${2:-}"
+        shift 2
+        ;;
+      --goos)
+        goos="${2:-}"
+        shift 2
+        ;;
+      --goarch)
+        goarch="${2:-}"
+        shift 2
+        ;;
       *)
         fail "unknown service packaging arg: $1"
         ;;
@@ -116,12 +142,16 @@ package_service() {
   done
 
   [[ -n "$version" ]] || fail "service packaging requires --version"
+  version="${version#v}"
+  edition="$(printf '%s' "$edition" | tr '[:upper:]' '[:lower:]')"
+  [[ -n "$edition" ]] || fail "service packaging requires --edition"
   [[ -f "$source_bin" ]] || fail "service binary not found: $source_bin"
 
   local temp_dir
   temp_dir="$(mktemp -d)"
 
-  local package_name="update-package-centag-${version}"
+  # Canonical OTA name: update-package-centag-<edition>-<version>-<goos>-<goarch>
+  local package_name="update-package-centag-${edition}-${version}-${goos}-${goarch}"
   local package_dir="${temp_dir}/${package_name}"
   mkdir -p "$package_dir"
   cp "$source_bin" "${package_dir}/centag"
@@ -138,7 +168,7 @@ package_service() {
 
   {
     echo "version: \"v${version}\""
-    echo "description: \"Centag System Update - v${version}\""
+    echo "description: \"Centag System Update (${edition}) - v${version}\""
     echo ""
     echo "files:"
     echo "  - source: \"centag\""
@@ -177,7 +207,7 @@ package_service() {
     cd "$temp_dir"
     tar -czf "$artifact" "$package_name"
   )
-  write_artifact_metadata "$artifact" "$version" "service" "tar.gz" "$build_time"
+  write_artifact_metadata "$artifact" "$version" "service:${edition}:${goos}-${goarch}" "tar.gz" "$build_time"
   rm -rf "$temp_dir"
   echo "$artifact"
 }

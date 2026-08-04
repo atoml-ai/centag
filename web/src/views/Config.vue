@@ -227,6 +227,48 @@
 
           <el-row :gutter="24">
             <el-col :xs="24">
+              <el-card shadow="never" class="su-card" style="margin-bottom:16px">
+                <template #header>
+                  <div class="su-card-hd">
+                    <span class="su-section-icon upload-color"><el-icon><Download /></el-icon></span>
+                    <div>
+                      <div class="su-section-title">{{ t('config.systemUpdateOnlineTitle') }}</div>
+                      <div class="su-section-sub">{{ t('config.systemUpdateOnlineDesc') }}</div>
+                    </div>
+                    <div style="margin-left:auto">
+                      <el-button :loading="suChecking" @click="suCheckUpdate">
+                        <el-icon><Search /></el-icon>{{ t('config.systemUpdateCheck') }}
+                      </el-button>
+                    </div>
+                  </div>
+                </template>
+                <div v-if="suCheckResult">
+                  <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:12px">
+                    <div>{{ t('config.systemUpdateCurrent') }}: <code class="ver-badge">{{ suCheckResult.current_version || '—' }}</code></div>
+                    <div>{{ t('config.systemUpdateLatest') }}: <code class="ver-badge">{{ suCheckResult.remote_version || '—' }}</code></div>
+                  </div>
+                  <el-alert
+                    :type="suCheckResult.update_available ? 'success' : 'info'"
+                    :closable="false"
+                    show-icon
+                    :title="suCheckResult.update_available ? t('config.systemUpdateAvailable') : (suCheckResult.message || t('config.systemUpdateUpToDate'))"
+                  />
+                  <el-button
+                    type="primary"
+                    size="large"
+                    :loading="suApplyingRemote"
+                    :disabled="!suCheckResult.update_available"
+                    @click="suApplyRemote"
+                    style="width:100%;margin-top:16px"
+                  >
+                    {{ suApplyingRemote ? t('config.systemUpdateApplying') : t('config.systemUpdateApplyRemote') }}
+                  </el-button>
+                </div>
+                <div v-else style="color:var(--el-text-color-secondary);font-size:.875rem">
+                  {{ t('config.systemUpdateCheckHint') }}
+                </div>
+              </el-card>
+
               <el-card shadow="never" class="su-card">
                 <template #header>
                   <div class="su-card-hd">
@@ -341,7 +383,7 @@ import { ref, computed, onMounted, watch, type Component } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Refresh, Check, Monitor, Connection, Switch, ArrowRight, Upload, UploadFilled, Clock, Document, RefreshLeft, Delete, MoreFilled } from '@element-plus/icons-vue'
+import { Refresh, Check, Monitor, Connection, Switch, ArrowRight, Upload, UploadFilled, Clock, Document, RefreshLeft, Delete, MoreFilled, Search, Download } from '@element-plus/icons-vue'
 import { getConfig, saveConfig } from '@/api'
 import { useEdition } from '@/composables/useEdition'
 import { useAuthStore } from '@/stores/auth'
@@ -390,6 +432,8 @@ function selectSection(id: ConfigSection) {
     router.replace({ query: { tab: 'resilience', sub: 'http' } })
   } else if (id === 'system-update') {
     router.replace({ query: { tab: 'resilience', sub: 'system-update' } })
+    void suCheckUpdate()
+    void suLoadHistory()
   } else {
     router.replace({ query: { tab: 'resilience', sub: 'fallback' } })
   }
@@ -404,6 +448,8 @@ function applyRouteQuery() {
   }
   if (sub === 'system-update') {
     activeSection.value = 'system-update'
+    void suCheckUpdate()
+    void suLoadHistory()
     return
   }
   if (sub === 'http' || tab === 'resilience') {
@@ -557,9 +603,62 @@ const suUpdating = ref(false)
 const suUpdateLog = ref('')
 const suHistory = ref<Array<{ version: string; time: string; success: boolean; can_rollback: boolean; history_file?: string }>>([])
 const suLoadingHistory = ref(false)
+const suChecking = ref(false)
+const suApplyingRemote = ref(false)
+const suCheckResult = ref<{
+  current_version?: string
+  remote_version?: string
+  update_available?: boolean
+  message?: string
+  asset_name?: string
+} | null>(null)
 
 function suHandleFileChange(file: UploadFile) { suSelectedFile.value = file.raw ?? null }
 function suHandleExceed() { ElMessage.warning(t('config.systemUpdateOnlyOne')) }
+
+async function suCheckUpdate() {
+  suChecking.value = true
+  try {
+    const data = await api.get('/api/v1/system/update/check')
+    suCheckResult.value = data?.check || data || null
+  } catch (e: any) {
+    suCheckResult.value = null
+    ElMessage.error(e.message || t('config.systemUpdateCheckFailed'))
+  } finally {
+    suChecking.value = false
+  }
+}
+
+async function suApplyRemote() {
+  if (!suCheckResult.value?.update_available) return
+  try {
+    await ElMessageBox.confirm(
+      t('config.systemUpdateApplyConfirm', { version: suCheckResult.value.remote_version || '' }),
+      t('config.systemUpdateApplyTitle'),
+      { confirmButtonText: t('config.systemUpdateApplyRemote'), cancelButtonText: t('config.cancel'), type: 'warning' },
+    )
+  } catch {
+    return
+  }
+  suApplyingRemote.value = true
+  suUpdateLog.value = ''
+  try {
+    const resp = await api.post('/api/v1/system/update/apply-remote')
+    suUpdateLog.value = typeof resp === 'string' ? resp : JSON.stringify(resp, null, 2)
+    if (resp?.success === false) {
+      ElMessage.warning(resp.message || t('config.systemUpdateFailedMsg'))
+    } else {
+      ElMessage.success(t('config.systemUpdateApplySuccess'))
+    }
+    suLoadHistory()
+    suCheckUpdate()
+  } catch (e: any) {
+    ElMessage.error(e.message || t('config.systemUpdateFailedMsg'))
+    suUpdateLog.value = e.message || t('config.systemUpdateFailedMsg')
+  } finally {
+    suApplyingRemote.value = false
+  }
+}
 
 async function suDoUpdate() {
   if (!suSelectedFile.value) return

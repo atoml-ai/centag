@@ -13,6 +13,7 @@ set -euo pipefail
 
 BASE_URL="${CENTAG_BASE_URL:-http://localhost:20060}"
 UPDATE_HISTORY_URL="${BASE_URL}/api/v1/system/update/history"
+UPDATE_CHECK_URL="${BASE_URL}/api/v1/system/update/check"
 VALID_TOKEN="${CENTAG_VALID_TOKEN:-}"
 
 if [[ -z "${VALID_TOKEN}" ]]; then
@@ -97,17 +98,32 @@ main() {
   probe_case "bad-token" "Bearer llmproxy_invalid_token_for_smoke_test" "non2xx"
 
   if [[ -z "${VALID_TOKEN}" ]]; then
-    warn "未提供有效 Token，跳过用例 3（可设置 CENTAG_VALID_TOKEN）"
+    warn "未提供有效 Token，跳过用例 3/4（可设置 CENTAG_VALID_TOKEN）"
     exit 0
   fi
 
+  local auth_header
   if [[ "${VALID_TOKEN}" =~ ^[Bb]earer[[:space:]]+ ]]; then
-    say "用例 3: 正确 Token（预期 2xx）"
-    probe_case "valid-token" "${VALID_TOKEN}" "success2xx"
+    auth_header="${VALID_TOKEN}"
   else
-    say "用例 3: 正确 Token（预期 2xx）"
-    probe_case "valid-token" "Bearer ${VALID_TOKEN}" "success2xx"
+    auth_header="Bearer ${VALID_TOKEN}"
   fi
+
+  say "用例 3: 正确 Token 访问 history（预期 2xx）"
+  probe_case "valid-token-history" "${auth_header}" "success2xx"
+
+  say "用例 4: 正确 Token 访问 check（预期 2xx 或网关错误 JSON，非 401/403）"
+  local body_file code
+  body_file="$(mktemp)"
+  code="$(curl -sS -o "${body_file}" -w "%{http_code}" -H "Authorization: ${auth_header}" "${UPDATE_CHECK_URL}")"
+  if [[ "${code}" == "401" || "${code}" == "403" ]]; then
+    echo "[FAIL] valid-token-check -> HTTP ${code}"
+    cat "${body_file}"
+    rm -f "${body_file}"
+    exit 1
+  fi
+  echo "[PASS] valid-token-check -> HTTP ${code}"
+  rm -f "${body_file}"
 }
 
 main "$@"

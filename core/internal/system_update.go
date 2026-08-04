@@ -3,6 +3,7 @@ package internal
 import (
 	"archive/tar"
 	"compress/gzip"
+	"context"
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
@@ -15,12 +16,15 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"centag/core/internal/ota"
 	"centag/core/pkg/logger"
 )
 
 // SystemUpdateHandler 系统更新处理器
 type SystemUpdateHandler struct {
 	updateConfigPath string
+	edition          string
+	otaClient        *ota.Client
 }
 
 // UpdateConfig 更新配置结构
@@ -95,20 +99,57 @@ type BackupInfo struct {
 
 // NewSystemUpdateHandler 创建系统更新处理器
 func NewSystemUpdateHandler(updateConfigPath string) *SystemUpdateHandler {
+	edition := strings.TrimSpace(os.Getenv("CENTAG_EDITION"))
+	if edition == "" {
+		edition = "team"
+	}
 	return &SystemUpdateHandler{
 		updateConfigPath: updateConfigPath,
+		edition:          edition,
+		otaClient:        ota.NewClientFromEnv(edition),
 	}
 }
 
-// HandleUpdate 处理系统更新请求
+// SetEdition overrides the product edition used for OTA asset matching.
+func (h *SystemUpdateHandler) SetEdition(edition string) {
+	if h == nil {
+		return
+	}
+	edition = strings.TrimSpace(strings.ToLower(edition))
+	if edition == "" {
+		return
+	}
+	h.edition = edition
+	if h.otaClient == nil {
+		h.otaClient = ota.NewClientFromEnv(edition)
+	} else {
+		h.otaClient.Edition = edition
+	}
+}
+
+// SetOTAClient injects an OTA client (tests / custom API base).
+func (h *SystemUpdateHandler) SetOTAClient(c *ota.Client) {
+	if h == nil {
+		return
+	}
+	h.otaClient = c
+}
+
+type applyOutcome struct {
+	history         *UpdateHistory
+	config          *UpdateConfig
+	sha256sum       string
+	historyFileName string
+	execDir         string
+}
+
+// HandleUpdate 处理系统更新请求（手动上传）
 func (h *SystemUpdateHandler) HandleUpdate(w http.ResponseWriter, r *http.Request) {
-	// 验证请求方法
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	// 解析上传的文件
 	file, header, err := r.FormFile("package")
 	if err != nil {
 		http.Error(w, "Missing package file", http.StatusBadRequest)
@@ -116,13 +157,11 @@ func (h *SystemUpdateHandler) HandleUpdate(w http.ResponseWriter, r *http.Reques
 	}
 	defer file.Close()
 
-	// 验证文件格式
-	if !strings.HasSuffix(header.Filename, ".tar.gz") {
+	if !strings.HasSuffix(header.Filename, ".tar.gz") && !strings.HasSuffix(header.Filename, ".tgz") {
 		http.Error(w, "Package must be a .tar.gz file", http.StatusBadRequest)
 		return
 	}
 
-	// 验证文件大小（500MB限制）
 	const maxFileSize = 500 * 1024 * 1024
 	if header.Size > maxFileSize {
 		http.Error(w, "Package size exceeds 500MB limit", http.StatusBadRequest)
@@ -131,7 +170,6 @@ func (h *SystemUpdateHandler) HandleUpdate(w http.ResponseWriter, r *http.Reques
 
 	logger.Infof("[系统更新] 开始处理更新包: %s", header.Filename)
 
-	// 创建临时目录
 	tempDir, err := os.MkdirTemp("", "centag-update-*")
 	if err != nil {
 		logger.Errorf("[系统更新] 创建临时目录失败: %v", err)
@@ -140,58 +178,166 @@ func (h *SystemUpdateHandler) HandleUpdate(w http.ResponseWriter, r *http.Reques
 	}
 	defer os.RemoveAll(tempDir)
 
-	// 保存更新包
-	packagePath := filepath.Join(tempDir, header.Filename)
+	packagePath := filepath.Join(tempDir, filepath.Base(header.Filename))
 	if err := saveFile(file, packagePath); err != nil {
 		logger.Errorf("[系统更新] 保存更新包失败: %v", err)
 		http.Error(w, "Failed to save package", http.StatusInternalServerError)
 		return
 	}
 
-	// 计算 SHA256
-	sha256sum, err := calculateSHA256(packagePath)
+	outcome, err := h.applyPackage(packagePath, header.Filename)
 	if err != nil {
-		logger.Errorf("[系统更新] 计算 SHA256 失败: %v", err)
+		logger.Errorf("[系统更新] 应用更新包失败: %v", err)
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	h.writeApplyResponse(w, outcome)
+}
+
+// HandleCheckUpdate 检查公开 GitHub Release 是否有新版本
+func (h *SystemUpdateHandler) HandleCheckUpdate(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	client := h.ota()
+	result, err := client.CheckLatest(r.Context(), GetVersion())
+	if err != nil {
+		logger.Errorf("[系统更新] 检查更新失败: %v", err)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadGateway)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   err.Error(),
+		})
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"check":   result,
+	})
+}
+
+// HandleApplyRemote 从公开 GitHub Release 下载并应用更新
+func (h *SystemUpdateHandler) HandleApplyRemote(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	client := h.ota()
+	ctx := r.Context()
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	check, err := client.CheckLatest(ctx, GetVersion())
+	if err != nil {
+		logger.Errorf("[系统更新] 远程检查失败: %v", err)
+		http.Error(w, err.Error(), http.StatusBadGateway)
+		return
+	}
+	if !check.UpdateAvailable {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"message": check.Message,
+			"check":   check,
+		})
+		return
+	}
+	if check.DownloadURL == "" {
+		http.Error(w, "no download URL for update asset", http.StatusBadRequest)
+		return
+	}
+
+	tempDir, err := os.MkdirTemp("", "centag-ota-*")
+	if err != nil {
+		http.Error(w, "Failed to create temp directory", http.StatusInternalServerError)
+		return
+	}
+	defer os.RemoveAll(tempDir)
+
+	packageName := check.AssetName
+	if packageName == "" {
+		packageName = "update-package.tar.gz"
+	}
+	packagePath := filepath.Join(tempDir, filepath.Base(packageName))
+	logger.Infof("[系统更新] 下载更新包: %s", packageName)
+	dlCtx, cancel := context.WithTimeout(ctx, 10*time.Minute)
+	defer cancel()
+	if err := client.DownloadToFile(dlCtx, check.DownloadURL, packagePath); err != nil {
+		logger.Errorf("[系统更新] 下载失败: %v", err)
+		http.Error(w, "Failed to download update package: "+err.Error(), http.StatusBadGateway)
+		return
+	}
+
+	sum, err := calculateSHA256(packagePath)
+	if err != nil {
 		http.Error(w, "Failed to calculate SHA256", http.StatusInternalServerError)
 		return
 	}
-
-	logger.Infof("[系统更新] 更新包 SHA256: %s", sha256sum[:8])
-
-	// 解压更新包
-	extractDir := filepath.Join(tempDir, "extracted")
-	if err := extractTarGz(packagePath, extractDir); err != nil {
-		logger.Errorf("[系统更新] 解压更新包失败: %v", err)
-		http.Error(w, "Failed to extract package", http.StatusInternalServerError)
+	if check.SHA256 != "" && !strings.EqualFold(sum, check.SHA256) {
+		logger.Errorf("[系统更新] SHA256 不匹配: got %s want %s", sum, check.SHA256)
+		http.Error(w, "SHA256 checksum mismatch", http.StatusBadRequest)
 		return
 	}
 
-	// 读取更新配置
+	outcome, err := h.applyPackage(packagePath, packageName)
+	if err != nil {
+		logger.Errorf("[系统更新] 应用远程更新失败: %v", err)
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	h.writeApplyResponse(w, outcome)
+}
+
+func (h *SystemUpdateHandler) ota() *ota.Client {
+	if h != nil && h.otaClient != nil {
+		return h.otaClient
+	}
+	edition := "team"
+	if h != nil && h.edition != "" {
+		edition = h.edition
+	}
+	return ota.NewClientFromEnv(edition)
+}
+
+// applyPackage extracts and applies a local .tar.gz update package.
+func (h *SystemUpdateHandler) applyPackage(packagePath, packageName string) (*applyOutcome, error) {
+	sha256sum, err := calculateSHA256(packagePath)
+	if err != nil {
+		return nil, fmt.Errorf("calculate sha256: %w", err)
+	}
+	logger.Infof("[系统更新] 更新包 SHA256: %s", sha256sum[:8])
+
+	tempDir := filepath.Dir(packagePath)
+	extractDir := filepath.Join(tempDir, "extracted")
+	if err := os.RemoveAll(extractDir); err != nil && !os.IsNotExist(err) {
+		return nil, err
+	}
+	if err := extractTarGz(packagePath, extractDir); err != nil {
+		return nil, fmt.Errorf("extract package: %w", err)
+	}
+
 	configPath := filepath.Join(extractDir, "update_config.yml")
 	config, err := readUpdateConfig(configPath)
 	if err != nil {
-		logger.Errorf("[系统更新] 读取更新配置失败: %v", err)
-		http.Error(w, "Failed to read update config", http.StatusBadRequest)
-		return
+		return nil, fmt.Errorf("read update config: %w", err)
 	}
 
-	// 获取可执行文件所在目录
 	execDir, err := getExecDir()
 	if err != nil {
-		logger.Errorf("[系统更新] 获取可执行文件目录失败: %v", err)
-		http.Error(w, "Failed to get executable directory", http.StatusInternalServerError)
-		return
+		return nil, fmt.Errorf("get executable directory: %w", err)
 	}
 
-	// 创建更新历史
 	history := &UpdateHistory{
 		StartTime:   time.Now(),
-		PackageName: header.Filename,
+		PackageName: packageName,
 		Version:     config.Version,
 		Files:       config.Files,
 	}
 
-	// 执行更新
 	var backups []BackupInfo
 	updateSucceeded := true
 	for _, fileSpec := range config.Files {
@@ -215,24 +361,20 @@ func (h *SystemUpdateHandler) HandleUpdate(w http.ResponseWriter, r *http.Reques
 
 		logger.Infof("[系统更新] 处理文件: %s -> %s", sourcePath, targetPath)
 
-		// 备份原文件
 		if fileSpec.Backup {
 			backupPath := filepath.Join(execDir, "storage", "backups", filepath.Base(targetPath)+"."+time.Now().Format("20060102150405"))
-			// 创建备份目录
 			if err := os.MkdirAll(filepath.Dir(backupPath), 0755); err != nil {
 				logger.Errorf("[系统更新] 创建备份目录失败: %v", err)
 			}
 			if _, err := os.Stat(targetPath); err == nil {
-				var err error
+				var copyErr error
 				if fileSpec.Recursive {
-					// 递归备份目录
-					err = copyDir(targetPath, backupPath)
+					copyErr = copyDir(targetPath, backupPath)
 				} else {
-					// 备份文件
-					err = copyFile(targetPath, backupPath)
+					copyErr = copyFile(targetPath, backupPath)
 				}
-				if err != nil {
-					logger.Errorf("[系统更新] 备份失败: %v", err)
+				if copyErr != nil {
+					logger.Errorf("[系统更新] 备份失败: %v", copyErr)
 				} else {
 					backups = append(backups, BackupInfo{
 						OriginalPath: targetPath,
@@ -243,7 +385,6 @@ func (h *SystemUpdateHandler) HandleUpdate(w http.ResponseWriter, r *http.Reques
 			}
 		}
 
-		// 复制文件
 		if fileSpec.Recursive {
 			logger.Infof("[系统更新] 递归复制目录: %s -> %s", sourcePath, targetPath)
 			if err := copyDir(sourcePath, targetPath); err != nil {
@@ -267,14 +408,11 @@ func (h *SystemUpdateHandler) HandleUpdate(w http.ResponseWriter, r *http.Reques
 		}
 	}
 
-	// 仅在全量更新无错误时标记成功
 	history.Success = updateSucceeded
-
 	history.Backups = backups
 	history.FilesCount = len(config.Files)
 	history.EndTime = time.Now()
 
-	// 执行初始化脚本
 	if config.Behavior.AutoRestart && history.Success {
 		for _, script := range config.InitScripts {
 			scriptPath, err := safeJoinUnderBase(extractDir, script.Script)
@@ -284,53 +422,53 @@ func (h *SystemUpdateHandler) HandleUpdate(w http.ResponseWriter, r *http.Reques
 			}
 			if _, err := os.Stat(scriptPath); err == nil {
 				logger.Infof("[系统更新] 执行脚本: %s", script.Script)
-				// TODO: 执行脚本
 			}
 		}
 	}
 
-	// 保存更新历史
 	historyDir := filepath.Join(execDir, "storage", "update-history")
-	os.MkdirAll(historyDir, 0755)
+	_ = os.MkdirAll(historyDir, 0755)
 	historyFileName := fmt.Sprintf("update-%d-%s.json", time.Now().Unix(), sha256sum[:8])
 	historyPath := filepath.Join(historyDir, historyFileName)
-
 	historyData, _ := json.MarshalIndent(history, "", "  ")
-	os.WriteFile(historyPath, historyData, 0644)
+	_ = os.WriteFile(historyPath, historyData, 0644)
 
-	// 返回结果
+	return &applyOutcome{
+		history:         history,
+		config:          config,
+		sha256sum:       sha256sum,
+		historyFileName: historyFileName,
+		execDir:         execDir,
+	}, nil
+}
+
+func (h *SystemUpdateHandler) writeApplyResponse(w http.ResponseWriter, outcome *applyOutcome) {
+	history := outcome.history
+	config := outcome.config
 	response := map[string]interface{}{
 		"success": history.Success,
 		"message": "Update completed",
+		"version": history.Version,
 	}
 
 	if history.Success {
 		logger.Info("[系统更新] 更新文件已就绪，准备重启服务...")
-
-		// 通知守护进程进行热更新（写入标记文件）
 		if config.Behavior.AutoRestart {
-			// 写入热更新标记文件
-			updateMarker := filepath.Join(execDir, "storage", "update_marker")
+			updateMarker := filepath.Join(outcome.execDir, "storage", "update_marker")
 			markerData := map[string]string{
 				"timestamp": time.Now().Format(time.RFC3339),
 				"version":   config.Version,
-				"history":   historyFileName,
+				"history":   outcome.historyFileName,
 			}
 			markerJSON, _ := json.Marshal(markerData)
-			os.WriteFile(updateMarker, markerJSON, 0644)
+			_ = os.WriteFile(updateMarker, markerJSON, 0644)
 			logger.Infof("[系统更新] 已写入更新标记: %s", updateMarker)
 
-			// 优雅停止 HTTP 服务器，等待当前请求处理完毕
 			go func() {
-				// 给 HTTP 服务器一些时间来处理正在进行的请求
 				time.Sleep(2 * time.Second)
-
-				// 写入停止标记，通知守护进程
-				stopMarker := filepath.Join(execDir, "storage", "update_stop")
-				os.WriteFile(stopMarker, []byte(time.Now().Format(time.RFC3339)), 0644)
+				stopMarker := filepath.Join(outcome.execDir, "storage", "update_stop")
+				_ = os.WriteFile(stopMarker, []byte(time.Now().Format(time.RFC3339)), 0644)
 				logger.Info("[系统更新] 已写入停止标记，守护进程将重启服务...")
-
-				// 延迟退出，确保标记文件已写入
 				time.Sleep(1 * time.Second)
 				os.Exit(0)
 			}()
@@ -341,7 +479,7 @@ func (h *SystemUpdateHandler) HandleUpdate(w http.ResponseWriter, r *http.Reques
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+	_ = json.NewEncoder(w).Encode(response)
 }
 
 // HandleUpdateHistory 获取更新历史

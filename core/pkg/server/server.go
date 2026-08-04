@@ -783,6 +783,7 @@ func New(cfg *config.Config) *Server {
 		updateConfigPath = "../update_config.yml"
 	}
 	systemUpdate := internal.NewSystemUpdateHandler(updateConfigPath)
+	systemUpdate.SetEdition(cfg.Server.Edition)
 
 	// 创建代理模式管理器
 	modeMgr := proxymode.NewManager()

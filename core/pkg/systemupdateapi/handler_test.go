@@ -17,4 +17,6 @@ func TestWrap_NilIsNop(t *testing.T) {
 	h.HandleUpdateHistory(rr, req)
 	h.HandleRollback(rr, req)
 	h.HandleDelete(rr, req)
+	h.HandleCheckUpdate(rr, req)
+	h.HandleApplyRemote(rr, req)
 }

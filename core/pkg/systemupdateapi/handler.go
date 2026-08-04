@@ -13,6 +13,8 @@ type Handler interface {
 	HandleUpdateHistory(w http.ResponseWriter, r *http.Request)
 	HandleRollback(w http.ResponseWriter, r *http.Request)
 	HandleDelete(w http.ResponseWriter, r *http.Request)
+	HandleCheckUpdate(w http.ResponseWriter, r *http.Request)
+	HandleApplyRemote(w http.ResponseWriter, r *http.Request)
 }
 
 // Wrap adapts the internal SystemUpdateHandler.
@@ -29,3 +31,5 @@ func (nopHandler) HandleUpdate(http.ResponseWriter, *http.Request)        {}
 func (nopHandler) HandleUpdateHistory(http.ResponseWriter, *http.Request) {}
 func (nopHandler) HandleRollback(http.ResponseWriter, *http.Request)      {}
 func (nopHandler) HandleDelete(http.ResponseWriter, *http.Request)        {}
+func (nopHandler) HandleCheckUpdate(http.ResponseWriter, *http.Request)   {}
+func (nopHandler) HandleApplyRemote(http.ResponseWriter, *http.Request)   {}
