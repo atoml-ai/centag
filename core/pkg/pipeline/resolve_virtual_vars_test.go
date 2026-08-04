@@ -60,6 +60,38 @@ func TestResolveVirtualVars_FallbackPlaceholders(t *testing.T) {
 	}
 }
 
+func TestResolveVirtualVars_EmptyFallbackPicksDistinctFreeTier(t *testing.T) {
+	mgr := backend.NewManager()
+	_ = mgr.Add(&backend.BackendConfig{
+		ID:         "zen",
+		Name:       "Zen",
+		Type:       "openai",
+		Enabled:    true,
+		ProbeModel: "deepseek-v4-flash-free",
+		SupportedModels: []backend.ModelMapping{
+			{RequestedModel: "deepseek-v4-flash-free", ActualModel: "deepseek-v4-flash-free"},
+			{RequestedModel: "mimo-v2.5-free", ActualModel: "mimo-v2.5-free"},
+		},
+	})
+	backend.SetManagerForTest(mgr)
+	defer backend.SetManagerForTest(nil)
+
+	prev := config.Get()
+	config.Set(&config.Config{
+		Proxy: config.ProxyConfig{
+			DefaultBackendID: "zen",
+			DefaultModel:     "deepseek-v4-flash-free",
+			// FallbackModel 故意留空
+		},
+	})
+	defer config.Set(prev)
+
+	_, gotModel := ResolveVirtualVars("{{system.fallback_backend}}", "{{system.fallback_model}}")
+	if gotModel != "mimo-v2.5-free" {
+		t.Fatalf("empty fallback_model should pick distinct free tier, got %q", gotModel)
+	}
+}
+
 func TestApplyResolvedModelToRawBody(t *testing.T) {
 	raw := map[string]interface{}{"model": "{{system.default_model}}", "stream": false}
 	applyResolvedModelToRawBody(raw, "real-model")

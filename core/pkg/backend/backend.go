@@ -359,8 +359,10 @@ func (m *Manager) Update(cfg *BackendConfig) error {
 	}
 	cfg.APIKey = NormalizeOpenAICompatibleAPIKey(cfg.APIKey)
 
-	// 账户池：未传则保留；传入时对空 api_key 的账户从旧池按 id 补全，避免保存策略/权重时把密钥冲掉。
-	if cfg.AccountPool == nil && old.AccountPool != nil {
+	// 账户池：未传则原样保留（不重跑 Validate，避免历史空 key 脏数据阻塞改模型/探测等无关字段）。
+	// 传入时对空 api_key 的账户从旧池按 id 补全，避免保存策略/权重时把密钥冲掉。
+	preservePool := cfg.AccountPool == nil && old.AccountPool != nil
+	if preservePool {
 		cfg.AccountPool = old.AccountPool
 	} else if cfg.AccountPool != nil && old.AccountPool != nil {
 		for i := range cfg.AccountPool.Accounts {
@@ -373,7 +375,7 @@ func (m *Manager) Update(cfg *BackendConfig) error {
 			}
 		}
 	}
-	if cfg.AccountPool != nil {
+	if cfg.AccountPool != nil && !preservePool {
 		NormalizeAccountPool(cfg.AccountPool)
 		if err := ValidateAccountPool(cfg.AccountPool); err != nil {
 			return err

@@ -130,9 +130,9 @@
             </TransitionGroup>
           </div>
 
-          <!-- 多 Key 时自动显示轮转策略 -->
+          <!-- 多 Key 时自动显示轮转策略（只计有效槽：有明文或已配置） -->
           <Transition name="el-fade-in">
-            <div v-if="apiKeys.length > 1" class="strategy-section">
+            <div v-if="usableKeyCount > 1" class="strategy-section">
               <div class="form-group" style="margin-bottom: 0">
                 <label class="form-label">{{ t('backendEditor.rotationPolicy') }}</label>
                 <el-select v-model="accountPool.strategy" style="width: 100%">
@@ -153,7 +153,7 @@
                 </template>
               </div>
               <div class="strategy-hint">
-                {{ t('backendEditor.keysCountHint', { count: apiKeys.length }) }}
+                {{ t('backendEditor.keysCountHint', { count: usableKeyCount }) }}
               </div>
             </div>
           </Transition>
@@ -424,6 +424,15 @@ const selectedTypeMeta = computed(() =>
   backendTypes.value.find((bt) => bt.type === form.type) || null
 )
 
+/** 有效 Key：有明文，或编辑态已在服务端配置过（has_key） */
+function isUsableApiKey(k: { api_key: string; has_key: boolean }): boolean {
+  return !!(k.api_key || '').trim() || !!k.has_key
+}
+
+const usableKeyCount = computed(
+  () => apiKeys.value.filter((k) => isUsableApiKey(k)).length
+)
+
 const canFetchModels = computed(() => {
   if (!(form.base_url || '').trim()) return false
   if (form.type === 'ollama') return true
@@ -511,17 +520,35 @@ function setDefaultModel(name: string) {
 
 // ── API Key 管理 ──────────────────────────────────────────────
 
+function nextApiKeyId(): string {
+  const used = new Set(apiKeys.value.map((k) => k.id))
+  let n = 1
+  while (used.has(`key-${n}`)) n++
+  return `key-${n}`
+}
+
 function addApiKey() {
-  const idx = apiKeys.value.length + 1
-  apiKeys.value.push({ id: `key-${idx}`, api_key: '', has_key: false })
+  apiKeys.value.push({ id: nextApiKeyId(), api_key: '', has_key: false })
 }
 
 function removeApiKey(index: number) {
   apiKeys.value.splice(index, 1)
 }
 
+/** 去掉未填写且未在服务端落库的空槽（加了又删/留空不参与保存） */
+function pruneEmptyDraftKeys(): number {
+  const before = apiKeys.value.length
+  apiKeys.value = apiKeys.value.filter((k) => isUsableApiKey(k))
+  return before - apiKeys.value.length
+}
+
+/** 取第一个明文 Key（勿固定用第 1 槽：用户可能只填了后面几项） */
 function getPrimaryApiKey(): string {
-  return apiKeys.value.length > 0 ? apiKeys.value[0].api_key || '' : form.api_key || ''
+  for (const k of apiKeys.value) {
+    const plain = (k.api_key || '').trim()
+    if (plain) return plain
+  }
+  return (form.api_key || '').trim()
 }
 
 // ── 数据加载 ──────────────────────────────────────────────────
@@ -548,7 +575,8 @@ async function loadAccountDetails(backendId: string) {
     apiKeys.value = accounts.map((acc: any) => ({
       id: acc.id || `key-${Math.random().toString(36).slice(2, 8)}`,
       api_key: '',
-      has_key: !!(acc.has_api_key ?? acc.has_key ?? true),
+      // 缺省勿当 true：空密钥脏账户会被误显示为「已配置」
+      has_key: !!(acc.has_api_key ?? acc.has_key ?? false),
     }))
     if (apiKeys.value.length === 0 && form.has_api_key) {
       apiKeys.value.push({ id: 'key-1', api_key: '', has_key: true })
@@ -562,50 +590,47 @@ async function loadAccountDetails(backendId: string) {
 
 // ── 保存 ──────────────────────────────────────────────────────
 
-async function saveAccountPool(backendId: string) {
-  try {
-    const existing: any = await api.get(`/api/v1/backends/${backendId}/accounts`)
-    const existingAccounts = Array.isArray(existing) ? existing : existing?.accounts || []
-    const existingIds = new Set(existingAccounts.map((a: any) => a.id))
-    const newIds = new Set(apiKeys.value.map((k) => k.id))
+/** 同步账户池；失败抛错，由 save() 统一提示（勿吞错装成功） */
+async function saveAccountPool(backendId: string): Promise<void> {
+  const existing: any = await api.get(`/api/v1/backends/${backendId}/accounts`)
+  const existingAccounts = Array.isArray(existing) ? existing : existing?.accounts || []
+  const existingIds = new Set(existingAccounts.map((a: any) => a.id))
+  // 仅同步有效槽；空草稿槽已在 save 前 prune
+  const keysToSync = apiKeys.value.filter((k) => isUsableApiKey(k))
+  const newIds = new Set(keysToSync.map((k) => k.id))
 
-    for (const key of apiKeys.value) {
-      const payload: any = { id: key.id, enabled: true, weight: 1 }
-      if (key.api_key) payload.api_key = key.api_key
-      // 仅当服务端账户池里确有该 id 时才 PUT；否则一律 POST（创建池/追加）
-      if (existingIds.has(key.id)) {
-        try {
-          await api.put(`/api/v1/backends/${backendId}/accounts/${key.id}`, payload)
-        } catch {
-          await api.post(`/api/v1/backends/${backendId}/accounts`, payload)
-        }
-      } else {
-        await api.post(`/api/v1/backends/${backendId}/accounts`, payload)
+  for (const key of keysToSync) {
+    const plain = (key.api_key || '').trim()
+    const payload: any = { id: key.id, enabled: true, weight: 1 }
+    if (plain) payload.api_key = plain
+    if (existingIds.has(key.id)) {
+      // 无明文时只更新元数据；后端 UpdateAccount 会保留原密钥
+      await api.put(`/api/v1/backends/${backendId}/accounts/${key.id}`, payload)
+    } else {
+      if (!plain) {
+        throw new Error(t('backendEditor.newKeyRequiresValue'))
       }
+      await api.post(`/api/v1/backends/${backendId}/accounts`, { ...payload, api_key: plain })
     }
+  }
 
-    for (const existingAcc of existingAccounts) {
-      if (!newIds.has(existingAcc.id)) {
-        await api.delete(`/api/v1/backends/${backendId}/accounts/${existingAcc.id}`)
-      }
+  for (const existingAcc of existingAccounts) {
+    if (!newIds.has(existingAcc.id)) {
+      await api.delete(`/api/v1/backends/${backendId}/accounts/${existingAcc.id}`)
     }
+  }
 
-    // 策略此前只在 UI 选择、从未写入后端；多 Key 时显式持久化。
-    if (apiKeys.value.length > 1 && accountPool.strategy) {
-      await api.put(`/api/v1/backends/${backendId}/account-pool`, {
-        strategy: accountPool.strategy,
-      })
-    }
-  } catch (err: any) {
-    console.error('Failed to save account pool', err)
-    ElMessage.warning(t('backendEditor.accountPoolSaveFailed') + (err.message || t('backendEditor.unknownError')))
+  if (keysToSync.length > 1 && accountPool.strategy) {
+    await api.put(`/api/v1/backends/${backendId}/account-pool`, {
+      strategy: accountPool.strategy,
+    })
   }
 }
 
 const openCreate = () => {
   isCreate.value = true
   resetForm()
-  apiKeys.value.push({ id: 'key-1', api_key: '', has_key: false })
+  apiKeys.value.push({ id: nextApiKeyId(), api_key: '', has_key: false })
   dialogVisible.value = true
 }
 
@@ -631,7 +656,7 @@ watch(
     if (create) {
       isCreate.value = true
       resetForm()
-      apiKeys.value.push({ id: 'key-1', api_key: '', has_key: false })
+      apiKeys.value.push({ id: nextApiKeyId(), api_key: '', has_key: false })
     } else if (backend) {
       isCreate.value = false
       populateFromApi(backend)
@@ -640,6 +665,12 @@ watch(
 )
 
 const save = async () => {
+  // 加了空槽又删掉/未填：保存前自动剔除，避免空账户写入或冲掉已有密钥
+  const pruned = pruneEmptyDraftKeys()
+  if (pruned > 0) {
+    ElMessage.info(t('backendEditor.emptyKeySlotsIgnored', { count: pruned }))
+  }
+
   form.api_key = getPrimaryApiKey()
   const check = validateProviderForm(formForValidation(), {
     isCreate: isCreate.value,
@@ -647,6 +678,10 @@ const save = async () => {
   })
   if (!check.ok) {
     ElMessage.warning(check.errors[0] || t('backendEditor.formIncomplete'))
+    return
+  }
+  if (usableKeyCount.value < 1 && form.type !== 'ollama') {
+    ElMessage.warning(t('backendEditor.addApiKeyHint'))
     return
   }
 
@@ -665,6 +700,9 @@ const save = async () => {
       delete (payload as { id?: string }).id
       const created: any = await api.post('/api/v1/backends', payload)
       backendId = created.id
+      if (backendId && apiKeys.value.length > 0) {
+        await saveAccountPool(backendId)
+      }
       ElMessage.success(t('backendEditor.providerAdded'))
       try {
         const proxyData: any = await api.get('/api/v1/config/proxy')
@@ -678,20 +716,21 @@ const save = async () => {
         }
       } catch { /* ignore */ }
     } else {
+      // 先同步账户池再写后端元数据：避免空 key 脏池阻塞 PUT，且新增 Key 先落盘
+      if (backendId && apiKeys.value.length > 0) {
+        await saveAccountPool(backendId)
+      }
       await api.put(`/api/v1/backends/${form.id}`, payload)
       ElMessage.success(t('backendEditor.providerUpdated'))
-    }
-
-    // 创建/更新后都要同步账户池：此前仅在「编辑且 keys>1」时写入，
-    // 导致新建时填的第二个 Key 被丢掉，重开只剩 has_api_key 的单 Key。
-    if (backendId && apiKeys.value.length > 0) {
-      await saveAccountPool(backendId)
     }
 
     dialogVisible.value = false
     emit('saved')
   } catch (error: any) {
-    ElMessage.error(t('backendEditor.saveFailed') + (error.message || t('backendEditor.unknownError')))
+    ElMessage.error(
+      t('backendEditor.saveFailed') +
+        (error?.response?.data?.error || error?.message || t('backendEditor.unknownError'))
+    )
   } finally {
     saving.value = false
   }

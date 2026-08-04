@@ -49,6 +49,8 @@
   "save": "保存",
   "cancel": "キャンセル",
   "accountPoolSaveFailed": "アカウントプールの保存に失敗しました：",
+  "emptyKeySlotsIgnored": "未入力の API Key 枠を {count} 件スキップしました",
+  "newKeyRequiresValue": "新しい API Key は空にできません",
   "unknownError": "不明なエラー",
   "formIncomplete": "フォームを完成させてください",
   "saveFailed": "保存失敗：",

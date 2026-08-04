@@ -49,6 +49,8 @@
   "save": "Guardar",
   "cancel": "Cancelar",
   "accountPoolSaveFailed": "Error al guardar el pool de cuentas: ",
+  "emptyKeySlotsIgnored": "Se ignoraron {count} ranura(s) de API key vacía(s)",
+  "newKeyRequiresValue": "La nueva API key no puede estar vacía",
   "unknownError": "Error desconocido",
   "formIncomplete": "Por favor complete el formulario",
   "saveFailed": "Error al guardar: ",

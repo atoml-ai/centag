@@ -225,16 +225,20 @@ func (n *TransparentForwardNode) Execute(ctx context.Context, input *NodeInput) 
 		return nil, fmt.Errorf("transparent_forward node %q: %w", n.id, err)
 	}
 
-	// 账户池：429 / 纯鉴权 401（坏 Key）/ 计费额度超限时在账户间故障转移；
+	// 账户池优先于跨后端降级：限额/鉴权/5xx/Router.Unavailable 等先换同后端其它 Key；
+	// 池内启用 Key 全部失败后，再走同后端换模型 / 备用后端（billingFallback + FallbackGroups）。
 	// 未配置账户池时回退到单 Key（resolveTransparentUpstreamAuth）。
 	pool := resolveTransparentAccountPool(backendID)
 
 	maxAttempts := 1
-	if pool != nil && len(pool.Accounts) > 1 {
-		maxAttempts = len(pool.Accounts)
+	if pool != nil {
+		if n := countEnabledPoolAccounts(pool); n > 1 {
+			maxAttempts = n
+		}
 	}
 	sessionKey := backend.ExtractSessionKey(ctx, body, stringMeta(meta, "session_id"))
 	selector := getAccountSelector(backendID, pool)
+	triedAccounts := map[string]bool{}
 
 	var (
 		statusCode  int
@@ -255,18 +259,25 @@ func (n *TransparentForwardNode) Execute(ctx context.Context, input *NodeInput) 
 		auth := resolveTransparentUpstreamAuth(backendID, meta)
 		accountID := ""
 		if pool != nil && selector != nil {
-			if result, selErr := selector.SelectAccountForRequest(ctx, pool, sessionKey); selErr == nil {
+			result, selErr := selectUnusedPoolAccount(ctx, selector, pool, sessionKey, triedAccounts, maxAttempts)
+			if selErr == nil && result != nil {
 				auth = "Bearer " + backend.NormalizeOpenAICompatibleAPIKey(result.Key)
 				accountID = result.Account.ID
+				triedAccounts[accountID] = true
 			} else {
-				// 池内账户全部处于临时禁用冷却（429/401）时，退化为单 Key 出站，
-				// 避免整条请求因「no healthy accounts」直接失败，也保证计费降级仍可发出。
-				logger.Warn("transparent_forward account pool select failed, degrading to single key",
+				// 池内已无未尝试的健康账户：结束 Key 轮换，用最后一次结果走后续降级。
+				logger.Warn("transparent_forward account pool exhausted, stop key rotate",
 					logger.GetField("node_id", n.id),
 					logger.GetField("backend_id", backendID),
-					logger.GetField("error", selErr.Error()),
+					logger.GetField("tried", len(triedAccounts)),
+					logger.GetField("error", errString(selErr)),
 				)
-				accountID = ""
+				if attempt == 0 {
+					// 首次即无可用账户：退化为单 Key 出站一次，再交给跨模型/跨后端降级。
+					accountID = ""
+				} else {
+					break
+				}
 			}
 		}
 		poolStrategy := ""
@@ -283,6 +294,7 @@ func (n *TransparentForwardNode) Execute(ctx context.Context, input *NodeInput) 
 			logger.GetField("account_id", accountID),
 			logger.GetField("pool_strategy", poolStrategy),
 			logger.GetField("attempt", attempt+1),
+			logger.GetField("max_attempts", maxAttempts),
 		)
 		if auth != "" {
 			attemptReq.Header.Set("Authorization", auth)
@@ -290,6 +302,19 @@ func (n *TransparentForwardNode) Execute(ctx context.Context, input *NodeInput) 
 
 		currentResp, doErr := client.Do(attemptReq)
 		if doErr != nil {
+			// 网络错误也换下一把 Key（同后端优先），勿直接跳跨后端。
+			if pool != nil && selector != nil && accountID != "" && attempt < maxAttempts-1 {
+				logger.Info("transparent_forward rotate account",
+					logger.GetField("node_id", n.id),
+					logger.GetField("backend_id", backendID),
+					logger.GetField("account_id", accountID),
+					logger.GetField("error", doErr.Error()),
+					logger.GetField("attempt", attempt+1),
+					logger.GetField("max_attempts", maxAttempts),
+				)
+				selector.DisableAccountTemporarily(pool, accountID)
+				continue
+			}
 			return nil, fmt.Errorf("transparent_forward node %q: upstream request failed: %w", n.id, doErr)
 		}
 
@@ -315,8 +340,7 @@ func (n *TransparentForwardNode) Execute(ctx context.Context, input *NodeInput) 
 			return nil, fmt.Errorf("transparent_forward node %q: read response: %w", n.id, readErr)
 		}
 
-		// 429 / 纯鉴权 401 / 计费额度超限且账户池存在 → 临时禁用当前账户并换下一个。
-		// accountID 为空（已退化为单 Key）时不进入轮换，直接透传结果走后续计费降级。
+		// 可轮换失败且池内还有未尝试 Key → 临时禁用当前账户并换下一个（先于跨后端降级）。
 		if retryableAccountFailure(currentResp.StatusCode, string(currentBody)) && pool != nil && accountID != "" && attempt < maxAttempts-1 {
 			logger.Info("transparent_forward rotate account",
 				logger.GetField("node_id", n.id),
@@ -326,9 +350,7 @@ func (n *TransparentForwardNode) Execute(ctx context.Context, input *NodeInput) 
 				logger.GetField("attempt", attempt+1),
 				logger.GetField("max_attempts", maxAttempts),
 			)
-			if accountID != "" {
-				selector.DisableAccountTemporarily(pool, accountID)
-			}
+			selector.DisableAccountTemporarily(pool, accountID)
 			continue
 		}
 
@@ -340,9 +362,8 @@ func (n *TransparentForwardNode) Execute(ctx context.Context, input *NodeInput) 
 
 	bodyStr := string(respBody)
 
-	// 余额/额度不足：先尝试账户池内其他账户（上面已轮换），耗尽后再走系统 fallback_model
-	// （同后端免费档或备用后端），最后向上返回 error 供 FallbackGroups。
-	// 纯鉴权 401/403（无计费关键词）仍透传给客户端。
+	// 账户池已耗尽（或未配置）后：同后端换模型 → 备用后端；最后向上返回 error 供 FallbackGroups。
+	// 纯鉴权 401（池已穷尽）仍透传给客户端。
 	if config.IsBillingOrQuotaFailure(statusCode, bodyStr) {
 		if out, ok := n.retryWithSystemBillingFallback(ctx, client, method, meta, body, backendID, resolvedModel, clientModel, requestPath, bridgeToChat, anthropicToChat); ok {
 			return out, nil
@@ -350,29 +371,90 @@ func (n *TransparentForwardNode) Execute(ctx context.Context, input *NodeInput) 
 		return nil, newTransparentUpstreamError(n.id, backendID, resolvedModel, targetURL, statusCode, bodyStr)
 	}
 
-	// 对可重试的 HTTP 错误码返回 error，触发上层重试/降级逻辑。
-	if config.IsRetryableStatusCode(statusCode) {
+	// 模型不存在 / Router.Unavailable：池 Key 已轮换完毕后，再同后端换模型。
+	if statusCode >= 400 && (isUpstreamModelOrPlaceholderError(bodyStr) || isUpstreamRouterUnavailable(bodyStr)) {
+		if out, ok := n.retryWithSystemBillingFallback(ctx, client, method, meta, body, backendID, resolvedModel, clientModel, requestPath, bridgeToChat, anthropicToChat); ok {
+			return out, nil
+		}
 		return nil, newTransparentUpstreamError(n.id, backendID, resolvedModel, targetURL, statusCode, bodyStr)
 	}
 
-	// 模型不存在 / 占位符未解析等：必须返回 error，避免策略降级把错误 JSON 当成成功。
-	if statusCode >= 400 && isUpstreamModelOrPlaceholderError(bodyStr) {
+	// 对可重试的 HTTP 错误码返回 error，触发上层重试/降级逻辑（此时同后端 Key 已尝试过）。
+	if config.IsRetryableStatusCode(statusCode) {
 		return nil, newTransparentUpstreamError(n.id, backendID, resolvedModel, targetURL, statusCode, bodyStr)
 	}
 
 	return n.buildTransparentOutput(targetURL, statusCode, contentType, respBody, backendID, resolvedModel, clientModel, requestPath, bridgeToChat, anthropicToChat, nil), nil
 }
 
-// retryableAccountFailure 判断是否应触发账户池故障转移：
-// - 429 限流
-// - 401 上游鉴权失败（含 plain Invalid API key：多 Key 池内同请求换下一把）
-// - 401/402/403 + 计费/额度关键词（IsBillingOrQuotaFailure）
-// 无账户池或池内仅一把 Key 时，调用方不会进入轮换，纯 401 仍透传给客户端。
+// retryableAccountFailure 同后端账户池内是否应换下一把 Key（优先于跨后端）：
+// 429 限流、401/402/403、5xx、Router.Unavailable、计费/额度类失败。
+// 明确的客户端坏请求（400）不轮换 Key。
 func retryableAccountFailure(statusCode int, body string) bool {
-	if statusCode == http.StatusTooManyRequests || statusCode == http.StatusUnauthorized {
+	if statusCode == http.StatusBadRequest {
+		return config.IsBillingOrQuotaFailure(statusCode, body)
+	}
+	switch statusCode {
+	case http.StatusUnauthorized, http.StatusPaymentRequired, http.StatusForbidden, http.StatusTooManyRequests:
+		return true
+	}
+	if statusCode >= 500 {
+		return true
+	}
+	if isUpstreamRouterUnavailable(body) {
 		return true
 	}
 	return config.IsBillingOrQuotaFailure(statusCode, body)
+}
+
+func countEnabledPoolAccounts(pool *backend.AccountPoolConfig) int {
+	if pool == nil {
+		return 0
+	}
+	n := 0
+	for _, acc := range pool.Accounts {
+		if acc.Enabled {
+			n++
+		}
+	}
+	return n
+}
+
+func errString(err error) string {
+	if err == nil {
+		return ""
+	}
+	return err.Error()
+}
+
+// selectUnusedPoolAccount 选择尚未在本请求尝试过的健康账户；若选到已尝试账户则临时禁用后重选。
+func selectUnusedPoolAccount(
+	ctx context.Context,
+	selector *backend.AccountPoolSelector,
+	pool *backend.AccountPoolConfig,
+	sessionKey string,
+	tried map[string]bool,
+	maxTries int,
+) (*backend.AccountPoolResult, error) {
+	var lastErr error
+	for i := 0; i < maxTries; i++ {
+		result, err := selector.SelectAccountForRequest(ctx, pool, sessionKey)
+		if err != nil {
+			return nil, err
+		}
+		if result == nil || result.Account.ID == "" {
+			return nil, fmt.Errorf("empty account selection")
+		}
+		if !tried[result.Account.ID] {
+			return result, nil
+		}
+		selector.DisableAccountTemporarily(pool, result.Account.ID)
+		lastErr = fmt.Errorf("account %s already tried", result.Account.ID)
+	}
+	if lastErr == nil {
+		lastErr = fmt.Errorf("no unused healthy accounts")
+	}
+	return nil, lastErr
 }
 
 // resolveTransparentAccountPool 解析后端账户池；无托管后端或未配置账户池时返回 nil。
@@ -403,6 +485,12 @@ func isUpstreamModelOrPlaceholderError(body string) bool {
 	return strings.Contains(body, "{{requested_model}}") ||
 		strings.Contains(body, "{{system.fallback_model}}") ||
 		strings.Contains(body, "{{system.default_model}}")
+}
+
+// isUpstreamRouterUnavailable OpenCode Zen 等网关对暂不可达模型返回 Router.Unavailable。
+func isUpstreamRouterUnavailable(body string) bool {
+	return strings.Contains(body, "Router.Unavailable") ||
+		strings.Contains(strings.ToLower(body), "router.unavailable")
 }
 
 // retryWithSystemBillingFallback 在余额/额度失败时按候选链再打：配置的 fallback_* → 同后端免费档模型。
@@ -476,9 +564,15 @@ func billingFallbackCandidatesContext(ctx context.Context, primaryBackend string
 		out = append(out, billingFallbackCandidate{backendID: be, model: model})
 	}
 
-	add(fbBackend, fbModel)
+	// 同后端换模型优先；其它后端最后（账户池 Key 轮换已在外层完成）。
+	sameBackendFallbackModel := fbModel
+	if !strings.EqualFold(fbBackend, primaryBackend) {
+		sameBackendFallbackModel = ""
+	}
+	add(primaryBackend, sameBackendFallbackModel)
 	add(primaryBackend, pickFreeTierModel(primaryBackend))
 	if fbBackend != "" && !strings.EqualFold(fbBackend, primaryBackend) && !strings.Contains(fbBackend, "{{") {
+		add(fbBackend, fbModel)
 		add(fbBackend, pickFreeTierModel(fbBackend))
 	}
 	return out

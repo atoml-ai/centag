@@ -49,6 +49,8 @@
   "save": "保存",
   "cancel": "取消",
   "accountPoolSaveFailed": "账户池保存失败：",
+  "emptyKeySlotsIgnored": "已忽略 {count} 个未填写的 API Key 槽位",
+  "newKeyRequiresValue": "新增的 API Key 不能为空",
   "unknownError": "未知错误",
   "formIncomplete": "请完善表单",
   "saveFailed": "保存失败：",

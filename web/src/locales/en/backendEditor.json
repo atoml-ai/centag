@@ -49,6 +49,8 @@
   "save": "Save",
   "cancel": "Cancel",
   "accountPoolSaveFailed": "Account pool save failed: ",
+  "emptyKeySlotsIgnored": "Ignored {count} empty API key slot(s)",
+  "newKeyRequiresValue": "New API key cannot be empty",
   "unknownError": "Unknown error",
   "formIncomplete": "Please complete the form",
   "saveFailed": "Save failed: ",

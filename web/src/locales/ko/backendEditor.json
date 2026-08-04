@@ -49,6 +49,8 @@
   "save": "저장",
   "cancel": "취소",
   "accountPoolSaveFailed": "계정 풀 저장 실패: ",
+  "emptyKeySlotsIgnored": "비어 있는 API Key 슬롯 {count}개를 무시했습니다",
+  "newKeyRequiresValue": "새 API Key는 비워 둘 수 없습니다",
   "unknownError": "알 수 없는 오류",
   "formIncomplete": "양식을 작성해주세요",
   "saveFailed": "저장 실패: ",

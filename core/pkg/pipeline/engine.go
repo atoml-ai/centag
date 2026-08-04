@@ -2711,19 +2711,49 @@ func ResolveVirtualVarsContext(ctx context.Context, backendID, model string) (st
 	case "{{system.default_model}}", "":
 		resolvedModel = defaultModel
 	case "{{system.fallback_model}}":
-		// 未配置时保持空，由计费/策略降级自行挑选免费档；勿回落 default_model（否则与主路相同、降级被跳过）
+		// 未配置时保持空，由下方挑选「不同于 default_model」的免费档；勿直接回落 PreferredDefaultModel
+		// （probe/default 常相同，会导致 forward_fallback 与主路打同一不可用模型）。
 		resolvedModel = cfg.Proxy.FallbackModel
 	}
 
 	if strings.TrimSpace(resolvedModel) == "" && strings.TrimSpace(resolvedBackend) != "" {
 		if mgr := backend.GetManager(); mgr != nil {
 			if b, err := mgr.Get(resolvedBackend); err == nil {
-				resolvedModel = backend.PreferredDefaultModel(b)
+				if model == "{{system.fallback_model}}" {
+					resolvedModel = pickDistinctFreeTierModel(b, defaultModel)
+				}
+				if strings.TrimSpace(resolvedModel) == "" {
+					resolvedModel = backend.PreferredDefaultModel(b)
+				}
 			}
 		}
 	}
 
 	return resolvedBackend, resolvedModel
+}
+
+// pickDistinctFreeTierModel 在后端模型列表中选一个免费档，且尽量不等于 avoidModel。
+func pickDistinctFreeTierModel(b *backend.BackendConfig, avoidModel string) string {
+	if b == nil {
+		return ""
+	}
+	avoid := strings.ToLower(strings.TrimSpace(avoidModel))
+	var firstFree string
+	for _, m := range b.SupportedModels {
+		for _, name := range []string{m.ActualModel, m.RequestedModel} {
+			name = strings.TrimSpace(name)
+			if name == "" || !backend.ModelHasFreeTier(name) {
+				continue
+			}
+			if firstFree == "" {
+				firstFree = name
+			}
+			if avoid == "" || !strings.EqualFold(name, avoid) {
+				return name
+			}
+		}
+	}
+	return firstFree
 }
 
 // resolveFallback 解析降级配置

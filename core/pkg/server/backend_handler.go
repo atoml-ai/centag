@@ -1113,12 +1113,17 @@ func (h *BackendHandler) ListBackendAccounts(c *gin.Context) {
 		return
 	}
 
-	// 掩码 api_key
-	accounts := make([]backend.BackendAccount, 0, len(cfg.AccountPool.Accounts))
+	// 掩码 api_key，并显式返回 has_api_key（避免前端把空密钥账户当成「已配置」）
+	accounts := make([]gin.H, 0, len(cfg.AccountPool.Accounts))
 	for _, acc := range cfg.AccountPool.Accounts {
-		masked := acc
-		masked.APIKey = ""
-		accounts = append(accounts, masked)
+		accounts = append(accounts, gin.H{
+			"id":          acc.ID,
+			"label":       acc.Label,
+			"enabled":     acc.Enabled,
+			"weight":      acc.Weight,
+			"created_at":  acc.CreatedAt,
+			"has_api_key": strings.TrimSpace(acc.APIKey) != "",
+		})
 	}
 
 	RespondSuccess(c, gin.H{

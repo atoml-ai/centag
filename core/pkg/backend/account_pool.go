@@ -293,6 +293,12 @@ func AddAccount(pool *AccountPoolConfig, account BackendAccount) error {
 	if pool == nil {
 		return fmt.Errorf("account pool is nil")
 	}
+	if strings.TrimSpace(account.ID) == "" {
+		return fmt.Errorf("account id is required")
+	}
+	if strings.TrimSpace(account.APIKey) == "" {
+		return fmt.Errorf("account %s: api_key is required", account.ID)
+	}
 
 	// 检查 ID 唯一性
 	for _, acc := range pool.Accounts {
@@ -300,6 +306,8 @@ func AddAccount(pool *AccountPoolConfig, account BackendAccount) error {
 			return fmt.Errorf("duplicate account id: %s", account.ID)
 		}
 	}
+
+	account.APIKey = NormalizeOpenAICompatibleAPIKey(account.APIKey)
 
 	// 设置默认值
 	if account.Weight <= 0 {
@@ -313,7 +321,8 @@ func AddAccount(pool *AccountPoolConfig, account BackendAccount) error {
 	return nil
 }
 
-// UpdateAccount 更新池中的账户
+// UpdateAccount 更新池中的账户。
+// 空 api_key 表示「不修改」（与 Manager.Update 顶层 api_key 语义一致），避免前端掩码回写冲掉密钥。
 func UpdateAccount(pool *AccountPoolConfig, account BackendAccount) error {
 	if pool == nil {
 		return fmt.Errorf("account pool is nil")
@@ -321,9 +330,19 @@ func UpdateAccount(pool *AccountPoolConfig, account BackendAccount) error {
 
 	for i := range pool.Accounts {
 		if pool.Accounts[i].ID == account.ID {
-			// 保留创建时间
 			if account.CreatedAt == "" {
 				account.CreatedAt = pool.Accounts[i].CreatedAt
+			}
+			if strings.TrimSpace(account.APIKey) == "" {
+				account.APIKey = pool.Accounts[i].APIKey
+			} else {
+				account.APIKey = NormalizeOpenAICompatibleAPIKey(account.APIKey)
+			}
+			if account.Weight <= 0 {
+				account.Weight = pool.Accounts[i].Weight
+				if account.Weight <= 0 {
+					account.Weight = 1
+				}
 			}
 			pool.Accounts[i] = account
 			return nil

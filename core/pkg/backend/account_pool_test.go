@@ -302,6 +302,31 @@ func TestUpdateAccount(t *testing.T) {
 	}
 }
 
+func TestUpdateAccount_PreservesAPIKeyWhenEmpty(t *testing.T) {
+	pool := &AccountPoolConfig{
+		Strategy: "round_robin",
+		Accounts: []BackendAccount{
+			{ID: "key-1", APIKey: "sk-secret", Enabled: true, Weight: 2},
+		},
+	}
+	if err := UpdateAccount(pool, BackendAccount{ID: "key-1", Enabled: true, Weight: 3}); err != nil {
+		t.Fatalf("UpdateAccount: %v", err)
+	}
+	if pool.Accounts[0].APIKey != "sk-secret" {
+		t.Fatalf("api_key wiped: %q", pool.Accounts[0].APIKey)
+	}
+	if pool.Accounts[0].Weight != 3 {
+		t.Fatalf("weight=%d want 3", pool.Accounts[0].Weight)
+	}
+}
+
+func TestAddAccount_RequiresAPIKey(t *testing.T) {
+	pool := &AccountPoolConfig{Strategy: "round_robin"}
+	if err := AddAccount(pool, BackendAccount{ID: "key-1"}); err == nil {
+		t.Fatal("expected error for empty api_key")
+	}
+}
+
 func TestRemoveAccount(t *testing.T) {
 	pool := &AccountPoolConfig{
 		Strategy: "round_robin",

@@ -1348,8 +1348,148 @@ func TestRetryableAccountFailure_Plain401(t *testing.T) {
 	if !retryableAccountFailure(429, `rate limit`) {
 		t.Fatal("429 should be retryable")
 	}
+	if !retryableAccountFailure(402, `payment required`) {
+		t.Fatal("402 should rotate account before other backends")
+	}
+	if !retryableAccountFailure(500, `{"type":"Router.Unavailable","modelID":"x"}`) {
+		t.Fatal("5xx / Router.Unavailable should rotate account before other backends")
+	}
+	if retryableAccountFailure(400, `invalid json`) {
+		t.Fatal("plain 400 should not rotate account keys")
+	}
 	if retryableAccountFailure(404, `not found`) {
 		t.Fatal("404 should not be retryable for account pool")
+	}
+}
+
+func TestBillingFallbackCandidates_SameBackendBeforeOther(t *testing.T) {
+	prevCfg := config.Get()
+	config.Set(&config.Config{
+		Proxy: config.ProxyConfig{
+			FallbackBackendID: "other",
+			FallbackModel:     "other-model",
+		},
+	})
+	t.Cleanup(func() { config.Set(prevCfg) })
+
+	mgr := backend.NewManager()
+	_ = mgr.Add(&backend.BackendConfig{
+		ID:      "primary",
+		Name:    "Primary",
+		Type:    "openai",
+		Enabled: true,
+		SupportedModels: []backend.ModelMapping{
+			{RequestedModel: "primary-free", ActualModel: "primary-free"},
+		},
+	})
+	backend.SetManagerForTest(mgr)
+	t.Cleanup(func() { backend.SetManagerForTest(nil) })
+
+	cands := billingFallbackCandidates("primary", map[string]bool{"paid-model": true})
+	if len(cands) < 2 {
+		t.Fatalf("expected same-backend then other-backend, got %#v", cands)
+	}
+	if cands[0].backendID != "primary" {
+		t.Fatalf("first candidate should be same backend, got %#v", cands[0])
+	}
+	foundOther := false
+	for i, c := range cands {
+		if c.backendID == "other" {
+			foundOther = true
+			if i == 0 {
+				t.Fatalf("other backend must not come before same-backend candidates: %#v", cands)
+			}
+		}
+	}
+	if !foundOther {
+		t.Fatalf("expected other backend candidate, got %#v", cands)
+	}
+}
+
+func TestTransparentForwardNode_AccountPoolExhaustsBeforeOtherBackend(t *testing.T) {
+	prevCfg := config.Get()
+	config.Set(&config.Config{
+		Proxy: config.ProxyConfig{
+			DefaultBackendID:  "primary",
+			DefaultModel:      "m1",
+			FallbackBackendID: "other",
+			FallbackModel:     "m2",
+		},
+	})
+	t.Cleanup(func() { config.Set(prevCfg) })
+
+	pool := &backend.AccountPoolConfig{
+		Strategy: "round_robin",
+		Accounts: []backend.BackendAccount{
+			{ID: "k1", APIKey: "sk-1", Enabled: true, Weight: 1},
+			{ID: "k2", APIKey: "sk-2", Enabled: true, Weight: 1},
+		},
+	}
+	prevEP := ResolveBackendEndpoint
+	t.Cleanup(func() { ResolveBackendEndpoint = prevEP })
+	ResolveBackendEndpoint = func(backendID string) (*BackendEndpoint, error) {
+		if backendID == "other" {
+			return &BackendEndpoint{BaseURL: "https://other.example.com/v1", APIKey: "sk-other"}, nil
+		}
+		return &BackendEndpoint{
+			BaseURL:     "https://primary.example.com/v1",
+			APIKey:      "sk-fallback",
+			AccountPool: pool,
+		}, nil
+	}
+
+	quotaBody := `{"error":{"type":"FreeUsageLimitError","message":"quota exceeded"}}`
+	seq := &sequenceHTTPClient{
+		resps: []struct {
+			status int
+			body   string
+		}{
+			{429, quotaBody},
+			{429, quotaBody},
+			{200, `{"id":"ok","choices":[{"message":{"content":"from-other"}}]}`},
+		},
+	}
+	broker := &mockCapabilityBroker{httpClient: seq}
+
+	node, err := NewTransparentForwardNode(NodeConfig{
+		Backend: "primary",
+		CustomConfig: map[string]interface{}{
+			"route_policy": "fixed",
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	tf := node.(*TransparentForwardNode)
+	tf.BaseNode.id = "forward"
+	tf.SetCapabilityBroker(broker)
+
+	out, err := tf.Execute(context.Background(), &NodeInput{
+		Metadata: map[string]interface{}{
+			"request_path":     "/v1/chat/completions",
+			"raw_request_body": `{"model":"m1","messages":[{"role":"user","content":"hi"}]}`,
+		},
+	})
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if seq.calls != 3 {
+		t.Fatalf("calls=%d want 3 (two pool keys then other backend)", seq.calls)
+	}
+	if len(seq.auths) < 3 {
+		t.Fatalf("auths=%v", seq.auths)
+	}
+	if seq.auths[0] != "Bearer sk-1" || seq.auths[1] != "Bearer sk-2" {
+		t.Fatalf("expected both primary pool keys first, got %v", seq.auths[:2])
+	}
+	if seq.auths[2] != "Bearer sk-other" {
+		t.Fatalf("expected other backend only after pool exhausted, got %v", seq.auths)
+	}
+	if out.Metadata["status_code"] != 200 {
+		t.Fatalf("status_code=%v", out.Metadata["status_code"])
+	}
+	if out.Metadata["billing_fallback_used"] != true {
+		t.Fatalf("expected billing_fallback_used, metadata=%v", out.Metadata)
 	}
 }
 

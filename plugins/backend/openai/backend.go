@@ -14,6 +14,7 @@ import (
 
 	"centag/core/pkg/backend"
 	"centag/core/pkg/circuitbreaker"
+	"centag/core/pkg/config"
 	"centag/core/pkg/plugin"
 )
 
@@ -227,30 +228,54 @@ func (b *Backend) CallModel(ctx context.Context, req *plugin.ProxyRequest) (*plu
 		sessionKey = backend.ExtractSessionKey(ctx, reqBody, "")
 	}
 
-	// 账户池 429 故障转移：最多重试 min(MaxRetries, len(accounts)-1) 次
+	// 账户池优先：限额/鉴权/5xx 等先换同后端其它 Key，再失败才返回给上层跨后端降级。
 	maxAttempts := 1
-	if backend.HasAccountPool(backendCfg) && len(backendCfg.AccountPool.Accounts) > 1 {
-		maxAttempts = backendCfg.MaxRetries
-		if maxAttempts <= 0 {
-			maxAttempts = 3
+	if backend.HasAccountPool(backendCfg) {
+		enabled := 0
+		for _, acc := range backendCfg.AccountPool.Accounts {
+			if acc.Enabled {
+				enabled++
+			}
 		}
-		if maxAttempts > len(backendCfg.AccountPool.Accounts) {
-			maxAttempts = len(backendCfg.AccountPool.Accounts)
+		if enabled > 1 {
+			maxAttempts = enabled
+			if backendCfg.MaxRetries > 0 && backendCfg.MaxRetries < maxAttempts {
+				maxAttempts = backendCfg.MaxRetries
+			}
 		}
 	}
 
 	var lastErr error
+	tried := map[string]bool{}
 	for attempt := 0; attempt < maxAttempts; attempt++ {
 		// 选择 API Key（账户池或单 Key）
 		apiKey := backend.NormalizeOpenAICompatibleAPIKey(backendCfg.APIKey)
 		currentAccountID := ""
 		if backend.HasAccountPool(backendCfg) {
-			result, selErr := b.accountSelector.SelectAccountForRequest(ctx, backendCfg.AccountPool, sessionKey)
-			if selErr != nil {
+			var result *backend.AccountPoolResult
+			var selErr error
+			for skip := 0; skip < maxAttempts; skip++ {
+				result, selErr = b.accountSelector.SelectAccountForRequest(ctx, backendCfg.AccountPool, sessionKey)
+				if selErr != nil {
+					break
+				}
+				if result != nil && !tried[result.Account.ID] {
+					break
+				}
+				if result != nil {
+					b.accountSelector.DisableAccountTemporarily(backendCfg.AccountPool, result.Account.ID)
+				}
+				result = nil
+			}
+			if selErr != nil || result == nil {
+				if lastErr != nil {
+					return nil, fmt.Errorf("account pool exhausted after %d attempts: %w", attempt, lastErr)
+				}
 				return nil, fmt.Errorf("account pool select: %w", selErr)
 			}
 			apiKey = backend.NormalizeOpenAICompatibleAPIKey(result.Key)
 			currentAccountID = result.Account.ID
+			tried[currentAccountID] = true
 		}
 
 		httpReq, reqErr := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(reqBody))
@@ -268,6 +293,10 @@ func (b *Backend) CallModel(ctx context.Context, req *plugin.ProxyRequest) (*plu
 		resp, doErr := b.client.Do(httpReq)
 		if doErr != nil {
 			lastErr = fmt.Errorf("failed to send request: %w", doErr)
+			if currentAccountID != "" && attempt < maxAttempts-1 {
+				b.accountSelector.DisableAccountTemporarily(backendCfg.AccountPool, currentAccountID)
+				continue
+			}
 			continue
 		}
 
@@ -281,11 +310,10 @@ func (b *Backend) CallModel(ctx context.Context, req *plugin.ProxyRequest) (*plu
 
 		// 检查响应状态
 		if resp.StatusCode != http.StatusOK {
-			if resp.StatusCode == http.StatusTooManyRequests && backend.HasAccountPool(backendCfg) && attempt < maxAttempts-1 {
-				// 429 + 账户池：禁用当前账户，重试下一个
-				log.Printf("[OpenAI Backend] 429 rate limit on account %s, rotating to next (attempt %d/%d)", currentAccountID, attempt+1, maxAttempts)
+			if shouldRotateOpenAIAccount(resp.StatusCode, string(respBody)) && backend.HasAccountPool(backendCfg) && currentAccountID != "" && attempt < maxAttempts-1 {
+				log.Printf("[OpenAI Backend] rotate account %s status=%d (attempt %d/%d)", currentAccountID, resp.StatusCode, attempt+1, maxAttempts)
 				b.accountSelector.DisableAccountTemporarily(backendCfg.AccountPool, currentAccountID)
-				lastErr = fmt.Errorf("API 429 on account %s", currentAccountID)
+				lastErr = fmt.Errorf("API error (status %d) on account %s", resp.StatusCode, currentAccountID)
 				continue
 			}
 			return nil, fmt.Errorf("API error (status %d): %s", resp.StatusCode, string(respBody))
@@ -399,57 +427,114 @@ func (b *Backend) CallModelStream(ctx context.Context, req *plugin.ProxyRequest)
 			url = buildOpenAIChatURL(baseURL)
 		}
 
-		// 账户池：准备 session key
+		// 账户池：准备 session key；限额/鉴权/5xx 先换同后端其它 Key，再失败才交给上层跨后端降级。
 		sessionKey := ""
 		if backend.HasAccountPool(backendCfg) {
 			sessionKey = backend.ExtractSessionKey(ctx, reqBody, "")
 		}
 
-		// 选择 API Key（账户池或单 Key）
-		apiKey := backend.NormalizeOpenAICompatibleAPIKey(backendCfg.APIKey)
-		currentAccountID := ""
+		maxAttempts := 1
 		if backend.HasAccountPool(backendCfg) {
-			result, selErr := b.accountSelector.SelectAccountForRequest(ctx, backendCfg.AccountPool, sessionKey)
-			if selErr != nil {
-				ch <- plugin.StreamChunk{Error: fmt.Errorf("account pool select: %w", selErr)}
-				return
+			enabled := 0
+			for _, acc := range backendCfg.AccountPool.Accounts {
+				if acc.Enabled {
+					enabled++
+				}
 			}
-			apiKey = backend.NormalizeOpenAICompatibleAPIKey(result.Key)
-			currentAccountID = result.Account.ID
+			if enabled > 1 {
+				maxAttempts = enabled
+				if backendCfg.MaxRetries > 0 && backendCfg.MaxRetries < maxAttempts {
+					maxAttempts = backendCfg.MaxRetries
+				}
+			}
 		}
 
-		httpReq, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(reqBody))
-		if err != nil {
-			ch <- plugin.StreamChunk{Error: fmt.Errorf("failed to create request: %w", err)}
+		var resp *http.Response
+		tried := map[string]bool{}
+		var lastErr error
+		for attempt := 0; attempt < maxAttempts; attempt++ {
+			apiKey := backend.NormalizeOpenAICompatibleAPIKey(backendCfg.APIKey)
+			currentAccountID := ""
+			if backend.HasAccountPool(backendCfg) {
+				var result *backend.AccountPoolResult
+				var selErr error
+				for skip := 0; skip < maxAttempts; skip++ {
+					result, selErr = b.accountSelector.SelectAccountForRequest(ctx, backendCfg.AccountPool, sessionKey)
+					if selErr != nil {
+						break
+					}
+					if result != nil && !tried[result.Account.ID] {
+						break
+					}
+					if result != nil {
+						b.accountSelector.DisableAccountTemporarily(backendCfg.AccountPool, result.Account.ID)
+					}
+					result = nil
+				}
+				if selErr != nil || result == nil {
+					if lastErr != nil {
+						ch <- plugin.StreamChunk{Error: fmt.Errorf("account pool exhausted after %d attempts: %w", attempt, lastErr)}
+						return
+					}
+					ch <- plugin.StreamChunk{Error: fmt.Errorf("account pool select: %w", selErr)}
+					return
+				}
+				apiKey = backend.NormalizeOpenAICompatibleAPIKey(result.Key)
+				currentAccountID = result.Account.ID
+				tried[currentAccountID] = true
+			}
+
+			httpReq, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(reqBody))
+			if err != nil {
+				ch <- plugin.StreamChunk{Error: fmt.Errorf("failed to create request: %w", err)}
+				return
+			}
+
+			httpReq.Header.Set("Content-Type", "application/json")
+			httpReq.Header.Set("Accept", "text/event-stream")
+			if apiKey != "" {
+				httpReq.Header.Set("Authorization", "Bearer "+apiKey)
+			}
+
+			var doErr error
+			resp, doErr = b.client.Do(httpReq)
+			if doErr != nil {
+				lastErr = fmt.Errorf("failed to send request: %w", doErr)
+				if currentAccountID != "" && attempt < maxAttempts-1 {
+					b.accountSelector.DisableAccountTemporarily(backendCfg.AccountPool, currentAccountID)
+					continue
+				}
+				ch <- plugin.StreamChunk{Error: lastErr}
+				return
+			}
+
+			if resp.StatusCode == http.StatusOK {
+				break
+			}
+
+			statusCode := resp.StatusCode
+			body, _ := io.ReadAll(resp.Body)
+			resp.Body.Close()
+			resp = nil
+			if shouldRotateOpenAIAccount(statusCode, string(body)) && currentAccountID != "" && attempt < maxAttempts-1 {
+				log.Printf("[OpenAI Backend] rotate stream account %s status=%d (attempt %d/%d)", currentAccountID, statusCode, attempt+1, maxAttempts)
+				b.accountSelector.DisableAccountTemporarily(backendCfg.AccountPool, currentAccountID)
+				lastErr = fmt.Errorf("API error (status %d) on account %s", statusCode, currentAccountID)
+				continue
+			}
+			ch <- plugin.StreamChunk{Error: fmt.Errorf("API error (status %d): %s", statusCode, string(body))}
 			return
 		}
 
-		// 设置请求头
-		httpReq.Header.Set("Content-Type", "application/json")
-		httpReq.Header.Set("Accept", "text/event-stream")
-		if apiKey != "" {
-			httpReq.Header.Set("Authorization", "Bearer "+apiKey)
-		}
-
-		// 发送请求
-		resp, err := b.client.Do(httpReq)
-		if err != nil {
-			ch <- plugin.StreamChunk{Error: fmt.Errorf("failed to send request: %w", err)}
+		if resp == nil {
+			if lastErr != nil {
+				ch <- plugin.StreamChunk{Error: lastErr}
+				return
+			}
+			ch <- plugin.StreamChunk{Error: fmt.Errorf("all accounts failed")}
 			return
 		}
 		defer resp.Body.Close()
-
-		// 检查响应状态
-		if resp.StatusCode != http.StatusOK {
-			if resp.StatusCode == http.StatusTooManyRequests && backend.HasAccountPool(backendCfg) {
-				// 429 + 账户池：禁用当前账户，重试一次
-				log.Printf("[OpenAI Backend] 429 rate limit on stream account %s, disabling and failing over", currentAccountID)
-				b.accountSelector.DisableAccountTemporarily(backendCfg.AccountPool, currentAccountID)
-			}
-			body, _ := io.ReadAll(resp.Body)
-			ch <- plugin.StreamChunk{Error: fmt.Errorf("API error (status %d): %s", resp.StatusCode, string(body))}
-			return
-		}
 
 		// 按 SSE 事件边界（\n\n）读取，避免远程 API 返回多行 JSON 时被按单行拆分导致解析失败、输出被截断
 		sseReader := newSSEEventReader(resp.Body)
@@ -1309,6 +1394,21 @@ func convertToolCallsInJSON(rawJSON []byte, toolCalls []plugin.ToolCall, cleaned
 	}
 
 	return modifiedJSON, nil
+}
+
+// shouldRotateOpenAIAccount：同后端多 key 时，限额/鉴权/上游错误优先换本后端其它 key。
+func shouldRotateOpenAIAccount(statusCode int, body string) bool {
+	if statusCode == http.StatusBadRequest {
+		return config.IsBillingOrQuotaFailure(statusCode, body)
+	}
+	if statusCode == http.StatusTooManyRequests ||
+		statusCode == http.StatusUnauthorized ||
+		statusCode == http.StatusPaymentRequired ||
+		statusCode == http.StatusForbidden ||
+		statusCode >= 500 {
+		return true
+	}
+	return config.IsBillingOrQuotaFailure(statusCode, body)
 }
 
 // buildOpenAIChatURL 构建 OpenAI 兼容的聊天 API URL

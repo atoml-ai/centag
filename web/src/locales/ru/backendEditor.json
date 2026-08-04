@@ -49,6 +49,8 @@
   "save": "Сохранить",
   "cancel": "Отмена",
   "accountPoolSaveFailed": "Не удалось сохранить пул учётных записей: ",
+  "emptyKeySlotsIgnored": "Пропущено пустых слотов API key: {count}",
+  "newKeyRequiresValue": "Новый API key не может быть пустым",
   "unknownError": "Неизвестная ошибка",
   "formIncomplete": "Пожалуйста, заполните форму",
   "saveFailed": "Ошибка сохранения: ",
