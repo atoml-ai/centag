@@ -121,10 +121,16 @@
             </div>
           </template>
         </el-table-column>
-        <el-table-column prop="name" :label="t('pipelineModes.table.name')" min-width="160" sortable>
+        <el-table-column prop="name" :label="t('pipelineModes.table.name')" min-width="180" sortable>
           <template #default="{ row }">
-            <div style="display: flex; align-items: center; gap: 6px;">
+            <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
               <span style="font-weight: 500">{{ row.name }}</span>
+              <el-tag v-if="isSystemPipeline(row)" type="info" size="small" effect="plain">
+                {{ t('pipelineModes.table.scopeSystem') }}
+              </el-tag>
+              <el-tag v-else type="warning" size="small" effect="plain">
+                {{ t('pipelineModes.table.scopeMine') }}
+              </el-tag>
               <el-tag v-if="row.id === defaultPipelineId" type="success" size="small" effect="light">
                 <el-icon style="margin-right: 2px; vertical-align: -2px;"><StarFilled /></el-icon>
                 {{ t('pipelineModes.table.defaultPipeline') }}
@@ -139,7 +145,7 @@
           </template>
         </el-table-column>
         <el-table-column prop="version" :label="t('pipelineModes.table.version')" width="80" align="center" sortable />
-        <el-table-column :label="t('pipelineModes.table.actions')" width="480" align="center" fixed="right">
+        <el-table-column :label="t('pipelineModes.table.actions')" width="520" align="center" fixed="right">
           <template #default="{ row }">
             <div class="action-btns">
               <el-tooltip :content="row.id === defaultPipelineId ? t('pipelineModes.table.currentDefault') : t('pipelineModes.table.setDefault')" placement="top">
@@ -223,16 +229,20 @@
                   </el-button>
                 </template>
               </PipelineFeatureGuard>
-              <el-tooltip :content="t('pipelineModes.table.clone')" placement="top">
+              <el-tooltip
+                :content="isSystemPipeline(row) ? t('pipelineModes.table.cloneFromSystem') : t('pipelineModes.table.clone')"
+                placement="top"
+              >
                 <el-button
-                  circle
+                  :circle="!isSystemPipeline(row)"
                   size="small"
-                  type="info"
-                  plain
+                  :type="isSystemPipeline(row) ? 'warning' : 'info'"
+                  :plain="!isSystemPipeline(row)"
                   :loading="cloningId === row.id"
                   @click="handleClone(row)"
                 >
                   <el-icon><CopyDocument /></el-icon>
+                  <span v-if="isSystemPipeline(row)">{{ t('pipelineModes.table.cloneShort') }}</span>
                 </el-button>
               </el-tooltip>
               <PipelineFeatureGuard
@@ -387,7 +397,7 @@ import ExecutionHistory from '@/components/pipeline/ExecutionHistory.vue'
 import PipelineTestDialog from '@/components/pipeline/PipelineTestDialog.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useUserResourceAccess } from '@/composables/useUserResourceAccess'
-import { resolvePipelineFeatureSupport } from '@/utils/pipeline/features'
+import { resolvePipelineFeatureSupport, isSystemPipeline } from '@/utils/pipeline/features'
 import { canConfigureCapabilitySlots } from '@/utils/capabilitySlots'
 import { downloadPipelineYaml, downloadPipelinesAsZip } from '@/utils/pipeline/importExport'
 

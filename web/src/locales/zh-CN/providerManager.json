@@ -18,7 +18,7 @@
   "weight": "权重",
   "modelsCount": "{count} 模型",
   "currentDefault": "当前默认",
-  "setDefault": "设为默认",
+  "setDefault": "设为我的默认",
   "actions": "操作",
   "test": "测试",
   "edit": "编辑",
@@ -68,5 +68,7 @@
   "statusHealthy": "健康",
   "statusUnhealthy": "不健康",
   "statusUnknown": "未检测",
-  "keysCount": "{enabled}/{total} Keys"
+  "keysCount": "{enabled}/{total} Keys",
+  "scopeSystem": "系统",
+  "scopeMine": "我的"
 }

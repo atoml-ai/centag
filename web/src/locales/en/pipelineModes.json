@@ -28,11 +28,15 @@
     "history": "History",
     "export": "Export",
     "clone": "Copy Pipeline",
+    "cloneShort": "Copy",
     "delete": "Delete",
     "defaultPipeline": "Default",
     "currentDefault": "Current default pipeline",
     "setDefault": "Set as default pipeline",
-    "test": "AI Chat Test"
+    "test": "AI Chat Test",
+    "cloneFromSystem": "Clone system pipeline as my editable copy",
+    "scopeSystem": "System",
+    "scopeMine": "Mine"
   },
   "templateDialog": {
     "title": "Create Pipeline from Template",

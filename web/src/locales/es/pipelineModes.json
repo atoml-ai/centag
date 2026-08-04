@@ -27,11 +27,16 @@
     "edit": "Editar",
     "history": "Historial",
     "export": "Exportar",
+    "clone": "Copiar pipeline",
+    "cloneShort": "Copiar",
     "delete": "Eliminar",
     "defaultPipeline": "Por defecto",
     "currentDefault": "Pipeline por defecto actual",
     "setDefault": "Establecer como pipeline por defecto",
-    "test": "Prueba de Chat AI"
+    "test": "Prueba de Chat AI",
+    "cloneFromSystem": "Clonar pipeline del sistema como copia editable",
+    "scopeSystem": "Sistema",
+    "scopeMine": "Mío"
   },
   "templateDialog": {
     "title": "Crear Pipeline desde Plantilla",

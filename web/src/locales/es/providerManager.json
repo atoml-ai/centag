@@ -18,7 +18,7 @@
   "weight": "Peso",
   "modelsCount": "{count} modelos",
   "currentDefault": "Actual predeterminado",
-  "setDefault": "Establecer como predeterminado",
+  "setDefault": "Establecer como mi predeterminado",
   "actions": "Acciones",
   "test": "Probar",
   "edit": "Editar",
@@ -68,5 +68,7 @@
   "statusHealthy": "Saludable",
   "statusUnhealthy": "No saludable",
   "statusUnknown": "No sondado",
-  "keysCount": "{enabled}/{total} Keys"
+  "keysCount": "{enabled}/{total} Keys",
+  "scopeSystem": "Sistema",
+  "scopeMine": "Mío"
 }

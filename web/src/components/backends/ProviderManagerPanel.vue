@@ -73,6 +73,24 @@
               <div class="backend-name">
                 {{ b.name }}
                 <el-tag
+                  v-if="!b.tenant_id"
+                  type="info"
+                  size="small"
+                  effect="plain"
+                  class="default-tag"
+                >
+                  {{ t('providerManager.scopeSystem') }}
+                </el-tag>
+                <el-tag
+                  v-else
+                  type="warning"
+                  size="small"
+                  effect="plain"
+                  class="default-tag"
+                >
+                  {{ t('providerManager.scopeMine') }}
+                </el-tag>
+                <el-tag
                   v-if="defaultBackendId === b.id"
                   type="success"
                   size="small"

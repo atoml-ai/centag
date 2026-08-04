@@ -27,11 +27,16 @@
     "edit": "Редактировать",
     "history": "История",
     "export": "Экспорт",
+    "clone": "Копировать pipeline",
+    "cloneShort": "Копировать",
     "delete": "Удалить",
     "defaultPipeline": "По умолчанию",
     "currentDefault": "Текущий пайплайн по умолчанию",
     "setDefault": "Сделать пайплайном по умолчанию",
-    "test": "AI-чат тест"
+    "test": "AI-чат тест",
+    "cloneFromSystem": "Клонировать системный pipeline как свою копию",
+    "scopeSystem": "Система",
+    "scopeMine": "Моё"
   },
   "templateDialog": {
     "title": "Создать пайплайн из шаблона",

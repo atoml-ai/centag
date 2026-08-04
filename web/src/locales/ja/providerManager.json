@@ -18,7 +18,7 @@
   "weight": "重み",
   "modelsCount": "{count} モデル",
   "currentDefault": "現在のデフォルト",
-  "setDefault": "デフォルトに設定",
+  "setDefault": "自分のデフォルトに設定",
   "actions": "操作",
   "test": "テスト",
   "edit": "編集",
@@ -68,5 +68,7 @@
   "statusHealthy": "正常",
   "statusUnhealthy": "異常",
   "statusUnknown": "未プローブ",
-  "keysCount": "{enabled}/{total} Keys"
+  "keysCount": "{enabled}/{total} Keys",
+  "scopeSystem": "システム",
+  "scopeMine": "自分"
 }

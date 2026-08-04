@@ -27,11 +27,16 @@
     "edit": "편집",
     "history": "기록",
     "export": "내보내기",
+    "clone": "파이프라인 복제",
+    "cloneShort": "복제",
     "delete": "삭제",
     "defaultPipeline": "기본",
     "currentDefault": "현재 기본 파이프라인",
     "setDefault": "기본 파이프라인으로 설정",
-    "test": "AI 채팅 테스트"
+    "test": "AI 채팅 테스트",
+    "cloneFromSystem": "시스템 파이프라인을 내 편집 가능한 복사본으로 복제",
+    "scopeSystem": "시스템",
+    "scopeMine": "내 것"
   },
   "templateDialog": {
     "title": "템플릿에서 파이프라인 만들기",

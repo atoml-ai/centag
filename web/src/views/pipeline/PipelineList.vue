@@ -53,9 +53,19 @@
             {{ row.nodes?.length || 0 }}
           </template>
         </el-table-column>
-        <el-table-column :label="t('pipelineList.actions')" width="250" fixed="right">
+        <el-table-column :label="t('pipelineList.actions')" width="360" fixed="right">
           <template #default="{ row }">
             <div class="action-btns">
+              <el-button
+                v-if="canAddOwnPipelines"
+                size="default"
+                :type="isSystemPipeline(row) ? 'warning' : 'default'"
+                :loading="cloningId === row.id"
+                @click="handleClone(row)"
+              >
+                <el-icon><CopyDocument /></el-icon>
+                {{ isSystemPipeline(row) ? t('pipelineList.cloneFromSystemShort') : t('pipelineList.clone') }}
+              </el-button>
               <PipelineFeatureGuard
                 feature="pipelineEdit"
                 :pipeline="row"
@@ -112,9 +122,9 @@ import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Search, Plus, Edit, Delete, Download } from '@element-plus/icons-vue'
-import { getPipelines, deletePipeline, exportPipeline, parsePipelinesResponse, type Pipeline } from '@/api/pipeline'
-import { resolvePipelineFeatureSupport, type PipelineFeatureKey } from '@/utils/pipeline/features'
+import { Search, Plus, Edit, Delete, Download, CopyDocument } from '@element-plus/icons-vue'
+import { getPipelines, deletePipeline, exportPipeline, clonePipeline, parsePipelinesResponse, type Pipeline } from '@/api/pipeline'
+import { resolvePipelineFeatureSupport, isSystemPipeline, type PipelineFeatureKey } from '@/utils/pipeline/features'
 import { useAuthStore } from '@/stores/auth'
 import { useUserResourceAccess } from '@/composables/useUserResourceAccess'
 import PipelineFeatureGuard from '@/components/pipeline/PipelineFeatureGuard.vue'
@@ -127,6 +137,7 @@ const loading = ref(false)
 const pipelines = ref<Pipeline[]>([])
 const searchText = ref('')
 const selectedPipelines = ref<Pipeline[]>([])
+const cloningId = ref('')
 
 const filteredPipelines = computed(() => {
   if (!searchText.value.trim()) return pipelines.value
@@ -203,6 +214,20 @@ const handleCreate = () => {
 const handleEdit = (row: Pipeline) => {
   // 跳转到 PipelineModes 页面，通过路由参数打开编辑对话框
   router.push(`/pipelines/${row.id}`)
+}
+
+const handleClone = async (row: Pipeline) => {
+  cloningId.value = row.id
+  try {
+    const res: any = await clonePipeline(row.id)
+    const data = res?.data?.data || res?.data || res
+    ElMessage.success(t('pipelineList.cloneSuccess', { name: data?.name || data?.id || row.name }))
+    await loadPipelines()
+  } catch (error: any) {
+    ElMessage.error(t('pipelineList.cloneFailed') + '：' + (error?.response?.data?.error || error?.message || error))
+  } finally {
+    cloningId.value = ''
+  }
 }
 
 // 删除流水线

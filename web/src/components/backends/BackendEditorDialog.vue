@@ -531,26 +531,28 @@ function populateFromApi(row: any) {
   captureConnectivitySnapshot()
 
   apiKeys.value = []
-  if (row.account_pool_summary && row.account_pool_summary.total_accounts > 0) {
-    accountPool.strategy = row.account_pool_summary.strategy || 'round_robin'
+  accountPool.strategy = row.account_pool_summary?.strategy || 'round_robin'
+  // 始终拉账户池详情：summary 可能滞后/缺失，但 /accounts 会合成单 Key 或返回完整列表
+  if (row.id && (row.account_pool_summary?.total_accounts > 0 || form.has_api_key)) {
     loadAccountDetails(row.id)
-  } else {
-    accountPool.strategy = 'round_robin'
-    if (form.has_api_key) {
-      apiKeys.value.push({ id: 'key-1', api_key: '', has_key: true })
-    }
+  } else if (form.has_api_key) {
+    apiKeys.value.push({ id: 'key-1', api_key: '', has_key: true })
   }
 }
 
 async function loadAccountDetails(backendId: string) {
   try {
     const res: any = await api.get(`/api/v1/backends/${backendId}/accounts`)
-    const accounts = res?.accounts || []
+    // 拦截器已解包 data；兼容 {accounts:[]} 与历史空数组响应
+    const accounts = Array.isArray(res) ? res : res?.accounts || []
     apiKeys.value = accounts.map((acc: any) => ({
-      id: acc.id,
+      id: acc.id || `key-${Math.random().toString(36).slice(2, 8)}`,
       api_key: '',
-      has_key: true,
+      has_key: !!(acc.has_api_key ?? acc.has_key ?? true),
     }))
+    if (apiKeys.value.length === 0 && form.has_api_key) {
+      apiKeys.value.push({ id: 'key-1', api_key: '', has_key: true })
+    }
   } catch {
     if (apiKeys.value.length === 0) {
       apiKeys.value.push({ id: 'key-1', api_key: '', has_key: form.has_api_key })
@@ -563,15 +565,20 @@ async function loadAccountDetails(backendId: string) {
 async function saveAccountPool(backendId: string) {
   try {
     const existing: any = await api.get(`/api/v1/backends/${backendId}/accounts`)
-    const existingAccounts = existing?.accounts || []
+    const existingAccounts = Array.isArray(existing) ? existing : existing?.accounts || []
     const existingIds = new Set(existingAccounts.map((a: any) => a.id))
     const newIds = new Set(apiKeys.value.map((k) => k.id))
 
     for (const key of apiKeys.value) {
       const payload: any = { id: key.id, enabled: true, weight: 1 }
       if (key.api_key) payload.api_key = key.api_key
+      // 仅当服务端账户池里确有该 id 时才 PUT；否则一律 POST（创建池/追加）
       if (existingIds.has(key.id)) {
-        await api.put(`/api/v1/backends/${backendId}/accounts/${key.id}`, payload)
+        try {
+          await api.put(`/api/v1/backends/${backendId}/accounts/${key.id}`, payload)
+        } catch {
+          await api.post(`/api/v1/backends/${backendId}/accounts`, payload)
+        }
       } else {
         await api.post(`/api/v1/backends/${backendId}/accounts`, payload)
       }
@@ -581,6 +588,13 @@ async function saveAccountPool(backendId: string) {
       if (!newIds.has(existingAcc.id)) {
         await api.delete(`/api/v1/backends/${backendId}/accounts/${existingAcc.id}`)
       }
+    }
+
+    // 策略此前只在 UI 选择、从未写入后端；多 Key 时显式持久化。
+    if (apiKeys.value.length > 1 && accountPool.strategy) {
+      await api.put(`/api/v1/backends/${backendId}/account-pool`, {
+        strategy: accountPool.strategy,
+      })
     }
   } catch (err: any) {
     console.error('Failed to save account pool', err)
@@ -668,7 +682,9 @@ const save = async () => {
       ElMessage.success(t('backendEditor.providerUpdated'))
     }
 
-    if (!isCreate.value && backendId && apiKeys.value.length > 1) {
+    // 创建/更新后都要同步账户池：此前仅在「编辑且 keys>1」时写入，
+    // 导致新建时填的第二个 Key 被丢掉，重开只剩 has_api_key 的单 Key。
+    if (backendId && apiKeys.value.length > 0) {
       await saveAccountPool(backendId)
     }
 

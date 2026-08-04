@@ -86,6 +86,8 @@ export interface AgentPatternPipeline {
   description: string
   version: string
   shortcut_code?: string
+  /** 空 = 系统流水线；非空 = 用户私有副本 */
+  tenant_id?: string
   nodes: PipelineNodeConfig[]
   global_config: {
     timeout: number

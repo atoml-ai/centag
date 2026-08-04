@@ -18,7 +18,7 @@
   "weight": "Weight",
   "modelsCount": "{count} Models",
   "currentDefault": "Current Default",
-  "setDefault": "Set as Default",
+  "setDefault": "Set as my default",
   "actions": "Actions",
   "test": "Test",
   "edit": "Edit",
@@ -68,5 +68,7 @@
   "statusHealthy": "Healthy",
   "statusUnhealthy": "Unhealthy",
   "statusUnknown": "Not probed",
-  "keysCount": "{enabled}/{total} Keys"
+  "keysCount": "{enabled}/{total} Keys",
+  "scopeSystem": "System",
+  "scopeMine": "Mine"
 }

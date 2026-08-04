@@ -18,7 +18,7 @@
   "weight": "가중치",
   "modelsCount": "{count} 모델",
   "currentDefault": "현재 기본값",
-  "setDefault": "기본값으로 설정",
+  "setDefault": "내 기본값으로 설정",
   "actions": "작업",
   "test": "테스트",
   "edit": "편집",
@@ -68,5 +68,7 @@
   "statusHealthy": "정상",
   "statusUnhealthy": "비정상",
   "statusUnknown": "프로브되지 않음",
-  "keysCount": "{enabled}/{total} Keys"
+  "keysCount": "{enabled}/{total} Keys",
+  "scopeSystem": "시스템",
+  "scopeMine": "내 것"
 }

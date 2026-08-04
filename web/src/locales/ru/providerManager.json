@@ -18,7 +18,7 @@
   "weight": "Вес",
   "modelsCount": "{count} моделей",
   "currentDefault": "Текущий по умолчанию",
-  "setDefault": "Установить по умолчанию",
+  "setDefault": "Сделать моим по умолчанию",
   "actions": "Действия",
   "test": "Тест",
   "edit": "Редактировать",
@@ -68,5 +68,7 @@
   "statusHealthy": "Здоров",
   "statusUnhealthy": "Нездоров",
   "statusUnknown": "Не проверен",
-  "keysCount": "{enabled}/{total} Keys"
+  "keysCount": "{enabled}/{total} Keys",
+  "scopeSystem": "Система",
+  "scopeMine": "Моё"
 }

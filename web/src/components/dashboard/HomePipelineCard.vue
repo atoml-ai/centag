@@ -54,6 +54,9 @@
           <div class="pipeline-main">
             <div class="pipeline-title-row">
               <span class="pipeline-name">{{ pipeline.name }}</span>
+              <el-tag size="small" :type="pipeline.tenant_id ? 'warning' : 'info'" effect="plain">
+                {{ pipeline.tenant_id ? t('pipelineModes.table.scopeMine') : t('pipelineModes.table.scopeSystem') }}
+              </el-tag>
               <el-tag
                 v-if="pipeline.id === selectedDefaultId"
                 size="small"
@@ -115,6 +118,22 @@
                 </el-button>
               </template>
             </PipelineFeatureGuard>
+            <el-tooltip
+              v-if="canCreatePipeline"
+              :content="isSystemPipeline(pipeline) ? t('homePipelineCard.cloneFromSystem') : t('homePipelineCard.cloneAction')"
+              placement="top"
+            >
+              <el-button
+                size="small"
+                :type="isSystemPipeline(pipeline) ? 'warning' : 'default'"
+                :plain="!isSystemPipeline(pipeline)"
+                :loading="cloningId === pipeline.id"
+                @click="handleClone(pipeline)"
+              >
+                <el-icon><CopyDocument /></el-icon>
+                {{ isSystemPipeline(pipeline) ? t('homePipelineCard.cloneFromSystemShort') : t('homePipelineCard.cloneAction') }}
+              </el-button>
+            </el-tooltip>
             <PipelineFeatureGuard
               feature="pipelineEdit"
               :pipeline="pipeline"
@@ -215,7 +234,7 @@
 import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Edit } from '@element-plus/icons-vue'
+import { CopyDocument, Edit } from '@element-plus/icons-vue'
 import PipelineCreateDialog from '@/components/pipeline/PipelineCreateDialog.vue'
 import type { PipelineCreateInfo } from '@/components/pipeline/PipelineCreateDialog.vue'
 import PipelineEditorDialog from '@/components/pipeline/PipelineEditorDialog.vue'
@@ -225,12 +244,14 @@ import { useEdition } from '@/composables/useEdition'
 import { useAuthStore } from '@/stores/auth'
 import { useUserResourceAccess } from '@/composables/useUserResourceAccess'
 import { canConfigureCapabilitySlots } from '@/utils/capabilitySlots'
+import { isSystemPipeline } from '@/utils/pipeline/features'
 import {
   getPipelines,
   getPipeline,
   getPipelineDefaults,
   updatePipelineDefaults,
   deletePipeline,
+  clonePipeline,
   parsePipelinesResponse,
   type AgentPatternPipeline
 } from '@/api/pipeline'
@@ -264,6 +285,7 @@ const selectedIds = ref<string[]>([])
 const batchDeleting = ref(false)
 const batchExporting = ref(false)
 const exportingId = ref('')
+const cloningId = ref('')
 const importing = ref(false)
 const importInputRef = ref<HTMLInputElement | null>(null)
 const importConflictVisible = ref(false)
@@ -458,6 +480,25 @@ async function handleExportOne(pipeline: AgentPatternPipeline) {
     ElMessage.error(t('homePipelineCard.exportFailed', { msg: error?.message || error }))
   } finally {
     exportingId.value = ''
+  }
+}
+
+async function handleClone(pipeline: AgentPatternPipeline) {
+  if (!pipeline?.id) return
+  cloningId.value = pipeline.id
+  try {
+    const res: any = await clonePipeline(pipeline.id)
+    const data = res?.data?.data || res?.data || res
+    ElMessage.success(t('homePipelineCard.cloneSuccess', { name: data?.name || data?.id || pipeline.name }))
+    await loadPipelines()
+  } catch (error: any) {
+    ElMessage.error(
+      t('homePipelineCard.cloneFailed', {
+        msg: error?.response?.data?.error || error?.message || error
+      })
+    )
+  } finally {
+    cloningId.value = ''
   }
 }
 

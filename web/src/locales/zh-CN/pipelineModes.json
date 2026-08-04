@@ -28,15 +28,19 @@
     "history": "历史",
     "export": "导出",
     "clone": "复制流水线",
+    "cloneShort": "复制",
     "delete": "删除",
     "defaultPipeline": "默认",
     "currentDefault": "当前默认流水线",
     "setDefault": "设为默认流水线",
-    "test": "AI 对话测试"
+    "test": "AI 对话测试",
+    "cloneFromSystem": "从系统流水线复制为我的副本（可编辑/设为默认）",
+    "scopeSystem": "系统",
+    "scopeMine": "我的"
   },
   "templateDialog": {
     "title": "从模板创建流水线",
-    "hint": "选择以下预设模板快速创建流水线。带多分类的模板可用「配置模型」绑定各分支后端/模型；也可在画布「新增分类」后配置。",
+    "hint": "选择以下预设模板快速创建流水线。系统流水线请用列表中的「复制」生成自己的可编辑副本。带多分类的模板可用「配置模型」绑定各分支后端/模型。",
     "nodes": "{count} 个节点"
   },
   "importConflict": {

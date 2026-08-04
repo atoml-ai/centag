@@ -27,11 +27,16 @@
     "edit": "編集",
     "history": "履歴",
     "export": "エクスポート",
+    "clone": "流水線を複製",
+    "cloneShort": "複製",
     "delete": "削除",
     "defaultPipeline": "デフォルト",
     "currentDefault": "現在のデフォルトパイプライン",
     "setDefault": "デフォルトに設定",
-    "test": "AIチャットテスト"
+    "test": "AIチャットテスト",
+    "cloneFromSystem": "システム流水線を自分の編集可能なコピーとして複製",
+    "scopeSystem": "システム",
+    "scopeMine": "自分"
   },
   "templateDialog": {
     "title": "テンプレートからパイプラインを作成",
