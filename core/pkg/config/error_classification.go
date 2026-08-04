@@ -39,6 +39,7 @@ func looksLikeBillingOrQuotaMessage(msg string) bool {
 		"quota_exceeded",
 		"payment_required",
 		"payment required",
+		"freeusagelimiterror", // OpenCode Zen 等免费档额度/限流
 		"余额不足",
 		"额度不足",
 		"积分不足",

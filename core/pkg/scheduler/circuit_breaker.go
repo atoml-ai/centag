@@ -83,7 +83,11 @@ func (cb *CircuitBreaker) Allow() bool {
 		}
 		return false
 	case StateHalfOpen:
-		// 半开状态允许有限请求
+		// 半开状态：只放行有限数量的探测请求（SuccessThreshold 个），
+		// 避免半开后端被全量流量冲击，形成"全量失败→重开→再全量"的惊群。
+		if cb.config.SuccessThreshold > 0 && len(cb.successes)+len(cb.failures) >= cb.config.SuccessThreshold {
+			return false
+		}
 		return true
 	}
 

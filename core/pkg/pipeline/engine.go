@@ -571,11 +571,23 @@ func NewPipelineEngine(
 
 // Execute 执行流水线（按 ID 从注册表获取定义）
 func (e *PipelineEngine) Execute(ctx context.Context, pipelineID string, input *PipelineInput) (*PipelineOutput, error) {
-	pipeline := e.pipelineRegistry.Get(pipelineID)
+	pipeline := e.LookupPipeline(ctx, pipelineID)
 	if pipeline == nil {
 		return nil, fmt.Errorf("pipeline not found: %s", pipelineID)
 	}
 	return e.executePipeline(ctx, pipeline, input)
+}
+
+// LookupPipeline resolves a pipeline for execution: owner-scoped private copy
+// first (when ctx carries OwnerScope), otherwise system registry.
+func (e *PipelineEngine) LookupPipeline(ctx context.Context, pipelineID string) *AgentPatternPipeline {
+	if e == nil || e.pipelineRegistry == nil {
+		return nil
+	}
+	if scope := OwnerScopeFromContext(ctx); scope != "" {
+		return e.pipelineRegistry.GetByTenant(scope, pipelineID)
+	}
+	return e.pipelineRegistry.Get(pipelineID)
 }
 
 // ExecutePipelineDefinition 直接执行流水线定义（无需预先注册到注册表）。
@@ -592,9 +604,19 @@ func (e *PipelineEngine) ExecutePipelineDefinition(ctx context.Context, pipeline
 	return e.executePipeline(ctx, pipeline, input)
 }
 
-// HasPipeline 检查流水线是否存在
+// HasPipeline 检查流水线是否存在于系统或任意租户空间。
+// ModeDispatcher 用它把 mode/默认流水线 ID 解析为可执行 ID；必须能看到用户私有副本。
+// 实际执行仍走 LookupPipeline / HasPipelineContext（带 OwnerScope）。
 func (e *PipelineEngine) HasPipeline(pipelineID string) bool {
-	return e.pipelineRegistry.Exists(pipelineID)
+	if e == nil || e.pipelineRegistry == nil {
+		return false
+	}
+	return e.pipelineRegistry.ExistsAnywhere(pipelineID)
+}
+
+// HasPipelineContext 检查流水线是否对当前 OwnerScope 可见（自有或系统预设）。
+func (e *PipelineEngine) HasPipelineContext(ctx context.Context, pipelineID string) bool {
+	return e.LookupPipeline(ctx, pipelineID) != nil
 }
 
 // RegisterPipeline 注册流水线到引擎
@@ -623,7 +645,7 @@ type PipelineStreamResult struct {
 // 所有节点统一以阻塞方式执行（Execute()），节点间传递完整 NodeOutput；
 // 流式分块由顶层 streamEmitter 根据 input.Stream 统一适配。
 func (e *PipelineEngine) ExecuteStream(ctx context.Context, pipelineID string, input *PipelineInput) (<-chan PipelineStreamResult, error) {
-	pipeline := e.pipelineRegistry.Get(pipelineID)
+	pipeline := e.LookupPipeline(ctx, pipelineID)
 	if pipeline == nil {
 		return nil, fmt.Errorf("pipeline not found: %s", pipelineID)
 	}
@@ -726,51 +748,17 @@ func (e *PipelineEngine) executePipelineStream(ctx context.Context, pipeline *Ag
 			}
 		}
 
-		// ---------- 3. 降级组处理（与非流式路径一致）----------
+		// ---------- 3. 降级组处理（与非流式共用 executeFallbackGroup）----------
 		for _, fg := range pipeline.GlobalConfig.FallbackGroups {
 			primaryNode := graph.GetNode(fg.PrimaryNodeID)
 			if primaryNode == nil {
 				continue
 			}
-			primaryFailed := primaryNode.Status == StatusFailed || primaryNode.Error != nil
-			if !primaryFailed {
-				for _, fbID := range fg.FallbackNodes {
-					if fbNode := graph.GetNode(fbID); fbNode != nil {
-						fbNode.Status = StatusSkipped
-					}
-				}
-				continue
-			}
-			maxAttempts := fg.MaxAttempts
-			if maxAttempts < 1 {
-				maxAttempts = len(fg.FallbackNodes) + 1
-			}
-			fallbackSuccess := false
-			for attemptIdx, fbID := range e.filterFallbackNodesByCircuit(graph, fg.FallbackNodes) {
-				if attemptIdx >= maxAttempts-1 {
-					break
-				}
-				e.logger.Warn("executing fallback node (stream, primary failed)",
-					"primary_node_id", fg.PrimaryNodeID,
-					"fallback_node_id", fbID,
-					"attempt", attemptIdx+1,
-				)
-				if execErr := e.executeLayerNode(ctx, graph, execCtx, fbID, pipeline); execErr != nil {
-					e.logger.Warn("fallback node also failed (stream)",
-						"fallback_node_id", fbID,
-						"error", execErr,
-					)
-					continue
-				}
-				if fbNode := graph.GetNode(fbID); fbNode != nil && fbNode.Status == StatusSuccess {
-					markFallbackGroupOutput(fbNode, fg.PrimaryNodeID)
-					fallbackSuccess = true
-					break
-				}
-			}
+
+			fallbackSuccess, lastFallbackErr := e.executeFallbackGroup(ctx, graph, execCtx, pipeline, fg, primaryNode)
 			if !fallbackSuccess {
 				resultCh <- PipelineStreamResult{Chunk: &plugin.StreamChunk{
-					Error: fmt.Errorf("all fallback attempts failed for primary node %s", fg.PrimaryNodeID),
+					Error: buildFallbackGroupError(fg.PrimaryNodeID, primaryNode.Error, lastFallbackErr),
 				}}
 				return
 			}
@@ -1158,56 +1146,9 @@ func (e *PipelineEngine) executePipeline(ctx context.Context, pipeline *AgentPat
 			continue
 		}
 
-		primaryFailed := primaryNode.Status == StatusFailed || primaryNode.Error != nil
-		if !primaryFailed {
-			// 主节点成功，跳过降级
-			for _, fbID := range fg.FallbackNodes {
-				if fbNode := graph.GetNode(fbID); fbNode != nil {
-					fbNode.Status = StatusSkipped
-					e.logger.Info("fallback node skipped (primary succeeded)",
-						"primary_node_id", fg.PrimaryNodeID,
-						"fallback_node_id", fbID,
-					)
-				}
-			}
-			continue
-		}
-
-		// 主节点失败，依次尝试备用节点（跳过熔断打开的后端）
-		maxAttempts := fg.MaxAttempts
-		if maxAttempts < 1 {
-			maxAttempts = len(fg.FallbackNodes) + 1
-		}
-		fallbackSuccess := false
-		for attemptIdx, fbID := range e.filterFallbackNodesByCircuit(graph, fg.FallbackNodes) {
-			if attemptIdx >= maxAttempts-1 {
-				break
-			}
-			e.logger.Warn("executing fallback node (primary failed)",
-				"primary_node_id", fg.PrimaryNodeID,
-				"fallback_node_id", fbID,
-				"attempt", attemptIdx+1,
-			)
-			execErr := e.executeLayerNode(ctx, graph, execCtx, fbID, pipeline)
-			if execErr != nil {
-				e.logger.Warn("fallback node also failed",
-					"fallback_node_id", fbID,
-					"error", execErr,
-				)
-				continue
-			}
-			if fbNode := graph.GetNode(fbID); fbNode != nil && fbNode.Status == StatusSuccess {
-				markFallbackGroupOutput(fbNode, fg.PrimaryNodeID)
-				fallbackSuccess = true
-				e.logger.Info("fallback node succeeded",
-					"fallback_node_id", fbID,
-				)
-				break
-			}
-		}
-
+		fallbackSuccess, lastFallbackErr := e.executeFallbackGroup(ctx, graph, execCtx, pipeline, fg, primaryNode)
 		if !fallbackSuccess {
-			return nil, fmt.Errorf("all fallback attempts failed for primary node %s", fg.PrimaryNodeID)
+			return nil, buildFallbackGroupError(fg.PrimaryNodeID, primaryNode.Error, lastFallbackErr)
 		}
 	}
 
@@ -1473,7 +1414,7 @@ func (e *PipelineEngine) executeLayerNode(ctx context.Context, graph *ExecutionG
 		}
 	}
 	nodeInput := e.prepareNodeInput(execNode.Config, execCtx)
-	resolvedBackendID := nodeBackendID(execNode.Config, execNode.Config.Config)
+	resolvedBackendID := nodeBackendIDContext(ctx, execNode.Config, execNode.Config.Config)
 
 	// 执行节点
 	output, err := e.executeNode(ctx, execNode.Config, nodeInput)
@@ -1486,8 +1427,9 @@ func (e *PipelineEngine) executeLayerNode(ctx context.Context, graph *ExecutionG
 	}
 	// 余额/额度失败不记熔断，避免挡住同后端 fallback_model
 	// 模型不存在 / 余额不足：应继续降级，但不计入熔断（否则同后端其它模型也被挡）。
+	// 免费档 429 限流同样豁免，避免免费档流量高峰把整个后端打成 open。
 	skipCircuitRecord := skippedCircuit || isBillingQuotaError(err) || isModelNotFoundNodeError(err)
-	recordNodeCircuitOutcome(resolvedBackendID, err == nil, skipCircuitRecord)
+	recordNodeCircuitOutcome(resolvedBackendID, nodeModelContext(ctx, execNode.Config, execNode.Config.Config), err == nil, skipCircuitRecord, err)
 	if err != nil {
 		// 尝试策略降级：节点级 → 流水线级
 		if policy := e.resolveFallbackPolicy(execNode.Config, pipeline); policy != nil {
@@ -1788,7 +1730,7 @@ func (e *PipelineEngine) executePolicyFallback(
 
 // resolveFallbackRuleTarget 解析规则中的 backend/model 占位符；绝不把 "{{...}}" 原样发给上游。
 func resolveFallbackRuleTarget(rule config.FallbackRule, input *NodeInput, origBackend, origModel string) (string, string) {
-	resolvedBackend, resolvedModel := ResolveVirtualVars(rule.BackendID, rule.Model)
+	resolvedBackend, resolvedModel := ResolveVirtualVars(rule.BackendID, rule.Model) // fallback rules use global defaults
 
 	switch strings.TrimSpace(rule.Model) {
 	case "{{requested_model}}":
@@ -2044,7 +1986,7 @@ func (e *PipelineEngine) executeNode(ctx context.Context, config PipelineNodeCon
 	}
 
 	// 固定出站（直连）不拦熔断：唯一后端被 open 后整条链路不可用，且半开探测也无从谈起。
-	if backendID := nodeBackendID(config, nodeConfig); isCircuitOpenForBackend(backendID) && !isFixedEgressNodeConfig(nodeConfig) {
+	if backendID := nodeBackendIDContext(ctx, config, nodeConfig); isCircuitOpenForBackend(backendID) && !isFixedEgressNodeConfig(nodeConfig) {
 		return nil, fmt.Errorf("circuit breaker open for backend %s", backendID)
 	}
 
@@ -2206,7 +2148,11 @@ func (e *PipelineEngine) executeWithRetry(ctx context.Context, node PipelineNode
 		nodeLog.Kind = KindForBuiltinType(node.Type())
 	}
 
+	// max_attempts 语义：表示「首次执行之外的额外重试次数」。
+	// MaxAttempts=0 → 仅执行 1 次；MaxAttempts=3 → 最多执行 4 次（含首次）。
+	attemptsExecuted := 0
 	for attempt := 0; attempt <= retryConfig.MaxAttempts; attempt++ {
+		attemptsExecuted = attempt + 1
 		if attempt > 0 {
 			delay := retryConfig.CalculateDelay(attempt)
 			time.Sleep(delay)
@@ -2316,7 +2262,7 @@ func (e *PipelineEngine) executeWithRetry(ctx context.Context, node PipelineNode
 	}
 
 	if lastErr != nil && lastOutput == nil {
-		return nil, fmt.Errorf("node execution failed after %d attempts: %w", retryConfig.MaxAttempts, lastErr)
+		return nil, fmt.Errorf("node execution failed after %d attempts: %w", attemptsExecuted, lastErr)
 	}
 
 	return lastOutput, nil
@@ -2352,12 +2298,12 @@ func classifyNodeError(err error) (string, int, string) {
 		return "billing", 0, "insufficient_quota"
 	}
 
-	// HTTP 状态码错误（transparent_forward_node 格式："upstream returned %d: ..."）
-	if strings.Contains(msg, "upstream returned ") {
-		var code int
-		if _, scanErr := fmt.Sscanf(msg, "transparent_forward node %*q: upstream returned %d", &code); scanErr == nil {
-			return "http_status", code, ""
-		}
+	// HTTP 状态码错误：优先结构化 UpstreamError，其次文本兜底解析。
+	if code := upstreamStatusCodeOf(err); code != 0 {
+		return "http_status", code, ""
+	}
+	if code, ok := extractUpstreamStatusCode(msg); ok {
+		return "http_status", code, ""
 	}
 
 	// OpenAI 插件格式："API error (status %d): ..."
@@ -2726,9 +2672,26 @@ func (p *DefaultLLMProvider) resolveVirtualVars(backendID, model string) (string
 // 若已解析出 backend 但 model 仍为空，则兜底使用该后端的首选模型
 // （ProbeModel → SupportedModels[0]）。
 func ResolveVirtualVars(backendID, model string) (string, string) {
+	return ResolveVirtualVarsContext(context.Background(), backendID, model)
+}
+
+// ResolveVirtualVarsContext 与 ResolveVirtualVars 相同，但优先使用 ctx 中的
+// 请求级代理默认值（Team 普通用户的「我的默认后端」）。
+func ResolveVirtualVarsContext(ctx context.Context, backendID, model string) (string, string) {
 	cfg := config.Get()
 	if cfg == nil {
 		return backendID, model
+	}
+
+	defaultBackend := cfg.Proxy.DefaultBackendID
+	defaultModel := cfg.Proxy.DefaultModel
+	if ov, ok := config.ProxyDefaultsFromContext(ctx); ok {
+		if strings.TrimSpace(ov.DefaultBackendID) != "" {
+			defaultBackend = ov.DefaultBackendID
+		}
+		if strings.TrimSpace(ov.DefaultModel) != "" {
+			defaultModel = ov.DefaultModel
+		}
 	}
 
 	resolvedBackend := backendID
@@ -2736,17 +2699,17 @@ func ResolveVirtualVars(backendID, model string) (string, string) {
 
 	switch backendID {
 	case "{{system.default_backend}}", "":
-		resolvedBackend = cfg.Proxy.DefaultBackendID
+		resolvedBackend = defaultBackend
 	case "{{system.fallback_backend}}":
 		resolvedBackend = cfg.Proxy.FallbackBackendID
 		if strings.TrimSpace(resolvedBackend) == "" {
-			resolvedBackend = cfg.Proxy.DefaultBackendID
+			resolvedBackend = defaultBackend
 		}
 	}
 
 	switch model {
 	case "{{system.default_model}}", "":
-		resolvedModel = cfg.Proxy.DefaultModel
+		resolvedModel = defaultModel
 	case "{{system.fallback_model}}":
 		// 未配置时保持空，由计费/策略降级自行挑选免费档；勿回落 default_model（否则与主路相同、降级被跳过）
 		resolvedModel = cfg.Proxy.FallbackModel

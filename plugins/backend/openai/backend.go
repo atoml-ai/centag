@@ -267,7 +267,6 @@ func (b *Backend) CallModel(ctx context.Context, req *plugin.ProxyRequest) (*plu
 		// 发送请求
 		resp, doErr := b.client.Do(httpReq)
 		if doErr != nil {
-			circuitbreaker.RecordFailure(backendCfg.ID)
 			lastErr = fmt.Errorf("failed to send request: %w", doErr)
 			continue
 		}
@@ -276,7 +275,6 @@ func (b *Backend) CallModel(ctx context.Context, req *plugin.ProxyRequest) (*plu
 		respBody, readErr := io.ReadAll(resp.Body)
 		resp.Body.Close()
 		if readErr != nil {
-			circuitbreaker.RecordFailure(backendCfg.ID)
 			lastErr = fmt.Errorf("failed to read response: %w", readErr)
 			continue
 		}
@@ -287,20 +285,11 @@ func (b *Backend) CallModel(ctx context.Context, req *plugin.ProxyRequest) (*plu
 				// 429 + 账户池：禁用当前账户，重试下一个
 				log.Printf("[OpenAI Backend] 429 rate limit on account %s, rotating to next (attempt %d/%d)", currentAccountID, attempt+1, maxAttempts)
 				b.accountSelector.DisableAccountTemporarily(backendCfg.AccountPool, currentAccountID)
-				circuitbreaker.RecordRateLimitFailure(backendCfg.ID)
 				lastErr = fmt.Errorf("API 429 on account %s", currentAccountID)
 				continue
 			}
-			if resp.StatusCode == http.StatusTooManyRequests {
-				circuitbreaker.RecordRateLimitFailure(backendCfg.ID)
-			} else {
-				circuitbreaker.RecordFailure(backendCfg.ID)
-			}
 			return nil, fmt.Errorf("API error (status %d): %s", resp.StatusCode, string(respBody))
 		}
-
-		// 记录成功到熔断器
-		circuitbreaker.RecordSuccess(backendCfg.ID)
 
 		// 解析响应
 		var openaiResp ChatCompletionResponse
@@ -445,7 +434,6 @@ func (b *Backend) CallModelStream(ctx context.Context, req *plugin.ProxyRequest)
 		// 发送请求
 		resp, err := b.client.Do(httpReq)
 		if err != nil {
-			circuitbreaker.RecordFailure(backendCfg.ID)
 			ch <- plugin.StreamChunk{Error: fmt.Errorf("failed to send request: %w", err)}
 			return
 		}
@@ -458,18 +446,10 @@ func (b *Backend) CallModelStream(ctx context.Context, req *plugin.ProxyRequest)
 				log.Printf("[OpenAI Backend] 429 rate limit on stream account %s, disabling and failing over", currentAccountID)
 				b.accountSelector.DisableAccountTemporarily(backendCfg.AccountPool, currentAccountID)
 			}
-			if resp.StatusCode == http.StatusTooManyRequests {
-				circuitbreaker.RecordRateLimitFailure(backendCfg.ID)
-			} else {
-				circuitbreaker.RecordFailure(backendCfg.ID)
-			}
 			body, _ := io.ReadAll(resp.Body)
 			ch <- plugin.StreamChunk{Error: fmt.Errorf("API error (status %d): %s", resp.StatusCode, string(body))}
 			return
 		}
-
-		// 请求成功发送，记录到熔断器（流完成时再记录最终成功）
-		circuitbreaker.RecordSuccess(backendCfg.ID)
 
 		// 按 SSE 事件边界（\n\n）读取，避免远程 API 返回多行 JSON 时被按单行拆分导致解析失败、输出被截断
 		sseReader := newSSEEventReader(resp.Body)

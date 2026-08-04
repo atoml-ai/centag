@@ -37,7 +37,7 @@ func NewSensitiveDataMasker() *SensitiveDataMasker {
 			},
 			{
 				Name:    "Secret Reference",
-				Pattern: regexp.MustCompile(`(?i)(secrets?_ref|api[_-]?key|token|password|authorization)(["'\s:=]+)([^"',\s}]{6,})`),
+				Pattern: regexp.MustCompile(`(?i)(secrets?_ref|api[\s_-]?key|token|password|authorization)(["'\s:=]+)([^"',\s}]{6,})`),
 				ReplaceFunc: func(match string) string {
 					parts := regexp.MustCompile(`(["'\s:=]+)`).Split(match, 2)
 					if len(parts) == 0 {

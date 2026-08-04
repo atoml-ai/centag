@@ -28,6 +28,79 @@ func TestNodeBackendID_ResolvesVirtualVars(t *testing.T) {
 	}
 }
 
+func TestExecute_PrimarySuccess_WithFallbackGroup(t *testing.T) {
+	// 回归：主节点成功时 executeFallbackGroup 必须返回 groupOK=true，
+	// 否则透明代理等带 FallbackGroups 的流水线会误报 all fallback attempts failed。
+	mockClient := &testBackendClient{response: "from-primary"}
+	mockBroker := &testCapabilityBroker{llmClient: mockClient}
+	nodeRegistry := NewNodeRegistry()
+	if err := RegisterBuiltinNodes(nodeRegistry); err != nil {
+		t.Fatalf("RegisterBuiltinNodes: %v", err)
+	}
+	pipelineRegistry := NewPipelineRegistry()
+	engine := NewPipelineEngine(nodeRegistry, pipelineRegistry, mockBroker, NewPipelineLogger(), nil)
+
+	pipeline := &AgentPatternPipeline{
+		ID:   "primary-ok",
+		Name: "Primary OK",
+		Nodes: []PipelineNodeConfig{
+			{
+				ID:        "forward",
+				Type:      NodeTypeGenerator,
+				Kind:      "llm.generate",
+				Backend:   "ok-backend",
+				Model:     "m",
+				Config:    NodeConfig{Backend: "ok-backend", Model: "m", PromptTemplate: "{{input}}"},
+				NextNodes: []string{"forward_fallback"},
+			},
+			{
+				ID:        "forward_fallback",
+				Type:      NodeTypeGenerator,
+				Kind:      "llm.generate",
+				Backend:   "fb-backend",
+				Model:     "m",
+				Config:    NodeConfig{Backend: "fb-backend", Model: "m", PromptTemplate: "{{input}}"},
+				DependsOn: []string{"forward"},
+			},
+		},
+		GlobalConfig: GlobalPipelineConfig{
+			ParallelLimit: 1,
+			BypassOnError: true,
+			FallbackGroups: []FallbackGroup{
+				{PrimaryNodeID: "forward", FallbackNodes: []string{"forward_fallback"}, MaxAttempts: 2},
+			},
+		},
+	}
+	if err := pipelineRegistry.Register(pipeline); err != nil {
+		t.Fatalf("Register: %v", err)
+	}
+
+	out, err := engine.Execute(context.Background(), "primary-ok", &PipelineInput{Content: "hello"})
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if !strings.Contains(out.Content, "from-primary") {
+		t.Fatalf("content=%q, want from-primary", out.Content)
+	}
+
+	ch, err := engine.ExecuteStream(context.Background(), "primary-ok", &PipelineInput{Content: "hello", Stream: true})
+	if err != nil {
+		t.Fatalf("ExecuteStream: %v", err)
+	}
+	var streamOut string
+	for res := range ch {
+		if res.Chunk != nil && res.Chunk.Error != nil {
+			t.Fatalf("stream error: %v", res.Chunk.Error)
+		}
+		if res.Output != nil {
+			streamOut = res.Output.Content
+		}
+	}
+	if !strings.Contains(streamOut, "from-primary") {
+		t.Fatalf("stream content=%q, want from-primary", streamOut)
+	}
+}
+
 func TestExecuteStream_PrimaryCircuitOpen_RunsFallbackGroup(t *testing.T) {
 	IsCircuitOpen = func(backendID string) bool {
 		return backendID == "broken-backend"
@@ -113,7 +186,7 @@ func TestFilterFallbackNodesByCircuit(t *testing.T) {
 	}
 	graph := NewExecutionGraph(pipeline)
 
-	filtered := engine.filterFallbackNodesByCircuit(graph, []string{"fb-open", "fb-ok"})
+	filtered := engine.filterFallbackNodesByCircuit(context.Background(), graph, []string{"fb-open", "fb-ok"})
 	if len(filtered) != 1 || filtered[0] != "fb-ok" {
 		t.Fatalf("filtered = %v, want [fb-ok]", filtered)
 	}
