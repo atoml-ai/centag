@@ -1,6 +1,8 @@
 package server
 
 import (
+	"context"
+	"encoding/json"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -10,8 +12,10 @@ import (
 	"centag/core/internal/middleware"
 	"centag/core/pkg/backend"
 	"centag/core/pkg/config"
+	"centag/core/pkg/database"
 	"centag/core/pkg/logger"
 	pluginregistry "centag/core/pkg/plugin/registry"
+	"centag/core/pkg/useraccess"
 
 	"github.com/gin-gonic/gin"
 )
@@ -230,23 +234,40 @@ func (s *Server) handleMinimalTokenUsageDaily(c *gin.Context) {
 }
 
 // handleGetProxyConfig returns the current proxy config (default backend/model).
+// Team 普通用户：返回个人默认（user_config.proxy_settings），缺省时回落系统默认。
 func (s *Server) handleGetProxyConfig(c *gin.Context) {
 	cfg := config.Get()
 	if cfg == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "config not initialized"})
 		return
 	}
+	backendID := cfg.Proxy.DefaultBackendID
+	model := cfg.Proxy.DefaultModel
+	scope := "system"
+	if user := s.loadAccessUser(c); user != nil {
+		if ub, um, ok := loadUserProxyDefaults(c.Request.Context(), user.ID); ok {
+			if ub != "" {
+				backendID = ub
+			}
+			if um != "" {
+				model = um
+			}
+			scope = "user"
+		}
+	}
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"data": gin.H{
-			"default_backend_id":    cfg.Proxy.DefaultBackendID,
-			"default_model":         cfg.Proxy.DefaultModel,
+			"default_backend_id":    backendID,
+			"default_model":         model,
 			"response_trace_banner": cfg.Proxy.ResponseTraceBanner,
+			"scope":                 scope,
 		},
 	})
 }
 
 // handleSaveProxyConfig updates the proxy config (default backend/model).
+// Team 普通用户：写入个人 user_config（不改系统默认）；管理员/Personal：写系统配置。
 func (s *Server) handleSaveProxyConfig(c *gin.Context) {
 	cfg := config.Get()
 	if cfg == nil {
@@ -264,6 +285,11 @@ func (s *Server) handleSaveProxyConfig(c *gin.Context) {
 		return
 	}
 
+	if user := s.loadAccessUser(c); user != nil {
+		s.saveUserProxyConfig(c, user, req.DefaultBackendID, req.DefaultModel)
+		return
+	}
+
 	if req.DefaultBackendID != nil {
 		cfg.Proxy.DefaultBackendID = strings.TrimSpace(*req.DefaultBackendID)
 	}
@@ -273,7 +299,6 @@ func (s *Server) handleSaveProxyConfig(c *gin.Context) {
 	if req.ResponseTraceBanner != nil {
 		cfg.Proxy.ResponseTraceBanner = *req.ResponseTraceBanner
 	}
-	// When default_model is empty but a default backend is set, auto-fill from that backend's preferred model.
 	if strings.TrimSpace(cfg.Proxy.DefaultModel) == "" && strings.TrimSpace(cfg.Proxy.DefaultBackendID) != "" {
 		if filled := s.preferredModelForBackend(cfg.Proxy.DefaultBackendID); filled != "" {
 			cfg.Proxy.DefaultModel = filled
@@ -281,7 +306,6 @@ func (s *Server) handleSaveProxyConfig(c *gin.Context) {
 		}
 	}
 
-	// Personal/team → DB；minimal → proxy-config.yaml（有 data dir 时双写，避免重启丢失）
 	if err := config.PersistProxyConfig(c.Request.Context(), cfg.Proxy); err != nil {
 		logger.Errorf("Failed to persist proxy config: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "failed to persist proxy config: " + err.Error()})
@@ -298,6 +322,89 @@ func (s *Server) handleSaveProxyConfig(c *gin.Context) {
 			"default_backend_id":    cfg.Proxy.DefaultBackendID,
 			"default_model":         cfg.Proxy.DefaultModel,
 			"response_trace_banner": cfg.Proxy.ResponseTraceBanner,
+			"scope":                 "system",
+		},
+	})
+}
+
+func loadUserProxyDefaults(ctx context.Context, userID int64) (backendID, model string, ok bool) {
+	if !database.IsInitialized() || userID <= 0 {
+		return "", "", false
+	}
+	uc, err := database.Get().UserConfigStore().Get(ctx, userID)
+	if err != nil || uc == nil || strings.TrimSpace(uc.ProxySettings) == "" {
+		return "", "", false
+	}
+	var ps struct {
+		DefaultBackendID string `json:"default_backend_id"`
+		DefaultModel     string `json:"default_model"`
+	}
+	if json.Unmarshal([]byte(uc.ProxySettings), &ps) != nil {
+		return "", "", false
+	}
+	backendID = strings.TrimSpace(ps.DefaultBackendID)
+	model = strings.TrimSpace(ps.DefaultModel)
+	if backendID == "" && model == "" {
+		return "", "", false
+	}
+	return backendID, model, true
+}
+
+func (s *Server) saveUserProxyConfig(c *gin.Context, user *database.User, backendID, model *string) {
+	if user == nil {
+		c.JSON(http.StatusForbidden, gin.H{"success": false, "message": "user required"})
+		return
+	}
+	ctx := c.Request.Context()
+	uc, err := database.Get().UserConfigStore().Get(ctx, user.ID)
+	if err != nil || uc == nil {
+		uc = database.DefaultUserConfig(user.ID)
+	}
+	var ps struct {
+		DefaultBackendID string `json:"default_backend_id"`
+		DefaultModel     string `json:"default_model"`
+	}
+	_ = json.Unmarshal([]byte(uc.ProxySettings), &ps)
+	if backendID != nil {
+		ps.DefaultBackendID = strings.TrimSpace(*backendID)
+	}
+	if model != nil {
+		ps.DefaultModel = strings.TrimSpace(*model)
+	}
+	if ps.DefaultModel == "" && ps.DefaultBackendID != "" {
+		if filled := s.preferredModelForBackend(ps.DefaultBackendID); filled != "" {
+			ps.DefaultModel = filled
+		}
+	}
+	if ps.DefaultBackendID != "" && s.backendHandler != nil && s.backendHandler.backendManager != nil {
+		list := s.backendHandler.backendManager.List()
+		filtered := useraccess.FilterBackendsFor(user, list, policyForUser(ctx, user))
+		allowed := false
+		for _, b := range filtered {
+			if b != nil && b.ID == ps.DefaultBackendID {
+				allowed = true
+				break
+			}
+		}
+		if !allowed {
+			c.JSON(http.StatusForbidden, gin.H{"success": false, "message": "backend not allowed for this user: " + ps.DefaultBackendID})
+			return
+		}
+	}
+	raw, _ := json.Marshal(ps)
+	uc.ProxySettings = string(raw)
+	if err := database.Get().UserConfigStore().Upsert(ctx, uc); err != nil {
+		logger.Errorf("save user proxy config: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "failed to save user proxy config"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "user proxy config saved",
+		"data": gin.H{
+			"default_backend_id": ps.DefaultBackendID,
+			"default_model":      ps.DefaultModel,
+			"scope":              "user",
 		},
 	})
 }

@@ -11,6 +11,7 @@ import (
 
 	"centag/core/internal/auth"
 	"centag/core/pkg/config"
+	"centag/core/pkg/database"
 	"centag/core/pkg/metrics"
 	"centag/core/pkg/pipeline"
 	"centag/core/pkg/plugin"
@@ -110,8 +111,10 @@ func (d *ModeDispatcher) Dispatch(
 		"pipeline_id", pipelineID,
 	)
 
+	execCtx := d.requestExecContext(c)
+
 	// 2. 检查流水线是否存在，如果不存在则尝试从内置模板创建
-	if !d.pipelineEngine.HasPipeline(pipelineID) {
+	if !d.pipelineExists(execCtx, pipelineID) {
 		// 尝试从内置模板注册
 		if err := d.registerBuiltinPipeline(pipelineID); err != nil {
 			return fmt.Errorf("pipeline not found: %s (%w)", pipelineID, err)
@@ -136,9 +139,9 @@ func (d *ModeDispatcher) Dispatch(
 			"mode", mode,
 			"pipeline_id", pipelineID,
 		)
-		output, err = d.executeStreamToOutput(c.Request.Context(), pipelineID, input, h.config.MaxBytes)
+		output, err = d.executeStreamToOutput(execCtx, pipelineID, input, h.config.MaxBytes)
 	} else {
-		output, err = d.pipelineEngine.Execute(c.Request.Context(), pipelineID, input)
+		output, err = d.pipelineEngine.Execute(execCtx, pipelineID, input)
 	}
 	if err != nil {
 		d.logger.Error("pipeline execution failed",
@@ -881,6 +884,52 @@ func extractUserID(c *gin.Context) string {
 	return ""
 }
 
+// requestExecContext attaches owner scope + per-user proxy defaults for Team users.
+func (d *ModeDispatcher) requestExecContext(c *gin.Context) context.Context {
+	ctx := c.Request.Context()
+	if auth.IsAdmin(c) {
+		return ctx
+	}
+	uid, err := auth.GetUserID(c)
+	if err != nil || uid == 0 {
+		return ctx
+	}
+	scope := fmt.Sprintf("user:%d", uid)
+	if database.IsInitialized() {
+		if user, err := database.Get().UserStore().GetByID(ctx, uid); err == nil && user != nil {
+			if user.TenantID != nil && strings.TrimSpace(*user.TenantID) != "" {
+				scope = strings.TrimSpace(*user.TenantID)
+			}
+		}
+		if uc, err := database.Get().UserConfigStore().Get(ctx, uid); err == nil && uc != nil && strings.TrimSpace(uc.ProxySettings) != "" {
+			var ps struct {
+				DefaultBackendID string `json:"default_backend_id"`
+				DefaultModel     string `json:"default_model"`
+			}
+			if json.Unmarshal([]byte(uc.ProxySettings), &ps) == nil {
+				ctx = config.WithProxyDefaults(ctx, config.ProxyDefaults{
+					DefaultBackendID: strings.TrimSpace(ps.DefaultBackendID),
+					DefaultModel:     strings.TrimSpace(ps.DefaultModel),
+				})
+			}
+		}
+	}
+	return pipeline.WithOwnerScope(ctx, scope)
+}
+
+func (d *ModeDispatcher) pipelineExists(ctx context.Context, pipelineID string) bool {
+	if d == nil || d.pipelineEngine == nil {
+		return false
+	}
+	type scoped interface {
+		HasPipelineContext(context.Context, string) bool
+	}
+	if s, ok := d.pipelineEngine.(scoped); ok {
+		return s.HasPipelineContext(ctx, pipelineID)
+	}
+	return d.pipelineEngine.HasPipeline(pipelineID)
+}
+
 // GetModeMappings 获取所有模式映射
 func GetModeMappings() []ModeToPipelineMapping {
 	return defaultModeMappings
@@ -943,7 +992,8 @@ func (d *ModeDispatcher) DispatchStream(
 		"pipeline_id", pipelineID,
 	)
 
-	if !d.pipelineEngine.HasPipeline(pipelineID) {
+	execCtx := d.requestExecContext(c)
+	if !d.pipelineExists(execCtx, pipelineID) {
 		return fmt.Errorf("pipeline not found: %s", pipelineID)
 	}
 
@@ -954,7 +1004,7 @@ func (d *ModeDispatcher) DispatchStream(
 	}
 
 	// 执行流式流水线
-	resultCh, err := d.pipelineEngine.ExecuteStream(c.Request.Context(), pipelineID, input)
+	resultCh, err := d.pipelineEngine.ExecuteStream(execCtx, pipelineID, input)
 	if err != nil {
 		return fmt.Errorf("pipeline stream execution failed: %w", err)
 	}

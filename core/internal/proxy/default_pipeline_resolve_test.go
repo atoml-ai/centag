@@ -7,6 +7,35 @@ import (
 	"centag/core/pkg/config"
 )
 
+type stubUserDefaultPipeline struct {
+	id string
+}
+
+func (s stubUserDefaultPipeline) GetUserDefaultPipelineID(ctx context.Context, userID int64) (string, error) {
+	return s.id, nil
+}
+
+func TestDefaultPipelineResolver_UserDefaultWins(t *testing.T) {
+	cfg := &config.Config{
+		Proxy: config.ProxyConfig{
+			PipelineConfig: &config.PipelineConfig{DefaultPipeline: "transparent-proxy"},
+		},
+	}
+	resolver := NewDefaultPipelineResolver(cfg)
+	resolver.SetUserQuotaService(stubUserDefaultPipeline{id: "transparent-proxy-copy-1"})
+	uid := int64(3)
+	mode, source, err := resolver.ResolveProxyMode(context.Background(), "auto", &uid, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if mode != ProxyMode("transparent-proxy-copy-1") {
+		t.Fatalf("mode=%q", mode)
+	}
+	if source != "user-default" {
+		t.Fatalf("source=%q", source)
+	}
+}
+
 func TestDefaultPipelineResolverResolveProxyMode(t *testing.T) {
 	tests := []struct {
 		name           string

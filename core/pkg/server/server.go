@@ -635,7 +635,10 @@ func New(cfg *config.Config) *Server {
 		hookManager.RegisterTokenHook(newTokenUsageHookAdapter(tokenUsageService))
 		wireTokenUsagePersistence(tokenUsageService, hookManager)
 		proxyHandler.SetTokenUsageService(tokenUsageService)
-		logger.Infof("[hooks] TokenHook adapter registered")
+		// 用户默认流水线写在 users.default_pipeline_id；此前从未注入，导致对话始终走 system-default。
+		userQuotaSvc := tokenusage.NewUserQuotaService(db, database.Get().DriverName())
+		defaultPipelineResolver.SetUserQuotaService(userQuotaSvc)
+		logger.Infof("[hooks] TokenHook adapter registered; user default pipeline resolver wired")
 
 		ruleStore := billing.NewSQLRuleStore(db, database.Get().DriverName())
 		if path, err := billing.ResolveDefaultPricingPath(); err != nil {
@@ -1407,7 +1410,8 @@ func (s *Server) setupRoutes() {
 			config.GET("", s.configHandler.GetAllConfig)
 			config.PUT("", s.configHandler.SaveAllConfig)
 			config.GET("/proxy", s.handleGetProxyConfig)
-			config.PUT("/proxy", s.teamAdminWriteOnly(), s.handleSaveProxyConfig)
+			// Team 普通用户写入自己的 user_config.proxy_settings；管理员写系统默认。
+			config.PUT("/proxy", s.handleSaveProxyConfig)
 		}
 
 		// 监控统计
@@ -1478,12 +1482,13 @@ func (s *Server) setupRoutes() {
 
 			// 账户池 CRUD
 			backends.GET("/:id/accounts", s.backendHandler.ListBackendAccounts)
+			backends.PUT("/:id/account-pool", s.backendHandler.UpdateAccountPool)
+			backends.GET("/:id/accounts/stats", s.backendHandler.GetAccountPoolStats)
 			backends.GET("/:id/accounts/:accountId", s.backendHandler.GetBackendAccount)
 			backends.POST("/:id/accounts", s.backendHandler.CreateBackendAccount)
 			backends.PUT("/:id/accounts/:accountId", s.backendHandler.UpdateBackendAccount)
 			backends.DELETE("/:id/accounts/:accountId", s.backendHandler.DeleteBackendAccount)
 			backends.POST("/:id/accounts/:accountId/reset-breaker", s.backendHandler.ResetAccountBreaker)
-			backends.GET("/:id/accounts/stats", s.backendHandler.GetAccountPoolStats)
 		}
 
 		// 全局降级策略管理
