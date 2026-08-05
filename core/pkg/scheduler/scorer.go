@@ -177,7 +177,7 @@ func (s *MultiDimensionScorer) calculatePriceScore(backendID, model string) floa
 
 // calculateQualityScore 计算质量评分
 func (s *MultiDimensionScorer) calculateQualityScore(backend *backend.BackendConfig, intent *ClassificationResult) float64 {
-	baseScore := 0.5
+	var baseScore float64
 
 	// 根据后端类型调整
 	switch backend.ID {
