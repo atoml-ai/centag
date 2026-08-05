@@ -39,5 +39,7 @@
   "systemAdmin": "系统管理",
   "overview": "概览",
   "userGroupManagement": "用户与组管理",
-  "myBilling": "我的计费"
+  "myBilling": "计量计费",
+  "meteringBilling": "计量计费",
+  "billingStatements": "对账单"
 }

@@ -10,11 +10,20 @@ import (
 func TestRecordUsage_WithPricingService(t *testing.T) {
 	ctx := context.Background()
 	store := billing.NewMemoryRuleStore()
-	rule := &billing.PricingRule{
-		Name: "t", BackendID: "b1", Model: "m1",
+	costRule := &billing.PricingRule{
+		Name: "t-cost", BackendID: "b1", Model: "m1",
+		PriceType: billing.PriceTypeCost,
 		InputPricePerM: 1, OutputPricePerM: 1, Priority: 1, Enabled: true,
 	}
-	if err := store.CreateRule(ctx, rule); err != nil {
+	revRule := &billing.PricingRule{
+		Name: "t-rev", BackendID: "b1", Model: "m1",
+		PriceType: billing.PriceTypeRevenue,
+		InputPricePerM: 3, OutputPricePerM: 3, Priority: 1, Enabled: true,
+	}
+	if err := store.CreateRule(ctx, costRule); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.CreateRule(ctx, revRule); err != nil {
 		t.Fatal(err)
 	}
 	SetPricingService(billing.NewPricingService(store))
@@ -31,18 +40,21 @@ func TestRecordUsage_WithPricingService(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	var cost, inCost float64
+	var cost, inCost, revenue float64
 	var ruleID *int64
-	err = svc.db.QueryRow(`SELECT cost_usd, input_cost, pricing_rule_id FROM token_usage WHERE user_id = 1`).
-		Scan(&cost, &inCost, &ruleID)
+	err = svc.db.QueryRow(`SELECT cost_usd, input_cost, revenue_usd, pricing_rule_id FROM token_usage WHERE user_id = 1`).
+		Scan(&cost, &inCost, &revenue, &ruleID)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if cost != 1 || inCost != 1 {
 		t.Fatalf("cost=%v input=%v", cost, inCost)
 	}
-	if ruleID == nil || *ruleID != rule.ID {
-		t.Fatalf("ruleID=%v want %d", ruleID, rule.ID)
+	if revenue != 3 {
+		t.Fatalf("revenue=%v want 3", revenue)
+	}
+	if ruleID == nil || *ruleID != costRule.ID {
+		t.Fatalf("ruleID=%v want %d", ruleID, costRule.ID)
 	}
 }
 

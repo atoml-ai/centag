@@ -10,6 +10,10 @@ declare module '*.vue' {
 declare module '@team-pack' {
   import type { RouteRecordRaw } from 'vue-router'
   export const teamPackRoutes: RouteRecordRaw[]
-  const pack: { teamPackRoutes: RouteRecordRaw[] }
+  export const teamPackLocaleMessages: Record<string, Record<string, unknown>>
+  const pack: {
+    teamPackRoutes: RouteRecordRaw[]
+    teamPackLocaleMessages: Record<string, Record<string, unknown>>
+  }
   export default pack
 }

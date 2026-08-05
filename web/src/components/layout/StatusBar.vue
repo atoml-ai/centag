@@ -141,6 +141,10 @@ function goUsage() {
     router.push('/cost')
     return
   }
+  if (isTeam.value) {
+    router.push({ path: '/metering-billing', query: { tab: 'usage' } })
+    return
+  }
   router.push('/token-usage')
 }
 

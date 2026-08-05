@@ -39,5 +39,7 @@
   "systemAdmin": "System Admin",
   "overview": "Overview",
   "userGroupManagement": "Users & Groups",
-  "myBilling": "My Billing"
+  "myBilling": "Metering & billing",
+  "meteringBilling": "Metering & billing",
+  "billingStatements": "Statements"
 }

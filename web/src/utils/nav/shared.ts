@@ -160,19 +160,22 @@ export function navGroup(
   }
 }
 
-/** 用量：会话 + 用量与计费 */
-export function usageNavGroup(): NavItem {
-  return navGroup(
-    'usage',
-    'nav.usage',
-    'TrendCharts',
-    [
-      tokenUsageNav('nav.tokenUsage'),
-      conversationsNav(),
-      { id: 'my-billing', labelKey: 'nav.myBilling', icon: 'Wallet', path: '/my-billing', requiresTeam: true }
-    ],
-    '/token-usage'
-  )
+/** 用量：会话记录 → 计量计费（Team 合并页）/ 用量统计（Personal） */
+export function usageNavGroup(caps?: { role?: string }): NavItem {
+  const isTeam = caps?.role === 'team_user' || caps?.role === 'team_admin'
+  const children: NavItem[] = [conversationsNav()]
+  if (isTeam) {
+    children.push({
+      id: 'metering-billing',
+      labelKey: 'nav.meteringBilling',
+      icon: 'Wallet',
+      path: '/metering-billing',
+      requiresTeam: true
+    })
+  } else {
+    children.push(tokenUsageNav('nav.tokenUsage'))
+  }
+  return navGroup('usage', 'nav.usage', 'TrendCharts', children, children[0]?.path)
 }
 
 /** 接入：系统代理 + Agent 配置 */
@@ -226,6 +229,14 @@ export function userTenantGroup(): NavItem {
         requiresTeam: true
       },
       costDashboardNav(),
+      {
+        id: 'billing-statements',
+        labelKey: 'nav.billingStatements',
+        icon: 'Document',
+        path: '/billing/statements',
+        requiresAdmin: true,
+        requiresTeam: true
+      },
       {
         id: 'billing-rules',
         labelKey: 'nav.billingRules',
@@ -300,7 +311,7 @@ export function buildWorkerNav(caps: Capabilities): NavItem[] {
   const items: NavItem[] = [dashboardNav('nav.dashboard')]
 
   if (caps.usageBilling) {
-    items.push(usageNavGroup())
+    items.push(usageNavGroup(caps))
   }
   if (caps.localProxy || caps.agentSetup) {
     items.push(accessNavGroup())

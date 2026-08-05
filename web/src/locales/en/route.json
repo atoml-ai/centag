@@ -21,6 +21,8 @@
   "logs": "Logs",
   "requestTrace": "Request Trace",
   "tokenUsage": "Usage & Billing",
+  "meteringBilling": "Metering & billing",
+  "billingStatements": "Statements",
   "conversations": "Conversations",
   "billing": "Billing Rules",
   "personalConfig": "Personal Config",

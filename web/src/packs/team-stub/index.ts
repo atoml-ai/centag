@@ -6,4 +6,7 @@ import type { RouteRecordRaw } from 'vue-router'
 
 export const teamPackRoutes: RouteRecordRaw[] = []
 
-export default { teamPackRoutes }
+/** No commercial locale strings in personal/minimal builds. */
+export const teamPackLocaleMessages: Record<string, Record<string, unknown>> = {}
+
+export default { teamPackRoutes, teamPackLocaleMessages }

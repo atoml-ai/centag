@@ -137,7 +137,17 @@ const routes = [
     component: RequestTrace,
     meta: { titleKey: 'route.requestTrace' }
   },
-  { path: '/token-usage', name: 'TokenUsage', component: TokenUsage, meta: { titleKey: 'route.tokenUsage' } },
+  // Team pack merges metering-billing and redirects /token-usage; keep host page for personal.
+  ...(teamPackRoutes.some((r) => r.path === '/metering-billing')
+    ? []
+    : [
+        {
+          path: '/token-usage',
+          name: 'TokenUsage',
+          component: TokenUsage,
+          meta: { titleKey: 'route.tokenUsage' }
+        }
+      ]),
   {
     path: '/conversations',
     name: 'Conversations',

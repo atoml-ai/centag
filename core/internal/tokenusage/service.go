@@ -63,11 +63,14 @@ type UsageRecord struct {
 	PromptTokens     int     `json:"prompt_tokens"`
 	CompletionTokens int     `json:"completion_tokens"`
 	TotalTokens      int     `json:"total_tokens"`
-	CostUSD          float64 `json:"cost_usd"` // USD amount (column name historical)
+	CostUSD          float64 `json:"cost_usd"` // 成本侧金额（列名历史遗留 *_usd）
 	InputCost        float64 `json:"input_cost"`
 	OutputCost       float64 `json:"output_cost"`
 	CostInputPrice   float64 `json:"cost_input_price"`  // 成本侧 input 单价（USD per 1M tokens）
 	CostOutputPrice  float64 `json:"cost_output_price"` // 成本侧 output 单价（USD per 1M tokens）
+	RevenueUSD         float64 `json:"revenue_usd"`          // 收益侧金额
+	RevenueInputPrice  float64 `json:"revenue_input_price"`  // 收益侧 input 单价（/1M）
+	RevenueOutputPrice float64 `json:"revenue_output_price"` // 收益侧 output 单价（/1M）
 	PricingRuleID    int64   `json:"pricing_rule_id"`
 	Success          bool    `json:"success"`
 	TenantID         string  `json:"tenant_id"`
@@ -151,28 +154,41 @@ func (s *Service) RecordUsage(ctx context.Context, record *UsageRecord) error {
 			return nil
 		}
 	}
-	if record.CostUSD == 0 && record.TotalTokens > 0 {
-		bd := EstimateCostDetailed(
+	if record.TotalTokens > 0 && (record.CostUSD == 0 || record.RevenueUSD == 0) {
+		dual := EstimateDualPricing(
 			record.BackendID,
 			record.Model,
 			record.PromptTokens,
 			record.CompletionTokens,
 		)
-		record.CostUSD = bd.TotalCost
-		if record.InputCost == 0 {
-			record.InputCost = bd.InputCost
+		if record.CostUSD == 0 {
+			bd := dual.CostBreakdown
+			record.CostUSD = bd.TotalCost
+			if record.InputCost == 0 {
+				record.InputCost = bd.InputCost
+			}
+			if record.OutputCost == 0 {
+				record.OutputCost = bd.OutputCost
+			}
+			if record.PricingRuleID == 0 {
+				record.PricingRuleID = bd.PricingRuleID
+			}
+			if record.CostInputPrice == 0 {
+				record.CostInputPrice = bd.InputPricePerM
+			}
+			if record.CostOutputPrice == 0 {
+				record.CostOutputPrice = bd.OutputPricePerM
+			}
 		}
-		if record.OutputCost == 0 {
-			record.OutputCost = bd.OutputCost
-		}
-		if record.PricingRuleID == 0 {
-			record.PricingRuleID = bd.PricingRuleID
-		}
-		if record.CostInputPrice == 0 {
-			record.CostInputPrice = bd.InputPricePerM
-		}
-		if record.CostOutputPrice == 0 {
-			record.CostOutputPrice = bd.OutputPricePerM
+		if record.RevenueUSD == 0 {
+			rb := dual.RevenueBreakdown
+			record.RevenueUSD = rb.TotalCost
+			if record.RevenueInputPrice == 0 {
+				record.RevenueInputPrice = rb.InputPricePerM
+			}
+			if record.RevenueOutputPrice == 0 {
+				record.RevenueOutputPrice = rb.OutputPricePerM
+			}
 		}
 	}
 
@@ -200,14 +216,18 @@ func (s *Service) RecordUsage(ctx context.Context, record *UsageRecord) error {
 	}
 	insertQuery := s.q(`
 		INSERT INTO token_usage 
-		(user_id, api_key_id, backend_id, model, prompt_tokens, completion_tokens, total_tokens, cost_usd, input_cost, output_cost, cost_input_price, cost_output_price, pricing_rule_id, success, tenant_id, group_id, dept_tag, request_id, agent_type)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
+		(user_id, api_key_id, backend_id, model, prompt_tokens, completion_tokens, total_tokens,
+		 cost_usd, input_cost, output_cost, cost_input_price, cost_output_price,
+		 revenue_usd, revenue_input_price, revenue_output_price,
+		 pricing_rule_id, success, tenant_id, group_id, dept_tag, request_id, agent_type)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
 	`)
 	_, err = tx.ExecContext(ctx, insertQuery,
 		record.UserID, record.APIKeyID, record.BackendID, record.Model,
 		record.PromptTokens, record.CompletionTokens, record.TotalTokens,
 		record.CostUSD, record.InputCost, record.OutputCost,
 		record.CostInputPrice, record.CostOutputPrice,
+		record.RevenueUSD, record.RevenueInputPrice, record.RevenueOutputPrice,
 		ruleID, success, nullIfEmpty(record.TenantID), nullIfEmpty(groupID),
 		nullIfEmpty(record.DeptTag),
 		record.RequestID, normalizedAgentType,
@@ -230,6 +250,7 @@ func (s *Service) RecordUsage(ctx context.Context, record *UsageRecord) error {
 		record.UserID, record.BackendID, record.Model, normalizedAgentType, dateStr,
 		record.PromptTokens, record.CompletionTokens, record.TotalTokens,
 		record.CostUSD, record.CostInputPrice, record.CostOutputPrice,
+		record.RevenueUSD,
 		nullIfEmpty(groupID),
 	)
 	if err != nil {
@@ -253,8 +274,9 @@ func (s *Service) recordUsageDailyUpsertSQL() string {
 	if s.isPostgres() {
 		return `
 		INSERT INTO token_usage_daily 
-		(user_id, backend_id, model, agent_type, date, total_prompt_tokens, total_completion_tokens, total_tokens, total_cost_usd, cost_input_price, cost_output_price, group_id, request_count)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 1)
+		(user_id, backend_id, model, agent_type, date, total_prompt_tokens, total_completion_tokens, total_tokens,
+		 total_cost_usd, cost_input_price, cost_output_price, total_revenue_usd, group_id, request_count)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 1)
 		ON CONFLICT (user_id, backend_id, model, agent_type, date)
 		DO UPDATE SET
 			total_prompt_tokens = token_usage_daily.total_prompt_tokens + $6,
@@ -263,14 +285,16 @@ func (s *Service) recordUsageDailyUpsertSQL() string {
 			total_cost_usd = token_usage_daily.total_cost_usd + $9,
 			cost_input_price = token_usage_daily.cost_input_price + $10,
 			cost_output_price = token_usage_daily.cost_output_price + $11,
+			total_revenue_usd = token_usage_daily.total_revenue_usd + $12,
 			request_count = token_usage_daily.request_count + 1,
 			updated_at = CURRENT_TIMESTAMP
 	`
 	}
 	return `
 		INSERT INTO token_usage_daily 
-		(user_id, backend_id, model, agent_type, date, total_prompt_tokens, total_completion_tokens, total_tokens, total_cost_usd, cost_input_price, cost_output_price, group_id, request_count)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+		(user_id, backend_id, model, agent_type, date, total_prompt_tokens, total_completion_tokens, total_tokens,
+		 total_cost_usd, cost_input_price, cost_output_price, total_revenue_usd, group_id, request_count)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
 		ON CONFLICT (user_id, backend_id, model, agent_type, date)
 		DO UPDATE SET
 			total_prompt_tokens = token_usage_daily.total_prompt_tokens + excluded.total_prompt_tokens,
@@ -279,6 +303,7 @@ func (s *Service) recordUsageDailyUpsertSQL() string {
 			total_cost_usd = token_usage_daily.total_cost_usd + excluded.total_cost_usd,
 			cost_input_price = token_usage_daily.cost_input_price + excluded.cost_input_price,
 			cost_output_price = token_usage_daily.cost_output_price + excluded.cost_output_price,
+			total_revenue_usd = token_usage_daily.total_revenue_usd + excluded.total_revenue_usd,
 			request_count = token_usage_daily.request_count + 1,
 			updated_at = CURRENT_TIMESTAMP
 	`

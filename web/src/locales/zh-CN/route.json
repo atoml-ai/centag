@@ -21,6 +21,8 @@
   "logs": "日志查看器",
   "requestTrace": "请求追踪",
   "tokenUsage": "用量与计费",
+  "meteringBilling": "计量计费",
+  "billingStatements": "对账单",
   "conversations": "会话记录",
   "billing": "计费规则",
   "personalConfig": "个人配置",

@@ -1,6 +1,6 @@
 <template>
   <div class="token-usage">
-    <div class="usage-header">
+    <div v-if="!embedded" class="usage-header">
       <h2>{{ pageTitle }}</h2>
     </div>
 
@@ -84,6 +84,11 @@ echarts.use([
   LegendComponent,
   DataZoomComponent
 ])
+
+defineProps<{
+  /** When true, hide page title (embedded in metering-billing tabs). */
+  embedded?: boolean
+}>()
 
 const { t } = useI18n()
 

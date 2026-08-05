@@ -79,7 +79,7 @@ function run() {
       name: 'team_user worker',
       edition: 'team',
       isAdmin: false,
-      mustHave: ['dashboard', 'usage', 'access', 'memory', 'more', 'my-billing', 'logs'],
+      mustHave: ['dashboard', 'usage', 'access', 'memory', 'more', 'metering-billing', 'logs'],
       mustNot: [
         'chat',
         'backends',
@@ -105,6 +105,7 @@ function run() {
         'user-tenant',
         'system-users',
         'cost-dashboard',
+        'billing-statements',
         'billing-rules',
         'config-basic',
         'ab-comparison'
@@ -115,6 +116,7 @@ function run() {
         'memory',
         'usage',
         'my-billing',
+        'metering-billing',
         'local-proxy',
         'more',
         'shared-resources',

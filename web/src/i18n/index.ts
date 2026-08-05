@@ -5,6 +5,33 @@ import ja from '@/locales/ja'
 import ko from '@/locales/ko'
 import ru from '@/locales/ru'
 import es from '@/locales/es'
+import { teamPackLocaleMessages } from '@team-pack'
+
+function deepMerge(base: Record<string, unknown>, extra: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = { ...base }
+  for (const [k, v] of Object.entries(extra)) {
+    const cur = out[k]
+    if (
+      v &&
+      typeof v === 'object' &&
+      !Array.isArray(v) &&
+      cur &&
+      typeof cur === 'object' &&
+      !Array.isArray(cur)
+    ) {
+      out[k] = deepMerge(cur as Record<string, unknown>, v as Record<string, unknown>)
+    } else {
+      out[k] = v
+    }
+  }
+  return out
+}
+
+function withTeamPack(localeKey: string, hostMessages: Record<string, unknown>): Record<string, unknown> {
+  const pack = (teamPackLocaleMessages as Record<string, Record<string, unknown>> | undefined)?.[localeKey]
+  if (!pack) return hostMessages
+  return deepMerge(hostMessages, pack)
+}
 
 export type AppLocale = 'en' | 'zh-CN' | 'ja' | 'ko' | 'ru' | 'es'
 
@@ -20,12 +47,13 @@ export const localeLabels: Record<AppLocale, string> = {
 }
 
 const messages = {
-  'en': en,
-  'zh-CN': zhCN,
-  'ja': ja,
-  'ko': ko,
-  'ru': ru,
-  'es': es
+  'en': withTeamPack('en', en as unknown as Record<string, unknown>),
+  'zh-CN': withTeamPack('zh-CN', zhCN as unknown as Record<string, unknown>),
+  // fallback: use English team pack strings for other locales when pack keys missing
+  'ja': withTeamPack('en', withTeamPack('ja', ja as unknown as Record<string, unknown>)),
+  'ko': withTeamPack('en', withTeamPack('ko', ko as unknown as Record<string, unknown>)),
+  'ru': withTeamPack('en', withTeamPack('ru', ru as unknown as Record<string, unknown>)),
+  'es': withTeamPack('en', withTeamPack('es', es as unknown as Record<string, unknown>))
 }
 
 function detectBrowserLocale(): AppLocale {
