@@ -1,0 +1,133 @@
+version: '1.0'
+schema_version: centag.pipeline/v1alpha1
+id: rag-mode
+name: RAG Gateway Mode
+shortcut_code: '#rag'
+description: "Cache-first RAG: cache_read → (miss) question_splitter → rag_retrieval → generator → answer_synthesizer → cache_write"
+metadata:
+  aligned_proxy_mode: rag-mode
+  lastUpdated: '2026-08-06T00:00:00.000Z'
+  layoutVersion: '2.0'
+  template_scope: mode-id-alignment
+  phase: '5'
+  features:
+  - cache
+  - rag
+  - retrieval
+nodes:
+- id: cache_read
+  type: cache
+  kind: cache.access
+  implementation: builtin.cache
+  name: Cache Read
+  description: Try cache first; on hit skip retrieval and generation
+  config:
+    custom_config:
+      operation: read
+      strategy: exact
+      storage_type: redis
+      read_storage_name: redis
+      key_template: '{{model}}:{{hash}}'
+      vector_storage_name: chromadb-main
+      embedding_model: text-embedding-3-small
+      semantic_threshold: 0.8
+      semantic_top_k: 5
+  timeout: 5
+- id: question_splitter
+  type: question_splitter
+  kind: processing.question_split
+  implementation: business.question_splitter
+  name: Question Splitter
+  description: Optional multi-question split on cache miss
+  config:
+    custom_config: {}
+  timeout: 30
+  condition: '{{.cache_read.metadata.cache_hit}} == false'
+  depends_on:
+  - cache_read
+- id: rag_retrieval
+  type: rag_retrieval
+  kind: retrieval.rag
+  implementation: business.rag_retrieval
+  name: RAG Retrieval
+  description: Retrieve knowledge snippets for prompt augmentation (S3 usage B)
+  config:
+    custom_config:
+      top_k: 5
+      threshold: 0.7
+      # Production must not silently mock; empty corpus yields miss/empty docs
+      allow_mock: false
+  timeout: 30
+  condition: '{{.cache_read.metadata.cache_hit}} == false'
+  depends_on:
+  - question_splitter
+- id: generator
+  type: generator
+  kind: llm.generate
+  implementation: builtin.generator
+  name: Content Generate
+  description: Generate with retrieved context
+  backend: "{{system.default_backend}}"
+  model: "{{system.default_model}}"
+  config:
+    backend: "{{system.default_backend}}"
+    model: "{{system.default_model}}"
+    template_vars:
+      backend: "system.default_backend"
+      model: "system.default_model"
+    system_prompt: |
+      你是知识助手。请结合检索到的上下文回答用户问题；若上下文不足请明确说明。
+  timeout: 120
+  condition: '{{.cache_read.metadata.cache_hit}} == false'
+  depends_on:
+  - rag_retrieval
+- id: answer_synthesizer
+  type: answer_synthesizer
+  kind: processing.answer_synth
+  implementation: business.answer_synthesizer
+  name: Answer Synthesizer
+  description: Merge/cite answers when questions were split
+  config:
+    custom_config:
+      enable_citation: true
+  timeout: 30
+  condition: '{{.cache_read.metadata.cache_hit}} == false'
+  depends_on:
+  - generator
+- id: cache_write
+  type: cache
+  kind: cache.access
+  implementation: builtin.cache
+  name: Cache Write
+  description: Write final answer back to cache
+  config:
+    custom_config:
+      operation: write
+      strategy: exact
+      storage_type: redis
+      write_storage_name: redis
+      ttl: 3600
+      key_template: '{{model}}:{{hash}}'
+      vector_storage_name: chromadb-main
+      embedding_model: text-embedding-3-small
+  timeout: 5
+  condition: '{{.cache_read.metadata.cache_hit}} == false'
+  depends_on:
+  - answer_synthesizer
+- id: token_usage
+  type: token_usage
+  kind: metrics.token_usage
+  implementation: builtin.token_usage
+  name: Token Metering
+  config:
+    custom_config:
+      operation: record
+  timeout: 5
+  depends_on:
+  - cache_write
+global_config:
+  timeout: 180
+  max_retries: 1
+  bypass_on_error: false
+  parallel_limit: 1
+  log_level: info

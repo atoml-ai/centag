@@ -25,6 +25,8 @@ import (
 	_ "centag/plugins/storage/file"
 	_ "centag/plugins/storage/postgresql"
 	_ "centag/plugins/storage/redis"
+
+	_ "centag/plugins/business/rag_retrieval"
 )
 
 var (
