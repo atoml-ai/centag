@@ -124,9 +124,10 @@ func Run(version, buildTime string) {
 		os.Exit(1)
 	}
 
-	logger.Infof("Admin login — username: %q, password: %q", bootstrap.AdminUsername(), bootstrap.AdminPassword())
-	if apiKey := bootstrap.DefaultAdminAPIKeyString(); apiKey != "" {
-		logger.Infof("Admin API Key: %s", apiKey)
+	// 禁止在日志中打印密码或完整 API Key（凭据仅通过环境变量 / Web 管理）
+	logger.Infof("Admin account ready — username: %q (password not logged; set via LLM_PROXY_ADMIN_PASSWORD or change in Web)", bootstrap.AdminUsername())
+	if bootstrap.DefaultAdminAPIKeyString() != "" {
+		logger.Info("Default admin API Key is configured (value not logged; manage via Web / env)")
 	}
 
 	// Step 7: Load full runtime config from database
