@@ -48,6 +48,59 @@ file_size_bytes() {
   stat -c%s "$file"
 }
 
+# Refuse to ship a host binary under a mismatched --goos/--goarch package name
+# (e.g. Mach-O packed as linux-amd64 — this previously broke FNOS OTA).
+assert_binary_matches_target() {
+  local bin="$1"
+  local want_goos="$2"
+  local want_goarch="$3"
+  local desc=""
+  if command -v file >/dev/null 2>&1; then
+    desc="$(file -b "$bin" 2>/dev/null || true)"
+  fi
+  local head
+  head="$(od -An -tx1 -N4 "$bin" 2>/dev/null | tr -d ' \n' || true)"
+
+  case "$want_goos" in
+    linux)
+      if [[ "$head" != "7f454c46" ]]; then
+        fail "binary is not Linux ELF (file=${desc:-unknown}; want GOOS=linux GOARCH=${want_goarch}). Cross-compile with GOOS=linux GOARCH=${want_goarch}, or omit --goos/--goarch for host packages."
+      fi
+      case "$want_goarch" in
+        amd64)
+          if echo "$desc" | grep -qiE 'ARM|aarch64|arm64'; then
+            fail "binary arch looks like ARM but package claims amd64 (file=${desc})"
+          fi
+          ;;
+        arm64)
+          if echo "$desc" | grep -qiE 'x86-64|x86_64|Intel 80386' && ! echo "$desc" | grep -qiE 'ARM|aarch64|arm64'; then
+            fail "binary arch looks like x86_64 but package claims arm64 (file=${desc})"
+          fi
+          ;;
+      esac
+      ;;
+    darwin|macos)
+      # Mach-O magic: fe ed fa ce / ce fa ed fe / cf fa ed fe / fe ed fa cf
+      if [[ "$head" != "feedface" && "$head" != "cefaedfe" && "$head" != "cffaedfe" && "$head" != "feedfacf" ]]; then
+        if ! echo "$desc" | grep -qi 'Mach-O'; then
+          fail "binary is not macOS Mach-O (file=${desc:-unknown}; want GOOS=darwin)"
+        fi
+      fi
+      ;;
+    windows)
+      # PE: MZ
+      if [[ "$head" != 4d5a* && "${head:0:4}" != "4d5a" ]]; then
+        local mz
+        mz="$(od -An -tx1 -N2 "$bin" 2>/dev/null | tr -d ' \n' || true)"
+        if [[ "$mz" != "4d5a" ]]; then
+          fail "binary is not Windows PE (file=${desc:-unknown}; want GOOS=windows)"
+        fi
+      fi
+      ;;
+  esac
+  log_info "binary target check ok: ${want_goos}/${want_goarch} (${desc:-magic=$head})"
+}
+
 write_artifact_metadata() {
   local artifact="$1"
   local version="$2"
@@ -146,6 +199,7 @@ package_service() {
   edition="$(printf '%s' "$edition" | tr '[:upper:]' '[:lower:]')"
   [[ -n "$edition" ]] || fail "service packaging requires --edition"
   [[ -f "$source_bin" ]] || fail "service binary not found: $source_bin"
+  assert_binary_matches_target "$source_bin" "$goos" "$goarch"
 
   local temp_dir
   temp_dir="$(mktemp -d)"
@@ -176,14 +230,14 @@ package_service() {
     echo "    permission: \"0755\""
     echo "    backup: true"
     echo "    recursive: false"
-    echo "    description: \"Centag 主程序\""
+    echo "    description: \"Centag 主程序（apply 时若存在 bin/ 则落到 bin/centag）\""
     if [[ "$has_static" == "true" ]]; then
       echo "  - source: \"static/\""
       echo "    target: \"static/\""
       echo "    permission: \"0644\""
       echo "    backup: false"
       echo "    recursive: true"
-      echo "    description: \"Web前端静态文件\""
+      echo "    description: \"Web前端静态文件（安装根下 static/）\""
     fi
     echo ""
     echo "init_scripts: []"

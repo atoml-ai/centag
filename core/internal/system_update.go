@@ -5,12 +5,14 @@ import (
 	"compress/gzip"
 	"context"
 	"crypto/sha256"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -140,7 +142,7 @@ type applyOutcome struct {
 	config          *UpdateConfig
 	sha256sum       string
 	historyFileName string
-	execDir         string
+	installRoot     string
 }
 
 // HandleUpdate 处理系统更新请求（手动上传）
@@ -326,10 +328,11 @@ func (h *SystemUpdateHandler) applyPackage(packagePath, packageName string) (*ap
 		return nil, fmt.Errorf("read update config: %w", err)
 	}
 
-	execDir, err := getExecDir()
+	installRoot, err := resolveInstallRoot()
 	if err != nil {
-		return nil, fmt.Errorf("get executable directory: %w", err)
+		return nil, fmt.Errorf("resolve install root: %w", err)
 	}
+	logger.Infof("[系统更新] 安装根目录: %s", installRoot)
 
 	history := &UpdateHistory{
 		StartTime:   time.Now(),
@@ -350,7 +353,8 @@ func (h *SystemUpdateHandler) applyPackage(packagePath, packageName string) (*ap
 			break
 		}
 
-		targetPath, err := safeJoinUnderBase(execDir, fileSpec.Target)
+		mappedTarget := remapUpdateTarget(installRoot, fileSpec.Target)
+		targetPath, err := safeJoinUnderBase(installRoot, mappedTarget)
 		if err != nil {
 			logger.Errorf("[系统更新] 非法 target 路径: %v", err)
 			history.Success = false
@@ -359,10 +363,10 @@ func (h *SystemUpdateHandler) applyPackage(packagePath, packageName string) (*ap
 			break
 		}
 
-		logger.Infof("[系统更新] 处理文件: %s -> %s", sourcePath, targetPath)
+		logger.Infof("[系统更新] 处理文件: %s -> %s (config target=%s)", sourcePath, targetPath, fileSpec.Target)
 
 		if fileSpec.Backup {
-			backupPath := filepath.Join(execDir, "storage", "backups", filepath.Base(targetPath)+"."+time.Now().Format("20060102150405"))
+			backupPath := filepath.Join(installRoot, "storage", "backups", filepath.Base(targetPath)+"."+time.Now().Format("20060102150405"))
 			if err := os.MkdirAll(filepath.Dir(backupPath), 0755); err != nil {
 				logger.Errorf("[系统更新] 创建备份目录失败: %v", err)
 			}
@@ -396,6 +400,16 @@ func (h *SystemUpdateHandler) applyPackage(packagePath, packageName string) (*ap
 			}
 			logger.Infof("[系统更新] 目录复制成功: %s", targetPath)
 		} else {
+			// 主程序：拒绝把错误平台的二进制写进生产目录（曾导致 FNOS 上 Mach-O 替换 ELF）
+			if isMainBinaryTarget(mappedTarget) {
+				if err := validateExecutableForHost(sourcePath); err != nil {
+					logger.Errorf("[系统更新] 二进制平台校验失败: %v", err)
+					history.Success = false
+					history.Error = err.Error()
+					updateSucceeded = false
+					break
+				}
+			}
 			logger.Infof("[系统更新] 复制文件: %s -> %s", sourcePath, targetPath)
 			if err := copyFile(sourcePath, targetPath); err != nil {
 				logger.Errorf("[系统更新] 复制文件失败: %v", err)
@@ -405,6 +419,11 @@ func (h *SystemUpdateHandler) applyPackage(packagePath, packageName string) (*ap
 				break
 			}
 			logger.Infof("[系统更新] 文件复制成功: %s", targetPath)
+		}
+
+		// FNOS 兼容：若存在 webui 目录/链接约定，同步 static → webui
+		if updateSucceeded {
+			ensureStaticWebUICompat(installRoot, mappedTarget)
 		}
 	}
 
@@ -426,7 +445,7 @@ func (h *SystemUpdateHandler) applyPackage(packagePath, packageName string) (*ap
 		}
 	}
 
-	historyDir := filepath.Join(execDir, "storage", "update-history")
+	historyDir := filepath.Join(installRoot, "storage", "update-history")
 	_ = os.MkdirAll(historyDir, 0755)
 	historyFileName := fmt.Sprintf("update-%d-%s.json", time.Now().Unix(), sha256sum[:8])
 	historyPath := filepath.Join(historyDir, historyFileName)
@@ -438,7 +457,7 @@ func (h *SystemUpdateHandler) applyPackage(packagePath, packageName string) (*ap
 		config:          config,
 		sha256sum:       sha256sum,
 		historyFileName: historyFileName,
-		execDir:         execDir,
+		installRoot:     installRoot,
 	}, nil
 }
 
@@ -454,7 +473,9 @@ func (h *SystemUpdateHandler) writeApplyResponse(w http.ResponseWriter, outcome 
 	if history.Success {
 		logger.Info("[系统更新] 更新文件已就绪，准备重启服务...")
 		if config.Behavior.AutoRestart {
-			updateMarker := filepath.Join(outcome.execDir, "storage", "update_marker")
+			storageDir := filepath.Join(outcome.installRoot, "storage")
+			_ = os.MkdirAll(storageDir, 0755)
+			updateMarker := filepath.Join(storageDir, "update_marker")
 			markerData := map[string]string{
 				"timestamp": time.Now().Format(time.RFC3339),
 				"version":   config.Version,
@@ -466,7 +487,7 @@ func (h *SystemUpdateHandler) writeApplyResponse(w http.ResponseWriter, outcome 
 
 			go func() {
 				time.Sleep(2 * time.Second)
-				stopMarker := filepath.Join(outcome.execDir, "storage", "update_stop")
+				stopMarker := filepath.Join(storageDir, "update_stop")
 				_ = os.WriteFile(stopMarker, []byte(time.Now().Format(time.RFC3339)), 0644)
 				logger.Info("[系统更新] 已写入停止标记，守护进程将重启服务...")
 				time.Sleep(1 * time.Second)
@@ -484,13 +505,13 @@ func (h *SystemUpdateHandler) writeApplyResponse(w http.ResponseWriter, outcome 
 
 // HandleUpdateHistory 获取更新历史
 func (h *SystemUpdateHandler) HandleUpdateHistory(w http.ResponseWriter, r *http.Request) {
-	execDir, err := getExecDir()
+	installRoot, err := resolveInstallRoot()
 	if err != nil {
-		http.Error(w, "Failed to get executable directory", http.StatusInternalServerError)
+		http.Error(w, "Failed to resolve install root", http.StatusInternalServerError)
 		return
 	}
 
-	historyDir := filepath.Join(execDir, "storage", "update-history")
+	historyDir := filepath.Join(installRoot, "storage", "update-history")
 	entries, err := os.ReadDir(historyDir)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -560,16 +581,15 @@ func (h *SystemUpdateHandler) HandleRollback(w http.ResponseWriter, r *http.Requ
 
 	logger.Infof("[版本回退] 请求回退到: %s", historyFile)
 
-	// 获取可执行文件所在目录
-	execDir, err := getExecDir()
+	installRoot, err := resolveInstallRoot()
 	if err != nil {
-		logger.Errorf("[版本回退] 获取可执行文件目录失败: %v", err)
-		http.Error(w, "Failed to get executable directory", http.StatusInternalServerError)
+		logger.Errorf("[版本回退] 解析安装根目录失败: %v", err)
+		http.Error(w, "Failed to resolve install root", http.StatusInternalServerError)
 		return
 	}
 
 	// 读取历史记录
-	historyPath := filepath.Join(execDir, "storage", "update-history", historyFile)
+	historyPath := filepath.Join(installRoot, "storage", "update-history", historyFile)
 	historyData, err := os.ReadFile(historyPath)
 	if err != nil {
 		logger.Errorf("[版本回退] 读取历史记录失败: %v", err)
@@ -615,7 +635,7 @@ func (h *SystemUpdateHandler) HandleRollback(w http.ResponseWriter, r *http.Requ
 			rollbackHistory.EndTime = time.Now()
 
 			// 保存回退历史
-			saveUpdateHistory(execDir, rollbackHistory)
+			saveUpdateHistory(installRoot, rollbackHistory)
 			http.Error(w, fmt.Sprintf("回退失败: %v", err), http.StatusInternalServerError)
 			return
 		}
@@ -629,7 +649,7 @@ func (h *SystemUpdateHandler) HandleRollback(w http.ResponseWriter, r *http.Requ
 				rollbackHistory.EndTime = time.Now()
 
 				// 保存回退历史
-				saveUpdateHistory(execDir, rollbackHistory)
+				saveUpdateHistory(installRoot, rollbackHistory)
 				http.Error(w, fmt.Sprintf("回退失败: %v", err), http.StatusInternalServerError)
 				return
 			}
@@ -641,7 +661,7 @@ func (h *SystemUpdateHandler) HandleRollback(w http.ResponseWriter, r *http.Requ
 				rollbackHistory.EndTime = time.Now()
 
 				// 保存回退历史
-				saveUpdateHistory(execDir, rollbackHistory)
+				saveUpdateHistory(installRoot, rollbackHistory)
 				http.Error(w, fmt.Sprintf("回退失败: %v", err), http.StatusInternalServerError)
 				return
 			}
@@ -653,7 +673,7 @@ func (h *SystemUpdateHandler) HandleRollback(w http.ResponseWriter, r *http.Requ
 	rollbackHistory.EndTime = time.Now()
 
 	// 保存回退历史
-	saveUpdateHistory(execDir, rollbackHistory)
+	saveUpdateHistory(installRoot, rollbackHistory)
 
 	logger.Info("[版本回退] 回退成功")
 
@@ -679,16 +699,15 @@ func (h *SystemUpdateHandler) HandleDelete(w http.ResponseWriter, r *http.Reques
 
 	logger.Infof("[删除更新包] 请求删除: %s", historyFile)
 
-	// 获取可执行文件所在目录
-	execDir, err := getExecDir()
+	installRoot, err := resolveInstallRoot()
 	if err != nil {
-		logger.Errorf("[删除更新包] 获取可执行文件目录失败: %v", err)
-		http.Error(w, "Failed to get executable directory", http.StatusInternalServerError)
+		logger.Errorf("[删除更新包] 解析安装根目录失败: %v", err)
+		http.Error(w, "Failed to resolve install root", http.StatusInternalServerError)
 		return
 	}
 
 	// 读取历史记录
-	historyPath := filepath.Join(execDir, "storage", "update-history", historyFile)
+	historyPath := filepath.Join(installRoot, "storage", "update-history", historyFile)
 	historyData, err := os.ReadFile(historyPath)
 	if err != nil {
 		logger.Errorf("[删除更新包] 读取历史记录失败: %v", err)
@@ -731,8 +750,8 @@ func (h *SystemUpdateHandler) HandleDelete(w http.ResponseWriter, r *http.Reques
 }
 
 // saveUpdateHistory 保存更新历史到文件
-func saveUpdateHistory(execDir string, history *UpdateHistory) error {
-	historyDir := filepath.Join(execDir, "storage", "update-history")
+func saveUpdateHistory(installRoot string, history *UpdateHistory) error {
+	historyDir := filepath.Join(installRoot, "storage", "update-history")
 	os.MkdirAll(historyDir, 0755)
 
 	historyData, _ := json.MarshalIndent(history, "", "  ")
@@ -914,8 +933,111 @@ func getExecDir() (string, error) {
 	if err != nil {
 		return "", err
 	}
-
+	if resolved, err := filepath.EvalSymlinks(execPath); err == nil {
+		execPath = resolved
+	}
 	return filepath.Dir(execPath), nil
+}
+
+// resolveInstallRoot returns the install root aligned with daemon WORK_DIR.
+// When the binary lives at <root>/bin/centag, root is the parent of bin/.
+// Otherwise root is the directory containing the executable.
+func resolveInstallRoot() (string, error) {
+	execPath, err := os.Executable()
+	if err != nil {
+		return "", err
+	}
+	if resolved, err := filepath.EvalSymlinks(execPath); err == nil {
+		execPath = resolved
+	}
+	return installRootFromExecPath(execPath), nil
+}
+
+func installRootFromExecPath(execPath string) string {
+	execDir := filepath.Dir(execPath)
+	if filepath.Base(execDir) == "bin" {
+		return filepath.Dir(execDir)
+	}
+	return execDir
+}
+
+// remapUpdateTarget maps package targets onto the install layout.
+// Bare "centag" becomes "bin/centag" when <installRoot>/bin exists.
+func remapUpdateTarget(installRoot, target string) string {
+	clean := filepath.Clean(strings.TrimPrefix(strings.TrimSpace(target), "./"))
+	if clean == "." || clean == "" {
+		return clean
+	}
+	base := filepath.Base(clean)
+	if (base == "centag" || base == "centag.exe") && (clean == base) {
+		binDir := filepath.Join(installRoot, "bin")
+		if st, err := os.Stat(binDir); err == nil && st.IsDir() {
+			return filepath.Join("bin", base)
+		}
+	}
+	return clean
+}
+
+func isMainBinaryTarget(mappedTarget string) bool {
+	base := filepath.Base(filepath.Clean(mappedTarget))
+	return base == "centag" || base == "centag.exe"
+}
+
+// validateExecutableForHost rejects update payloads that cannot run on this OS
+// (e.g. packaging a macOS Mach-O binary as linux-amd64).
+func validateExecutableForHost(path string) error {
+	f, err := os.Open(path)
+	if err != nil {
+		return fmt.Errorf("open binary: %w", err)
+	}
+	defer f.Close()
+
+	var magic [4]byte
+	if _, err := io.ReadFull(f, magic[:]); err != nil {
+		return fmt.Errorf("read binary magic: %w", err)
+	}
+
+	switch runtime.GOOS {
+	case "linux":
+		if magic != [4]byte{0x7f, 'E', 'L', 'F'} {
+			return fmt.Errorf("更新包主程序不是 Linux ELF（当前系统=%s）；请用 GOOS=linux GOARCH=%s 重新打包，勿把本机 macOS 二进制标成 linux", runtime.GOOS, runtime.GOARCH)
+		}
+	case "darwin":
+		// Mach-O 32/64, thin/fat (big/little endian)
+		be32 := binary.BigEndian.Uint32(magic[:])
+		le32 := binary.LittleEndian.Uint32(magic[:])
+		ok := be32 == 0xfeedface || be32 == 0xfeedfacf || be32 == 0xcafebabe ||
+			le32 == 0xfeedface || le32 == 0xfeedfacf || le32 == 0xcafebabe
+		if !ok {
+			return fmt.Errorf("更新包主程序不是 macOS Mach-O（当前系统=%s）", runtime.GOOS)
+		}
+	case "windows":
+		if magic[0] != 'M' || magic[1] != 'Z' {
+			return fmt.Errorf("更新包主程序不是 Windows PE（当前系统=%s）", runtime.GOOS)
+		}
+	}
+	return nil
+}
+
+// ensureStaticWebUICompat keeps FNOS webui/ readable after OTA writes static/.
+func ensureStaticWebUICompat(installRoot, mappedTarget string) {
+	slash := filepath.ToSlash(mappedTarget)
+	if slash != "static" && !strings.HasPrefix(slash, "static/") {
+		return
+	}
+	staticDir := filepath.Join(installRoot, "static")
+	webuiPath := filepath.Join(installRoot, "webui")
+	if st, err := os.Stat(staticDir); err != nil || !st.IsDir() {
+		return
+	}
+	// If webui already exists as a real directory with content, leave it;
+	// only create a symlink when missing (fresh FNOS static layout).
+	if _, err := os.Lstat(webuiPath); err == nil {
+		return
+	}
+	if err := os.Symlink("static", webuiPath); err != nil {
+		logger.Warnf("[系统更新] 创建 webui -> static 链接失败: %v", err)
+	}
 }
 
 func safeJoinUnderBase(base, relativePath string) (string, error) {

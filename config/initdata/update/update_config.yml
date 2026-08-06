@@ -1,4 +1,5 @@
-# 更新配置模板
+# 更新配置模板（相对安装根；daemon WORK_DIR = 安装根）
+# 若运行布局为 <root>/bin/centag，apply 会把 target:centag 映射到 bin/centag。
 version: "v1.0.0"
 description: "Centag 更新包"
 files:
@@ -14,12 +15,6 @@ files:
     backup: false
     recursive: true
     description: "Web前端静态文件"
-  - source: "configs/"
-    target: "configs/"
-    permission: "0644"
-    backup: true
-    recursive: true
-    description: "配置文件"
 init_scripts:
   - script: "scripts/post-update.sh"
     description: "更新后执行脚本"
