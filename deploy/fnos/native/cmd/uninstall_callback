@@ -5,6 +5,12 @@
 ### 满足以下任一条件才清理数据：
 ###   1) 卸载向导（wizard/uninstall）选择「删除全部数据」→ $wizard_data_action=delete
 ###   2) 配置页 centag.conf: clean_data_on_uninstall=true
+###
+### 数据清理优先委托给跨平台的 Go 子命令 `centag cleanup`
+### （见 core/pkg/config/cleanup.go）：仅当 centag.conf 配置
+### db_driver=postgresql 时才连接 PostgreSQL 并 DROP public schema 表；
+### SQLite / 未配置时跳过。若卸载时二进制已不可用，则回退到本脚本内的
+### psql 清理路径（同样仅 postgresql 驱动才执行）。
 
 set +e
 
@@ -23,8 +29,9 @@ if command -v fuser >/dev/null 2>&1; then
   fuser -k "${PORT}/tcp" 2>/dev/null || true
 fi
 
-CONF_FILE="${TRIM_DATA_SHARE_PATHS%%:*}/centag.conf"
 DATA_DIR="${TRIM_DATA_SHARE_PATHS%%:*}"
+CONF_FILE="${DATA_DIR}/centag.conf"
+BINARY="${TRIM_APPDEST:-/vol1/@appcenter/centag}/bin/centag"
 
 clear_data() {
   if [ -n "${DATA_DIR}" ] && [ -d "${DATA_DIR}" ]; then
@@ -35,6 +42,64 @@ clear_data() {
     echo "清理持久化数据卷: ${TRIM_PKGVAR}"
     find "${TRIM_PKGVAR}" -mindepth 1 -delete 2>/dev/null
   fi
+}
+
+# 从 centag.conf 读取指定 JSON 字符串字段（回退路径用；单行/多行均兼容）
+json_get() {
+  grep -oE "\"${1}\"[[:space:]]*:[[:space:]]*\"[^\"]*\"" "${CONF_FILE}" 2>/dev/null | head -1 \
+    | sed -E 's/^"[^"]*"[[:space:]]*:[[:space:]]*"([^"]*)"/\1/' \
+    | tr -d ' \t\r'
+}
+
+# 二进制不可用时的回退：仅 postgresql 驱动才用 psql DROP public 表。
+clean_postgres_fallback() {
+  [ -f "${CONF_FILE}" ] || return 0
+  local db_driver
+  db_driver="$(json_get db_driver)"
+  [ "${db_driver}" = "postgresql" ] || return 0
+
+  if ! command -v psql >/dev/null 2>&1; then
+    echo "[WARN] 未找到 centag 二进制且无 psql，跳过 PostgreSQL 数据清理（重装前可能残留旧表）"
+    return 1
+  fi
+
+  local pg_host pg_port pg_user pg_password pg_db
+  pg_host="$(json_get pg_host)"
+  pg_port="$(json_get pg_port)"
+  pg_user="$(json_get pg_user)"
+  pg_password="$(json_get pg_password)"
+  pg_db="$(json_get pg_db)"
+  [ -n "${pg_host}" ] || pg_host="localhost"
+  [ -n "${pg_port}" ] || pg_port="5432"
+  [ -n "${pg_user}" ] || pg_user="postgres"
+  [ -n "${pg_db}" ] || pg_db="centag"
+
+  echo "回退：用 psql 清理 PostgreSQL 数据: ${pg_host}:${pg_port}/${pg_db}（public schema 所有表）"
+  PGPASSWORD="${pg_password}" psql -h "${pg_host}" -p "${pg_port}" -U "${pg_user}" -d "${pg_db}" -v ON_ERROR_STOP=1 -q \
+    -c "DO \$\$ DECLARE r RECORD; BEGIN FOR r IN SELECT tablename FROM pg_tables WHERE schemaname='public' LOOP EXECUTE format('DROP TABLE IF EXISTS %I CASCADE', r.tablename); END LOOP; END \$\$;"
+  if [ $? -eq 0 ]; then
+    echo "PostgreSQL 数据清理完成（psql 回退）"
+    return 0
+  fi
+  echo "[WARN] PostgreSQL 数据清理失败，请手动确认"
+  return 1
+}
+
+# 跨平台数据清理：优先 centag cleanup；二进制已删时回退 psql。
+clean_deployment_data() {
+  if [ -x "${BINARY}" ]; then
+    echo "调用 centag cleanup 清理部署数据..."
+    CENTAG_DATA_DIR="${DATA_DIR}" "${BINARY}" cleanup
+    if [ $? -eq 0 ]; then
+      echo "部署数据清理完成"
+      return 0
+    fi
+    echo "[WARN] centag cleanup 失败，请手动确认（重装前可能残留旧表）"
+    return 1
+  fi
+
+  echo "[WARN] 未找到可执行文件 ${BINARY}，尝试 psql 回退清理"
+  clean_postgres_fallback
 }
 
 should_clean="false"
@@ -53,6 +118,8 @@ elif [ -f "${CONF_FILE}" ]; then
 fi
 
 if [ "${should_clean}" = "true" ]; then
+  # 先清数据库（依赖 centag.conf 里的连接信息），再删本地数据卷
+  clean_deployment_data
   clear_data
 else
   echo "未选择清除数据，保留应用数据"

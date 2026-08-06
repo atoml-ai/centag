@@ -18,21 +18,24 @@ import (
 // 注意：文件名必须与 deploy/fnos/native/cmd/{main,uninstall_callback} 保持一致。
 const deploymentConfigFile = "centag.conf"
 
-// LoadDeploymentConfig 从数据目录读取部署级配置。文件不存在或无法解析时返回默认值，
-// 保证首次安装 / 普通服务环境使用 SQLite 且卸载保留数据。
-func LoadDeploymentConfig() DeploymentConfig {
+// LoadDeploymentConfigFrom 从指定数据目录读取部署级配置。
+// 文件不存在时返回默认值与 nil error；读失败或 JSON 无法解析时返回 error（调用方可决定
+// 是否回退默认值）。LoadDeploymentConfig 在失败时仍回退默认值以兼容运行时。
+func LoadDeploymentConfigFrom(dataDir string) (DeploymentConfig, error) {
 	def := DefaultDeploymentConfig()
-	dataDir := ResolveDataDir()
 	if dataDir == "" {
-		return def
+		return def, nil
 	}
 	data, err := os.ReadFile(filepath.Join(dataDir, deploymentConfigFile))
 	if err != nil {
-		return def
+		if os.IsNotExist(err) {
+			return def, nil
+		}
+		return def, err
 	}
 	var dep DeploymentConfig
 	if err := json.Unmarshal(data, &dep); err != nil {
-		return def
+		return def, err
 	}
 	// 兜底默认值：旧文件可能缺少新增字段
 	if dep.DBDriver == "" {
@@ -50,6 +53,13 @@ func LoadDeploymentConfig() DeploymentConfig {
 	if dep.PGDB == "" {
 		dep.PGDB = def.PGDB
 	}
+	return dep, nil
+}
+
+// LoadDeploymentConfig 从数据目录读取部署级配置。文件不存在或无法解析时返回默认值，
+// 保证首次安装 / 普通服务环境使用 SQLite 且卸载保留数据。
+func LoadDeploymentConfig() DeploymentConfig {
+	dep, _ := LoadDeploymentConfigFrom(ResolveDataDir())
 	return dep
 }
 

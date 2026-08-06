@@ -38,6 +38,9 @@ func Run(version, buildTime string) {
 	if HandleWrapCommand(os.Args) {
 		return
 	}
+	if HandleCleanupCommand(os.Args) {
+		return
+	}
 
 	if len(os.Args) > 1 && os.Args[1] == "plugin" {
 		fmt.Fprintf(os.Stderr, "plugin subcommand not available in this distribution\n")
