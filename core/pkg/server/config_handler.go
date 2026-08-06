@@ -99,6 +99,12 @@ func (h *ConfigHandler) GetAllConfig(c *gin.Context) {
 		spView.EgressAPIKey = "***"
 	}
 
+	// 部署级配置：PG 密码脱敏，避免明文回显
+	depView := cfg.Deployment
+	if strings.TrimSpace(depView.PGPassword) != "" {
+		depView.PGPassword = "***"
+	}
+
 	response := gin.H{
 		"server":          cfg.Server,
 		"log":             cfg.Log,
@@ -117,6 +123,7 @@ func (h *ConfigHandler) GetAllConfig(c *gin.Context) {
 		"default_storage": cfg.DefaultStorage,
 		"model_matching":  cfg.ModelMatching, // 添加模型调度配置
 		"scheduler":       cfg.Scheduler,     // 智能调度配置
+		"deployment":      depView,           // 部署级配置（fnOS 安装包）
 	}
 
 	RespondSuccess(c, response)
@@ -160,6 +167,7 @@ func (h *ConfigHandler) SaveAllConfig(c *gin.Context) {
 		DefaultStorage string                      `json:"default_storage"`
 		ModelMatching  *config.ModelMatchingConfig `json:"model_matching"`
 		Scheduler      config.SchedulerConfig      `json:"scheduler"` // 值类型，非指针
+		Deployment     *config.DeploymentConfig    `json:"deployment"`
 	}
 
 	if !BindJSON(c, &req) {
@@ -489,6 +497,41 @@ func (h *ConfigHandler) SaveAllConfig(c *gin.Context) {
 		}
 	} else {
 		logger.Warnf("No scheduler config in request body")
+	}
+
+	// 部署级配置（fnOS 等安装包）：合并保存到 ${CENTAG_DATA_DIR}/centag.conf，
+	// 不写入 DB。PG 密码沿用 SystemProxy.EgressAPIKey 的脱敏约定：非空且为 *** 时保留原值。
+	if req.Deployment != nil {
+		cur := cfg.Deployment
+		dep := *req.Deployment
+		if pw := strings.TrimSpace(dep.PGPassword); pw != "" && pw != "***" {
+			cur.PGPassword = pw
+		}
+		cur.CleanDataOnUninstall = dep.CleanDataOnUninstall
+		if dep.DBDriver != "" {
+			cur.DBDriver = dep.DBDriver
+		}
+		if dep.PGHost != "" {
+			cur.PGHost = dep.PGHost
+		}
+		if dep.PGPort != "" {
+			cur.PGPort = dep.PGPort
+		}
+		if dep.PGUser != "" {
+			cur.PGUser = dep.PGUser
+		}
+		if dep.PGDB != "" {
+			cur.PGDB = dep.PGDB
+		}
+		cfg.Deployment = cur
+		if err := config.SaveDeploymentConfig(cur); err != nil {
+			logger.Errorf("Failed to save deployment config: %v", err)
+			RespondInternalError(c, "Failed to save deployment config: "+err.Error())
+			return
+		}
+		config.UpdateDeploymentConfig(cur)
+		logger.Infof("Deployment config saved: db_driver=%s clean_data_on_uninstall=%v",
+			cur.DBDriver, cur.CleanDataOnUninstall)
 	}
 
 	// 保存配置到数据库

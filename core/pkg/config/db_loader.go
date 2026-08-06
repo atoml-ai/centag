@@ -70,6 +70,9 @@ func LoadFromDB(ctx context.Context, bootstrap *BootstrapConfig, adminUserID int
 	cfg.QuestionSplit = dbLoadOrDefault(ctx, scs, KeyQuestionSplitConfig, GetDefaultQuestionSplitConfig())
 	cfg.Scheduler = dbLoadOrDefault(ctx, scs, KeySchedulerConfig, DefaultSchedulerConfig())
 
+	// 部署级配置（fnOS 等安装包）：从数据目录的 centag.conf 读取，不写入 DB。
+	cfg.Deployment = LoadDeploymentConfig()
+
 	// ── data stores ───────────────────────────────────────────────────────────
 	if raw, err := scs.Get(ctx, KeyDataStores); err == nil && raw != "" {
 		_ = json.Unmarshal([]byte(raw), &cfg.DataStores)

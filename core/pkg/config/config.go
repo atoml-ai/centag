@@ -91,9 +91,37 @@ type Config struct {
 	ModelMatching     ModelMatchingConfig  `json:"model_matching"`
 	CacheControl      CacheControlConfig   `json:"cache_control"`
 	Scheduler         SchedulerConfig      `json:"scheduler"`
+	Deployment        DeploymentConfig     `json:"deployment"` // 部署级配置（fnOS 等安装包），不写入 DB
 }
 
 // ── sub-structures ────────────────────────────────────────────────────────────
+
+// DeploymentConfig 描述部署级设置（fnOS 等安装包环境）：卸载数据保留与元数据库选择。
+// 与 DB 中的运行配置不同，这些字段持久化到 ${CENTAG_DATA_DIR}/centag.conf，由
+// fnOS 启动脚本 load_app_config() 读取并注入环境变量（LLM_PROXY_DB_DRIVER / POSTGRES_*），
+// 由 uninstall_callback 读取 clean_data_on_uninstall 决定卸载时是否清除数据。
+type DeploymentConfig struct {
+	CleanDataOnUninstall bool   `json:"clean_data_on_uninstall"` // 卸载时是否清除全部数据（默认 false=保留）
+	DBDriver             string `json:"db_driver"`               // sqlite | postgresql
+	PGHost               string `json:"pg_host"`
+	PGPort               string `json:"pg_port"`
+	PGUser               string `json:"pg_user"`
+	PGPassword           string `json:"pg_password"`
+	PGDB                 string `json:"pg_db"`
+}
+
+// DefaultDeploymentConfig 返回部署级配置默认值（SQLite、卸载保留数据）。
+func DefaultDeploymentConfig() DeploymentConfig {
+	return DeploymentConfig{
+		CleanDataOnUninstall: false,
+		DBDriver:             "sqlite",
+		PGHost:               "localhost",
+		PGPort:               "5432",
+		PGUser:               "postgres",
+		PGPassword:           "",
+		PGDB:                 "centag",
+	}
+}
 
 // BackendHealthStatus 后端健康状态
 type BackendHealthStatus struct {
