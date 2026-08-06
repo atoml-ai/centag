@@ -1,6 +1,7 @@
 {
   "title": "Consola de registros en vivo",
   "categoryLabel": "Categoría:",
+  "categoryBusiness": "Negocio",
   "categoryAll": "Todo",
   "categoryLlm": "Acceso LLM",
   "categoryPipeline": "Pipeline",
@@ -9,7 +10,7 @@
   "levelAll": "Todo",
   "autoScroll": "Desplazamiento automático",
   "compact": "Compacto",
-  "compactHint": "Oculta ruido de arranque/migración/sondeo HTTP; desactívelo para ver todo",
+  "compactHint": "Oculta ruido de arranque/migración/HTTP; Negocio solo LLM/backend/pipeline",
   "pauseLive": "Pausar seguimiento en vivo",
   "startLive": "Iniciar seguimiento en vivo",
   "pause": "⏸ Pausa",

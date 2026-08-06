@@ -1,6 +1,7 @@
 {
   "title": "Консоль живых логов",
   "categoryLabel": "Категория:",
+  "categoryBusiness": "Бизнес",
   "categoryAll": "Все",
   "categoryLlm": "LLM доступ",
   "categoryPipeline": "Конвейер",
@@ -9,7 +10,7 @@
   "levelAll": "Все",
   "autoScroll": "Автопрокрутка",
   "compact": "Кратко",
-  "compactHint": "Скрывает шум запуска/миграций/HTTP-опроса; выключите, чтобы видеть всё",
+  "compactHint": "Скрывает шум запуска/миграций/HTTP; «Бизнес» — только LLM/бэкенд/конвейер",
   "pauseLive": "Приостановить отслеживание",
   "startLive": "Запустить отслеживание",
   "pause": "⏸ Пауза",

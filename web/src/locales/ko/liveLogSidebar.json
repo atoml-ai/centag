@@ -1,6 +1,7 @@
 {
   "title": "실시간 로그 콘솔",
   "categoryLabel": "분류:",
+  "categoryBusiness": "업무",
   "categoryAll": "전체",
   "categoryLlm": "LLM 액세스",
   "categoryPipeline": "파이프라인",
@@ -9,7 +10,7 @@
   "levelAll": "전체",
   "autoScroll": "자동 스크롤",
   "compact": "간결",
-  "compactHint": "시작/마이그레이션/HTTP 폴링 노이즈 숨김. 끄면 전체 표시",
+  "compactHint": "시작/마이그레이션/HTTP 폴링 노이즈 숨김. 「업무」는 LLM/백엔드/파이프라인만",
   "pauseLive": "실시간 추적 일시 중지",
   "startLive": "실시간 추적 시작",
   "pause": "⏸ 일시 중지",

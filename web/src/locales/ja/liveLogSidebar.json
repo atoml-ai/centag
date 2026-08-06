@@ -1,6 +1,7 @@
 {
   "title": "リアルタイムログコンソール",
   "categoryLabel": "カテゴリ：",
+  "categoryBusiness": "業務",
   "categoryAll": "すべて",
   "categoryLlm": "LLM アクセス",
   "categoryPipeline": "パイプライン",
@@ -9,7 +10,7 @@
   "levelAll": "すべて",
   "autoScroll": "自動スクロール",
   "compact": "簡潔",
-  "compactHint": "起動/移行/HTTP ポーリングなどのノイズを非表示。オフで全量表示",
+  "compactHint": "起動/移行/HTTP ポーリングなどのノイズを非表示。「業務」は LLM/バックエンド/パイプラインのみ",
   "pauseLive": "リアルタイム追跡を一時停止",
   "startLive": "リアルタイム追跡を開始",
   "pause": "⏸ 一時停止",

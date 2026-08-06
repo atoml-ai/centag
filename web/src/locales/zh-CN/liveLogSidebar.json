@@ -1,6 +1,7 @@
 {
   "title": "实时日志控制台",
   "categoryLabel": "分类：",
+  "categoryBusiness": "业务",
   "categoryAll": "全部",
   "categoryLlm": "大模型访问",
   "categoryPipeline": "流水线",
@@ -9,7 +10,7 @@
   "levelAll": "全部",
   "autoScroll": "自动滚动",
   "compact": "精简",
-  "compactHint": "隐藏启动/迁移/HTTP 轮询等噪音日志；关闭可看全量",
+  "compactHint": "隐藏启动/迁移/HTTP 轮询等噪音；「业务」仅保留大模型/后端/流水线日志",
   "pauseLive": "暂停实时跟踪",
   "startLive": "开启实时跟踪",
   "pause": "⏸ 暂停",

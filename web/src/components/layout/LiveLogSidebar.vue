@@ -11,6 +11,7 @@
           <div class="log-filter-group">
             <label class="log-filter-label">{{ t('liveLogSidebar.categoryLabel') }}</label>
             <select v-model="categoryFilter" class="log-filter-select">
+              <option value="business">{{ t('liveLogSidebar.categoryBusiness') }}</option>
               <option value="">{{ t('liveLogSidebar.categoryAll') }}</option>
               <option value="llm">{{ t('liveLogSidebar.categoryLlm') }}</option>
               <option value="pipeline">{{ t('liveLogSidebar.categoryPipeline') }}</option>
@@ -65,7 +66,7 @@
       <div class="log-panel-meta">
         <span class="log-file-path" :title="logFilePath">{{ logFilePath || '...' }}</span>
         <span class="log-stats">{{
-          compactMode && filteredLineCount !== lineCount
+          filteredLineCount !== lineCount
             ? t('liveLogSidebar.linesCountFiltered', { shown: filteredLineCount, count: lineCount, bytes: formatBytes(totalBytes) })
             : t('liveLogSidebar.linesCount', { count: lineCount, bytes: formatBytes(totalBytes) })
         }}</span>
@@ -92,6 +93,7 @@ const props = defineProps<{ visible: boolean }>()
 const emit = defineEmits<{ (e: 'close'): void }>()
 
 const COMPACT_STORAGE_KEY = 'centag.liveLog.compact'
+const CATEGORY_STORAGE_KEY = 'centag.liveLog.category'
 
 const consoleEl = ref<HTMLElement | null>(null)
 const displayContent = ref('')
@@ -100,7 +102,7 @@ const liveTail = ref(true)
 const autoScroll = ref(true)
 const compactMode = ref(readCompactPref())
 const levelFilter = ref('')
-const categoryFilter = ref('')
+const categoryFilter = ref(readCategoryPref())
 const lineCount = ref(0)
 const totalBytes = ref(0)
 const pausedHint = ref(false)
@@ -117,11 +119,30 @@ const LLM_MARKERS = [
   '/v1/chat', '/v1/messages', '/v1/completions', '/v1/embeddings',
   'transparent proxy', 'cache hit mode', 'cache mode', 'proxy auth rejected',
   'requested_model', 'selected_backend',
-  '"model":', '"backend":'
+  '"model":', '"backend":',
+  '[request] details', '[response] details', '[request] completed',
+  'mode dispatcher', 'modedispatcher',
 ]
 
 const PIPELINE_MARKERS = [
-  'pipeline', 'node', 'execution', 'resolved pipeline'
+  'pipeline', 'node', 'execution', 'resolved pipeline',
+  'fallback node', 'fallback group', 'billing_fallback', 'primary node failed',
+]
+
+/** 业务日志：大模型请求 + 后端连接/出站 + 流水线处理（用户最关心） */
+const BUSINESS_MARKERS = [
+  ...LLM_MARKERS,
+  ...PIPELINE_MARKERS,
+  'transparent_forward', 'backend_id=', 'outbound',
+  'rotate account', 'account pool', 'upstream returned',
+  '[proxyconfig]', 'proxy config',
+]
+
+/** UI/运维刷屏：即便「全部」也默认隐藏（ERROR 仍保留） */
+const ALWAYS_NOISE_MARKERS = [
+  'getmodels:', 'extracted supported models', 'using cached supported_models',
+  'getnodeplugins:', 'pipeline modes synced', 'saved backend configs to database',
+  'path=/api/v1/logs/tail', '/api/v1/logs/tail', 'auth/refresh',
 ]
 
 /** 启动/迁移/鉴权轮询等噪音（精简模式默认隐藏；ERROR 始终保留） */
@@ -169,6 +190,25 @@ function persistCompactPref(v: boolean) {
   }
 }
 
+function readCategoryPref(): string {
+  try {
+    const saved = localStorage.getItem(CATEGORY_STORAGE_KEY)
+    if (saved === null) return 'business'
+    if (['', 'business', 'llm', 'pipeline', 'system'].includes(saved)) return saved
+  } catch {
+    /* ignore */
+  }
+  return 'business'
+}
+
+function persistCategoryPref(v: string) {
+  try {
+    localStorage.setItem(CATEGORY_STORAGE_KEY, v)
+  } catch {
+    /* ignore */
+  }
+}
+
 function parseLineLevel(line: string): string {
   const m = line.match(/\[(DEBUG|INFO|WARN|WARNING|ERROR|FATAL)\]/i)
   if (m) {
@@ -209,6 +249,19 @@ function isLLMProxyPathInLine(lower: string): boolean {
   ].some((p) => lower.includes(p))
 }
 
+function isAlwaysNoiseLine(line: string): boolean {
+  if (!line.trim()) return false
+  const level = parseLineLevel(line)
+  if (level === 'error' || level === 'fatal') return false
+
+  const lower = line.toLowerCase()
+  // 无信息量的 HTTP access 行（如 logger.go:128 request）一律隐藏
+  if (isBareHTTPAccessLine(lower) && !isLLMProxyPathInLine(lower)) {
+    return true
+  }
+  return ALWAYS_NOISE_MARKERS.some((n) => lower.includes(n))
+}
+
 function isCompactNoiseLine(line: string): boolean {
   if (!line.trim()) return false
   const level = parseLineLevel(line)
@@ -221,10 +274,7 @@ function isCompactNoiseLine(line: string): boolean {
     return true
   }
 
-  // 无信息量的 HTTP access 行（非 LLM 路径）
-  if (isBareHTTPAccessLine(lower) && !isLLMProxyPathInLine(lower)) {
-    return true
-  }
+  if (isAlwaysNoiseLine(line)) return true
 
   // INFO/DEBUG 启动与基础设施噪音；WARN 仅在命中明确噪音标记时隐藏
   if (level === 'warn') {
@@ -239,31 +289,50 @@ function isCompactNoiseLine(line: string): boolean {
   return COMPACT_NOISE_MARKERS.some((n) => lower.includes(n))
 }
 
+function isBusinessLine(line: string): boolean {
+  const lower = line.toLowerCase()
+  const level = parseLineLevel(line)
+  // 业务相关的 ERROR/WARN 即使未命中 marker 也保留（如节点失败）
+  if (level === 'error' || level === 'fatal') return true
+  if (level === 'warn' && (
+    lower.includes('fallback') ||
+    lower.includes('pipeline') ||
+    lower.includes('transparent_forward') ||
+    lower.includes('backend') ||
+    lower.includes('mode dispatcher') ||
+    lower.includes('upstream')
+  )) {
+    return true
+  }
+  return BUSINESS_MARKERS.some((marker) => lower.includes(marker))
+}
+
 const filteredContent = computed(() => {
   const buffer = rawBuffer.value
   const level = levelFilter.value.toLowerCase()
   const category = categoryFilter.value.toLowerCase()
   const compact = compactMode.value
 
-  if (!level && !category && !compact) return buffer
-
   const lines = buffer.split('\n')
   const filtered = lines.filter((line) => {
     if (!line.trim()) return true
     const lower = line.toLowerCase()
 
+    // 无效 access 刷屏：任何分类都剔除（ERROR 除外）
+    if (isAlwaysNoiseLine(line)) return false
+
     if (compact && isCompactNoiseLine(line)) return false
     if (!lineMatchesLevel(line, level)) return false
 
     if (category) {
-      if (category === 'llm') {
+      if (category === 'business') {
+        if (!isBusinessLine(line)) return false
+      } else if (category === 'llm') {
         if (!LLM_MARKERS.some((marker) => lower.includes(marker))) return false
       } else if (category === 'pipeline') {
         if (!PIPELINE_MARKERS.some((marker) => lower.includes(marker))) return false
       } else if (category === 'system') {
-        const isLLM = LLM_MARKERS.some((marker) => lower.includes(marker))
-        const isPipeline = PIPELINE_MARKERS.some((marker) => lower.includes(marker))
-        if (isLLM || isPipeline) return false
+        if (isBusinessLine(line)) return false
       }
     }
 
@@ -280,6 +349,7 @@ const filteredLineCount = computed(() => {
 })
 
 watch(compactMode, (v) => persistCompactPref(v))
+watch(categoryFilter, (v) => persistCategoryPref(v))
 
 watch(filteredContent, () => {
   displayContent.value = filteredContent.value

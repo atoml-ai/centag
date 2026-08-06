@@ -1,6 +1,7 @@
 {
   "title": "Live Log Console",
   "categoryLabel": "Category:",
+  "categoryBusiness": "Business",
   "categoryAll": "All",
   "categoryLlm": "LLM Access",
   "categoryPipeline": "Pipeline",
@@ -9,7 +10,7 @@
   "levelAll": "All",
   "autoScroll": "Auto Scroll",
   "compact": "Compact",
-  "compactHint": "Hide startup/migration/HTTP polling noise; turn off to see everything",
+  "compactHint": "Hide startup/migration/HTTP polling noise; Business keeps LLM/backend/pipeline only",
   "pauseLive": "Pause live tracking",
   "startLive": "Start live tracking",
   "pause": "⏸ Pause",
