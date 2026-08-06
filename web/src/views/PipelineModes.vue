@@ -299,10 +299,10 @@
       :pipeline-name="historyPipelineName"
     />
 
-    <!-- 流水线 AI 对话测试对话框 -->
-    <PipelineTestDialog
-      v-model="testVisible"
-      :pipeline="testPipeline"
+    <!-- 与 Personal/Minimal 共用 MinimalChat 抽屉，避免 Team 单次问答对话框不一致 -->
+    <MinimalChat
+      v-model="testChatVisible"
+      :initial-pipeline-id="testChatPipelineId"
     />
 
     <!-- 从模板创建弹窗 -->
@@ -394,7 +394,7 @@ import PipelineFeatureGuard from '@/components/pipeline/PipelineFeatureGuard.vue
 import CapabilitySlotsDialog from '@/components/pipeline/CapabilitySlotsDialog.vue'
 import type { PipelineCreateInfo } from '@/components/pipeline/PipelineCreateDialog.vue'
 import ExecutionHistory from '@/components/pipeline/ExecutionHistory.vue'
-import PipelineTestDialog from '@/components/pipeline/PipelineTestDialog.vue'
+import MinimalChat from '@/views/MinimalChat.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useUserResourceAccess } from '@/composables/useUserResourceAccess'
 import { resolvePipelineFeatureSupport, isSystemPipeline } from '@/utils/pipeline/features'
@@ -433,8 +433,8 @@ const historyPipelineName = ref('')
 const defaultPipelineId = ref('')
 const settingDefaultId = ref('')
 const cloningId = ref('')
-const testVisible = ref(false)
-const testPipeline = ref<Pipeline | null>(null)
+const testChatVisible = ref(false)
+const testChatPipelineId = ref('')
 
 type PipelineRow = Pipeline & { shortcutLoading?: boolean; _originalShortcutCode?: string }
 
@@ -670,9 +670,15 @@ const handleSetDefault = async (row: Pipeline) => {
 }
 
 const openPipelineTest = (row: Pipeline) => {
-  testPipeline.value = row
-  testVisible.value = true
+  testChatPipelineId.value = row.id || ''
+  testChatVisible.value = true
 }
+
+watch(testChatVisible, (open, wasOpen) => {
+  if (wasOpen && !open) {
+    testChatPipelineId.value = ''
+  }
+})
 
 const loadAllData = async () => {
   await Promise.all([loadData(), loadTemplates()])

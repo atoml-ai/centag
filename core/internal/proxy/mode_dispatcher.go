@@ -1073,22 +1073,7 @@ func (d *ModeDispatcher) writeStreamResponse(
 			// [二次防护] 即使 metadata 标记缺失，若客户端协议非 OpenAI，禁止直接透传上游 SSE/JSON，
 			// 否则 Anthropic/Responses/Gemini 客户端会解析失败或一直转圈。
 			if shouldRawWriteTransparentStream(result.Output) && isOpenAIProtocol(c) {
-				statusCode, contentType := transparentPassthroughStatusAndType(result.Output)
-				c.Header("Content-Type", contentType)
-				c.Status(statusCode)
-				if _, err := c.Writer.Write([]byte(result.Output.Content)); err != nil {
-					return err
-				}
-				flusher.Flush()
-				requestID := c.GetHeader("X-Request-ID")
-				respModel := effectiveResponseModel(c, model, finalOutput)
-				backendID := extractBackendFromPipelineOutput(finalOutput)
-				logRequestResponse(requestID, respModel, backendID, statusCode, result.Output.Content)
-				setPipelineExecutionHeaders(c, finalOutput, c.GetHeader("X-Pipeline-ID"))
-				setPipelineOutputHeaders(c, finalOutput)
-				// 透明透传提前返回前必须记账（此前漏掉导致计量恒为 0）
-				d.finishStreamSideEffects(c, finalOutput, respModel)
-				return nil
+				return d.writeRawPassthroughStream(c, flusher, finalOutput, mode, model)
 			}
 		}
 
@@ -1144,21 +1129,7 @@ func (d *ModeDispatcher) writeStreamResponse(
 	// [二次防护] 协议非 OpenAI 时禁止直接透传，避免客户端格式不匹配。
 	if finalOutput != nil && shouldRawWriteTransparentStream(finalOutput) && isOpenAIProtocol(c) && responseContent.Len() == 0 && !sseHeadersReady {
 		pipeline.ApplyResponseTraceBanner(finalOutput, c.GetHeader("X-Pipeline-ID"))
-		statusCode, contentType := transparentPassthroughStatusAndType(finalOutput)
-		c.Header("Content-Type", contentType)
-		c.Status(statusCode)
-		if _, err := c.Writer.Write([]byte(finalOutput.Content)); err != nil {
-			return err
-		}
-		flusher.Flush()
-		requestID := c.GetHeader("X-Request-ID")
-		respModel := effectiveResponseModel(c, model, finalOutput)
-		backendID := extractBackendFromPipelineOutput(finalOutput)
-		logRequestResponse(requestID, respModel, backendID, statusCode, finalOutput.Content)
-		setPipelineExecutionHeaders(c, finalOutput, c.GetHeader("X-Pipeline-ID"))
-		setPipelineOutputHeaders(c, finalOutput)
-		d.finishStreamSideEffects(c, finalOutput, respModel)
-		return nil
+		return d.writeRawPassthroughStream(c, flusher, finalOutput, mode, model)
 	}
 
 	ensureSSEHeaders()
@@ -1262,6 +1233,81 @@ func (d *ModeDispatcher) finishStreamSideEffects(c *gin.Context, finalOutput *pi
 	triggerConversationResponseHooks(c, finalOutput, model, "")
 }
 
+// writeRawPassthroughStream 原样写出透明节点上游 SSE/JSON。
+// 关键缺陷：此前先写 body 再设降级头，且提前 return 跳过了 centag.meta，
+// 导致对话测试无法感知 FallbackGroup / billing fallback。
+func (d *ModeDispatcher) writeRawPassthroughStream(
+	c *gin.Context,
+	flusher http.Flusher,
+	finalOutput *pipeline.PipelineOutput,
+	mode ProxyMode,
+	model string,
+) error {
+	if finalOutput == nil {
+		return fmt.Errorf("raw passthrough: empty output")
+	}
+	statusCode, contentType := transparentPassthroughStatusAndType(finalOutput)
+
+	// 必须在 Write 之前设头，否则流式响应客户端读不到 X-Fallback-* / X-Backend-ID。
+	setPipelineExecutionHeaders(c, finalOutput, c.GetHeader("X-Pipeline-ID"))
+	setPipelineOutputHeaders(c, finalOutput)
+	c.Header("Content-Type", contentType)
+	c.Status(statusCode)
+
+	content := finalOutput.Content
+	injectMeta := shouldInjectCentagMetaSSE(c)
+	if injectMeta {
+		// 上游 SSE 常自带 data: [DONE]；客户端遇 DONE 即停读，meta 必须插在 DONE 之前。
+		content = stripTrailingOpenAISSEDone(content)
+	}
+	if _, err := c.Writer.Write([]byte(content)); err != nil {
+		return err
+	}
+	if len(content) > 0 && !strings.HasSuffix(content, "\n") {
+		fmt.Fprint(c.Writer, "\n")
+	}
+	flusher.Flush()
+
+	if injectMeta {
+		meta := buildStreamCentagMeta(finalOutput, c.GetHeader("X-Pipeline-ID"), mode)
+		if d.logger != nil {
+			d.logger.Debug("writeRawPassthroughStream: injecting SSE centag_meta event",
+				"pipeline_id", meta["pipeline_id"],
+				"fallback_used", meta["fallback_used"],
+				"has_node_results", meta["node_results"] != nil,
+				"executor_model", meta["executor_model"],
+				"last_node", meta["last_node"],
+			)
+		}
+		if metaJSON, err := json.Marshal(meta); err == nil {
+			fmt.Fprintf(c.Writer, "event: centag.meta\ndata: %s\n\n", metaJSON)
+			flusher.Flush()
+		}
+		if shouldEmitOpenAIDone(c) {
+			fmt.Fprint(c.Writer, "data: [DONE]\n\n")
+			flusher.Flush()
+		}
+	}
+
+	requestID := c.GetHeader("X-Request-ID")
+	respModel := effectiveResponseModel(c, model, finalOutput)
+	backendID := extractBackendFromPipelineOutput(finalOutput)
+	logRequestResponse(requestID, respModel, backendID, statusCode, finalOutput.Content)
+	d.finishStreamSideEffects(c, finalOutput, respModel)
+	return nil
+}
+
+// stripTrailingOpenAISSEDone 去掉正文末尾的 data: [DONE]，便于在其后注入 centag.meta 再补 DONE。
+func stripTrailingOpenAISSEDone(body string) string {
+	trimmed := strings.TrimRight(body, " \t\r\n")
+	for _, suffix := range []string{"data: [DONE]", "data:[DONE]", "data: [done]", "data:[done]"} {
+		if len(trimmed) >= len(suffix) && strings.EqualFold(trimmed[len(trimmed)-len(suffix):], suffix) {
+			return strings.TrimRight(trimmed[:len(trimmed)-len(suffix)], " \t\r\n")
+		}
+	}
+	return body
+}
+
 // nodeResultSummary 单个流水线节点的执行摘要。
 type nodeResultSummary struct {
 	NodeID     string `json:"node_id"`
@@ -1275,23 +1321,70 @@ type nodeResultSummary struct {
 // buildNodeResultsSummary 从 PipelineOutput 构建节点执行摘要列表。
 // 优先使用 ExecutionLog.NodeLogs（含精确的节点级耗时/token），
 // 回退到 NodeOutputs（仅含输出数据元信息）。
+//
+// 同一 node_id 可能先失败再被「补成功日志」：若 Metadata 标明 FallbackGroup 恢复，
+// 主节点摘要保留失败态，避免对话测试把主路画成成功、备用画成跳过。
 func buildNodeResultsSummary(output *pipeline.PipelineOutput) []nodeResultSummary {
 	if output == nil {
 		return nil
 	}
 
+	fallbackFromNode := ""
+	fallbackUsed := false
+	if output.Metadata != nil {
+		if v, ok := output.Metadata["fallback_from_node"].(string); ok {
+			fallbackFromNode = strings.TrimSpace(v)
+		}
+		switch v := output.Metadata["fallback_used"].(type) {
+		case bool:
+			fallbackUsed = v
+		case string:
+			fallbackUsed = strings.EqualFold(strings.TrimSpace(v), "true") || v == "1"
+		}
+		if output.Metadata["billing_fallback_used"] == true {
+			fallbackUsed = true
+		}
+	}
+
 	// 用 NodeLogs 做索引（包含准确耗时/模型/token 信息）
 	if output.ExecutionLog != nil && len(output.ExecutionLog.NodeLogs) > 0 {
-		summaries := make([]nodeResultSummary, 0, len(output.ExecutionLog.NodeLogs))
+		type agg struct {
+			sum        nodeResultSummary
+			sawFail    bool
+			sawSuccess bool
+		}
+		byNode := map[string]*agg{}
+		order := make([]string, 0)
 		for _, nl := range output.ExecutionLog.NodeLogs {
-			summaries = append(summaries, nodeResultSummary{
-				NodeID:     nl.NodeID,
-				NodeType:   string(nl.NodeType),
-				Model:      nl.Model,
-				Success:    nl.Success,
-				DurationMs: nl.Duration,
-				Tokens:     nl.InputTokens + nl.OutputTokens,
-			})
+			a, ok := byNode[nl.NodeID]
+			if !ok {
+				a = &agg{sum: nodeResultSummary{NodeID: nl.NodeID, NodeType: string(nl.NodeType)}}
+				byNode[nl.NodeID] = a
+				order = append(order, nl.NodeID)
+			}
+			if nl.Model != "" {
+				a.sum.Model = nl.Model
+			}
+			a.sum.DurationMs += nl.Duration
+			a.sum.Tokens += nl.InputTokens + nl.OutputTokens
+			if nl.Success {
+				a.sawSuccess = true
+			} else {
+				a.sawFail = true
+			}
+			a.sum.Success = nl.Success
+			if nl.NodeType != "" {
+				a.sum.NodeType = string(nl.NodeType)
+			}
+		}
+		summaries := make([]nodeResultSummary, 0, len(order))
+		for _, id := range order {
+			a := byNode[id]
+			// FallbackGroup 恢复：主节点曾失败又被补成功日志 → 对 UI 仍报失败（真实走了备用）
+			if fallbackUsed && fallbackFromNode != "" && id == fallbackFromNode && a.sawFail {
+				a.sum.Success = false
+			}
+			summaries = append(summaries, a.sum)
 		}
 		return summaries
 	}
@@ -1357,18 +1450,27 @@ func buildStreamCentagMeta(output *pipeline.PipelineOutput, pipelineID string, m
 	hasExecutorModel := false
 	if output.Metadata != nil {
 		for key, headerKey := range map[string]string{
-			"executor_backend":  "executor_backend",
-			"executor_model":    "executor_model",
-			"auditor_backend":   "auditor_backend",
-			"auditor_model":     "auditor_model",
-			"optimizer_backend": "optimizer_backend",
-			"optimizer_model":   "optimizer_model",
-			"cache_hit":         "cache_hit",
-			"selected_route":    "selected_route",
-			"routing_strategy":  "routing_strategy",
-			"bypass":            "bypass",
-			"bypass_node":       "bypass_node",
-			"bypass_reason":     "bypass_reason",
+			"executor_backend":         "executor_backend",
+			"executor_model":           "executor_model",
+			"auditor_backend":          "auditor_backend",
+			"auditor_model":            "auditor_model",
+			"optimizer_backend":        "optimizer_backend",
+			"optimizer_model":          "optimizer_model",
+			"cache_hit":                "cache_hit",
+			"selected_route":           "selected_route",
+			"routing_strategy":         "routing_strategy",
+			"bypass":                   "bypass",
+			"bypass_node":              "bypass_node",
+			"bypass_reason":            "bypass_reason",
+			"fallback_used":            "fallback_used",
+			"fallback_from_model":      "fallback_from_model",
+			"fallback_to_model":        "fallback_to_model",
+			"fallback_notice":          "fallback_notice",
+			"target_base_url":          "target_base_url",
+			"backend_id":               "backend_id",
+			"billing_fallback_used":    "billing_fallback_used",
+			"billing_fallback_backend": "billing_fallback_backend",
+			"billing_fallback_model":   "billing_fallback_model",
 		} {
 			if v, ok := output.Metadata[key]; ok {
 				meta[headerKey] = v

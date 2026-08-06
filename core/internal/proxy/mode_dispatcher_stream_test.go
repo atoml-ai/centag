@@ -397,3 +397,79 @@ func TestGeminiStreamFormatter_FormatErrorEmitsErrorData(t *testing.T) {
 		t.Fatalf("missing gemini error fields: %s", out)
 	}
 }
+
+func TestStripTrailingOpenAISSEDone(t *testing.T) {
+	in := "data: {\"choices\":[{\"delta\":{\"content\":\"hi\"}}]}\n\ndata: [DONE]\n\n"
+	got := stripTrailingOpenAISSEDone(in)
+	if strings.Contains(got, "[DONE]") {
+		t.Fatalf("DONE not stripped: %q", got)
+	}
+	if !strings.Contains(got, `"content":"hi"`) {
+		t.Fatalf("content lost: %q", got)
+	}
+}
+
+func TestWriteRawPassthroughStream_InjectsMetaBeforeDone(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	upstream := "data: {\"id\":\"1\",\"object\":\"chat.completion.chunk\",\"model\":\"deepseek-v4-flash\",\"choices\":[{\"delta\":{\"content\":\"OK\"}}]}\n\ndata: [DONE]\n\n"
+	ch := make(chan pipeline.PipelineStreamResult, 1)
+	ch <- pipeline.PipelineStreamResult{
+		Output: &pipeline.PipelineOutput{
+			Content: upstream,
+			Metadata: map[string]interface{}{
+				"raw_passthrough":   true,
+				"fallback_used":     true,
+				"fallback_to_model": "deepseek-v4-flash",
+				"backend_id":        "deepseek",
+				"model":             "deepseek-v4-flash",
+			},
+			ExecutionLog: &pipeline.ExecutionLog{
+				PipelineID: "transparent-proxy",
+				Success:    true,
+				NodeLogs: []pipeline.NodeExecutionLog{
+					{NodeID: "forward", Success: false, ErrorMessage: "primary fail"},
+					{NodeID: "forward_fallback", Success: true, Model: "deepseek-v4-flash"},
+					{NodeID: "forward", Success: true},
+				},
+			},
+			LastNode: "forward_fallback",
+		},
+	}
+	close(ch)
+
+	dispatcher := NewModeDispatcher(nil, nil, nil)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil)
+	c.Request.Header.Set("X-Pipeline-ID", "transparent-proxy")
+	c.Request.Header.Set("X-Centag-Include-Meta", "true")
+	c.Request.Header.Set("User-Agent", "centag/webui-pipeline-test")
+
+	if err := dispatcher.writeStreamResponse(c, ch, ModeTransparentProxy, "pipeline.transparent-proxy"); err != nil {
+		t.Fatalf("writeStreamResponse: %v", err)
+	}
+
+	if got := w.Header().Get("X-Fallback-Used"); got != "true" {
+		t.Fatalf("X-Fallback-Used=%q, want true (must be set before body)", got)
+	}
+	if got := w.Header().Get("X-Backend-ID"); got != "deepseek" {
+		t.Fatalf("X-Backend-ID=%q, want deepseek", got)
+	}
+
+	body := w.Body.String()
+	metaIdx := strings.Index(body, "event: centag.meta")
+	doneIdx := strings.LastIndex(body, "data: [DONE]")
+	if metaIdx < 0 {
+		t.Fatalf("missing centag.meta in body:\n%s", body)
+	}
+	if doneIdx < 0 || metaIdx > doneIdx {
+		t.Fatalf("centag.meta must appear before final [DONE]; meta=%d done=%d\n%s", metaIdx, doneIdx, body)
+	}
+	if !strings.Contains(body, `"fallback_used":true`) && !strings.Contains(body, `"fallback_used": true`) {
+		t.Fatalf("meta missing fallback_used: %s", body)
+	}
+	if strings.Count(body, "data: [DONE]") != 1 {
+		t.Fatalf("expected exactly one [DONE], got body:\n%s", body)
+	}
+}
