@@ -8,6 +8,8 @@
   "levelLabel": "레벨:",
   "levelAll": "전체",
   "autoScroll": "자동 스크롤",
+  "compact": "간결",
+  "compactHint": "시작/마이그레이션/HTTP 폴링 노이즈 숨김. 끄면 전체 표시",
   "pauseLive": "실시간 추적 일시 중지",
   "startLive": "실시간 추적 시작",
   "pause": "⏸ 일시 중지",
@@ -16,6 +18,7 @@
   "clearTitle": "현재 표시 지우기",
   "close": "로그 패널 닫기",
   "linesCount": "{count} 줄 · {bytes}",
+  "linesCountFiltered": "표시 {shown} / 전체 {count} 줄 · {bytes}",
   "paused": "일시 중지됨 · ",
   "resume": "추적 재개"
 }

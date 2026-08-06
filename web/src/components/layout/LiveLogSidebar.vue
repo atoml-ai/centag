@@ -27,6 +27,9 @@
               <option value="debug">Debug</option>
             </select>
           </div>
+          <label class="log-autoscroll" :title="t('liveLogSidebar.compactHint')">
+            <input type="checkbox" v-model="compactMode" /> {{ t('liveLogSidebar.compact') }}
+          </label>
           <label class="log-autoscroll">
             <input type="checkbox" v-model="autoScroll" /> {{ t('liveLogSidebar.autoScroll') }}
           </label>
@@ -61,7 +64,11 @@
       </div>
       <div class="log-panel-meta">
         <span class="log-file-path" :title="logFilePath">{{ logFilePath || '...' }}</span>
-        <span class="log-stats">{{ t('liveLogSidebar.linesCount', { count: lineCount, bytes: formatBytes(totalBytes) }) }}</span>
+        <span class="log-stats">{{
+          compactMode && filteredLineCount !== lineCount
+            ? t('liveLogSidebar.linesCountFiltered', { shown: filteredLineCount, count: lineCount, bytes: formatBytes(totalBytes) })
+            : t('liveLogSidebar.linesCount', { count: lineCount, bytes: formatBytes(totalBytes) })
+        }}</span>
       </div>
       <div ref="consoleEl" class="log-console" @scroll="onScroll">
         <pre class="log-content"><code>{{ displayContent }}</code></pre>
@@ -84,11 +91,14 @@ const { t } = useI18n()
 const props = defineProps<{ visible: boolean }>()
 const emit = defineEmits<{ (e: 'close'): void }>()
 
+const COMPACT_STORAGE_KEY = 'centag.liveLog.compact'
+
 const consoleEl = ref<HTMLElement | null>(null)
 const displayContent = ref('')
 const logFilePath = ref('')
 const liveTail = ref(true)
 const autoScroll = ref(true)
+const compactMode = ref(readCompactPref())
 const levelFilter = ref('')
 const categoryFilter = ref('')
 const lineCount = ref(0)
@@ -102,51 +112,157 @@ let pollTimer: ReturnType<typeof setInterval> | null = null
 let currentOffset = 0
 const MAX_BUFFER_LINES = 5000
 
+const LLM_MARKERS = [
+  'chat completions', 'request started', '[request]', '[config] proxy mode',
+  '/v1/chat', '/v1/messages', '/v1/completions', '/v1/embeddings',
+  'transparent proxy', 'cache hit mode', 'cache mode', 'proxy auth rejected',
+  'requested_model', 'selected_backend',
+  '"model":', '"backend":'
+]
+
+const PIPELINE_MARKERS = [
+  'pipeline', 'node', 'execution', 'resolved pipeline'
+]
+
+/** 启动/迁移/鉴权轮询等噪音（精简模式默认隐藏；ERROR 始终保留） */
+const COMPACT_NOISE_MARKERS = [
+  '[migrate]', 'bootstrap:', 'product edition:', 'version: v', 'db driver:',
+  'registered database plugins', 'database: initializing', 'database: attempting',
+  'database: failed to initialize', 'database: successfully initialized',
+  '数据库插件', 'api key 二次查看', '从数据库加载存储配置', '成功加载',
+  'runtime config loaded', 'proxy mode manager initialized',
+  'no backend configs found', 'loaded backends via store', '数据库中无后端记录',
+  'fallbackpolicystore', 'storage config loaded', 'exact match cache initialized',
+  'cache manager initialized', 'no default kv store', 'embedding backend',
+  '语义缓存初始化', 'no vector store available',
+  'semantic cache configured', 'semantic cache config updated', 'semantic cache ready',
+  'embedding service configured', 'qa split backend', 'saveonly mode',
+  '[cache] query expander', '[scheduler] initialized', '[circuitbreaker]',
+  'builtin nodes registered', 'plugin security validator',
+  'loaded 0 pipelines', 'pipelines from store', 'pipeline templates loaded',
+  'pipeline seed:', '[handler]', 'plugin registry store', 'registered builtin plugin',
+  'defaultpipelineresolver', '[agentprovider]', '[hooks]',
+  'synced ', 'pipeline shortcuts', 'evaluation manager configured',
+  'ca certificate', 'host proxy enabled', 'host proxy initialized',
+  'host proxy server started', 'host proxy is disabled', 'starting host proxy',
+  'plugin marketplace', '[team plugin]', 'rate limiter:', 'proxy mode middleware',
+  'starting server', 'listening on', 'server will listen',
+  'agent memory db persistence', 'agent memory file storage',
+  'cache strategies registered', 'capabilitybroker',
+  'auth/refresh', 'path=/api/v1/logs/tail', '/api/v1/logs/tail',
+  'gin mode', 'wails', 'desktop shell',
+]
+
+function readCompactPref(): boolean {
+  try {
+    return localStorage.getItem(COMPACT_STORAGE_KEY) !== 'false'
+  } catch {
+    return true
+  }
+}
+
+function persistCompactPref(v: boolean) {
+  try {
+    localStorage.setItem(COMPACT_STORAGE_KEY, String(v))
+  } catch {
+    /* ignore */
+  }
+}
+
+function parseLineLevel(line: string): string {
+  const m = line.match(/\[(DEBUG|INFO|WARN|WARNING|ERROR|FATAL)\]/i)
+  if (m) {
+    const lv = m[1].toLowerCase()
+    return lv === 'warning' ? 'warn' : lv
+  }
+  const lower = line.toLowerCase()
+  for (const lv of ['error', 'warn', 'info', 'debug', 'fatal']) {
+    if (lower.includes(`"level":"${lv}"`) || lower.includes(`level=${lv}`)) {
+      return lv
+    }
+  }
+  return ''
+}
+
+function lineMatchesLevel(line: string, level: string): boolean {
+  if (!level) return true
+  const lv = parseLineLevel(line)
+  if (lv) return lv === level
+  // 无法解析级别时不因 level 过滤丢掉（兼容未知格式）
+  return true
+}
+
+function isBareHTTPAccessLine(lower: string): boolean {
+  // zap 文本：... [INFO] logger/logger.go:128 request
+  // 或带字段：request {"method":"GET","path":"/api/..."}
+  if (/\brequest\s*$/.test(lower)) return true
+  if (/\brequest\s*\{/.test(lower) || lower.includes('request{"method"') || lower.includes('request {"method"')) {
+    return true
+  }
+  return false
+}
+
+function isLLMProxyPathInLine(lower: string): boolean {
+  return [
+    '/v1/chat', '/v1/messages', '/v1/completions', '/v1/embeddings',
+    '/v1/models', '/api/v1/openai/'
+  ].some((p) => lower.includes(p))
+}
+
+function isCompactNoiseLine(line: string): boolean {
+  if (!line.trim()) return false
+  const level = parseLineLevel(line)
+  if (level === 'error' || level === 'fatal') return false
+
+  const lower = line.toLowerCase()
+
+  // 日志面板自身鉴权失败 / refresh 轮询：即便 WARN 也藏
+  if (lower.includes('auth/refresh') || lower.includes('/api/v1/logs/tail') || lower.includes('path=/api/v1/logs/tail')) {
+    return true
+  }
+
+  // 无信息量的 HTTP access 行（非 LLM 路径）
+  if (isBareHTTPAccessLine(lower) && !isLLMProxyPathInLine(lower)) {
+    return true
+  }
+
+  // INFO/DEBUG 启动与基础设施噪音；WARN 仅在命中明确噪音标记时隐藏
+  if (level === 'warn') {
+    const warnNoise = [
+      'auth/refresh', 'embedding backend', 'qa split backend',
+      'no kv store configured', 'billing] default pricing',
+      'edition] centag_edition', 'database: failed to initialize',
+    ]
+    return warnNoise.some((n) => lower.includes(n))
+  }
+
+  return COMPACT_NOISE_MARKERS.some((n) => lower.includes(n))
+}
+
 const filteredContent = computed(() => {
   const buffer = rawBuffer.value
-  if (!levelFilter.value && !categoryFilter.value) return buffer
-
   const level = levelFilter.value.toLowerCase()
   const category = categoryFilter.value.toLowerCase()
-  const lines = buffer.split('\n')
+  const compact = compactMode.value
 
+  if (!level && !category && !compact) return buffer
+
+  const lines = buffer.split('\n')
   const filtered = lines.filter((line) => {
+    if (!line.trim()) return true
     const lower = line.toLowerCase()
 
-    if (level && !(lower.includes(`"level":"${level}"`) || lower.includes(`level=${level}`))) {
-      return false
-    }
+    if (compact && isCompactNoiseLine(line)) return false
+    if (!lineMatchesLevel(line, level)) return false
 
     if (category) {
       if (category === 'llm') {
-        const llmMarkers = [
-          'chat completions', 'request started', '[request]', '[config] proxy mode',
-          '/v1/chat', '/v1/messages', '/v1/completions', '/v1/embeddings',
-          'transparent proxy', 'cache hit mode', 'cache mode', 'proxy auth rejected',
-          'requested_model', 'selected_backend',
-          '"model":', '"backend":'
-        ]
-        const isLLM = llmMarkers.some(marker => lower.includes(marker))
-        if (!isLLM) return false
+        if (!LLM_MARKERS.some((marker) => lower.includes(marker))) return false
       } else if (category === 'pipeline') {
-        const pipelineMarkers = [
-          'pipeline', 'node', 'execution', 'resolved pipeline'
-        ]
-        const isPipeline = pipelineMarkers.some(marker => lower.includes(marker))
-        if (!isPipeline) return false
+        if (!PIPELINE_MARKERS.some((marker) => lower.includes(marker))) return false
       } else if (category === 'system') {
-        const llmMarkers = [
-          'chat completions', 'request started', '[request]', '[config] proxy mode',
-          '/v1/chat', '/v1/messages', '/v1/completions', '/v1/embeddings',
-          'transparent proxy', 'cache hit mode', 'cache mode', 'proxy auth rejected',
-          'requested_model', 'selected_backend',
-          '"model":', '"backend":'
-        ]
-        const pipelineMarkers = [
-          'pipeline', 'node', 'execution', 'resolved pipeline'
-        ]
-        const isLLM = llmMarkers.some(marker => lower.includes(marker))
-        const isPipeline = pipelineMarkers.some(marker => lower.includes(marker))
+        const isLLM = LLM_MARKERS.some((marker) => lower.includes(marker))
+        const isPipeline = PIPELINE_MARKERS.some((marker) => lower.includes(marker))
         if (isLLM || isPipeline) return false
       }
     }
@@ -156,6 +272,14 @@ const filteredContent = computed(() => {
 
   return filtered.join('\n')
 })
+
+const filteredLineCount = computed(() => {
+  const text = filteredContent.value
+  if (!text) return 0
+  return text.split('\n').filter((l) => l.trim()).length
+})
+
+watch(compactMode, (v) => persistCompactPref(v))
 
 watch(filteredContent, () => {
   displayContent.value = filteredContent.value

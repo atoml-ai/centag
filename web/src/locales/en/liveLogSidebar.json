@@ -8,6 +8,8 @@
   "levelLabel": "Level:",
   "levelAll": "All",
   "autoScroll": "Auto Scroll",
+  "compact": "Compact",
+  "compactHint": "Hide startup/migration/HTTP polling noise; turn off to see everything",
   "pauseLive": "Pause live tracking",
   "startLive": "Start live tracking",
   "pause": "⏸ Pause",
@@ -16,6 +18,7 @@
   "clearTitle": "Clear current display",
   "close": "Close log panel",
   "linesCount": "{count} lines · {bytes}",
+  "linesCountFiltered": "Showing {shown} / {count} lines · {bytes}",
   "paused": "Paused · ",
   "resume": "Resume tracking"
 }

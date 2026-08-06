@@ -8,6 +8,8 @@
   "levelLabel": "级别：",
   "levelAll": "全部",
   "autoScroll": "自动滚动",
+  "compact": "精简",
+  "compactHint": "隐藏启动/迁移/HTTP 轮询等噪音日志；关闭可看全量",
   "pauseLive": "暂停实时跟踪",
   "startLive": "开启实时跟踪",
   "pause": "⏸ 暂停",
@@ -16,6 +18,7 @@
   "clearTitle": "清空当前显示",
   "close": "关闭日志面板",
   "linesCount": "{count} 行 · {bytes}",
+  "linesCountFiltered": "显示 {shown} / 共 {count} 行 · {bytes}",
   "paused": "已暂停 · ",
   "resume": "继续跟踪"
 }
