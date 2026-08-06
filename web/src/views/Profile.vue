@@ -312,6 +312,7 @@ import {
   listAPIKeys, getAPIKey, createAPIKey as apiCreateAPIKey, updateAPIKey, deleteAPIKey as apiDeleteAPIKey,
 } from '@/api/user'
 import type { APIKey } from '@/api/user'
+import { copyToClipboard } from '@/utils/clipboard'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -361,13 +362,9 @@ const avatarStyle = computed(() => ({
 const profileForm = reactive({ username: '', display_name: '', email: '' })
 const savingProfile = ref(false)
 
-async function writeClipboard(text: string): Promise<boolean> {
-  const { copyToClipboard } = await import('@/utils/clipboard')
-  return copyToClipboard(text)
-}
-
 const copyText = async (text: string) => {
-  if (await writeClipboard(text)) ElMessage.success(t('profile.copied'))
+  // 静态导入 copyToClipboard：动态 import 会打断用户手势，HTTP 局域网下 Clipboard API 不可用时回退也会失败
+  if (await copyToClipboard(text)) ElMessage.success(t('profile.copied'))
   else ElMessage.warning(t('profile.copyFailed'))
 }
 
