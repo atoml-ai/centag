@@ -6,11 +6,12 @@
 ###   1) 卸载向导（wizard/uninstall）选择「删除全部数据」→ $wizard_data_action=delete
 ###   2) 配置页 centag.conf: clean_data_on_uninstall=true
 ###
-### 数据清理优先委托给跨平台的 Go 子命令 `centag cleanup`
-### （见 core/pkg/config/cleanup.go）：仅当 centag.conf 配置
-### db_driver=postgresql 时才连接 PostgreSQL 并 DROP public schema 表；
-### SQLite / 未配置时跳过。若卸载时二进制已不可用，则回退到本脚本内的
-### psql 清理路径（同样仅 postgresql 驱动才执行）。
+### 数据清理（见 core/pkg/config/cleanup.go）：
+###   - postgresql（fnOS 权威路径）：本脚本用 psql 连接维护库 postgres，
+###     DROP DATABASE 整个目标库（默认 centag）。
+###     不能把 `centag cleanup` 成功当作完成——旧二进制只 DROP TABLE 也会 exit 0，
+###     若此处提前 return，空库会残留。
+###   - sqlite：优先 `centag cleanup` 删库文件；否则由 clear_data 删数据目录覆盖。
 
 set +e
 
@@ -51,15 +52,15 @@ json_get() {
     | tr -d ' \t\r'
 }
 
-# 二进制不可用时的回退：仅 postgresql 驱动才用 psql DROP public 表。
-clean_postgres_fallback() {
-  [ -f "${CONF_FILE}" ] || return 0
-  local db_driver
-  db_driver="$(json_get db_driver)"
-  [ "${db_driver}" = "postgresql" ] || return 0
+# postgresql 权威清理：psql DROP DATABASE 整个目标库（连维护库 postgres）。
+clean_postgres_database() {
+  [ -f "${CONF_FILE}" ] || {
+    echo "[WARN] 无 ${CONF_FILE}，跳过 PostgreSQL DROP DATABASE"
+    return 1
+  }
 
   if ! command -v psql >/dev/null 2>&1; then
-    echo "[WARN] 未找到 centag 二进制且无 psql，跳过 PostgreSQL 数据清理（重装前可能残留旧表）"
+    echo "[WARN] 系统无 psql，无法在脚本内 DROP DATABASE"
     return 1
   fi
 
@@ -74,32 +75,81 @@ clean_postgres_fallback() {
   [ -n "${pg_user}" ] || pg_user="postgres"
   [ -n "${pg_db}" ] || pg_db="centag"
 
-  echo "回退：用 psql 清理 PostgreSQL 数据: ${pg_host}:${pg_port}/${pg_db}（public schema 所有表）"
-  PGPASSWORD="${pg_password}" psql -h "${pg_host}" -p "${pg_port}" -U "${pg_user}" -d "${pg_db}" -v ON_ERROR_STOP=1 -q \
-    -c "DO \$\$ DECLARE r RECORD; BEGIN FOR r IN SELECT tablename FROM pg_tables WHERE schemaname='public' LOOP EXECUTE format('DROP TABLE IF EXISTS %I CASCADE', r.tablename); END LOOP; END \$\$;"
-  if [ $? -eq 0 ]; then
-    echo "PostgreSQL 数据清理完成（psql 回退）"
-    return 0
-  fi
-  echo "[WARN] PostgreSQL 数据清理失败，请手动确认"
+  case "${pg_db}" in
+    postgres|template0|template1)
+      echo "[WARN] 拒绝删除 PostgreSQL 系统库: ${pg_db}"
+      return 1
+      ;;
+  esac
+  # 仅允许安全标识符，避免注入
+  case "${pg_db}" in
+    *[!A-Za-z0-9_]*|[0-9]*)
+      echo "[WARN] 非法 PostgreSQL 库名，跳过: ${pg_db}"
+      return 1
+      ;;
+  esac
+
+  echo "用 psql DROP DATABASE: ${pg_host}:${pg_port}/${pg_db}"
+  # 必须连维护库，不能连待删目标库；postgres 不可达时再试 template1
+  local admin_db rc=1
+  for admin_db in postgres template1; do
+    echo "  尝试维护库: ${admin_db}"
+    PGPASSWORD="${pg_password}" psql -h "${pg_host}" -p "${pg_port}" -U "${pg_user}" -d "${admin_db}" -v ON_ERROR_STOP=1 \
+      -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname='${pg_db}' AND pid <> pg_backend_pid();" \
+      -c "DROP DATABASE IF EXISTS \"${pg_db}\";"
+    rc=$?
+    if [ "${rc}" -eq 0 ]; then
+      echo "PostgreSQL 数据库已删除: ${pg_db}（经由 ${admin_db}）"
+      return 0
+    fi
+  done
+  echo "[WARN] psql DROP DATABASE 失败，请手动确认"
   return 1
 }
 
-# 跨平台数据清理：优先 centag cleanup；二进制已删时回退 psql。
+# 部署数据清理。postgresql 必须以 DROP DATABASE 为准，不能因旧版 cleanup 只删表成功而提前返回。
 clean_deployment_data() {
+  local db_driver=""
+  if [ -f "${CONF_FILE}" ]; then
+    db_driver="$(json_get db_driver)"
+  fi
+  [ -n "${db_driver}" ] || db_driver="sqlite"
+
+  if [ "${db_driver}" = "postgresql" ]; then
+    local rc=1
+    # 1) 权威：psql DROP DATABASE（不信任二进制“成功”）
+    if clean_postgres_database; then
+      rc=0
+    fi
+    # 2) psql 不可用/失败时，再试 centag cleanup（新二进制会 DROP DATABASE）
+    if [ "${rc}" -ne 0 ]; then
+      if [ -x "${BINARY}" ]; then
+        echo "调用 centag cleanup 尝试 DROP DATABASE..."
+        if CENTAG_DATA_DIR="${DATA_DIR}" "${BINARY}" cleanup; then
+          echo "centag cleanup 完成"
+          rc=0
+        else
+          echo "[WARN] centag cleanup 失败（重装前可能残留旧库）"
+        fi
+      else
+        echo "[WARN] 无 psql 成功清理且未找到 ${BINARY}"
+      fi
+    fi
+    return "${rc}"
+  fi
+
+  # sqlite：删整个库文件
   if [ -x "${BINARY}" ]; then
-    echo "调用 centag cleanup 清理部署数据..."
-    CENTAG_DATA_DIR="${DATA_DIR}" "${BINARY}" cleanup
-    if [ $? -eq 0 ]; then
+    echo "调用 centag cleanup 删除 SQLite 库文件..."
+    if CENTAG_DATA_DIR="${DATA_DIR}" "${BINARY}" cleanup; then
       echo "部署数据清理完成"
       return 0
     fi
-    echo "[WARN] centag cleanup 失败，请手动确认（重装前可能残留旧表）"
+    echo "[WARN] centag cleanup 失败；将依赖 clear_data 删除数据目录"
     return 1
   fi
-
-  echo "[WARN] 未找到可执行文件 ${BINARY}，尝试 psql 回退清理"
-  clean_postgres_fallback
+  echo "未找到 ${BINARY}；SQLite 库文件将由 clear_data 删除"
+  return 0
 }
 
 should_clean="false"

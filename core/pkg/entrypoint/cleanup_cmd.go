@@ -31,7 +31,14 @@ func runCleanupCommand() int {
 		return 1
 	}
 	if res.Cleaned {
-		fmt.Printf("cleanup: dropped PostgreSQL public schema tables (driver=%s)\n", res.Driver)
+		switch res.Driver {
+		case "postgresql":
+			fmt.Printf("cleanup: dropped PostgreSQL database (driver=%s)\n", res.Driver)
+		case "sqlite":
+			fmt.Printf("cleanup: removed SQLite database file (driver=%s)\n", res.Driver)
+		default:
+			fmt.Printf("cleanup: cleaned deployment data (driver=%s)\n", res.Driver)
+		}
 		return 0
 	}
 	if res.Skipped {
@@ -42,7 +49,7 @@ func runCleanupCommand() int {
 }
 
 // HandleCleanupCommand runs the cross-platform uninstall data cleanup
-// (drop centag's public-schema tables when the deployment uses PostgreSQL).
+// (DROP DATABASE for PostgreSQL; delete the SQLite db file for sqlite).
 // Returns true if the process should stop (caller should return from main).
 // Exits non-zero when cleanup fails so uninstall scripts can detect $? != 0.
 func HandleCleanupCommand(args []string) bool {

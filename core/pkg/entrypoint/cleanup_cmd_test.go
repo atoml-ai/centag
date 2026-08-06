@@ -32,12 +32,13 @@ func TestHandleCleanupCommand_NotCleanup(t *testing.T) {
 	}
 }
 
-func TestRunCleanupCommand_SkipSQLiteExit0(t *testing.T) {
+func TestRunCleanupCommand_SQLiteExit0(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("CENTAG_DATA_DIR", dir)
-	// default / missing conf → sqlite defaults → skip, exit 0
+	_ = os.Unsetenv("SQLITE_PATH")
+	// default / missing conf → sqlite defaults → remove db file (idempotent), exit 0
 	if code := runCleanupCommand(); code != 0 {
-		t.Fatalf("expected exit 0 for sqlite skip, got %d", code)
+		t.Fatalf("expected exit 0 for sqlite cleanup, got %d", code)
 	}
 }
 
