@@ -159,14 +159,19 @@ curl -X POST http://localhost:20060/v1/chat/completions \
 
 Transparent proxy mode now supports semantic caching, allowing cache hits on semantically similar queries (not just exact matches).
 
-**Cache Strategy Options**:
-- `exact`: KV exact match (default, backward compatible)
-- `semantic`: Semantic similarity matching using vector embeddings
-- `hybrid`: First try exact match, then fallback to semantic match
+**Recall backend vs hit strategies** (v0.3.3+; see [Cache-Guide.md](./Cache-Guide.md)):
+
+| Layer | Config | Values |
+|-------|--------|--------|
+| Recall backend | `cache.backend` (global) / node `strategy` | `exact` (S1, default), `semantic` (S2), `external` (S3) |
+| Hit strategies | `cache.hit_strategies` | e.g. `normalize`, `expand`, custom plugins |
+| Stacking (legacy hybrid) | `cache.allow_backend_stacking` | default `false`; when `true`, exact miss → semantic |
+
+Legacy `strategy: hybrid` maps to `backend=exact` + stacking (not the default).
 
 **Example: Enable Semantic Cache**:
 
-To enable semantic caching, configure the pipeline template with:
+To enable semantic caching, set global `cache.backend: semantic` (or pipeline node strategy) and ensure embedding/vector store are ready:
 
 ```json
 {
@@ -187,8 +192,8 @@ To enable semantic caching, configure the pipeline template with:
 **Semantic Cache Parameters**:
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `strategy` | string | `exact` | Cache strategy: `exact`/`semantic`/`hybrid` |
-| `vector_storage_name` | string | `default-vector` | Vector storage name (for semantic/hybrid) |
+| `strategy` | string | `exact` | Node-level recall: `exact`/`semantic` (prefer global `cache.backend`) |
+| `vector_storage_name` | string | `default-vector` | Vector storage name (for semantic) |
 | `embedding_model` | string | `text-embedding-3-small` | Embedding model for vector generation |
 | `semantic_threshold` | float | `0.85` | Similarity threshold (0-1, higher = stricter) |
 | `semantic_top_k` | int | `5` | Number of top results to return |

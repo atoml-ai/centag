@@ -14,13 +14,15 @@
 
 ## 概述
 
-LLM Proxy提供多种缓存策略，旨在减少重复请求的延迟，提升系统吞吐量。
+LLM Proxy 将「存储/召回后端」与「命中策略」分层（v0.3.3）：
 
-### 缓存类型
+| 层 | 配置 | 说明 |
+|----|------|------|
+| **召回后端** | `cache.backend` | `exact`（S1，默认）/ `semantic`（S2 插件）/ `external`（S3 插件） |
+| **命中策略** | `cache.hit_strategies` | 查库前的查询改写链，如 `normalize`、`expand`、自定义插件名 |
+| **叠加（高级）** | `cache.allow_backend_stacking` | 默认 `false`；为 `true` 时 exact miss 后再查 semantic（旧 hybrid） |
 
-1. **精确匹配缓存**：基于请求的精确匹配
-2. **语义缓存**：基于向量相似度的语义匹配
-3. **混合缓存**：结合精确匹配和语义匹配
+旧字段 `cache.strategy` 仍兼容：加载时归一到 `backend`（`hybrid` → `exact` + 可选 stacking）。
 
 ### 缓存优势
 
@@ -28,121 +30,90 @@ LLM Proxy提供多种缓存策略，旨在减少重复请求的延迟，提升�
 - **减少成本**：减少对LLM的API调用
 - **提升吞吐量**：相同请求可并发处理
 
-## 缓存策略
+### 管理台
 
-### 1. 精确匹配缓存
+Web 侧栏「缓存」→ `/cache` 为统一数据管理台（数据 / 统计 / 配置）。会话页可通过「查看关联缓存」深链到 `/cache?session_id=`。
 
-**原理**：基于请求的精确匹配，包括模型、messages、temperature等参数。
+## 召回后端与命中策略
 
-**适用场景**：
-- 重复的完全相同请求
-- 对响应一致性要求高的场景
+### 1. S1 Exact KV（默认）
+
+**原理**：基于请求 key 的精确匹配（模型、messages、temperature 等）。
 
 **配置**：
 ```yaml
 cache:
   enabled: true
-  strategy: exact
-  ttl: 3600  # 缓存有效期（秒）
-  max_entries: 10000  # 最大缓存条目数
+  backend: exact          # 默认
+  hit_strategies: [normalize, expand]
+  default_ttl: 3600
 ```
 
-**优点**：
-- 速度快
-- 一致性高
-- 实现简单
+**优点**：快、一致性高、配好 KV/存储即可开。  
+**缺点**：无法识别语义相似但文本不同的请求（可用 hit_strategies 提升命中）。
 
-**缺点**：
-- 无法识别语义相似但文本不同的请求
+### 2. S2 语义向量（插件扩展）
 
-### 2. 语义缓存
+**原理**：向量嵌入 + 相似度搜索。与 S1 **默认可互斥**（改 `backend: semantic`）。
 
-**原理**：使用向量嵌入和相似度搜索，识别语义相似的请求。
-
-**适用场景**：
-- 用户提问方式多样化的场景
-- 需要提升命中率的场景
-
-**配置**：
 ```yaml
 cache:
   enabled: true
-  strategy: semantic
-  semantic_cache:
-    enabled: true
-    threshold: 0.85  # 相似度阈值（0-1）
-    top_k: 3  # 返回最相似的K个结果
-  embedding:
-    provider: ollama  # 嵌入服务提供商
-    model: nomic-embed-text  # 嵌入模型
-    base_url: http://localhost:21434
-```
-
-**优点**：
-- 命中率高
-- 可识别语义相似请求
-
-**缺点**：
-- 需要额外的嵌入服务
-- 响应时间略长
-- 可能返回不完全相关的结果
-
-### 3. 混合缓存
-
-**原理**：先尝试精确匹配，未命中时再尝试语义匹配。
-
-**配置**：
-```yaml
-cache:
-  enabled: true
-  strategy: hybrid
-  exact_cache:
-    ttl: 3600
-  semantic_cache:
-    enabled: true
+  backend: semantic
+  hit_strategies: [normalize]
+  semantic:
     threshold: 0.85
+    top_k: 5
+    enable_auto_embedding: true
+embedding:
+  provider: ollama
+  model: nomic-embed-text
+  base_url: http://localhost:21434
 ```
 
-**推荐场景**：
-- 对命中率和响应速度都有要求的场景
-- 大多数请求相似度较高的场景
+### 3. S3 外部召回（插件扩展）
+
+实现 `CacheRecallBackend` 契约，配置 `backend: external` 与 `cache.external.plugin`。可用于缓存短路或 `#rag` 提示增强（见 pipeline 模板）。
+
+### 4. 旧 hybrid / stacking
+
+不再默认开启。若需「exact miss → semantic」：
+
+```yaml
+cache:
+  backend: exact
+  allow_backend_stacking: true
+```
+
+或配置遗留 `strategy: hybrid`（归一时会打开 stacking 告警路径，见 `NormalizeCacheConfig`）。
 
 ## 配置方法
 
 ### 基本配置
 
-编辑缓存配置（旧版 `config.yaml` 已归档至 `../../archive/deprecated/configs/config.yaml`）：
-
 ```yaml
 cache:
   enabled: true
-  strategy: hybrid  # exact | semantic | hybrid
+  backend: exact                 # exact | semantic | external
+  hit_strategies: [normalize, expand]
+  allow_backend_stacking: false
+  default_ttl: 3600
+  semantic:
+    threshold: 0.85
+    top_k: 5
+    enable_auto_embedding: true
 
-  # 精确缓存配置
-  exact_cache:
-    ttl: 3600  # 缓存时间（秒）
-    max_entries: 10000
-
-  # 语义缓存配置
-  semantic_cache:
-    enabled: true
-    threshold: 0.85  # 相似度阈值（0.7-0.9）
-    top_k: 3
-    enable_auto_embedding: true  # 自动生成嵌入
-
-  # 嵌入服务配置
-  embedding:
-    provider: ollama  # ollama | openai | remote
-    model: nomic-embed-text
-    base_url: http://localhost:21434
-    api_key: ""  # OpenAI需要
+embedding:
+  provider: ollama
+  model: nomic-embed-text
+  base_url: http://localhost:21434
 ```
 
 ### 环境变量配置
 
 ```bash
 export CACHE_ENABLED=true
-export CACHE_STRATEGY=hybrid
+export CACHE_STRATEGY=exact   # 兼容旧名；优先使用配置文件 backend
 export CACHE_TTL=3600
 export SEMANTIC_THRESHOLD=0.85
 ```
@@ -181,7 +152,15 @@ curl -X POST http://localhost:20060/api/v1/cache/clear
 curl -X DELETE http://localhost:20060/api/v1/cache/entry \
   -H "Content-Type: application/json" \
   -d '{"key":"your-cache-key"}'
+
+# 多维列表（管理台）
+curl "http://localhost:20060/api/v1/cache/list?type=all&session_id=sess-1&model=qwen&q=hello&from=2026-08-01&to=2026-08-06&page=1&size=20"
+
+# 单条详情
+curl "http://localhost:20060/api/v1/cache/entry?key=your-cache-key&type=exact"
 ```
+
+列表筛选参数：`type`、`session_id`、`model`、`q`、`from`/`to`、`storage`、`save_only`、分页。新写入条目尽力带 `session_id` / `model` / `cache_type`（依赖请求头 `X-Session-ID` 等）。
 
 ### 启用/禁用缓存
 
