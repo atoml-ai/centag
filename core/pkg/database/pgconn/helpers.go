@@ -16,6 +16,14 @@ func envFirst(keys ...string) string {
 	return ""
 }
 
+// envFirstOrDefault 返回第一个非空环境变量的值；若均未设置，返回默认值
+func envFirstOrDefault(defaultVal string, keys ...string) string {
+	if v := envFirst(keys...); v != "" {
+		return v
+	}
+	return defaultVal
+}
+
 // envIntFirst 返回第一个非空的环境变量的整数值
 // 如果环境变量不存在或不是有效整数，返回默认值
 func envIntFirst(defaultVal int, keys ...string) int {

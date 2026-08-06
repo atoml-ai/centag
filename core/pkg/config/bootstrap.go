@@ -130,10 +130,11 @@ func buildPGDSN() string {
 	user := envFirst("PG_USER", "POSTGRES_USER", "postgres")
 	password := envFirst("PG_PASSWORD", "POSTGRES_PASSWORD", "")
 	dbname := envFirst("PG_DATABASE", "POSTGRES_DB", "centag")
+	sslmode := envFirst("PG_SSLMODE", "POSTGRES_SSLMODE", "disable")
 
 	return fmt.Sprintf(
-		"host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
-		host, port, user, password, dbname,
+		"host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
+		host, port, user, password, dbname, sslmode,
 	)
 }
 
