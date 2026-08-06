@@ -26,7 +26,7 @@ CREATE TABLE IF NOT EXISTS api_keys (
     user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     name VARCHAR(100),
     key_hash VARCHAR(64) UNIQUE NOT NULL,
-    key_prefix VARCHAR(16) NOT NULL,
+    key_prefix VARCHAR(64) NOT NULL,
     expires_at TIMESTAMPTZ,
     last_used_at TIMESTAMPTZ,
     enabled BOOLEAN DEFAULT true,
