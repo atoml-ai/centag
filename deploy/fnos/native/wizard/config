@@ -1,0 +1,72 @@
+[
+  {
+    "stepTitle": "数据库",
+    "items": [
+      {
+        "type": "tips",
+        "helpText": "修改数据库类型或连接信息后，应用将在下次启动时生效。切换数据库不会自动迁移已有数据。"
+      },
+      {
+        "type": "radio",
+        "field": "wizard_db_driver",
+        "label": "数据库类型",
+        "initValue": "sqlite",
+        "options": [
+          { "label": "SQLite（内置，推荐）", "value": "sqlite" },
+          { "label": "PostgreSQL", "value": "postgresql" }
+        ]
+      },
+      {
+        "type": "tips",
+        "helpText": "以下 PostgreSQL 连接参数<b>仅在选择 PostgreSQL 时生效</b>；选择 SQLite 时无需填写，可全部留空。"
+      },
+      {
+        "type": "text",
+        "field": "wizard_pg_host",
+        "label": "PostgreSQL 主机（仅 PostgreSQL）",
+        "initValue": "localhost"
+      },
+      {
+        "type": "text",
+        "field": "wizard_pg_port",
+        "label": "PostgreSQL 端口（仅 PostgreSQL）",
+        "initValue": "5432",
+        "rules": [
+          { "pattern": "^[0-9]+$", "message": "端口必须为数字" }
+        ]
+      },
+      {
+        "type": "text",
+        "field": "wizard_pg_user",
+        "label": "PostgreSQL 用户名（仅 PostgreSQL）",
+        "initValue": "postgres"
+      },
+      {
+        "type": "password",
+        "field": "wizard_pg_password",
+        "label": "PostgreSQL 密码（仅 PostgreSQL）"
+      },
+      {
+        "type": "text",
+        "field": "wizard_pg_db",
+        "label": "数据库名（仅 PostgreSQL）",
+        "initValue": "centag"
+      }
+    ]
+  },
+  {
+    "stepTitle": "卸载数据保留",
+    "items": [
+      {
+        "type": "tips",
+        "helpText": "默认保留应用数据，卸载重装后可恢复。开启「卸载时清除数据」后，卸载应用将连同数据目录一并删除。"
+      },
+      {
+        "type": "switch",
+        "field": "wizard_clean_data_on_uninstall",
+        "label": "卸载时清除所有数据",
+        "initValue": "false"
+      }
+    ]
+  }
+]

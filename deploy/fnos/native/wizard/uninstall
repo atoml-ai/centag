@@ -1,0 +1,21 @@
+[
+  {
+    "stepTitle": "确认卸载",
+    "items": [
+      {
+        "type": "tips",
+        "helpText": "请选择卸载时是否保留应用数据。保留数据后重新安装可恢复原有配置、密钥与数据库。"
+      },
+      {
+        "type": "radio",
+        "field": "wizard_data_action",
+        "label": "数据保留",
+        "initValue": "keep",
+        "options": [
+          { "label": "保留应用数据（推荐）", "value": "keep" },
+          { "label": "删除全部数据", "value": "delete" }
+        ]
+      }
+    ]
+  }
+]

@@ -693,6 +693,15 @@ else
   cp "${SCRIPT_DIR}/config/resource" "${BUILD_DIR}/config/"
 fi
 
+# wizard（新版 fnOS 格式要求 wizard/ 目录；提供安装/卸载/配置向导）
+if [ -d "${SCRIPT_DIR}/native/wizard" ]; then
+  cp -r "${SCRIPT_DIR}/native/wizard" "${BUILD_DIR}/wizard"
+  echo "  wizard: 已打包安装/卸载/配置向导"
+elif [ "$MODE" = "native" ]; then
+  # 兜底：目录必须存在（空目录也可通过校验）
+  mkdir -p "${BUILD_DIR}/wizard"
+fi
+
 # 图标（优先公共路径，fallback 到 native 路径）
 ICON_SRC="${SCRIPT_DIR}/res"
 if [ ! -f "${ICON_SRC}/icon_256.png" ]; then
@@ -739,10 +748,47 @@ echo "[OK] 清单校验和: ${CHECKSUM}"
 FPK_FILE="${OUTPUT_DIR}/centag-${EDITION}-${MODE}-${GOARCH}.fpk"
 rm -f "${FPK_FILE}"
 
-cd "${BUILD_DIR}"
-tar czf "${FPK_FILE}" \
-  manifest app.tgz cmd/ config/ \
-  $(ls ICON*.PNG 2>/dev/null | tr "\n" " ")
+# fnOS 1.x / fnpack 1.2.x 新版格式：优先用官方 fnpack 完成 app.tgz 与 manifest checksum
+# （checksum 使用 fnpack 内部的规范化算法，手算 md5 会导致安装被拒）。
+# 找不到 fnpack 时回退到旧版手拼方式。
+FNPACK_BIN="${FNPACK:-${FNPACK_BIN:-}}"
+if [ -z "${FNPACK_BIN}" ]; then
+  command -v fnpack >/dev/null 2>&1 && FNPACK_BIN="fnpack"
+  command -v fn >/dev/null 2>&1 && FNPACK_BIN="${FNPACK_BIN:-fn}"
+fi
+
+if [ -n "${FNPACK_BIN}" ]; then
+  echo "[fpk] 使用官方 ${FNPACK_BIN} 打包（fnOS 1.x 新版 checksum/app.tgz）..."
+  STAGE="${BUILD_DIR}/fnproject"
+  mkdir -p "${STAGE}/app"
+  tar xzf "${BUILD_DIR}/app.tgz" -C "${STAGE}/app"
+  cp -r "${BUILD_DIR}/cmd"     "${STAGE}/cmd"
+  cp -r "${BUILD_DIR}/config"  "${STAGE}/config"
+  cp -r "${BUILD_DIR}/wizard"  "${STAGE}/wizard"
+  cp    "${BUILD_DIR}/manifest" "${STAGE}/manifest"
+  cp    "${BUILD_DIR}/ICON.PNG"     "${STAGE}/ICON.PNG"     2>/dev/null || true
+  cp    "${BUILD_DIR}/ICON_256.PNG" "${STAGE}/ICON_256.PNG" 2>/dev/null || true
+  cd "${STAGE}" && "${FNPACK_BIN}" build >/dev/null 2>&1
+  if [ -f "${STAGE}/centag.fpk" ]; then
+    cp "${STAGE}/centag.fpk" "${FPK_FILE}"
+  else
+    # 部分版本把文件命名为 ${appname}.fpk（appname=centag）
+    cp "${STAGE}/${appname:-centag}.fpk" "${FPK_FILE}" 2>/dev/null || true
+  fi
+  cd "${BUILD_DIR}"
+  if [ ! -f "${FPK_FILE}" ]; then
+    echo "[WARN] ${FNPACK_BIN} build 未生成 fpk，回退到手拼方式" >&2
+    FNPACK_BIN=""
+  fi
+fi
+
+if [ -z "${FNPACK_BIN}" ] && [ ! -f "${FPK_FILE}" ]; then
+  echo "[fpk] 未检测到 fnpack，采用旧版手拼方式打包（fnOS 0.8.x 兼容）..."
+  cd "${BUILD_DIR}"
+  tar czf "${FPK_FILE}" \
+    manifest app.tgz cmd/ config/ wizard/ \
+    $(ls ICON*.PNG 2>/dev/null | tr "\n" " ")
+fi
 
 echo "[OK] fpk 包已生成: ${FPK_FILE}"
 echo "    文件大小: $(du -h "${FPK_FILE}" | cut -f1)"

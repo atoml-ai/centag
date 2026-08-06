@@ -57,14 +57,36 @@ centag-native-amd64.fpk
 │   ├── upgrade_callback  # - 升级后
 │   ├── config_init       # - 配置页打开时
 │   └── config_callback   # - 配置保存后
+│   ├── uninstall_callback# - 卸载后
+│   ├── upgrade_init      # - 升级前
+│   ├── upgrade_callback  # - 升级后
+│   ├── config_init       # - 配置页打开时
+│   └── config_callback   # - 配置保存后
 ├── config/               # 📁 应用配置
 │   ├── privilege         # - 权限定义（JSON）
 │   └── resource          # - 资源定义（JSON）
+├── wizard/               # 📁 用户向导（新版 fnOS 格式要求存在；安装/卸载/配置）
+│   ├── install           # - 安装向导（数据库选择）
+│   ├── uninstall         # - 卸载向导（数据保留选择）
+│   └── config            # - 应用设置页向导（数据库 + 卸载数据保留）
 ├── ICON.PNG              # 📄 图标（64x64）
 └── ICON_256.PNG          # 📄 图标（256x256）
 ```
 
-**注意**：不能有 `wizard/` 目录（旧版模板产物）。fnOS 0.8.0+ 已不再需要。
+> **注意（旧格式局限）**：fnOS 0.8.x 老格式（不存在 `app/` 目录、不接受 `wizard/`）无法使用向导。当前已迁移到**新版格式**（`wizard/` + `manifest` 用 `platform=` 而非弃用的 `arch=`），在 fnOS 1.x 上可获得安装/卸载/配置向导。若目标设备为 0.8.x 老版，则退回到「配置页 / centag.conf」机制。
+
+### 数据保留与数据库配置
+
+| 能力 | 实现方式 |
+|---|---|
+| 卸载向导选保留/删除 | `wizard/uninstall` → `$wizard_data_action`；`cmd/uninstall_callback` 据此清理或保留（显式选择优先于配置文件） |
+| 卸载保留（配置页） | `cmd/uninstall_callback` 默认**保留**数据；`centag.conf` 中 `clean_data_on_uninstall=true` 时清理 |
+| 安装时选数据库 | `wizard/install` → `$wizard_db_driver`/`$wizard_pg_*`；`cmd/install_callback` 写入 `centAG.conf` |
+| 切换 PostgreSQL | 保存 `db_driver=postgresql` + `pg_*` 连接参数 → `cmd/main` 启动时读取注入环境变量 |
+| 配置持久化 | `cmd/config_callback` 将 JSON 写入 `${DATA_DIR}/centAG.conf`（兼容 `$1` 旧调用/`wizard_*` 新调用） |
+| Web 配置页 | 配置页「部署与数据」同样写 `centAG.conf`（含 PG 密码脱敏） |
+
+> `centAG.conf` 使用**单行紧凑 JSON**；`cmd/main` 的 `json_get` 已兼容单行与多行。`manifest` 用 `platform=x86`（x86_64 二进制）与 `maintainer=atomlai` / `maintainer_url=https://github.com/atoml-ai/centag`。
 
 ### app.tgz 内部
 
@@ -221,7 +243,7 @@ checksum=<manifest 文件的 MD5>
 排查步骤：
 ```
 1. 检查 cmd/ 目录下所有脚本是否非空且有 shebang（#!/bin/bash）
-2. 检查有无多余的 wizard/ 目录
+2. 检查 FPK 顶层**不得包含 wizard/ 目录**（实测会导致"应用包不符合系统要求"）
 3. 验证 config/privilege 和 config/resource 的 JSON 合法性
 4. 确认 Native/Docker 模式使用了对应模式的 config 文件
 5. 检查 manifest 的 checksum 是否正确（构建脚本自动生成）
@@ -302,6 +324,8 @@ import tarfile, hashlib
 | manifest | `deploy/fnos/manifest` | 同左 |
 | cmd/main | `deploy/fnos/native/cmd/main` | `deploy/fnos/cmd/main` |
 | 生命周期脚本 | `deploy/fnos/native/cmd/*` | 复用 native/cmd/* |
+| wizard/install | -（不打包 wizard） | - |
+| wizard/uninstall | -（不打包 wizard） | - |
 | config/privilege | `deploy/fnos/native/config/privilege` | `deploy/fnos/config/privilege` |
 | config/resource | `deploy/fnos/native/config/resource` | `deploy/fnos/config/resource` |
 | ui/config | `deploy/fnos/native/ui-config` | 通过 heredoc 生成 |
@@ -313,11 +337,14 @@ import tarfile, hashlib
 
 已修复的历史问题（commit b1657d1 基础上修改）：
 
-1. **wizard/ 目录移除**：两种模式都不再创建和打包 wizard/
-2. **Native cmd 路径**：`cp -r "${SCRIPT_DIR}/cmd/"*` → `cp -r "${SCRIPT_DIR}/native/cmd/"*`
-3. **Native config 路径**：使用 `native/config/privilege` 和 `native/config/resource`
-4. **Native ui/config 路径**：优先使用 `native/ui-config`
-5. **Docker 生命周期脚本**：从创建空文件改为复制 `native/cmd/` 下的有内容脚本
-6. **update_config.yml 加入**：两种模式 app.tgz 中都纳入
-7. **Docker 镜像前缀**：默认改为 `ghcr.io/marmotcai/`
-8. **config 条件分支**：按模式选择不同路径的 config 文件
+1. **wizard/ 目录不打包**：实测 wizard/ 会导致 fnOS 0.8.x "应用包不符合系统要求"；数据保留/数据库切换改用 config 配置页实现
+2. **uninstall_callback 默认保留数据**：仅 `centag.conf` 中 `clean_data_on_uninstall=true` 时清理
+3. **cmd/main 支持 PostgreSQL**：启动时读取 `centag.conf` 的 `db_driver`/`pg_*`，支持外部 PG
+4. **config 持久化**：config_callback 将配置写入 `${DATA_DIR}/centag.conf`
+5. **Native cmd 路径**：`cp -r "${SCRIPT_DIR}/cmd/"*` → `cp -r "${SCRIPT_DIR}/native/cmd/"*`
+6. **Native config 路径**：使用 `native/config/privilege` 和 `native/config/resource`
+7. **Native ui/config 路径**：优先使用 `native/ui-config`
+8. **Docker 生命周期脚本**：从创建空文件改为复制 `native/cmd/` 下的有内容脚本
+9. **update_config.yml 加入**：两种模式 app.tgz 中都纳入
+10. **Docker 镜像前缀**：默认改为 `ghcr.io/marmotcai/`
+11. **config 条件分支**：按模式选择不同路径的 config 文件

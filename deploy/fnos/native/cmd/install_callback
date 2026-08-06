@@ -1,12 +1,56 @@
 #!/bin/bash
 
 ### This script is called after the user installs the application.
-### 可在此处设置初始权限、创建数据库等
+### 安装向导（wizard/install）选择的数据库写入 ${DATA_DIR}/centag.conf，
+### 供 cmd/main 启动时读取（注入 LLM_PROXY_DB_DRIVER / POSTGRES_*）。
+### 若已存在配置文件（卸载保留后重装），则保留原配置不覆盖。
 
 DATA_DIR="${TRIM_DATA_SHARE_PATHS%%:*}"
+CONF_FILE="${DATA_DIR}/centag.conf"
 
-# 确保数据目录存在
 mkdir -p "${DATA_DIR}"
 mkdir -p "${TRIM_PKGVAR}/logs"
+
+# 检测已有数据（支持卸载保留后重装恢复）
+if [ -f "${DATA_DIR}/centag.db" ]; then
+  echo "检测到已有数据库，将使用保留的数据: ${DATA_DIR}/centag.db"
+fi
+
+# json_escape 转义 JSON 字符串中的特殊字符
+json_escape() {
+  local s="$1"
+  s="${s//\\/\\\\}"
+  s="${s//\"/\\\"}"
+  s="${s//$'\n'/\\n}"
+  s="${s//$'\t'/\\t}"
+  s="${s//$'\r'/\\r}"
+  printf '%s' "$s"
+}
+
+# 若已存在配置（保留自上次安装），跳过默认写入
+if [ -f "${CONF_FILE}" ]; then
+  echo "检测到已有配置文件，保留: ${CONF_FILE}"
+  exit 0
+fi
+
+# 根据安装向导写入数据库配置
+db_driver="${wizard_db_driver:-sqlite}"
+clean=false
+
+if [ "${db_driver}" = "postgresql" ]; then
+  {
+    printf '{"clean_data_on_uninstall":false,'
+    printf '"db_driver":"postgresql",'
+    printf '"pg_host":"%s",'   "$(json_escape "${wizard_pg_host:-localhost}")"
+    printf '"pg_port":"%s",'   "$(json_escape "${wizard_pg_port:-5432}")"
+    printf '"pg_user":"%s",'   "$(json_escape "${wizard_pg_user:-postgres}")"
+    printf '"pg_password":"%s",' "$(json_escape "${wizard_pg_password:-}")"
+    printf '"pg_db":"%s"}'     "$(json_escape "${wizard_pg_db:-centag}")"
+  } > "${CONF_FILE}"
+  echo "已按安装向导启用 PostgreSQL 并写入配置: ${CONF_FILE}"
+else
+  printf '{"clean_data_on_uninstall":false,"db_driver":"sqlite"}' > "${CONF_FILE}"
+  echo "已按安装向导启用 SQLite 并写入配置: ${CONF_FILE}"
+fi
 
 exit 0

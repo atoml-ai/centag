@@ -1,9 +1,56 @@
 #!/bin/bash
 
-### This script is called after saving the configuration.
-### $1 为 JSON 格式的配置参数
+### This script is called after saving the configuration page.
+### 兼容两种调用方式：
+###   1) 旧版：$1 为 JSON 格式配置参数（centag.conf 内容），直接持久化
+###   2) 新版：配置向导（wizard/config）值通过 wizard_* 环境变量传入，据此生成 centag.conf
 
-# 写入配置（占位示例）
-# echo "$1" > "${DATA_DIR}/centag.conf"
+DATA_DIR="${TRIM_DATA_SHARE_PATHS%%:*}"
+CONF_FILE="${DATA_DIR}/centag.conf"
+
+mkdir -p "${DATA_DIR}"
+
+json_escape() {
+  local s="$1"
+  s="${s//\\/\\\\}"
+  s="${s//\"/\\\"}"
+  s="${s//$'\n'/\\n}"
+  s="${s//$'\t'/\\t}"
+  s="${s//$'\r'/\\r}"
+  printf '%s' "$s"
+}
+
+write_conf() {
+  local clean="$1"
+  local db_driver="$2"
+  if [ "${db_driver}" = "postgresql" ]; then
+    {
+      printf '{"clean_data_on_uninstall":%s,' "${clean}"
+      printf '"db_driver":"postgresql",'
+      printf '"pg_host":"%s",'   "$(json_escape "${wizard_pg_host:-localhost}")"
+      printf '"pg_port":"%s",'   "$(json_escape "${wizard_pg_port:-5432}")"
+      printf '"pg_user":"%s",'   "$(json_escape "${wizard_pg_user:-postgres}")"
+      printf '"pg_password":"%s",' "$(json_escape "${wizard_pg_password:-}")"
+      printf '"pg_db":"%s"}'     "$(json_escape "${wizard_pg_db:-centag}")"
+    } > "${CONF_FILE}"
+  else
+    printf '{"clean_data_on_uninstall":%s,"db_driver":"sqlite"}' "${clean}" > "${CONF_FILE}"
+  fi
+}
+
+if [ -n "$1" ]; then
+  echo "$1" > "${CONF_FILE}"
+  echo "配置已保存: ${CONF_FILE}"
+  exit 0
+fi
+
+clean="false"
+case "${wizard_clean_data_on_uninstall:-}" in
+  true|1|on|yes) clean="true" ;;
+esac
+
+db_driver="${wizard_db_driver:-sqlite}"
+write_conf "${clean}" "${db_driver}"
+echo "配置已保存(向导): ${CONF_FILE} (db=${db_driver}, clean=${clean})"
 
 exit 0

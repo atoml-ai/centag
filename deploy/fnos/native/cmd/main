@@ -30,6 +30,33 @@ load_runtime_env() {
     fi
 }
 
+# 读取配置页持久化的 centag.conf，覆盖数据库等运行配置
+# 优先级: 环境变量(runtime.env) > centag.conf > 内置默认
+load_app_config() {
+    local conf="${DATA_DIR}/centag.conf"
+    [ -f "${conf}" ] || return 0
+
+    local val
+    # 解析 JSON 键值（兼容单行紧凑 JSON 与多行优雅 JSON；仅提取字符串值）
+    json_get() {
+        grep -oE "\"${1}\"[[:space:]]*:[[:space:]]*\"[^\"]*\"" "${conf}" 2>/dev/null | head -1 \
+            | sed -E 's/^"[^"]*"[[:space:]]*:[[:space:]]*"([^"]*)"/\1/' \
+            | tr -d ' \t\r'
+    }
+
+    val="$(json_get db_driver)"
+    if [ -n "${val}" ]; then
+        export LLM_PROXY_DB_DRIVER="${LLM_PROXY_DB_DRIVER:-${val}}"
+    fi
+    val="$(json_get pg_host)";  [ -n "${val}" ] && export POSTGRES_HOST="${POSTGRES_HOST:-${val}}"
+    val="$(json_get pg_port)";  [ -n "${val}" ] && export POSTGRES_PORT="${POSTGRES_PORT:-${val}}"
+    val="$(json_get pg_user)";  [ -n "${val}" ] && export POSTGRES_USER="${POSTGRES_USER:-${val}}"
+    val="$(json_get pg_password)"; [ -n "${val}" ] && export POSTGRES_PASSWORD="${POSTGRES_PASSWORD:-${val}}"
+    val="$(json_get pg_db)";    [ -n "${val}" ] && export POSTGRES_DB="${POSTGRES_DB:-${val}}"
+
+    log_msg "已加载应用配置: ${conf} (db=${LLM_PROXY_DB_DRIVER:-sqlite})"
+}
+
 start_process() {
     if status; then
         log_msg "应用已在运行中，跳过启动"
@@ -42,10 +69,23 @@ start_process() {
     mkdir -p "${LOGS_DIR}"
 
     load_runtime_env
+    load_app_config
 
-    export LLM_PROXY_DB_DRIVER="${LLM_PROXY_DB_DRIVER:-sqlite}"
-    export SQLITE_PATH="${SQLITE_PATH:-${DATA_DIR}/centag.db}"
-    export LLM_PROXY_DB_PATH="${LLM_PROXY_DB_PATH:-${SQLITE_PATH}}"
+    if [ "${LLM_PROXY_DB_DRIVER}" = "postgresql" ]; then
+        # PostgreSQL 模式（由配置页 centag.conf 设置）
+        export POSTGRES_HOST="${POSTGRES_HOST:-localhost}"
+        export POSTGRES_PORT="${POSTGRES_PORT:-5432}"
+        export POSTGRES_USER="${POSTGRES_USER:-postgres}"
+        export POSTGRES_PASSWORD="${POSTGRES_PASSWORD:-}"
+        export POSTGRES_DB="${POSTGRES_DB:-centag}"
+        export LLM_PROXY_DB_PATH="${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}"
+        log_msg "数据库: PostgreSQL ${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}"
+    else
+        # SQLite 模式（默认）
+        export SQLITE_PATH="${SQLITE_PATH:-${DATA_DIR}/centag.db}"
+        export LLM_PROXY_DB_PATH="${LLM_PROXY_DB_PATH:-${SQLITE_PATH}}"
+        log_msg "数据库: SQLite ${SQLITE_PATH}"
+    fi
     export SERVER_HOST="${SERVER_HOST:-0.0.0.0}"
     export SERVER_PORT="${SERVER_PORT:-${PORT}}"
     export LLM_PROXY_SERVER_HOST="${LLM_PROXY_SERVER_HOST:-${SERVER_HOST}}"

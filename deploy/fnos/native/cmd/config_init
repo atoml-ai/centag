@@ -1,14 +1,19 @@
 #!/bin/bash
 
 ### This script is called when entering the configuration page.
-### 可在此处读取当前配置并传出
+### 输出当前配置（JSON），供 fnOS 配置页渲染/用户编辑。
 
-# 输出当前密码（占位示例）
 DATA_DIR="${TRIM_DATA_SHARE_PATHS%%:*}"
+
 if [ -f "${DATA_DIR}/centag.conf" ]; then
     cat "${DATA_DIR}/centag.conf"
 else
-    echo "{}"
+    cat <<EOF
+{
+  "clean_data_on_uninstall": false,
+  "db_driver": "sqlite"
+}
+EOF
 fi
 
 exit 0

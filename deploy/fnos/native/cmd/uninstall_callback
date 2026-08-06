@@ -1,12 +1,44 @@
 #!/bin/bash
 
 ### This script is called after uninstalling the application.
-### 清理数据库和运行时数据
+### 默认【保留】应用数据，重装后可恢复配置与密钥。
+### 满足以下任一条件才清理数据：
+###   1) 卸载向导（wizard/uninstall）选择「删除全部数据」→ $wizard_data_action=delete
+###   2) 配置页 centag.conf: clean_data_on_uninstall=true
 
+CONF_FILE="${TRIM_DATA_SHARE_PATHS%%:*}/centag.conf"
 DATA_DIR="${TRIM_DATA_SHARE_PATHS%%:*}"
-if [ -n "${DATA_DIR}" ] && [ -d "${DATA_DIR}" ]; then
-  echo "Cleaning up Centag data: ${DATA_DIR}"
-  rm -rf "${DATA_DIR}"
+
+clear_data() {
+  if [ -n "${DATA_DIR}" ] && [ -d "${DATA_DIR}" ]; then
+    echo "用户选择清除所有数据: ${DATA_DIR}"
+    rm -rf "${DATA_DIR}"
+  fi
+  if [ -n "${TRIM_PKGVAR:-}" ] && [ -d "${TRIM_PKGVAR}" ]; then
+    echo "清理持久化数据卷: ${TRIM_PKGVAR}"
+    find "${TRIM_PKGVAR}" -mindepth 1 -delete 2>/dev/null
+  fi
+}
+
+should_clean="false"
+
+# 条件1：卸载向导明确选择（keep/delete）——用户卸载时的最终决定，优先于配置文件
+if [ -n "${wizard_data_action:-}" ]; then
+  if [ "${wizard_data_action}" = "delete" ]; then
+    should_clean="true"
+  else
+    should_clean="false"
+  fi
+elif [ -f "${CONF_FILE}" ]; then
+  # 条件2：无卸载向导（静默卸载），回退到配置文件显式开启（配置页设置）
+  conf_clean="$(grep -E '"clean_data_on_uninstall"[[:space:]]*:' "${CONF_FILE}" 2>/dev/null | head -1 | sed -E 's/.*:[[:space:]]*(true|false).*/\1/')"
+  [ "${conf_clean}" = "true" ] && should_clean="true"
+fi
+
+if [ "${should_clean}" = "true" ]; then
+  clear_data
+else
+  echo "未选择清除数据，保留应用数据"
 fi
 
 exit 0
