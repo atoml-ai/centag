@@ -1,6 +1,11 @@
 {
-  "pageTitle": "缓存管理",
-  "pageDescription": "查看和管理缓存数据",
+  "pageTitle": "缓存数据管理台",
+  "pageDescription": "统一浏览、筛选与配置 S1 精确 / S2 语义 / S3 外部召回缓存",
+  "tabs": {
+    "data": "数据浏览",
+    "stats": "统计概览",
+    "config": "配置"
+  },
   "hitRate": "缓存命中率",
   "hits": "命中",
   "misses": "未命中",
@@ -9,28 +14,40 @@
   "enabled": "已启用",
   "disabled": "已禁用",
   "cacheType": "缓存类型",
+  "backendLabel": "召回后端",
   "memoryCache": "内存缓存",
   "expiry": "过期时间",
   "permanent": "永久",
   "maxEntries": "最大条目",
   "unlimited": "无限制",
+  "listTotal": "当前列表总数",
   "refreshData": "刷新数据",
   "clearCache": "清空缓存",
   "cacheList": "缓存列表",
   "filterPlaceholder": {
     "cacheType": "缓存类型",
     "dataSource": "数据来源",
-    "storage": "存储后端"
+    "storage": "存储后端",
+    "session": "会话 ID",
+    "model": "模型",
+    "keyword": "关键词 / 访问 ID",
+    "from": "开始日期",
+    "to": "结束日期"
   },
   "filterOptions": {
     "allTypes": "全部类型",
-    "exact": "精确匹配",
-    "semantic": "语义匹配",
+    "exact": "S1 精确匹配",
+    "semantic": "S2 语义匹配",
+    "external": "S3 外部召回",
     "allData": "全部数据",
     "saveOnly": "仅保存",
     "cacheData": "缓存数据",
     "allStorage": "全部存储",
     "default": "默认"
+  },
+  "empty": {
+    "semantic": "暂无语义缓存。请在配置中将 backend 设为 semantic，并确保 embedding / 向量存储已就绪。",
+    "external": "暂无外部召回数据。请配置 cache.backend=external 与插件后写入。"
   },
   "table": {
     "type": "类型",
@@ -39,17 +56,20 @@
     "semantic": "语义",
     "question": "问题/请求",
     "cacheKey": "缓存键",
+    "session": "会话",
     "model": "模型",
     "storage": "存储",
     "createdAt": "创建时间",
     "similarity": "相似度",
     "actions": "操作",
-    "view": "查看"
+    "view": "查看",
+    "delete": "删除"
   },
   "refresh": "刷新",
   "detailDialog": {
     "title": "缓存记录详情",
     "cacheKey": "缓存键",
+    "copyKey": "复制 Key",
     "type": "类型",
     "saveOnly": "仅保存",
     "exactMatch": "精确匹配",
@@ -66,6 +86,25 @@
     "noData": "暂无数据",
     "close": "关闭"
   },
+  "config": {
+    "title": "缓存召回配置",
+    "save": "保存配置",
+    "saved": "配置已保存",
+    "saveFailed": "保存失败",
+    "enabled": "启用缓存",
+    "backend": "召回后端 (backend)",
+    "backendHint": "默认 exact（S1）。semantic / external 为插件扩展，默认可互斥。",
+    "hitStrategies": "命中策略 (hit_strategies)",
+    "hitStrategiesHint": "与存储选型分离；可注册自定义策略名。超时 fail-open。",
+    "stacking": "允许后端叠加 (stacking)",
+    "stackingHint": "高级开关：exact miss 后再查 semantic。默认关闭。",
+    "readWrite": "读写开关",
+    "read": "允许读",
+    "write": "允许写",
+    "defaultTtl": "默认 TTL（秒）",
+    "threshold": "语义阈值",
+    "externalHint": "S3 需配置 cache.external.plugin，且插件实现 CacheRecallBackend。"
+  },
   "confirm": {
     "clearTitle": "确认清空",
     "clearMessage": "确定要清空所有缓存数据吗？此操作不可恢复。",
@@ -77,6 +116,8 @@
   "message": {
     "cleared": "缓存已清空",
     "deleted": "删除成功",
+    "copied": "已复制",
+    "copyFailed": "复制失败",
     "loadFailed": "加载失败",
     "loadListFailed": "加载缓存列表失败",
     "clearFailed": "清空失败",

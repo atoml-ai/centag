@@ -4,12 +4,13 @@ import (
 	"net/http"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
-	"centag/core/pkg/backend"
 	"centag/core/internal/cache"
-	"centag/core/pkg/config"
 	"centag/core/internal/llm"
+	"centag/core/pkg/backend"
+	"centag/core/pkg/config"
 	"centag/core/pkg/logger"
 	"centag/core/pkg/processor"
 
@@ -248,18 +249,24 @@ func (h *CacheHandler) GetCacheInfo(c *gin.Context) {
 	})
 }
 
-// DeleteCacheEntry 删除缓存条目
+// DeleteCacheEntry 删除缓存条目（JSON body 或 query: key, type）
 func (h *CacheHandler) DeleteCacheEntry(c *gin.Context) {
 	var req CacheInfoRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
+	_ = c.ShouldBindJSON(&req)
+	if req.Key == "" {
+		req.Key = strings.TrimSpace(c.Query("key"))
+	}
+	if req.Type == "" {
+		req.Type = strings.TrimSpace(c.Query("type"))
+	}
+	if req.Key == "" {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
-			"error":   err.Error(),
+			"error":   "key is required",
 		})
 		return
 	}
 
-	// 默认删除精确缓存
 	cacheType := req.Type
 	if cacheType == "" {
 		cacheType = "exact"
@@ -267,7 +274,6 @@ func (h *CacheHandler) DeleteCacheEntry(c *gin.Context) {
 
 	var err error
 	if cacheType == "semantic" {
-		// 删除语义缓存
 		semanticCache := h.cacheManager.GetSemanticCache()
 		if semanticCache == nil {
 			c.JSON(http.StatusBadRequest, gin.H{
@@ -278,7 +284,6 @@ func (h *CacheHandler) DeleteCacheEntry(c *gin.Context) {
 		}
 		err = semanticCache.Delete(c.Request.Context(), req.Key)
 	} else {
-		// 删除精确缓存
 		err = h.proxyCache.Invalidate(c.Request.Context(), req.Key)
 	}
 
@@ -296,22 +301,40 @@ func (h *CacheHandler) DeleteCacheEntry(c *gin.Context) {
 	})
 }
 
-// ListCacheEntries 列出缓存条目(带分页)
+// ListCacheEntries 列出缓存条目(带分页与多维筛选)
+// Query: type, save_only, storage, session_id, model, q, from, to, page/size 或 limit/offset
 func (h *CacheHandler) ListCacheEntries(c *gin.Context) {
-	// 获取查询参数 - 支持 page/size 和 limit 两种方式
 	var limit int
 	var offset int
-	cacheType := c.Query("type") // 可选: exact, semantic, all (默认 exact)
-	saveOnlyFilter := c.Query("save_only") // 可选: all, save_only, cache
-	storageFilter := c.Query("storage") // 可选: 存储后端名称，如 "pg-cache-write"
+	cacheType := c.Query("type") // exact | semantic | all (默认 exact)
+	if cacheType == "" {
+		cacheType = "exact"
+	}
+	saveOnlyFilter := c.Query("save_only") // all | save_only | cache
+	storageFilter := c.Query("storage")
 
-	// 方式1: 使用 page 和 size 参数
+	filters := cacheListFilters{
+		SessionID: strings.TrimSpace(c.Query("session_id")),
+		Model:     strings.TrimSpace(c.Query("model")),
+		Query:     strings.TrimSpace(c.Query("q")),
+	}
+	if from, ok := parseRFC3339Loose(c.Query("from")); ok {
+		filters.From, filters.HasFrom = from, true
+	}
+	if to, ok := parseRFC3339Loose(c.Query("to")); ok {
+		// inclusive end-of-day when date-only
+		if len(strings.TrimSpace(c.Query("to"))) == 10 {
+			to = to.Add(24*time.Hour - time.Nanosecond)
+		}
+		filters.To, filters.HasTo = to, true
+	}
+
 	if pageStr := c.Query("page"); pageStr != "" {
 		page, err := strconv.Atoi(pageStr)
 		if err != nil || page < 1 {
 			page = 1
 		}
-		size := 10 // 默认每页10条
+		size := 10
 		if sizeStr := c.Query("size"); sizeStr != "" {
 			if n, err := strconv.Atoi(sizeStr); err == nil && n > 0 && n <= 1000 {
 				size = n
@@ -320,21 +343,24 @@ func (h *CacheHandler) ListCacheEntries(c *gin.Context) {
 		limit = size
 		offset = (page - 1) * size
 	} else {
-		// 方式2: 使用 limit 参数（向后兼容）
-		limit = 10 // 默认返回10条
+		limit = 10
 		if l := c.Query("limit"); l != "" {
 			if n, err := strconv.Atoi(l); err == nil && n > 0 && n <= 1000 {
 				limit = n
 			}
 		}
 		offset = 0
+		if o := c.Query("offset"); o != "" {
+			if n, err := strconv.Atoi(o); err == nil && n >= 0 {
+				offset = n
+			}
+		}
 	}
 
 	var allEntries []map[string]interface{}
 	var totalExactCount int
 	var totalSemanticCount int
 
-	// 获取存储后端信息
 	var kvStoreInfo, vectorStoreInfo string
 	if kvStore := h.cacheManager.GetKVStore(); kvStore != nil {
 		kvStoreInfo = kvStore.GetStoreInfo().Type
@@ -343,112 +369,86 @@ func (h *CacheHandler) ListCacheEntries(c *gin.Context) {
 		vectorStoreInfo = vectorStore.GetStoreInfo().Type
 	}
 
-	// 获取精确匹配缓存
-	exactCache := h.cacheManager.GetExactCache()
-	exactEntries := exactCache.List()
-
-	// 转换格式并添加类型标记和存储后端信息
-	for _, entry := range exactEntries {
-		// 应用 save_only 筛选
-		metadata, _ := entry["metadata"].(map[string]interface{})
-		isSaveOnly := metadata != nil && metadata["save_only"] == true
-
-		if saveOnlyFilter == "save_only" && !isSaveOnly {
-			continue // 只显示仅保存数据
-		}
-		if saveOnlyFilter == "cache" && isSaveOnly {
-			continue // 只显示缓存数据
-		}
-
-		entry["cache_type"] = "exact"
-		entry["similarity"] = nil
-
-		// 存储后端信息 - 优先从 entry 的 storage_backend 字段读取，否则使用 kvStoreInfo
-		if sb, ok := entry["storage_backend"].(string); ok && sb != "" {
-			// 条目已记录存储后端
-		} else if writeStorage, ok := metadata["write_storage"].(string); ok && writeStorage != "" {
-			entry["storage_backend"] = writeStorage
-		} else if kvStoreInfo != "" {
-			entry["storage_backend"] = kvStoreInfo
-		}
-
-		// 应用存储后端筛选
-		if storageFilter != "" && storageFilter != "all" {
-			entryStorage := ""
-			if sb, ok := entry["storage_backend"].(string); ok {
-				entryStorage = sb
-			}
-			if entryStorage != storageFilter {
-				continue // 跳过不匹配的条目
+	if cacheType == "all" || cacheType == "exact" {
+		exactCache := h.cacheManager.GetExactCache()
+		if exactCache != nil {
+			for _, entry := range exactCache.List() {
+				metadata, _ := entry["metadata"].(map[string]interface{})
+				isSaveOnly := metadata != nil && metadata["save_only"] == true
+				if saveOnlyFilter == "save_only" && !isSaveOnly {
+					continue
+				}
+				if saveOnlyFilter == "cache" && isSaveOnly {
+					continue
+				}
+				entry["cache_type"] = "exact"
+				entry["similarity"] = nil
+				if sb, ok := entry["storage_backend"].(string); ok && sb != "" {
+					// keep
+				} else if writeStorage, ok := metadata["write_storage"].(string); ok && writeStorage != "" {
+					entry["storage_backend"] = writeStorage
+				} else if kvStoreInfo != "" {
+					entry["storage_backend"] = kvStoreInfo
+				}
+				if storageFilter != "" && storageFilter != "all" {
+					entryStorage, _ := entry["storage_backend"].(string)
+					if entryStorage != storageFilter {
+						continue
+					}
+				}
+				entry = flattenCacheEntryForAPI(entry)
+				if !matchCacheListFilters(entry, filters) {
+					continue
+				}
+				allEntries = append(allEntries, entry)
+				totalExactCount++
 			}
 		}
 	}
-	allEntries = append(allEntries, exactEntries...)
-	totalExactCount = len(exactEntries)
 
-	// 获取语义缓存
-	// 注意：语义缓存不支持 save_only 筛选（因为 save_only 只写入精确缓存）
+	// 语义缓存不支持 save_only（save_only 只写精确缓存）
 	if (cacheType == "all" || cacheType == "semantic") && saveOnlyFilter != "save_only" {
 		if semanticCache := h.cacheManager.GetSemanticCache(); semanticCache != nil {
-			// 从向量存储加载语义缓存
-			var semanticEntries []map[string]interface{}
-			var err error
-
-			// 加载所有语义缓存（分页后由内存合并处理）
-			// 由于向量存储可能有大量数据，我们先加载1000条
-			semanticEntries, err = semanticCache.ListFromVectorStore(c.Request.Context(), 1000, 0)
+			semanticEntries, err := semanticCache.ListFromVectorStore(c.Request.Context(), 1000, 0)
 			if err != nil {
 				logger.Warn("Failed to load semantic cache from vector store", logger.GetField("error", err))
-				// 如果向量存储加载失败，使用内存中的数据
 				semanticEntries = semanticCache.List()
 			}
-
-			// 如果向量存储为空，使用内存中的数据
 			if len(semanticEntries) == 0 {
 				semanticEntries = semanticCache.List()
 			}
-
-			// 转换格式并添加类型标记
 			for _, entry := range semanticEntries {
 				entry["cache_type"] = "semantic"
-				// 语义缓存没有相似度字段,除非是从搜索结果返回的
 				if _, hasSimilarity := entry["similarity"]; !hasSimilarity {
 					entry["similarity"] = nil
 				}
-				// 存储后端信息 - 语义缓存使用向量存储
-				// 优先从 entry 的 storage_backend 字段读取，否则使用 vectorStoreInfo
+				metadata, _ := entry["metadata"].(map[string]interface{})
 				if sb, ok := entry["storage_backend"].(string); ok && sb != "" {
-					// 条目已记录存储后端
-				} else if metadata, ok := entry["metadata"].(map[string]interface{}); ok {
-					if writeStorage, ok := metadata["write_storage"].(string); ok && writeStorage != "" {
-						entry["storage_backend"] = writeStorage
-					} else if vectorStoreInfo != "" {
-						entry["storage_backend"] = vectorStoreInfo
-					}
+					// keep
+				} else if writeStorage, ok := metadata["write_storage"].(string); ok && writeStorage != "" {
+					entry["storage_backend"] = writeStorage
 				} else if vectorStoreInfo != "" {
 					entry["storage_backend"] = vectorStoreInfo
 				}
-
-				// 应用存储后端筛选
 				if storageFilter != "" && storageFilter != "all" {
-					entryStorage := ""
-					if sb, ok := entry["storage_backend"].(string); ok {
-						entryStorage = sb
-					}
+					entryStorage, _ := entry["storage_backend"].(string)
 					if entryStorage != storageFilter {
-						continue // 跳过不匹配的条目
+						continue
 					}
 				}
+				entry = flattenCacheEntryForAPI(entry)
+				if !matchCacheListFilters(entry, filters) {
+					continue
+				}
+				allEntries = append(allEntries, entry)
+				totalSemanticCount++
 			}
-			allEntries = append(allEntries, semanticEntries...)
-			totalSemanticCount = len(semanticEntries)
 		}
 	}
 
-	// 按时间戳降序排序
 	sort.Slice(allEntries, func(i, j int) bool {
-		ti, ok1 := allEntries[i]["timestamp"].(time.Time)
-		tj, ok2 := allEntries[j]["timestamp"].(time.Time)
+		ti, ok1 := entryTimestamp(allEntries[i])
+		tj, ok2 := entryTimestamp(allEntries[j])
 		if !ok1 || !ok2 {
 			return false
 		}
@@ -456,8 +456,6 @@ func (h *CacheHandler) ListCacheEntries(c *gin.Context) {
 	})
 
 	totalCount := len(allEntries)
-
-	// 应用分页
 	start := offset
 	if start > totalCount {
 		start = totalCount
@@ -484,10 +482,68 @@ func (h *CacheHandler) ListCacheEntries(c *gin.Context) {
 			"offset":               offset,
 			"cache_type":           cacheType,
 			"storage_filter":       storageFilter,
+			"session_id":           filters.SessionID,
+			"model":                filters.Model,
+			"q":                    filters.Query,
 			"kv_store":             kvStoreInfo,
 			"vector_store":         vectorStoreInfo,
 		},
 	})
+}
+
+// GetCacheEntry returns a single cache entry by key (management console detail).
+// Query: key (required), type=exact|semantic (default exact)
+func (h *CacheHandler) GetCacheEntry(c *gin.Context) {
+	key := strings.TrimSpace(c.Query("key"))
+	if key == "" {
+		key = strings.TrimSpace(c.Param("key"))
+	}
+	if key == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "key is required"})
+		return
+	}
+	cacheType := c.Query("type")
+	if cacheType == "" {
+		cacheType = "exact"
+	}
+
+	if cacheType == "semantic" {
+		semanticCache := h.cacheManager.GetSemanticCache()
+		if semanticCache == nil {
+			c.JSON(http.StatusNotFound, gin.H{"success": false, "error": "semantic cache not available"})
+			return
+		}
+		entries := semanticCache.List()
+		for _, entry := range entries {
+			if stringifyEntryField(entry, "key") == key {
+				entry["cache_type"] = "semantic"
+				c.JSON(http.StatusOK, gin.H{"success": true, "data": flattenCacheEntryForAPI(entry)})
+				return
+			}
+		}
+		c.JSON(http.StatusNotFound, gin.H{"success": false, "error": "entry not found"})
+		return
+	}
+
+	exact := h.cacheManager.GetExactCache()
+	if exact == nil {
+		c.JSON(http.StatusNotFound, gin.H{"success": false, "error": "exact cache not available"})
+		return
+	}
+	entry, err := exact.Get(c.Request.Context(), key)
+	if err != nil || entry == nil {
+		c.JSON(http.StatusNotFound, gin.H{"success": false, "error": "entry not found"})
+		return
+	}
+	out := map[string]interface{}{
+		"key":        entry.Key,
+		"request":    entry.Request,
+		"response":   entry.Response,
+		"metadata":   entry.Metadata,
+		"timestamp":  entry.Timestamp,
+		"cache_type": "exact",
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": flattenCacheEntryForAPI(out)})
 }
 
 // WarmupCache 预热缓存

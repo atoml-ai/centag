@@ -56,12 +56,31 @@ export function clearCache() {
   return api.post('/api/v1/cache/clear')
 }
 
-export function getCacheList(params?: { page?: number; size?: number; type?: string }) {
+export type CacheListParams = {
+  page?: number
+  size?: number
+  limit?: number
+  offset?: number
+  type?: string
+  save_only?: string
+  storage?: string
+  session_id?: string
+  model?: string
+  q?: string
+  from?: string
+  to?: string
+}
+
+export function getCacheList(params?: CacheListParams) {
   return api.get('/api/v1/cache/list', { params })
 }
 
-export function deleteCacheEntry(key: string) {
-  return api.delete('/api/v1/cache/entry', { data: { key } })
+export function getCacheEntry(params: { key: string; type?: string }) {
+  return api.get('/api/v1/cache/entry', { params })
+}
+
+export function deleteCacheEntry(key: string, type?: string) {
+  return api.delete('/api/v1/cache/entry', { data: { key, type: type || 'exact' } })
 }
 
 // Chat API

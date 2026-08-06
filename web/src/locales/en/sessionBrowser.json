@@ -21,6 +21,7 @@
   "roleAssistant": "Assistant",
   "roleSystem": "System",
   "emptyContent": "(empty)",
-  "loadSessionsFailed": "Failed to load sessions"
+  "loadSessionsFailed": "Failed to load sessions",
+  "viewRelatedCache": "View related cache"
 }
 

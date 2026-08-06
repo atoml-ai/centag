@@ -21,6 +21,7 @@
   "roleAssistant": "助手",
   "roleSystem": "系统",
   "emptyContent": "（空）",
-  "loadSessionsFailed": "加载会话失败"
+  "loadSessionsFailed": "加载会话失败",
+  "viewRelatedCache": "查看关联缓存"
 }
 

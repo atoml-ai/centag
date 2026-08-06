@@ -118,8 +118,21 @@
         <el-col :xs="24" :md="14" :lg="15">
           <el-card shadow="never" class="detail-card">
             <template #header>
-              <span>{{ t('sessionBrowser.messagesTitle') }}</span>
-              <span v-if="selected" class="muted">{{ selected.id }}</span>
+              <div class="detail-header">
+                <div>
+                  <span>{{ t('sessionBrowser.messagesTitle') }}</span>
+                  <span v-if="selected" class="muted">{{ selected.id }}</span>
+                </div>
+                <el-button
+                  v-if="selectedId"
+                  text
+                  type="primary"
+                  size="small"
+                  @click="openRelatedCache"
+                >
+                  {{ t('sessionBrowser.viewRelatedCache') }}
+                </el-button>
+              </div>
             </template>
             <el-empty v-if="!selectedId" :description="t('sessionBrowser.selectSessionHint')" />
             <div v-else v-loading="messagesLoading" class="message-list">
@@ -147,12 +160,14 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRouter } from 'vue-router'
 import { ArrowDown, ArrowRight } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import * as convApi from '@/api/conversations'
 import type { ConversationMessage, ConversationSession } from '@/api/conversations'
 
 const { t } = useI18n()
+const router = useRouter()
 
 const props = withDefaults(
   defineProps<{
@@ -182,6 +197,11 @@ function formatTime(v?: string) {
   const d = new Date(v)
   if (Number.isNaN(d.getTime())) return v
   return d.toLocaleString()
+}
+
+function openRelatedCache() {
+  if (!selectedId.value) return
+  router.push({ path: '/cache', query: { tab: 'data', session_id: selectedId.value } })
 }
 
 function roleLabel(role: string) {
@@ -442,6 +462,13 @@ defineExpose({ reload: reloadKeepSelection })
 }
 .body-row {
   min-height: 420px;
+}
+.detail-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  gap: 8px;
 }
 .list-card :deep(.el-card__header),
 .detail-card :deep(.el-card__header) {
