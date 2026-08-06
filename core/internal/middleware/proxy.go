@@ -316,53 +316,66 @@ func (h *LLMProxyHandler) HandleOpenAIRequest(c *gin.Context) {
 				logger.Info("Stream cache miss, calling backend", zap.String("key", cacheKey))
 				// 继续执行后续代码,调用后端
 			} else {
-				// 非流式请求
-				cachedResp, found, err := h.proxyCache.TryGet(c.Request.Context(), cacheKey)
-				if err != nil {
-					logger.Warn("Failed to get exact cache", zap.Error(err))
+				// 非流式请求 — v0.3.3: 按 cache.backend 互斥召回；stacking 时 exact→semantic
+				cacheCfg := config.CacheConfig{}
+				if h.cacheConfig != nil {
+					cacheCfg = *h.cacheConfig
+				} else if cfg := config.Get(); cfg != nil {
+					cacheCfg = cfg.Cache
+				}
+				config.NormalizeCacheConfig(&cacheCfg)
+				threshold := cacheCfg.Semantic.Threshold
+				if threshold <= 0 {
+					threshold = 0.8
+				}
+				topK := cacheCfg.Semantic.TopK
+				if topK <= 0 {
+					topK = 5
 				}
 
-				if found {
-					logger.Info("Exact cache hit, returning cached response", zap.String("key", cacheKey))
-					cached = true
-					statusCode = http.StatusOK
+				tryExact := cacheCfg.Backend == config.CacheBackendExact || cacheCfg.AllowBackendStacking
+				trySemantic := cacheCfg.Backend == config.CacheBackendSemantic ||
+					(cacheCfg.AllowBackendStacking && cacheCfg.Backend == config.CacheBackendExact)
 
-					// 记录统计
-					h.recordCacheStats(model, "HIT-EXACT", false, http.StatusOK, time.Since(start))
-
-					// 返回缓存的响应
-					c.Header("X-Cache", "HIT-EXACT")
-					c.Header("Content-Type", "application/json")
-					c.String(http.StatusOK, cachedResp)
-					return
-				}
-
-				// 2. 精确匹配未命中,尝试语义匹配
-				query := h.proxyCache.GetRequestQuery(messages)
-				if query != "" {
-					semanticResult, found, err := h.proxyCache.TryGetSemantic(c.Request.Context(), query, 0.85, 3)
+				if tryExact {
+					cachedResp, found, err := h.proxyCache.TryGet(c.Request.Context(), cacheKey)
 					if err != nil {
-						logger.Warn("Failed to get semantic cache", zap.Error(err))
+						logger.Warn("Failed to get exact cache", zap.Error(err))
 					}
-
 					if found {
-						logger.Infof("✓ 语义缓存命中 - 查询: %s, 相似度: %.4f/0.85, 缓存key: %s",
-							query, semanticResult.Similarity, semanticResult.CacheKey)
+						logger.Info("Exact cache hit, returning cached response", zap.String("key", cacheKey))
 						cached = true
 						statusCode = http.StatusOK
-
-						// 记录统计
-						h.recordCacheStats(model, "HIT-SEMANTIC", false, http.StatusOK, time.Since(start))
-
-						// 返回缓存的响应
-						c.Header("X-Cache", "HIT-SEMANTIC")
+						h.recordCacheStats(model, "HIT-EXACT", false, http.StatusOK, time.Since(start))
+						c.Header("X-Cache", "HIT-EXACT")
 						c.Header("Content-Type", "application/json")
-						c.String(http.StatusOK, semanticResult.Response)
+						c.String(http.StatusOK, cachedResp)
 						return
 					}
 				}
 
-				logger.Debug("Cache miss (both exact and semantic)", zap.String("key", cacheKey))
+				if trySemantic {
+					query := h.proxyCache.GetRequestQuery(messages)
+					if query != "" {
+						semanticResult, found, err := h.proxyCache.TryGetSemantic(c.Request.Context(), query, threshold, topK)
+						if err != nil {
+							logger.Warn("Failed to get semantic cache", zap.Error(err))
+						}
+						if found {
+							logger.Infof("✓ 语义缓存命中 - 查询: %s, 相似度: %.4f/%.2f, 缓存key: %s",
+								query, semanticResult.Similarity, threshold, semanticResult.CacheKey)
+							cached = true
+							statusCode = http.StatusOK
+							h.recordCacheStats(model, "HIT-SEMANTIC", false, http.StatusOK, time.Since(start))
+							c.Header("X-Cache", "HIT-SEMANTIC")
+							c.Header("Content-Type", "application/json")
+							c.String(http.StatusOK, semanticResult.Response)
+							return
+						}
+					}
+				}
+
+				logger.Debug("Cache miss", zap.String("key", cacheKey), zap.String("backend", cacheCfg.Backend))
 				c.Header("X-Cache", "MISS")
 			}
 		}
@@ -680,6 +693,7 @@ func (h *LLMProxyHandler) HandleOpenAIRequest(c *gin.Context) {
 				requestText := h.proxyCache.GetRequestQuery(messages)
 				// 将原始请求文本存入metadata，用于语义缓存
 				reqMetadata["request_text"] = requestText
+				reqMetadata = attachProxyCacheContext(c, reqMetadata)
 				// 标记是否为仅保存模式
 				if saveOnlyMode {
 					reqMetadata["save_only"] = true
@@ -746,6 +760,7 @@ func (h *LLMProxyHandler) HandleOpenAIRequest(c *gin.Context) {
 			if err == nil {
 				requestText := h.proxyCache.GetRequestQuery(messages)
 				reqMetadata["request_text"] = requestText
+				reqMetadata = attachProxyCacheContext(c, reqMetadata)
 				reqMetadata["save_only"] = true
 
 				logger.Info("Save-only mode (cache disabled): saving QA data",
@@ -1403,6 +1418,26 @@ func (h *LLMProxyHandler) cacheSplitQAPair(ctx context.Context, pair processor.Q
 		zap.String("question", utils.TruncateString(pair.Question, 50)))
 
 	return nil
+}
+
+// attachProxyCacheContext fills session_id / request_id for cache management filters (best-effort).
+func attachProxyCacheContext(c *gin.Context, metadata map[string]interface{}) map[string]interface{} {
+	if metadata == nil {
+		metadata = map[string]interface{}{}
+	}
+	sessionID := ""
+	if c != nil {
+		if v, ok := c.Get("conversation_session_id"); ok {
+			if s, ok := v.(string); ok {
+				sessionID = strings.TrimSpace(s)
+			}
+		}
+		if sessionID == "" {
+			sessionID = strings.TrimSpace(c.GetHeader("X-Session-ID"))
+		}
+		metadata = cache.AttachRequestContextMetadata(metadata, sessionID, strings.TrimSpace(c.GetHeader("X-Request-ID")), "")
+	}
+	return metadata
 }
 
 // generateID 生成唯一ID

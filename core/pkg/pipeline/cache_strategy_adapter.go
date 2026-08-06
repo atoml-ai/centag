@@ -46,21 +46,24 @@ func (a *cacheStrategyAdapter) Read(ctx context.Context, query string, threshold
 }
 
 // Write implements CacheStrategyCapability.Write.
-// Converts the simplified signature to Strategy's signature.
-func (a *cacheStrategyAdapter) Write(ctx context.Context, key string, content string, ttl time.Duration) error {
+// request is the query text for embedding; content is the cached response body.
+func (a *cacheStrategyAdapter) Write(ctx context.Context, key string, request string, content string, ttl time.Duration) error {
 	if a.strategy == nil {
 		return fmt.Errorf("underlying strategy is nil")
 	}
 
 	entry := &strategy.Entry{
 		Key:       key,
+		Request:   request,
 		Response:  content,
 		Timestamp: time.Now(),
 		ExpiresAt: time.Now().Add(ttl),
+		Metadata:  map[string]interface{}{},
 	}
 
 	opts := strategy.WriteOptions{
-		TTL: ttl,
+		TTL:               ttl,
+		GenerateEmbedding: true,
 	}
 
 	return a.strategy.Write(ctx, entry, opts)

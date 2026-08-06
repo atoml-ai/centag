@@ -18,6 +18,7 @@ import (
 	"centag/core/internal/auth"
 	"centag/core/internal/billing"
 	"centag/core/internal/cache"
+	cacheexpansion "centag/core/internal/cache/expansion"
 	evalmanager "centag/core/internal/cache/evaluation/manager"
 	evaluationplugins "centag/core/internal/cache/evaluation/plugins"
 	cachestrategy "centag/core/internal/cache/strategy"
@@ -339,6 +340,14 @@ func New(cfg *config.Config) *Server {
 	// 设置仅保存模式
 	proxyCache.SetSaveOnlyMode(cfg.Cache.SaveOnlyMode)
 
+	// v0.3.3: 接线查询展开（hit_strategies 含 expand 时生效）
+	if expander, err := cacheexpansion.NewRuleBasedExpander(nil); err != nil {
+		logger.Warnf("[cache] rule-based expander init failed: %v", err)
+	} else {
+		proxyCache.SetExpander(expander)
+		logger.Info("[cache] query expander registered (hit_strategies)")
+	}
+
 	// 创建代理服务和处理器
 	proxyService := proxy.New(pluginManager)
 	proxyHandler := proxy.NewHandler(proxyService, pluginManager, proxyCache)
@@ -461,6 +470,9 @@ func New(cfg *config.Config) *Server {
 		pipeline.NewPipelineLogger(),
 		storageManager, // 传递 storage.Manager
 	)
+	if facade := proxyCache.Facade(); facade != nil {
+		pipelineEngine.SetCacheFacade(facade)
+	}
 	proxyHandler.SetPipelineEngine(pipelineEngine)
 	proxyHandler.SetPipelineRegistry(pipelineRegistry)
 	if pipelineStore != nil {
@@ -617,6 +629,21 @@ func New(cfg *config.Config) *Server {
 	hooks.SetDefault(hookManager)
 	logger.Infof("[hooks] HookManager registered (fail-open)")
 
+	// v0.3.3: 缓存命中走统一 Facade，并触发 StorageHook.OnCacheHit
+	proxyCache.SetHitNotifier(func(ctx context.Context, key string, data []byte) {
+		_ = hookManager.TriggerCacheHitHooks(ctx, key, data)
+	})
+	if facade := proxyCache.Facade(); facade != nil {
+		if cfg.Cache.Backend == config.CacheBackendExternal || cfg.Cache.External.Plugin != "" {
+			facade.SetExternalBackend(&cache.UnconfiguredRecallBackend{PluginID: cfg.Cache.External.Plugin})
+		}
+		if err := facade.EnsureBackendReady(); err != nil {
+			logger.Warnf("[cache] facade backend not ready: %v", err)
+		} else {
+			logger.Infof("[cache] facade ready backend=%s", facade.EffectiveBackend())
+		}
+	}
+
 	// 创建 Token 计量处理器 + 定价子系统
 	var tokenUsageHandler *TokenUsageHandler
 	var costHandler *CostHandler
@@ -694,9 +721,9 @@ func New(cfg *config.Config) *Server {
 	if db := database.Get().GetDB(); db != nil {
 		agentMemSvc = agentmemory.NewService(db, database.Get().DriverName(), embeddingSvc)
 	}
-	// TODO: rag_retrieval 需要通过 plugin.RegisterBusinessPlugin 注册
-	// 当前暂不注册，等插件独立化后通过 dist/main.go 注册
-	_ = agentMemSvc // agentMemSvc 已初始化，可供后续插件使用
+	// rag_retrieval：通过 blank import plugins/business/rag_retrieval 注册（见 dist/*/main.go）
+	// agentMemSvc 可供后续真实知识库 S3 后端接线使用
+	_ = agentMemSvc
 	memoryHandler := NewMemoryHandler(memoryVectorStore, embeddingSvc, memoryStoreRoot, agentMemSvc)
 
 	// 创建 CapabilityBroker（延迟注入，因为 agentMemSvc 刚初始化）
@@ -1559,8 +1586,10 @@ func (s *Server) setupRoutes() {
 			cache.POST("/check", s.cacheHandler.CheckCache)
 			cache.POST("/info", s.cacheHandler.GetCacheInfo)
 			cache.DELETE("/entry", s.cacheHandler.DeleteCacheEntry)
+			cache.GET("/entry", s.cacheHandler.GetCacheEntry)
 			cache.POST("/warmup", s.cacheHandler.WarmupCache)
 			cache.GET("/list", s.cacheHandler.ListCacheEntries)
+			cache.GET("/entries", s.cacheHandler.ListCacheEntries) // alias for management console
 			cache.GET("/semantic/threshold", s.cacheHandler.GetSemanticThreshold)
 			cache.POST("/semantic/threshold", s.cacheHandler.SetSemanticThreshold)
 			cache.POST("/semantic/search", s.cacheHandler.SemanticSearch)

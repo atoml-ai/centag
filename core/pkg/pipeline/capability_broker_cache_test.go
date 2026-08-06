@@ -24,7 +24,7 @@ func (m *mockCacheStrategyCapability) Read(ctx context.Context, query string, th
 	return &CacheReadResult{Hit: false}, nil
 }
 
-func (m *mockCacheStrategyCapability) Write(ctx context.Context, key string, content string, ttl time.Duration) error {
+func (m *mockCacheStrategyCapability) Write(ctx context.Context, key string, request string, content string, ttl time.Duration) error {
 	return m.writeErr
 }
 

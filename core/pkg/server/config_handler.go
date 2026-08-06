@@ -208,7 +208,18 @@ func (h *ConfigHandler) SaveAllConfig(c *gin.Context) {
 		}
 	}
 	if req.Cache != nil {
-		cfg.Cache = *req.Cache
+		// 合并更新：避免前端只传部分 cache 字段时整对象替换把 TTL/semantic 等清零
+		merged := cfg.Cache
+		if raw, ok := rawData["cache"]; ok && len(raw) > 0 {
+			if err := json.Unmarshal(raw, &merged); err != nil {
+				logger.Warnf("Failed to merge cache config JSON, falling back to bind result: %v", err)
+				merged = *req.Cache
+			}
+		} else {
+			merged = *req.Cache
+		}
+		_ = config.NormalizeCacheConfig(&merged)
+		cfg.Cache = merged
 	}
 	if req.Redis != nil {
 		cfg.Redis = *req.Redis
@@ -524,14 +535,19 @@ func (h *ConfigHandler) SaveAllConfig(c *gin.Context) {
 			cur.PGDB = dep.PGDB
 		}
 		cfg.Deployment = cur
-		if err := config.SaveDeploymentConfig(cur); err != nil {
+		if config.ResolveDataDir() == "" {
+			// 本地/开发未设置 CENTAG_DATA_DIR 时无法落盘 centag.conf；仍更新内存，不阻断其它配置保存
+			config.UpdateDeploymentConfig(cur)
+			logger.Warnf("Deployment config updated in-memory only (data directory empty); skip writing centag.conf")
+		} else if err := config.SaveDeploymentConfig(cur); err != nil {
 			logger.Errorf("Failed to save deployment config: %v", err)
 			RespondInternalError(c, "Failed to save deployment config: "+err.Error())
 			return
+		} else {
+			config.UpdateDeploymentConfig(cur)
+			logger.Infof("Deployment config saved: db_driver=%s clean_data_on_uninstall=%v",
+				cur.DBDriver, cur.CleanDataOnUninstall)
 		}
-		config.UpdateDeploymentConfig(cur)
-		logger.Infof("Deployment config saved: db_driver=%s clean_data_on_uninstall=%v",
-			cur.DBDriver, cur.CleanDataOnUninstall)
 	}
 
 	// 保存配置到数据库

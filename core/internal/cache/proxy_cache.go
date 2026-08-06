@@ -25,6 +25,7 @@ var (
 // ProxyCache 代理缓存包装器
 type ProxyCache struct {
 	manager  *Manager
+	facade   *Facade
 	enabled  bool
 	expander QueryExpander // 查询展开器
 }
@@ -36,9 +37,28 @@ type QueryExpander interface {
 
 // NewProxyCache 创建代理缓存
 func NewProxyCache(manager *Manager, enabled bool) *ProxyCache {
-	return &ProxyCache{
+	p := &ProxyCache{
 		manager: manager,
 		enabled: enabled,
+	}
+	if manager != nil {
+		p.facade = NewFacade(manager)
+	}
+	return p
+}
+
+// Facade returns the shared Lookup/Store facade (may be nil if manager was nil).
+func (p *ProxyCache) Facade() *Facade {
+	if p == nil {
+		return nil
+	}
+	return p.facade
+}
+
+// SetHitNotifier wires cache-hit hooks (OnCacheHit) through the facade.
+func (p *ProxyCache) SetHitNotifier(n HitNotifier) {
+	if p != nil && p.facade != nil {
+		p.facade.SetHitNotifier(n)
 	}
 }
 
@@ -94,6 +114,17 @@ func (p *ProxyCache) GetRequestKey(model string, messages []interface{}, tempera
 	// 如果没有用户消息,返回空字符串(不进行缓存)
 	if lastUserMessage == nil {
 		return "", nil
+	}
+
+	// v0.3.3: hit_strategies 含 normalize 时归一化 user content，提高 exact 命中率
+	if msgMap, ok := lastUserMessage.(map[string]interface{}); ok {
+		if content, ok := msgMap["content"].(string); ok {
+			normalized := NormalizeQueryText(content)
+			if normalized != "" && normalized != content {
+				cp := map[string]interface{}{"role": msgMap["role"], "content": normalized}
+				lastUserMessage = cp
+			}
+		}
 	}
 
 	// 构建缓存键的内容 - 只包含最后一条用户消息
@@ -161,21 +192,20 @@ func (p *ProxyCache) GetRequestQuery(messages []interface{}) string {
 		return ""
 	}
 
-	// 提取真正的问题内容（过滤元数据）
+	// 提取真正的问题内容（过滤元数据），再跑 hit_strategies（normalize/expand）
 	cleanQuery := extractCleanQuestion(lastUserContent)
-
-	// 如果有查询展开器，尝试展开查询
-	if p.expander != nil && len(history) > 1 {
-		expanded, isExpanded, err := p.expander.Expand(context.Background(), cleanQuery, history[:len(history)-1])
-		if err == nil && isExpanded {
-			logger.Debug("Query expanded for semantic search",
-				zap.String("original", cleanQuery),
-				zap.String("expanded", expanded))
-			return expanded
-		}
+	hist := history
+	if len(hist) > 1 {
+		hist = history[:len(history)-1]
+	} else {
+		hist = nil
 	}
-
-	return cleanQuery
+	cands := ApplyHitStrategies(context.Background(), cleanQuery, hist, p.expander)
+	if len(cands) == 0 {
+		return cleanQuery
+	}
+	// 语义查询优先使用最后一个候选（通常为 expand 结果）；无 expand 时即为 normalize 结果
+	return cands[len(cands)-1]
 }
 
 // extractCleanQuestion 从包含元数据的内容中提取真正的问题
@@ -290,24 +320,11 @@ func extractCleanQuestion(content string) string {
 // 注意: 此方法只负责获取缓存数据,不记录命中/未命中统计
 // 调用方根据返回结果决定是否记录统计
 func (p *ProxyCache) TryGet(ctx context.Context, key string) (string, bool, error) {
-	if !p.enabled {
-		return "", false, nil
+	entry, ok, err := p.TryGetEntry(ctx, key)
+	if err != nil || !ok || entry == nil {
+		return "", ok, err
 	}
-
-	// 直接从精确匹配缓存获取,不记录统计
-	entry, err := p.manager.GetExactCache().Get(ctx, key)
-	if err != nil {
-		logger.Error("Failed to get cache", zap.Error(err))
-		return "", false, nil
-	}
-
-	if entry != nil {
-		logger.Debug("Exact cache hit", zap.String("key", key))
-		return entry.Response, true, nil
-	}
-
-	logger.Debug("Exact cache miss", zap.String("key", key))
-	return "", false, nil
+	return entry.Response, true, nil
 }
 
 // TryGetEntry 尝试从缓存获取完整条目(精确匹配)
@@ -316,19 +333,30 @@ func (p *ProxyCache) TryGetEntry(ctx context.Context, key string) (*CacheEntry, 
 	if !p.enabled {
 		return nil, false, nil
 	}
-
-	// 直接从精确匹配缓存获取
+	if p.facade != nil {
+		entry, ok, err := p.facade.LookupExact(ctx, key)
+		if err != nil {
+			return nil, false, nil
+		}
+		if ok {
+			logger.Debug("Exact cache entry hit", zap.String("key", key))
+			return entry, true, nil
+		}
+		logger.Debug("Exact cache entry miss", zap.String("key", key))
+		return nil, false, nil
+	}
+	if p.manager == nil || p.manager.GetExactCache() == nil {
+		return nil, false, nil
+	}
 	entry, err := p.manager.GetExactCache().Get(ctx, key)
 	if err != nil {
 		logger.Error("Failed to get cache entry", zap.Error(err))
 		return nil, false, nil
 	}
-
 	if entry != nil {
 		logger.Debug("Exact cache entry hit", zap.String("key", key))
 		return entry, true, nil
 	}
-
 	logger.Debug("Exact cache entry miss", zap.String("key", key))
 	return nil, false, nil
 }
@@ -444,6 +472,8 @@ func (p *ProxyCache) SetResponse(ctx context.Context, key string, response strin
 		return nil
 	}
 
+	metadata = EnrichCacheWriteMetadata(metadata, "exact")
+
 	// 从metadata中提取原始请求文本(用于语义匹配的embedding)
 	requestText := ""
 	if reqText, ok := metadata["request_text"].(string); ok {
@@ -478,6 +508,8 @@ func (p *ProxyCache) SetStreamResponse(ctx context.Context, key string, streamCh
 	if !p.enabled {
 		return nil
 	}
+
+	metadata = EnrichCacheWriteMetadata(metadata, "exact")
 
 	// 从metadata中提取原始请求文本
 	requestText := ""
@@ -614,6 +646,7 @@ func (p *ProxyCache) SetSaveOnlyResponse(ctx context.Context, key, requestText, 
 	}
 	metadata["save_only"] = true
 	metadata["request_text"] = requestText
+	metadata = EnrichCacheWriteMetadata(metadata, "exact")
 
 	entry := &CacheEntry{
 		Key:       key,

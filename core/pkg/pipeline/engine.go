@@ -473,9 +473,17 @@ type PipelineEngine struct {
 	capabilityBroker CapabilityBroker
 	logger           Logger
 	storageManager   *storage.Manager // 存储管理器（用于 CacheNode 初始化存储）
+	cacheFacade      *cache.Facade    // v0.3.3: 与 ProxyCache 共用的 Lookup/Store 门面
 	// storageHooks 按 pipelineID 缓存已创建的存储钩子
 	storageHooks map[string]*StorageHook
 	hookMu       sync.RWMutex
+}
+
+// SetCacheFacade injects the shared cache Lookup/Store facade for CacheNode.
+func (e *PipelineEngine) SetCacheFacade(f *cache.Facade) {
+	if e != nil {
+		e.cacheFacade = f
+	}
 }
 
 // getOrCreateStorageHook 获取或创建流水线对应的存储钩子
@@ -2020,22 +2028,21 @@ func (e *PipelineEngine) executeNode(ctx context.Context, config PipelineNodeCon
 		}
 	}
 
-	// Phase 4A: 注入缓存策略插件到 CacheNode
-	// 当节点类型为 cache 且配置了 use_strategy_plugin 时，通过 CapabilityBroker 获取策略并注入
+	// Phase 4A / v0.3.3: 仅当显式 use_strategy_plugin=true 时注入策略插件。
+	// 默认走传统 CacheNode / Lookup 门面，避免盖住完整 exact/semantic 路径。
 	if config.Type == NodeTypeCache {
+		if cn, ok := node.(*CacheNode); ok && e.cacheFacade != nil {
+			cn.SetCacheFacade(e.cacheFacade)
+			if m := e.cacheFacade.Manager(); m != nil {
+				cn.SetCacheManager(m)
+			}
+		}
 		if cacheNode, ok := node.(interface {
 			SetStrategyPlugin(CacheStrategyCapability)
-			GetStrategyPlugin() CacheStrategyCapability
 			IsUsingStrategyPlugin() bool
 		}); ok && !cacheNode.IsUsingStrategyPlugin() {
-			// 从节点配置中读取策略名称，默认使用 "exact"
-			strategyName := "exact"
-			if config.Config.CustomConfig != nil {
-				if sn, ok := config.Config.CustomConfig["cache_strategy"].(string); ok && sn != "" {
-					strategyName = sn
-				}
-			}
-			if e.capabilityBroker != nil {
+			usePlugin, strategyName := resolveCacheStrategyPluginInjection(config.Config.CustomConfig)
+			if usePlugin && e.capabilityBroker != nil {
 				strat, err := e.capabilityBroker.GetCacheStrategy(ctx, strategyName, []string{"cache.read", "cache.write"})
 				if err != nil {
 					e.logger.Debug("cache strategy not available (provider may not be configured)",
@@ -3046,4 +3053,34 @@ func (e *PipelineEngine) mergeToolCalls(execCtx *ExecutionContext) []ToolCall {
 	}
 
 	return allToolCalls
+}
+
+// resolveCacheStrategyPluginInjection decides whether to inject a cache strategy
+// plugin and which strategy name to request. Injection is opt-in only.
+func resolveCacheStrategyPluginInjection(custom map[string]interface{}) (usePlugin bool, strategyName string) {
+	if custom != nil {
+		if v, ok := custom["use_strategy_plugin"].(bool); ok {
+			usePlugin = v
+		}
+		if sn, ok := custom["cache_strategy"].(string); ok && sn != "" {
+			strategyName = sn
+		} else if sn, ok := custom["strategy"].(string); ok && sn != "" {
+			strategyName = sn
+		}
+	}
+	if !usePlugin {
+		return false, ""
+	}
+	if strategyName == "" {
+		if cfg := config.Get(); cfg != nil {
+			strategyName = cfg.Cache.Backend
+			if strategyName == "" {
+				strategyName = cfg.Cache.Strategy
+			}
+		}
+	}
+	if strategyName == "" {
+		strategyName = "exact"
+	}
+	return true, strategyName
 }

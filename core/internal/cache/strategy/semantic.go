@@ -76,6 +76,21 @@ func (s *SemanticStrategy) Read(ctx context.Context, query string, opts ReadOpti
     if s.vectorStore == nil {
         return nil, fmt.Errorf("VectorStore not initialized")
     }
+
+    threshold := opts.Threshold
+    if threshold <= 0 && s.config != nil {
+        threshold = s.config.Threshold
+    }
+    if threshold <= 0 {
+        threshold = 0.8
+    }
+    topK := opts.TopK
+    if topK <= 0 && s.config != nil {
+        topK = s.config.TopK
+    }
+    if topK <= 0 {
+        topK = 5
+    }
     
     // 1. 生成查询的嵌入向量
     queryVector, err := s.embeddingService.GetEmbedding(ctx, query)
@@ -84,17 +99,20 @@ func (s *SemanticStrategy) Read(ctx context.Context, query string, opts ReadOpti
     }
     
     // 2. 搜索相似向量
-    results, err := s.vectorStore.Search(ctx, queryVector, opts.TopK, nil)
+    results, err := s.vectorStore.Search(ctx, queryVector, topK, nil)
     if err != nil {
         return nil, fmt.Errorf("vector search failed: %w", err)
     }
     
-    // 3. 选择最佳匹配
+    // 3. 选择最佳匹配（必须达到阈值）
     if len(results) == 0 {
         return &Result{Hit: false}, nil
     }
     
     best := results[0]
+    if best.Score < threshold {
+        return &Result{Hit: false, Score: float64(best.Score), Key: best.ID}, nil
+    }
     
     // 4. 从 KVStore 获取完整响应
     if s.kvStore != nil {
@@ -124,16 +142,20 @@ func (s *SemanticStrategy) Write(ctx context.Context, entry *Entry, opts WriteOp
     if s.vectorStore == nil {
         return fmt.Errorf("VectorStore not initialized")
     }
+    requestText := entry.Request
+    if requestText == "" {
+        return fmt.Errorf("semantic write requires non-empty Request (query text for embedding)")
+    }
     
     // 1. 生成嵌入向量
-    vector, err := s.embeddingService.GetEmbedding(ctx, entry.Request)
+    vector, err := s.embeddingService.GetEmbedding(ctx, requestText)
     if err != nil {
         return fmt.Errorf("failed to embed request: %w", err)
     }
     
     // 2. 存储到向量存储
     metadata := map[string]interface{}{
-        "request":  entry.Request,
+        "request":  requestText,
         "response": entry.Response,
         "expires":  entry.ExpiresAt,
     }

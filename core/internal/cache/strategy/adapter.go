@@ -43,21 +43,24 @@ func (a *Adapter) Read(ctx context.Context, query string, threshold float32, top
 }
 
 // Write implements CacheStrategyCapability.Write.
-// It converts the simplified signature to the Strategy interface's signature.
-func (a *Adapter) Write(ctx context.Context, key string, content string, ttl time.Duration) error {
+// request is the user query text used for semantic embedding (must be non-empty for semantic/hybrid).
+func (a *Adapter) Write(ctx context.Context, key string, request string, content string, ttl time.Duration) error {
 	if a.strategy == nil {
 		return fmt.Errorf("underlying strategy is nil")
 	}
 
 	entry := &Entry{
 		Key:       key,
+		Request:   request,
 		Response:  content,
 		Timestamp: time.Now(),
 		ExpiresAt: time.Now().Add(ttl),
+		Metadata:  map[string]interface{}{},
 	}
 
 	opts := WriteOptions{
-		TTL: ttl,
+		TTL:               ttl,
+		GenerateEmbedding: true,
 	}
 
 	return a.strategy.Write(ctx, entry, opts)

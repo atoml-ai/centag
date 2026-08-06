@@ -59,6 +59,9 @@ func LoadFromDB(ctx context.Context, bootstrap *BootstrapConfig, adminUserID int
 	// ── system-level config ──────────────────────────────────────────────────
 	cfg.Proxy = dbLoadOrDefault(ctx, scs, KeyProxyConfig, DefaultProxyConfig())
 	cfg.Cache = dbLoadOrDefault(ctx, scs, KeyCacheConfig, DefaultCacheConfig())
+	for _, w := range NormalizeCacheConfig(&cfg.Cache) {
+		logger.Warnf("cache config: %s", w)
+	}
 	cfg.Redis = dbLoadOrDefault(ctx, scs, KeyRedisConfig, DefaultRedisConfig())
 	cfg.Vector = dbLoadOrDefault(ctx, scs, KeyVectorConfig, DefaultVectorConfig())
 	cfg.Plugins = dbLoadOrDefault(ctx, scs, KeyPluginsConfig, DefaultPluginsConfig())
@@ -215,6 +218,8 @@ func SaveConfig(cfg *Config) error {
 		key string
 		val interface{}
 	}
+	_ = NormalizeCacheConfig(&cfg.Cache)
+
 	pairs := []kv{
 		{KeyProxyConfig, cfg.Proxy},
 		{KeyCacheConfig, cfg.Cache},

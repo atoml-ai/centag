@@ -2635,6 +2635,9 @@ type CacheNode struct {
 	useStrategyPlugin bool                    // 是否使用策略插件模式
 	semanticThreshold float32                 // 语义搜索阈值
 	semanticTopK      int                     // 语义搜索 TopK
+
+	// v0.3.3: 与 ProxyCache 共用的召回门面（优先于裸 CacheManager.Get）
+	cacheFacade *cache.Facade
 }
 
 // NewCacheNode 创建缓存节点
@@ -2744,6 +2747,11 @@ func (n *CacheNode) Type() NodeType {
 // SetCacheManager 设置缓存管理器（由外部注入）
 func (n *CacheNode) SetCacheManager(cm cache.CacheManager) {
 	n.CacheManager = cm
+}
+
+// SetCacheFacade 设置统一缓存门面（与 middleware ProxyCache 共用）
+func (n *CacheNode) SetCacheFacade(f *cache.Facade) {
+	n.cacheFacade = f
 }
 
 // SetStrategyPlugin 设置缓存策略插件（P2新增）
@@ -3206,9 +3214,9 @@ func (n *CacheNode) executeWithStrategyPlugin(ctx context.Context, input *NodeIn
 		}, nil
 
 	case "write":
-		// 使用策略插件写入
+		// 使用策略插件写入（request=用户问题，content=响应）
 		ttl := time.Duration(n.TTL) * time.Second
-		if err := n.strategyPlugin.Write(ctx, cacheKey, input.Content, ttl); err != nil {
+		if err := n.strategyPlugin.Write(ctx, cacheKey, userInput, input.Content, ttl); err != nil {
 			if logger != nil {
 				logger.Warn("[CacheNode] Strategy plugin write failed: " + err.Error())
 			}
@@ -3369,7 +3377,27 @@ func (n *CacheNode) executeRead(ctx context.Context, key string, input *NodeInpu
 		}
 	}
 
-	// 2. 回退：使用注入的缓存管理器
+	// 2. 统一门面（与 ProxyCache 同路径）
+	if !cacheHit && n.cacheFacade != nil {
+		entry, ok, err := n.cacheFacade.LookupExact(ctx, key)
+		if err != nil {
+			if logger != nil {
+				logger.Warn("[CacheNode] Cache facade read error",
+					"key", key,
+					"error", err)
+			}
+		} else if ok && entry != nil {
+			cachedEntry = entry
+			cachedContent = entry.Response
+			cacheHit = true
+			if logger != nil {
+				logger.Info(fmt.Sprintf("[CacheNode] Cache facade hit: %s (response_length=%d)",
+					key, len(cachedContent)))
+			}
+		}
+	}
+
+	// 3. 回退：使用注入的缓存管理器
 	if !cacheHit && n.CacheManager != nil {
 		entry, err := n.CacheManager.Get(ctx, key)
 		if err != nil {
@@ -3389,7 +3417,7 @@ func (n *CacheNode) executeRead(ctx context.Context, key string, input *NodeInpu
 		}
 	}
 
-	// 3. 回退：从执行上下文读取（兼容旧逻辑）
+	// 4. 回退：从执行上下文读取（兼容旧逻辑）
 	if !cacheHit && execCtx != nil {
 		if val, ok := execCtx.GetVariable("cache_" + key); ok {
 			cachedContent = val.(string)
@@ -3397,7 +3425,7 @@ func (n *CacheNode) executeRead(ctx context.Context, key string, input *NodeInpu
 		}
 	}
 
-	// 4. 语义缓存搜索（策略为 semantic/hybrid 且 KV 未命中时）
+	// 5. 语义缓存搜索（策略为 semantic/hybrid 且 KV 未命中时）
 	if !cacheHit && (n.Strategy == "semantic" || n.Strategy == "hybrid") && n.ReadVectorStore != nil && n.embeddingService != nil {
 		if logger != nil {
 			logger.Info("[CacheNode] KV miss, attempting semantic search",
@@ -3856,10 +3884,24 @@ func (n *CacheNode) executeWrite(ctx context.Context, key string, input *NodeInp
 		}
 	}
 
-	// 3. 回退：写入缓存管理器（如果存在且需要）
-	// 注意：大多数情况下 CacheManager 为 nil，因为流水线节点不直接持有 CacheManager
-	if n.CacheManager != nil {
-		ttl := time.Duration(n.TTL) * time.Second
+	// 3. 统一门面写入（与 ProxyCache 同路径）
+	ttl := time.Duration(n.TTL) * time.Second
+	if n.cacheFacade != nil {
+		if err := n.cacheFacade.StoreExact(ctx, key, cacheEntry, ttl); err != nil {
+			if logger != nil {
+				logger.Error("[CacheNode] Cache facade write error",
+					"key", key,
+					"strategy", n.Strategy,
+					"error", err)
+			}
+		} else if logger != nil {
+			logger.Info("[CacheNode] Cache facade written successfully",
+				"key", key,
+				"strategy", n.Strategy,
+				"ttl_seconds", n.TTL)
+		}
+	} else if n.CacheManager != nil {
+		// 回退：写入缓存管理器
 		if err := n.CacheManager.Set(ctx, key, cacheEntry, ttl); err != nil {
 			if logger != nil {
 				logger.Error("[CacheNode] Cache manager write error",
@@ -3867,13 +3909,11 @@ func (n *CacheNode) executeWrite(ctx context.Context, key string, input *NodeInp
 					"strategy", n.Strategy,
 					"error", err)
 			}
-		} else {
-			if logger != nil {
-				logger.Info("[CacheNode] Cache manager written successfully",
-					"key", key,
-					"strategy", n.Strategy,
-					"ttl_seconds", n.TTL)
-			}
+		} else if logger != nil {
+			logger.Info("[CacheNode] Cache manager written successfully",
+				"key", key,
+				"strategy", n.Strategy,
+				"ttl_seconds", n.TTL)
 		}
 	}
 

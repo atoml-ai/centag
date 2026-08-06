@@ -145,10 +145,21 @@ func (m *Manager) Set(ctx context.Context, key string, value *CacheEntry, ttl ti
 		return nil
 	}
 
-	// 从全局配置读取当前策略，与读取路径保持一致
-	currentStrategy := CacheStrategySemantic // 默认仅语义
-	if cfg := config.Get(); cfg != nil && cfg.Cache.Strategy != "" {
-		currentStrategy = CacheStrategy(cfg.Cache.Strategy)
+	// 从全局配置读取当前后端/策略（v0.3.3: backend 优先，兼容旧 strategy）
+	currentStrategy := CacheStrategyExact
+	if cfg := config.Get(); cfg != nil {
+		c := cfg.Cache
+		config.NormalizeCacheConfig(&c)
+		switch {
+		case c.AllowBackendStacking && c.Backend == config.CacheBackendExact:
+			currentStrategy = CacheStrategyHybrid
+		case c.Backend == config.CacheBackendSemantic, c.Backend == config.CacheBackendExternal:
+			currentStrategy = CacheStrategySemantic
+		case c.Backend == config.CacheBackendExact:
+			currentStrategy = CacheStrategyExact
+		case c.Strategy != "":
+			currentStrategy = CacheStrategy(c.Strategy)
+		}
 	}
 
 	// 仅语义策略时跳过精确缓存写入

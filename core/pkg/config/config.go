@@ -52,6 +52,9 @@ func GetBackendManager() BackendManager {
 
 // Set replaces the global runtime config.  Called by LoadFromDB.
 func Set(cfg *Config) {
+	if cfg != nil {
+		_ = NormalizeCacheConfig(&cfg.Cache)
+	}
 	mu.Lock()
 	defer mu.Unlock()
 	globalConfig = cfg
@@ -373,25 +376,52 @@ type CacheControlConfig struct {
 	DefaultQASplit bool `json:"default_qa_split"`
 }
 
+// Cache backend kinds (v0.3.3): mutually exclusive recall store selection.
+const (
+	CacheBackendExact    = "exact"
+	CacheBackendSemantic = "semantic"
+	CacheBackendExternal = "external"
+)
+
 // CacheConfig holds all caching settings.
 type CacheConfig struct {
-	Enabled          bool                `json:"enabled"`
-	EnableCacheRead  bool                `json:"enable_cache_read"`  // 是否启用缓存命中流程，关闭后完全不走缓存命中，直接转发
-	EnableCacheWrite bool                `json:"enable_cache_write"` // 是否启用缓存写入流程
-	SaveOnlyMode     bool                `json:"save_only_mode"`     // 仅保存模式：不进行拆分和向量化，只保存问答数据用于浏览
-	DefaultTTL       int                 `json:"default_ttl"`        // seconds
-	MaxCacheSize     int                 `json:"max_cache_size"`
-	Strategy         string              `json:"strategy"`         // exact | semantic | hybrid
-	CleanupInterval  int                 `json:"cleanup_interval"` // seconds
-	Semantic         SemanticCacheConfig `json:"semantic"`
+	Enabled          bool `json:"enabled"`
+	EnableCacheRead  bool `json:"enable_cache_read"`  // 是否启用缓存命中流程，关闭后完全不走缓存命中，直接转发
+	EnableCacheWrite bool `json:"enable_cache_write"` // 是否启用缓存写入流程
+	SaveOnlyMode     bool `json:"save_only_mode"`     // 仅保存模式：不进行拆分和向量化，只保存问答数据用于浏览
+	DefaultTTL       int  `json:"default_ttl"`        // seconds
+	MaxCacheSize     int  `json:"max_cache_size"`
+	// Backend is the active recall store: exact | semantic | external (default exact).
+	Backend string `json:"backend"`
+	// AllowBackendStacking when true permits exact-then-semantic (legacy hybrid). Default false.
+	AllowBackendStacking bool `json:"allow_backend_stacking"`
+	// HitStrategies is an ordered list of hit-prep strategies (e.g. normalize, expand).
+	HitStrategies []string `json:"hit_strategies"`
+	// HitStrategyConfig holds per-strategy options keyed by strategy name.
+	HitStrategyConfig map[string]interface{} `json:"hit_strategy_config,omitempty"`
+	// KVStorage binds the KV store name used by backend=exact.
+	KVStorage string `json:"kv_storage,omitempty"`
+	// Strategy is deprecated: exact | semantic | hybrid. Prefer Backend (+ AllowBackendStacking).
+	// Kept for compatibility; NormalizeCacheConfig maps it to/from Backend.
+	Strategy        string               `json:"strategy,omitempty"`
+	CleanupInterval int                  `json:"cleanup_interval"` // seconds
+	Semantic        SemanticCacheConfig  `json:"semantic"`
+	External        ExternalCacheConfig  `json:"external"`
 }
 
 // SemanticCacheConfig holds semantic-cache specific options.
 type SemanticCacheConfig struct {
+	Plugin              string  `json:"plugin,omitempty"` // optional plugin id when backend=semantic
 	Threshold           float32 `json:"threshold"`
 	TopK                int     `json:"top_k"`
 	DistanceType        string  `json:"distance_type"`
 	EnableAutoEmbedding bool    `json:"enable_auto_embedding"`
+}
+
+// ExternalCacheConfig selects a third-party memory/KB recall plugin (S3).
+type ExternalCacheConfig struct {
+	Plugin  string                 `json:"plugin"`
+	Options map[string]interface{} `json:"options,omitempty"`
 }
 
 // RedisConfig holds Redis connection settings.

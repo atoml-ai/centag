@@ -103,8 +103,8 @@ type LLMProvider interface {
 type CacheStrategyCapability interface {
 	// Read 读取缓存
 	Read(ctx context.Context, query string, threshold float32, topK int) (*CacheReadResult, error)
-	// Write 写入缓存
-	Write(ctx context.Context, key string, content string, ttl time.Duration) error
+	// Write 写入缓存；request 为用于 embedding/召回的查询文本（可为空，语义策略会拒绝空向量）
+	Write(ctx context.Context, key string, request string, content string, ttl time.Duration) error
 	// Delete 删除缓存
 	Delete(ctx context.Context, key string) error
 	// StrategyName 返回策略名称

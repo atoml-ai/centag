@@ -89,22 +89,27 @@ func DefaultCircuitBreakerSettings() *CircuitBreakerSettings {
 func boolPtr(v bool) *bool { return &v }
 
 // DefaultCacheConfig returns sensible cache defaults.
+// v0.3.3: default recall backend is exact (KV); hit strategies improve hit rate without vectors.
 func DefaultCacheConfig() CacheConfig {
 	return CacheConfig{
-		Enabled:          true,
-		EnableCacheRead:  true,  // 默认启用缓存命中流程
-		EnableCacheWrite: true,  // 默认启用缓存写入
-		SaveOnlyMode:     false, // 默认不启用仅保存模式
-		DefaultTTL:       3600,
-		MaxCacheSize:     10000,
-		Strategy:         "semantic",
-		CleanupInterval:  300,
+		Enabled:              true,
+		EnableCacheRead:      true,  // 默认启用缓存命中流程
+		EnableCacheWrite:     true,  // 默认启用缓存写入
+		SaveOnlyMode:         false, // 默认不启用仅保存模式
+		DefaultTTL:           3600,
+		MaxCacheSize:         10000,
+		Backend:              CacheBackendExact,
+		AllowBackendStacking: false,
+		HitStrategies:        []string{"normalize", "expand"},
+		Strategy:             CacheBackendExact, // legacy mirror of Backend
+		CleanupInterval:      300,
 		Semantic: SemanticCacheConfig{
 			Threshold:           0.8,
 			TopK:                5,
 			DistanceType:        "cosine",
 			EnableAutoEmbedding: true,
 		},
+		External: ExternalCacheConfig{},
 	}
 }
 
