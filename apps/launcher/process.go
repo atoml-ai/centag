@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -20,9 +21,11 @@ const (
 )
 
 type sidecarProcess struct {
-	cmd     *exec.Cmd
-	port    int
-	logFile *os.File
+	cmd      *exec.Cmd
+	port     int
+	logFile  *os.File
+	waitOnce sync.Once
+	waitErr  error
 }
 
 func (p *sidecarProcess) baseURL() string {
@@ -165,13 +168,23 @@ func waitHealthy(ctx context.Context, baseURL string) error {
 	return fmt.Errorf("sidecar not healthy within %s: %w", healthTimeout, lastErr)
 }
 
+func (p *sidecarProcess) wait() error {
+	if p == nil || p.cmd == nil {
+		return nil
+	}
+	p.waitOnce.Do(func() {
+		p.waitErr = p.cmd.Wait()
+	})
+	return p.waitErr
+}
+
 func (p *sidecarProcess) stop() error {
 	if p == nil || p.cmd == nil || p.cmd.Process == nil {
 		return nil
 	}
 	stopProcess(p.cmd.Process)
 	done := make(chan error, 1)
-	go func() { done <- p.cmd.Wait() }()
+	go func() { done <- p.wait() }()
 	select {
 	case <-time.After(5 * time.Second):
 		_ = p.cmd.Process.Kill()
@@ -180,6 +193,7 @@ func (p *sidecarProcess) stop() error {
 	}
 	if p.logFile != nil {
 		_ = p.logFile.Close()
+		p.logFile = nil
 	}
 	return nil
 }

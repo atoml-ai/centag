@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"os"
 	"runtime"
-	"sync"
 
 	"github.com/energye/systray"
 )
@@ -22,9 +21,8 @@ var menuIconWindowsICO []byte
 var menuIconTemplatePNG []byte
 
 type launcherApp struct {
-	cfg     Config
-	sidecar *sidecarProcess
-	mu      sync.Mutex
+	cfg Config
+	hub *sidecarHub
 }
 
 func (a *launcherApp) run(ctx context.Context) error {
@@ -80,11 +78,8 @@ func (a *launcherApp) onExit() {
 }
 
 func (a *launcherApp) shutdown() {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	if a.sidecar != nil {
-		_ = a.sidecar.stop()
-		a.sidecar = nil
+	if a.hub != nil {
+		a.hub.shutdown()
 	}
 }
 

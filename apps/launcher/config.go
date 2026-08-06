@@ -20,12 +20,13 @@ const (
 )
 
 type Config struct {
-	Edition  Edition
-	BinPath  string
-	Port     int
-	DataDir  string
-	NoOpen   bool
-	Headless bool // no system menu / systray (CI)
+	Edition   Edition
+	BinPath   string
+	Port      int
+	DataDir   string
+	NoOpen    bool
+	Headless  bool // no system menu / systray (CI)
+	Supervise bool // restart sidecar on crash (default on except debug)
 }
 
 func parseConfig(args []string) (Config, error) {
@@ -52,12 +53,13 @@ func parseConfig(args []string) (Config, error) {
 	}
 
 	return Config{
-		Edition:  ed,
-		BinPath:  strings.TrimSpace(*binPath),
-		Port:     *port,
-		DataDir:  strings.TrimSpace(*dataDir),
-		NoOpen:   *noOpen,
-		Headless: *headless,
+		Edition:   ed,
+		BinPath:   strings.TrimSpace(*binPath),
+		Port:      *port,
+		DataDir:   strings.TrimSpace(*dataDir),
+		NoOpen:    *noOpen,
+		Headless:  *headless,
+		Supervise: launcherSuperviseEnabled(),
 	}, nil
 }
 

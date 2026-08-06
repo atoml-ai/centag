@@ -31,15 +31,21 @@ func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 
-	fmt.Fprintf(os.Stderr, "centag-launcher: starting %s (%s) on :%d\ndata dir: %s\n", binary, cfg.Edition, cfg.Port, dataDir)
+	fmt.Fprintf(os.Stderr, "centag-launcher: starting %s (%s) on :%d\ndata dir: %s\nsupervise: %v\n",
+		binary, cfg.Edition, cfg.Port, dataDir, cfg.Supervise)
 	sidecar, err := startSidecar(ctx, cfg, binary, dataDir)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "centag-launcher: bootstrap failed: %v\n", err)
 		os.Exit(1)
 	}
 
-	app := &launcherApp{cfg: cfg, sidecar: sidecar}
+	hub := newSidecarHub(cfg, binary, dataDir, sidecar)
+	app := &launcherApp{cfg: cfg, hub: hub}
 	defer app.shutdown()
+
+	if cfg.Supervise {
+		go hub.watch(ctx)
+	}
 
 	if !cfg.NoOpen {
 		if err := openBrowser(cfg.baseURL()); err != nil {

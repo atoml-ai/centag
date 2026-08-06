@@ -4,7 +4,7 @@
 
 | 形态 | 入口 | 说明 |
 |------|------|------|
-| **cli** | `./start.sh run personal` | 前台 sidecar，无托盘 |
+| **cli** | `./start.sh run personal` | daemon 监督 sidecar（非 debug）；无托盘 |
 | **desktop** | `./start.sh run personal --desktop` | 菜单栏/托盘 + 打开 UI + 退出停 sidecar |
 
 内部 Go build tag `tray` 仍用于启用 systray（实现细节，不是产品名）。
@@ -57,7 +57,9 @@ desktop 因 systray 依赖 **CGO**，请在目标系统上本地构建；不保�
 
 1. 解析 sidecar（`centag-personal` 等）与用户数据目录。
 2. 启动 sidecar，健康检查通过后显示托盘。
-3. 菜单：**打开管理界面**、**运行**（`/agent-run`）、**退出**。
-4. `./start.sh run … --desktop` 会先 `load_env`，把 `config/secrets/.env` 中的管理员口令传给 sidecar。
+3. **非 debug**：托盘监督 sidecar，异常退出后自动拉起（退避重试）。可用 `CENTAG_LAUNCHER_SUPERVISE=0` 关闭；`LLM_PROXY_SERVER_MODE=debug`（`./start.sh debug … --desktop`）默认不自动拉起。
+4. 菜单：**打开管理界面**、**运行**（`/agent-run`）、**退出**（停止监督并结束）。
+5. `./start.sh run … --desktop` 会先 `load_env`，把 `config/secrets/.env` 中的管理员口令传给 sidecar。
+6. **本迭代不做桌面应用内 OTA**（升级请重装 dmg/zip）。
 
 CI / 无桌面环境可用 `-headless`（跳过 systray 循环）。
