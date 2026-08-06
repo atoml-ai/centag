@@ -1,21 +1,27 @@
 #!/bin/bash
 # =============================================================
-# Centag fnOS Native 应用 - 启动/停止/状态 管理脚本
+# Centag fnOS Native 应用 - 启动/停止/状态（daemon 监督）
 # =============================================================
 
 LOG_FILE="${TRIM_PKGVAR}/info.log"
 PID_FILE="${TRIM_PKGVAR}/app.pid"
 
-BINARY="${TRIM_APPDEST}/bin/centag"
-STATIC_DIR="${TRIM_APPDEST}/webui"
-INITDATA_DIR="${TRIM_APPDEST}/config/initdata"
-RUNTIME_ENV="${TRIM_APPDEST}/config/runtime.env"
+APP_ROOT="${TRIM_APPDEST}"
+BINARY="${APP_ROOT}/bin/centag"
+DAEMON_SH="${APP_ROOT}/daemon.sh"
+STATIC_DIR="${APP_ROOT}/static"
+# 兼容旧包 webui 布局
+if [ ! -d "${STATIC_DIR}" ] && [ -d "${APP_ROOT}/webui" ]; then
+    STATIC_DIR="${APP_ROOT}/webui"
+fi
+INITDATA_DIR="${APP_ROOT}/config/initdata"
+RUNTIME_ENV="${APP_ROOT}/config/runtime.env"
 DATA_DIR="${TRIM_DATA_SHARE_PATHS%%:*}"
 LOGS_DIR="${TRIM_PKGVAR}/logs"
 PORT=20060
 
 log_msg() {
-    echo "$(date +%Y-%m-%d %H:%M:%S) - $1" >> "${LOG_FILE}"
+    echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" >> "${LOG_FILE}"
 }
 
 load_runtime_env() {
@@ -37,7 +43,6 @@ load_app_config() {
     [ -f "${conf}" ] || return 0
 
     local val
-    # 解析 JSON 键值（兼容单行紧凑 JSON 与多行优雅 JSON；仅提取字符串值）
     json_get() {
         grep -oE "\"${1}\"[[:space:]]*:[[:space:]]*\"[^\"]*\"" "${conf}" 2>/dev/null | head -1 \
             | sed -E 's/^"[^"]*"[[:space:]]*:[[:space:]]*"([^"]*)"/\1/' \
@@ -57,22 +62,15 @@ load_app_config() {
     log_msg "已加载应用配置: ${conf} (db=${LLM_PROXY_DB_DRIVER:-sqlite})"
 }
 
-start_process() {
-    if status; then
-        log_msg "应用已在运行中，跳过启动"
-        return 0
-    fi
-
-    log_msg "正在启动 Centag..."
-
+prepare_env() {
     mkdir -p "${DATA_DIR}"
     mkdir -p "${LOGS_DIR}"
+    mkdir -p "${APP_ROOT}/storage"
 
     load_runtime_env
     load_app_config
 
     if [ "${LLM_PROXY_DB_DRIVER}" = "postgresql" ]; then
-        # PostgreSQL 模式（由配置页 centag.conf 设置）
         export POSTGRES_HOST="${POSTGRES_HOST:-localhost}"
         export POSTGRES_PORT="${POSTGRES_PORT:-5432}"
         export POSTGRES_USER="${POSTGRES_USER:-postgres}"
@@ -81,7 +79,6 @@ start_process() {
         export LLM_PROXY_DB_PATH="${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}"
         log_msg "数据库: PostgreSQL ${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}"
     else
-        # SQLite 模式（默认）
         export SQLITE_PATH="${SQLITE_PATH:-${DATA_DIR}/centag.db}"
         export LLM_PROXY_DB_PATH="${LLM_PROXY_DB_PATH:-${SQLITE_PATH}}"
         log_msg "数据库: SQLite ${SQLITE_PATH}"
@@ -92,71 +89,122 @@ start_process() {
     export LLM_PROXY_SERVER_PORT="${LLM_PROXY_SERVER_PORT:-${SERVER_PORT}}"
     export LOG_LEVEL="${LOG_LEVEL:-info}"
     export LLM_PROXY_LOG_OUTPUT="${LLM_PROXY_LOG_OUTPUT:-both}"
+    export LLM_PROXY_LOG_PATH="${LLM_PROXY_LOG_PATH:-${LOGS_DIR}}"
     export TZ="${TZ:-Asia/Shanghai}"
     export LANG="${LANG:-C.UTF-8}"
 
-    # 静态文件 / 初始数据
     export STATIC_PATH="${STATIC_DIR}"
-    export PROJECT_ROOT="${TRIM_APPDEST}"
+    export PROJECT_ROOT="${APP_ROOT}"
     export INITDATA_PATH="${INITDATA_PATH:-${INITDATA_DIR}}"
-    # minimal 密码哈希 / 文件配置落盘目录
     export CENTAG_DATA_DIR="${CENTAG_DATA_DIR:-${DATA_DIR}}"
+}
 
+start_process() {
+    if status; then
+        log_msg "应用已在运行中，跳过启动"
+        return 0
+    fi
+
+    log_msg "正在启动 Centag（daemon）..."
+    prepare_env
+
+    if [ ! -x "${BINARY}" ] && [ ! -f "${BINARY}" ]; then
+        log_msg "错误: 找不到二进制 ${BINARY}"
+        return 1
+    fi
+
+    if [ -f "${DAEMON_SH}" ]; then
+        chmod +x "${DAEMON_SH}" "${BINARY}" 2>/dev/null || true
+        # 守护进程监督 bin/centag，并消费 storage/update_stop
+        nohup bash "${DAEMON_SH}" "${APP_ROOT}" >> "${LOGS_DIR}/daemon.log" 2>&1 &
+        local pid=$!
+        printf "%s" "${pid}" > "${PID_FILE}"
+        sleep 2
+        if ! kill -0 "${pid}" 2>/dev/null; then
+            log_msg "daemon 启动失败，详见 ${LOGS_DIR}/daemon.log"
+            rm -f "${PID_FILE}"
+            return 1
+        fi
+        log_msg "Centag daemon 已启动，PID=${pid}"
+        return 0
+    fi
+
+    # 回退：无 daemon.sh 时直启（旧包兼容）
+    log_msg "未找到 daemon.sh，回退直启二进制"
     nohup "${BINARY}" >> "${LOGS_DIR}/centag.log" 2>&1 &
     local pid=$!
     printf "%s" "${pid}" > "${PID_FILE}"
-
-    local count=0
-    while [ $count -lt 5 ]; do
-        if kill -0 "${pid}" 2>/dev/null; then
-            sleep 1
-            if grep -q "listening\|started\|ready\|Minimal\|Starting" "${LOGS_DIR}/centag.log" 2>/dev/null; then
-                break
-            fi
-        fi
-        count=$((count + 1))
-    done
-
-    log_msg "Centag 已启动，PID=${pid}"
+    log_msg "Centag 已启动（直启），PID=${pid}"
     return 0
 }
 
-stop_process() {
-    log_msg "正在停止 Centag..."
+# Thorough stop: PID files + process patterns + listeners on app ports.
+# Used by fnOS stop and to avoid leftover daemon blocking reinstall.
+stop_all_centag() {
+    local pids="" pid p f
+    local ports="${PORT} 8080 8081 8443"
 
-    if [ ! -r "${PID_FILE}" ]; then
-        log_msg "PID 文件不存在，应用可能未运行"
-        return 0
-    fi
-
-    pid=$(head -n 1 "${PID_FILE}" | tr -d [:space:])
-    log_msg "PID=${pid}"
-
-    if ! check_process "${pid}"; then
-        log_msg "进程 ${pid} 不存在，清理 PID 文件"
-        rm -f "${PID_FILE}"
-        return 0
-    fi
-
-    log_msg "发送 TERM 信号到 PID:${pid}..."
-    kill -TERM "${pid}" >> "${LOG_FILE}" 2>&1
-
-    local count=0
-    while check_process "${pid}" && [ $count -lt 10 ]; do
-        sleep 1
-        count=$((count + 1))
-        log_msg "等待进程终止... (${count}s/10s)"
+    for f in \
+        "${PID_FILE}" \
+        "${APP_ROOT}/storage/centag.daemon.pid" \
+        "${APP_ROOT}/storage/centag.pid"
+    do
+        if [ -r "$f" ]; then
+            pid=$(tr -d '[:space:]' <"$f" 2>/dev/null || true)
+            [ -n "$pid" ] && pids="${pids} ${pid}"
+        fi
     done
 
-    if check_process "${pid}"; then
-        log_msg "发送 KILL 信号到 PID:${pid}..."
-        kill -KILL "${pid}"
-        sleep 1
-    else
-        log_msg "进程已正常终止"
+    if command -v pgrep >/dev/null 2>&1; then
+        pids="${pids} $(pgrep -f "daemon\\.sh ${APP_ROOT}" 2>/dev/null || true)"
+        pids="${pids} $(pgrep -f "${APP_ROOT}/daemon\\.sh" 2>/dev/null || true)"
+        pids="${pids} $(pgrep -f "${APP_ROOT}/bin/centag" 2>/dev/null || true)"
+        pids="${pids} $(pgrep -f '[.]/bin/centag' 2>/dev/null || true)"
     fi
 
-    rm -f "${PID_FILE}"
+    for p in ${ports}; do
+        if command -v lsof >/dev/null 2>&1; then
+            pids="${pids} $(lsof -tiTCP:"${p}" -sTCP:LISTEN 2>/dev/null || true)"
+        fi
+        if command -v fuser >/dev/null 2>&1; then
+            pids="${pids} $(fuser "${p}/tcp" 2>/dev/null || true)"
+        fi
+    done
+
+    # shellcheck disable=SC2086
+    for pid in $(printf '%s\n' ${pids} | awk 'NF && !seen[$0]++'); do
+        if kill -0 "$pid" 2>/dev/null; then
+            log_msg "停止进程 PID=${pid}"
+            kill -TERM "$pid" 2>/dev/null || true
+        fi
+    done
+    sleep 2
+    # shellcheck disable=SC2086
+    for pid in $(printf '%s\n' ${pids} | awk 'NF && !seen[$0]++'); do
+        if kill -0 "$pid" 2>/dev/null; then
+            log_msg "强制停止 PID=${pid}"
+            kill -KILL "$pid" 2>/dev/null || true
+        fi
+    done
+
+    for p in ${ports}; do
+        if command -v fuser >/dev/null 2>&1; then
+            fuser -k "${p}/tcp" 2>/dev/null || true
+        fi
+    done
+
+    rm -f "${PID_FILE}" \
+        "${APP_ROOT}/storage/centag.daemon.pid" \
+        "${APP_ROOT}/storage/centag.pid" \
+        "${APP_ROOT}/storage/update_stop" \
+        "${APP_ROOT}/storage/update_marker" \
+        2>/dev/null || true
+}
+
+stop_process() {
+    log_msg "正在停止 Centag（含 daemon / 端口清理）..."
+    stop_all_centag
+    log_msg "停止完成"
     return 0
 }
 
@@ -171,7 +219,7 @@ check_process() {
 
 status() {
     if [ -f "${PID_FILE}" ]; then
-        pid=$(head -n 1 "${PID_FILE}" | tr -d [:space:])
+        pid=$(head -n 1 "${PID_FILE}" | tr -d '[:space:]')
         if check_process "${pid}"; then
             return 0
         else

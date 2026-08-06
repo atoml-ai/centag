@@ -6,6 +6,23 @@
 ###   1) 卸载向导（wizard/uninstall）选择「删除全部数据」→ $wizard_data_action=delete
 ###   2) 配置页 centag.conf: clean_data_on_uninstall=true
 
+set +e
+
+# Safety net: uninstall_init should have stopped processes; sweep again after files removed.
+PORT="${LLM_PROXY_SERVER_PORT:-${SERVER_PORT:-20060}}"
+if command -v pgrep >/dev/null 2>&1; then
+  for pid in $(pgrep -f 'daemon\.sh .*/centag' 2>/dev/null; pgrep -f '/@appcenter/centag/bin/centag' 2>/dev/null; pgrep -x centag 2>/dev/null); do
+    kill -TERM "$pid" 2>/dev/null || true
+  done
+  sleep 1
+  for pid in $(pgrep -f 'daemon\.sh .*/centag' 2>/dev/null; pgrep -f '/@appcenter/centag/bin/centag' 2>/dev/null; pgrep -x centag 2>/dev/null); do
+    kill -KILL "$pid" 2>/dev/null || true
+  done
+fi
+if command -v fuser >/dev/null 2>&1; then
+  fuser -k "${PORT}/tcp" 2>/dev/null || true
+fi
+
 CONF_FILE="${TRIM_DATA_SHARE_PATHS%%:*}/centag.conf"
 DATA_DIR="${TRIM_DATA_SHARE_PATHS%%:*}"
 

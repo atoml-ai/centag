@@ -1,5 +1,134 @@
 #!/bin/bash
+### Called before uninstalling the application.
+### Must stop daemon + service and free ports so reinstall is not blocked.
 
-### This script is called before uninstalling the application.
+set +e
 
+APP_ROOT="${TRIM_APPDEST:-/vol1/@appcenter/centag}"
+PKGVAR="${TRIM_PKGVAR:-}"
+PORT="${LLM_PROXY_SERVER_PORT:-${SERVER_PORT:-20060}}"
+# Host-proxy / MITM defaults (may be enabled in some deployments)
+PORTS="${PORT} 8080 8081 8443"
+
+log() {
+  echo "[centag uninstall_init] $*"
+}
+
+kill_pid() {
+  local pid="$1"
+  [ -n "$pid" ] || return 0
+  if kill -0 "$pid" 2>/dev/null; then
+    log "TERM pid=${pid}"
+    kill -TERM "$pid" 2>/dev/null || true
+  fi
+}
+
+kill_pid_hard() {
+  local pid="$1"
+  [ -n "$pid" ] || return 0
+  if kill -0 "$pid" 2>/dev/null; then
+    log "KILL pid=${pid}"
+    kill -KILL "$pid" 2>/dev/null || true
+  fi
+}
+
+# Collect PIDs from pid files, process table, and listening ports.
+collect_pids() {
+  local pids=""
+  local f pid
+
+  for f in \
+    "${PKGVAR}/app.pid" \
+    "${APP_ROOT}/storage/centag.daemon.pid" \
+    "${APP_ROOT}/storage/centag.pid"
+  do
+    if [ -r "$f" ]; then
+      pid="$(tr -d '[:space:]' <"$f" 2>/dev/null || true)"
+      [ -n "$pid" ] && pids="${pids} ${pid}"
+    fi
+  done
+
+  # daemon.sh / binary (path may already be half-removed during uninstall)
+  if command -v pgrep >/dev/null 2>&1; then
+    pids="${pids} $(pgrep -f 'daemon\.sh .*/centag' 2>/dev/null || true)"
+    pids="${pids} $(pgrep -f '/@appcenter/centag/bin/centag' 2>/dev/null || true)"
+    pids="${pids} $(pgrep -f '/@appcenter/centag/daemon\.sh' 2>/dev/null || true)"
+    pids="${pids} $(pgrep -f '[.]/bin/centag' 2>/dev/null || true)"
+    # also match bare "bin/centag" cwd-relative launches from daemon
+    pids="${pids} $(pgrep -x centag 2>/dev/null || true)"
+  fi
+
+  # Anyone holding our ports
+  local p
+  for p in ${PORTS}; do
+    if command -v ss >/dev/null 2>&1; then
+      pids="${pids} $(ss -lntp 2>/dev/null | sed -n "s/.*:${p} .*pid=\\([0-9]*\\).*/\\1/p" || true)"
+    fi
+    if command -v lsof >/dev/null 2>&1; then
+      pids="${pids} $(lsof -tiTCP:"${p}" -sTCP:LISTEN 2>/dev/null || true)"
+    fi
+    if command -v fuser >/dev/null 2>&1; then
+      pids="${pids} $(fuser "${p}/tcp" 2>/dev/null || true)"
+    fi
+  done
+
+  # uniq
+  # shellcheck disable=SC2086
+  printf '%s\n' ${pids} | awk 'NF && !seen[$0]++'
+}
+
+stop_all() {
+  log "stopping Centag (app=${APP_ROOT}, ports=${PORTS})"
+
+  local pid
+  local list
+  list="$(collect_pids)"
+
+  if [ -z "${list}" ]; then
+    log "no matching process found"
+  else
+    log "targets: $(echo "${list}" | tr '\n' ' ')"
+    for pid in ${list}; do
+      kill_pid "$pid"
+    done
+    sleep 2
+    for pid in ${list}; do
+      kill_pid_hard "$pid"
+    done
+    sleep 1
+  fi
+
+  # Second sweep after kills (children / respawn races)
+  list="$(collect_pids)"
+  for pid in ${list}; do
+    kill_pid_hard "$pid"
+  done
+
+  # Clear pid / update markers so a half-removed tree does not confuse next install
+  rm -f \
+    "${PKGVAR}/app.pid" \
+    "${APP_ROOT}/storage/centag.daemon.pid" \
+    "${APP_ROOT}/storage/centag.pid" \
+    "${APP_ROOT}/storage/update_stop" \
+    "${APP_ROOT}/storage/update_marker" \
+    2>/dev/null || true
+
+  # Best-effort: free ports again
+  local p
+  for p in ${PORTS}; do
+    if command -v fuser >/dev/null 2>&1; then
+      fuser -k "${p}/tcp" 2>/dev/null || true
+    fi
+  done
+
+  if command -v ss >/dev/null 2>&1 && ss -lntp 2>/dev/null | grep -q ":${PORT} "; then
+    log "WARN: port ${PORT} still in use after stop"
+    ss -lntp 2>/dev/null | grep ":${PORT} " || true
+    # Do not fail uninstall — fnOS should still remove the package; install_init will retry.
+  else
+    log "port ${PORT} is free"
+  fi
+}
+
+stop_all
 exit 0

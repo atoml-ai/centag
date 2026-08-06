@@ -1,13 +1,99 @@
 #!/bin/bash
+### Called before the user installs the application.
+### Clears leftover daemon/service from a previous uninstall so ports are free.
 
-### This script is called before the user installs the application.
-### 可在此处检查系统依赖，例如 Node.js 等
+set +e
 
-# 检查是否为 x86_64 架构
 ARCH=$(uname -m)
-if [ "$ARCH" != "x86_64" ]; then
-    echo "错误: Centag 目前仅支持 x86_64 架构"
+if [ "$ARCH" != "x86_64" ] && [ "$ARCH" != "amd64" ]; then
+  # arm64 packages are also published; allow aarch64 when present
+  if [ "$ARCH" != "aarch64" ] && [ "$ARCH" != "arm64" ]; then
+    echo "错误: 不支持的架构 ${ARCH}（需要 x86_64 或 arm64）"
     exit 1
+  fi
 fi
 
+APP_ROOT="${TRIM_APPDEST:-/vol1/@appcenter/centag}"
+PKGVAR="${TRIM_PKGVAR:-}"
+PORT="${LLM_PROXY_SERVER_PORT:-${SERVER_PORT:-20060}}"
+PORTS="${PORT} 8080 8081 8443"
+
+log() {
+  echo "[centag install_init] $*"
+}
+
+kill_pid_hard() {
+  local pid="$1"
+  [ -n "$pid" ] || return 0
+  if kill -0 "$pid" 2>/dev/null; then
+    log "stopping leftover pid=${pid}"
+    kill -TERM "$pid" 2>/dev/null || true
+    sleep 1
+    kill -KILL "$pid" 2>/dev/null || true
+  fi
+}
+
+collect_pids() {
+  local pids="" pid p
+  for f in \
+    "${PKGVAR}/app.pid" \
+    "${APP_ROOT}/storage/centag.daemon.pid" \
+    "${APP_ROOT}/storage/centag.pid" \
+    /vol1/@appdata/centag/app.pid \
+    /vol1/@appcenter/centag/storage/centag.daemon.pid \
+    /vol1/@appcenter/centag/storage/centag.pid
+  do
+    if [ -r "$f" ]; then
+      pid="$(tr -d '[:space:]' <"$f" 2>/dev/null || true)"
+      [ -n "$pid" ] && pids="${pids} ${pid}"
+    fi
+  done
+  if command -v pgrep >/dev/null 2>&1; then
+    pids="${pids} $(pgrep -f 'daemon\.sh .*/centag' 2>/dev/null || true)"
+    pids="${pids} $(pgrep -f '/@appcenter/centag/(bin/centag|daemon\.sh)' 2>/dev/null || true)"
+    pids="${pids} $(pgrep -f '[.]/bin/centag' 2>/dev/null || true)"
+    pids="${pids} $(pgrep -x centag 2>/dev/null || true)"
+  fi
+  for p in ${PORTS}; do
+    if command -v lsof >/dev/null 2>&1; then
+      pids="${pids} $(lsof -tiTCP:"${p}" -sTCP:LISTEN 2>/dev/null || true)"
+    fi
+    if command -v fuser >/dev/null 2>&1; then
+      pids="${pids} $(fuser "${p}/tcp" 2>/dev/null || true)"
+    fi
+  done
+  # shellcheck disable=SC2086
+  printf '%s\n' ${pids} | awk 'NF && !seen[$0]++'
+}
+
+log "pre-install cleanup (free ports: ${PORTS})"
+for pid in $(collect_pids); do
+  kill_pid_hard "$pid"
+done
+sleep 1
+for pid in $(collect_pids); do
+  kill_pid_hard "$pid"
+done
+
+for p in ${PORTS}; do
+  if command -v fuser >/dev/null 2>&1; then
+    fuser -k "${p}/tcp" 2>/dev/null || true
+  fi
+done
+
+rm -f \
+  /vol1/@appdata/centag/app.pid \
+  /vol1/@appcenter/centag/storage/centag.daemon.pid \
+  /vol1/@appcenter/centag/storage/centag.pid \
+  2>/dev/null || true
+
+if command -v ss >/dev/null 2>&1 && ss -lntp 2>/dev/null | grep -q ":${PORT} "; then
+  log "ERROR: port ${PORT} still occupied; refuse install"
+  ss -lntp 2>/dev/null | grep ":${PORT} " || true
+  echo "端口 ${PORT} 仍被占用（多为上次卸载残留的 daemon）。请在飞牛 SSH 以 root 执行："
+  echo "  pkill -9 -f '/@appcenter/centag' ; fuser -k ${PORT}/tcp"
+  exit 1
+fi
+
+log "ports clear, continue install"
 exit 0

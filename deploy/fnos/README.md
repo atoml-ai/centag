@@ -116,9 +116,11 @@ Native 模式的 `cmd/main` 脚本参考 fnOS 官方 [Notepad 示例](https://de
 
 | 操作 | 行为 |
 |------|------|
-| `start` | 设置环境变量 → 启动 Centag 二进制 → 写入 PID |
-| `stop` | 读取 PID → 发送 TERM 信号 → 等待 → 必要时 KILL |
+| `start` | 设置环境变量 → 启动 `daemon.sh` 监督 `bin/centag` → 写入 PID（支持崩溃拉起与应用内 OTA） |
+| `stop` | 彻底停止：daemon / `bin/centag` / 端口监听（20060 等）+ 清理 PID |
 | `status` | 检查 PID 文件 → 检查进程是否存在 → 返回 0（运行中）/ 3（未运行） |
+| `uninstall_init` | 卸载前强制停干净 daemon/服务并释放端口（避免重装报端口占用） |
+| `install_init` | 安装前再扫一遍残留进程；端口仍占用则拒绝安装并提示清理命令 |
 
 ### 环境变量（由 cmd/main 自动设置）
 
@@ -131,7 +133,7 @@ Native 模式的 `cmd/main` 脚本参考 fnOS 官方 [Notepad 示例](https://de
 | `LLM_PROXY_ADMIN_PASSWORD` | 来自包内 `config/runtime.env`（打包时注入） |
 | `LLM_PROXY_ADMIN_API_KEY` / `DEFAULT` | 同上；首轮 seed 预置管理员 API Key |
 | `LLM_PROXY_API_KEY_STORAGE_SECRET` | 可选；留空则运行时自动生成。设 `LLM_PROXY_API_KEY_REVEAL_ONCE=true` 可关闭二次查看 |
-| `STATIC_DIR` / `STATIC_PATH` | `${TRIM_APPDEST}/webui` |
+| `STATIC_DIR` / `STATIC_PATH` | `${TRIM_APPDEST}/static`（包内 `webui` → `static` 兼容链接） |
 
 ---
 
@@ -140,7 +142,8 @@ Native 模式的 `cmd/main` 脚本参考 fnOS 官方 [Notepad 示例](https://de
 | Native 模式（二进制） | Docker 模式 |
 |---|---|
 | `bin/centag`（Go 二进制） | `docker/docker-compose.yaml` |
-| `webui/`（前端静态文件） | `docker/image.tar.gz`（Docker 镜像） |
+| `daemon.sh`（非 debug 监督 / OTA） | （容器内同样默认 daemon） |
+| `static/`（前端；`webui` → `static`） | `docker/image.tar.gz`（Docker 镜像） |
 | `ui/config`（.url 格式） | `ui/config`（.url 格式） |
 | `ui/images/icon_*.png` | `ui/images/icon_*.png` |
 | `config/initdata/`（初始配置） | — |

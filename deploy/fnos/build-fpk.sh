@@ -526,10 +526,11 @@ elif [ "$MODE" = "native" ]; then
 
   APP_DIR="${BUILD_DIR}/app"
   mkdir -p "${APP_DIR}/bin"
-  mkdir -p "${APP_DIR}/webui"
+  mkdir -p "${APP_DIR}/static"
   mkdir -p "${APP_DIR}/scripts"
   mkdir -p "${APP_DIR}/ui/images"
   mkdir -p "${APP_DIR}/config/initdata"
+  mkdir -p "${APP_DIR}/storage"
 
   DIST_DIR="${REPO_ROOT}/dist/${DIST_NAME}"
 
@@ -595,12 +596,22 @@ elif [ "$MODE" = "native" ]; then
     exit 1
   fi
 
-  # 前端静态文件
+  # 前端静态文件（canonical: static/；webui -> static 兼容旧布局）
   if [ -d "${local_static_dir}" ]; then
-    cp -r "${local_static_dir}/"* "${APP_DIR}/webui/"
-    echo "  静态文件: $(find "${APP_DIR}/webui" -type f | wc -l) 个文件"
+    cp -r "${local_static_dir}/"* "${APP_DIR}/static/"
+    ln -sfn static "${APP_DIR}/webui"
+    echo "  静态文件: $(find "${APP_DIR}/static" -type f | wc -l) 个文件 (+ webui -> static)"
   else
     echo "[WARN] 未找到静态文件目录 ${local_static_dir}"
+  fi
+
+  # daemon 监督（OTA update_stop + 崩溃拉起）
+  if [ -f "${REPO_ROOT}/scripts/tools/daemon.sh" ]; then
+    cp "${REPO_ROOT}/scripts/tools/daemon.sh" "${APP_DIR}/daemon.sh"
+    chmod +x "${APP_DIR}/daemon.sh"
+    echo "  daemon: ${APP_DIR}/daemon.sh"
+  else
+    echo "[WARN] 未找到 scripts/tools/daemon.sh"
   fi
 
   # 初始数据：minimal 用 profile，并合并全局 common 中 minimal 可用的流水线
