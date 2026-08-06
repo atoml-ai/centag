@@ -94,5 +94,22 @@
   "systemUpdateRollbackSuccess": "回滚成功",
   "systemUpdateDeleteConfirm": "确定删除此更新记录？",
   "systemUpdateDeleteTitle": "删除确认",
-  "systemUpdateDeleteSuccess": "记录已删除"
+  "systemUpdateDeleteSuccess": "记录已删除",
+  "navDeployment": "部署与数据",
+  "deploymentTitle": "部署与数据",
+  "deploymentDesc": "数据库选择与卸载时的数据保留策略（适用于 fnOS 等安装包部署）",
+  "deploymentRestartTip": "数据库切换将在服务下次重启时生效（启动脚本会读取此配置注入环境变量）。",
+  "deploymentDatabase": "元数据库",
+  "deploymentDbDriver": "数据库类型",
+  "deploymentDbSqlite": "SQLite（内置，默认）",
+  "deploymentDbPostgresql": "PostgreSQL",
+  "deploymentPgHost": "主机",
+  "deploymentPgPort": "端口",
+  "deploymentPgUser": "用户名",
+  "deploymentPgPassword": "密码",
+  "deploymentPgPasswordMasked": "已保存，输入新值以修改",
+  "deploymentPgDb": "数据库名",
+  "deploymentUninstall": "卸载数据保留",
+  "deploymentCleanData": "卸载时清除所有数据",
+  "deploymentCleanDataDesc": "默认保留数据，重装后配置与密钥可恢复。开启后卸载应用时会连同数据目录一并清除。"
 }

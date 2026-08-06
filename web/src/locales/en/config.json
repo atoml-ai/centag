@@ -94,5 +94,22 @@
   "systemUpdateRollbackSuccess": "Rollback successful",
   "systemUpdateDeleteConfirm": "Are you sure to delete this update record?",
   "systemUpdateDeleteTitle": "Delete Confirmation",
-  "systemUpdateDeleteSuccess": "Record deleted"
+  "systemUpdateDeleteSuccess": "Record deleted",
+  "navDeployment": "Deployment & Data",
+  "deploymentTitle": "Deployment & Data",
+  "deploymentDesc": "Database selection and data-retention policy on uninstall (for fnOS / install-package deployments)",
+  "deploymentRestartTip": "Database switch takes effect on the next service restart (the startup script reads this config and injects environment variables).",
+  "deploymentDatabase": "Metadata database",
+  "deploymentDbDriver": "Database type",
+  "deploymentDbSqlite": "SQLite (built-in, default)",
+  "deploymentDbPostgresql": "PostgreSQL",
+  "deploymentPgHost": "Host",
+  "deploymentPgPort": "Port",
+  "deploymentPgUser": "User",
+  "deploymentPgPassword": "Password",
+  "deploymentPgPasswordMasked": "Saved; enter a new value to change",
+  "deploymentPgDb": "Database name",
+  "deploymentUninstall": "Data retention on uninstall",
+  "deploymentCleanData": "Clear all data on uninstall",
+  "deploymentCleanDataDesc": "Data is kept by default so config and keys survive a reinstall. When enabled, the data directory is wiped together with the app on uninstall."
 }

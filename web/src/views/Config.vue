@@ -210,6 +210,72 @@
           <FallbackPolicyView embedded />
         </section>
 
+        <!-- 部署与数据 -->
+        <section v-show="activeSection === 'deployment'" class="section-panel">
+          <header class="section-header">
+            <h2 class="section-title">{{ t('config.deploymentTitle') }}</h2>
+            <p class="section-desc">{{ t('config.deploymentDesc') }}</p>
+          </header>
+
+          <el-alert
+            type="warning"
+            :closable="false"
+            show-icon
+            class="section-alert"
+            :title="t('config.deploymentRestartTip')"
+          />
+
+          <div class="overview-block">
+            <div class="overview-block-head">
+              <span class="overview-block-title">{{ t('config.deploymentDatabase') }}</span>
+            </div>
+            <el-form label-width="150px">
+              <el-form-item :label="t('config.deploymentDbDriver')">
+                <el-radio-group v-model="config.deployment.db_driver">
+                  <el-radio value="sqlite">{{ t('config.deploymentDbSqlite') }}</el-radio>
+                  <el-radio value="postgresql">{{ t('config.deploymentDbPostgresql') }}</el-radio>
+                </el-radio-group>
+              </el-form-item>
+              <template v-if="config.deployment.db_driver === 'postgresql'">
+                <el-form-item :label="t('config.deploymentPgHost')">
+                  <el-input v-model="config.deployment.pg_host" style="width: 320px" />
+                </el-form-item>
+                <el-form-item :label="t('config.deploymentPgPort')">
+                  <el-input v-model="config.deployment.pg_port" style="width: 160px" />
+                </el-form-item>
+                <el-form-item :label="t('config.deploymentPgUser')">
+                  <el-input v-model="config.deployment.pg_user" style="width: 240px" />
+                </el-form-item>
+                <el-form-item :label="t('config.deploymentPgPassword')">
+                  <el-input
+                    v-model="config.deployment.pg_password"
+                    type="password"
+                    show-password
+                    style="width: 240px"
+                    :placeholder="config.deployment.pg_password === '***' ? t('config.deploymentPgPasswordMasked') : ''"
+                  />
+                </el-form-item>
+                <el-form-item :label="t('config.deploymentPgDb')">
+                  <el-input v-model="config.deployment.pg_db" style="width: 240px" />
+                </el-form-item>
+              </template>
+            </el-form>
+          </div>
+
+          <div class="overview-block">
+            <div class="overview-block-head">
+              <span class="overview-block-title">{{ t('config.deploymentUninstall') }}</span>
+            </div>
+            <div class="setting-row">
+              <div class="setting-copy">
+                <div class="setting-label">{{ t('config.deploymentCleanData') }}</div>
+                <p class="form-tip">{{ t('config.deploymentCleanDataDesc') }}</p>
+              </div>
+              <el-switch v-model="config.deployment.clean_data_on_uninstall" />
+            </div>
+          </div>
+        </section>
+
         <!-- 系统更新 -->
         <section v-if="isTeamAdmin" v-show="activeSection === 'system-update'" class="section-panel">
           <div class="su-section-hd">
@@ -383,7 +449,7 @@ import { ref, computed, onMounted, watch, type Component } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Refresh, Check, Monitor, Connection, Switch, ArrowRight, Upload, UploadFilled, Clock, Document, RefreshLeft, Delete, MoreFilled, Search, Download } from '@element-plus/icons-vue'
+import { Refresh, Check, Monitor, Connection, Switch, ArrowRight, Upload, UploadFilled, Clock, Document, RefreshLeft, Delete, MoreFilled, Search, Download, Box } from '@element-plus/icons-vue'
 import { getConfig, saveConfig } from '@/api'
 import { useEdition } from '@/composables/useEdition'
 import { useAuthStore } from '@/stores/auth'
@@ -398,8 +464,9 @@ const authStore = useAuthStore()
 const { edition } = useEdition()
 const { t } = useI18n()
 
-type ConfigSection = 'overview' | 'http' | 'fallback' | 'system-update'
+type ConfigSection = 'overview' | 'http' | 'fallback' | 'deployment' | 'system-update'
 
+const isAdmin = computed(() => authStore.isAdmin)
 const isTeamAdmin = computed(() => edition.value === 'team' && authStore.isAdmin)
 
 const navItems = computed(() => {
@@ -408,6 +475,9 @@ const navItems = computed(() => {
     { id: 'http', labelKey: 'config.navHttp', icon: Connection },
     { id: 'fallback', labelKey: 'config.navFallback', icon: Switch },
   ]
+  if (authStore.isAdmin) {
+    items.push({ id: 'deployment', labelKey: 'config.navDeployment', icon: Box })
+  }
   if (isTeamAdmin.value) {
     items.push({ id: 'system-update', labelKey: 'config.navSystemUpdate', icon: Upload })
   }
@@ -434,6 +504,8 @@ function selectSection(id: ConfigSection) {
     router.replace({ query: { tab: 'resilience', sub: 'system-update' } })
     void suCheckUpdate()
     void suLoadHistory()
+  } else if (id === 'deployment') {
+    router.replace({ query: { tab: 'resilience', sub: 'deployment' } })
   } else {
     router.replace({ query: { tab: 'resilience', sub: 'fallback' } })
   }
@@ -444,6 +516,10 @@ function applyRouteQuery() {
   const sub = String(route.query.sub || '')
   if (sub === 'fallback') {
     activeSection.value = 'fallback'
+    return
+  }
+  if (sub === 'deployment') {
+    activeSection.value = 'deployment'
     return
   }
   if (sub === 'system-update') {
@@ -541,6 +617,15 @@ const config = ref<any>({
       distance_type: 'cosine',
     },
   },
+  deployment: {
+    clean_data_on_uninstall: false,
+    db_driver: 'sqlite',
+    pg_host: 'localhost',
+    pg_port: '5432',
+    pg_user: 'postgres',
+    pg_password: '',
+    pg_db: 'centag',
+  },
 })
 
 async function load() {
@@ -560,6 +645,7 @@ async function load() {
         ...data.cache,
         semantic: { ...config.value.cache.semantic, ...(data.cache?.semantic || {}) },
       },
+      deployment: { ...config.value.deployment, ...(data.deployment || {}) },
     }
     if (typeof config.value.proxy.response_trace_banner !== 'boolean') {
       config.value.proxy.response_trace_banner = false
