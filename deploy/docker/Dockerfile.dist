@@ -141,14 +141,17 @@ RUN groupadd -g 1001 llmproxy && \
 
 WORKDIR /app
 
-# 从构建阶段复制产物
-COPY --from=builder /app/bin/centag ./bin/centag
+# 种子目录：供运行时卷为空时拷贝（OTA 持久化后不被普通重启覆盖）
+COPY --from=builder /app/bin/centag /opt/centag/seed/bin/centag
+COPY --from=frontend-builder /bin/server/static /opt/centag/seed/static
 
-# 复制前端静态文件（所有版本共用，前端通过 CENTAG_EDITION 自动适配 UI）
+# 默认布局（无卷挂载时直接使用）
+COPY --from=builder /app/bin/centag ./bin/centag
 COPY --from=frontend-builder /bin/server/static ./static
 
 # 复制运行时脚本和初始数据
 COPY deploy/docker/entrypoint.sh ./entrypoint.sh
+COPY scripts/tools/daemon.sh ./daemon.sh
 # 全局 initdata：流水线模板等
 COPY config/initdata/ ./config/initdata/
 # 计费规则种子（启动时 EnsureSeededFromYAML → pricing_rules；缺省则规则为空、成本恒为 0）
@@ -165,9 +168,9 @@ RUN if [ "$INITDATA_ARCHIVE" = "true" ] && [ -f ./initdata.zip ]; then \
         rm initdata.zip; \
     fi
 
-RUN chmod +x ./entrypoint.sh ./bin/centag && \
+RUN chmod +x ./entrypoint.sh ./daemon.sh ./bin/centag /opt/centag/seed/bin/centag && \
     mkdir -p ./storage ./logs ./plugins ./bin && \
-    chown -R llmproxy:llmproxy /app && \
+    chown -R llmproxy:llmproxy /app /opt/centag && \
     chmod -R 755 ./storage ./logs ./plugins ./bin
 
 USER root

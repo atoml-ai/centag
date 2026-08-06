@@ -216,8 +216,11 @@ main() {
     fi
 
     # 确保持久化目录存在（宿主机 bind-mount 时也需可写）
-    # storage: SQLite + CENTAG_DATA_DIR 配置文件；bin/certs: MITM CA（相对可执行文件）
-    mkdir -p /app/logs /app/storage /app/storage/memory-store /app/plugins /app/bin/certs /app/bin/certs/domains
+    # storage: SQLite + CENTAG_DATA_DIR；bin/static 可挂卷以持久化 OTA
+    mkdir -p /app/logs /app/storage /app/storage/memory-store /app/plugins /app/bin/certs /app/bin/certs/domains /app/static
+
+    # 卷为空时从镜像种子恢复（不覆盖已有 OTA 结果）
+    seed_runtime_paths
 
     # 提示：相对 SQLITE_PATH 会落到 /app/bin/storage，脱离常见挂载点
     if [ -n "${SQLITE_PATH:-}" ]; then
@@ -226,21 +229,20 @@ main() {
     if [ -n "${CENTAG_DATA_DIR:-}" ]; then
         echo "  - CENTAG_DATA_DIR: ${CENTAG_DATA_DIR}"
     fi
+    echo "  - DAEMON_MODE: ${DAEMON_MODE:-true}"
 
     # 设置权限
     if [ "$(id -u)" -eq 0 ]; then
-        chown -R llmproxy:llmproxy /app/logs /app/storage /app/plugins /app/bin/certs 2>/dev/null || true
+        chown -R llmproxy:llmproxy /app/logs /app/storage /app/plugins /app/bin /app/static 2>/dev/null || true
     fi
 
-    # 检查是否使用守护进程模式
-    if [ "${DAEMON_MODE:-false}" = "true" ]; then
+    # 非 debug 默认守护进程（OTA update_stop + 崩溃拉起）；DAEMON_MODE=false 可直启
+    if [ "${DAEMON_MODE:-true}" = "true" ]; then
         print_info "使用守护进程模式启动..."
         print_info "======================================"
         
-        # 使用守护进程脚本启动服务
         if [ -f "./daemon.sh" ]; then
             chmod +x ./daemon.sh
-            # 以 root 运行 entrypoint，切换到 llmproxy 用户运行 daemon 和服务
             if [ "$(id -u)" -eq 0 ]; then
                 exec gosu llmproxy bash ./daemon.sh .
             else
@@ -256,8 +258,7 @@ main() {
             fi
         fi
     else
-        # 直接启动模式（向后兼容）
-        print_info "启动 Centag 服务..."
+        print_info "启动 Centag 服务（直启，DAEMON_MODE=false）..."
         print_info "======================================"
 
         if [ "$(id -u)" -eq 0 ]; then
@@ -265,6 +266,25 @@ main() {
         else
             exec /app/bin/centag
         fi
+    fi
+}
+
+# 将镜像内 /opt/centag/seed 拷到挂载卷（仅当目标缺少关键文件时）
+seed_runtime_paths() {
+    local seed_bin="/opt/centag/seed/bin/centag"
+    local seed_static="/opt/centag/seed/static"
+
+    if [ -f "$seed_bin" ] && [ ! -f /app/bin/centag ]; then
+        print_info "种子初始化: /app/bin/centag"
+        mkdir -p /app/bin
+        cp -a "$seed_bin" /app/bin/centag
+        chmod +x /app/bin/centag
+    fi
+
+    if [ -d "$seed_static" ] && [ ! -f /app/static/index.html ]; then
+        print_info "种子初始化: /app/static"
+        mkdir -p /app/static
+        cp -a "$seed_static"/. /app/static/
     fi
 }
 

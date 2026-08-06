@@ -25,9 +25,13 @@ services:
       - "${LLM_PROXY_SYSTEM_PROXY_PORT:-8081}:8081"
     networks:
       - centag-network
+    environment:
+      DAEMON_MODE: "${DAEMON_MODE:-true}"
     volumes:
       - centag_storage:/app/storage
       - centag_logs:/app/logs
+      - centag_bin:/app/bin
+      - centag_static:/app/static
       - ../../config/initdata:/app/config/initdata:ro
       - /etc/localtime:/etc/localtime:ro
       - /etc/timezone:/etc/timezone:ro
@@ -48,6 +52,10 @@ volumes:
   centag_storage:
     driver: local
   centag_logs:
+    driver: local
+  centag_bin:
+    driver: local
+  centag_static:
     driver: local
 
 networks:

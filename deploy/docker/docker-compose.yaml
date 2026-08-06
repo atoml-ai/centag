@@ -16,10 +16,15 @@ services:
       - "${LLM_PROXY_SYSTEM_PROXY_PORT:-8081}:8081"
     networks:
       - centag-network
+    environment:
+      # 非 debug 默认守护；热更新依赖下方 bin/static 卷持久化
+      DAEMON_MODE: "${DAEMON_MODE:-true}"
     volumes:
       - centag-storage:/app/storage
       - centag-logs:/app/logs
       - centag-plugins:/app/plugins
+      - centag-bin:/app/bin
+      - centag-static:/app/static
       - centag-certs:/app/bin/certs
       - /etc/localtime:/etc/localtime:ro
       - /etc/timezone:/etc/localtime:ro
@@ -34,6 +39,8 @@ volumes:
   centag-storage:
   centag-logs:
   centag-plugins:
+  centag-bin:
+  centag-static:
   centag-certs:
 
 networks:

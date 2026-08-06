@@ -1522,9 +1522,11 @@ run_edition() {
     export INITDATA_PATH="${PROJECT_ROOT}/config/initdata"
 
     if ! $with_desktop; then
-        print_info "启动 ${run_edition} CLI: ${sidecar}"
-        cd "$BIN_DIR"
-        CENTAG_EDITION="${run_edition}" exec "./${sidecar_name}"
+        print_info "启动 ${run_edition} CLI（daemon）: ${sidecar}"
+        print_info "前台调试请用: ./start.sh debug ${run_edition}"
+        export CENTAG_EDITION="${run_edition}"
+        "${PROJECT_ROOT}/scripts/tools/daemon.sh" "$BIN_DIR"
+        return $?
     fi
 
     if [ ! -d "${BIN_DIR}/static" ] || [ ! -f "${BIN_DIR}/static/index.html" ]; then
@@ -3432,7 +3434,7 @@ _help_run() {
     echo -e "  ${GREEN}--docker${NC}         以 Docker 容器启动（替代 docker run）"
     echo ""
     echo -e "${CYAN}示例:${NC}"
-    echo -e "  ./start.sh run be                      # 后端前台"
+    echo -e "  ./start.sh run be                      # 后端守护（非 debug 默认；前台用 debug）"
     echo -e "  ./start.sh run fe                      # 前端开发服务器"
     echo -e "  ./start.sh run all                     # 后端+前端"
     echo -e "  ./start.sh run personal                # CLI"
@@ -4423,7 +4425,8 @@ main() {
                         print_error "--desktop/--docker 不适用于 run be"
                         exit 1
                     fi
-                    start_backend_foreground
+                    # 非 debug 默认守护进程（崩溃拉起 + OTA update_stop）；前台请用 debug
+                    start_backend_background
                     ;;
                 frontend|fe|vue)
                     if $with_desktop || $with_docker; then
