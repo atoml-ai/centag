@@ -66,17 +66,17 @@ const rules: Rule[] = [
 function run() {
   assert(modelHasFreeTier('mimo-v2.5-free'), 'model free suffix')
   assert(isFreePricingRule(rules[0]), 'name free tier counts as free')
-  assert(isFreePricingRule(rules[1]), 'zero price counts as free')
+  assert(!isFreePricingRule(rules[1]), 'zero price without free suffix is not free')
   assert(!isFreePricingRule(rules[2]), 'paid model')
 
   const groups = groupRulesByBackend(rules as any)
   assert(groups.length === 2, 'two backends')
   assert(groups[0].backendId === 'ppinfra', 'sorted backends')
-  assert(groups[1].freeCount === 2 && groups[1].paidCount === 0, 'zen free/paid split')
+  assert(groups[1].freeCount === 1 && groups[1].paidCount === 1, 'zen free/paid split')
 
   const filters: PricingRuleFilters = { freePaid: 'free' }
   const onlyFree = filterPricingRules(rules as any, filters)
-  assert(onlyFree.length === 2, 'filter free')
+  assert(onlyFree.length === 1, 'filter free')
   const onlyZen = filterPricingRules(rules as any, { backendId: 'zen', search: 'mimo' })
   assert(onlyZen.length === 1 && onlyZen[0].id === 1, 'filter backend+search')
 

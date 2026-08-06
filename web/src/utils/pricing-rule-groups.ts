@@ -17,11 +17,12 @@ export function modelHasFreeTier(modelName: string): boolean {
   return false
 }
 
-/** Free if both unit prices are 0, or model name looks like a free tier. */
+/**
+ * Free tier is name-driven (align with backend.ModelHasFreeTier), e.g. *-free.
+ * Zero unit prices alone are NOT treated as free: LiteLLM placeholder zeros
+ * (github_copilot/*, some reseller stubs) otherwise land in the free bucket.
+ */
 export function isFreePricingRule(rule: Pick<PricingRule, 'model' | 'input_price_per_m' | 'output_price_per_m'>): boolean {
-  const inP = Number(rule.input_price_per_m) || 0
-  const outP = Number(rule.output_price_per_m) || 0
-  if (inP === 0 && outP === 0) return true
   return modelHasFreeTier(rule.model)
 }
 

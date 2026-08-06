@@ -1,15 +1,15 @@
 <template>
-  <el-table :data="rows" stripe size="small" class="rules-table" :empty-text="t('billingRulesDialog.emptyText')">
-    <el-table-column prop="model" :label="t('billingRulesDialog.table.model')" min-width="150" show-overflow-tooltip />
-    <el-table-column prop="name" :label="t('billingRulesDialog.table.name')" min-width="120" show-overflow-tooltip />
-    <el-table-column prop="price_type" :label="t('billingRulesDialog.table.priceType')" width="90">
+  <el-table :data="rows" stripe size="small" class="rules-table" table-layout="fixed" :empty-text="t('billingRulesDialog.emptyText')">
+    <el-table-column prop="model" :label="t('billingRulesDialog.table.model')" min-width="96" width="128" show-overflow-tooltip />
+    <el-table-column prop="name" :label="t('billingRulesDialog.table.name')" min-width="72" width="100" show-overflow-tooltip />
+    <el-table-column prop="price_type" :label="t('billingRulesDialog.table.priceType')" width="78">
       <template #default="{ row }">
         <el-tag :type="row.price_type === 'revenue' ? 'warning' : 'info'" size="small">
           {{ row.price_type || 'cost' }}
         </el-tag>
       </template>
     </el-table-column>
-    <el-table-column :label="t('billingRulesDialog.table.inputPrice', { unit: priceUnit })" width="150">
+    <el-table-column :label="t('billingRulesDialog.table.inputPrice', { unit: priceUnit })" min-width="140" width="160">
       <template #default="{ row }">
         <el-input-number
           v-model="draft[keyOf(row)].input"
@@ -23,7 +23,7 @@
         />
       </template>
     </el-table-column>
-    <el-table-column :label="t('billingRulesDialog.table.outputPrice', { unit: priceUnit })" width="150">
+    <el-table-column :label="t('billingRulesDialog.table.outputPrice', { unit: priceUnit })" min-width="140" width="160">
       <template #default="{ row }">
         <el-input-number
           v-model="draft[keyOf(row)].output"
@@ -37,8 +37,8 @@
         />
       </template>
     </el-table-column>
-    <el-table-column prop="priority" :label="t('billingRulesDialog.table.priority')" width="70" />
-    <el-table-column :label="t('billingRulesDialog.table.enabled')" width="80">
+    <el-table-column prop="priority" :label="t('billingRulesDialog.table.priority')" width="64" />
+    <el-table-column :label="t('billingRulesDialog.table.enabled')" width="72">
       <template #default="{ row }">
         <el-switch
           :model-value="row.enabled"
@@ -48,7 +48,7 @@
         />
       </template>
     </el-table-column>
-    <el-table-column :label="t('billingRulesDialog.table.actions')" width="160" fixed="right">
+    <el-table-column :label="t('billingRulesDialog.table.actions')" width="168" fixed="right">
       <template #default="{ row }">
         <el-button
           link
@@ -130,9 +130,15 @@ function onPriceChange(_row: PricingRule) {
 
 <style scoped>
 .price-input {
-  width: 128px;
+  width: 100%;
+  max-width: 148px;
 }
 .rules-table {
   width: 100%;
+}
+.rules-table :deep(.el-table__header th),
+.rules-table :deep(.el-table__body td) {
+  padding-left: 8px;
+  padding-right: 8px;
 }
 </style>
