@@ -10,6 +10,13 @@ import (
 )
 
 const resolverSchema = `
+CREATE TABLE groups (
+	id TEXT PRIMARY KEY,
+	name TEXT NOT NULL DEFAULT '',
+	available_backend_ids TEXT NOT NULL DEFAULT '[]',
+	available_models TEXT NOT NULL DEFAULT '[]',
+	available_pipeline_ids TEXT NOT NULL DEFAULT '[]'
+);
 CREATE TABLE users (
 	id INTEGER PRIMARY KEY AUTOINCREMENT,
 	username TEXT NOT NULL,
@@ -127,6 +134,7 @@ func mustExec(t *testing.T, db *sql.DB, q string, args ...interface{}) {
 
 func TestResolver_GroupMode(t *testing.T) {
 	db := newResolverDB(t)
+	mustExec(t, db, `INSERT INTO groups (id, name, available_backend_ids, available_models, available_pipeline_ids) VALUES ('g_1', 'G1', 'b1,b2', 'm1,m2', 'p1')`)
 	mustExec(t, db, `INSERT INTO users (id, username, group_id, policy_mode) VALUES (1, 'alice', 'g_1', 'group')`)
 	mustExec(t, db, `INSERT INTO group_plans (group_id, available_backend_ids, available_models, available_pipeline_ids, rate_limit_rpm) VALUES ('g_1', 'b1,b2', 'm1,m2', 'p1', 60)`)
 	mustExec(t, db, `INSERT INTO group_quotas (group_id, daily_limit, monthly_limit, daily_request_limit, max_backends, max_api_keys) VALUES ('g_1', 1000, 20000, 500, 3, 5)`)
@@ -165,6 +173,7 @@ func TestResolver_GroupMode(t *testing.T) {
 
 func TestResolver_GroupMode_NoPlan_Defaults(t *testing.T) {
 	db := newResolverDB(t)
+	mustExec(t, db, `INSERT INTO groups (id, name) VALUES ('g_1', 'G1')`)
 	mustExec(t, db, `INSERT INTO users (id, username, group_id, policy_mode) VALUES (1, 'alice', 'g_1', 'group')`)
 
 	r := NewResolver(db, "sqlite", WithTTL(0))
@@ -175,11 +184,12 @@ func TestResolver_GroupMode_NoPlan_Defaults(t *testing.T) {
 	if ep.HasPlan {
 		t.Fatal("no plan but HasPlan")
 	}
-	if !ep.IsAllowedModel("anything") || !ep.IsAllowedBackend("anything") {
-		t.Fatal("empty allowlist must allow all")
+	// Without a plan assignment, group resource scope is not applied — deny resources.
+	if ep.IsAllowedModel("anything") || ep.IsAllowedBackend("anything") {
+		t.Fatal("no plan must not grant resource access")
 	}
 	if ep.GroupDailyTokenLimit != 0 || ep.IsTokenQuotaEnabled() {
-		t.Fatal("default policy must be unlimited")
+		t.Fatal("default policy must be unlimited metering")
 	}
 }
 
@@ -246,9 +256,6 @@ CREATE TABLE plan_templates (
 	name TEXT NOT NULL,
 	enabled INTEGER NOT NULL DEFAULT 1,
 	currency TEXT NOT NULL DEFAULT 'USD',
-	available_backend_ids TEXT NOT NULL DEFAULT '[]',
-	available_models TEXT NOT NULL DEFAULT '[]',
-	available_pipeline_ids TEXT NOT NULL DEFAULT '[]',
 	price_type TEXT NOT NULL DEFAULT 'revenue',
 	budget_amount REAL,
 	budget_period TEXT NOT NULL DEFAULT 'monthly',
@@ -275,10 +282,12 @@ CREATE TABLE group_plan_assignments (
 	metering_mode TEXT NOT NULL DEFAULT 'per_member',
 	assigned_at TEXT
 );`)
+	mustExec(t, db, `INSERT INTO groups (id, name, available_backend_ids, available_models, available_pipeline_ids)
+		VALUES ('g1', 'G1', '["b1"]', '["m1"]', '["p1"]')`)
 	mustExec(t, db, `INSERT INTO users (id, username, group_id, policy_mode) VALUES (1, 'a', 'g1', 'group')`)
 	mustExec(t, db, `INSERT INTO users (id, username, group_id, policy_mode) VALUES (2, 'b', 'g1', 'group')`)
-	mustExec(t, db, `INSERT INTO plan_templates (id, name, available_models, token_quota_total, token_quota_period)
-		VALUES (10, '中度', 'm1', 100000, 'daily')`)
+	mustExec(t, db, `INSERT INTO plan_templates (id, name, token_quota_total, token_quota_period)
+		VALUES (10, '中度', 100000, 'daily')`)
 	mustExec(t, db, `INSERT INTO group_plan_assignments (group_id, template_id, metering_mode) VALUES ('g1', 10, 'per_member')`)
 
 	r := NewResolver(db, "sqlite", WithTTL(0))
@@ -288,6 +297,13 @@ CREATE TABLE group_plan_assignments (
 	}
 	if !ep.HasPlan || ep.TemplateID != 10 || ep.TemplateName != "中度" {
 		t.Fatalf("template resolve wrong: %+v", ep)
+	}
+	if !ep.ResourcesConfigured {
+		t.Fatal("expected ResourcesConfigured from groups")
+	}
+	if !ep.IsAllowedBackend("b1") || !ep.IsAllowedModel("m1") || !ep.IsAllowedPipeline("p1") {
+		t.Fatalf("group allowlists not applied: backends=%v models=%v pipelines=%v",
+			ep.AllowBackends, ep.AllowModels, ep.AllowPipelines)
 	}
 	if ep.MeteringMode != MeteringPerMember {
 		t.Fatalf("metering: %q", ep.MeteringMode)
@@ -377,21 +393,24 @@ func TestResolver_CacheInvalidation(t *testing.T) {
 		t.Fatal("no plan initially")
 	}
 
-	// New plan created; without invalidation the cache is stale...
-	mustExec(t, db, `INSERT INTO user_plans (user_id, available_models) VALUES (1, 'm1')`)
-	// ...so explicit invalidation is required for prompt propagation.
+	// New metering plan; custom mode does not grant resources from user_plans.
+	mustExec(t, db, `INSERT INTO user_plans (user_id, available_models, budget_amount) VALUES (1, 'm1', 9)`)
 	r.Invalidate(1)
 	ep2, err := r.Resolve(context.Background(), 1)
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
 	}
-	if !ep2.HasPlan || !ep2.IsAllowedModel("m1") {
-		t.Fatalf("expected fresh plan after invalidate, got %+v", ep2)
+	if !ep2.HasPlan || !ep2.IsBudgetEnabled() {
+		t.Fatalf("expected fresh metering after invalidate, got %+v", ep2)
+	}
+	if ep2.IsAllowedModel("m1") {
+		t.Fatal("custom mode must not grant resources from user_plans")
 	}
 
-	// Moving a user to a group is a per-user change → Invalidate(userID).
+	// Moving a user to a group → resources come from groups table.
+	mustExec(t, db, `INSERT INTO groups (id, name, available_models) VALUES ('g_9', 'G9', 'gm1')`)
 	mustExec(t, db, `UPDATE users SET group_id = 'g_9', policy_mode = 'group' WHERE id = 1`)
-	mustExec(t, db, `INSERT INTO group_plans (group_id, available_models) VALUES ('g_9', 'gm1')`)
+	mustExec(t, db, `INSERT INTO group_plans (group_id, available_models, rate_limit_rpm) VALUES ('g_9', 'ignored', 10)`)
 	r.Invalidate(1)
 	ep3, err := r.Resolve(context.Background(), 1)
 	if err != nil {
@@ -401,15 +420,15 @@ func TestResolver_CacheInvalidation(t *testing.T) {
 		t.Fatalf("expected fresh group policy after Invalidate, got %+v", ep3)
 	}
 
-	// Group plan change → InvalidateGroup covers every member.
-	mustExec(t, db, `UPDATE group_plans SET available_models = 'gm2' WHERE group_id = 'g_9'`)
+	// Group resource change → InvalidateGroup covers every member.
+	mustExec(t, db, `UPDATE groups SET available_models = 'gm2' WHERE id = 'g_9'`)
 	r.InvalidateGroup("g_9")
 	ep4, err := r.Resolve(context.Background(), 1)
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
 	}
 	if !ep4.IsAllowedModel("gm2") || ep4.IsAllowedModel("gm1") {
-		t.Fatalf("expected fresh group plan after InvalidateGroup, got %+v", ep4)
+		t.Fatalf("expected fresh group resources after InvalidateGroup, got %+v", ep4)
 	}
 }
 
@@ -425,6 +444,8 @@ func TestParseAllowList(t *testing.T) {
 		{"{a,b,c}", []string{"a", "b", "c"}},
 		{"a, b , c", []string{"a", "b", "c"}},
 		{`{"a","b"}`, []string{"a", "b"}},
+		{`["opencode-zen"]`, []string{"opencode-zen"}},
+		{`["a","b","c"]`, []string{"a", "b", "c"}},
 	}
 	for _, tc := range cases {
 		got := parseAllowList(tc.in)
