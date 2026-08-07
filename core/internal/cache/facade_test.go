@@ -2,6 +2,7 @@ package cache
 
 import (
 	"context"
+	"fmt"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -126,5 +127,118 @@ func TestProxyCacheUsesFacade(t *testing.T) {
 	entry, ok, err := pc.TryGetEntry(ctx, key)
 	if err != nil || !ok || entry.Response != "cached" {
 		t.Fatalf("TryGetEntry ok=%v err=%v entry=%v", ok, err, entry)
+	}
+}
+
+type stubExternalBackend struct {
+	hit      *RecallHit
+	err      error
+	storeErr error
+	stored   *RecallEntry
+}
+
+func (s *stubExternalBackend) Name() string { return "stub-external" }
+func (s *stubExternalBackend) Kind() string { return "external" }
+func (s *stubExternalBackend) Lookup(ctx context.Context, q RecallQuery) (*RecallHit, error) {
+	return s.hit, s.err
+}
+func (s *stubExternalBackend) Store(ctx context.Context, e RecallEntry) error {
+	cp := e
+	s.stored = &cp
+	return s.storeErr
+}
+
+func TestFacadeLookup_ExternalHitAndMiss(t *testing.T) {
+	prev := config.Get()
+	cfg := config.DefaultCacheConfig()
+	cfg.Backend = config.CacheBackendExternal
+	config.Set(&config.Config{Cache: cfg})
+	t.Cleanup(func() { config.Set(prev) })
+
+	mgr, err := NewManager(&CacheConfig{Enabled: true, DefaultTTL: 60})
+	if err != nil {
+		t.Fatal(err)
+	}
+	facade := NewFacade(mgr)
+	if err := facade.EnsureBackendReady(); err == nil {
+		t.Fatal("external without plugin must fail EnsureBackendReady")
+	}
+
+	// miss / error → fail-open, never fabricate hit
+	down := &stubExternalBackend{err: fmt.Errorf("down")}
+	facade.SetExternalBackend(down)
+	if err := facade.EnsureBackendReady(); err != nil {
+		t.Fatalf("ready after SetExternalBackend: %v", err)
+	}
+	entry, ok, err := facade.Lookup(context.Background(), "k", "q", 0.8, 5)
+	if err != nil || ok || entry != nil {
+		t.Fatalf("external error must miss: ok=%v entry=%v err=%v", ok, entry, err)
+	}
+
+	var hits int
+	facade.SetHitNotifier(func(ctx context.Context, key string, data []byte) { hits++ })
+	ext := &stubExternalBackend{hit: &RecallHit{
+		Key: "k", Response: "external-answer",
+	}}
+	facade.SetExternalBackend(ext)
+	entry, ok, err = facade.Lookup(context.Background(), "k", "q", 0.8, 5)
+	if err != nil || !ok || entry == nil || entry.Response != "external-answer" {
+		t.Fatalf("external hit: ok=%v entry=%v err=%v", ok, entry, err)
+	}
+	if hits != 1 {
+		t.Fatalf("hit notifier=%d", hits)
+	}
+	if HitLabel(entry) != "HIT-EXTERNAL" {
+		t.Fatalf("label=%s", HitLabel(entry))
+	}
+
+	if err := facade.Store(context.Background(), "k", &CacheEntry{
+		Key: "k", Request: "q", Response: "a",
+		Metadata: map[string]interface{}{"session_id": "s1", "model": "m1"},
+	}, time.Minute); err != nil {
+		t.Fatal(err)
+	}
+	if ext.stored == nil || ext.stored.SessionID != "s1" || ext.stored.Response != "a" {
+		t.Fatalf("external store payload=%+v", ext.stored)
+	}
+}
+
+func TestFacadeEnsureBackendReady_SemanticMissing(t *testing.T) {
+	prev := config.Get()
+	cfg := config.DefaultCacheConfig()
+	cfg.Backend = config.CacheBackendSemantic
+	config.Set(&config.Config{Cache: cfg})
+	t.Cleanup(func() { config.Set(prev) })
+
+	mgr, err := NewManager(&CacheConfig{Enabled: true, DefaultTTL: 60})
+	if err != nil {
+		t.Fatal(err)
+	}
+	facade := NewFacade(mgr)
+	if err := facade.EnsureBackendReady(); err == nil {
+		t.Fatal("semantic without vector/embedding must error")
+	}
+	entry, ok, err := facade.Lookup(context.Background(), "k", "query", 0.8, 5)
+	if err != nil || ok || entry != nil {
+		t.Fatalf("semantic not ready must miss: ok=%v err=%v", ok, err)
+	}
+}
+
+func TestFacadeLookupExact_DisabledOrEmpty(t *testing.T) {
+	mgr, err := NewManager(&CacheConfig{Enabled: false, DefaultTTL: 60})
+	if err != nil {
+		t.Fatal(err)
+	}
+	facade := NewFacade(mgr)
+	entry, ok, err := facade.LookupExact(context.Background(), "any")
+	if err != nil || ok || entry != nil {
+		t.Fatalf("disabled cache: ok=%v err=%v", ok, err)
+	}
+	entry, ok, err = facade.LookupExact(context.Background(), "")
+	if err != nil || ok || entry != nil {
+		t.Fatalf("empty key: ok=%v err=%v", ok, err)
+	}
+	if NewFacade(nil).Manager() != nil {
+		t.Fatal("nil manager")
 	}
 }

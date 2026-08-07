@@ -293,89 +293,50 @@ func (h *LLMProxyHandler) HandleOpenAIRequest(c *gin.Context) {
 		if err != nil {
 			logger.Warn("Failed to generate cache key", zap.Error(err))
 		} else {
-			// 检查是否为流式请求
-			if stream {
-				// 流式请求也使用缓存
-				logger.Infof("Stream request checking cache - model: %s, key: %s", model, cacheKey)
+			// v0.3.3: 统一走 Facade.Lookup（exact/semantic/external + stacking），命中触发 OnCacheHit
+			cacheCfg := config.CacheConfig{}
+			if h.cacheConfig != nil {
+				cacheCfg = *h.cacheConfig
+			} else if cfg := config.Get(); cfg != nil {
+				cacheCfg = cfg.Cache
+			}
+			config.NormalizeCacheConfig(&cacheCfg)
+			threshold := cacheCfg.Semantic.Threshold
+			if threshold <= 0 {
+				threshold = 0.8
+			}
+			topK := cacheCfg.Semantic.TopK
+			if topK <= 0 {
+				topK = 5
+			}
+			query := h.proxyCache.GetRequestQuery(messages)
 
-				// 尝试从缓存获取完整entry
-				cachedEntry, found, err := h.proxyCache.TryGetEntry(c.Request.Context(), cacheKey)
-				if err == nil && found {
-					logger.Info("Stream cache hit, returning cached response", zap.String("key", cacheKey))
-					cached = true
-					statusCode = http.StatusOK
-
-					// 记录统计
-					h.recordCacheStats(model, "HIT-EXACT", true, http.StatusOK, time.Since(start))
-
-					// 流式返回缓存数据
+			cachedEntry, found, err := h.proxyCache.Lookup(c.Request.Context(), cacheKey, query, threshold, topK)
+			if err != nil {
+				logger.Warn("Cache facade lookup failed", zap.Error(err))
+			}
+			if found && cachedEntry != nil {
+				hitLabel := cache.HitLabel(cachedEntry)
+				logger.Info("Cache hit via facade",
+					zap.String("key", cacheKey),
+					zap.String("label", hitLabel),
+					zap.String("backend", cacheCfg.Backend),
+					zap.Bool("stream", stream))
+				cached = true
+				statusCode = http.StatusOK
+				h.recordCacheStats(model, hitLabel, stream, http.StatusOK, time.Since(start))
+				if stream {
 					h.streamCachedResponse(c, cachedEntry)
 					return
 				}
+				c.Header("X-Cache", hitLabel)
+				c.Header("Content-Type", "application/json")
+				c.String(http.StatusOK, cachedEntry.Response)
+				return
+			}
 
-				logger.Info("Stream cache miss, calling backend", zap.String("key", cacheKey))
-				// 继续执行后续代码,调用后端
-			} else {
-				// 非流式请求 — v0.3.3: 按 cache.backend 互斥召回；stacking 时 exact→semantic
-				cacheCfg := config.CacheConfig{}
-				if h.cacheConfig != nil {
-					cacheCfg = *h.cacheConfig
-				} else if cfg := config.Get(); cfg != nil {
-					cacheCfg = cfg.Cache
-				}
-				config.NormalizeCacheConfig(&cacheCfg)
-				threshold := cacheCfg.Semantic.Threshold
-				if threshold <= 0 {
-					threshold = 0.8
-				}
-				topK := cacheCfg.Semantic.TopK
-				if topK <= 0 {
-					topK = 5
-				}
-
-				tryExact := cacheCfg.Backend == config.CacheBackendExact || cacheCfg.AllowBackendStacking
-				trySemantic := cacheCfg.Backend == config.CacheBackendSemantic ||
-					(cacheCfg.AllowBackendStacking && cacheCfg.Backend == config.CacheBackendExact)
-
-				if tryExact {
-					cachedResp, found, err := h.proxyCache.TryGet(c.Request.Context(), cacheKey)
-					if err != nil {
-						logger.Warn("Failed to get exact cache", zap.Error(err))
-					}
-					if found {
-						logger.Info("Exact cache hit, returning cached response", zap.String("key", cacheKey))
-						cached = true
-						statusCode = http.StatusOK
-						h.recordCacheStats(model, "HIT-EXACT", false, http.StatusOK, time.Since(start))
-						c.Header("X-Cache", "HIT-EXACT")
-						c.Header("Content-Type", "application/json")
-						c.String(http.StatusOK, cachedResp)
-						return
-					}
-				}
-
-				if trySemantic {
-					query := h.proxyCache.GetRequestQuery(messages)
-					if query != "" {
-						semanticResult, found, err := h.proxyCache.TryGetSemantic(c.Request.Context(), query, threshold, topK)
-						if err != nil {
-							logger.Warn("Failed to get semantic cache", zap.Error(err))
-						}
-						if found {
-							logger.Infof("✓ 语义缓存命中 - 查询: %s, 相似度: %.4f/%.2f, 缓存key: %s",
-								query, semanticResult.Similarity, threshold, semanticResult.CacheKey)
-							cached = true
-							statusCode = http.StatusOK
-							h.recordCacheStats(model, "HIT-SEMANTIC", false, http.StatusOK, time.Since(start))
-							c.Header("X-Cache", "HIT-SEMANTIC")
-							c.Header("Content-Type", "application/json")
-							c.String(http.StatusOK, semanticResult.Response)
-							return
-						}
-					}
-				}
-
-				logger.Debug("Cache miss", zap.String("key", cacheKey), zap.String("backend", cacheCfg.Backend))
+			logger.Debug("Cache miss", zap.String("key", cacheKey), zap.String("backend", cacheCfg.Backend))
+			if !stream {
 				c.Header("X-Cache", "MISS")
 			}
 		}

@@ -113,6 +113,21 @@ func TestApplyHitStrategies_SessionHistoryIsolation(t *testing.T) {
 	}
 }
 
+func TestListHitStrategies_ContainsRegistered(t *testing.T) {
+	RegisterHitStrategy(errHitStrategy{})
+	names := ListHitStrategies()
+	found := false
+	for _, n := range names {
+		if n == "err-test" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("ListHitStrategies missing err-test: %v", names)
+	}
+}
+
 func TestGetRequestKey_ModelIsolation(t *testing.T) {
 	mgr, err := NewManager(&CacheConfig{Enabled: true, DefaultTTL: 60})
 	if err != nil {

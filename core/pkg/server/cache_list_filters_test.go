@@ -55,4 +55,55 @@ func TestFlattenCacheEntryForAPI(t *testing.T) {
 	if out["session_id"] != "s1" || out["model"] != "m1" {
 		t.Fatalf("%v", out)
 	}
+	if out["cache_type"] != "exact" {
+		t.Fatalf("cache_type=%v", out["cache_type"])
+	}
+}
+
+func TestParseRFC3339Loose(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		ok   bool
+	}{
+		{name: "rfc3339", in: "2026-08-01T12:00:00Z", ok: true},
+		{name: "date only", in: "2026-08-01", ok: true},
+		{name: "datetime no zone", in: "2026-08-01T15:04:05", ok: true},
+		{name: "empty", in: "", ok: false},
+		{name: "garbage", in: "not-a-date", ok: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, ok := parseRFC3339Loose(tt.in)
+			if ok != tt.ok {
+				t.Fatalf("ok=%v want %v", ok, tt.ok)
+			}
+		})
+	}
+}
+
+func TestEntryTimestamp_StringAndCreatedAt(t *testing.T) {
+	ts, ok := entryTimestamp(map[string]interface{}{"timestamp": "2026-08-01T12:00:00Z"})
+	if !ok || ts.Year() != 2026 {
+		t.Fatalf("string timestamp: ok=%v ts=%v", ok, ts)
+	}
+	ts, ok = entryTimestamp(map[string]interface{}{
+		"metadata": map[string]interface{}{"created_at": "2026-07-15"},
+	})
+	if !ok || ts.Month() != time.July {
+		t.Fatalf("created_at: ok=%v ts=%v", ok, ts)
+	}
+	if _, ok := entryTimestamp(nil); ok {
+		t.Fatal("nil entry")
+	}
+}
+
+func TestMatchCacheListFilters_ModelEmptyRejects(t *testing.T) {
+	entry := map[string]interface{}{"key": "k", "request": "x"}
+	if matchCacheListFilters(entry, cacheListFilters{Model: "qwen"}) {
+		t.Fatal("missing model must not match model filter")
+	}
+	if !matchCacheListFilters(entry, cacheListFilters{}) {
+		t.Fatal("empty filters match all")
+	}
 }

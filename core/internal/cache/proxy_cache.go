@@ -316,6 +316,17 @@ func extractCleanQuestion(content string) string {
 	return strings.TrimSpace(timestampPrefixRegex.ReplaceAllString(normalized, ""))
 }
 
+// Lookup is the unified recall entry (exact / semantic / external per cache.backend).
+func (p *ProxyCache) Lookup(ctx context.Context, key, queryText string, threshold float32, topK int) (*CacheEntry, bool, error) {
+	if !p.enabled {
+		return nil, false, nil
+	}
+	if p.facade != nil {
+		return p.facade.Lookup(ctx, key, queryText, threshold, topK)
+	}
+	return p.TryGetEntry(ctx, key)
+}
+
 // TryGet 尝试从缓存获取响应(精确匹配)
 // 注意: 此方法只负责获取缓存数据,不记录命中/未命中统计
 // 调用方根据返回结果决定是否记录统计
@@ -327,22 +338,22 @@ func (p *ProxyCache) TryGet(ctx context.Context, key string) (string, bool, erro
 	return entry.Response, true, nil
 }
 
-// TryGetEntry 尝试从缓存获取完整条目(精确匹配)
-// 返回完整的CacheEntry,包含流式数据等信息
+// TryGetEntry 尝试从缓存获取完整条目。
+// 有 Facade 时走统一 Lookup（尊重 backend/stacking，并触发 OnCacheHit）。
 func (p *ProxyCache) TryGetEntry(ctx context.Context, key string) (*CacheEntry, bool, error) {
 	if !p.enabled {
 		return nil, false, nil
 	}
 	if p.facade != nil {
-		entry, ok, err := p.facade.LookupExact(ctx, key)
+		entry, ok, err := p.facade.Lookup(ctx, key, "", 0, 0)
 		if err != nil {
 			return nil, false, nil
 		}
 		if ok {
-			logger.Debug("Exact cache entry hit", zap.String("key", key))
+			logger.Debug("Cache entry hit via facade", zap.String("key", key), zap.String("label", HitLabel(entry)))
 			return entry, true, nil
 		}
-		logger.Debug("Exact cache entry miss", zap.String("key", key))
+		logger.Debug("Cache entry miss via facade", zap.String("key", key))
 		return nil, false, nil
 	}
 	if p.manager == nil || p.manager.GetExactCache() == nil {
@@ -368,64 +379,56 @@ type SemanticResult struct {
 	CacheKey   string
 }
 
-// TryGetSemantic 尝试从语义缓存获取响应
+// TryGetSemantic 尝试从语义缓存获取响应（经 Facade，尊重 backend 互斥并触发 OnCacheHit）。
 func (p *ProxyCache) TryGetSemantic(ctx context.Context, query string, threshold float32, topK int) (*SemanticResult, bool, error) {
 	if !p.enabled {
 		return nil, false, nil
 	}
+	if p.facade != nil {
+		entry, ok, err := p.facade.Lookup(ctx, "", query, threshold, topK)
+		if err != nil || !ok || entry == nil {
+			return nil, false, nil
+		}
+		response := entry.Response
+		if response == "" && len(entry.StreamData) > 0 {
+			var fullContent strings.Builder
+			for _, chunk := range entry.StreamData {
+				fullContent.WriteString(chunk.Content)
+			}
+			response = fullContent.String()
+		}
+		return &SemanticResult{
+			Response:   response,
+			Similarity: extractSimilarity(entry.Metadata),
+			CacheKey:   entry.Key,
+		}, true, nil
+	}
+	if p.manager == nil {
+		return nil, false, nil
+	}
 
-	// 使用语义搜索
 	entries, err := p.manager.SearchByQuery(ctx, query, threshold, topK)
 	if err != nil {
 		logger.Error("Failed to search semantic cache", zap.Error(err))
 		return nil, false, nil
 	}
-
-	if len(entries) > 0 {
-		// 返回相似度最高的缓存
-		bestEntry := entries[0]
-		similarity := extractSimilarity(bestEntry.Metadata)
-
-		// ⚠️ 重要: 必须检查相似度是否达到阈值
-		// SearchByQuery返回所有结果(包括低于阈值的),用于前端显示
-		if similarity < threshold {
-			logger.Info("Semantic cache miss (similarity below threshold)",
-				zap.String("query", query),
-				zap.String("cache_key", bestEntry.Key),
-				zap.Float32("similarity", similarity),
-				zap.Float32("threshold", threshold))
-			return nil, false, nil
-		}
-
-		logger.Info("Semantic cache hit",
-			zap.String("query", query),
-			zap.String("cache_key", bestEntry.Key),
-			zap.Float32("similarity", similarity),
-			zap.Float32("threshold", threshold))
-
-		// 如果Response为空,尝试从StreamData中合并
-		response := bestEntry.Response
-		if response == "" && len(bestEntry.StreamData) > 0 {
-			var fullContent strings.Builder
-			for _, chunk := range bestEntry.StreamData {
-				fullContent.WriteString(chunk.Content)
-			}
-			response = fullContent.String()
-			logger.Debug("Reconstructed response from stream data",
-				zap.String("key", bestEntry.Key),
-				zap.Int("reconstructed_length", len(response)))
-		}
-
-		result := &SemanticResult{
-			Response:   response,
-			Similarity: similarity,
-			CacheKey:   bestEntry.Key,
-		}
-
-		return result, true, nil
+	if len(entries) == 0 {
+		return nil, false, nil
 	}
-
-	return nil, false, nil
+	bestEntry := entries[0]
+	similarity := extractSimilarity(bestEntry.Metadata)
+	if similarity < threshold {
+		return nil, false, nil
+	}
+	response := bestEntry.Response
+	if response == "" && len(bestEntry.StreamData) > 0 {
+		var fullContent strings.Builder
+		for _, chunk := range bestEntry.StreamData {
+			fullContent.WriteString(chunk.Content)
+		}
+		response = fullContent.String()
+	}
+	return &SemanticResult{Response: response, Similarity: similarity, CacheKey: bestEntry.Key}, true, nil
 }
 
 // extractSimilarity 从元数据中提取相似度分数
@@ -492,7 +495,13 @@ func (p *ProxyCache) SetResponse(ctx context.Context, key string, response strin
 		IsStream:  false, // 默认为非流式
 	}
 
-	if err := p.manager.Set(ctx, key, entry, ttl); err != nil {
+	var err error
+	if p.facade != nil {
+		err = p.facade.Store(ctx, key, entry, ttl)
+	} else {
+		err = p.manager.Set(ctx, key, entry, ttl)
+	}
+	if err != nil {
 		logger.Error("Failed to set cache", zap.Error(err))
 		return err
 	}
@@ -529,7 +538,13 @@ func (p *ProxyCache) SetStreamResponse(ctx context.Context, key string, streamCh
 		StreamData: streamChunks, // 缓存流式分块数据
 	}
 
-	if err := p.manager.Set(ctx, key, entry, ttl); err != nil {
+	var err error
+	if p.facade != nil {
+		err = p.facade.Store(ctx, key, entry, ttl)
+	} else {
+		err = p.manager.Set(ctx, key, entry, ttl)
+	}
+	if err != nil {
 		logger.Error("Failed to set stream cache", zap.Error(err))
 		return err
 	}

@@ -116,15 +116,53 @@ func (f *Facade) LookupExact(ctx context.Context, key string) (*CacheEntry, bool
 	return entry, true, nil
 }
 
-// StoreExact writes an S1 exact cache entry (and follows Manager.Set strategy for semantic side effects).
+// StoreExact writes via Store (respects global cache.backend). Kept for call-site compatibility.
 func (f *Facade) StoreExact(ctx context.Context, key string, entry *CacheEntry, ttl time.Duration) error {
+	return f.Store(ctx, key, entry, ttl)
+}
+
+// Store dispatches writes by configured backend (exact / semantic / external).
+func (f *Facade) Store(ctx context.Context, key string, entry *CacheEntry, ttl time.Duration) error {
 	if f == nil || f.manager == nil {
 		return fmt.Errorf("cache facade: manager not configured")
 	}
-	if entry != nil {
-		entry.Metadata = EnrichCacheWriteMetadata(entry.Metadata, "exact")
+	backend := f.EffectiveBackend()
+	switch backend {
+	case config.CacheBackendExternal:
+		if entry != nil {
+			entry.Metadata = EnrichCacheWriteMetadata(entry.Metadata, "external")
+		}
+		if f.external == nil {
+			return fmt.Errorf("external recall backend not configured")
+		}
+		model, sessionID := "", ""
+		req, resp := "", ""
+		var meta map[string]interface{}
+		if entry != nil {
+			req, resp, meta = entry.Request, entry.Response, entry.Metadata
+			if meta != nil {
+				model, _ = meta["model"].(string)
+				sessionID, _ = meta["session_id"].(string)
+			}
+		}
+		if err := f.external.Store(ctx, RecallEntry{
+			Key: key, Request: req, Response: resp, Model: model, SessionID: sessionID, TTL: ttl, Metadata: meta,
+		}); err != nil {
+			logger.Warn("cache facade Store external failed", zap.String("key", key), zap.Error(err))
+			return err
+		}
+		return nil
+	case config.CacheBackendSemantic:
+		if entry != nil {
+			entry.Metadata = EnrichCacheWriteMetadata(entry.Metadata, "semantic")
+		}
+		return f.manager.Set(ctx, key, entry, ttl)
+	default: // exact (+ stacking hybrid write inside Manager.Set)
+		if entry != nil {
+			entry.Metadata = EnrichCacheWriteMetadata(entry.Metadata, "exact")
+		}
+		return f.manager.Set(ctx, key, entry, ttl)
 	}
-	return f.manager.Set(ctx, key, entry, ttl)
 }
 
 // Lookup dispatches by configured backend. Default is mutually exclusive;
@@ -163,8 +201,15 @@ func (f *Facade) Lookup(ctx context.Context, key, queryText string, threshold fl
 		if err != nil || len(entries) == 0 {
 			return nil, false, nil
 		}
-		f.notifyHit(ctx, entries[0].Key, entries[0])
-		return entries[0], true, nil
+		entry := entries[0]
+		if entry.Metadata == nil {
+			entry.Metadata = map[string]interface{}{}
+		}
+		if _, ok := entry.Metadata["cache_type"]; !ok {
+			entry.Metadata["cache_type"] = "semantic"
+		}
+		f.notifyHit(ctx, entry.Key, entry)
+		return entry, true, nil
 	}
 
 	switch backend {
@@ -189,12 +234,34 @@ func (f *Facade) Lookup(ctx context.Context, key, queryText string, threshold fl
 		}
 		entry := hit.Entry
 		if entry == nil {
-			entry = &CacheEntry{Key: hit.Key, Response: hit.Response}
+			entry = &CacheEntry{Key: hit.Key, Response: hit.Response, Metadata: map[string]interface{}{}}
+		}
+		if entry.Metadata == nil {
+			entry.Metadata = map[string]interface{}{}
+		}
+		if _, ok := entry.Metadata["cache_type"]; !ok {
+			entry.Metadata["cache_type"] = "external"
 		}
 		f.notifyHit(ctx, hit.Key, entry)
 		return entry, true, nil
 	default:
 		return nil, false, nil
+	}
+}
+
+// HitLabel returns X-Cache style label from entry metadata.
+func HitLabel(entry *CacheEntry) string {
+	if entry == nil {
+		return "HIT"
+	}
+	ct, _ := entry.Metadata["cache_type"].(string)
+	switch ct {
+	case "semantic":
+		return "HIT-SEMANTIC"
+	case "external":
+		return "HIT-EXTERNAL"
+	default:
+		return "HIT-EXACT"
 	}
 }
 

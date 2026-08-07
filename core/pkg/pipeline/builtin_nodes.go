@@ -10,6 +10,7 @@ import (
 	"centag/core/pkg/backend"
 	"centag/core/internal/cache"
 	evalplugin "centag/core/internal/cache/evaluation/plugin"
+	"centag/core/pkg/config"
 	"centag/core/pkg/embedding"
 	"centag/core/pkg/plugin"
 	"centag/core/pkg/storage"
@@ -2754,6 +2755,63 @@ func (n *CacheNode) SetCacheFacade(f *cache.Facade) {
 	n.cacheFacade = f
 }
 
+// globalCacheAllowsSemantic reports whether global cache.backend permits semantic recall/write.
+func globalCacheAllowsSemantic() bool {
+	cfg := config.Get()
+	if cfg == nil {
+		return false
+	}
+	c := cfg.Cache
+	config.NormalizeCacheConfig(&c)
+	return c.Backend == config.CacheBackendSemantic ||
+		(c.AllowBackendStacking && c.Backend == config.CacheBackendExact)
+}
+
+func facadeLookupParams(n *CacheNode) (threshold float32, topK int) {
+	threshold = n.semanticThreshold
+	topK = n.semanticTopK
+	if cfg := config.Get(); cfg != nil {
+		c := cfg.Cache
+		config.NormalizeCacheConfig(&c)
+		if threshold <= 0 {
+			threshold = c.Semantic.Threshold
+		}
+		if topK <= 0 {
+			topK = c.Semantic.TopK
+		}
+	}
+	if threshold <= 0 {
+		threshold = 0.8
+	}
+	if topK <= 0 {
+		topK = 5
+	}
+	return threshold, topK
+}
+
+func sessionIDFromCacheInput(input *NodeInput, execCtx *ExecutionContext) string {
+	if input != nil {
+		if input.Context != nil {
+			if s, ok := input.Context["session_id"].(string); ok && s != "" {
+				return s
+			}
+		}
+		if input.Metadata != nil {
+			if s, ok := input.Metadata["session_id"].(string); ok && s != "" {
+				return s
+			}
+		}
+	}
+	if execCtx != nil {
+		if v, ok := execCtx.GetVariable("session_id"); ok {
+			if s, ok := v.(string); ok {
+				return s
+			}
+		}
+	}
+	return ""
+}
+
 // SetStrategyPlugin 设置缓存策略插件（P2新增）
 func (n *CacheNode) SetStrategyPlugin(plugin CacheStrategyCapability) {
 	n.strategyPlugin = plugin
@@ -3377,9 +3435,14 @@ func (n *CacheNode) executeRead(ctx context.Context, key string, input *NodeInpu
 		}
 	}
 
-	// 2. 统一门面（与 ProxyCache 同路径）
+	// 2. 统一门面 Lookup（尊重全局 cache.backend / stacking / external，触发 OnCacheHit）
 	if !cacheHit && n.cacheFacade != nil {
-		entry, ok, err := n.cacheFacade.LookupExact(ctx, key)
+		userInput := extractUserInput(input)
+		if userInput == "" {
+			userInput = input.Content
+		}
+		threshold, topK := facadeLookupParams(n)
+		entry, ok, err := n.cacheFacade.Lookup(ctx, key, userInput, threshold, topK)
 		if err != nil {
 			if logger != nil {
 				logger.Warn("[CacheNode] Cache facade read error",
@@ -3391,14 +3454,14 @@ func (n *CacheNode) executeRead(ctx context.Context, key string, input *NodeInpu
 			cachedContent = entry.Response
 			cacheHit = true
 			if logger != nil {
-				logger.Info(fmt.Sprintf("[CacheNode] Cache facade hit: %s (response_length=%d)",
-					key, len(cachedContent)))
+				logger.Info(fmt.Sprintf("[CacheNode] Cache facade hit: %s label=%s (response_length=%d)",
+					key, cache.HitLabel(entry), len(cachedContent)))
 			}
 		}
 	}
 
-	// 3. 回退：使用注入的缓存管理器
-	if !cacheHit && n.CacheManager != nil {
+	// 3. 回退：使用注入的缓存管理器（无门面时）
+	if !cacheHit && n.cacheFacade == nil && n.CacheManager != nil {
 		entry, err := n.CacheManager.Get(ctx, key)
 		if err != nil {
 			if logger != nil {
@@ -3425,8 +3488,9 @@ func (n *CacheNode) executeRead(ctx context.Context, key string, input *NodeInpu
 		}
 	}
 
-	// 5. 语义缓存搜索（策略为 semantic/hybrid 且 KV 未命中时）
-	if !cacheHit && (n.Strategy == "semantic" || n.Strategy == "hybrid") && n.ReadVectorStore != nil && n.embeddingService != nil {
+	// 5. 节点本地语义搜索：仅当无门面且全局允许 semantic/stacking 时启用（禁止绕过全局互斥）
+	if !cacheHit && n.cacheFacade == nil && globalCacheAllowsSemantic() &&
+		(n.Strategy == "semantic" || n.Strategy == "hybrid") && n.ReadVectorStore != nil && n.embeddingService != nil {
 		if logger != nil {
 			logger.Info("[CacheNode] KV miss, attempting semantic search",
 				"key", key,
@@ -3789,6 +3853,42 @@ func (n *CacheNode) executeWrite(ctx context.Context, key string, input *NodeInp
 	if writeStorageName == "" {
 		writeStorageName = "default"
 	}
+	execCtxWrite, _ := ctx.Value(executionContextKey{}).(*ExecutionContext)
+	sessionID := sessionIDFromCacheInput(input, execCtxWrite)
+	requestID := ""
+	if input != nil && input.Metadata != nil {
+		if rid, ok := input.Metadata["request_id"].(string); ok {
+			requestID = rid
+		}
+	}
+	backendName := ""
+	modelName := ""
+	if input != nil && input.Metadata != nil {
+		if b, ok := input.Metadata["backend"].(string); ok {
+			backendName = b
+		}
+		if m, ok := input.Metadata["model"].(string); ok {
+			modelName = m
+		}
+	}
+	meta := map[string]interface{}{
+		"model":         modelName,
+		"backend":       backendName,
+		"messages":      messages,
+		"strategy":      n.Strategy,
+		"storage_type":  n.StorageType,
+		"write_storage": writeStorageName,
+		"read_storage":  n.ReadStorageName,
+		"is_stream":     isStream,
+		"stream_chunks": len(streamData),
+	}
+	meta = cache.AttachRequestContextMetadata(meta, sessionID, requestID, backendName)
+	if modelName != "" {
+		if v, _ := meta["model"].(string); v == "" {
+			meta["model"] = modelName
+		}
+	}
+
 	cacheEntry := &cache.CacheEntry{
 		Key:            key,
 		Request:        userInput,
@@ -3798,17 +3898,7 @@ func (n *CacheNode) executeWrite(ctx context.Context, key string, input *NodeInp
 		StorageBackend: writeStorageName,
 		IsStream:       isStream,
 		StreamData:     streamData,
-		Metadata: map[string]interface{}{
-			"model":         input.Metadata["model"],
-			"backend":       input.Metadata["backend"],
-			"messages":      messages,
-			"strategy":      n.Strategy,
-			"storage_type":  n.StorageType,
-			"write_storage": writeStorageName,
-			"read_storage":  n.ReadStorageName,
-			"is_stream":     isStream,
-			"stream_chunks": len(streamData),
-		},
+		Metadata:       meta,
 	}
 
 	// 写入缓存条目（直接传递 cacheEntry，由存储后端负责序列化）
@@ -3832,9 +3922,9 @@ func (n *CacheNode) executeWrite(ctx context.Context, key string, input *NodeInp
 		}
 	}
 
-	// 2. 写入向量存储（语义缓存需要向量化写入）
-	// 当策略为 semantic/hybrid 时，需要将用户输入向量化后写入向量存储
-	if (n.Strategy == "semantic" || n.Strategy == "hybrid") && n.WriteVectorStore != nil && n.embeddingService != nil {
+	// 2. 节点本地向量写入：仅当无门面且全局允许 semantic/stacking
+	if n.cacheFacade == nil && globalCacheAllowsSemantic() &&
+		(n.Strategy == "semantic" || n.Strategy == "hybrid") && n.WriteVectorStore != nil && n.embeddingService != nil {
 		if logger != nil {
 			logger.Info("[CacheNode] Writing to VectorStore for semantic cache",
 				"key", key,
@@ -3884,20 +3974,21 @@ func (n *CacheNode) executeWrite(ctx context.Context, key string, input *NodeInp
 		}
 	}
 
-	// 3. 统一门面写入（与 ProxyCache 同路径）
+	// 3. 统一门面 Store（按全局 backend：exact/semantic/external）
 	ttl := time.Duration(n.TTL) * time.Second
 	if n.cacheFacade != nil {
-		if err := n.cacheFacade.StoreExact(ctx, key, cacheEntry, ttl); err != nil {
+		if err := n.cacheFacade.Store(ctx, key, cacheEntry, ttl); err != nil {
 			if logger != nil {
 				logger.Error("[CacheNode] Cache facade write error",
 					"key", key,
-					"strategy", n.Strategy,
+					"backend", n.cacheFacade.EffectiveBackend(),
 					"error", err)
 			}
 		} else if logger != nil {
 			logger.Info("[CacheNode] Cache facade written successfully",
 				"key", key,
-				"strategy", n.Strategy,
+				"backend", n.cacheFacade.EffectiveBackend(),
+				"session_id", sessionID,
 				"ttl_seconds", n.TTL)
 		}
 	} else if n.CacheManager != nil {

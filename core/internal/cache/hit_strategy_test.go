@@ -9,10 +9,22 @@ import (
 )
 
 func TestNormalizeQueryText(t *testing.T) {
-	in := "  hello   world\u200b  "
-	got := NormalizeQueryText(in)
-	if got != "hello world" {
-		t.Fatalf("got %q", got)
+	tests := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{name: "collapse spaces and zwsp", in: "  hello   world\u200b  ", want: "hello world"},
+		{name: "empty", in: "   ", want: ""},
+		{name: "bom strip", in: "\ufeffhi", want: "hi"},
+		{name: "newlines to space", in: "a\n\tb", want: "a b"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := NormalizeQueryText(tt.in); got != tt.want {
+				t.Fatalf("got %q want %q", got, tt.want)
+			}
+		})
 	}
 }
 
@@ -45,5 +57,35 @@ func TestApplyHitStrategies_NormalizeAndExpand(t *testing.T) {
 	}
 	if !found {
 		t.Fatalf("expected expanded candidate in %v", cands)
+	}
+}
+
+func TestApplyHitStrategies_ExpandNilAndUnknownSkipped(t *testing.T) {
+	prev := config.Get()
+	config.Set(&config.Config{Cache: config.CacheConfig{
+		Backend:       config.CacheBackendExact,
+		HitStrategies: []string{"normalize", "expand", "no-such-strategy"},
+	}})
+	t.Cleanup(func() { config.Set(prev) })
+
+	cands := ApplyHitStrategies(context.Background(), "  alpha  ", nil, nil)
+	if len(cands) != 1 || cands[0] != "alpha" {
+		t.Fatalf("nil expander + unknown custom should leave normalize only: %v", cands)
+	}
+}
+
+func TestApplyHitStrategies_EmptyQueryFallback(t *testing.T) {
+	prev := config.Get()
+	config.Set(&config.Config{Cache: config.CacheConfig{
+		Backend:       config.CacheBackendExact,
+		HitStrategies: []string{"normalize"},
+	}})
+	t.Cleanup(func() { config.Set(prev) })
+
+	cands := ApplyHitStrategies(context.Background(), "   ", nil, nil)
+	if len(cands) != 1 || cands[0] != "   " {
+		// whitespace-only normalizes away; function returns original when empty candidates + non-empty query
+		// query is non-empty spaces → NormalizeQueryText("") → candidates empty → fallback to original
+		t.Fatalf("got %v", cands)
 	}
 }

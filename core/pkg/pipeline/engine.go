@@ -2043,18 +2043,18 @@ func (e *PipelineEngine) executeNode(ctx context.Context, config PipelineNodeCon
 		}); ok && !cacheNode.IsUsingStrategyPlugin() {
 			usePlugin, strategyName := resolveCacheStrategyPluginInjection(config.Config.CustomConfig)
 			if usePlugin && e.capabilityBroker != nil {
-				strat, err := e.capabilityBroker.GetCacheStrategy(ctx, strategyName, []string{"cache.read", "cache.write"})
+				cacheStrat, err := e.capabilityBroker.GetCacheStrategy(ctx, strategyName, []string{"cache.read", "cache.write"})
 				if err != nil {
 					e.logger.Debug("cache strategy not available (provider may not be configured)",
 						"node_id", config.ID,
 						"strategy", strategyName,
 						"error", err,
 					)
-				} else if strat != nil {
-					cacheNode.SetStrategyPlugin(strat)
+				} else if cacheStrat != nil {
+					cacheNode.SetStrategyPlugin(cacheStrat)
 					e.logger.Info("cache strategy plugin injected",
 						"node_id", config.ID,
-						"strategy", strat.StrategyName(),
+						"strategy", cacheStrat.StrategyName(),
 					)
 				}
 			}

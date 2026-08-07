@@ -114,3 +114,27 @@ func TestEffectiveCacheBackend(t *testing.T) {
 		t.Fatalf("default effective = %q", got)
 	}
 }
+
+func TestNormalizeCacheConfig_UnknownAndSemanticDefaults(t *testing.T) {
+	cfg := CacheConfig{Backend: "weird-backend", Semantic: SemanticCacheConfig{}}
+	warns := NormalizeCacheConfig(&cfg)
+	if cfg.Backend != CacheBackendExact {
+		t.Fatalf("unknown backend → exact, got %q", cfg.Backend)
+	}
+	joined := strings.Join(warns, " ")
+	if !strings.Contains(joined, "unknown cache.backend") {
+		t.Fatalf("warnings=%v", warns)
+	}
+	if cfg.Semantic.TopK != 5 || cfg.Semantic.Threshold != 0.8 || cfg.Semantic.DistanceType != "cosine" {
+		t.Fatalf("semantic defaults: %+v", cfg.Semantic)
+	}
+
+	cfg2 := CacheConfig{Strategy: "mystery"}
+	warns2 := NormalizeCacheConfig(&cfg2)
+	if cfg2.Backend != CacheBackendExact {
+		t.Fatalf("unknown strategy backend=%q", cfg2.Backend)
+	}
+	if !strings.Contains(strings.Join(warns2, " "), "unknown cache.strategy") {
+		t.Fatalf("warnings=%v", warns2)
+	}
+}

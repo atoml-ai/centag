@@ -146,14 +146,18 @@ func (m *Manager) Set(ctx context.Context, key string, value *CacheEntry, ttl ti
 	}
 
 	// 从全局配置读取当前后端/策略（v0.3.3: backend 优先，兼容旧 strategy）
+	// backend=external 的写入由 Facade.Store → CacheRecallBackend 处理，禁止静默当 semantic 写向量。
 	currentStrategy := CacheStrategyExact
 	if cfg := config.Get(); cfg != nil {
 		c := cfg.Cache
 		config.NormalizeCacheConfig(&c)
 		switch {
+		case c.Backend == config.CacheBackendExternal:
+			logger.Debug("Manager.Set skipped for backend=external; use Facade.Store", zap.String("key", key))
+			return nil
 		case c.AllowBackendStacking && c.Backend == config.CacheBackendExact:
 			currentStrategy = CacheStrategyHybrid
-		case c.Backend == config.CacheBackendSemantic, c.Backend == config.CacheBackendExternal:
+		case c.Backend == config.CacheBackendSemantic:
 			currentStrategy = CacheStrategySemantic
 		case c.Backend == config.CacheBackendExact:
 			currentStrategy = CacheStrategyExact
