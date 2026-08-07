@@ -238,20 +238,11 @@ type UserResponse struct {
 	DisplayName string `json:"display_name"`
 	Email       string `json:"email"`
 	Enabled     bool   `json:"enabled"`
-	// v2.1: Quota fields
-	DefaultPipelineID string `json:"default_pipeline_id,omitempty"`
-	DailyTokenLimit   int64  `json:"daily_token_limit"`
-	MonthlyTokenLimit int64  `json:"monthly_token_limit"`
-	DailyTokenUsed    int64  `json:"daily_token_used"`
-	MonthlyTokenUsed  int64  `json:"monthly_token_used"`
-	// Team: shared resource access
-	AllowedBackendIDs        []string `json:"allowed_backend_ids"`
-	AllowedModelIDs          []string `json:"allowed_model_ids"`
-	AllowedPipelineIDs       []string `json:"allowed_pipeline_ids"`
-	CanAddOwnBackends        bool     `json:"can_add_own_backends"`
-	CanAddOwnPipelines       bool     `json:"can_add_own_pipelines"`
-	CanChangeDefaultPipeline bool     `json:"can_change_default_pipeline"`
-	CreatedAt                string   `json:"created_at"`
+	DefaultPipelineID        string `json:"default_pipeline_id,omitempty"`
+	CanAddOwnBackends        bool   `json:"can_add_own_backends"`
+	CanAddOwnPipelines       bool   `json:"can_add_own_pipelines"`
+	CanChangeDefaultPipeline bool   `json:"can_change_default_pipeline"`
+	CreatedAt                string `json:"created_at"`
 }
 
 // Deprecated: use UserResponse.
@@ -263,18 +254,6 @@ func ToUserResponse(u *database.User) *UserResponse {
 }
 
 func toUserResponse(u *database.User) *UserResponse {
-	backends := u.AllowedBackendIDs
-	if backends == nil {
-		backends = []string{}
-	}
-	models := u.AllowedModelIDs
-	if models == nil {
-		models = []string{}
-	}
-	pipelines := u.AllowedPipelineIDs
-	if pipelines == nil {
-		pipelines = []string{}
-	}
 	return &userResponse{
 		ID:                       u.ID,
 		Username:                 u.Username,
@@ -283,13 +262,6 @@ func toUserResponse(u *database.User) *UserResponse {
 		Email:                    u.Email,
 		Enabled:                  u.Enabled,
 		DefaultPipelineID:        u.DefaultPipelineID,
-		DailyTokenLimit:          u.DailyTokenLimit,
-		MonthlyTokenLimit:        u.MonthlyTokenLimit,
-		DailyTokenUsed:           u.DailyTokenUsed,
-		MonthlyTokenUsed:         u.MonthlyTokenUsed,
-		AllowedBackendIDs:        backends,
-		AllowedModelIDs:          models,
-		AllowedPipelineIDs:       pipelines,
 		CanAddOwnBackends:        u.CanAddOwnBackends,
 		CanAddOwnPipelines:       u.CanAddOwnPipelines,
 		CanChangeDefaultPipeline: u.CanChangeDefaultPipeline,

@@ -8,8 +8,8 @@ export interface CreateUserRequest {
   display_name?: string
   email?: string
   default_pipeline_id?: string
-  daily_token_limit?: number
-  monthly_token_limit?: number
+  /** Normal users: omit to join system default group; empty string = no group. */
+  group_id?: string
 }
 
 export interface UpdateUserRequest {
@@ -18,11 +18,6 @@ export interface UpdateUserRequest {
   role?: 'admin' | 'normal'
   enabled?: boolean
   default_pipeline_id?: string
-  daily_token_limit?: number
-  monthly_token_limit?: number
-  allowed_backend_ids?: string[]
-  allowed_model_ids?: string[]
-  allowed_pipeline_ids?: string[]
   can_add_own_backends?: boolean
   can_add_own_pipelines?: boolean
   can_change_default_pipeline?: boolean

@@ -131,16 +131,14 @@ type sqliteUserStore struct {
 func (s *sqliteUserStore) Create(ctx context.Context, user *database.User) error {
 	query := `INSERT INTO users (
 		username, password_hash, role, display_name, email, enabled,
-		default_pipeline_id, daily_token_limit, monthly_token_limit,
-		allowed_backend_ids, allowed_model_ids, allowed_pipeline_ids,
+		default_pipeline_id,
 		can_add_own_backends, can_add_own_pipelines, can_change_default_pipeline
-	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
 	result, err := s.db.ExecContext(ctx, query,
 		user.Username, user.Password, user.Role,
 		user.DisplayName, user.Email, user.Enabled,
-		user.DefaultPipelineID, user.DailyTokenLimit, user.MonthlyTokenLimit,
-		encodeUserIDs(user.AllowedBackendIDs), encodeUserIDs(user.AllowedModelIDs), encodeUserIDs(user.AllowedPipelineIDs),
+		user.DefaultPipelineID,
 		boolToInt(user.CanAddOwnBackends), boolToInt(user.CanAddOwnPipelines), boolToInt(user.CanChangeDefaultPipeline),
 	)
 	if err != nil {
@@ -167,38 +165,29 @@ func scanSQLiteUserTenantID(tenantID sql.NullString) *string {
 }
 
 const sqliteUserSelectCols = `id, username, password_hash, role, display_name, email, enabled, tenant_id,
-	COALESCE(default_pipeline_id, ''), COALESCE(daily_token_limit, 0), COALESCE(monthly_token_limit, 0),
-	COALESCE(daily_token_used, 0), COALESCE(monthly_token_used, 0),
-	COALESCE(allowed_backend_ids, '[]'), COALESCE(allowed_model_ids, '[]'), COALESCE(allowed_pipeline_ids, '[]'),
+	COALESCE(default_pipeline_id, ''),
 	COALESCE(can_add_own_backends, 1), COALESCE(can_add_own_pipelines, 1), COALESCE(can_change_default_pipeline, 1),
 	created_at, updated_at`
 
 func scanSQLiteUser(user *database.User, role *string, tenantID *sql.NullString,
-	backendsJSON, modelsJSON, pipelinesJSON *string,
 	canAddBackends, canAddPipelines, canChangeDefault *int,
 	createdAtStr, updatedAtStr *string,
 ) []any {
 	return []any{
 		&user.ID, &user.Username, &user.Password, role,
 		&user.DisplayName, &user.Email, &user.Enabled, tenantID,
-		&user.DefaultPipelineID, &user.DailyTokenLimit, &user.MonthlyTokenLimit,
-		&user.DailyTokenUsed, &user.MonthlyTokenUsed,
-		backendsJSON, modelsJSON, pipelinesJSON,
+		&user.DefaultPipelineID,
 		canAddBackends, canAddPipelines, canChangeDefault,
 		createdAtStr, updatedAtStr,
 	}
 }
 
 func finishSQLiteUser(user *database.User, role string, tenantID sql.NullString,
-	backendsJSON, modelsJSON, pipelinesJSON string,
 	canAddBackends, canAddPipelines, canChangeDefault int,
 	createdAtStr, updatedAtStr string,
 ) {
 	user.Role = database.UserRole(role)
 	user.TenantID = scanSQLiteUserTenantID(tenantID)
-	user.AllowedBackendIDs = decodeUserIDs(backendsJSON)
-	user.AllowedModelIDs = decodeUserIDs(modelsJSON)
-	user.AllowedPipelineIDs = decodeUserIDs(pipelinesJSON)
 	user.CanAddOwnBackends = canAddBackends != 0
 	user.CanAddOwnPipelines = canAddPipelines != 0
 	user.CanChangeDefaultPipeline = canChangeDefault != 0
@@ -216,11 +205,9 @@ func (s *sqliteUserStore) GetByID(ctx context.Context, id int64) (*database.User
 	user := &database.User{}
 	var role string
 	var tenantID sql.NullString
-	var backendsJSON, modelsJSON, pipelinesJSON string
 	var canAddBackends, canAddPipelines, canChangeDefault int
 	var createdAtStr, updatedAtStr string
 	err := s.db.QueryRowContext(ctx, query, id).Scan(scanSQLiteUser(user, &role, &tenantID,
-		&backendsJSON, &modelsJSON, &pipelinesJSON,
 		&canAddBackends, &canAddPipelines, &canChangeDefault,
 		&createdAtStr, &updatedAtStr)...)
 	if err == sql.ErrNoRows {
@@ -229,7 +216,7 @@ func (s *sqliteUserStore) GetByID(ctx context.Context, id int64) (*database.User
 	if err != nil {
 		return nil, err
 	}
-	finishSQLiteUser(user, role, tenantID, backendsJSON, modelsJSON, pipelinesJSON,
+	finishSQLiteUser(user, role, tenantID,
 		canAddBackends, canAddPipelines, canChangeDefault, createdAtStr, updatedAtStr)
 	return user, nil
 }
@@ -240,11 +227,9 @@ func (s *sqliteUserStore) GetByUsername(ctx context.Context, username string) (*
 	user := &database.User{}
 	var role string
 	var tenantID sql.NullString
-	var backendsJSON, modelsJSON, pipelinesJSON string
 	var canAddBackends, canAddPipelines, canChangeDefault int
 	var createdAtStr, updatedAtStr string
 	err := s.db.QueryRowContext(ctx, query, username).Scan(scanSQLiteUser(user, &role, &tenantID,
-		&backendsJSON, &modelsJSON, &pipelinesJSON,
 		&canAddBackends, &canAddPipelines, &canChangeDefault,
 		&createdAtStr, &updatedAtStr)...)
 	if err == sql.ErrNoRows {
@@ -253,7 +238,7 @@ func (s *sqliteUserStore) GetByUsername(ctx context.Context, username string) (*
 	if err != nil {
 		return nil, err
 	}
-	finishSQLiteUser(user, role, tenantID, backendsJSON, modelsJSON, pipelinesJSON,
+	finishSQLiteUser(user, role, tenantID,
 		canAddBackends, canAddPipelines, canChangeDefault, createdAtStr, updatedAtStr)
 	return user, nil
 }
@@ -261,8 +246,7 @@ func (s *sqliteUserStore) GetByUsername(ctx context.Context, username string) (*
 func (s *sqliteUserStore) Update(ctx context.Context, user *database.User) error {
 	query := `UPDATE users SET
 		username = ?, password_hash = ?, role = ?, display_name = ?, email = ?, enabled = ?, tenant_id = ?,
-		default_pipeline_id = ?, daily_token_limit = ?, monthly_token_limit = ?,
-		allowed_backend_ids = ?, allowed_model_ids = ?, allowed_pipeline_ids = ?,
+		default_pipeline_id = ?,
 		can_add_own_backends = ?, can_add_own_pipelines = ?, can_change_default_pipeline = ?,
 		updated_at = CURRENT_TIMESTAMP
 	WHERE id = ?`
@@ -275,8 +259,7 @@ func (s *sqliteUserStore) Update(ctx context.Context, user *database.User) error
 	_, err := s.db.ExecContext(ctx, query,
 		user.Username, user.Password, string(user.Role),
 		user.DisplayName, user.Email, user.Enabled, tenantID,
-		user.DefaultPipelineID, user.DailyTokenLimit, user.MonthlyTokenLimit,
-		encodeUserIDs(user.AllowedBackendIDs), encodeUserIDs(user.AllowedModelIDs), encodeUserIDs(user.AllowedPipelineIDs),
+		user.DefaultPipelineID,
 		boolToInt(user.CanAddOwnBackends), boolToInt(user.CanAddOwnPipelines), boolToInt(user.CanChangeDefaultPipeline),
 		user.ID,
 	)
@@ -303,16 +286,14 @@ func (s *sqliteUserStore) List(ctx context.Context) ([]*database.User, error) {
 		user := &database.User{}
 		var role string
 		var tenantID sql.NullString
-		var backendsJSON, modelsJSON, pipelinesJSON string
 		var canAddBackends, canAddPipelines, canChangeDefault int
 		var createdAtStr, updatedAtStr string
 		if err := rows.Scan(scanSQLiteUser(user, &role, &tenantID,
-			&backendsJSON, &modelsJSON, &pipelinesJSON,
 			&canAddBackends, &canAddPipelines, &canChangeDefault,
 			&createdAtStr, &updatedAtStr)...); err != nil {
 			return nil, err
 		}
-		finishSQLiteUser(user, role, tenantID, backendsJSON, modelsJSON, pipelinesJSON,
+		finishSQLiteUser(user, role, tenantID,
 			canAddBackends, canAddPipelines, canChangeDefault, createdAtStr, updatedAtStr)
 		users = append(users, user)
 	}

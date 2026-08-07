@@ -64,16 +64,114 @@ export function exportPricingRules() {
   }) as Promise<string>
 }
 
-// UserPlan types and APIs
+// Plan templates + assignments
+export interface PlanTemplate {
+  id?: number
+  name: string
+  description?: string
+  enabled: boolean
+  is_builtin?: boolean
+  currency?: string
+  price_type?: string
+  budget_amount?: number
+  budget_period?: string
+  token_quota_total?: number
+  token_quota_input?: number
+  token_quota_output?: number
+  token_quota_period?: string
+  rate_limit_rpm?: number
+  rate_limit_tpm?: number
+  available_backend_ids?: string[]
+  available_models?: string[]
+  available_pipeline_ids?: string[]
+}
+
+export interface UserPlanAssignment {
+  user_id: number
+  template_id: number
+  assigned_at?: string
+  assigned_by?: string
+  template_name?: string
+  username?: string
+}
+
+export interface GroupPlanAssignment {
+  group_id: string
+  template_id: number
+  metering_mode: 'per_member' | 'shared_pool'
+  assigned_at?: string
+  template_name?: string
+  group_name?: string
+}
+
+export function listPlanTemplates() {
+  return api({ url: '/api/v1/admin/billing/plan-templates', method: 'get' }) as Promise<PlanTemplate[]>
+}
+
+export function createPlanTemplate(data: PlanTemplate) {
+  return api({ url: '/api/v1/admin/billing/plan-templates', method: 'post', data }) as Promise<PlanTemplate>
+}
+
+export function updatePlanTemplate(id: number, data: PlanTemplate) {
+  return api({ url: `/api/v1/admin/billing/plan-templates/${id}`, method: 'put', data }) as Promise<PlanTemplate>
+}
+
+export function deletePlanTemplate(id: number) {
+  return api({ url: `/api/v1/admin/billing/plan-templates/${id}`, method: 'delete' })
+}
+
+export function listUserPlanAssignments() {
+  return api({ url: '/api/v1/admin/billing/user-plan-assignments', method: 'get' }) as Promise<UserPlanAssignment[]>
+}
+
+export function upsertUserPlanAssignment(userId: number, templateId: number, assignedBy?: string) {
+  return api({
+    url: `/api/v1/admin/billing/user-plan-assignments/${userId}`,
+    method: 'put',
+    data: { template_id: templateId, assigned_by: assignedBy || '' }
+  })
+}
+
+export function deleteUserPlanAssignment(userId: number) {
+  return api({ url: `/api/v1/admin/billing/user-plan-assignments/${userId}`, method: 'delete' })
+}
+
+export function listGroupPlanAssignments() {
+  return api({ url: '/api/v1/admin/billing/group-plan-assignments', method: 'get' }) as Promise<GroupPlanAssignment[]>
+}
+
+export function upsertGroupPlanAssignment(
+  groupId: string,
+  templateId: number,
+  meteringMode: 'per_member' | 'shared_pool'
+) {
+  return api({
+    url: `/api/v1/admin/billing/group-plan-assignments/${encodeURIComponent(groupId)}`,
+    method: 'put',
+    data: { template_id: templateId, metering_mode: meteringMode }
+  })
+}
+
+export function deleteGroupPlanAssignment(groupId: string) {
+  return api({
+    url: `/api/v1/admin/billing/group-plan-assignments/${encodeURIComponent(groupId)}`,
+    method: 'delete'
+  })
+}
+
+// UserPlan types and APIs (legacy flat rows)
 export interface UserPlan {
   id?: number
   user_id: string
   tenant_id?: string
   plan_name: string
+  currency?: string
+  price_type?: string
   budget_amount?: number
   budget_period?: string
   budget_start_at?: string
   budget_end_at?: string
+  token_quota_total?: number
   token_quota_input?: number
   token_quota_output?: number
   token_quota_period?: string
@@ -81,7 +179,12 @@ export interface UserPlan {
   token_quota_end_at?: string
   rate_limit_rpm?: number
   rate_limit_tpm?: number
+  available_backend_ids?: string[]
+  available_models?: string[]
+  available_pipeline_ids?: string[]
+  /** @deprecated use available_backend_ids */
   allowed_backends?: string[]
+  /** @deprecated use available_models */
   allowed_models?: string[]
   enabled: boolean
   created_at?: string
@@ -184,9 +287,19 @@ export interface UserBillingInfo {
     input_tokens: number
     output_tokens: number
     total_tokens: number
+    billed_amount?: number
     total_cost: number
+    budget_amount?: number
+    budget_remaining?: number
+    token_quota_total?: number
+    token_remaining?: number
+    token_quota_input?: number
+    token_input_remaining?: number
+    token_quota_output?: number
+    token_output_remaining?: number
     period_start?: string
     period_end?: string
+    price_type?: string
   }
 }
 
@@ -195,6 +308,14 @@ export function getUserBillingInfo() {
     url: '/api/v1/user/billing/info',
     method: 'get'
   }) as Promise<UserBillingInfo>
+}
+
+export function getUserBillingSummary(params?: { group_by?: string }) {
+  return api({
+    url: '/api/v1/user/billing/summary',
+    method: 'get',
+    params
+  }) as Promise<import('./cost').CostSummary>
 }
 
 export function getUserUsageDetail(params?: { start_date?: string; end_date?: string }) {

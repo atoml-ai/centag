@@ -204,19 +204,19 @@ func TestFilterBackendsByPolicy_OwnTenantPlusAllowedSystem(t *testing.T) {
 	}
 }
 
-func TestFilterBackendsFor_FallsBackToLegacyWithoutPlan(t *testing.T) {
+func TestFilterBackendsFor_NoPlanOwnOnly(t *testing.T) {
 	user := &database.User{
-		Role:              database.RoleNormal,
-		AllowedBackendIDs: []string{"sys-a"},
-		AllowedModelIDs:   []string{"m1"},
+		ID:   7,
+		Role: database.RoleNormal,
 	}
 	list := []*backend.BackendConfig{
 		{ID: "sys-a", Enabled: true, TenantID: ""},
 		{ID: "sys-b", Enabled: true, TenantID: ""},
+		{ID: "own-1", Enabled: true, TenantID: "user:7"},
 	}
 	got := FilterBackendsFor(user, list, nil)
-	if len(got) != 1 || got[0].ID != "sys-a" {
-		t.Fatalf("expected legacy fallback sys-a only, got %#v", got)
+	if len(got) != 1 || got[0].ID != "own-1" {
+		t.Fatalf("expected own-only without plan, got %#v", got)
 	}
 }
 

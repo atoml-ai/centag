@@ -31,7 +31,13 @@
     <div class="usage-stats">
       <div class="stat">
         <div class="stat-value">{{ currencySymbol }}{{ formatCost(summary.total_cost_usd) }}</div>
-        <div class="stat-label">{{ t('usageMetricsSummary.totalCost', { currency: displayCurrency }) }}</div>
+        <div class="stat-label">
+          {{
+            isTeam && !authStore.isAdmin
+              ? t('usageMetricsSummary.totalBilled', { currency: displayCurrency })
+              : t('usageMetricsSummary.totalCost', { currency: displayCurrency })
+          }}
+        </div>
       </div>
       <div class="stat">
         <div class="stat-value">{{ formatNumber(summary.total_tokens || stats.total_tokens) }}</div>
@@ -181,6 +187,12 @@ async function loadCostSummary() {
       params.from = dateRange.value[0]
       params.to = dateRange.value[1]
     }
+    // Team normal users cannot call admin cost APIs; use user billing summary (billed).
+    if (isTeam.value && !authStore.isAdmin) {
+      const { getUserBillingSummary } = await import('@/api/billing')
+      summary.value = await getUserBillingSummary({ group_by: groupBy.value })
+      return
+    }
     summary.value = await costApi.getCostSummary(params)
   } catch (err: any) {
     const status = err?.response?.status ?? err?.status
@@ -190,7 +202,7 @@ async function loadCostSummary() {
       groups: []
     }
     if (status === 403) {
-      console.warn('[usage] cost/summary unavailable (403); rebuild/update if on personal edition')
+      console.warn('[usage] cost/summary unavailable (403)')
     }
   }
 }

@@ -15,12 +15,8 @@ import (
 )
 
 // teamResourceModelGuard rejects proxy requests whose model is not allowed
-// for the current Team normal user (dual backend+model whitelist).
+// for the current Team normal user (EffectivePlan allowlists only).
 func (s *Server) teamResourceModelGuard() gin.HandlerFunc {
-	// Under the group model (036) the allowlists live in the user's effective
-	// policy (group_plans / user_plans), not the legacy users.allowed_* columns.
-	// A 30s TTL cache is acceptable; admin mutations also invalidate their own
-	// resolver instance in centag-pro.
 	var resolver *groupmodel.Resolver
 	if dbm := database.Get(); dbm != nil && dbm.GetDB() != nil {
 		resolver = groupmodel.NewResolver(dbm.GetDB(), dbm.DriverName())
@@ -33,54 +29,18 @@ func (s *Server) teamResourceModelGuard() gin.HandlerFunc {
 			return
 		}
 
-		// 036: when the user has an active plan, enforce the effective policy
-		// allowlists (group or custom mode) instead of the legacy columns.
-		if resolver != nil {
-			if pol, err := resolver.Resolve(c.Request.Context(), user.ID); err == nil && pol != nil && pol.HasPlan {
-				s.enforcePolicyAllowLists(c, pol)
-				return
-			}
-		}
-
-		model := peekRequestModel(c)
-		// Pipeline-as-model: centag/<id>、pipeline.<id>，或 #shortcut / #u... 快捷码
-		if pid, ok := pipelineIDFromModel(model); ok {
-			if pid != "" && !useraccess.CanUseSharedPipeline(user, pid) {
-				// Allow if it is a tenant-owned pipeline (not in shared whitelist).
-				tenantID := ownTenantID(user)
-				if tenantID == "" || s.pipelineHandler == nil || s.pipelineHandler.pipelineRegistry == nil {
-					RespondError(c, http.StatusForbidden, "pipeline not allowed for this user")
-					c.Abort()
-					return
-				}
-				p := s.pipelineHandler.pipelineRegistry.GetByTenant(tenantID, pid)
-				if p == nil || p.TenantID == "" {
-					RespondError(c, http.StatusForbidden, "pipeline not allowed for this user")
-					c.Abort()
-					return
-				}
-			}
-			c.Next()
-			return
-		}
-		if shortcut, ok := shortcutCodeFromModel(model); ok {
-			if !s.canUsePipelineShortcut(user, shortcut) {
-				RespondError(c, http.StatusForbidden, "pipeline not allowed for this user")
-				c.Abort()
-				return
-			}
-			c.Next()
-			return
-		}
-
-		tenantID := ownTenantID(user)
-		backends := s.backendHandler.backendManager.ListByTenant(tenantID)
-		if !useraccess.CanServeModel(user, backends, model) {
-			RespondError(c, http.StatusForbidden, "model or backend not allowed for this user")
+		if resolver == nil {
+			RespondError(c, http.StatusForbidden, "no active plan; contact administrator")
 			c.Abort()
 			return
 		}
-		c.Next()
+		pol, err := groupmodel.ResolveForEdition(resolver, c.Request.Context(), user.ID, s.edition.IsTeam())
+		if err != nil || pol == nil || !pol.HasPlan {
+			RespondError(c, http.StatusForbidden, "no active plan; contact administrator")
+			c.Abort()
+			return
+		}
+		s.enforcePolicyAllowLists(c, pol)
 	}
 }
 
@@ -100,7 +60,7 @@ func (s *Server) enforcePolicyAllowLists(c *gin.Context, pol *groupmodel.Effecti
 	}
 	if shortcut, ok := shortcutCodeFromModel(model); ok {
 		user := s.loadAccessUser(c)
-		if !s.canUsePipelineShortcut(user, shortcut) {
+		if !s.canUsePipelineShortcutWithPolicy(user, shortcut, pol) {
 			RespondError(c, http.StatusForbidden, "pipeline not allowed for this user")
 			c.Abort()
 			return
@@ -163,7 +123,7 @@ func shortcutCodeFromModel(model string) (string, bool) {
 	return code, true
 }
 
-func (s *Server) canUsePipelineShortcut(user *database.User, shortcut string) bool {
+func (s *Server) canUsePipelineShortcutWithPolicy(user *database.User, shortcut string, pol *groupmodel.EffectivePolicy) bool {
 	if user == nil || s == nil || s.pipelineHandler == nil || s.pipelineHandler.pipelineRegistry == nil {
 		return false
 	}
@@ -175,7 +135,17 @@ func (s *Server) canUsePipelineShortcut(user *database.User, shortcut string) bo
 		if p.TenantID != "" && p.TenantID == own {
 			return true
 		}
-		return useraccess.CanUseSharedPipeline(user, p.ID)
+		if pol != nil {
+			return pol.IsAllowedPipeline(p.ID)
+		}
+		return false
 	}
 	return false
 }
+
+// Deprecated path kept for tests that still call the legacy helper name.
+func (s *Server) canUsePipelineShortcut(user *database.User, shortcut string) bool {
+	return s.canUsePipelineShortcutWithPolicy(user, shortcut, nil)
+}
+
+var _ = useraccess.Applies

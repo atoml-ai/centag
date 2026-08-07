@@ -10,9 +10,8 @@ import (
 
 // policyForUser resolves the effective group-model policy for a Team normal
 // user. Returns nil when no database / resolver is available or resolution
-// fails, so callers fall back to legacy whitelist filtering. Under the group
-// model (migration 036) the allowlists live in the user's effective policy
-// (group_plans / user_plans), not the legacy users.allowed_* columns.
+// fails (callers treat nil as no shared resources). Under the group model
+// the allowlists live in the user's EffectivePlan (group_plans / user_plans).
 func policyForUser(ctx context.Context, user *database.User) *groupmodel.EffectivePolicy {
 	if user == nil {
 		return nil
