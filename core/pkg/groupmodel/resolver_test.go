@@ -15,9 +15,7 @@ CREATE TABLE users (
 	username TEXT NOT NULL,
 	tenant_id TEXT,
 	group_id TEXT,
-	policy_mode TEXT NOT NULL DEFAULT 'group',
-	daily_token_limit INTEGER DEFAULT 0,
-	monthly_token_limit INTEGER DEFAULT 0
+	policy_mode TEXT NOT NULL DEFAULT 'group'
 );
 CREATE TABLE user_plans (
 	id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -33,6 +31,7 @@ CREATE TABLE user_plans (
 	budget_end_at TEXT,
 	token_quota_input INTEGER,
 	token_quota_output INTEGER,
+	token_quota_total INTEGER,
 	token_quota_period TEXT NOT NULL DEFAULT 'monthly',
 	token_quota_start_at TEXT,
 	token_quota_end_at TEXT,
@@ -69,6 +68,7 @@ CREATE TABLE group_plans (
 	budget_end_at TEXT,
 	token_quota_input INTEGER,
 	token_quota_output INTEGER,
+	token_quota_total INTEGER,
 	token_quota_period TEXT NOT NULL DEFAULT 'monthly',
 	token_quota_start_at TEXT,
 	token_quota_end_at TEXT,
@@ -158,9 +158,8 @@ func TestResolver_GroupMode(t *testing.T) {
 		ep.GroupMaxBackends != 3 || ep.GroupMaxAPIKeys != 5 {
 		t.Fatalf("group quota wrong: %+v", ep)
 	}
-	// custom-mode user limits must be zero in group mode.
-	if ep.DailyTokenLimit != 0 || ep.MonthlyTokenLimit != 0 {
-		t.Fatalf("user limits leaked into group mode")
+	if ep.TokenQuotaTotal != nil {
+		t.Fatalf("user token total leaked into group mode: %+v", ep.TokenQuotaTotal)
 	}
 }
 
@@ -179,15 +178,15 @@ func TestResolver_GroupMode_NoPlan_Defaults(t *testing.T) {
 	if !ep.IsAllowedModel("anything") || !ep.IsAllowedBackend("anything") {
 		t.Fatal("empty allowlist must allow all")
 	}
-	if ep.GroupDailyTokenLimit != 0 || ep.DailyTokenLimit != 0 {
+	if ep.GroupDailyTokenLimit != 0 || ep.IsTokenQuotaEnabled() {
 		t.Fatal("default policy must be unlimited")
 	}
 }
 
 func TestResolver_CustomMode(t *testing.T) {
 	db := newResolverDB(t)
-	mustExec(t, db, `INSERT INTO users (id, username, group_id, policy_mode, daily_token_limit, monthly_token_limit) VALUES (1, 'alice', 'g_1', 'custom', 500, 9000)`)
-	mustExec(t, db, `INSERT INTO user_plans (user_id, available_models, budget_amount, token_quota_input) VALUES (1, 'm1', 10.5, 100000)`)
+	mustExec(t, db, `INSERT INTO users (id, username, group_id, policy_mode) VALUES (1, 'alice', 'g_1', 'custom')`)
+	mustExec(t, db, `INSERT INTO user_plans (user_id, available_models, budget_amount, token_quota_input, token_quota_total) VALUES (1, 'm1', 10.5, 100000, 250)`)
 
 	r := NewResolver(db, "sqlite", WithTTL(0))
 	ep, err := r.Resolve(context.Background(), 1)
@@ -203,8 +202,8 @@ func TestResolver_CustomMode(t *testing.T) {
 	if !ep.IsTokenQuotaEnabled() || *ep.TokenQuotaInput != 100000 {
 		t.Fatalf("token quota wrong: %+v", ep.TokenQuotaInput)
 	}
-	if ep.DailyTokenLimit != 500 || ep.MonthlyTokenLimit != 9000 {
-		t.Fatalf("user limits wrong: %+v", ep)
+	if ep.TokenQuotaTotal == nil || *ep.TokenQuotaTotal != 250 {
+		t.Fatalf("token total wrong: %+v", ep.TokenQuotaTotal)
 	}
 	// group quota must not leak into custom mode.
 	if ep.GroupDailyTokenLimit != 0 {
@@ -214,7 +213,7 @@ func TestResolver_CustomMode(t *testing.T) {
 
 func TestResolver_CustomMode_NoPlan(t *testing.T) {
 	db := newResolverDB(t)
-	mustExec(t, db, `INSERT INTO users (id, username, policy_mode, daily_token_limit) VALUES (1, 'bob', 'custom', 250)`)
+	mustExec(t, db, `INSERT INTO users (id, username, policy_mode) VALUES (1, 'bob', 'custom')`)
 
 	r := NewResolver(db, "sqlite", WithTTL(0))
 	ep, err := r.Resolve(context.Background(), 1)
@@ -224,9 +223,80 @@ func TestResolver_CustomMode_NoPlan(t *testing.T) {
 	if ep.HasPlan {
 		t.Fatal("no user plan but HasPlan")
 	}
-	// user-table limits still apply in custom mode.
-	if ep.DailyTokenLimit != 250 {
-		t.Fatalf("user limit wrong: %+v", ep.DailyTokenLimit)
+	if ep.IsTokenQuotaEnabled() {
+		t.Fatal("no plan must have no token quota")
+	}
+}
+
+func TestResolveForEdition_SyntheticFullAccess(t *testing.T) {
+	pol, err := ResolveForEdition(nil, context.Background(), 1, false)
+	if err != nil {
+		t.Fatalf("ResolveForEdition: %v", err)
+	}
+	if !pol.HasPlan || !pol.IsAllowedModel("anything") || pol.IsTokenQuotaEnabled() {
+		t.Fatalf("synthetic full access wrong: %+v", pol)
+	}
+}
+
+func TestResolver_TemplateAssignment_PerMember(t *testing.T) {
+	db := newResolverDB(t)
+	mustExec(t, db, `
+CREATE TABLE plan_templates (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	name TEXT NOT NULL,
+	enabled INTEGER NOT NULL DEFAULT 1,
+	currency TEXT NOT NULL DEFAULT 'USD',
+	available_backend_ids TEXT NOT NULL DEFAULT '[]',
+	available_models TEXT NOT NULL DEFAULT '[]',
+	available_pipeline_ids TEXT NOT NULL DEFAULT '[]',
+	price_type TEXT NOT NULL DEFAULT 'revenue',
+	budget_amount REAL,
+	budget_period TEXT NOT NULL DEFAULT 'monthly',
+	budget_start_at TEXT,
+	budget_end_at TEXT,
+	token_quota_input INTEGER,
+	token_quota_output INTEGER,
+	token_quota_total INTEGER,
+	token_quota_period TEXT NOT NULL DEFAULT 'monthly',
+	token_quota_start_at TEXT,
+	token_quota_end_at TEXT,
+	rate_limit_rpm INTEGER NOT NULL DEFAULT 0,
+	rate_limit_tpm INTEGER NOT NULL DEFAULT 0
+);
+CREATE TABLE user_plan_assignments (
+	user_id INTEGER PRIMARY KEY,
+	template_id INTEGER NOT NULL,
+	assigned_at TEXT,
+	assigned_by TEXT
+);
+CREATE TABLE group_plan_assignments (
+	group_id TEXT PRIMARY KEY,
+	template_id INTEGER NOT NULL,
+	metering_mode TEXT NOT NULL DEFAULT 'per_member',
+	assigned_at TEXT
+);`)
+	mustExec(t, db, `INSERT INTO users (id, username, group_id, policy_mode) VALUES (1, 'a', 'g1', 'group')`)
+	mustExec(t, db, `INSERT INTO users (id, username, group_id, policy_mode) VALUES (2, 'b', 'g1', 'group')`)
+	mustExec(t, db, `INSERT INTO plan_templates (id, name, available_models, token_quota_total, token_quota_period)
+		VALUES (10, '中度', 'm1', 100000, 'daily')`)
+	mustExec(t, db, `INSERT INTO group_plan_assignments (group_id, template_id, metering_mode) VALUES ('g1', 10, 'per_member')`)
+
+	r := NewResolver(db, "sqlite", WithTTL(0))
+	ep, err := r.Resolve(context.Background(), 1)
+	if err != nil {
+		t.Fatalf("Resolve: %v", err)
+	}
+	if !ep.HasPlan || ep.TemplateID != 10 || ep.TemplateName != "中度" {
+		t.Fatalf("template resolve wrong: %+v", ep)
+	}
+	if ep.MeteringMode != MeteringPerMember {
+		t.Fatalf("metering: %q", ep.MeteringMode)
+	}
+	if ep.UsesSharedPool() {
+		t.Fatal("per_member must not use shared pool")
+	}
+	if ep.TokenQuotaTotal == nil || *ep.TokenQuotaTotal != 100000 {
+		t.Fatalf("quota wrong: %+v", ep.TokenQuotaTotal)
 	}
 }
 

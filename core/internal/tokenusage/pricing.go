@@ -120,3 +120,31 @@ func EstimateDualPricing(backendID, model string, promptTokens, completionTokens
 		RevenueBreakdown: revenueBD,
 	}
 }
+
+func (b PricingBreakdown) toPkg() billingpkg.CostBreakdown {
+	return billingpkg.CostBreakdown{
+		InputCost:       b.InputCost,
+		OutputCost:      b.OutputCost,
+		TotalCost:       b.TotalCost,
+		Currency:        b.Currency,
+		PricingRuleID:   b.PricingRuleID,
+		Source:          b.Source,
+		PriceType:       b.PriceType,
+		InputPricePerM:  b.InputPricePerM,
+		OutputPricePerM: b.OutputPricePerM,
+	}
+}
+
+func fromPkgBreakdown(b billingpkg.CostBreakdown) PricingBreakdown {
+	return PricingBreakdown{
+		TotalCost:       b.TotalCost,
+		InputCost:       b.InputCost,
+		OutputCost:      b.OutputCost,
+		Currency:        b.Currency,
+		PricingRuleID:   b.PricingRuleID,
+		Source:          b.Source,
+		PriceType:       b.PriceType,
+		InputPricePerM:  b.InputPricePerM,
+		OutputPricePerM: b.OutputPricePerM,
+	}
+}

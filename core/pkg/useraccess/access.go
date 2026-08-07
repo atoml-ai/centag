@@ -236,21 +236,48 @@ func FilterPipelines(user *database.User, list []*pipeline.AgentPatternPipeline)
 }
 
 // FilterBackendsFor and FilterPipelinesFor resolve resource visibility for a
-// Team normal user under the group model (036): when an active plan is
-// resolved, the effective policy allowlists govern visibility; otherwise they
-// fall back to the legacy per-user whitelists.
+// Team normal user under EffectivePlan. Without an active plan, only the user's
+// own scope-scoped resources are visible (no shared system resources).
 func FilterBackendsFor(user *database.User, list []*backend.BackendConfig, pol *groupmodel.EffectivePolicy) []*backend.BackendConfig {
 	if pol != nil && pol.HasPlan {
 		return FilterBackendsByPolicy(user, list, pol)
 	}
-	return FilterBackends(user, list)
+	return filterOwnBackendsOnly(user, list)
 }
 
 func FilterPipelinesFor(user *database.User, list []*pipeline.AgentPatternPipeline, pol *groupmodel.EffectivePolicy) []*pipeline.AgentPatternPipeline {
 	if pol != nil && pol.HasPlan {
 		return FilterPipelinesByPolicy(user, list, pol)
 	}
-	return FilterPipelines(user, list)
+	return filterOwnPipelinesOnly(user, list)
+}
+
+func filterOwnBackendsOnly(user *database.User, list []*backend.BackendConfig) []*backend.BackendConfig {
+	if user == nil {
+		return nil
+	}
+	own := userOwnerScope(user)
+	out := make([]*backend.BackendConfig, 0, len(list))
+	for _, b := range list {
+		if b != nil && b.TenantID != "" && b.TenantID == own {
+			out = append(out, b)
+		}
+	}
+	return out
+}
+
+func filterOwnPipelinesOnly(user *database.User, list []*pipeline.AgentPatternPipeline) []*pipeline.AgentPatternPipeline {
+	if user == nil {
+		return nil
+	}
+	own := userOwnerScope(user)
+	out := make([]*pipeline.AgentPatternPipeline, 0, len(list))
+	for _, p := range list {
+		if p != nil && p.TenantID != "" && p.TenantID == own {
+			out = append(out, p)
+		}
+	}
+	return out
 }
 
 // FilterBackendsByPolicy keeps the user's own scope-scoped backends plus

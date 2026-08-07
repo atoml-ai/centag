@@ -154,19 +154,17 @@ func (s *pgUserStore) Create(ctx context.Context, user *database.User) error {
 	query := `
 		INSERT INTO users (
 			username, password_hash, role, display_name, email, enabled,
-			default_pipeline_id, daily_token_limit, monthly_token_limit,
-			allowed_backend_ids, allowed_model_ids, allowed_pipeline_ids,
+			default_pipeline_id,
 			can_add_own_backends, can_add_own_pipelines, can_change_default_pipeline
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 		RETURNING id, created_at, updated_at
 	`
 
 	return s.db.QueryRowContext(ctx, query,
 		user.Username, user.Password, user.Role,
 		user.DisplayName, user.Email, user.Enabled,
-		user.DefaultPipelineID, user.DailyTokenLimit, user.MonthlyTokenLimit,
-		encodeUserIDs(user.AllowedBackendIDs), encodeUserIDs(user.AllowedModelIDs), encodeUserIDs(user.AllowedPipelineIDs),
+		user.DefaultPipelineID,
 		user.CanAddOwnBackends, user.CanAddOwnPipelines, user.CanChangeDefaultPipeline,
 	).Scan(&user.ID, &user.CreatedAt, &user.UpdatedAt)
 }
@@ -180,36 +178,27 @@ func scanPGUserTenantID(tenantID sql.NullString) *string {
 }
 
 const pgUserSelectCols = `id, username, password_hash, role, display_name, email, enabled, tenant_id,
-	COALESCE(default_pipeline_id, ''), COALESCE(daily_token_limit, 0), COALESCE(monthly_token_limit, 0),
-	COALESCE(daily_token_used, 0), COALESCE(monthly_token_used, 0),
-	COALESCE(allowed_backend_ids, '[]'), COALESCE(allowed_model_ids, '[]'), COALESCE(allowed_pipeline_ids, '[]'),
+	COALESCE(default_pipeline_id, ''),
 	COALESCE(can_add_own_backends, TRUE), COALESCE(can_add_own_pipelines, TRUE), COALESCE(can_change_default_pipeline, TRUE),
 	created_at, updated_at`
 
 func scanPGUserRow(user *database.User, role *string, tenantID *sql.NullString,
-	backendsJSON, modelsJSON, pipelinesJSON *string,
 	canAddBackends, canAddPipelines, canChangeDefault *bool,
 ) []any {
 	return []any{
 		&user.ID, &user.Username, &user.Password, role,
 		&user.DisplayName, &user.Email, &user.Enabled, tenantID,
-		&user.DefaultPipelineID, &user.DailyTokenLimit, &user.MonthlyTokenLimit,
-		&user.DailyTokenUsed, &user.MonthlyTokenUsed,
-		backendsJSON, modelsJSON, pipelinesJSON,
+		&user.DefaultPipelineID,
 		canAddBackends, canAddPipelines, canChangeDefault,
 		&user.CreatedAt, &user.UpdatedAt,
 	}
 }
 
 func finishPGUser(user *database.User, role string, tenantID sql.NullString,
-	backendsJSON, modelsJSON, pipelinesJSON string,
 	canAddBackends, canAddPipelines, canChangeDefault bool,
 ) {
 	user.Role = database.UserRole(role)
 	user.TenantID = scanPGUserTenantID(tenantID)
-	user.AllowedBackendIDs = decodeUserIDs(backendsJSON)
-	user.AllowedModelIDs = decodeUserIDs(modelsJSON)
-	user.AllowedPipelineIDs = decodeUserIDs(pipelinesJSON)
 	user.CanAddOwnBackends = canAddBackends
 	user.CanAddOwnPipelines = canAddPipelines
 	user.CanChangeDefaultPipeline = canChangeDefault
@@ -221,10 +210,8 @@ func (s *pgUserStore) GetByID(ctx context.Context, id int64) (*database.User, er
 	user := &database.User{}
 	var role string
 	var tenantID sql.NullString
-	var backendsJSON, modelsJSON, pipelinesJSON string
 	var canAddBackends, canAddPipelines, canChangeDefault bool
 	err := s.db.QueryRowContext(ctx, query, id).Scan(scanPGUserRow(user, &role, &tenantID,
-		&backendsJSON, &modelsJSON, &pipelinesJSON,
 		&canAddBackends, &canAddPipelines, &canChangeDefault)...)
 	if err == sql.ErrNoRows {
 		return nil, database.ErrNotFound
@@ -232,7 +219,7 @@ func (s *pgUserStore) GetByID(ctx context.Context, id int64) (*database.User, er
 	if err != nil {
 		return nil, err
 	}
-	finishPGUser(user, role, tenantID, backendsJSON, modelsJSON, pipelinesJSON,
+	finishPGUser(user, role, tenantID,
 		canAddBackends, canAddPipelines, canChangeDefault)
 	return user, nil
 }
@@ -243,10 +230,8 @@ func (s *pgUserStore) GetByUsername(ctx context.Context, username string) (*data
 	user := &database.User{}
 	var role string
 	var tenantID sql.NullString
-	var backendsJSON, modelsJSON, pipelinesJSON string
 	var canAddBackends, canAddPipelines, canChangeDefault bool
 	err := s.db.QueryRowContext(ctx, query, username).Scan(scanPGUserRow(user, &role, &tenantID,
-		&backendsJSON, &modelsJSON, &pipelinesJSON,
 		&canAddBackends, &canAddPipelines, &canChangeDefault)...)
 	if err == sql.ErrNoRows {
 		return nil, database.ErrNotFound
@@ -254,7 +239,7 @@ func (s *pgUserStore) GetByUsername(ctx context.Context, username string) (*data
 	if err != nil {
 		return nil, err
 	}
-	finishPGUser(user, role, tenantID, backendsJSON, modelsJSON, pipelinesJSON,
+	finishPGUser(user, role, tenantID,
 		canAddBackends, canAddPipelines, canChangeDefault)
 	return user, nil
 }
@@ -263,9 +248,8 @@ func (s *pgUserStore) Update(ctx context.Context, user *database.User) error {
 	query := `
 		UPDATE users SET username = $2, password_hash = $3, role = $4, display_name = $5, email = $6,
 			enabled = $7, tenant_id = $8,
-			default_pipeline_id = $9, daily_token_limit = $10, monthly_token_limit = $11,
-			allowed_backend_ids = $12, allowed_model_ids = $13, allowed_pipeline_ids = $14,
-			can_add_own_backends = $15, can_add_own_pipelines = $16, can_change_default_pipeline = $17,
+			default_pipeline_id = $9,
+			can_add_own_backends = $10, can_add_own_pipelines = $11, can_change_default_pipeline = $12,
 			updated_at = CURRENT_TIMESTAMP
 		WHERE id = $1
 	`
@@ -278,8 +262,7 @@ func (s *pgUserStore) Update(ctx context.Context, user *database.User) error {
 	_, err := s.db.ExecContext(ctx, query,
 		user.ID, user.Username, user.Password, string(user.Role),
 		user.DisplayName, user.Email, user.Enabled, tenantID,
-		user.DefaultPipelineID, user.DailyTokenLimit, user.MonthlyTokenLimit,
-		encodeUserIDs(user.AllowedBackendIDs), encodeUserIDs(user.AllowedModelIDs), encodeUserIDs(user.AllowedPipelineIDs),
+		user.DefaultPipelineID,
 		user.CanAddOwnBackends, user.CanAddOwnPipelines, user.CanChangeDefaultPipeline,
 	)
 	return err
@@ -305,14 +288,12 @@ func (s *pgUserStore) List(ctx context.Context) ([]*database.User, error) {
 		user := &database.User{}
 		var role string
 		var tenantID sql.NullString
-		var backendsJSON, modelsJSON, pipelinesJSON string
 		var canAddBackends, canAddPipelines, canChangeDefault bool
 		if err := rows.Scan(scanPGUserRow(user, &role, &tenantID,
-			&backendsJSON, &modelsJSON, &pipelinesJSON,
 			&canAddBackends, &canAddPipelines, &canChangeDefault)...); err != nil {
 			return nil, err
 		}
-		finishPGUser(user, role, tenantID, backendsJSON, modelsJSON, pipelinesJSON,
+		finishPGUser(user, role, tenantID,
 			canAddBackends, canAddPipelines, canChangeDefault)
 		users = append(users, user)
 	}

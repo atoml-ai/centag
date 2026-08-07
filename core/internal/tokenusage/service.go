@@ -7,6 +7,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	billingpkg "centag/core/pkg/billing"
 )
 
 // Service Token 使用计量服务
@@ -161,6 +163,17 @@ func (s *Service) RecordUsage(ctx context.Context, record *UsageRecord) error {
 			record.PromptTokens,
 			record.CompletionTokens,
 		)
+		// Team: apply user/group pricing overrides when registered.
+		if record.UserID > 0 {
+			if applier := billingpkg.GetUserDualPricer(); applier != nil {
+				costBD := dual.CostBreakdown.toPkg()
+				revBD := dual.RevenueBreakdown.toPkg()
+				applier.ApplyOverrides(ctx, record.UserID, record.BackendID, record.Model,
+					record.PromptTokens, record.CompletionTokens, &costBD, &revBD)
+				dual.CostBreakdown = fromPkgBreakdown(costBD)
+				dual.RevenueBreakdown = fromPkgBreakdown(revBD)
+			}
+		}
 		if record.CostUSD == 0 {
 			bd := dual.CostBreakdown
 			record.CostUSD = bd.TotalCost

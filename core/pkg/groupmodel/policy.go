@@ -2,12 +2,14 @@
 // group model (migration 036).
 //
 // Model:
-//   - users are independent metering / pricing / permission units;
-//   - groups are N:1 policy containers (shared metering pool + pricing rules
-//     + resource allowlist);
-//   - a user inherits the group's rules when policy_mode = "group", or uses
-//     their own user_plans / user_pricing_overrides when policy_mode = "custom";
-//   - with no active plan the global default (unlimited) applies.
+//   - plan_templates hold reusable rules (quotas, price_type, resource allowlists);
+//   - users/groups are assigned to a template (user_plan_assignments /
+//     group_plan_assignments);
+//   - policy_mode=group inherits the group's template; metering_mode selects
+//     per_member (each user own usage window) or shared_pool;
+//   - policy_mode=custom uses the user's template assignment;
+//   - Team normal users without an assignment are denied (fail-closed);
+//   - Personal / Minimal use SyntheticFullAccess() (no DB template required).
 //
 // The package is shared: open-core middleware and centag-pro enforcement
 // points both consume the same resolver, so a single policy lookup keeps every
@@ -26,6 +28,12 @@ const (
 	PolicyModeCustom = "custom"
 )
 
+// Group metering modes (group_plan_assignments.metering_mode).
+const (
+	MeteringPerMember  = "per_member"
+	MeteringSharedPool = "shared_pool"
+)
+
 // EffectivePolicy is the normalized, resolved policy for a user at a point in
 // time. Every enforcement gate reads the same struct, so the "custom vs group
 // inheritance" decision happens exactly once.
@@ -40,16 +48,17 @@ type EffectivePolicy struct {
 
 	PriceType string // billing price type ("cost" | "revenue")
 
-	// Budget (money quota, enforced on token_usage.cost_usd within the window).
-	BudgetAmount   *float64
-	BudgetPeriod   string // monthly | yearly | custom
-	BudgetStartAt  *time.Time
-	BudgetEndAt    *time.Time
+	// Budget (money quota; column chosen by PriceType: revenue_usd or cost_usd).
+	BudgetAmount  *float64
+	BudgetPeriod  string // monthly | yearly | custom
+	BudgetStartAt *time.Time
+	BudgetEndAt   *time.Time
 
-	// Token quota (prompt / completion within the window).
+	// Token quota (prompt / completion / total within the window).
 	TokenQuotaInput   *int64
 	TokenQuotaOutput  *int64
-	TokenQuotaPeriod  string // monthly | yearly | custom
+	TokenQuotaTotal   *int64
+	TokenQuotaPeriod  string // daily | monthly | yearly | custom
 	TokenQuotaStartAt *time.Time
 	TokenQuotaEndAt   *time.Time
 
@@ -57,27 +66,45 @@ type EffectivePolicy struct {
 	RateLimitRPM int
 	RateLimitTPM int
 
-	// User-level token limits. Populated in custom mode from the users table.
-	// 0 = unlimited.
-	DailyTokenLimit   int64
-	MonthlyTokenLimit int64
-
 	// Group shared-pool limits. Populated in group mode from group_quotas.
 	// 0 = unlimited.
-	GroupDailyTokenLimit    int64
-	GroupDailyRequestLimit  int64
-	GroupMonthlyTokenLimit  int64
+	GroupDailyTokenLimit     int64
+	GroupDailyRequestLimit   int64
+	GroupMonthlyTokenLimit   int64
 	GroupMonthlyRequestLimit int64
-	GroupMaxBackends        int
-	GroupMaxAPIKeys         int
+	GroupMaxBackends         int
+	GroupMaxAPIKeys          int
 
-	// HasPlan reports whether an active plan row (group or user) was resolved.
+	// Template identity (empty when synthetic or legacy fallback without template).
+	TemplateID   int64
+	TemplateName string
+
+	// MeteringMode: per_member (default) or shared_pool. Only meaningful in group mode.
+	MeteringMode string
+
+	// HasPlan reports whether an active template assignment (or legacy plan)
+	// was resolved, or a synthetic full-access policy was injected.
 	HasPlan bool
 }
 
-// IsGroup reports whether the policy inherits a group's shared pool.
+// SyntheticFullAccess returns the Personal/Minimal edition policy: all
+// resources allowed, no budget / token / rate limits.
+func SyntheticFullAccess() *EffectivePolicy {
+	return &EffectivePolicy{
+		Mode:      PolicyModeCustom,
+		HasPlan:   true,
+		PriceType: "cost",
+	}
+}
+
+// IsGroup reports whether the policy inherits a group's assignment.
 func (p *EffectivePolicy) IsGroup() bool {
 	return p != nil && p.Mode == PolicyModeGroup && p.GroupID != ""
+}
+
+// UsesSharedPool reports whether budget/token sums should cover the whole group.
+func (p *EffectivePolicy) UsesSharedPool() bool {
+	return p != nil && p.IsGroup() && p.MeteringMode == MeteringSharedPool
 }
 
 // IsBudgetEnabled mirrors the plan helper (used by enforcement points).
@@ -91,7 +118,8 @@ func (p *EffectivePolicy) IsTokenQuotaEnabled() bool {
 		return false
 	}
 	return (p.TokenQuotaInput != nil && *p.TokenQuotaInput > 0) ||
-		(p.TokenQuotaOutput != nil && *p.TokenQuotaOutput > 0)
+		(p.TokenQuotaOutput != nil && *p.TokenQuotaOutput > 0) ||
+		(p.TokenQuotaTotal != nil && *p.TokenQuotaTotal > 0)
 }
 
 // IsAllowedBackend reports whether a backend is in the allowlist.

@@ -21,18 +21,19 @@ type User struct {
 	Enabled     bool      `json:"enabled"`
 	TenantID    *string   `json:"tenant_id,omitempty"` // 一用户一租户，NULL = 单用户模式
 
-	// v2.1: User quota fields
-	DefaultPipelineID string     `json:"default_pipeline_id,omitempty"` // 默认流水线 ID
-	DailyTokenLimit   int64      `json:"daily_token_limit"`            // 每日 Token 限额，0=不限
-	MonthlyTokenLimit int64      `json:"monthly_token_limit"`          // 每月 Token 限额，0=不限
-	DailyTokenUsed   int64      `json:"daily_token_used"`             // 当日已用 Token
-	MonthlyTokenUsed int64      `json:"monthly_token_used"`           // 当月已用 Token
-	QuotaResetDate   *time.Time `json:"quota_reset_date,omitempty"`   // 额度重置日期
+	DefaultPipelineID string `json:"default_pipeline_id,omitempty"` // 默认流水线 ID
 
-	// Team: shared resource whitelist (empty = no shared resources; own tenant resources separate)
-	AllowedBackendIDs  []string `json:"allowed_backend_ids"`
-	AllowedModelIDs    []string `json:"allowed_model_ids"`
-	AllowedPipelineIDs []string `json:"allowed_pipeline_ids"`
+	// Deprecated: not persisted; kept for in-memory unit tests of useraccess helpers.
+	// Team resource/quota policy lives in user_plans / group_plans (EffectivePlan).
+	DailyTokenLimit   int64      `json:"-"`
+	MonthlyTokenLimit int64      `json:"-"`
+	DailyTokenUsed    int64      `json:"-"`
+	MonthlyTokenUsed  int64      `json:"-"`
+	QuotaResetDate    *time.Time `json:"-"`
+	AllowedBackendIDs  []string `json:"-"`
+	AllowedModelIDs    []string `json:"-"`
+	AllowedPipelineIDs []string `json:"-"`
+
 	// Self-service flags (default true for new users)
 	CanAddOwnBackends        bool `json:"can_add_own_backends"`
 	CanAddOwnPipelines       bool `json:"can_add_own_pipelines"`

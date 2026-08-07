@@ -213,7 +213,7 @@ export function cacheManagementNavGroup(): NavItem {
   return navGroup('cache-management', 'nav.cacheManagement', 'FolderOpened', children, children[0]?.path)
 }
 
-/** 用户与组管理：用户管理 + 成本看板 + 计费规则 + 组管理（team admin 专用） */
+/** 用户与组管理：用户/组 + 额度模板 + 成本看板 + 计费规则（team admin 专用） */
 export function userTenantGroup(): NavItem {
   return navGroup(
     'user-tenant',
@@ -225,6 +225,14 @@ export function userTenantGroup(): NavItem {
         labelKey: 'nav.users',
         icon: 'UserFilled',
         path: '/system/users',
+        requiresAdmin: true,
+        requiresTeam: true
+      },
+      {
+        id: 'plan-templates',
+        labelKey: 'nav.planTemplates',
+        icon: 'Ticket',
+        path: '/billing/plan-templates',
         requiresAdmin: true,
         requiresTeam: true
       },
@@ -242,14 +250,6 @@ export function userTenantGroup(): NavItem {
         labelKey: 'nav.billingRules',
         icon: 'Coin',
         path: '/billing',
-        requiresAdmin: true,
-        requiresTeam: true
-      },
-      {
-        id: 'groups',
-        labelKey: 'nav.groups',
-        icon: 'Coin',
-        path: '/billing/groups',
         requiresAdmin: true,
         requiresTeam: true
       }

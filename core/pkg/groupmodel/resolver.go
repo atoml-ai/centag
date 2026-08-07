@@ -13,7 +13,7 @@ import (
 const planProjection = `id, currency,
 	available_backend_ids, available_models, available_pipeline_ids,
 	price_type, budget_amount, budget_period, budget_start_at, budget_end_at,
-	token_quota_input, token_quota_output, token_quota_period,
+	token_quota_input, token_quota_output, token_quota_total, token_quota_period,
 	token_quota_start_at, token_quota_end_at,
 	rate_limit_rpm, rate_limit_tpm`
 
@@ -90,9 +90,22 @@ func (r *Resolver) InvalidateAll() {
 	r.cache = make(map[int64]*cacheEntry)
 }
 
-// Resolve returns the effective policy for the user. A missing user or a user
-// without an active plan resolves to the unlimited global default. Database
-// failures are surfaced to the caller, which is expected to fail open.
+// ResolveForEdition returns SyntheticFullAccess for non-Team editions so
+// Personal / Minimal never require a user_plans row. Team uses Resolve.
+func ResolveForEdition(r *Resolver, ctx context.Context, userID int64, isTeam bool) (*EffectivePolicy, error) {
+	if !isTeam {
+		return SyntheticFullAccess(), nil
+	}
+	if r == nil {
+		return &EffectivePolicy{}, nil
+	}
+	return r.Resolve(ctx, userID)
+}
+
+// Resolve returns the Team effective policy for the user. Missing users or
+// users without an active plan resolve to HasPlan=false (callers fail-closed
+// for Team normal users). Database failures are surfaced to the caller.
+// Personal / Minimal editions should use ResolveForEdition instead.
 func (r *Resolver) Resolve(ctx context.Context, userID int64) (*EffectivePolicy, error) {
 	if r.db == nil {
 		return &EffectivePolicy{}, nil
@@ -146,15 +159,33 @@ func (r *Resolver) resolve(ctx context.Context, userID int64) (*EffectivePolicy,
 	if mode == "" {
 		mode = PolicyModeGroup // schema default
 	}
-	ep := &EffectivePolicy{Mode: mode, GroupID: u.groupID}
+	ep := &EffectivePolicy{Mode: mode, GroupID: u.groupID, MeteringMode: MeteringPerMember}
 
 	if mode == PolicyModeGroup && u.groupID != "" {
+		tpl, metering, err := r.loadGroupTemplateAssignment(ctx, u.groupID)
+		if err != nil {
+			return nil, err
+		}
+		if tpl != nil {
+			applyTemplate(ep, tpl)
+			ep.MeteringMode = metering
+			if ep.MeteringMode == "" {
+				ep.MeteringMode = MeteringPerMember
+			}
+			quota, err := r.loadGroupQuota(ctx, u.groupID)
+			if err == nil && quota != nil {
+				applyGroupQuota(ep, quota)
+			}
+			return ep, nil
+		}
+		// Legacy fallback: inline group_plans (treated as shared_pool).
 		plan, err := r.loadGroupPlan(ctx, u.groupID)
 		if err != nil {
 			return nil, err
 		}
 		if plan != nil {
 			applyPlan(ep, plan)
+			ep.MeteringMode = MeteringSharedPool
 			quota, err := r.loadGroupQuota(ctx, u.groupID)
 			if err == nil && quota != nil {
 				applyGroupQuota(ep, quota)
@@ -163,7 +194,15 @@ func (r *Resolver) resolve(ctx context.Context, userID int64) (*EffectivePolicy,
 		return ep, nil
 	}
 
-	// custom mode: user plan on top of the user-table limits.
+	// custom mode: template assignment, then legacy user_plans.
+	tpl, err := r.loadUserTemplateAssignment(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	if tpl != nil {
+		applyTemplate(ep, tpl)
+		return ep, nil
+	}
 	plan, err := r.loadUserPlan(ctx, userID)
 	if err != nil {
 		return nil, err
@@ -171,27 +210,22 @@ func (r *Resolver) resolve(ctx context.Context, userID int64) (*EffectivePolicy,
 	if plan != nil {
 		applyPlan(ep, plan)
 	}
-	ep.DailyTokenLimit = u.dailyTokenLimit
-	ep.MonthlyTokenLimit = u.monthlyTokenLimit
 	return ep, nil
 }
 
 // userRow is the minimal users projection the resolver needs.
 type userRow struct {
-	tenantID         sql.NullString
-	groupID          string
-	policyMode       string
-	dailyTokenLimit  int64
-	monthlyTokenLimit int64
+	tenantID   sql.NullString
+	groupID    string
+	policyMode string
 }
 
 func (r *Resolver) loadUser(ctx context.Context, userID int64) (*userRow, error) {
-	query := `SELECT id, tenant_id, group_id, policy_mode, daily_token_limit, monthly_token_limit
-		FROM users WHERE id = $1`
+	query := `SELECT id, tenant_id, group_id, policy_mode FROM users WHERE id = $1`
 	u := &userRow{}
 	var gid, mode sql.NullString
 	err := r.db.QueryRowContext(ctx, query, userID).Scan(
-		&userID, &u.tenantID, &gid, &mode, &u.dailyTokenLimit, &u.monthlyTokenLimit,
+		&userID, &u.tenantID, &gid, &mode,
 	)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -200,10 +234,10 @@ func (r *Resolver) loadUser(ctx context.Context, userID int64) (*userRow, error)
 		// Pre-group-model schema: group_id / policy_mode may not exist.
 		// Fall back to treating the user as custom-mode with no group.
 		if isMissingColumn(err) {
-			base := `SELECT id, tenant_id, daily_token_limit, monthly_token_limit FROM users WHERE id = $1`
+			base := `SELECT id, tenant_id FROM users WHERE id = $1`
 			b := &userRow{policyMode: PolicyModeCustom}
 			if err2 := r.db.QueryRowContext(ctx, base, userID).Scan(
-				&userID, &b.tenantID, &b.dailyTokenLimit, &b.monthlyTokenLimit,
+				&userID, &b.tenantID,
 			); err2 != nil {
 				if err2 == sql.ErrNoRows {
 					return nil, nil
@@ -225,24 +259,25 @@ func (r *Resolver) loadUser(ctx context.Context, userID int64) (*userRow, error)
 
 // planRow is a group_plans / user_plans row with the owner in Owner.
 type planRow struct {
-	ID                 int64
-	Owner              string
-	Currency           string
-	AllowBackends      []string
-	AllowModels        []string
-	AllowPipelines     []string
-	PriceType          string
-	BudgetAmount       *float64
-	BudgetPeriod       string
-	BudgetStartAt      *time.Time
-	BudgetEndAt        *time.Time
-	TokenQuotaInput    *int64
-	TokenQuotaOutput   *int64
-	TokenQuotaPeriod   string
-	TokenQuotaStartAt  *time.Time
-	TokenQuotaEndAt    *time.Time
-	RateLimitRPM       int
-	RateLimitTPM       int
+	ID                int64
+	Owner             string
+	Currency          string
+	AllowBackends     []string
+	AllowModels       []string
+	AllowPipelines    []string
+	PriceType         string
+	BudgetAmount      *float64
+	BudgetPeriod      string
+	BudgetStartAt     *time.Time
+	BudgetEndAt       *time.Time
+	TokenQuotaInput   *int64
+	TokenQuotaOutput  *int64
+	TokenQuotaTotal   *int64
+	TokenQuotaPeriod  string
+	TokenQuotaStartAt *time.Time
+	TokenQuotaEndAt   *time.Time
+	RateLimitRPM      int
+	RateLimitTPM      int
 }
 
 func (r *Resolver) loadGroupPlan(ctx context.Context, groupID string) (*planRow, error) {
@@ -275,10 +310,172 @@ func (r *Resolver) loadUserPlan(ctx context.Context, userID int64) (*planRow, er
 		return nil, nil
 	}
 	if err != nil {
+		if isMissingColumn(err) || isMissingTable(err) {
+			return nil, nil
+		}
 		return nil, err
 	}
 	p.Owner = fmt.Sprintf("%d", userID)
 	return p, nil
+}
+
+type templateRow struct {
+	planRow
+	Name string
+}
+
+func (r *Resolver) loadUserTemplateAssignment(ctx context.Context, userID int64) (*templateRow, error) {
+	if r.db == nil {
+		return nil, nil
+	}
+	row := r.db.QueryRowContext(ctx, `
+		SELECT t.id, t.name, t.currency,
+			t.available_backend_ids, t.available_models, t.available_pipeline_ids,
+			t.price_type, t.budget_amount, t.budget_period, t.budget_start_at, t.budget_end_at,
+			t.token_quota_input, t.token_quota_output, t.token_quota_total, t.token_quota_period,
+			t.token_quota_start_at, t.token_quota_end_at,
+			t.rate_limit_rpm, t.rate_limit_tpm
+		FROM user_plan_assignments a
+		JOIN plan_templates t ON t.id = a.template_id
+		WHERE a.user_id = $1 AND (t.enabled = 1 OR t.enabled = TRUE)`, userID)
+	tpl, err := scanTemplate(row)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		if isMissingTable(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return tpl, nil
+}
+
+func (r *Resolver) loadGroupTemplateAssignment(ctx context.Context, groupID string) (*templateRow, string, error) {
+	if r.db == nil {
+		return nil, "", nil
+	}
+	var metering string
+	row := r.db.QueryRowContext(ctx, `
+		SELECT a.metering_mode, t.id, t.name, t.currency,
+			t.available_backend_ids, t.available_models, t.available_pipeline_ids,
+			t.price_type, t.budget_amount, t.budget_period, t.budget_start_at, t.budget_end_at,
+			t.token_quota_input, t.token_quota_output, t.token_quota_total, t.token_quota_period,
+			t.token_quota_start_at, t.token_quota_end_at,
+			t.rate_limit_rpm, t.rate_limit_tpm
+		FROM group_plan_assignments a
+		JOIN plan_templates t ON t.id = a.template_id
+		WHERE a.group_id = $1 AND (t.enabled = 1 OR t.enabled = TRUE)`, groupID)
+	var (
+		budgetAmount     sql.NullFloat64
+		budgetStartAt    time.Time
+		budgetEndAt      time.Time
+		tokenInput       sql.NullInt64
+		tokenOutput      sql.NullInt64
+		tokenTotal       sql.NullInt64
+		tokenStartAt     time.Time
+		tokenEndAt       time.Time
+		backends, models string
+		pipelines        string
+	)
+	tpl := &templateRow{}
+	err := row.Scan(
+		&metering, &tpl.ID, &tpl.Name, &tpl.Currency,
+		&backends, &models, &pipelines,
+		&tpl.PriceType, &budgetAmount, &tpl.BudgetPeriod,
+		&flexTime{&budgetStartAt}, &flexTime{&budgetEndAt},
+		&tokenInput, &tokenOutput, &tokenTotal, &tpl.TokenQuotaPeriod,
+		&flexTime{&tokenStartAt}, &flexTime{&tokenEndAt},
+		&tpl.RateLimitRPM, &tpl.RateLimitTPM,
+	)
+	if err == sql.ErrNoRows {
+		return nil, "", nil
+	}
+	if err != nil {
+		if isMissingTable(err) {
+			return nil, "", nil
+		}
+		return nil, "", err
+	}
+	fillPlanAllow(&tpl.planRow, backends, models, pipelines, budgetAmount, budgetStartAt, budgetEndAt,
+		tokenInput, tokenOutput, tokenTotal, tokenStartAt, tokenEndAt)
+	metering = strings.TrimSpace(metering)
+	if metering != MeteringSharedPool {
+		metering = MeteringPerMember
+	}
+	return tpl, metering, nil
+}
+
+func scanTemplate(scanner interface{ Scan(...interface{}) error }) (*templateRow, error) {
+	tpl := &templateRow{}
+	var (
+		budgetAmount     sql.NullFloat64
+		budgetStartAt    time.Time
+		budgetEndAt      time.Time
+		tokenInput       sql.NullInt64
+		tokenOutput      sql.NullInt64
+		tokenTotal       sql.NullInt64
+		tokenStartAt     time.Time
+		tokenEndAt       time.Time
+		backends, models string
+		pipelines        string
+	)
+	err := scanner.Scan(
+		&tpl.ID, &tpl.Name, &tpl.Currency,
+		&backends, &models, &pipelines,
+		&tpl.PriceType, &budgetAmount, &tpl.BudgetPeriod,
+		&flexTime{&budgetStartAt}, &flexTime{&budgetEndAt},
+		&tokenInput, &tokenOutput, &tokenTotal, &tpl.TokenQuotaPeriod,
+		&flexTime{&tokenStartAt}, &flexTime{&tokenEndAt},
+		&tpl.RateLimitRPM, &tpl.RateLimitTPM,
+	)
+	if err != nil {
+		return nil, err
+	}
+	fillPlanAllow(&tpl.planRow, backends, models, pipelines, budgetAmount, budgetStartAt, budgetEndAt,
+		tokenInput, tokenOutput, tokenTotal, tokenStartAt, tokenEndAt)
+	return tpl, nil
+}
+
+func fillPlanAllow(p *planRow, backends, models, pipelines string,
+	budgetAmount sql.NullFloat64, budgetStartAt, budgetEndAt time.Time,
+	tokenInput, tokenOutput, tokenTotal sql.NullInt64, tokenStartAt, tokenEndAt time.Time) {
+	p.AllowBackends = parseAllowList(backends)
+	p.AllowModels = parseAllowList(models)
+	p.AllowPipelines = parseAllowList(pipelines)
+	if budgetAmount.Valid {
+		p.BudgetAmount = &budgetAmount.Float64
+	}
+	if !budgetStartAt.IsZero() {
+		p.BudgetStartAt = &budgetStartAt
+	}
+	if !budgetEndAt.IsZero() {
+		p.BudgetEndAt = &budgetEndAt
+	}
+	if tokenInput.Valid {
+		p.TokenQuotaInput = &tokenInput.Int64
+	}
+	if tokenOutput.Valid {
+		p.TokenQuotaOutput = &tokenOutput.Int64
+	}
+	if tokenTotal.Valid {
+		p.TokenQuotaTotal = &tokenTotal.Int64
+	}
+	if !tokenStartAt.IsZero() {
+		p.TokenQuotaStartAt = &tokenStartAt
+	}
+	if !tokenEndAt.IsZero() {
+		p.TokenQuotaEndAt = &tokenEndAt
+	}
+}
+
+func isMissingTable(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "no such table") ||
+		(strings.Contains(msg, "does not exist") && strings.Contains(msg, "relation"))
 }
 
 // scanPlan scans one plan row in planProjection column order.
@@ -290,6 +487,7 @@ func scanPlan(scanner interface{ Scan(...interface{}) error }) (*planRow, error)
 		budgetEndAt      time.Time
 		tokenInput       sql.NullInt64
 		tokenOutput      sql.NullInt64
+		tokenTotal       sql.NullInt64
 		tokenStartAt     time.Time
 		tokenEndAt       time.Time
 		backends, models string
@@ -300,7 +498,7 @@ func scanPlan(scanner interface{ Scan(...interface{}) error }) (*planRow, error)
 		&backends, &models, &pipelines,
 		&p.PriceType, &budgetAmount, &p.BudgetPeriod,
 		&flexTime{&budgetStartAt}, &flexTime{&budgetEndAt},
-		&tokenInput, &tokenOutput, &p.TokenQuotaPeriod,
+		&tokenInput, &tokenOutput, &tokenTotal, &p.TokenQuotaPeriod,
 		&flexTime{&tokenStartAt}, &flexTime{&tokenEndAt},
 		&p.RateLimitRPM, &p.RateLimitTPM,
 	)
@@ -324,6 +522,9 @@ func scanPlan(scanner interface{ Scan(...interface{}) error }) (*planRow, error)
 	}
 	if tokenOutput.Valid {
 		p.TokenQuotaOutput = &tokenOutput.Int64
+	}
+	if tokenTotal.Valid {
+		p.TokenQuotaTotal = &tokenTotal.Int64
 	}
 	if !tokenStartAt.IsZero() {
 		p.TokenQuotaStartAt = &tokenStartAt
@@ -416,11 +617,21 @@ func applyPlan(ep *EffectivePolicy, p *planRow) {
 	ep.BudgetEndAt = p.BudgetEndAt
 	ep.TokenQuotaInput = p.TokenQuotaInput
 	ep.TokenQuotaOutput = p.TokenQuotaOutput
+	ep.TokenQuotaTotal = p.TokenQuotaTotal
 	ep.TokenQuotaPeriod = p.TokenQuotaPeriod
 	ep.TokenQuotaStartAt = p.TokenQuotaStartAt
 	ep.TokenQuotaEndAt = p.TokenQuotaEndAt
 	ep.RateLimitRPM = p.RateLimitRPM
 	ep.RateLimitTPM = p.RateLimitTPM
+}
+
+func applyTemplate(ep *EffectivePolicy, t *templateRow) {
+	if t == nil {
+		return
+	}
+	applyPlan(ep, &t.planRow)
+	ep.TemplateID = t.ID
+	ep.TemplateName = t.Name
 }
 
 func applyGroupQuota(ep *EffectivePolicy, q *groupQuotaRow) {
