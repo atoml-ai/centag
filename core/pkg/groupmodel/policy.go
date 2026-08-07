@@ -1,13 +1,15 @@
 // Package groupmodel resolves the effective Team policy for a user under the
-// group model (migration 036).
+// group model (migration 036 / 040).
 //
 // Model:
-//   - plan_templates hold reusable rules (quotas, price_type, resource allowlists);
+//   - plan_templates hold reusable metering rules (quotas, price_type, rate limits);
+//   - groups hold resource allowlists (available backends / models / pipelines);
 //   - users/groups are assigned to a template (user_plan_assignments /
 //     group_plan_assignments);
-//   - policy_mode=group inherits the group's template; metering_mode selects
-//     per_member (each user own usage window) or shared_pool;
-//   - policy_mode=custom uses the user's template assignment;
+//   - policy_mode=group inherits the group's template + group resource scope;
+//     metering_mode selects per_member or shared_pool;
+//   - policy_mode=custom uses the user's template for metering only (no resource
+//     allowlist — Team should force users into a group);
 //   - Team normal users without an assignment are denied (fail-closed);
 //   - Personal / Minimal use SyntheticFullAccess() (no DB template required).
 //
@@ -41,10 +43,12 @@ type EffectivePolicy struct {
 	Mode    string // PolicyModeGroup, PolicyModeCustom, or "" (no policy)
 	GroupID string // resolved group in group mode ("" in single-user mode)
 
-	// Resource allowlists (empty = all allowed).
-	AllowBackends  []string
-	AllowModels    []string
-	AllowPipelines []string
+	// Resource allowlists. When ResourcesConfigured is true, empty lists mean
+	// all allowed. When false, IsAllowed* denies (avoids custom/no-scope full-open).
+	AllowBackends        []string
+	AllowModels          []string
+	AllowPipelines       []string
+	ResourcesConfigured  bool
 
 	PriceType string // billing price type ("cost" | "revenue")
 
@@ -91,9 +95,10 @@ type EffectivePolicy struct {
 // resources allowed, no budget / token / rate limits.
 func SyntheticFullAccess() *EffectivePolicy {
 	return &EffectivePolicy{
-		Mode:      PolicyModeCustom,
-		HasPlan:   true,
-		PriceType: "cost",
+		Mode:                PolicyModeCustom,
+		HasPlan:             true,
+		ResourcesConfigured: true, // empty allowlists + configured = all allowed
+		PriceType:           "cost",
 	}
 }
 
@@ -124,15 +129,21 @@ func (p *EffectivePolicy) IsTokenQuotaEnabled() bool {
 
 // IsAllowedBackend reports whether a backend is in the allowlist.
 func (p *EffectivePolicy) IsAllowedBackend(backendID string) bool {
-	if p == nil || len(p.AllowBackends) == 0 {
-		return true // empty = all allowed
+	if p == nil || !p.ResourcesConfigured {
+		return false
+	}
+	if len(p.AllowBackends) == 0 {
+		return true // empty + configured = all allowed
 	}
 	return contains(p.AllowBackends, backendID)
 }
 
 // IsAllowedModel reports whether a model is in the allowlist.
 func (p *EffectivePolicy) IsAllowedModel(model string) bool {
-	if p == nil || len(p.AllowModels) == 0 {
+	if p == nil || !p.ResourcesConfigured {
+		return false
+	}
+	if len(p.AllowModels) == 0 {
 		return true
 	}
 	if contains(p.AllowModels, model) {
@@ -143,7 +154,10 @@ func (p *EffectivePolicy) IsAllowedModel(model string) bool {
 
 // IsAllowedPipeline reports whether a pipeline is in the allowlist.
 func (p *EffectivePolicy) IsAllowedPipeline(pipelineID string) bool {
-	if p == nil || len(p.AllowPipelines) == 0 {
+	if p == nil || !p.ResourcesConfigured {
+		return false
+	}
+	if len(p.AllowPipelines) == 0 {
 		return true
 	}
 	return contains(p.AllowPipelines, pipelineID)

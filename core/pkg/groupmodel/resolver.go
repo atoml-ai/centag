@@ -3,6 +3,7 @@ package groupmodel
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"sync"
@@ -44,6 +45,19 @@ type Option func(*Resolver)
 // WithTTL overrides the default policy cache TTL (0 disables caching).
 func WithTTL(d time.Duration) Option {
 	return func(r *Resolver) { r.ttl = d }
+}
+
+// templateEnabledPred returns a SQL predicate for plan_templates.enabled.
+// PostgreSQL uses BOOLEAN; SQLite uses INTEGER — never compare boolean to 1.
+func (r *Resolver) templateEnabledPred(alias string) string {
+	col := "enabled"
+	if alias != "" {
+		col = alias + ".enabled"
+	}
+	if r != nil && (r.driver == "postgresql" || r.driver == "postgres") {
+		return col + " = TRUE"
+	}
+	return col + " = 1"
 }
 
 // NewResolver creates a resolver bound to the shared database.
@@ -167,10 +181,13 @@ func (r *Resolver) resolve(ctx context.Context, userID int64) (*EffectivePolicy,
 			return nil, err
 		}
 		if tpl != nil {
-			applyTemplate(ep, tpl)
+			applyTemplateMetering(ep, tpl)
 			ep.MeteringMode = metering
 			if ep.MeteringMode == "" {
 				ep.MeteringMode = MeteringPerMember
+			}
+			if err := r.applyGroupResourceScope(ctx, ep, u.groupID); err != nil {
+				return nil, err
 			}
 			quota, err := r.loadGroupQuota(ctx, u.groupID)
 			if err == nil && quota != nil {
@@ -184,8 +201,10 @@ func (r *Resolver) resolve(ctx context.Context, userID int64) (*EffectivePolicy,
 			return nil, err
 		}
 		if plan != nil {
-			applyPlan(ep, plan)
+			applyPlan(ep, plan) // includes legacy allowlists + ResourcesConfigured
 			ep.MeteringMode = MeteringSharedPool
+			// Prefer groups.* resource columns when present (040).
+			_ = r.applyGroupResourceScope(ctx, ep, u.groupID)
 			quota, err := r.loadGroupQuota(ctx, u.groupID)
 			if err == nil && quota != nil {
 				applyGroupQuota(ep, quota)
@@ -194,13 +213,14 @@ func (r *Resolver) resolve(ctx context.Context, userID int64) (*EffectivePolicy,
 		return ep, nil
 	}
 
-	// custom mode: template assignment, then legacy user_plans.
+	// custom mode: metering from template/user_plans only — no resource scope
+	// (Team should force users into a group; ResourcesConfigured stays false → deny).
 	tpl, err := r.loadUserTemplateAssignment(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
 	if tpl != nil {
-		applyTemplate(ep, tpl)
+		applyTemplateMetering(ep, tpl)
 		return ep, nil
 	}
 	plan, err := r.loadUserPlan(ctx, userID)
@@ -208,7 +228,9 @@ func (r *Resolver) resolve(ctx context.Context, userID int64) (*EffectivePolicy,
 		return nil, err
 	}
 	if plan != nil {
-		applyPlan(ep, plan)
+		// Legacy custom user_plans: keep metering; do not grant ResourcesConfigured
+		// from personal allowlists (040: resources are group-owned).
+		applyPlanMeteringOnly(ep, plan)
 	}
 	return ep, nil
 }
@@ -330,15 +352,14 @@ func (r *Resolver) loadUserTemplateAssignment(ctx context.Context, userID int64)
 	}
 	row := r.db.QueryRowContext(ctx, `
 		SELECT t.id, t.name, t.currency,
-			t.available_backend_ids, t.available_models, t.available_pipeline_ids,
 			t.price_type, t.budget_amount, t.budget_period, t.budget_start_at, t.budget_end_at,
 			t.token_quota_input, t.token_quota_output, t.token_quota_total, t.token_quota_period,
 			t.token_quota_start_at, t.token_quota_end_at,
 			t.rate_limit_rpm, t.rate_limit_tpm
 		FROM user_plan_assignments a
 		JOIN plan_templates t ON t.id = a.template_id
-		WHERE a.user_id = $1 AND (t.enabled = 1 OR t.enabled = TRUE)`, userID)
-	tpl, err := scanTemplate(row)
+		WHERE a.user_id = $1 AND `+r.templateEnabledPred("t"), userID)
+	tpl, err := scanTemplateMetering(row)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -358,30 +379,26 @@ func (r *Resolver) loadGroupTemplateAssignment(ctx context.Context, groupID stri
 	var metering string
 	row := r.db.QueryRowContext(ctx, `
 		SELECT a.metering_mode, t.id, t.name, t.currency,
-			t.available_backend_ids, t.available_models, t.available_pipeline_ids,
 			t.price_type, t.budget_amount, t.budget_period, t.budget_start_at, t.budget_end_at,
 			t.token_quota_input, t.token_quota_output, t.token_quota_total, t.token_quota_period,
 			t.token_quota_start_at, t.token_quota_end_at,
 			t.rate_limit_rpm, t.rate_limit_tpm
 		FROM group_plan_assignments a
 		JOIN plan_templates t ON t.id = a.template_id
-		WHERE a.group_id = $1 AND (t.enabled = 1 OR t.enabled = TRUE)`, groupID)
+		WHERE a.group_id = $1 AND `+r.templateEnabledPred("t"), groupID)
 	var (
-		budgetAmount     sql.NullFloat64
-		budgetStartAt    time.Time
-		budgetEndAt      time.Time
-		tokenInput       sql.NullInt64
-		tokenOutput      sql.NullInt64
-		tokenTotal       sql.NullInt64
-		tokenStartAt     time.Time
-		tokenEndAt       time.Time
-		backends, models string
-		pipelines        string
+		budgetAmount  sql.NullFloat64
+		budgetStartAt time.Time
+		budgetEndAt   time.Time
+		tokenInput    sql.NullInt64
+		tokenOutput   sql.NullInt64
+		tokenTotal    sql.NullInt64
+		tokenStartAt  time.Time
+		tokenEndAt    time.Time
 	)
 	tpl := &templateRow{}
 	err := row.Scan(
 		&metering, &tpl.ID, &tpl.Name, &tpl.Currency,
-		&backends, &models, &pipelines,
 		&tpl.PriceType, &budgetAmount, &tpl.BudgetPeriod,
 		&flexTime{&budgetStartAt}, &flexTime{&budgetEndAt},
 		&tokenInput, &tokenOutput, &tokenTotal, &tpl.TokenQuotaPeriod,
@@ -397,7 +414,7 @@ func (r *Resolver) loadGroupTemplateAssignment(ctx context.Context, groupID stri
 		}
 		return nil, "", err
 	}
-	fillPlanAllow(&tpl.planRow, backends, models, pipelines, budgetAmount, budgetStartAt, budgetEndAt,
+	fillPlanMetering(&tpl.planRow, budgetAmount, budgetStartAt, budgetEndAt,
 		tokenInput, tokenOutput, tokenTotal, tokenStartAt, tokenEndAt)
 	metering = strings.TrimSpace(metering)
 	if metering != MeteringSharedPool {
@@ -406,23 +423,46 @@ func (r *Resolver) loadGroupTemplateAssignment(ctx context.Context, groupID stri
 	return tpl, metering, nil
 }
 
-func scanTemplate(scanner interface{ Scan(...interface{}) error }) (*templateRow, error) {
+func (r *Resolver) applyGroupResourceScope(ctx context.Context, ep *EffectivePolicy, groupID string) error {
+	if r.db == nil || ep == nil || groupID == "" {
+		return nil
+	}
+	var backends, models, pipelines string
+	err := r.db.QueryRowContext(ctx, `
+		SELECT COALESCE(available_backend_ids, '[]'),
+			COALESCE(available_models, '[]'),
+			COALESCE(available_pipeline_ids, '[]')
+		FROM groups WHERE id = $1`, groupID).Scan(&backends, &models, &pipelines)
+	if err == sql.ErrNoRows {
+		return nil
+	}
+	if err != nil {
+		if isMissingTable(err) || isMissingColumn(err) {
+			return nil
+		}
+		return err
+	}
+	ep.AllowBackends = parseAllowList(backends)
+	ep.AllowModels = parseAllowList(models)
+	ep.AllowPipelines = parseAllowList(pipelines)
+	ep.ResourcesConfigured = true
+	return nil
+}
+
+func scanTemplateMetering(scanner interface{ Scan(...interface{}) error }) (*templateRow, error) {
 	tpl := &templateRow{}
 	var (
-		budgetAmount     sql.NullFloat64
-		budgetStartAt    time.Time
-		budgetEndAt      time.Time
-		tokenInput       sql.NullInt64
-		tokenOutput      sql.NullInt64
-		tokenTotal       sql.NullInt64
-		tokenStartAt     time.Time
-		tokenEndAt       time.Time
-		backends, models string
-		pipelines        string
+		budgetAmount  sql.NullFloat64
+		budgetStartAt time.Time
+		budgetEndAt   time.Time
+		tokenInput    sql.NullInt64
+		tokenOutput   sql.NullInt64
+		tokenTotal    sql.NullInt64
+		tokenStartAt  time.Time
+		tokenEndAt    time.Time
 	)
 	err := scanner.Scan(
 		&tpl.ID, &tpl.Name, &tpl.Currency,
-		&backends, &models, &pipelines,
 		&tpl.PriceType, &budgetAmount, &tpl.BudgetPeriod,
 		&flexTime{&budgetStartAt}, &flexTime{&budgetEndAt},
 		&tokenInput, &tokenOutput, &tokenTotal, &tpl.TokenQuotaPeriod,
@@ -432,17 +472,14 @@ func scanTemplate(scanner interface{ Scan(...interface{}) error }) (*templateRow
 	if err != nil {
 		return nil, err
 	}
-	fillPlanAllow(&tpl.planRow, backends, models, pipelines, budgetAmount, budgetStartAt, budgetEndAt,
+	fillPlanMetering(&tpl.planRow, budgetAmount, budgetStartAt, budgetEndAt,
 		tokenInput, tokenOutput, tokenTotal, tokenStartAt, tokenEndAt)
 	return tpl, nil
 }
 
-func fillPlanAllow(p *planRow, backends, models, pipelines string,
+func fillPlanMetering(p *planRow,
 	budgetAmount sql.NullFloat64, budgetStartAt, budgetEndAt time.Time,
 	tokenInput, tokenOutput, tokenTotal sql.NullInt64, tokenStartAt, tokenEndAt time.Time) {
-	p.AllowBackends = parseAllowList(backends)
-	p.AllowModels = parseAllowList(models)
-	p.AllowPipelines = parseAllowList(pipelines)
 	if budgetAmount.Valid {
 		p.BudgetAmount = &budgetAmount.Float64
 	}
@@ -606,10 +643,15 @@ func scanOverride(scanner interface{ Scan(...interface{}) error }) (*PricingOver
 }
 
 func applyPlan(ep *EffectivePolicy, p *planRow) {
-	ep.HasPlan = true
+	applyPlanMeteringOnly(ep, p)
 	ep.AllowBackends = p.AllowBackends
 	ep.AllowModels = p.AllowModels
 	ep.AllowPipelines = p.AllowPipelines
+	ep.ResourcesConfigured = true
+}
+
+func applyPlanMeteringOnly(ep *EffectivePolicy, p *planRow) {
+	ep.HasPlan = true
 	ep.PriceType = p.PriceType
 	ep.BudgetAmount = p.BudgetAmount
 	ep.BudgetPeriod = p.BudgetPeriod
@@ -625,11 +667,11 @@ func applyPlan(ep *EffectivePolicy, p *planRow) {
 	ep.RateLimitTPM = p.RateLimitTPM
 }
 
-func applyTemplate(ep *EffectivePolicy, t *templateRow) {
+func applyTemplateMetering(ep *EffectivePolicy, t *templateRow) {
 	if t == nil {
 		return
 	}
-	applyPlan(ep, &t.planRow)
+	applyPlanMeteringOnly(ep, &t.planRow)
 	ep.TemplateID = t.ID
 	ep.TemplateName = t.Name
 }
@@ -645,12 +687,29 @@ func applyGroupQuota(ep *EffectivePolicy, q *groupQuotaRow) {
 
 // parseAllowList parses an allowlist column which may be:
 //   - empty or the JSON/PG default ('[]' / '{}') → nil (all allowed)
-//   - a PG array literal {a,b,c}
+//   - a JSON array ["a","b"] (plan_templates / Team UI storage)
+//   - a PG array literal {a,b,c} or {"a","b"}
 //   - a comma-joined string a,b,c
 func parseAllowList(s string) []string {
 	s = strings.TrimSpace(s)
 	if s == "" || s == "[]" || s == "{}" {
 		return nil
+	}
+	if strings.HasPrefix(s, "[") {
+		var arr []string
+		if err := json.Unmarshal([]byte(s), &arr); err == nil {
+			out := make([]string, 0, len(arr))
+			for _, p := range arr {
+				p = strings.TrimSpace(p)
+				if p != "" {
+					out = append(out, p)
+				}
+			}
+			if len(out) == 0 {
+				return nil
+			}
+			return out
+		}
 	}
 	if strings.HasPrefix(s, "{") && strings.HasSuffix(s, "}") {
 		s = s[1 : len(s)-1]

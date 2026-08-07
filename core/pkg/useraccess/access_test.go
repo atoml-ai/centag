@@ -164,12 +164,13 @@ func TestEncodeDecodeIDs(t *testing.T) {
 
 func polWithPlan(allowBackends, allowModels, allowPipelines []string) *groupmodel.EffectivePolicy {
 	return &groupmodel.EffectivePolicy{
-		Mode:           groupmodel.PolicyModeGroup,
-		GroupID:        "g1",
-		AllowBackends:  allowBackends,
-		AllowModels:    allowModels,
-		AllowPipelines: allowPipelines,
-		HasPlan:        true,
+		Mode:                groupmodel.PolicyModeGroup,
+		GroupID:             "g1",
+		AllowBackends:       allowBackends,
+		AllowModels:         allowModels,
+		AllowPipelines:      allowPipelines,
+		HasPlan:             true,
+		ResourcesConfigured: true,
 	}
 }
 

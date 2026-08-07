@@ -81,9 +81,6 @@ export interface PlanTemplate {
   token_quota_period?: string
   rate_limit_rpm?: number
   rate_limit_tpm?: number
-  available_backend_ids?: string[]
-  available_models?: string[]
-  available_pipeline_ids?: string[]
 }
 
 export interface UserPlanAssignment {
