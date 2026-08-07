@@ -292,6 +292,18 @@ type ProxyConfig struct {
 	CircuitBreaker *CircuitBreakerSettings `json:"circuit_breaker,omitempty"`
 	// ResponseTraceBanner 开启后在返回正文前附加流水线 / 后端 / 模型 / 降级信息（热生效）
 	ResponseTraceBanner bool `json:"response_trace_banner"`
+	// ReasoningContentRoundtrip 透明代理是否自动补回上游曾返回的 reasoning_content（默认开启）。
+	// DeepSeek thinking + tools 要求历史 assistant(tool_calls) 回传该字段；OpenAI 兼容客户端常会丢掉。
+	// nil/缺省 = true；显式 false 关闭。
+	ReasoningContentRoundtrip *bool `json:"reasoning_content_roundtrip,omitempty"`
+}
+
+// ReasoningContentRoundtripEnabled 返回是否启用 reasoning_content 会话补回（默认 true）。
+func (p ProxyConfig) ReasoningContentRoundtripEnabled() bool {
+	if p.ReasoningContentRoundtrip == nil {
+		return true
+	}
+	return *p.ReasoningContentRoundtrip
 }
 
 // CircuitBreakerSettings 熔断器可配置参数（热生效）。

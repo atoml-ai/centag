@@ -220,6 +220,9 @@ func (n *TransparentForwardNode) Execute(ctx context.Context, input *NodeInput) 
 	// 旧 injectSystemPromptIntoChatBody 已收敛为 ApplySystemStrategy 薄封装；
 	// NewTransparentForwardNode 总会 ResolveSystemMode，不再走平行分支。
 
+	// DeepSeek thinking+tools：窄触发补回客户端丢掉的 reasoning_content（见 reasoning_roundtrip.go）。
+	body, _ = applyReasoningRoundtripOnRequest(meta, body)
+
 	client, err := n.getHTTPClient(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("transparent_forward node %q: %w", n.id, err)
@@ -384,7 +387,9 @@ func (n *TransparentForwardNode) Execute(ctx context.Context, input *NodeInput) 
 		return nil, newTransparentUpstreamError(n.id, backendID, resolvedModel, targetURL, statusCode, bodyStr)
 	}
 
-	return n.buildTransparentOutput(targetURL, statusCode, contentType, respBody, backendID, resolvedModel, clientModel, requestPath, bridgeToChat, anthropicToChat, nil), nil
+	out := n.buildTransparentOutput(targetURL, statusCode, contentType, respBody, backendID, resolvedModel, clientModel, requestPath, bridgeToChat, anthropicToChat, nil)
+	applyReasoningRoundtripOnResponse(meta, body, respBody, statusCode)
+	return out, nil
 }
 
 // retryableAccountFailure 同后端账户池内是否应换下一把 Key（优先于跨后端）：
@@ -677,6 +682,7 @@ func (n *TransparentForwardNode) doBillingFallbackAttempt(
 		"fallback_used":                 true,
 	}
 	out := n.buildTransparentOutput(targetURL, resp.StatusCode, resp.Header.Get("Content-Type"), respBody, fbBackend, fbModel, clientModel, requestPath, attemptBridge, attemptAnthropic, extra)
+	applyReasoningRoundtripOnResponse(meta, body, respBody, resp.StatusCode)
 	AnnotateFallbackNotice(out)
 	return out, true
 }
