@@ -218,7 +218,10 @@ func (s *DBPipelineStore) List() ([]*AgentPatternPipeline, error) {
 
 // ListEnabled 列出启用的流水线
 func (s *DBPipelineStore) ListEnabled() ([]*AgentPatternPipeline, error) {
-	return s.listByCondition("WHERE enabled = true")
+	if s.pg {
+		return s.listByCondition("WHERE enabled = true")
+	}
+	return s.listByCondition("WHERE enabled = 1")
 }
 
 func (s *DBPipelineStore) listByCondition(condition string) ([]*AgentPatternPipeline, error) {
@@ -531,7 +534,10 @@ func (s *DBPluginRegistryStore) List() ([]*PluginRegistration, error) {
 
 // ListEnabled 列出启用的插件
 func (s *DBPluginRegistryStore) ListEnabled() ([]*PluginRegistration, error) {
-	return s.listByCondition("WHERE enabled = true")
+	if s.pg {
+		return s.listByCondition("WHERE enabled = true")
+	}
+	return s.listByCondition("WHERE enabled = 1")
 }
 
 func (s *DBPluginRegistryStore) listByCondition(condition string) ([]*PluginRegistration, error) {

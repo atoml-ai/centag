@@ -229,9 +229,13 @@ func (s *UserQuotaService) ResetUserMonthlyUsage(ctx context.Context, userID int
 
 // RefreshCache refreshes the in-memory cache from the database
 func (s *UserQuotaService) RefreshCache(ctx context.Context) error {
+	enabledPred := "enabled = 1"
+	if s.driver == "postgresql" {
+		enabledPred = "enabled = TRUE"
+	}
 	query := `SELECT id, default_pipeline_id, daily_token_limit, monthly_token_limit, 
 	          daily_token_used, monthly_token_used, quota_reset_date 
-	          FROM users WHERE enabled = true`
+	          FROM users WHERE ` + enabledPred
 
 	rows, err := s.db.QueryContext(ctx, query)
 	if err != nil {
