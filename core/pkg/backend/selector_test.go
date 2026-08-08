@@ -56,6 +56,57 @@ func TestBackendSelector_SelectBackendByModel(t *testing.T) {
 	}
 }
 
+func TestBackendSelector_ProviderPrefixedModel(t *testing.T) {
+	config := DefaultModelMatchingConfig()
+	config.Strategy = StrategyExact
+	selector := NewBackendSelector(config)
+
+	backends := []*BackendConfig{
+		{
+			ID:      "opencode-zen",
+			Name:    "OpenCode Zen",
+			Enabled: true,
+			Priority: 10,
+			SupportedModels: []ModelMapping{
+				{RequestedModel: "deepseek-v4-flash-free", ActualModel: "deepseek-v4-flash-free"},
+			},
+		},
+	}
+
+	// opencode/deepseek-v4-flash-free should resolve to deepseek-v4-flash-free (provider-prefix tolerance).
+	backend, actualModel, err := selector.SelectBackendByModel("opencode/deepseek-v4-flash-free", backends)
+	if err != nil {
+		t.Fatalf("SelectBackendByModel() error = %v", err)
+	}
+	if backend == nil || backend.ID != "opencode-zen" {
+		t.Fatalf("BackendID = %v, want opencode-zen", backend)
+	}
+	if actualModel != "deepseek-v4-flash-free" {
+		t.Errorf("ActualModel = %v, want deepseek-v4-flash-free", actualModel)
+	}
+}
+
+func TestBackendSelector_NonListedModelRejected(t *testing.T) {
+	config := DefaultModelMatchingConfig()
+	config.Strategy = StrategyExact
+	selector := NewBackendSelector(config)
+
+	backends := []*BackendConfig{
+		{
+			ID:      "opencode-zen",
+			Name:    "OpenCode Zen",
+			Enabled: true,
+			SupportedModels: []ModelMapping{
+				{RequestedModel: "deepseek-v4-flash-free", ActualModel: "deepseek-v4-flash-free"},
+			},
+		},
+	}
+
+	if _, _, err := selector.SelectBackendByModel("gpt-4o", backends); err == nil {
+		t.Fatal("non-listed model should not select a backend with StrategyExact")
+	}
+}
+
 func TestBackendSelector_NoExactMatch(t *testing.T) {
 	config := DefaultModelMatchingConfig()
 	config.Strategy = StrategyHybrid

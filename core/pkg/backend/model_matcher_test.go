@@ -224,6 +224,34 @@ func TestModelNamesLooselyEqual(t *testing.T) {
 	}
 }
 
+func TestModelNamesLooselyEqual_ProviderPrefix(t *testing.T) {
+	tests := []struct {
+		name string
+		a    string
+		b    string
+		want bool
+	}{
+		{name: "provider prefix vs bare", a: "opencode/deepseek-v4-flash-free", b: "deepseek-v4-flash-free", want: true},
+		{name: "bare vs provider prefix", a: "deepseek-v4-flash-free", b: "opencode/deepseek-v4-flash-free", want: true},
+		{name: "deepseek prefix vs bare", a: "deepseek/deepseek-v4-flash-free", b: "deepseek-v4-flash-free", want: true},
+		{name: "prefixed tier alias", a: "opencode/mimo-v2.5", b: "mimo-v2.5-free", want: true},
+		{name: "slash model exact", a: "nvidia/llama-3.1-405b-instruct", b: "nvidia/llama-3.1-405b-instruct", want: true},
+		{name: "slash model last segment", a: "llama-3.1-405b-instruct", b: "nvidia/llama-3.1-405b-instruct", want: true},
+		{name: "slash model reversed", a: "nvidia/llama-3.1-405b-instruct", b: "llama-3.1-405b-instruct", want: true},
+		{name: "different models", a: "opencode/deepseek-v4-flash-free", b: "gpt-4", want: false},
+		{name: "different slash models", a: "nvidia/llama-3.1-405b-instruct", b: "meta/llama-3.1-70b-instruct", want: false},
+		{name: "trailing slash", a: "opencode/", b: "opencode", want: false},
+		{name: "empty prefix side", a: "", b: "opencode/deepseek-v4-flash-free", want: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := ModelNamesLooselyEqual(tt.a, tt.b); got != tt.want {
+				t.Errorf("ModelNamesLooselyEqual(%q, %q) = %v, want %v", tt.a, tt.b, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestFindLooseModelMapping_PrefersFreeTierExact(t *testing.T) {
 	b := &BackendConfig{
 		ID:      "zen",

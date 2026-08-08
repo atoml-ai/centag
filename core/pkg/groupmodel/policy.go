@@ -22,6 +22,8 @@ package groupmodel
 import (
 	"strings"
 	"time"
+
+	"centag/core/pkg/backend"
 )
 
 // Policy mode values (users.policy_mode).
@@ -139,6 +141,12 @@ func (p *EffectivePolicy) IsAllowedBackend(backendID string) bool {
 }
 
 // IsAllowedModel reports whether a model is in the allowlist.
+//
+// Matching follows the router's loose-match semantics so that "user can see"
+// and "user can use" are consistent: exact names, tier aliases
+// (mimo-v2.5 ≈ mimo-v2.5-free), and provider-prefixed names
+// (opencode/deepseek-v4-flash-free ≈ deepseek-v4-flash-free) are all allowed
+// when the model is in the allowlist. Models outside the list are still denied.
 func (p *EffectivePolicy) IsAllowedModel(model string) bool {
 	if p == nil || !p.ResourcesConfigured {
 		return false
@@ -149,7 +157,15 @@ func (p *EffectivePolicy) IsAllowedModel(model string) bool {
 	if contains(p.AllowModels, model) {
 		return true
 	}
-	return contains(p.AllowModels, "*")
+	if contains(p.AllowModels, "*") {
+		return true
+	}
+	for _, allowed := range p.AllowModels {
+		if backend.ModelNamesLooselyEqual(model, allowed) {
+			return true
+		}
+	}
+	return false
 }
 
 // IsAllowedPipeline reports whether a pipeline is in the allowlist.

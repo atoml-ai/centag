@@ -276,10 +276,34 @@ func stripModelTierSuffix(name string) string {
 // ModelNamesLooselyEqual 判断两个模型名在规范化后是否视为同一模型。
 func ModelNamesLooselyEqual(a, b string) bool {
 	na := NormalizeModelName(a)
-	if na == "" {
+	nb := NormalizeModelName(b)
+	if na == "" || nb == "" {
 		return false
 	}
-	return na == NormalizeModelName(b)
+	if na == nb {
+		return true
+	}
+	// Provider-prefix tolerance: `opencode/deepseek-v4-flash-free` ≡
+	// `deepseek-v4-flash-free`（反之亦然）。仅在全串不等时用「最后一段」兜底，
+	// 因此含斜杠的真实模型 ID（如 `nvidia/llama-3.1-405b-instruct`）优先全串精确命中，
+	// 且该容忍只影响相等性比较，不改变 NormalizeModelName 的其它使用面。
+	if seg := modelNameAfterLastSlash(na); seg != "" && seg == nb {
+		return true
+	}
+	if seg := modelNameAfterLastSlash(nb); seg != "" && seg == na {
+		return true
+	}
+	return false
+}
+
+// modelNameAfterLastSlash 返回最后一个 '/' 之后的模型名（剥离 provider 前缀段）；
+// 无 '/' 或 '/' 结尾时返回空串。
+func modelNameAfterLastSlash(name string) string {
+	i := strings.LastIndex(name, "/")
+	if i < 0 || i == len(name)-1 {
+		return ""
+	}
+	return name[i+1:]
 }
 
 // ModelHasFreeTier 名称是否带免费档标记（free / -free 等）。

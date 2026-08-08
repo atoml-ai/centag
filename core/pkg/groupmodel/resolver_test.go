@@ -171,6 +171,36 @@ func TestResolver_GroupMode(t *testing.T) {
 	}
 }
 
+func TestEffectivePolicy_IsAllowedModel_LooseMatching(t *testing.T) {
+	pol := &EffectivePolicy{
+		ResourcesConfigured: true,
+		AllowModels:         []string{"deepseek-v4-flash-free", "mimo-v2.5-free", "nvidia/llama-3.1-405b-instruct", "gpt-5"},
+	}
+	cases := []struct {
+		model string
+		want  bool
+	}{
+		{"deepseek-v4-flash-free", true},                 // exact
+		{"opencode/deepseek-v4-flash-free", true},        // provider prefix
+		{"deepseek/deepseek-v4-flash-free", true},        // provider prefix
+		{"deepseek-v4-flash", true},                      // tier alias
+		{"mimo-v2.5", true},                              // tier alias
+		{"opencode/mimo-v2.5", true},                     // provider prefix + alias
+		{"nvidia/llama-3.1-405b-instruct", true},         // slash model exact
+		{"llama-3.1-405b-instruct", true},                // slash model last segment
+		{"gpt-5", true},                                  // exact
+		{"gpt-4", false},                                 // not in list
+		{"deepseek-r1", false},                           // not in list
+		{"opencode/gpt-4", false},                        // prefix of non-listed model
+		{"meta/llama-3.1-70b-instruct", false},           // different slash model
+	}
+	for _, tc := range cases {
+		if got := pol.IsAllowedModel(tc.model); got != tc.want {
+			t.Errorf("IsAllowedModel(%q) = %v, want %v", tc.model, got, tc.want)
+		}
+	}
+}
+
 func TestResolver_GroupMode_NoPlan_Defaults(t *testing.T) {
 	db := newResolverDB(t)
 	mustExec(t, db, `INSERT INTO groups (id, name) VALUES ('g_1', 'G1')`)
