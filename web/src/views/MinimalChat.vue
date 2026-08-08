@@ -373,8 +373,8 @@ function latestNodeResult(nodeResults: any[], nodeId: string) {
   return found
 }
 
-/** 综合 meta / 响应头 / last_node 判断是否发生降级 */
-function detectFallbackUsed(meta: Record<string, any>, headers: Record<string, string>): boolean {
+/** 综合 meta / 响应头 / last_node / 错误文本判断是否发生降级 */
+function detectFallbackUsed(meta: Record<string, any>, headers: Record<string, string>, errorText?: string): boolean {
   if (truthy(meta.fallback_used) || truthy(headers['x-fallback-used']) || truthy(meta.billing_fallback_used)) {
     return true
   }
@@ -382,6 +382,9 @@ function detectFallbackUsed(meta: Record<string, any>, headers: Record<string, s
   if (lastNode.includes('fallback')) return true
   const fromNode = String(meta.fallback_from_node || '').trim()
   if (fromNode) return true
+  // 失败响应没有 _centag_meta：但降级聚合错误文本一定包含 "fallback"（如
+  // "all fallback attempts failed ... last fallback: ..."），据此识别已走降级。
+  if (errorText && /fallback/i.test(errorText)) return true
   return false
 }
 
@@ -389,7 +392,8 @@ function buildFlowSteps(
   pipeline: AgentPatternPipeline | undefined,
   meta: Record<string, any>,
   headers: Record<string, string>,
-  ok: boolean
+  ok: boolean,
+  errorText?: string
 ): FlowStep[] {
   const steps: FlowStep[] = [
     { label: t('minimalChat.stepClient'), status: 'ok', kind: 'client' },
@@ -405,7 +409,7 @@ function buildFlowSteps(
 
   const nodeResults: any[] = Array.isArray(meta.node_results) ? meta.node_results : []
   const nodes = pipeline?.nodes || []
-  const fallbackUsed = detectFallbackUsed(meta, headers)
+  const fallbackUsed = detectFallbackUsed(meta, headers, errorText)
 
   if (nodes.length > 0) {
     for (const node of nodes) {
@@ -415,17 +419,26 @@ function buildFlowSteps(
         String(node.id || '').includes('fallback')
       )
       let status: FlowStep['status'] = 'info'
-      // 降级标记优先：避免「补成功日志 / 总请求 200」把主路画成成功、备用画成跳过
-      if (fallbackUsed && isFallbackNode) {
-        status = 'ok'
-      } else if (fallbackUsed && !isFallbackNode) {
+      if (fallbackUsed && !isFallbackNode) {
+        // 主节点：发生了降级即未产出最终结果
         status = 'fail'
+      } else if (isFallbackNode) {
+        if (fallbackUsed) {
+          // 降级节点：如实反映真实结果——若降级模型也失败（整体请求失败），不能标绿打勾
+          if (nr && (nr.success === false || nr.status === 'failed')) {
+            status = 'fail'
+          } else if (nr && nr.success) {
+            status = 'ok'
+          } else {
+            status = ok ? 'ok' : 'fail'
+          }
+        } else {
+          status = 'skip' // 未走降级 → 备用节点未执行
+        }
       } else if (nr) {
         if (nr.success === false || nr.status === 'failed') status = 'fail'
         else if (nr.status === 'skipped' || nr.skipped) status = 'skip'
         else status = 'ok'
-      } else if (isFallbackNode) {
-        status = 'skip'
       } else {
         status = ok ? 'ok' : 'fail'
       }
@@ -478,14 +491,15 @@ function buildTraceFromMeta(
   headers: Record<string, string>,
   pipeline: AgentPatternPipeline | undefined,
   ok: boolean,
-  observedModel?: string
+  observedModel?: string,
+  errorText?: string
 ): TraceInfo {
   const mergedMeta = { ...meta }
   // 流式 chunk 里的 model（如 deepseek-v4-flash）可作为降级后模型的补充信号
   if (observedModel && !mergedMeta.executor_model && !mergedMeta.fallback_to_model) {
     mergedMeta.observed_model = observedModel
   }
-  let fallbackUsed = detectFallbackUsed(mergedMeta, headers)
+  let fallbackUsed = detectFallbackUsed(mergedMeta, headers, errorText)
   // 兜底：实际响应模型与主节点配置模型不同，且命中备用节点模型时，视为已降级
   if (!fallbackUsed && observedModel && pipeline) {
     const primary = pipeline.nodes?.find(n => !String(n.id).includes('fallback'))
@@ -542,7 +556,7 @@ function buildTraceFromMeta(
     requestId: headers['x-request-id'] || undefined,
     sessionId: headers['x-session-id'] || undefined,
     nodeResults: Array.isArray(mergedMeta.node_results) ? mergedMeta.node_results : [],
-    steps: buildFlowSteps(pipeline, mergedMeta, headers, ok),
+    steps: buildFlowSteps(pipeline, mergedMeta, headers, ok, errorText),
     headers,
     rawMeta: Object.keys(mergedMeta).length ? mergedMeta : undefined,
   }
@@ -715,7 +729,7 @@ async function sendMessage() {
               ? data.error
               : data.error.message || JSON.stringify(data.error)
             assistantMsg.error = errMsg
-            assistantMsg.trace = buildTraceFromMeta(meta, headers, pipeline, false, observedModel)
+            assistantMsg.trace = buildTraceFromMeta(meta, headers, pipeline, false, observedModel, errMsg)
             loading.value = false
             return
           }
@@ -739,10 +753,10 @@ async function sendMessage() {
     // 流结束后再读一次 header（部分环境可补全；多数浏览器已冻结，故以 meta 为主）
     headers = { ...headers, ...collectResponseHeaders(response) }
     const ok = !assistantMsg.error && (!!assistantMsg.content || truthy(meta.success))
-    assistantMsg.trace = buildTraceFromMeta(meta, headers, pipeline, ok || !assistantMsg.error, observedModel)
+    assistantMsg.trace = buildTraceFromMeta(meta, headers, pipeline, ok || !assistantMsg.error, observedModel, assistantMsg.error)
   } catch (e: any) {
     assistantMsg.error = e.message || t('minimalChat.requestFailed')
-    assistantMsg.trace = buildTraceFromMeta(meta, headers, pipeline, false, observedModel)
+    assistantMsg.trace = buildTraceFromMeta(meta, headers, pipeline, false, observedModel, assistantMsg.error)
     ElMessage.error(assistantMsg.error)
   } finally {
     loading.value = false

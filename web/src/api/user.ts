@@ -153,3 +153,11 @@ export function getAdminAPIKey(userId: number, keyId: number): Promise<APIKeyDet
 export function adminCreateAPIKey(req: CreateAPIKeyRequest & { user_id: number }): Promise<APIKeyWithFull> {
   return api.post('/api/v1/admin/api-keys', req)
 }
+
+export function adminUpdateAPIKey(keyId: number, req: UpdateAPIKeyRequest): Promise<APIKey> {
+  return api.put(`/api/v1/admin/api-keys/${keyId}`, req)
+}
+
+export function adminDeleteAPIKey(keyId: number): Promise<void> {
+  return api.delete(`/api/v1/admin/api-keys/${keyId}`)
+}
