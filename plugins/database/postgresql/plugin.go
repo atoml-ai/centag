@@ -512,9 +512,21 @@ func (s *pgAPIKeyStore) Update(ctx context.Context, key *database.APIKey) error 
 }
 
 func (s *pgAPIKeyStore) Delete(ctx context.Context, id int64) error {
-	query := `DELETE FROM api_keys WHERE id = $1`
-	_, err := s.db.ExecContext(ctx, query, id)
-	return err
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	// Preserve usage history: release token_usage rows referencing the key,
+	// otherwise the FK (NO ACTION) rejects deleting a key that has usage rows.
+	if _, err := tx.ExecContext(ctx, `UPDATE token_usage SET api_key_id = NULL WHERE api_key_id = $1`, id); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM api_keys WHERE id = $1`, id); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 func (s *pgAPIKeyStore) UpdateLastUsed(ctx context.Context, id int64, t time.Time) error {

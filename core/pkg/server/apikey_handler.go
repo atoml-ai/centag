@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"centag/core/internal/auth"
@@ -105,6 +106,17 @@ func (h *APIKeyHandler) CreateAPIKey(c *gin.Context) {
 		return
 	}
 
+	existing, err := database.Get().APIKeyStore().ListByUserID(c.Request.Context(), userID)
+	if err != nil {
+		logger.Errorf("check duplicate api key name user %d: %v", userID, err)
+		RespondInternalError(c, "failed to create API key")
+		return
+	}
+	if userAPIKeyNameConflict(existing, req.Name, 0) {
+		RespondError(c, http.StatusBadRequest, "API key name already exists")
+		return
+	}
+
 	fullKey, keyHash, keyPrefix, err := auth.GenerateAPIKey()
 	if err != nil {
 		RespondInternalError(c, "failed to generate API key")
@@ -201,6 +213,15 @@ func (h *APIKeyHandler) UpdateAPIKey(c *gin.Context) {
 		return
 	}
 	if req.Name != nil {
+		existing, listErr := db.APIKeyStore().ListByUserID(ctx, userID)
+		if listErr != nil {
+			RespondInternalError(c, "failed to update API key")
+			return
+		}
+		if userAPIKeyNameConflict(existing, *req.Name, key.ID) {
+			RespondError(c, http.StatusBadRequest, "API key name already exists")
+			return
+		}
 		key.Name = *req.Name
 	}
 	if req.Enabled != nil {
@@ -260,6 +281,7 @@ func (h *APIKeyHandler) DeleteAPIKey(c *gin.Context) {
 	}
 
 	if err := db.APIKeyStore().Delete(ctx, keyID); err != nil {
+		logger.Errorf("delete api key %d user %d: %v", keyID, userID, err)
 		RespondInternalError(c, "failed to delete API key")
 		return
 	}
@@ -397,4 +419,22 @@ func toAPIKeyResponses(keys []*database.APIKey) []APIKeyResponse {
 		resp = append(resp, toAPIKeyResponse(k))
 	}
 	return resp
+}
+
+// userAPIKeyNameConflict reports whether any of the user's API keys already uses
+// the given name (case-insensitive, trimmed). excludeID skips the key being updated.
+func userAPIKeyNameConflict(keys []*database.APIKey, name string, excludeID int64) bool {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return false
+	}
+	for _, k := range keys {
+		if k == nil || k.ID == excludeID {
+			continue
+		}
+		if strings.EqualFold(strings.TrimSpace(k.Name), name) {
+			return true
+		}
+	}
+	return false
 }
