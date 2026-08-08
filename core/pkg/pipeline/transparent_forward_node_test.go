@@ -1145,7 +1145,7 @@ func TestTransparentForwardNode_BillingFallbackRetriesFreeModel(t *testing.T) {
 	}
 }
 
-func TestBillingFallbackCandidates_IgnoresResolvedFreeWhenBodyStillPaid(t *testing.T) {
+func TestBillingFallbackCandidates_NoFreeTierAutoPick(t *testing.T) {
 	mgr := backend.NewManager()
 	_ = mgr.Add(&backend.BackendConfig{
 		ID:      "zen",
@@ -1160,30 +1160,27 @@ func TestBillingFallbackCandidates_IgnoresResolvedFreeWhenBodyStillPaid(t *testi
 	backend.SetManagerForTest(mgr)
 	t.Cleanup(func() { backend.SetManagerForTest(nil) })
 
-	// 模拟：resolvedModel 已是 free，但 body 仍是付费 —— free 不得进入 failed 集合
+	// 未配置显式降级模型时，不得自动替换为「同后端免费档模型」——
+	// 用户显式指定的主/备模型不可用时应如实失败，而不是静默改用未指定的免费模型。
 	failed := map[string]bool{"gpt-5.6-luna": true}
 	cands := billingFallbackCandidates("zen", failed)
-	found := false
 	for _, c := range cands {
-		if c.model == "deepseek-v4-flash-free" && c.backendID == "zen" {
-			found = true
+		if c.model == "deepseek-v4-flash-free" {
+			t.Fatalf("free-tier auto-pick must be removed, got %#v", cands)
 		}
 		if strings.Contains(c.model, "{{") || strings.Contains(c.backendID, "{{") {
 			t.Fatalf("placeholder leaked into candidates: %#v", c)
 		}
 	}
-	if !found {
-		t.Fatalf("expected free-tier candidate, got %#v", cands)
-	}
 }
 
-func TestTransparentForwardNode_BillingFallbackPicksFreeTierWhenUnset(t *testing.T) {
+func TestTransparentForwardNode_BillingFallbackNoFreeTierWhenUnset(t *testing.T) {
 	prevCfg := config.Get()
 	config.Set(&config.Config{
 		Proxy: config.ProxyConfig{
 			DefaultBackendID: "zen",
 			DefaultModel:     "gpt-5.4-nano",
-			// FallbackModel 未配置：应从 SupportedModels 挑选 *-free
+			// FallbackModel 未配置：不得从 SupportedModels 自动挑选 *-free 替代
 		},
 	})
 	t.Cleanup(func() { config.Set(prevCfg) })
@@ -1214,7 +1211,6 @@ func TestTransparentForwardNode_BillingFallbackPicksFreeTierWhenUnset(t *testing
 			body   string
 		}{
 			{401, `{"error":{"type":"CreditsError","message":"Insufficient balance"}}`},
-			{200, `{"id":"ok"}`},
 		},
 	}
 	broker := &mockCapabilityBroker{httpClient: seq}
@@ -1231,20 +1227,14 @@ func TestTransparentForwardNode_BillingFallbackPicksFreeTierWhenUnset(t *testing
 	tf := node.(*TransparentForwardNode)
 	tf.SetCapabilityBroker(broker)
 
-	out, err := tf.Execute(context.Background(), &NodeInput{
+	_, err = tf.Execute(context.Background(), &NodeInput{
 		Metadata: map[string]interface{}{
 			"request_path":     "/v1/chat/completions",
 			"raw_request_body": `{"model":"gpt-5.4-nano","messages":[{"role":"user","content":"hi"}]}`,
 		},
 	})
-	if err != nil {
-		t.Fatalf("Execute: %v", err)
-	}
-	if !strings.Contains(seq.bodies[1], "mimo-v2.5-free") {
-		t.Fatalf("expected free-tier rewrite, body=%s", seq.bodies[1])
-	}
-	if out.Metadata["billing_fallback_used"] != true {
-		t.Fatal("expected billing_fallback_used")
+	if err == nil {
+		t.Fatal("expected error when no configured fallback candidate (free-tier auto-pick removed)")
 	}
 }
 
@@ -1362,7 +1352,7 @@ func TestRetryableAccountFailure_Plain401(t *testing.T) {
 	}
 }
 
-func TestBillingFallbackCandidates_SameBackendBeforeOther(t *testing.T) {
+func TestBillingFallbackCandidates_UsesConfiguredFallbackOnly(t *testing.T) {
 	prevCfg := config.Get()
 	config.Set(&config.Config{
 		Proxy: config.ProxyConfig{
@@ -1386,23 +1376,9 @@ func TestBillingFallbackCandidates_SameBackendBeforeOther(t *testing.T) {
 	t.Cleanup(func() { backend.SetManagerForTest(nil) })
 
 	cands := billingFallbackCandidates("primary", map[string]bool{"paid-model": true})
-	if len(cands) < 2 {
-		t.Fatalf("expected same-backend then other-backend, got %#v", cands)
-	}
-	if cands[0].backendID != "primary" {
-		t.Fatalf("first candidate should be same backend, got %#v", cands[0])
-	}
-	foundOther := false
-	for i, c := range cands {
-		if c.backendID == "other" {
-			foundOther = true
-			if i == 0 {
-				t.Fatalf("other backend must not come before same-backend candidates: %#v", cands)
-			}
-		}
-	}
-	if !foundOther {
-		t.Fatalf("expected other backend candidate, got %#v", cands)
+	// 只应包含显式配置的降级后端模型，不得自动补同后端免费档
+	if len(cands) != 1 || cands[0].backendID != "other" || cands[0].model != "other-model" {
+		t.Fatalf("expected only configured fallback, got %#v", cands)
 	}
 }
 

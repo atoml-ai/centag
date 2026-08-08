@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"centag/core/internal/auth"
+	"centag/core/pkg/backend"
 	"centag/core/pkg/config"
 	"centag/core/pkg/database"
 	"centag/core/pkg/metrics"
@@ -481,6 +482,18 @@ func (d *ModeDispatcher) writeResponse(
 	if output.ExecutionLog != nil {
 		totalTokens = output.ExecutionLog.TotalTokens
 		resp.TokensUsed = totalTokens
+	}
+
+	// 空响应防护：上游失败被降级/旁路逻辑聚合成「成功但空」的 output 时，
+	// 不得再向客户端返回空 200（会表现为"很快返回但无输出"）。视为上游失败，
+	// 返回 502 并透出失败原因，避免客户端把空响应当成功结果消费。
+	if isEmptyPipelineOutput(output, totalTokens) {
+		hint := pipelineEmptyOutputHint(output)
+		if hint == "" {
+			hint = "upstream returned an empty response after exhausting retries and fallbacks"
+		}
+		c.JSON(http.StatusBadGateway, backend.OpenAIErrorBody("upstream_empty_response", hint))
+		return nil
 	}
 
 	requestID := c.GetHeader("X-Request-ID")
@@ -1165,6 +1178,21 @@ func (d *ModeDispatcher) writeStreamResponse(
 			flusher.Flush()
 		}
 		responseContent.WriteString(finalOutput.Content)
+	}
+
+	// 空响应防护（流式）：一个 chunk 都没写出且聚合 output 为空时，写 SSE 错误
+	// 而非空的 [DONE]，避免客户端把"上游失败聚合成空"当成功消费（表现为无输出）。
+	if chunkIndex == 0 && responseContent.Len() == 0 && isEmptyPipelineOutput(finalOutput, pipelineOutputTotalTokens(finalOutput)) {
+		hint := pipelineEmptyOutputHint(finalOutput)
+		if hint == "" {
+			hint = "upstream returned an empty response after exhausting retries and fallbacks"
+		}
+		errorLine := formatter.FormatError(model, fmt.Errorf("%s", hint), responseID, created)
+		if errorLine != "" {
+			fmt.Fprint(c.Writer, errorLine)
+			flusher.Flush()
+		}
+		return nil
 	}
 
 	// 发送 usage 信息和结束标记
@@ -2442,4 +2470,69 @@ func setPipelineOutputHeaders(c *gin.Context, output *pipeline.PipelineOutput) {
 			c.Header(headerKey, fmt.Sprintf("%v", v))
 		}
 	}
+}
+
+// isEmptyPipelineOutput 判断流水线输出是否为「空」：无正文、无工具调用、
+// 无推理内容、无 token、无消息。此类输出对客户端毫无价值，通常是上游失败
+// 被降级/旁路逻辑聚合成空响应的结果，应作为错误返回而非空 200。
+func isEmptyPipelineOutput(output *pipeline.PipelineOutput, totalTokens int) bool {
+	if output == nil {
+		return false
+	}
+	if strings.TrimSpace(output.Content) != "" ||
+		len(output.ToolCalls) > 0 ||
+		totalTokens > 0 ||
+		strings.TrimSpace(output.ReasoningContent) != "" ||
+		len(output.Messages) > 0 {
+		return false
+	}
+	return true
+}
+
+// pipelineOutputTotalTokens 返回执行日志的总 token 数。
+func pipelineOutputTotalTokens(output *pipeline.PipelineOutput) int {
+	if output == nil || output.ExecutionLog == nil {
+		return 0
+	}
+	return output.ExecutionLog.TotalTokens
+}
+
+// pipelineEmptyOutputHint 从执行日志中提取空响应的原因：
+//   - 末节点成功但输出为空 → 上游/降级模型返回了空内容（限流/无输出），
+//     此时不能只报主节点错误，否则客户端会误以为没有走降级。
+//   - 否则取最后一个失败节点的错误信息。
+func pipelineEmptyOutputHint(output *pipeline.PipelineOutput) string {
+	if output == nil || output.ExecutionLog == nil {
+		return ""
+	}
+	if strings.TrimSpace(output.ExecutionLog.ErrorMessage) != "" {
+		return output.ExecutionLog.ErrorMessage
+	}
+	lastNodeID := strings.TrimSpace(output.LastNode)
+	var lastModel string
+	var lastFailed string
+	var lastLog *pipeline.NodeExecutionLog
+	for i := range output.ExecutionLog.NodeLogs {
+		nl := &output.ExecutionLog.NodeLogs[i]
+		if strings.TrimSpace(nl.Model) != "" {
+			lastModel = nl.Model
+		}
+		if !nl.Success && strings.TrimSpace(nl.ErrorMessage) != "" {
+			lastFailed = nl.ErrorMessage
+		}
+		if lastNodeID != "" && nl.NodeID == lastNodeID {
+			lastLog = nl
+		}
+	}
+	if lastLog != nil && lastLog.Success && lastModel != "" {
+		primary := ""
+		if lastFailed != "" {
+			primary = "primary error: " + lastFailed
+		}
+		return fmt.Sprintf("model %q returned an empty response after fallback (%s)", lastModel, primary)
+	}
+	if lastFailed != "" {
+		return lastFailed
+	}
+	return ""
 }

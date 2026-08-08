@@ -389,7 +389,25 @@ func (n *TransparentForwardNode) Execute(ctx context.Context, input *NodeInput) 
 
 	out := n.buildTransparentOutput(targetURL, statusCode, contentType, respBody, backendID, resolvedModel, clientModel, requestPath, bridgeToChat, anthropicToChat, nil)
 	applyReasoningRoundtripOnResponse(meta, body, respBody, statusCode)
+
+	// 上游返回空正文（HTTP 成功但 0 token/无正文/无工具调用）视为节点失败：
+	// 交给降级/错误处理，否则主备都会被当成「成功但无输出」，客户端拿不到真实错误。
+	if statusCode >= 200 && statusCode < 400 && transparentOutputIsEmpty(out) {
+		return nil, newTransparentUpstreamError(n.id, backendID, resolvedModel, targetURL, http.StatusBadGateway,
+			"upstream returned an empty response (0 tokens)")
+	}
+
 	return out, nil
+}
+
+// transparentOutputIsEmpty 判断透明转发节点输出是否为空（无正文、无工具调用、无推理）。
+func transparentOutputIsEmpty(out *NodeOutput) bool {
+	if out == nil {
+		return true
+	}
+	return strings.TrimSpace(out.Content) == "" &&
+		len(out.ToolCalls) == 0 &&
+		strings.TrimSpace(out.ReasoningContent) == ""
 }
 
 // retryableAccountFailure 同后端账户池内是否应换下一把 Key（优先于跨后端）：
@@ -570,15 +588,15 @@ func billingFallbackCandidatesContext(ctx context.Context, primaryBackend string
 	}
 
 	// 同后端换模型优先；其它后端最后（账户池 Key 轮换已在外层完成）。
+	// 注意：不自动替换为「同后端免费档模型」——用户显式配置的主/备模型不可用时
+	// 应如实失败（由流水线降级组继续尝试用户配置的备用节点），而不是静默改用未指定的免费模型。
 	sameBackendFallbackModel := fbModel
 	if !strings.EqualFold(fbBackend, primaryBackend) {
 		sameBackendFallbackModel = ""
 	}
 	add(primaryBackend, sameBackendFallbackModel)
-	add(primaryBackend, pickFreeTierModel(primaryBackend))
 	if fbBackend != "" && !strings.EqualFold(fbBackend, primaryBackend) && !strings.Contains(fbBackend, "{{") {
 		add(fbBackend, fbModel)
-		add(fbBackend, pickFreeTierModel(fbBackend))
 	}
 	return out
 }
