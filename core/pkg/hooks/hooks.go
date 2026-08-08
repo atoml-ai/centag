@@ -93,6 +93,9 @@ type TokenUsage struct {
 	// TenantID 租户 ID（team；单用户可为空）
 	TenantID string `json:"tenant_id,omitempty"`
 
+	// GroupID 组 ID（036 shared-pool metering；用户自建后端时记为用户 scope，避免计入组共享池）
+	GroupID string `json:"group_id,omitempty"`
+
 	// RequestID 请求 ID
 	RequestID string `json:"request_id,omitempty"`
 

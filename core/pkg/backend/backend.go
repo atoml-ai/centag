@@ -217,6 +217,21 @@ func GetManager() *Manager {
 	return globalManager
 }
 
+// UserOwnedScope returns the ownership scope (user:{id} or the user's legacy
+// tenant) for a user-created backend, or "" for system/team backends.
+// Backends created by a user carry BackendConfig.TenantID (see ownTenantID),
+// so usage recorded against them must not count into team/group quota pools.
+func UserOwnedScope(backendID string) string {
+	if strings.TrimSpace(backendID) == "" {
+		return ""
+	}
+	cfg, err := GetManager().Get(backendID)
+	if err != nil || cfg == nil {
+		return ""
+	}
+	return strings.TrimSpace(cfg.TenantID)
+}
+
 // SetManagerForTest replaces the process-wide manager (tests only).
 func SetManagerForTest(m *Manager) {
 	once.Do(func() {

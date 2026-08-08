@@ -7,6 +7,7 @@ import (
 
 	"centag/core/internal/auth"
 	"centag/core/internal/tokenusage"
+	"centag/core/pkg/backend"
 	"centag/core/pkg/hooks"
 	"centag/core/pkg/pipeline"
 	"github.com/gin-gonic/gin"
@@ -75,6 +76,13 @@ func maybeRecordTokenUsage(c *gin.Context, output *pipeline.PipelineOutput, fall
 		DeptTag:      deptTag,
 	}
 
+	// 用户自建后端（TenantID 非空 = 用户私有）：用量归属到用户 scope，
+	// 使团队 tenant 配额与组共享池配额均不计入（用量仍正常记录展示）。
+	if scope := backend.UserOwnedScope(usage.Backend); scope != "" {
+		usage.TenantID = scope
+		usage.GroupID = scope
+	}
+
 	go func() {
 		ctx := context.Background()
 		if hm := hooks.Default(); hm != nil {
@@ -89,6 +97,7 @@ func maybeRecordTokenUsage(c *gin.Context, output *pipeline.PipelineOutput, fall
 				CompletionTokens: usage.OutputTokens,
 				TotalTokens:      usage.TotalTokens,
 				TenantID:         usage.TenantID,
+				GroupID:          usage.GroupID,
 				DeptTag:          usage.DeptTag,
 				RequestID:        usage.RequestID,
 				ClientIP:         clientIP,
