@@ -13,7 +13,7 @@ func TestResolveFallbackRuleTarget_RequestedModelPlaceholder(t *testing.T) {
 			"raw_request_body": `{"model":"gpt-5.4-nano","messages":[]}`,
 		},
 	}
-	backend, model := resolveFallbackRuleTarget(config.FallbackRule{
+	backend, model := resolveFallbackRuleTarget(context.Background(), config.FallbackRule{
 		BackendID: "opencode-zen",
 		Model:     "{{requested_model}}",
 	}, input, "opencode-zen", "gpt-5.6-luna")

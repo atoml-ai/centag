@@ -1,6 +1,7 @@
 package pipeline
 
 import (
+	"context"
 	"errors"
 	"testing"
 
@@ -13,7 +14,7 @@ func TestDefaultLLMProvider_CreateClient_NoBackend(t *testing.T) {
 	pm := plugin.NewManager()
 	provider := NewDefaultLLMProvider(mgr, pm)
 
-	_, err := provider.CreateClient("missing-backend", "gpt-4o-mini")
+	_, err := provider.CreateClient(context.Background(), "missing-backend", "gpt-4o-mini")
 	if err == nil {
 		t.Fatal("expected error when backend missing")
 	}
@@ -38,7 +39,7 @@ func TestDefaultLLMProvider_CreateClient_MissingAPIKey(t *testing.T) {
 	}
 	provider := NewDefaultLLMProvider(mgr, plugin.NewManager())
 
-	_, err := provider.CreateClient("openai", "gpt-4o-mini")
+	_, err := provider.CreateClient(context.Background(), "openai", "gpt-4o-mini")
 	if err == nil {
 		t.Fatal("expected error when api key missing")
 	}
@@ -50,7 +51,7 @@ func TestDefaultLLMProvider_CreateClient_MissingAPIKey(t *testing.T) {
 
 func TestDefaultLLMProvider_CreateClient_NilManager(t *testing.T) {
 	provider := NewDefaultLLMProvider(nil, plugin.NewManager())
-	_, err := provider.CreateClient("x", "m")
+	_, err := provider.CreateClient(context.Background(), "x", "m")
 	ce := backend.ClassifyClientError(err)
 	if ce == nil || ce.Code != backend.ErrorCodeNoBackendConfigured {
 		t.Fatalf("got %#v", ce)

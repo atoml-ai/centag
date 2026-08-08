@@ -91,9 +91,10 @@ type HTTPClient interface {
 // 用于通过后端管理器创建 LLM 客户端
 type LLMProvider interface {
 	// CreateClient 创建 LLM 客户端
+	// ctx: 请求上下文（携带 ProxyDefaults 等 per-request 信息）
 	// backendID: 后端 ID
 	// model: 模型名称
-	CreateClient(backendID, model string) (LLMClient, error)
+	CreateClient(ctx context.Context, backendID, model string) (LLMClient, error)
 }
 
 // ========== Cache Strategy Capabilities ==========
@@ -278,7 +279,7 @@ func (b *DefaultCapabilityBroker) GetLLMClient(ctx context.Context, permissions 
 			return nil, fmt.Errorf("llm.call requires backend ID and model in permissions (e.g., llm.call:backend-id:model-name)")
 		}
 		
-		return b.llmProvider.CreateClient(backendID, model)
+		return b.llmProvider.CreateClient(ctx, backendID, model)
 	}
 
 	return nil, fmt.Errorf("llm.call not available: LLM provider not configured")
@@ -298,7 +299,7 @@ func (b *DefaultCapabilityBroker) GetLLMStreamClient(ctx context.Context, permis
 			return nil, fmt.Errorf("llm.call requires backend ID and model in permissions (e.g., llm.call:backend-id:model-name)")
 		}
 		
-		client, err := b.llmProvider.CreateClient(backendID, model)
+		client, err := b.llmProvider.CreateClient(ctx, backendID, model)
 		if err != nil {
 			return nil, err
 		}

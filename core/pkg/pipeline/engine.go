@@ -1637,7 +1637,7 @@ func (e *PipelineEngine) executePolicyFallback(
 ) (*NodeOutput, error) {
 	originalBackend := originalConfig.Config.Backend
 	originalModel := originalConfig.Config.Model
-	origBackendResolved, origModelResolved := ResolveVirtualVars(originalBackend, originalModel)
+	origBackendResolved, origModelResolved := ResolveVirtualVarsContext(ctx, originalBackend, originalModel)
 	// 与配置默认值比较不够：客户端可能仍打付费 model，而 default 已是免费档
 	failedModel := resolveClientRequestedModel(input, "")
 	if failedModel == "" {
@@ -1707,7 +1707,7 @@ func (e *PipelineEngine) executePolicyFallback(
 	}
 
 	for _, rule := range policy.SortedRules() {
-		resolvedBackend, resolvedModel := resolveFallbackRuleTarget(rule, input, origBackendResolved, origModelResolved)
+		resolvedBackend, resolvedModel := resolveFallbackRuleTarget(ctx, rule, input, origBackendResolved, origModelResolved)
 		// 同后端跨模型：规则里即使写了 system.default_backend，也钉死在失败节点的实际后端。
 		// 否则直连钉死 opencode-zen 时，会误跳到系统默认 bigmodel-ai。
 		if policy.Strategy == config.StrategySameBackendDifferentModel && origBackendResolved != "" {
@@ -1737,8 +1737,8 @@ func (e *PipelineEngine) executePolicyFallback(
 }
 
 // resolveFallbackRuleTarget 解析规则中的 backend/model 占位符；绝不把 "{{...}}" 原样发给上游。
-func resolveFallbackRuleTarget(rule config.FallbackRule, input *NodeInput, origBackend, origModel string) (string, string) {
-	resolvedBackend, resolvedModel := ResolveVirtualVars(rule.BackendID, rule.Model) // fallback rules use global defaults
+func resolveFallbackRuleTarget(ctx context.Context, rule config.FallbackRule, input *NodeInput, origBackend, origModel string) (string, string) {
+	resolvedBackend, resolvedModel := ResolveVirtualVarsContext(ctx, rule.BackendID, rule.Model) // fallback rules use global defaults
 
 	switch strings.TrimSpace(rule.Model) {
 	case "{{requested_model}}":
@@ -2595,13 +2595,13 @@ func (e *ConfigIncompleteError) Error() string {
 }
 
 // CreateClient 创建 LLM 客户端（支持虚拟变量解析和降级策略）
-func (p *DefaultLLMProvider) CreateClient(backendID, model string) (LLMClient, error) {
+func (p *DefaultLLMProvider) CreateClient(ctx context.Context, backendID, model string) (LLMClient, error) {
 	if p.backendManager == nil {
 		return nil, backend.NewNoUsableBackendError(fmt.Errorf("backend manager not available"))
 	}
 
-	// 1. 解析虚拟变量
-	resolvedBackend, resolvedModel := p.resolveVirtualVars(backendID, model)
+	// 1. 解析虚拟变量（携带用户 ProxyDefaults）
+	resolvedBackend, resolvedModel := p.resolveVirtualVarsContext(ctx, backendID, model)
 	// 1b. 兜底：已有 default_backend，但 default_model 为空时，取该后端的首选模型
 	if strings.TrimSpace(resolvedModel) == "" && strings.TrimSpace(resolvedBackend) != "" && p.backendManager != nil {
 		if b, err := p.backendManager.Get(resolvedBackend); err == nil {
@@ -2669,9 +2669,14 @@ func (p *DefaultLLMProvider) CreateClient(backendID, model string) (LLMClient, e
 	return p.createClientFromConfig(backendConfig, resolvedModel)
 }
 
-// resolveVirtualVars 解析虚拟变量
+// resolveVirtualVars 解析虚拟变量（无请求上下文，用于非请求路径）
 func (p *DefaultLLMProvider) resolveVirtualVars(backendID, model string) (string, string) {
 	return ResolveVirtualVars(backendID, model)
+}
+
+// resolveVirtualVarsContext 解析虚拟变量，携带请求上下文以支持 Team 用户默认值覆盖。
+func (p *DefaultLLMProvider) resolveVirtualVarsContext(ctx context.Context, backendID, model string) (string, string) {
+	return ResolveVirtualVarsContext(ctx, backendID, model)
 }
 
 // ResolveVirtualVars 解析 {{system.default_*}} / {{system.fallback_*}} 虚拟变量。
