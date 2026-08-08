@@ -871,22 +871,126 @@ build_all() {
     build all
 }
 
+# 交叉编译 OTA 服务端二进制（目标平台 ≠ 本机时自动调用）。
+# 返回编译后的二进制路径；失败则 exit 1。
+_ota_cross_build() {
+    local edition="$1" goos="$2" goarch="$3" out_dir="$4"
+    local out_bin="${out_dir}/centag-${edition}"
+    mkdir -p "$out_dir"
+
+    local ver_ldflags="-X 'main.Version=${CENTAG_VERSION}' -X 'main.BuildTime=${BUILD_TIME}'"
+    local tags
+    tags="$(_get_dist_tags "$edition")"
+
+    case "$goos" in
+        darwin|linux|windows) ;;
+        *)
+            print_error "不支持的目标系统: $goos（darwin|linux|windows）" >&2
+            exit 1
+            ;;
+    esac
+    case "$goarch" in
+        amd64|arm64) ;;
+        *)
+            print_error "不支持的目标架构: $goarch（amd64|arm64）" >&2
+            exit 1
+            ;;
+    esac
+
+    if [ "$edition" = "team" ]; then
+        # Team 商业二进制只在 centag-pro 构建（开源仓无 dist/team）
+        local pro_root="${PROJECT_ROOT}/../centag-pro"
+        if [ ! -f "$pro_root/scripts/build-team.sh" ]; then
+            print_error "交叉编译 team 需要私有仓: $pro_root" >&2
+            echo "  export CENTAG_ROOT=${PROJECT_ROOT}" >&2
+            exit 1
+        fi
+        print_info "交叉编译 team ${goos}/${goarch}（centag-pro）..." >&2
+        ( cd "$pro_root" \
+            && GOOS="$goos" GOARCH="$goarch" CGO_ENABLED=0 \
+               ASSEMBLE_OUT_DIR="$out_dir" ASSEMBLE_OUT="$out_bin" \
+               CENTAG_ROOT="$PROJECT_ROOT" \
+               bash "$pro_root/scripts/build-team.sh" >&2 ) \
+            || { print_error "team 交叉编译失败" >&2; exit 1; }
+    else
+        # personal / minimal：开源 dist/<edition> 交叉编译
+        local dist_dir="${PROJECT_ROOT}/dist/${edition}"
+        if [ ! -d "$dist_dir" ]; then
+print_error "版本目录不存在: $dist_dir" >&2
+            exit 1
+        fi
+        print_info "交叉编译 ${edition} ${goos}/${goarch}（$dist_dir）..." >&2
+        ( cd "$dist_dir" \
+            && CGO_ENABLED=0 GOOS="$goos" GOARCH="$goarch" \
+               go build -tags "$tags" -ldflags "-s -w $ver_ldflags" -o "$out_bin" . >&2 ) \
+            || { print_error "${edition} 交叉编译失败" >&2; exit 1; }
+    fi
+
+    [ -f "$out_bin" ] || { print_error "交叉编译未产出 $out_bin" >&2; exit 1; }
+    echo "$out_bin"
+}
+
+# 解析 pack/ota 的单平台 → 使用哪个源二进制
+# $1=平台(goos-goarch 或空=本机) $2=版本 $3=跨平台产物目录
+# 返回: 二进制路径
+_ota_source_bin() {
+    local pf="$1" edition="$2" cache_dir="$3"
+    local host_goos host_goarch
+    host_goos="$(go env GOOS 2>/dev/null || uname -s | tr '[:upper:]' '[:lower:]')"
+    host_goarch="$(go env GOARCH 2>/dev/null || uname -m)"
+
+    if [ -z "$pf" ]; then
+        # 本机 → 使用已构建产物
+        if [ ! -f "$BIN_DIR/$SERVER_BIN" ]; then
+            print_error "未找到已编译的 centag（$BIN_DIR/$SERVER_BIN），请先: ./start.sh build" >&2
+            exit 1
+        fi
+        echo "$BIN_DIR/$SERVER_BIN"
+    else
+        local pgoos="${pf%%-*}" pgoarch="${pf#*-}"
+        if [ "$pgoos" = "$host_goos" ] && [ "$pgoarch" = "$host_goarch" ]; then
+            if [ ! -f "$BIN_DIR/$SERVER_BIN" ]; then
+                print_error "未找到本机二进制 $BIN_DIR/$SERVER_BIN，请先: ./start.sh build" >&2
+                exit 1
+            fi
+            echo "$BIN_DIR/$SERVER_BIN"
+        else
+            _ota_cross_build "$edition" "$pgoos" "$pgoarch" "$cache_dir"
+        fi
+    fi
+}
+
 # Pack - 打包更新包（参考 gov-subscribe）
 pack() {
     local upload=false
+    local platforms=""
+    local edition=""
     local package_script="${PROJECT_ROOT}/scripts/release/package.sh"
 
-    # 解析参数
+    # 解析参数（平台统一为 --platforms <goos-goarch,...>，与 cli 一致）
     while [ $# -gt 0 ]; do
         case "$1" in
             --upload)
                 upload=true
                 shift
                 ;;
+            --platforms)
+                platforms="${2:-}"
+                shift 2
+                ;;
+            --edition)
+                edition="${2:-}"
+                shift 2
+                ;;
+            --version)
+                shift 2
+                ;;
             *)
                 print_error "未知参数: $1"
-                echo "用法: $0 pack [--upload]"
-                echo "  --upload  先构建，再打包，然后更新到容器"
+                echo "用法: $0 package ota [--upload] [--platforms <goos-goarch,...>] [--edition <personal|minimal|team>]"
+                echo "  --upload     先构建，再打包，然后更新到容器"
+                echo "  --platforms  目标平台 goos-goarch，逗号分隔可多个（默认本机）"
+                echo "  --edition    版本（默认取当前布局 edition）"
                 exit 1
                 ;;
         esac
@@ -906,23 +1010,58 @@ pack() {
     print_info "=== 步骤 2/4: 打包更新包 ==="
     print_info "通过统一脚本打包更新包..."
 
-    # 确保已构建（如果没指定 --upload，仍然检查）
-    if [ ! -f "$BIN_DIR/$SERVER_BIN" ]; then
-        print_error "未找到编译后的 centag，请先执行构建"
-        echo "  ./start.sh build"
+    # 版本默认值：中心 edition（布局）或 env
+    local edition_default="${edition:-${CENTAG_EDITION:-${CENTAG_PACKAGE_EDITION:-personal}}}"
+
+    # --edition 驱动布局：BIN_DIR/STATIC_DIR 切到对应 lib/<edition>，
+    # 确保 OTA 包携带该版本的 Web 静态（否则会用默认 personal 的旧静态）。
+    if [ -n "$edition_default" ]; then
+        centag_set_edition "$edition_default"
+    fi
+
+    # 平台列表展开；空 → 默认本机（release 脚本自行推断 goos/goarch）
+    local -a ota_platforms=()
+    if [ -n "$platforms" ]; then
+        IFS=',' read -r -a ota_platforms <<< "$platforms"
+    else
+        ota_platforms=("")
+    fi
+    if [ "$upload" = true ] && [ "${#ota_platforms[@]}" -gt 1 ]; then
+        print_error "--upload 仅支持单平台发布，请指定 --platforms <单目标> 或省略（默认本机）"
         exit 1
     fi
 
+    # 跨平台编译产物缓存目录（./bin/ota-cross 同级，避免污染正式 BIN）
+    local cross_dir="${BIN_DIR}/ota-cross"
+    mkdir -p "$cross_dir"
+
     mkdir -p "$PACKAGES_DIR"
-    local package_path
-    package_path="$(
-        bash "$package_script" service \
-            --version "$VERSION" \
-            --build-time "$BUILD_TIME" \
-            --source-bin "$BIN_DIR/$SERVER_BIN" \
-            --source-static "$BIN_DIR/static" \
-            --out-dir "$PACKAGES_DIR"
-    )"
+    local package_path=""
+    local -a produced=()
+    local pf pf_args_=()
+    for pf in "${ota_platforms[@]}"; do
+        local src_bin
+        src_bin="$(_ota_source_bin "$pf" "$edition_default" "$cross_dir")"
+        local pf_args=()
+        if [ -n "$pf" ]; then
+            local pgoos="${pf%%-*}"
+            local pgoarch="${pf#*-}"
+            pf_args+=(--goos "$pgoos" --goarch "$pgoarch")
+        fi
+        pf_args+=(--edition "$edition_default")
+        pf_args+=(--source-bin "$src_bin")
+        package_path="$(
+            bash "$package_script" service \
+                --version "$VERSION" \
+                --build-time "$BUILD_TIME" \
+                --source-static "$BIN_DIR/static" \
+                --out-dir "$PACKAGES_DIR" \
+                "${pf_args[@]}"
+        )"
+        produced+=("$package_path")
+    done
+    rm -rf "$cross_dir"
+
     local package_name
     package_name="$(basename "$package_path" .tar.gz)"
 
@@ -934,15 +1073,18 @@ pack() {
     echo -e "${GREEN}========================================${NC}"
     echo -e "${GREEN}📦 Package Complete!${NC}"
     echo -e "${GREEN}========================================${NC}"
-    echo -e "${GREEN}Package: ${package_path}${NC}"
-    echo -e "${GREEN}Size: ${package_size}${NC}"
+    for produced_path in "${produced[@]}"; do
+        echo -e "${GREEN}Package: ${produced_path}${NC}"
+        echo -e "${GREEN}Size:    $(du -h "$produced_path" | cut -f1)${NC}"
+        if [ -f "${produced_path}.sha256" ]; then
+            echo -e "${GREEN}Checksum: ${produced_path}.sha256${NC}"
+        fi
+        if [ -f "${produced_path}.manifest.json" ]; then
+            echo -e "${GREEN}Manifest: ${produced_path}.manifest.json${NC}"
+        fi
+        echo ""
+    done
     echo -e "${GREEN}Version: v${VERSION}${NC}"
-    if [ -f "${package_path}.sha256" ]; then
-        echo -e "${GREEN}Checksum: ${package_path}.sha256${NC}"
-    fi
-    if [ -f "${package_path}.manifest.json" ]; then
-        echo -e "${GREEN}Manifest: ${package_path}.manifest.json${NC}"
-    fi
     echo ""
 
     # 如果指定了 --upload，更新到容器
@@ -3283,8 +3425,9 @@ show_short_help() {
     echo -e "  ${GREEN}build${NC}    <personal|minimal> [--desktop] [--docker] [--wrap]"
     echo -e "  ${GREEN}build${NC}    wrap                仅构建 centag-wrap"
     echo -e "  ${GREEN}clean${NC}    [build|install|all] [-y] 清理构建产物 / 已部署文件"
-    echo -e "  ${GREEN}pack${NC}     [--upload]              打包服务端更新包"
-    echo -e "  ${GREEN}package${NC}  <cli|desktop> <os> [arch]   部署包"
+    echo -e "  ${GREEN}pack${NC}     [--upload]              打包服务端更新包（旧别名）"
+    echo -e "  ${GREEN}package${NC}  ota [--platforms <目标平台> --edition <ed>] [--upload]   服务端 OTA 更新包（原 pack）"
+    echo -e "  ${GREEN}package${NC}  <cli|desktop> <os> [arch]   部署包，平台参数统一用 --platforms"
     echo -e "  ${GREEN}test${NC}                             运行单元测试"
     echo ""
 
@@ -3628,49 +3771,84 @@ _help_webui() {
 }
 
 _help_pack() {
-    echo -e "${GREEN}命令: pack${NC}"
+    echo -e "${GREEN}命令: pack${NC}（旧别名 → 推荐: package ota）"
     echo -e "       ${YELLOW}打包服务端更新包${NC}"
     echo ""
     echo -e "${CYAN}用法:${NC}"
-    echo -e "  ./start.sh pack [--upload]"
+    echo -e "  ./start.sh package ota [选项...]   （推荐）"
+    echo -e "  ./start.sh pack [选项...]          （旧别名）"
     echo ""
     echo -e "${CYAN}选项:${NC}"
-    echo -e "  ${GREEN}--upload${NC}   打包并上传热更新（需设置认证 Token）"
+    echo -e "  ${GREEN}--upload${NC}        打包并上传热更新（需设置认证 Token；仅支持单平台）"
+    echo -e "  ${GREEN}--platforms${NC}    目标平台 goos-goarch，逗号分隔可多个（默认本机）；跨平台自动交叉编译"
+    echo -e "  ${GREEN}--edition${NC}      版本 personal|minimal|team（默认布局 edition）"
+    echo ""
+    echo -e "${CYAN}说明:${NC}"
+    echo -e "  --platforms 目标 ≠ 本机时自动交叉编译（team 委托 centag-pro，personal/minimal 用本仓 dist）。"
     echo ""
     echo -e "${CYAN}认证优先级:${NC}"
     echo -e "  CENTAG_UPDATE_TOKEN > LLM_PROXY_DEFAULT_ADMIN_API_KEY"
     echo -e "  > LLM_PROXY_ADMIN_API_KEY > CENTAG_API_KEY"
     echo ""
     echo -e "${CYAN}示例:${NC}"
-    echo -e "  ./start.sh pack"
-    echo -e "  CENTAG_UPDATE_TOKEN=xxx ./start.sh pack --upload"
+    echo -e "  # 本机打包"
+    echo -e "  ./start.sh package ota"
+    echo -e "  # 指定平台/版本（跨平台自动交叉编译）"
+    echo -e "  ./start.sh package ota --platforms linux-amd64 --edition team"
+    echo -e "  ./start.sh package ota --platforms linux-amd64,linux-arm64 --edition personal"
+    echo -e "  # 打包并热更新（需认证 Token，单平台）"
+    echo -e "  CENTAG_UPDATE_TOKEN=xxx ./start.sh package ota --platforms linux-arm64 --edition personal --upload"
 }
 
 _help_package() {
     echo -e "${GREEN}命令: package${NC}"
-    echo -e "       ${YELLOW}部署包 = 形态 × 系统 × 架构${NC}"
+    echo -e "       ${YELLOW}部署包 = 形态 × 系统 × 架构；服务端 OTA = ota${NC}"
     echo ""
     echo -e "${CYAN}用法:${NC}"
+    echo -e "  ./start.sh package ota [--upload]     服务端 OTA 更新包（原 pack，可热更新）"
+    echo -e "  ./start.sh package <form> <os> [arch] [选项...]   部署包"
     echo -e "  ./start.sh package list"
-    echo -e "  ./start.sh package <form> <os> [arch] [选项...]"
     echo ""
     echo -e "${CYAN}维度:${NC}"
-    echo -e "  form  ${GREEN}cli${NC} | ${GREEN}desktop${NC}     （同一维度：命令行 / 桌面；桌面含托盘，不再叫 tray）"
+    echo -e "  form  ${GREEN}ota${NC} | ${GREEN}cli${NC} | ${GREEN}desktop${NC}   （ota=OTA，cli=命令行，desktop=桌面含托盘）"
     echo -e "  os    ${GREEN}macos${NC} | ${GREEN}linux${NC} | ${GREEN}windows${NC} | ${GREEN}fnos${NC} | ${GREEN}docker${NC}"
-    echo -e "  arch  ${GREEN}amd64${NC} | ${GREEN}arm64${NC} | ${GREEN}host${NC} | ${GREEN}all${NC}   （可省略）"
+    echo -e "  arch  ${GREEN}amd64${NC} | ${GREEN}arm64${NC} | ${GREEN}host${NC} | ${GREEN}all${NC}（desktop 默认 host；cli/linux 默认 all）"
     echo ""
-    echo -e "${CYAN}说明:${NC}"
-    echo -e "  与 ${GREEN}pack${NC}（服务端热更新）不同。"
-    echo -e "  desktop 仅 macos/windows（须本机对应系统）；linux/fnos/docker 用 cli。"
-    echo -e "  install.sh 发布集 = desktop(macos)+desktop(windows)+cli(linux)。"
+    echo -e "${CYAN}平台参数（统一用 --platforms <goos-goarch,...>，跨平台自动交叉编译）:${NC}"
+    echo -e "  ota        --platforms linux-amd64,linux-arm64 --edition <personal|minimal|team> --upload"
+    echo -e "  cli*       --platforms darwin-amd64,darwin-arm64 --components <personal|minimal> --version <v>"
+    echo -e "             --skip-frontend --desktop"
+    echo ""
+    echo -e "${CYAN}其他可选参数（按打包脚本透传）:${NC}"
+    echo -e "  desktop    --version <v> --skip-frontend  跳过前端构建（用已有 static）"
+    echo -e "  fnos       --mode <native|docker> --edition <minimal|personal|team> --arch <amd64|arm64>"
+    echo -e "             --output <dir> --image-prefix <registry/>"
     echo ""
     echo -e "${CYAN}示例:${NC}"
-    echo -e "  ./start.sh package desktop macos --skip-frontend"
+    echo -e "  # 服务端 OTA（原 pack；平台参数用 --platforms，同 cli）"
+    echo -e "  ./start.sh package ota"
+    echo -e "  ./start.sh package ota --platforms linux-amd64 --edition team"
+    echo -e "  ./start.sh package ota --platforms linux-amd64,linux-arm64 --edition personal"
+    echo -e "  CENTAG_UPDATE_TOKEN=xxx ./start.sh package ota --platforms linux-arm64 --edition personal --upload"
+    echo ""
+    echo -e "  # 桌面（须本机对应系统）"
+    echo -e "  ./start.sh package desktop macos"
+    echo -e "  ./start.sh package desktop macos host --version v0.2.7 --skip-frontend"
     echo -e "  ./start.sh package desktop windows"
+    echo ""
+    echo -e "  # CLI（可交叉编译，默认 all 双架构）"
     echo -e "  ./start.sh package cli linux"
     echo -e "  ./start.sh package cli linux amd64"
-    echo -e "  ./start.sh package cli fnos amd64 --edition personal"
+    echo -e "  ./start.sh package cli linux arm64 --version v0.2.7 --components minimal"
+    echo -e "  ./start.sh package cli macos all --platforms darwin-amd64,darwin-arm64"
     echo -e "  ./start.sh package cli docker"
+    echo ""
+    echo -e "  # fnOS（.fpk；edition/mode 默认取 packaging.env）"
+    echo -e "  ./start.sh package cli fnos amd64 --edition personal"
+    echo -e "  ./start.sh package cli fnos amd64 --edition team --mode native"
+    echo -e "  ./start.sh package cli fnos arm64 --mode docker --image-prefix ghcr.io/marmotcai/"
+    echo ""
+    echo -e "  # 总览"
     echo -e "  ./start.sh package list"
 }
 
@@ -4738,17 +4916,27 @@ main() {
 
         # ── 打包 ─────────────────────────────────────────────────────
         pack)
+            print_info "提示: pack 已并入 package 命令，推荐使用: ./start.sh package ota [--upload]（pack 仍可用）"
             pack "$@"
             ;;
 
         # ── 部署包统一入口（桌面 / GitHub / CLI / fnOS / Docker）────────
         package)
-            local package_script="${PROJECT_ROOT}/scripts/packaging/package.sh"
-            if [ ! -f "$package_script" ]; then
-                print_error "打包入口不存在: $package_script"
-                exit 1
-            fi
-            bash "$package_script" "$@"
+            # ota = 服务端 OTA 更新包（原 pack；service/update 为兼容别名）
+            case "${1:-}" in
+                ota|service|update|hot-update)
+                    shift
+                    pack "$@"
+                    ;;
+                *)
+                    local package_script="${PROJECT_ROOT}/scripts/packaging/package.sh"
+                    if [ ! -f "$package_script" ]; then
+                        print_error "打包入口不存在: $package_script"
+                        exit 1
+                    fi
+                    bash "$package_script" "$@"
+                    ;;
+            esac
             ;;
 
         # ── 测试 ─────────────────────────────────────────────────────
