@@ -33,8 +33,9 @@
     "defaultPipeline": "デフォルト",
     "currentDefault": "現在のデフォルトパイプライン",
     "setDefault": "デフォルトに設定",
-    "test": "AIチャットテスト",
-    "cloneFromSystem": "システム流水線を自分の編集可能なコピーとして複製",
+    "test": "チャットテスト",
+    "createCopy": "コピーを作成",
+    "more": "その他",
     "scopeSystem": "システム",
     "scopeMine": "自分"
   },

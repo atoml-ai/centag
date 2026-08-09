@@ -32,9 +32,10 @@
     "delete": "Удалить",
     "defaultPipeline": "По умолчанию",
     "currentDefault": "Текущий пайплайн по умолчанию",
-    "setDefault": "Сделать пайплайном по умолчанию",
-    "test": "AI-чат тест",
-    "cloneFromSystem": "Клонировать системный pipeline как свою копию",
+    "setDefault": "Установить по умолчанию",
+    "test": "Чат-тест",
+    "createCopy": "Создать копию",
+    "more": "Ещё",
     "scopeSystem": "Система",
     "scopeMine": "Моё"
   },

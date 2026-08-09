@@ -67,7 +67,7 @@
     </div>
 
     <!-- 流水线列表 -->
-    <el-card class="table-card" v-loading="loading">
+    <el-card v-if="!isTeamView" class="table-card" v-loading="loading">
       <el-table
         :data="filteredPipelines"
         stripe
@@ -145,131 +145,106 @@
           </template>
         </el-table-column>
         <el-table-column prop="version" :label="t('pipelineModes.table.version')" width="80" align="center" sortable />
-        <el-table-column :label="t('pipelineModes.table.actions')" width="520" align="center" fixed="right">
+        <el-table-column :label="t('pipelineModes.table.actions')" width="130" align="center" fixed="right">
           <template #default="{ row }">
-            <div class="action-btns">
-              <el-tooltip :content="row.id === defaultPipelineId ? t('pipelineModes.table.currentDefault') : t('pipelineModes.table.setDefault')" placement="top">
-                <el-button
-                  circle
-                  size="small"
-                  type="success"
-                  :plain="row.id !== defaultPipelineId"
-                  :loading="settingDefaultId === row.id"
-                  :disabled="row.id === defaultPipelineId"
-                  @click="handleSetDefault(row)"
-                >
-                  <el-icon><StarFilled /></el-icon>
-                </el-button>
-              </el-tooltip>
-              <el-tooltip :content="t('pipelineModes.table.test')" placement="top">
-                <el-button circle size="small" type="primary" plain @click="openPipelineTest(row)">
-                  <el-icon><ChatDotRound /></el-icon>
-                </el-button>
-              </el-tooltip>
-              <el-tooltip v-if="canConfigureCapabilitySlots(row)" :content="t('pipelineModes.table.configureModel')" placement="top">
-                <el-button
-                  circle
-                  size="small"
-                  type="warning"
-                  @click="openRouteAssign(row)"
-                >
-                  <el-icon><Connection /></el-icon>
-                </el-button>
-              </el-tooltip>
-              <PipelineFeatureGuard
-                feature="pipelineEdit"
-                :pipeline="row"
-                :is-admin="authStore.isAdmin"
-                :action-label="t('pipelineModes.table.edit')"
-              >
-                <template #default="{ disabled }">
-                  <el-button
-                    circle
-                    size="small"
-                    :disabled="disabled"
-                    @click="openEdit(row)"
-                  >
-                    <el-icon><Edit /></el-icon>
-                  </el-button>
-                </template>
-              </PipelineFeatureGuard>
-              <PipelineFeatureGuard
-                feature="executionHistory"
-                :pipeline="row"
-                :is-admin="authStore.isAdmin"
-                :action-label="t('pipelineModes.table.history')"
-              >
-                <template #default="{ disabled }">
-                  <el-button
-                    circle
-                    size="small"
-                    type="info"
-                    :disabled="disabled"
-                    @click="openHistory(row)"
-                  >
-                    <el-icon><Timer /></el-icon>
-                  </el-button>
-                </template>
-              </PipelineFeatureGuard>
-              <PipelineFeatureGuard
-                feature="pipelineExport"
-                :pipeline="row"
-                :is-admin="authStore.isAdmin"
-                :action-label="t('pipelineModes.table.export')"
-              >
-                <template #default="{ disabled }">
-                  <el-button
-                    circle
-                    size="small"
-                    type="primary"
-                    :disabled="disabled"
-                    @click="handleExport(row)"
-                  >
-                    <el-icon><Download /></el-icon>
-                  </el-button>
-                </template>
-              </PipelineFeatureGuard>
-              <el-tooltip
-                :content="isSystemPipeline(row) ? t('pipelineModes.table.cloneFromSystem') : t('pipelineModes.table.clone')"
-                placement="top"
-              >
-                <el-button
-                  :circle="!isSystemPipeline(row)"
-                  size="small"
-                  :type="isSystemPipeline(row) ? 'warning' : 'info'"
-                  :plain="!isSystemPipeline(row)"
-                  :loading="cloningId === row.id"
-                  @click="handleClone(row)"
-                >
-                  <el-icon><CopyDocument /></el-icon>
-                  <span v-if="isSystemPipeline(row)">{{ t('pipelineModes.table.cloneShort') }}</span>
-                </el-button>
-              </el-tooltip>
-              <PipelineFeatureGuard
-                feature="pipelineDelete"
-                :pipeline="row"
-                :is-admin="authStore.isAdmin"
-                :action-label="t('pipelineModes.table.delete')"
-              >
-                <template #default="{ disabled }">
-                  <el-button
-                    circle
-                    size="small"
-                    type="danger"
-                    :disabled="disabled"
-                    @click="handleDelete(row)"
-                  >
-                    <el-icon><Delete /></el-icon>
-                  </el-button>
-                </template>
-              </PipelineFeatureGuard>
-            </div>
+            <PipelineRowActions
+              :row="row"
+              :is-admin="authStore.isAdmin"
+              :default-pipeline-id="defaultPipelineId"
+              @command="(cmd) => handleRowCommand(cmd, row)"
+            />
           </template>
         </el-table-column>
       </el-table>
 
       <el-empty v-if="!loading && pipelines.length === 0" :description="t('pipelineModes.empty')" :image-size="120" />
     </el-card>
+
+    <!-- 流水线卡片视图（Team 版） -->
+    <div v-else class="pipeline-cards-wrap" v-loading="loading">
+      <el-empty v-if="!loading && filteredPipelines.length === 0" :description="t('pipelineModes.empty')" :image-size="120" />
+      <div class="pipeline-cards">
+        <div
+          v-for="row in filteredPipelines"
+          :key="row.id"
+          class="pipeline-card"
+          :class="{ 'is-default': row.id === defaultPipelineId }"
+        >
+          <div class="pipeline-card__head">
+            <el-checkbox
+              :model-value="isCardSelected(row)"
+              @change="(v) => toggleCardSelection(row, v)"
+            />
+            <div class="pipeline-card__title">
+              <span class="pipeline-card__name">{{ row.name }}</span>
+              <el-tag v-if="isSystemPipeline(row)" type="info" size="small" effect="plain">
+                {{ t('pipelineModes.table.scopeSystem') }}
+              </el-tag>
+              <el-tag v-else type="warning" size="small" effect="plain">
+                {{ t('pipelineModes.table.scopeMine') }}
+              </el-tag>
+              <el-tag v-if="row.id === defaultPipelineId" type="success" size="small" effect="light">
+                <el-icon style="margin-right: 2px; vertical-align: -2px;"><StarFilled /></el-icon>
+                {{ t('pipelineModes.table.defaultPipeline') }}
+              </el-tag>
+            </div>
+            <PipelineRowActions
+              class="pipeline-card__actions"
+              :row="row"
+              :is-admin="authStore.isAdmin"
+              :default-pipeline-id="defaultPipelineId"
+              @command="(cmd) => handleRowCommand(cmd, row)"
+            />
+          </div>
+          <div class="pipeline-card__body">
+            <div class="pipeline-card__row">
+              <el-tag type="info" size="small">{{ row.id }}</el-tag>
+            </div>
+            <p class="pipeline-card__desc">{{ row.description || '—' }}</p>
+            <div class="pipeline-card__shortcut">
+              <el-input
+                v-model="row.shortcut_code"
+                :placeholder="t('pipelineModes.table.shortcutPlaceholder')"
+                clearable
+                size="small"
+                :loading="row.shortcutLoading"
+                style="flex: 1"
+              >
+                <template #prefix>
+                  <el-icon><SetUp /></el-icon>
+                </template>
+              </el-input>
+              <PipelineFeatureGuard
+                v-if="(row.shortcut_code || '') !== (row._originalShortcutCode || '')"
+                feature="pipelineShortcutUpdate"
+                :pipeline="row"
+                :is-admin="authStore.isAdmin"
+                :action-label="t('pipelineModes.table.saveShortcut')"
+              >
+                <template #default="{ disabled }">
+                  <el-button
+                    size="small"
+                    type="primary"
+                    :loading="row.shortcutLoading"
+                    :disabled="disabled"
+                    @click="handleShortcutSave(row)"
+                  >
+                    <el-icon><Check /></el-icon>
+                  </el-button>
+                </template>
+              </PipelineFeatureGuard>
+            </div>
+          </div>
+          <div class="pipeline-card__footer">
+            <span class="pipeline-card__stat">
+              <el-icon><Connection /></el-icon>
+              {{ row.nodes?.length || 0 }} {{ t('pipelineModes.table.nodeUnit') }}
+            </span>
+            <span class="pipeline-card__stat">v{{ row.version }}</span>
+          </div>
+        </div>
+      </div>
+    </div>
 
     <PipelineCreateDialog
       v-model="createInfoVisible"
@@ -373,7 +348,7 @@ import { ref, onMounted, computed, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Search, SetUp, Refresh, Plus, Edit, Delete, DocumentCopy, Upload, Timer, Check, Download, WarningFilled, CircleClose, Select, Connection, StarFilled, ChatDotRound, CopyDocument } from '@element-plus/icons-vue'
+import { Search, SetUp, Refresh, Plus, Delete, DocumentCopy, Upload, Check, Download, WarningFilled, CircleClose, Select, Connection, StarFilled } from '@element-plus/icons-vue'
 import * as yaml from 'js-yaml'
 import {
   getPipelines,
@@ -391,6 +366,7 @@ import {
 import PipelineEditorDialog from '@/components/pipeline/PipelineEditorDialog.vue'
 import PipelineCreateDialog from '@/components/pipeline/PipelineCreateDialog.vue'
 import PipelineFeatureGuard from '@/components/pipeline/PipelineFeatureGuard.vue'
+import PipelineRowActions from '@/components/pipeline/PipelineRowActions.vue'
 import CapabilitySlotsDialog from '@/components/pipeline/CapabilitySlotsDialog.vue'
 import type { PipelineCreateInfo } from '@/components/pipeline/PipelineCreateDialog.vue'
 import ExecutionHistory from '@/components/pipeline/ExecutionHistory.vue'
@@ -398,8 +374,8 @@ import MinimalChat from '@/views/MinimalChat.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useUserResourceAccess } from '@/composables/useUserResourceAccess'
 import { resolvePipelineFeatureSupport, isSystemPipeline } from '@/utils/pipeline/features'
-import { canConfigureCapabilitySlots } from '@/utils/capabilitySlots'
 import { downloadPipelineYaml, downloadPipelinesAsZip } from '@/utils/pipeline/importExport'
+import { isTeamEdition } from '@/utils/edition'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -437,6 +413,20 @@ const testChatVisible = ref(false)
 const testChatPipelineId = ref('')
 
 type PipelineRow = Pipeline & { shortcutLoading?: boolean; _originalShortcutCode?: string }
+
+const isTeamView = isTeamEdition()
+
+function isCardSelected(row: Pipeline): boolean {
+  return selectedPipelines.value.some((p) => p.id === row.id)
+}
+
+function toggleCardSelection(row: Pipeline, checked: boolean | string | number) {
+  if (checked) {
+    if (!isCardSelected(row)) selectedPipelines.value = [...selectedPipelines.value, row]
+  } else {
+    selectedPipelines.value = selectedPipelines.value.filter((p) => p.id !== row.id)
+  }
+}
 
 function pipelineRowClass({ row }: { row: PipelineRow }) {
   return row.id === defaultPipelineId.value ? 'is-default-pipeline-row' : ''
@@ -900,14 +890,13 @@ const handleEditorClosed = () => {
 }
 
 const handleClone = async (row: Pipeline) => {
+  if (cloningId.value) return
+  cloningId.value = row.id
   try {
-    cloningId.value = row.id
-    const res = await clonePipeline(row.id)
-    const data = res.data?.data || res.data
-    if (data?.id) {
-      ElMessage.success(t('pipelineModes.message.cloneSuccess', { name: data.name || data.id }))
-      await loadData()
-    }
+    const res: any = await clonePipeline(row.id)
+    const data = res?.data?.data ?? res?.data ?? res
+    ElMessage.success(t('pipelineModes.message.cloneSuccess', { name: data?.name || data?.id || row.name }))
+    await loadData()
   } catch (error: any) {
     ElMessage.error(t('pipelineModes.message.cloneFailed') + '：' + (error.response?.data?.error || error.message || error))
   } finally {
@@ -934,6 +923,35 @@ const handleDelete = async (row: Pipeline) => {
     if (error === 'cancel' || error === 'close') return
     ElMessage.error(t('pipelineModes.message.deleteFailed') + '：' + (error.message || error))
     await loadData()
+  }
+}
+
+const handleRowCommand = (command: string, row: Pipeline) => {
+  switch (command) {
+    case 'setDefault':
+      handleSetDefault(row)
+      break
+    case 'test':
+      openPipelineTest(row)
+      break
+    case 'configure':
+      openRouteAssign(row)
+      break
+    case 'edit':
+      openEdit(row)
+      break
+    case 'history':
+      openHistory(row)
+      break
+    case 'export':
+      handleExport(row)
+      break
+    case 'clone':
+      handleClone(row)
+      break
+    case 'delete':
+      handleDelete(row)
+      break
   }
 }
 
@@ -980,6 +998,115 @@ onMounted(() => {
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
+.pipeline-cards-wrap {
+  min-height: 200px;
+}
+
+.pipeline-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 16px;
+}
+
+.pipeline-card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid #e4e7ed;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.pipeline-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.pipeline-card.is-default {
+  border-color: #67c23a;
+  background: linear-gradient(180deg, #f0fdf4 0%, #ffffff 60%);
+}
+
+.pipeline-card__head {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.pipeline-card__title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  flex: 1;
+  min-width: 0;
+}
+
+.pipeline-card__name {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: #1f2937;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pipeline-card__actions {
+  flex-shrink: 0;
+}
+
+.pipeline-card__body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+}
+
+.pipeline-card__row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.pipeline-card__desc {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: #6b7280;
+  line-height: 1.5;
+  min-height: 2.4em;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.pipeline-card__shortcut {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pipeline-card__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #f1f3f5;
+}
+
+.pipeline-card__stat {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.8125rem;
+  color: #6b7280;
+}
+
 .toolbar-actions {
   display: flex;
   align-items: center;
@@ -991,13 +1118,6 @@ onMounted(() => {
   font-size: 13px;
   color: #64748b;
   white-space: nowrap;
-}
-
-.action-btns {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 6px;
 }
 
 /* 默认流水线行绿色高亮 */

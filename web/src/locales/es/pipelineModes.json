@@ -32,9 +32,10 @@
     "delete": "Eliminar",
     "defaultPipeline": "Por defecto",
     "currentDefault": "Pipeline por defecto actual",
-    "setDefault": "Establecer como pipeline por defecto",
-    "test": "Prueba de Chat AI",
-    "cloneFromSystem": "Clonar pipeline del sistema como copia editable",
+    "setDefault": "Establecer como predeterminado",
+    "test": "Prueba de Chat",
+    "createCopy": "Crear copia",
+    "more": "Más",
     "scopeSystem": "Sistema",
     "scopeMine": "Mío"
   },
