@@ -708,11 +708,8 @@ const save = async () => {
         const proxyData: any = await api.get('/api/v1/config/proxy')
         const currentDefault = (proxyData?.default_backend_id ?? proxyData?.data?.default_backend_id) || ''
         if (!currentDefault && created?.id) {
-          const sm = Array.isArray(created.supported_models) ? created.supported_models : (form.models || [])
-          const firstSupported = sm[0] && (sm[0].actual_model || sm[0].requested_model || sm[0].name)
-          const defaultModel = created.default_model || created.probe_model || form.default_model || form.probe_model || firstSupported || ''
-          await api.put('/api/v1/config/proxy', { default_backend_id: created.id, default_model: defaultModel })
-          ElMessage.success(t('backendEditor.autoSetDefault') + (defaultModel || t('backendEditor.notSet')) + '」')
+          await api.put('/api/v1/config/proxy', { default_backend_id: created.id, default_model: '' })
+          ElMessage.success(t('backendEditor.autoSetDefault') + '」')
         }
       } catch { /* ignore */ }
     } else {

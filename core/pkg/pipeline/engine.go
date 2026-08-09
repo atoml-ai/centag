@@ -2698,10 +2698,11 @@ func ResolveVirtualVarsContext(ctx context.Context, backendID, model string) (st
 	defaultBackend := cfg.Proxy.DefaultBackendID
 	defaultModel := cfg.Proxy.DefaultModel
 	if ov, ok := config.ProxyDefaultsFromContext(ctx); ok {
-		if strings.TrimSpace(ov.DefaultBackendID) != "" {
+		hasBackend := strings.TrimSpace(ov.DefaultBackendID) != ""
+		if hasBackend {
 			defaultBackend = ov.DefaultBackendID
-		}
-		if strings.TrimSpace(ov.DefaultModel) != "" {
+			defaultModel = ""
+		} else if strings.TrimSpace(ov.DefaultModel) != "" {
 			defaultModel = ov.DefaultModel
 		}
 	}

@@ -412,7 +412,7 @@ async function handleSetDefault(backend: any) {
       ''
     await api.put('/api/v1/config/proxy', {
       default_backend_id: backend.id,
-      default_model: defaultModel
+      default_model: ''
     })
     defaultBackendId.value = backend.id
     ElMessage.success(

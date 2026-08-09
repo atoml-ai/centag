@@ -383,11 +383,6 @@ func (s *Server) saveUserProxyConfig(c *gin.Context, user *database.User, backen
 	if model != nil {
 		ps.DefaultModel = strings.TrimSpace(*model)
 	}
-	if ps.DefaultModel == "" && ps.DefaultBackendID != "" {
-		if filled := s.preferredModelForBackend(ps.DefaultBackendID); filled != "" {
-			ps.DefaultModel = filled
-		}
-	}
 	if ps.DefaultBackendID != "" && s.backendHandler != nil && s.backendHandler.backendManager != nil {
 		list := s.backendHandler.backendManager.List()
 		filtered := useraccess.FilterBackendsFor(user, list, policyForUser(ctx, user))
