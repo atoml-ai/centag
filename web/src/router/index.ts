@@ -6,12 +6,11 @@ import {
   resolveEditionRouteRedirect,
   syncEditionFromStatus
 } from '@/utils/edition'
-import { teamPackRoutes } from '@team-pack'
+import { teamPackRoutes, teamPackDashboard } from '@team-pack'
 import { applyDocumentTitle } from '@/i18n/document-title'
 
 // Lazy-load all page components for better chunking.
 const Login = () => import('@/views/Login.vue')
-const Dashboard = () => import('@/views/Dashboard.vue')
 const Backends = () => import('@/views/Backends.vue')
 const Config = () => import('@/views/Config.vue')
 const Cache = () => import('@/views/Cache.vue')
@@ -52,7 +51,7 @@ const routes = [
 
   // ── Common (all authenticated users) ─────────────────────────────────────
   { path: '/', redirect: '/dashboard' },
-  { path: '/dashboard', name: 'Dashboard', component: Dashboard, meta: { titleKey: 'route.dashboard' } },
+  { path: '/dashboard', name: 'Dashboard', component: teamPackDashboard, meta: { titleKey: 'route.dashboard' } },
   { path: '/backends', name: 'Backends', component: Backends, meta: { titleKey: 'route.backends' } },
   // 降级策略已并入系统配置 → 韧性 → 降级策略
   {
