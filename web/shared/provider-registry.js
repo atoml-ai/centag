@@ -296,6 +296,22 @@ const PROVIDER_REGISTRY = {
       { name: 'deepseek-v4-pro', supports_tools: true, supports_images: false, supports_thinking: false, max_context_tokens: 128000 },
     ],
   },
+  'opencode-go': {
+    id: 'opencode-go',
+    name: 'OpenCode Go',
+    type: 'openai',
+    base_url: 'https://opencode.ai/zen/go/v1',
+    env_key: 'OPENCODE_API_KEY',
+    icon: '⚡',
+    description: 'OpenCode Go 订阅网关（首月 $5，之后每月 $10）— https://opencode.ai/zen/go',
+    default_models: [
+      { name: 'grok-4.5', supports_tools: true, supports_images: false, supports_thinking: true, max_context_tokens: 200000 },
+      { name: 'deepseek-v4-pro', supports_tools: true, supports_images: false, supports_thinking: false, max_context_tokens: 128000 },
+      { name: 'deepseek-v4-flash', supports_tools: true, supports_images: false, supports_thinking: false, max_context_tokens: 128000 },
+      { name: 'kimi-k3', supports_tools: true, supports_images: false, supports_thinking: true, max_context_tokens: 200000 },
+      { name: 'glm-5.2', supports_tools: true, supports_images: false, supports_thinking: false, max_context_tokens: 128000 },
+    ],
+  },
   bedrock: {
     id: 'bedrock',
     name: 'AWS Bedrock',
