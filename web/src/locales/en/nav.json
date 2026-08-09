@@ -24,7 +24,7 @@
   "systemProxy": "System Proxy",
   "clashRules": "Clash Rules",
   "config": "System Config",
-  "users": "Users & Groups",
+  "users": "Operations",
   "planTemplates": "Plan Templates",
   "systemUpdate": "System Update",
   "usage": "Usage",
@@ -39,7 +39,7 @@
   "cacheAndMemory": "Cache & Memory",
   "systemAdmin": "System Admin",
   "overview": "Overview",
-  "userGroupManagement": "Users & Groups",
+  "userGroupManagement": "Operations",
   "myBilling": "Metering & billing",
   "meteringBilling": "Metering & billing",
   "billingStatements": "Statements"

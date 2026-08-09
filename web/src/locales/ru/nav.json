@@ -24,7 +24,7 @@
   "systemProxy": "Системный прокси",
   "clashRules": "Правила Clash",
   "config": "Системные настройки",
-  "users": "Пользователи и группы",
+  "users": "Операции",
   "systemUpdate": "Обновление системы",
   "usage": "Использование",
   "access": "Доступ",
@@ -38,7 +38,7 @@
   "cacheAndMemory": "Кеш и память",
   "systemAdmin": "Системное управление",
   "overview": "Обзор",
-  "userGroupManagement": "Пользователи и группы",
+  "userGroupManagement": "Операции",
   "myBilling": "Мои платежи",
   "planTemplates": "Шаблоны квот"
 }

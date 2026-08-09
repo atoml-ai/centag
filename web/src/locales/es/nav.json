@@ -24,7 +24,7 @@
   "systemProxy": "Proxy sistema",
   "clashRules": "Reglas de Clash",
   "config": "Configuración del sistema",
-  "users": "Usuarios y grupos",
+  "users": "Operaciones",
   "systemUpdate": "Actualización del sistema",
   "usage": "Uso",
   "access": "Acceso",
@@ -38,7 +38,7 @@
   "cacheAndMemory": "Caché y memoria",
   "systemAdmin": "Administración del sistema",
   "overview": "Resumen",
-  "userGroupManagement": "Usuarios y grupos",
+  "userGroupManagement": "Operaciones",
   "myBilling": "Mi facturación",
   "planTemplates": "Plantillas de cuota"
 }

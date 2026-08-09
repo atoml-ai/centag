@@ -24,7 +24,7 @@
   "systemProxy": "システムプロキシ",
   "clashRules": "Clashルール",
   "config": "システム設定",
-  "users": "ユーザーとグループ",
+  "users": "運営管理",
   "systemUpdate": "システム更新",
   "usage": "使用量",
   "access": "アクセス",
@@ -38,7 +38,7 @@
   "cacheAndMemory": "キャッシュとメモリ",
   "systemAdmin": "システム管理",
   "overview": "概要",
-  "userGroupManagement": "ユーザーとグループ",
+  "userGroupManagement": "運営管理",
   "myBilling": "マイ請求",
   "planTemplates": "利用枠テンプレート"
 }

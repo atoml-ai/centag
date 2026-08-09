@@ -24,7 +24,7 @@
   "systemProxy": "시스템 프록시",
   "clashRules": "Clash 규칙",
   "config": "시스템 설정",
-  "users": "사용자 및 그룹",
+  "users": "운영 관리",
   "systemUpdate": "시스템 업데이트",
   "usage": "사용량",
   "access": "접속",
@@ -38,7 +38,7 @@
   "cacheAndMemory": "캐시 및 메모리",
   "systemAdmin": "시스템 관리",
   "overview": "개요",
-  "userGroupManagement": "사용자 및 그룹",
+  "userGroupManagement": "운영 관리",
   "myBilling": "내 결제",
   "planTemplates": "한도 템플릿"
 }
