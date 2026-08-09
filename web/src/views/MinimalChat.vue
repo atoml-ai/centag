@@ -3,7 +3,7 @@
     v-model="visible"
     :title="t('minimalChat.title')"
     direction="rtl"
-    size="640px"
+    size="1280px"
     :close-on-click-modal="true"
     destroy-on-close
     class="minimal-chat-drawer"
@@ -1256,7 +1256,7 @@ watch(() => props.initialPipelineId, (id) => {
 <style>
 .minimal-chat-drawer.el-drawer.rtl {
   --el-drawer-padding-primary: 16px;
-  width: min(640px, 96vw) !important;
+  width: min(1280px, 96vw) !important;
 }
 .minimal-chat-drawer .el-drawer__body {
   display: flex;

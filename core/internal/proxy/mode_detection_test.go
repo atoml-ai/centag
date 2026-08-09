@@ -194,8 +194,8 @@ func TestApplyModelPipelinePrefixToBodyPipelineOnly(t *testing.T) {
 	if !applied || pipelineID != "transparent-proxy" {
 		t.Fatalf("pipelineID=%q applied=%v", pipelineID, applied)
 	}
-	if body["model"] != "mimo-v2.5-free" {
-		t.Fatalf("model=%v, want mimo-v2.5-free (default_model fallback)", body["model"])
+	if body["model"] != "pipeline.transparent-proxy" {
+		t.Fatalf("model=%v, want pipeline.transparent-proxy kept (no system default injection)", body["model"])
 	}
 }
 

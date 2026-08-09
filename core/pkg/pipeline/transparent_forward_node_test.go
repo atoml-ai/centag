@@ -428,6 +428,98 @@ func TestTransparentForwardNode_FallbackFirstUsableBackend(t *testing.T) {
 	}
 }
 
+func TestTransparentForwardNode_VirtualPipelineModelPrefersUserBackend(t *testing.T) {
+	// 虚拟 pipeline 模型名（无真实模型）时，必须回落到「我的默认后端」而非系统默认后端。
+	inner := &mockHTTPClient{status: 200, body: `{"id":"ok","choices":[{"message":{"content":"ok"}}]}`}
+	capturing := &capturingHTTPClient{inner: inner}
+	broker := &mockCapabilityBroker{httpClient: capturing}
+
+	prevCfg := config.Get()
+	config.Set(&config.Config{
+		Proxy: config.ProxyConfig{
+			DefaultBackendID: "opencode-zen",
+			DefaultModel:     "mimo-v2.5-free",
+		},
+	})
+	t.Cleanup(func() { config.Set(prevCfg) })
+
+	prevList := ListEnabledBackendsForMatch
+	prevEP := ResolveBackendEndpoint
+	t.Cleanup(func() {
+		ListEnabledBackendsForMatch = prevList
+		ResolveBackendEndpoint = prevEP
+	})
+
+	ListEnabledBackendsForMatch = func() []*backend.BackendConfig {
+		return []*backend.BackendConfig{
+			{
+				ID:      "opencode-zen",
+				Name:    "Zen",
+				Type:    "openai",
+				BaseURL: "https://zen.example.com/v1",
+				APIKey:  "sk-zen",
+				Enabled: true,
+				SupportedModels: []backend.ModelMapping{
+					{RequestedModel: "mimo-v2.5-free", ActualModel: "mimo-v2.5-free"},
+				},
+			},
+			{
+				ID:      "deepseek",
+				Name:    "DeepSeek",
+				Type:    "openai",
+				BaseURL: "https://api.deepseek.com/v1",
+				APIKey:  "sk-ds",
+				Enabled: true,
+				SupportedModels: []backend.ModelMapping{
+					{RequestedModel: "deepseek-v4-flash", ActualModel: "deepseek-v4-flash"},
+				},
+			},
+		}
+	}
+	ResolveBackendEndpoint = func(backendID string) (*BackendEndpoint, error) {
+		base := "https://api.deepseek.com/v1"
+		if backendID == "opencode-zen" {
+			base = "https://zen.example.com/v1"
+		}
+		return &BackendEndpoint{BaseURL: base, APIKey: "sk"}, nil
+	}
+
+	node, err := NewTransparentForwardNode(NodeConfig{
+		Backend: "{{system.default_backend}}",
+		Model:   "{{system.default_model}}",
+	})
+	if err != nil {
+		t.Fatalf("NewTransparentForwardNode: %v", err)
+	}
+	tf := node.(*TransparentForwardNode)
+	tf.BaseNode.id = "forward"
+	tf.SetCapabilityBroker(broker)
+
+	ctx := config.WithProxyDefaults(context.Background(), config.ProxyDefaults{
+		DefaultBackendID: "deepseek",
+		DefaultModel:     "deepseek-v4-flash",
+	})
+
+	out, err := tf.Execute(ctx, &NodeInput{
+		Metadata: map[string]interface{}{
+			"request_path":     "/v1/chat/completions",
+			"raw_request_body": `{"model":"pipeline.transparent-proxy","messages":[{"role":"user","content":"hi"}]}`,
+		},
+	})
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if out.Metadata["backend_id"] != "deepseek" {
+		t.Fatalf("backend_id=%v, want deepseek (user preferred backend)", out.Metadata["backend_id"])
+	}
+	if !strings.Contains(inner.lastReq.URL.Host, "deepseek.com") {
+		t.Fatalf("url=%v, want user preferred backend", inner.lastReq.URL)
+	}
+	if !strings.Contains(capturing.body, `"model":"deepseek-v4-flash"`) {
+		t.Fatalf("upstream body model not rewritten to user default model: %s", capturing.body)
+	}
+}
+
 func TestTransparentForwardNode_ResponsesToChatCompletions(t *testing.T) {
 	inner := &mockHTTPClient{
 		status: 200,
