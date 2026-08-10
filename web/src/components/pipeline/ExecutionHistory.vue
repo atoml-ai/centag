@@ -102,7 +102,7 @@
 
         <el-table-column :label="t('executionHistory.totalTokens')" width="90" align="center">
           <template #default="{ row }">
-            <span>{{ row.total_tokens || '-' }}</span>
+            <span>{{ row.total_tokens ? formatTokens(row.total_tokens) : '-' }}</span>
           </template>
         </el-table-column>
 
@@ -148,7 +148,7 @@
             </el-tag>
           </el-descriptions-item>
           <el-descriptions-item :label="t('executionHistory.duration')">{{ currentRecord.duration_ms }}ms</el-descriptions-item>
-          <el-descriptions-item :label="t('executionHistory.totalTokens')">{{ currentRecord.total_tokens || '-' }}</el-descriptions-item>
+          <el-descriptions-item :label="t('executionHistory.totalTokens')">{{ currentRecord.total_tokens ? formatTokens(currentRecord.total_tokens) : '-' }}</el-descriptions-item>
           <el-descriptions-item :label="t('executionHistory.executionTime')">{{ formatTime(currentRecord.created_at) }}</el-descriptions-item>
         </el-descriptions>
 
@@ -198,6 +198,7 @@ import { ElMessage } from 'element-plus'
 import { useI18n } from 'vue-i18n'
 import { View, List, Check, Close } from '@element-plus/icons-vue'
 import { getExecutionHistory, type ExecutionRecord, type NodeAuditSummary } from '@/api/pipeline'
+import { formatTokens } from '@/utils/format'
 
 const { t } = useI18n()
 

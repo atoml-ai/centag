@@ -115,7 +115,7 @@
           </ul>
           <p v-if="trace.pipeline_graph.total_nodes" class="pipeline-meta">
             {{ t('requestTrace.totalNodes', { n: trace.pipeline_graph.total_nodes }) }}
-            <span v-if="trace.pipeline_graph.total_tokens"> · {{ t('requestTrace.tokens', { n: trace.pipeline_graph.total_tokens }) }}</span>
+            <span v-if="trace.pipeline_graph.total_tokens"> · {{ t('requestTrace.tokens', { n: formatTokens(trace.pipeline_graph.total_tokens) }) }}</span>
           </p>
         </aside>
       </div>
@@ -129,6 +129,7 @@ import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { tracesApi, type TraceResult } from '../api'
 import { saveBlobAsFile } from '@/utils/downloadFile'
+import { formatTokens } from '@/utils/format'
 
 const { t } = useI18n()
 const route = useRoute()

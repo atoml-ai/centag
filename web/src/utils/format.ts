@@ -29,6 +29,21 @@ export function formatNumber(num: number | null | undefined): string {
 }
 
 /**
+ * 格式化 Token 数量：按中文计量展示（万）。
+ * 例：7_353_000 → 735.3万，2_500_000 → 250万，1_250 → 1.3K
+ */
+export function formatTokens(num: number | null | undefined): string {
+  if (num === null || num === undefined || !Number.isFinite(num)) return '0'
+  const n = Math.max(0, num)
+  if (n >= 10_000) {
+    const v = (n / 10_000).toFixed(1)
+    return (v.endsWith('.0') ? v.slice(0, -2) : v) + '万'
+  }
+  if (n >= 1_000) return (n / 1_000).toFixed(1) + 'K'
+  return String(Math.floor(n))
+}
+
+/**
  * 格式化字节大小
  */
 export function formatBytes(bytes: number): string {

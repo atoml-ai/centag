@@ -9,6 +9,7 @@ import {
   getDisplayCurrency,
   type DisplayCurrency
 } from '@/utils/billing-currency'
+import { formatTokens } from '@/utils/format'
 
 /** 状态栏：总费用 + 总 Token（鉴权就绪后加载） */
 export function useUsageTotals(options?: { enabled?: boolean }) {
@@ -29,9 +30,7 @@ export function useUsageTotals(options?: { enabled?: boolean }) {
   })
 
   function formatNumber(num: number): string {
-    if (num >= 1_000_000) return (num / 1_000_000).toFixed(1) + 'M'
-    if (num >= 1_000) return (num / 1_000).toFixed(1) + 'K'
-    return String(num || 0)
+    return formatTokens(num)
   }
 
   const tokensText = computed(() => formatNumber(totalTokens.value))

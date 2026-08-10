@@ -143,7 +143,7 @@
 
             <div v-if="testResult.execution_log" class="result-log-summary">
               <span>{{ t('pipelineCanvas.elapsed') }}：{{ testResult.execution_log.duration_ms }} ms</span>
-              <span>{{ t('pipelineCanvas.tokenCount') }}：{{ testResult.execution_log.total_tokens }}</span>
+              <span>{{ t('pipelineCanvas.tokenCount') }}：{{ formatTokens(testResult.execution_log.total_tokens) }}</span>
               <span>{{ t('pipelineCanvas.nodeCount') }}：{{ testResult.execution_log.node_logs?.length || 0 }}</span>
             </div>
 
@@ -469,6 +469,7 @@ import { dump as yamlDump, load as yamlLoad } from 'js-yaml'
 import { FullScreen, Rank, DocumentAdd, Plus, Upload, Download, VideoPlay, Setting, Delete } from '@element-plus/icons-vue'
 import type { PipelineNodeConfig, PluginDescriptor } from '@/api/pipeline'
 import { executePipelineDirect, getNodePlugins, parseNodePluginsResponse } from '@/api/pipeline'
+import { formatTokens } from '@/utils/format'
 
 const { t } = useI18n()
 

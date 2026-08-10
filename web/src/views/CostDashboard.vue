@@ -79,6 +79,7 @@ import {
   toDisplayAmount,
   type DisplayCurrency
 } from '@/utils/billing-currency'
+import { formatTokens } from '@/utils/format'
 
 echarts.use([CanvasRenderer, BarChart, LineChart, GridComponent, TooltipComponent, LegendComponent])
 
@@ -137,7 +138,7 @@ const chartOption = computed(() => {
 })
 
 function formatNumber(n: number) {
-  return new Intl.NumberFormat('zh-CN').format(n || 0)
+  return formatTokens(n)
 }
 
 function formatCost(n: number) {

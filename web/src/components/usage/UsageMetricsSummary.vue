@@ -40,7 +40,7 @@
         </div>
       </div>
       <div class="stat">
-        <div class="stat-value">{{ formatNumber(summary.total_tokens || stats.total_tokens) }}</div>
+        <div class="stat-value">{{ formatTokens(summary.total_tokens || stats.total_tokens) }}</div>
         <div class="stat-label">{{ t('usageMetricsSummary.tokens') }}</div>
       </div>
       <div class="stat">
@@ -48,11 +48,11 @@
         <div class="stat-label">{{ t('usageMetricsSummary.requests') }}</div>
       </div>
       <div class="stat">
-        <div class="stat-value">{{ formatNumber(stats.total_prompt_tokens) }}</div>
+        <div class="stat-value">{{ formatTokens(stats.total_prompt_tokens) }}</div>
         <div class="stat-label">{{ t('usageMetricsSummary.input') }}</div>
       </div>
       <div class="stat">
-        <div class="stat-value">{{ formatNumber(stats.total_completion_tokens) }}</div>
+        <div class="stat-value">{{ formatTokens(stats.total_completion_tokens) }}</div>
         <div class="stat-label">{{ t('usageMetricsSummary.output') }}</div>
       </div>
     </div>
@@ -65,7 +65,7 @@
           <template #default="{ row }">{{ currencySymbol }}{{ formatCost(row.cost_usd) }}</template>
         </el-table-column>
         <el-table-column prop="tokens" :label="t('usageMetricsSummary.tokenColumn')" width="100">
-          <template #default="{ row }">{{ formatNumber(row.tokens) }}</template>
+          <template #default="{ row }">{{ formatTokens(row.tokens) }}</template>
         </el-table-column>
         <el-table-column prop="request_count" :label="t('usageMetricsSummary.requestColumn')" width="80" />
       </el-table>
@@ -89,6 +89,7 @@ import {
   setDisplayCurrency,
   type DisplayCurrency
 } from '@/utils/billing-currency'
+import { formatTokens } from '@/utils/format'
 
 const { t } = useI18n()
 

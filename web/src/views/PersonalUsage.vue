@@ -131,6 +131,7 @@
 import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
+import { formatTokens } from '@/utils/format'
 
 const { t } = useI18n()
 
@@ -176,9 +177,7 @@ const selfLimit = ref<SelfLimit>({
 })
 
 function formatNumber(n: number): string {
-  if (n >= 1000000) return `${(n / 1000000).toFixed(1)}M`
-  if (n >= 1000) return `${(n / 1000).toFixed(1)}K`
-  return String(n)
+  return formatTokens(n)
 }
 
 async function loadUsage() {
