@@ -707,7 +707,26 @@ fi
 # wizard（新版 fnOS 格式要求 wizard/ 目录；提供安装/卸载/配置向导）
 if [ -d "${SCRIPT_DIR}/native/wizard" ]; then
   cp -r "${SCRIPT_DIR}/native/wizard" "${BUILD_DIR}/wizard"
-  echo "  wizard: 已打包安装/卸载/配置向导"
+  
+  # Personal/minimal版本不显示数据库选择对话框，使用简化的wizard/install
+  if [ "$EDITION" = "personal" ] || [ "$EDITION" = "minimal" ]; then
+    cat > "${BUILD_DIR}/wizard/install" << 'EOF'
+[
+  {
+    "stepTitle": "安装配置",
+    "items": [
+      {
+        "type": "tips",
+        "helpText": "应用将使用内置 SQLite 数据库，无需额外配置。安装后可随时在「应用设置」中修改。"
+      }
+    ]
+  }
+]
+EOF
+    echo "  wizard: 已为 ${EDITION} 版本生成简化的安装向导（无数据库选择）"
+  else
+    echo "  wizard: 已打包安装/卸载/配置向导"
+  fi
 elif [ "$MODE" = "native" ]; then
   # 兜底：目录必须存在（空目录也可通过校验）
   mkdir -p "${BUILD_DIR}/wizard"
