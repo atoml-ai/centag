@@ -63,6 +63,12 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
+	// 密码为空表示尚未设置初始化密码，需要先完成设置
+	if user.Password == "" {
+		RespondError(c, http.StatusUnauthorized, "请先设置管理密码")
+		return
+	}
+
 	if !auth.CheckPassword(req.Password, user.Password) {
 		RespondError(c, http.StatusUnauthorized, "用户名或密码错误，请重新输入")
 		return
@@ -279,25 +285,35 @@ func (h *AuthHandler) BootstrapStatus(c *gin.Context) {
 	db := database.Get()
 	ctx := c.Request.Context()
 
-	count, err := db.UserStore().Count(ctx)
-	if err != nil {
-		logger.Errorf("bootstrap-status: count users: %v", err)
-		RespondInternalError(c, "failed to check bootstrap status")
-		return
-	}
-
 	// 获取edition环境变量
 	edition := strings.ToLower(strings.TrimSpace(os.Getenv("CENTAG_EDITION")))
 	if edition == "" {
 		edition = "team"
 	}
 
-	// 如果没有用户，则未初始化
-	initialized := count > 0
+	// 检查是否已初始化：需要用户存在且密码已设置
+	adminUsername := "admin"
+	if envUser := strings.TrimSpace(os.Getenv("LLM_PROXY_ADMIN_USERNAME")); envUser != "" {
+		adminUsername = envUser
+	}
+
+	user, err := db.UserStore().GetByUsername(ctx, adminUsername)
+	if err != nil {
+		// 用户不存在，未初始化
+		RespondSuccess(c, gin.H{
+			"initialized": false,
+			"username":    adminUsername,
+			"edition":     edition,
+		})
+		return
+	}
+
+	// 用户存在但密码为空，视为未初始化（需要用户设置密码）
+	initialized := user.Password != ""
 
 	RespondSuccess(c, gin.H{
 		"initialized": initialized,
-		"username":    "admin",
+		"username":    adminUsername,
 		"edition":     edition,
 	})
 }
@@ -307,18 +323,6 @@ func (h *AuthHandler) BootstrapStatus(c *gin.Context) {
 func (h *AuthHandler) Setup(c *gin.Context) {
 	db := database.Get()
 	ctx := c.Request.Context()
-
-	// 检查是否已有用户（已初始化）
-	count, err := db.UserStore().Count(ctx)
-	if err != nil {
-		logger.Errorf("setup: count users: %v", err)
-		RespondInternalError(c, "failed to check setup status")
-		return
-	}
-	if count > 0 {
-		RespondError(c, http.StatusConflict, "管理密码已设置")
-		return
-	}
 
 	var req struct {
 		Password string `json:"password"`
@@ -346,7 +350,55 @@ func (h *AuthHandler) Setup(c *gin.Context) {
 		return
 	}
 
-	// 创建管理员用户
+	// 检查是否已存在管理员用户
+	existingUser, err := db.UserStore().GetByUsername(ctx, username)
+	if err == nil && existingUser != nil {
+		// 用户已存在
+		if existingUser.Password != "" {
+			// 密码已设置，拒绝重复初始化
+			RespondError(c, http.StatusConflict, "管理密码已设置")
+			return
+		}
+		// 用户存在但密码为空，更新密码
+		existingUser.Password = hash
+		if err := db.UserStore().Update(ctx, existingUser); err != nil {
+			logger.Errorf("setup: update password: %v", err)
+			RespondInternalError(c, "无法保存密码")
+			return
+		}
+		// 签发令牌
+		accessToken, err := auth.IssueAccessToken(existingUser.ID, existingUser.Username, string(existingUser.Role), "")
+		if err != nil {
+			logger.Errorf("setup: issue token: %v", err)
+			RespondInternalError(c, "签发令牌失败")
+			return
+		}
+		rawRefresh, refreshHash, err := auth.GenerateRefreshToken()
+		if err != nil {
+			logger.Errorf("setup: generate refresh token: %v", err)
+			RespondInternalError(c, "签发令牌失败")
+			return
+		}
+		rt := &database.RefreshToken{
+			UserID:    existingUser.ID,
+			TokenHash: refreshHash,
+			ExpiresAt: time.Now().Add(auth.RefreshTokenTTL),
+		}
+		if err := db.RefreshTokenStore().Create(ctx, rt); err != nil {
+			logger.Errorf("setup: store refresh token: %v", err)
+			RespondInternalError(c, "签发令牌失败")
+			return
+		}
+		RespondSuccess(c, loginResponse{
+			AccessToken:  accessToken,
+			RefreshToken: rawRefresh,
+			ExpiresIn:    int64(auth.AccessTokenTTL.Seconds()),
+			User:         toUserResponse(existingUser),
+		})
+		return
+	}
+
+	// 用户不存在，创建新管理员用户
 	user := &database.User{
 		Username:                 username,
 		Password:                 hash,
