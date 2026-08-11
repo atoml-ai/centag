@@ -1,8 +1,12 @@
 package server
 
 import (
+	"context"
 	"errors"
+	"fmt"
 	"net/http"
+	"os"
+	"strings"
 	"time"
 
 	"centag/core/internal/auth"
@@ -267,4 +271,177 @@ func toUserResponse(u *database.User) *UserResponse {
 		CanChangeDefaultPipeline: u.CanChangeDefaultPipeline,
 		CreatedAt:                u.CreatedAt.Format("2006-01-02 15:04:05"),
 	}
+}
+
+// ── GET /api/v1/auth/bootstrap-status ────────────────────────────────────────
+
+func (h *AuthHandler) BootstrapStatus(c *gin.Context) {
+	db := database.Get()
+	ctx := c.Request.Context()
+
+	count, err := db.UserStore().Count(ctx)
+	if err != nil {
+		logger.Errorf("bootstrap-status: count users: %v", err)
+		RespondInternalError(c, "failed to check bootstrap status")
+		return
+	}
+
+	// 获取edition环境变量
+	edition := strings.ToLower(strings.TrimSpace(os.Getenv("CENTAG_EDITION")))
+	if edition == "" {
+		edition = "team"
+	}
+
+	// 如果没有用户，则未初始化
+	initialized := count > 0
+
+	RespondSuccess(c, gin.H{
+		"initialized": initialized,
+		"username":    "admin",
+		"edition":     edition,
+	})
+}
+
+// ── POST /api/v1/auth/setup ──────────────────────────────────────────────────
+
+func (h *AuthHandler) Setup(c *gin.Context) {
+	db := database.Get()
+	ctx := c.Request.Context()
+
+	// 检查是否已有用户（已初始化）
+	count, err := db.UserStore().Count(ctx)
+	if err != nil {
+		logger.Errorf("setup: count users: %v", err)
+		RespondInternalError(c, "failed to check setup status")
+		return
+	}
+	if count > 0 {
+		RespondError(c, http.StatusConflict, "管理密码已设置")
+		return
+	}
+
+	var req struct {
+		Password string `json:"password"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil || strings.TrimSpace(req.Password) == "" {
+		RespondBadRequest(c, "请提供密码")
+		return
+	}
+	if len(req.Password) < 6 {
+		RespondBadRequest(c, "密码至少 6 位")
+		return
+	}
+
+	// 获取用户名（从环境变量或默认值）
+	username := "admin"
+	if envUser := strings.TrimSpace(os.Getenv("LLM_PROXY_ADMIN_USERNAME")); envUser != "" {
+		username = envUser
+	}
+
+	// 哈希密码
+	hash, err := auth.HashPassword(req.Password)
+	if err != nil {
+		logger.Errorf("setup: hash password: %v", err)
+		RespondInternalError(c, "无法保存密码")
+		return
+	}
+
+	// 创建管理员用户
+	user := &database.User{
+		Username:                 username,
+		Password:                 hash,
+		Role:                     database.RoleAdmin,
+		DisplayName:              "Administrator",
+		Enabled:                  true,
+		AllowedBackendIDs:        []string{},
+		AllowedModelIDs:          []string{},
+		AllowedPipelineIDs:       []string{},
+		CanAddOwnBackends:        true,
+		CanAddOwnPipelines:       true,
+		CanChangeDefaultPipeline: true,
+	}
+	if err := db.UserStore().Create(ctx, user); err != nil {
+		logger.Errorf("setup: create user: %v", err)
+		RespondInternalError(c, "无法保存密码")
+		return
+	}
+
+	// 为新用户创建默认API key
+	if err := createDefaultAPIKey(ctx, db, user); err != nil {
+		logger.Errorf("setup: create default api key: %v", err)
+		// 不返回错误，API key创建失败不影响用户创建
+	}
+
+	// 签发令牌
+	accessToken, err := auth.IssueAccessToken(user.ID, user.Username, string(user.Role), "")
+	if err != nil {
+		logger.Errorf("setup: issue token: %v", err)
+		RespondInternalError(c, "签发令牌失败")
+		return
+	}
+
+	rawRefresh, refreshHash, err := auth.GenerateRefreshToken()
+	if err != nil {
+		logger.Errorf("setup: generate refresh token: %v", err)
+		RespondInternalError(c, "签发令牌失败")
+		return
+	}
+
+	rt := &database.RefreshToken{
+		UserID:    user.ID,
+		TokenHash: refreshHash,
+		ExpiresAt: time.Now().Add(auth.RefreshTokenTTL),
+	}
+	if err := db.RefreshTokenStore().Create(ctx, rt); err != nil {
+		logger.Errorf("setup: store refresh token: %v", err)
+		RespondInternalError(c, "签发令牌失败")
+		return
+	}
+
+	RespondSuccess(c, loginResponse{
+		AccessToken:  accessToken,
+		RefreshToken: rawRefresh,
+		ExpiresIn:    int64(auth.AccessTokenTTL.Seconds()),
+		User:         toUserResponse(user),
+	})
+}
+
+// createDefaultAPIKey creates a default API key for a user if none exists.
+func createDefaultAPIKey(ctx context.Context, db *database.Manager, user *database.User) error {
+	if user == nil || user.ID == 0 {
+		return fmt.Errorf("invalid user")
+	}
+
+	// 确保API key存储已初始化
+	if err := auth.EnsureAPIKeyStorage(ctx); err != nil {
+		return fmt.Errorf("ensure api key storage: %w", err)
+	}
+
+	// 生成API key
+	fullKey, keyHash, keyPrefix, err := auth.GenerateAPIKey()
+	if err != nil {
+		return fmt.Errorf("generate api key: %w", err)
+	}
+
+	// 加密存储
+	enc, err := auth.EncryptAPIKeyForStorage(fullKey)
+	if err != nil {
+		return fmt.Errorf("encrypt api key: %w", err)
+	}
+
+	key := &database.APIKey{
+		UserID:       user.ID,
+		TenantID:     user.TenantID,
+		Name:         "default",
+		KeyHash:      keyHash,
+		KeyPrefix:    keyPrefix,
+		KeySecretEnc: enc,
+		Enabled:      true,
+	}
+	if err := db.APIKeyStore().Create(ctx, key); err != nil {
+		return err
+	}
+
+	logger.Infof("已为用户 %q 创建默认 API key", user.Username)
+	return nil
 }

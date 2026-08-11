@@ -135,8 +135,8 @@ func SeedDefaultAdminAPIKeyFromConfig(ctx context.Context, db *database.Manager,
 	userID := user.ID
 	raw := DefaultAdminAPIKeyString()
 	if raw == "" {
-		logger.Info("bootstrap: 未配置默认管理员 API Key（LLM_PROXY_DEFAULT_ADMIN_API_KEY / LLM_PROXY_ADMIN_API_KEY / _FILE），跳过预置")
-		return nil
+		// 未配置环境变量API key时，生成一个默认的API key
+		return createDefaultAPIKey(ctx, db, user)
 	}
 
 	keyHash, keyPrefix := auth.APIKeyMetadataFromFullKey(raw)
@@ -169,6 +169,46 @@ func SeedDefaultAdminAPIKeyFromConfig(ctx context.Context, db *database.Manager,
 		return err
 	}
 	logger.Infof("bootstrap: 已从配置预置管理员 API Key（名称=%q）", name)
+	return nil
+}
+
+// createDefaultAPIKey creates a default API key for a user.
+func createDefaultAPIKey(ctx context.Context, db *database.Manager, user *database.User) error {
+	if user == nil || user.ID == 0 {
+		return fmt.Errorf("invalid user")
+	}
+
+	// 确保API key存储已初始化
+	if err := auth.EnsureAPIKeyStorage(ctx); err != nil {
+		return fmt.Errorf("ensure api key storage: %w", err)
+	}
+
+	// 生成API key
+	fullKey, keyHash, keyPrefix, err := auth.GenerateAPIKey()
+	if err != nil {
+		return fmt.Errorf("generate api key: %w", err)
+	}
+
+	// 加密存储
+	enc, err := auth.EncryptAPIKeyForStorage(fullKey)
+	if err != nil {
+		return fmt.Errorf("encrypt api key: %w", err)
+	}
+
+	key := &database.APIKey{
+		UserID:       user.ID,
+		TenantID:     user.TenantID,
+		Name:         "default",
+		KeyHash:      keyHash,
+		KeyPrefix:    keyPrefix,
+		KeySecretEnc: enc,
+		Enabled:      true,
+	}
+	if err := db.APIKeyStore().Create(ctx, key); err != nil {
+		return err
+	}
+
+	logger.Infof("bootstrap: 已为用户 %q 创建默认 API key", user.Username)
 	return nil
 }
 
@@ -215,10 +255,18 @@ func createAdminUser(ctx context.Context, db *database.Manager) (*database.User,
 		return nil, fmt.Errorf("hash password: %w", err)
 	}
 
+	// Personal/minimal版本使用普通用户角色，team版本使用管理员角色
+	// 这样personal/minimal版本的用户行为与team版本普通用户一致
+	role := database.RoleAdmin
+	edition := strings.ToLower(strings.TrimSpace(os.Getenv("CENTAG_EDITION")))
+	if edition == "personal" || edition == "minimal" {
+		role = database.RoleNormal
+	}
+
 	user := &database.User{
 		Username:                 username,
 		Password:                 string(hash),
-		Role:                     database.RoleAdmin,
+		Role:                     role,
 		DisplayName:              "Administrator",
 		Enabled:                  true,
 		AllowedBackendIDs:        []string{},

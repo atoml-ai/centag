@@ -1301,6 +1301,13 @@ func (s *Server) setupRoutes() {
 		apiAuth.GET("/me", auth.JWTMiddleware(), s.authHandler.Me)
 	}
 
+	// ── 初始化路由（公开，无需 JWT）────────────────────────────────────────────
+	v1Auth := s.router.Group("/api/v1/auth")
+	{
+		v1Auth.GET("/bootstrap-status", s.authHandler.BootstrapStatus)
+		v1Auth.POST("/setup", s.authHandler.Setup)
+	}
+
 	// ── 普通用户路由（需要 JWT）────────────────────────────────────────────────
 	userAPI := s.router.Group("/api/v1/user", auth.JWTMiddleware())
 	{
