@@ -61,7 +61,15 @@ func AdminUsername() string {
 	return "admin"
 }
 
+// AdminPassword returns the initial admin password from environment variable.
+// Returns empty string for personal/minimal editions — the user must set it via
+// the first-run setup dialog.
 func AdminPassword() string {
+	edition := strings.ToLower(strings.TrimSpace(os.Getenv("CENTAG_EDITION")))
+	if edition == "personal" || edition == "minimal" {
+		// Personal/minimal: no default password; user sets it on first launch.
+		return ""
+	}
 	if v := strings.TrimSpace(os.Getenv("LLM_PROXY_ADMIN_PASSWORD")); v != "" {
 		return v
 	}
@@ -250,9 +258,15 @@ func createAdminUser(ctx context.Context, db *database.Manager) (*database.User,
 	username := AdminUsername()
 	password := AdminPassword()
 
-	hash, err := bcrypt.GenerateFromPassword([]byte(password), 12)
-	if err != nil {
-		return nil, fmt.Errorf("hash password: %w", err)
+	// Personal/minimal editions: password is empty — user must set it via
+	// the first-run setup dialog.  Store "" directly (no bcrypt hash).
+	var hash string
+	if password != "" {
+		h, err := bcrypt.GenerateFromPassword([]byte(password), 12)
+		if err != nil {
+			return nil, fmt.Errorf("hash password: %w", err)
+		}
+		hash = string(h)
 	}
 
 	// Personal/minimal版本使用普通用户角色，team版本使用管理员角色
@@ -265,7 +279,7 @@ func createAdminUser(ctx context.Context, db *database.Manager) (*database.User,
 
 	user := &database.User{
 		Username:                 username,
-		Password:                 string(hash),
+		Password:                 hash,
 		Role:                     role,
 		DisplayName:              "Administrator",
 		Enabled:                  true,
