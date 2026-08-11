@@ -65,10 +65,6 @@
           </el-button>
         </el-form-item>
       </el-form>
-
-      <p v-if="!isSetup" class="default-hint">
-        {{ t('login.defaultCredential') }}
-      </p>
     </div>
   </div>
 </template>
@@ -83,7 +79,7 @@ import CentagMark from '@/components/icons/CentagMark.vue'
 import type { FormInstance, FormRules } from 'element-plus'
 import { useAuthStore } from '@/stores/auth'
 import { getBootstrapStatus } from '@/api/auth'
-import { isMinimalEdition } from '@/utils/edition'
+import { isMinimalEdition, isPersonalEdition } from '@/utils/edition'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -95,16 +91,16 @@ const bootLoading = ref(true)
 const isSetup = ref(false)
 const form = reactive({ username: 'admin', password: '', confirm: '' })
 
-const hideUsername = computed(() => isMinimalEdition() || isSetup.value)
+const hideUsername = computed(() => isMinimalEdition() || isPersonalEdition() || isSetup.value)
 const passwordPlaceholder = computed(() => {
   if (isSetup.value) {
-    return isMinimalEdition() ? t('login.setupPasswordPlaceholder') : t('login.adminPasswordPlaceholder')
+    return (isMinimalEdition() || isPersonalEdition()) ? t('login.setupPasswordPlaceholder') : t('login.adminPasswordPlaceholder')
   }
-  return isMinimalEdition() ? t('login.passwordPlaceholder') : t('login.password')
+  return (isMinimalEdition() || isPersonalEdition()) ? t('login.passwordPlaceholder') : t('login.password')
 })
 const subtitle = computed(() => {
-  if (isSetup.value) return isMinimalEdition() ? t('login.firstTimeTitle') : t('login.firstTimeAdminTitle')
-  if (isMinimalEdition()) {
+  if (isSetup.value) return (isMinimalEdition() || isPersonalEdition()) ? t('login.firstTimeTitle') : t('login.firstTimeAdminTitle')
+  if (isMinimalEdition() || isPersonalEdition()) {
     return t('login.resetHint')
   }
   return t('login.subtitle')
