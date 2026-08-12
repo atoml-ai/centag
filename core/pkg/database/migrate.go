@@ -78,6 +78,19 @@ func (m *Migrator) Migrate() error {
 
 	migratorInfof("[MIGRATE] 共 %d 个迁移版本，已执行 %d 个", len(migrations), len(executed))
 
+	// 版本倒挂检测：已执行版本的最大值若大于某个待执行版本，说明存在
+	// 后提交的低版本迁移（如 037 先于 035/036 发布）。这类迁移重跑时依赖
+	// ADD COLUMN 幂等跳过，这里仅给出提示，不阻断（防止部署回归）。
+	maxExecuted := maxVersion(executed)
+	for _, migration := range migrations {
+		if contains(executed, migration.Version) {
+			continue
+		}
+		if maxExecuted != "" && migration.Version < maxExecuted {
+			migratorInfof("[MIGRATE] 提示：迁移 %s 版本号低于已执行的最大版本 %s（版本倒挂），将按 ADD COLUMN 幂等策略重放", migration.Version, maxExecuted)
+		}
+	}
+
 	// 执行未执行的迁移
 	applied := 0
 	for _, migration := range migrations {
@@ -411,12 +424,63 @@ func (m *Migrator) executeSQLInTx(tx *sql.Tx, sqlStr string) error {
 			continue
 		}
 
+		// ALTER TABLE ... ADD COLUMN 并非天然幂等（SQLite 无 IF NOT EXISTS；
+		// 部分旧版 PostgreSQL 迁移文件也遗漏了 IF NOT EXISTS）。若迁移文件
+		// 因版本号倒挂被重跑，列已存在会报 duplicate column，这里在两种数据库
+		// 下都先探测目标列是否已存在，存在则跳过该语句，保证迁移可重入。
+		if skip, err := columnExists(tx, m.dbType, stmt); err != nil {
+			return err
+		} else if skip {
+			continue
+		}
+
 		if _, err := tx.Exec(stmt); err != nil {
 			return fmt.Errorf("failed to execute statement: %w\nSQL: %s", err, stmt)
 		}
 	}
 
 	return nil
+}
+
+// addColumnRe 匹配 ALTER TABLE <table> ADD [COLUMN] <column> 语句。
+var addColumnRe = regexp.MustCompile(`(?i)^\s*ALTER\s+TABLE\s+["`+"`"+`]?([\w."-]+)["`+"`"+`]?\s+ADD\s+(?:COLUMN\s+)?(["`+"`"+`]?[\w."-]+["`+"`"+`]?)\b`)
+
+// parseAddColumn 从 ALTER TABLE ... ADD COLUMN 语句中提取表名与列名；
+// 非 ADD COLUMN 语句返回 (ok=false)。
+func parseAddColumn(stmt string) (table, column string, ok bool) {
+	matches := addColumnRe.FindStringSubmatch(stmt)
+	if len(matches) < 3 {
+		return "", "", false
+	}
+	return strings.Trim(matches[1], "`\""), strings.Trim(matches[2], "`\""), true
+}
+
+// columnExists 判断一条 ALTER TABLE ... ADD COLUMN 语句是否因目标列已存在而应跳过：
+// 仅对 ADD COLUMN 生效，其余语句返回 false。SQLite 查 pragma_table_info，
+// PostgreSQL 查 information_schema.columns。
+func columnExists(tx *sql.Tx, dbType, stmt string) (bool, error) {
+	table, column, ok := parseAddColumn(stmt)
+	if !ok {
+		return false, nil
+	}
+
+	var n int
+	var err error
+	if dbType == "sqlite" {
+		err = tx.QueryRow(
+			`SELECT COUNT(*) FROM pragma_table_info(?) WHERE name = ?`,
+			table, column,
+		).Scan(&n)
+	} else {
+		err = tx.QueryRow(
+			`SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = $1 AND column_name = $2`,
+			table, column,
+		).Scan(&n)
+	}
+	if err != nil {
+		return false, fmt.Errorf("failed to check column %s.%s existence: %w", table, column, err)
+	}
+	return n > 0, nil
 }
 
 // removeMigrationRecord 从记录表中删除迁移
@@ -464,6 +528,17 @@ func contains(slice []string, item string) bool {
 		}
 	}
 	return false
+}
+
+// maxVersion 返回字符串切片中字典序最大的元素；空切片返回 ""。
+func maxVersion(versions []string) string {
+	max := ""
+	for _, v := range versions {
+		if v > max {
+			max = v
+		}
+	}
+	return max
 }
 
 // skipDollarQuoted 若 s[start] 为 PostgreSQL 美元引用起始（$tag$ 或 $$），返回闭合后的下标；否则返回 start。
