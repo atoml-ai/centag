@@ -13,6 +13,36 @@ import (
 	"centag/core/pkg/types"
 )
 
+// auxiliarySystemMarkers 匹配客户端内部辅助请求（标题生成、上下文压缩等）的 system prompt 关键词。
+// 这些请求不应记录为对话消息。
+var auxiliarySystemMarkers = []string{
+	"title generator",
+	"output only a thread title",
+	"generate a title for this conversation",
+	"generating a title for this conversation",
+	"context summarization assistant",
+	"summarize only the conversation history",
+	"anchored context summarization",
+	"summarization assistant for coding",
+	"you are a file search specialist",
+}
+
+// isAuxiliaryRequest 检测客户端内部辅助请求（标题生成、上下文压缩、文件搜索等）。
+func isAuxiliaryRequest(messages []plugin.Message) bool {
+	for _, msg := range messages {
+		if msg.Role != "system" {
+			continue
+		}
+		lower := strings.ToLower(msg.Content)
+		for _, marker := range auxiliarySystemMarkers {
+			if strings.Contains(lower, marker) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // resolveSessionID prefers X-Session-ID, else creates a new ephemeral id from request id.
 func resolveSessionID(c *gin.Context) string {
 	if c == nil {
@@ -53,6 +83,9 @@ func triggerConversationRequestHooks(c *gin.Context, req *plugin.ProxyRequest, m
 			"request_id":   c.GetHeader("X-Request-ID"),
 			"user_content": userContent,
 		},
+	}
+	if isAuxiliaryRequest(req.Messages) {
+		ureq.Metadata["is_auxiliary"] = "true"
 	}
 	_ = hm.TriggerRequestHooks(c.Request.Context(), ureq)
 	if sid, ok := ureq.Metadata["session_id"].(string); ok && sid != "" {

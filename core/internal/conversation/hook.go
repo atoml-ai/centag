@@ -10,19 +10,23 @@ import (
 )
 
 const (
-	metaSessionID  = "session_id"
-	metaUserID     = "user_id"
-	metaTenantID   = "tenant_id"
-	metaCategory   = "category"
-	metaPipelineID = "pipeline_id"
-	metaProxyMode  = "proxy_mode"
-	metaRequestID  = "request_id"
+	metaSessionID   = "session_id"
+	metaUserID      = "user_id"
+	metaTenantID    = "tenant_id"
+	metaCategory    = "category"
+	metaPipelineID  = "pipeline_id"
+	metaProxyMode   = "proxy_mode"
+	metaRequestID   = "request_id"
 	metaUserContent = "user_content"
-	metaStatusCode = "status_code"
-	metaBackend    = "backend"
-	metaLatencyMs  = "latency_ms"
-	metaInputTok   = "input_tokens"
-	metaOutputTok  = "output_tokens"
+	metaStatusCode  = "status_code"
+	metaBackend     = "backend"
+	metaLatencyMs   = "latency_ms"
+	metaInputTok    = "input_tokens"
+	metaOutputTok   = "output_tokens"
+
+	// dedupWindow 同一 session 内相同 user_content 的去重时间窗口。
+	// 覆盖"并发辅助请求（标题生成等）"和"客户端短期重试"场景。
+	dedupWindow = 30 * time.Second
 )
 
 // LoggingHook records conversations via StorageHook interface (fail-open async writes).
@@ -31,17 +35,24 @@ type LoggingHook struct {
 
 	mu      sync.Mutex
 	pending map[string]pendingTurn // key: session_id|request_id
+	recent  map[string]recentUser  // sessionID -> last recorded user turn for dedup
 }
 
 type pendingTurn struct {
-	sessionID  string
-	userID    int64
-	tenantID   string
-	category   string
-	pipelineID string
-	proxyMode  string
-	requestID  string
+	sessionID   string
+	userID      int64
+	tenantID    string
+	category    string
+	pipelineID  string
+	proxyMode   string
+	requestID   string
 	userContent string
+	isAuxiliary bool // skip recording (client-internal title gen / summarisation etc.)
+}
+
+type recentUser struct {
+	content string
+	at      time.Time
 }
 
 // NewLoggingHook creates a conversation logging hook.
@@ -49,6 +60,7 @@ func NewLoggingHook(store Store) *LoggingHook {
 	return &LoggingHook{
 		store:   store,
 		pending: make(map[string]pendingTurn),
+		recent:  make(map[string]recentUser),
 	}
 }
 
@@ -107,12 +119,15 @@ func (h *LoggingHook) OnRequest(ctx context.Context, req *types.UnifiedRequest) 
 		proxyMode:   proxyMode,
 		requestID:   requestID,
 		userContent: userContent,
+		isAuxiliary: metaString(meta, "is_auxiliary") == "true",
 	}
 	h.mu.Unlock()
 	return nil
 }
 
 // OnResponse appends user + assistant messages asynchronously.
+// Skips client-internal auxiliary requests (title generation, summarisation, etc.)
+// and deduplicates identical user content within a short time window.
 func (h *LoggingHook) OnResponse(ctx context.Context, resp *types.UnifiedResponse) error {
 	if h == nil || h.store == nil || resp == nil {
 		return nil
@@ -132,11 +147,14 @@ func (h *LoggingHook) OnResponse(ctx context.Context, resp *types.UnifiedRespons
 	}
 	h.mu.Unlock()
 	if !ok {
-		// still try write assistant-only if session known
 		if sessionID == "" {
 			return nil
 		}
 		pending = pendingTurn{sessionID: sessionID, requestID: requestID}
+	}
+
+	if pending.isAuxiliary {
+		return nil
 	}
 
 	assistant := NormalizeAssistantContent(resp.Content)
@@ -160,7 +178,18 @@ func (h *LoggingHook) OnResponse(ctx context.Context, resp *types.UnifiedRespons
 	go func() {
 		bg := context.Background()
 		now := time.Now().UTC()
+
 		if pending.userContent != "" {
+			h.mu.Lock()
+			if r, ok := h.recent[pending.sessionID]; ok {
+				if pending.userContent == r.content && now.Sub(r.at) < dedupWindow {
+					h.mu.Unlock()
+					return
+				}
+			}
+			h.recent[pending.sessionID] = recentUser{content: pending.userContent, at: now}
+			h.mu.Unlock()
+
 			_ = h.store.AppendMessage(bg, &Message{
 				SessionID:  pending.sessionID,
 				Role:       "user",
