@@ -127,7 +127,7 @@ else
     -H 'Content-Type: application/json' \
     -d "$login_json" 2>/dev/null) || {
     fail "POST /api/auth/login — wrong credentials or auth failure"
-    warn "Default credentials: admin / centag123 (override via env LLM_PROXY_ADMIN_PASSWORD)"
+    warn "Default setup: no preset password (use first-run setup); preset via env LLM_PROXY_ADMIN_PASSWORD"
     JWT=""
   }
 

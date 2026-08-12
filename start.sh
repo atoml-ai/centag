@@ -1604,7 +1604,7 @@ _debug_run_desktop() {
     fi
 
     if [ -z "${LLM_PROXY_ADMIN_PASSWORD:-}" ]; then
-        print_warn "未检测到 LLM_PROXY_ADMIN_PASSWORD；首轮 seed 将使用内置默认口令"
+        print_warn "未检测到 LLM_PROXY_ADMIN_PASSWORD；首轮启动将通过初始化向导设置管理员密码"
     fi
 
     print_info "启动 desktop (debug) edition=${edition}"
@@ -1687,7 +1687,7 @@ run_edition() {
     fi
 
     if [ -z "${LLM_PROXY_ADMIN_PASSWORD:-}" ]; then
-        print_warn "未检测到 LLM_PROXY_ADMIN_PASSWORD；首轮 seed 将使用内置默认口令"
+        print_warn "未检测到 LLM_PROXY_ADMIN_PASSWORD；首轮启动将通过初始化向导设置管理员密码"
     else
         print_info "已加载管理员口令环境变量（来自 config/secrets/.env）"
     fi
@@ -4338,14 +4338,14 @@ wizard_finish() {
         else
             print_warn "未找到 Web UI 管理员凭据配置"
             print_info "默认用户名: admin"
-            print_info "默认密码: centag123"
+            print_info "未预置默认口令；请通过首次启动的初始化向导设置密码"
             print_info "或运行 ./start.sh env gen 生成新凭据"
             echo ""
         fi
     else
         print_warn "未找到密钥配置文件"
         print_info "默认用户名: admin"
-        print_info "默认密码: centag123"
+        print_info "未预置默认口令；请通过首次启动的初始化向导设置密码"
         print_info "或运行 ./start.sh env gen 生成新凭据"
         echo ""
     fi
