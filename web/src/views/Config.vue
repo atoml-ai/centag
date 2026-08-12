@@ -277,7 +277,7 @@
         </section>
 
         <!-- 系统更新 -->
-        <section v-if="isTeamAdmin" v-show="activeSection === 'system-update'" class="section-panel">
+        <section v-if="canSystemUpdate" v-show="activeSection === 'system-update'" class="section-panel">
           <div class="su-section-hd">
             <span class="su-section-icon upload-color"><el-icon><Upload /></el-icon></span>
             <div>
@@ -467,7 +467,7 @@ const { t } = useI18n()
 type ConfigSection = 'overview' | 'http' | 'fallback' | 'deployment' | 'system-update'
 
 const isAdmin = computed(() => authStore.isAdmin)
-const isTeamAdmin = computed(() => edition.value === 'team' && authStore.isAdmin)
+const canSystemUpdate = computed(() => authStore.isAdmin)
 
 const navItems = computed(() => {
   const items: Array<{ id: ConfigSection; labelKey: string; icon: Component }> = [
@@ -478,7 +478,7 @@ const navItems = computed(() => {
   if (authStore.isAdmin) {
     items.push({ id: 'deployment', labelKey: 'config.navDeployment', icon: Box })
   }
-  if (isTeamAdmin.value) {
+  if (canSystemUpdate.value) {
     items.push({ id: 'system-update', labelKey: 'config.navSystemUpdate', icon: Upload })
   }
   return items

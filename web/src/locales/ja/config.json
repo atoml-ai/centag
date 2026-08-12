@@ -6,6 +6,7 @@
   "navOverview": "概要",
   "navHttp": "リトライ",
   "navFallback": "フォールバック",
+  "navSystemUpdate": "システム更新",
   "serviceOverview": "サービス概要",
   "serviceOverviewDesc": "リッスンアドレス、応答動作、よく使う入口を確認します。",
   "listenInfo": "リッスン情報",

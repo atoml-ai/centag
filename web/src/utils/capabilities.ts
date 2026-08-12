@@ -110,7 +110,7 @@ export function getCapabilities(edition: Edition, isAdmin = false): Capabilities
       memoryQuery: false,
       memoryFull: false,
       agentSetup: false,
-      systemConfig: false
+      systemConfig: true
     }
   }
 

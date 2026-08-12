@@ -6,6 +6,7 @@
   "navOverview": "Обзор",
   "navHttp": "Повторы",
   "navFallback": "Резерв",
+  "navSystemUpdate": "Обновление системы",
   "serviceOverview": "Обзор сервиса",
   "serviceOverviewDesc": "Просмотр адреса прослушивания, поведения ответа и частых входов.",
   "listenInfo": "Слушающий адрес",

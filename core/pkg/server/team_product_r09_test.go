@@ -13,6 +13,8 @@ import (
 )
 
 // R09: open-core must not hard-register Team product routes; only Apply* from Host.
+// Exception: /system/update* OTA is open-core for personal/minimal editions
+// (registered in system_update_routes.go, gated on !IsTeam()).
 func TestOpenCoreServerSourceHasNoHardcodedTeamProductRoutes(t *testing.T) {
 	_, file, _, ok := runtime.Caller(0)
 	if !ok {
@@ -31,8 +33,6 @@ func TestOpenCoreServerSourceHasNoHardcodedTeamProductRoutes(t *testing.T) {
 		`teamAdmin.GET("/tenants"`,
 		`teamAdmin.GET("/token-usage/all"`,
 		`teamAdmin.GET("/ab-eval/`,
-		`system.POST("/update"`,
-		`system.GET("/update/history"`,
 	}
 	for _, needle := range forbidden {
 		if strings.Contains(src, needle) {

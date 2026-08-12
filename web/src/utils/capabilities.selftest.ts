@@ -100,7 +100,8 @@ function run() {
         memoryQuery: false,
         liteHome: true,
         manageBackends: true,
-        managePipelines: true
+        managePipelines: true,
+        systemConfig: true
       }
     }
   ]

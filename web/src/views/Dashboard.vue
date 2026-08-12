@@ -10,6 +10,7 @@
           <el-button type="success" @click="openPipelineChat()">
             <el-icon><ChatDotRound /></el-icon>&nbsp;{{ $t('nav.chat') }}
           </el-button>
+          <el-button @click="openSystemUpdate">{{ $t('config.navSystemUpdate') }}</el-button>
           <el-button @click="securityDialogVisible = true">{{ $t('dashboard.config') }}</el-button>
           <el-button @click="handleLogout">{{ $t('dashboard.logout') }}</el-button>
         </template>
@@ -564,6 +565,10 @@ async function handleLogout() {
   }
   await authStore.logout()
   router.push('/login')
+}
+
+function openSystemUpdate() {
+  router.push({ path: '/config', query: { tab: 'resilience', sub: 'system-update' } })
 }
 
 use([CanvasRenderer, LineChart, GridComponent, TooltipComponent, LegendComponent])

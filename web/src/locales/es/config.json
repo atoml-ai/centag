@@ -6,6 +6,7 @@
   "navOverview": "Resumen",
   "navHttp": "Reintentos",
   "navFallback": "Respaldo",
+  "navSystemUpdate": "Actualización del sistema",
   "serviceOverview": "Resumen del servicio",
   "serviceOverviewDesc": "Revisa la dirección de escucha, el comportamiento de respuesta y accesos comunes.",
   "listenInfo": "Información de escucha",

@@ -6,6 +6,7 @@
   "navOverview": "개요",
   "navHttp": "재시도",
   "navFallback": "폴백",
+  "navSystemUpdate": "시스템 업데이트",
   "serviceOverview": "서비스 개요",
   "serviceOverviewDesc": "수신 주소, 응답 동작, 자주 쓰는 진입점을 확인합니다.",
   "listenInfo": "수신 정보",

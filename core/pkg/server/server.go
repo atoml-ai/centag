@@ -1619,9 +1619,15 @@ func (s *Server) setupRoutes() {
 		}
 
 		// /system/update* registered by centag-pro via extension.Host (E2.5).
-		system := v1Protected.Group("/system", s.teamEditionOnly())
+		// 个人/极简版为单管理员，同样支持 OTA；团队版仅管理员可操作。
+		system := v1Protected.Group("/system", s.teamAdminWriteOnly())
 		if s.extensionHost != nil {
 			s.extensionHost.ApplySystemAPI(system)
+		}
+		// 个人/极简版不加载 centag-pro 插件，OTA 路由由 open-core 直接注册；
+		// 团队版由插件注册（避免重复路由）。
+		if !s.edition.IsTeam() {
+			s.registerSystemUpdateRoutes(system)
 		}
 
 		// 匹配策略管理（内置 + 自定义）
