@@ -919,7 +919,7 @@ _ota_cross_build() {
 print_error "版本目录不存在: $dist_dir" >&2
             exit 1
         fi
-        print_info "交叉编译 ${edition} ${goos}/${goarch}（$dist_dir）..." >&2
+        print_info "交叉编译 ${edition} ${goos}/${goarch}（${dist_dir}）..." >&2
         ( cd "$dist_dir" \
             && CGO_ENABLED=0 GOOS="$goos" GOARCH="$goarch" \
                go build -tags "$tags" -ldflags "-s -w $ver_ldflags" -o "$out_bin" . >&2 ) \
@@ -942,7 +942,7 @@ _ota_source_bin() {
     if [ -z "$pf" ]; then
         # 本机 → 使用已构建产物
         if [ ! -f "$BIN_DIR/$SERVER_BIN" ]; then
-            print_error "未找到已编译的 centag（$BIN_DIR/$SERVER_BIN），请先: ./start.sh build" >&2
+            print_error "未找到已编译的 centag（${BIN_DIR}/${SERVER_BIN}），请先: ./start.sh build" >&2
             exit 1
         fi
         echo "$BIN_DIR/$SERVER_BIN"
@@ -1490,6 +1490,7 @@ debug() {
     # 覆盖 secrets 中的 edition；对齐 ~/.centag/lib/personal
     centag_set_edition personal
     export INITDATA_PATH="${PROJECT_ROOT}/config/initdata"
+    export CENTAG_PRICING_FILE="${PROJECT_ROOT}/config/pricing/default.yaml"
 
     # ── 清理所有残留进程（保证前台独占）──────────────────────────
     cleanup_residual_processes
@@ -1662,6 +1663,7 @@ run_edition() {
 
     load_env
     export INITDATA_PATH="${PROJECT_ROOT}/config/initdata"
+    export CENTAG_PRICING_FILE="${PROJECT_ROOT}/config/pricing/default.yaml"
 
     if ! $with_desktop; then
         print_info "启动 ${run_edition} CLI（daemon）: ${sidecar}"
@@ -1714,6 +1716,7 @@ _debug_minimal() {
     centag_export_debug_console_env
     centag_set_edition minimal
     export INITDATA_PATH="${PROJECT_ROOT}/config/initdata"
+    export CENTAG_PRICING_FILE="${PROJECT_ROOT}/config/pricing/default.yaml"
 
     cleanup_residual_processes
     rm -f "$BIN_DIR/storage/centag.pid" 2>/dev/null || true
