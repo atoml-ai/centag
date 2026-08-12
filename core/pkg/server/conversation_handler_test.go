@@ -1,6 +1,7 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"net/http"
@@ -105,5 +106,132 @@ func TestConversationHandler_NotFoundAndUnavailable(t *testing.T) {
 	r2.ServeHTTP(w2, httptest.NewRequest(http.MethodGet, "/sessions", nil))
 	if w2.Code != http.StatusServiceUnavailable {
 		t.Fatalf("expected 503, got %d", w2.Code)
+	}
+}
+
+func TestConversationHandler_DeleteSession(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	store := conversation.NewFileStore(t.TempDir())
+	ctx := context.Background()
+	sess, _ := store.EnsureSession(ctx, &conversation.Session{ID: "s1", UserID: 1, Category: "chat"})
+	_ = store.AppendMessage(ctx, &conversation.Message{SessionID: sess.ID, Role: "user", Content: "hi"})
+	_ = store.AppendMessage(ctx, &conversation.Message{SessionID: sess.ID, Role: "assistant", Content: "hello"})
+
+	h := NewConversationHandler(store, edition.Personal)
+	r := gin.New()
+	r.DELETE("/sessions/:id", func(c *gin.Context) {
+		c.Set(auth.CtxKeyUserID, int64(1))
+		h.DeleteSession(c)
+	})
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest(http.MethodDelete, "/sessions/s1", nil))
+	if w.Code != http.StatusOK {
+		t.Fatalf("delete status=%d body=%s", w.Code, w.Body.String())
+	}
+	got, _ := store.GetSession(ctx, "s1")
+	if got != nil {
+		t.Fatalf("session should be deleted, got %+v", got)
+	}
+
+	// 删除不存在的会话 → 404
+	w2 := httptest.NewRecorder()
+	r.ServeHTTP(w2, httptest.NewRequest(http.MethodDelete, "/sessions/missing", nil))
+	if w2.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d", w2.Code)
+	}
+}
+
+func TestConversationHandler_DeleteSessions_Batch(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	store := conversation.NewFileStore(t.TempDir())
+	ctx := context.Background()
+	s1, _ := store.EnsureSession(ctx, &conversation.Session{ID: "s1", UserID: 1, Category: "chat"})
+	_, _ = store.EnsureSession(ctx, &conversation.Session{ID: "s2", UserID: 1, Category: "code"})
+	_, _ = store.EnsureSession(ctx, &conversation.Session{ID: "s3", UserID: 1, Category: "chat"})
+	_ = store.AppendMessage(ctx, &conversation.Message{SessionID: s1.ID, Role: "user", Content: "hi"})
+
+	h := NewConversationHandler(store, edition.Personal)
+	r := gin.New()
+	r.POST("/sessions/delete", func(c *gin.Context) {
+		c.Set(auth.CtxKeyUserID, int64(1))
+		h.DeleteSessions(c)
+	})
+
+	// 多选 ids
+	body := bytes.NewBufferString(`{"ids":["s1","s2"]}`)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/sessions/delete", body))
+	if w.Code != http.StatusOK {
+		t.Fatalf("batch delete status=%d body=%s", w.Code, w.Body.String())
+	}
+	var resp map[string]interface{}
+	_ = json.Unmarshal(w.Body.Bytes(), &resp)
+	if resp["deleted"].(float64) != 2 {
+		t.Fatalf("expected 2 deleted, got %v", resp)
+	}
+	if got, _ := store.GetSession(ctx, "s1"); got != nil {
+		t.Fatal("s1 should be deleted")
+	}
+
+	// 条件筛选（全选 category=chat）
+	body2 := bytes.NewBufferString(`{"category":"chat"}`)
+	w2 := httptest.NewRecorder()
+	r.ServeHTTP(w2, httptest.NewRequest(http.MethodPost, "/sessions/delete", body2))
+	if w2.Code != http.StatusOK {
+		t.Fatalf("filter delete status=%d body=%s", w2.Code, w2.Body.String())
+	}
+	var resp2 map[string]interface{}
+	_ = json.Unmarshal(w2.Body.Bytes(), &resp2)
+	if resp2["deleted"].(float64) != 1 {
+		t.Fatalf("expected 1 chat deleted, got %v", resp2)
+	}
+
+	// 空条件 → 400
+	w3 := httptest.NewRecorder()
+	r.ServeHTTP(w3, httptest.NewRequest(http.MethodPost, "/sessions/delete", bytes.NewBufferString(`{}`)))
+	if w3.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", w3.Code)
+	}
+}
+
+func TestConversationHandler_DeleteMessages(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	store := conversation.NewFileStore(t.TempDir())
+	ctx := context.Background()
+	sess, _ := store.EnsureSession(ctx, &conversation.Session{ID: "s1", UserID: 1, Category: "chat"})
+	_ = store.AppendMessage(ctx, &conversation.Message{SessionID: sess.ID, Role: "user", Content: "hi"})
+	_ = store.AppendMessage(ctx, &conversation.Message{SessionID: sess.ID, Role: "assistant", Content: "hello"})
+
+	h := NewConversationHandler(store, edition.Personal)
+	r := gin.New()
+	r.POST("/sessions/:id/messages/delete", func(c *gin.Context) {
+		c.Set(auth.CtxKeyUserID, int64(1))
+		h.DeleteMessages(c)
+	})
+
+	// 按 role 删除 assistant
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/sessions/s1/messages/delete",
+		bytes.NewBufferString(`{"role":"assistant"}`)))
+	if w.Code != http.StatusOK {
+		t.Fatalf("delete messages status=%d body=%s", w.Code, w.Body.String())
+	}
+	var resp map[string]interface{}
+	_ = json.Unmarshal(w.Body.Bytes(), &resp)
+	if resp["deleted"].(float64) != 1 {
+		t.Fatalf("expected 1 deleted, got %v", resp)
+	}
+	msgs, _ := store.ListMessages(ctx, "s1", conversation.PageQuery{})
+	if len(msgs) != 1 || msgs[0].Role != "user" {
+		t.Fatalf("expected only user message, got %+v", msgs)
+	}
+
+	// 空条件 → 400
+	w2 := httptest.NewRecorder()
+	r.ServeHTTP(w2, httptest.NewRequest(http.MethodPost, "/sessions/s1/messages/delete",
+		bytes.NewBufferString(`{}`)))
+	if w2.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", w2.Code)
 	}
 }

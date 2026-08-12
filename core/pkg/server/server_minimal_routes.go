@@ -203,6 +203,9 @@ func (s *Server) setupMinimalRoutes(configHandler *MinimalConfigHandler, pluginR
 				convs.GET("/sessions/:id", s.conversationHandler.GetSession)
 				convs.GET("/sessions/:id/messages", s.conversationHandler.ListMessages)
 				convs.GET("/categories", s.conversationHandler.ListCategories)
+				convs.DELETE("/sessions/:id", s.conversationHandler.DeleteSession)
+				convs.POST("/sessions/delete", s.conversationHandler.DeleteSessions)
+				convs.POST("/sessions/:id/messages/delete", s.conversationHandler.DeleteMessages)
 			}
 			convsTop := protected.Group("/conversations")
 			{
@@ -210,6 +213,9 @@ func (s *Server) setupMinimalRoutes(configHandler *MinimalConfigHandler, pluginR
 				convsTop.GET("/sessions/:id", s.conversationHandler.GetSession)
 				convsTop.GET("/sessions/:id/messages", s.conversationHandler.ListMessages)
 				convsTop.GET("/categories", s.conversationHandler.ListCategories)
+				convsTop.DELETE("/sessions/:id", s.conversationHandler.DeleteSession)
+				convsTop.POST("/sessions/delete", s.conversationHandler.DeleteSessions)
+				convsTop.POST("/sessions/:id/messages/delete", s.conversationHandler.DeleteMessages)
 			}
 		}
 	}

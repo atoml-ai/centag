@@ -1356,6 +1356,9 @@ func (s *Server) setupRoutes() {
 				convs.GET("/sessions/:id", s.conversationHandler.GetSession)
 				convs.GET("/sessions/:id/messages", s.conversationHandler.ListMessages)
 				convs.GET("/categories", s.conversationHandler.ListCategories)
+				convs.DELETE("/sessions/:id", s.conversationHandler.DeleteSession)
+				convs.POST("/sessions/delete", s.conversationHandler.DeleteSessions)
+				convs.POST("/sessions/:id/messages/delete", s.conversationHandler.DeleteMessages)
 			}
 		}
 
@@ -1374,6 +1377,9 @@ func (s *Server) setupRoutes() {
 			convsJWT.GET("/sessions/:id", s.conversationHandler.GetSession)
 			convsJWT.GET("/sessions/:id/messages", s.conversationHandler.ListMessages)
 			convsJWT.GET("/categories", s.conversationHandler.ListCategories)
+			convsJWT.DELETE("/sessions/:id", s.conversationHandler.DeleteSession)
+			convsJWT.POST("/sessions/delete", s.conversationHandler.DeleteSessions)
+			convsJWT.POST("/sessions/:id/messages/delete", s.conversationHandler.DeleteMessages)
 		}
 	}
 

@@ -153,6 +153,167 @@ func (h *ConversationHandler) ListCategories(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"categories": cats})
 }
 
+// deleteSessionsReq is the body for batch session deletion.
+// ids（多选）优先；否则按 all + 筛选条件（单选/全选/条件筛选后删除）。
+type deleteSessionsReq struct {
+	IDs      []string `json:"ids"`
+	All      bool     `json:"all"`
+	Category string   `json:"category"`
+	UserID   int64    `json:"user_id"`
+	Since    string   `json:"since"`
+	Until    string   `json:"until"`
+}
+
+// DeleteSession DELETE /api/v1/conversations/sessions/:id
+// 删除单个会话及其全部消息（单选）。
+func (h *ConversationHandler) DeleteSession(c *gin.Context) {
+	if h == nil || h.store == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "conversation store unavailable"})
+		return
+	}
+	id := c.Param("id")
+	sess, err := h.store.GetSession(c.Request.Context(), id)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if sess == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "session not found"})
+		return
+	}
+	if !h.canAccessSession(c, sess) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
+		return
+	}
+	n, err := h.store.DeleteSessions(c.Request.Context(), conversation.DeleteSessionsQuery{IDs: []string{id}})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"deleted": n})
+}
+
+// DeleteSessions POST /api/v1/conversations/sessions/delete
+// 批量删除会话：ids 多选；all + category/since/until 全选或条件筛选后删除。
+func (h *ConversationHandler) DeleteSessions(c *gin.Context) {
+	if h == nil || h.store == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "conversation store unavailable"})
+		return
+	}
+	var body deleteSessionsReq
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid body: " + err.Error()})
+		return
+	}
+	q := conversation.DeleteSessionsQuery{IDs: body.IDs}
+	if len(body.IDs) == 0 {
+		q.Category = body.Category
+		if h.edition.IsTeam() {
+			if auth.IsAdmin(c) {
+				q.UserID = body.UserID
+			} else {
+				userID, err := auth.GetUserID(c)
+				if err != nil {
+					c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+					return
+				}
+				q.UserID = userID
+			}
+		}
+		if t, err := parseTime(body.Since); err == nil {
+			q.Since = t
+		}
+		if t, err := parseTime(body.Until); err == nil {
+			q.Until = t
+		}
+		// 既无多选也无筛选条件时，必须显式 all 才允许全量删除（防误操作）。
+		if !body.All && len(q.IDs) == 0 && q.Category == "" && q.Since.IsZero() && q.Until.IsZero() {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "nothing to delete: provide ids, filters, or all=true"})
+			return
+		}
+	} else if h.edition.IsTeam() && !auth.IsAdmin(c) {
+		// 组模型：非管理员多选删除时校验每个会话归属，防止越权删除他人会话。
+		userID, err := auth.GetUserID(c)
+		if err != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+			return
+		}
+		for _, id := range body.IDs {
+			sess, err := h.store.GetSession(c.Request.Context(), id)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+			if sess == nil {
+				continue
+			}
+			if !(sess.UserID == 0 || sess.UserID == userID) {
+				c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
+				return
+			}
+		}
+	}
+	n, err := h.store.DeleteSessions(c.Request.Context(), q)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"deleted": n})
+}
+
+// deleteMessagesReq is the body for message deletion within a session.
+// ids（多选）优先；否则 role 删除该角色全部消息。
+type deleteMessagesReq struct {
+	IDs  []string `json:"ids"`
+	Role string   `json:"role"`
+}
+
+// DeleteMessages POST /api/v1/conversations/sessions/:id/messages/delete
+// 删除会话内消息：ids 单选/多选，或按 role 条件筛选删除。
+func (h *ConversationHandler) DeleteMessages(c *gin.Context) {
+	if h == nil || h.store == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "conversation store unavailable"})
+		return
+	}
+	id := c.Param("id")
+	sess, err := h.store.GetSession(c.Request.Context(), id)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if sess == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "session not found"})
+		return
+	}
+	if !h.canAccessSession(c, sess) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
+		return
+	}
+	var body deleteMessagesReq
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid body: " + err.Error()})
+		return
+	}
+	if len(body.IDs) == 0 && body.Role == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "nothing to delete: provide ids or role"})
+		return
+	}
+	n, err := h.store.DeleteMessages(c.Request.Context(), conversation.DeleteMessagesQuery{
+		SessionID: id,
+		IDs:       body.IDs,
+		Role:      body.Role,
+	})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"deleted": n})
+}
+
+func parseTime(s string) (time.Time, error) {
+	return time.Parse(time.RFC3339, s)
+}
+
 func (h *ConversationHandler) canAccessSession(c *gin.Context, sess *conversation.Session) bool {
 	if sess == nil {
 		return false
