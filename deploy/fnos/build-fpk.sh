@@ -662,6 +662,14 @@ elif [ "$MODE" = "native" ]; then
     cp -r "${REPO_ROOT}/config/initdata/scripts/"* "${APP_DIR}/scripts/" 2>/dev/null || true
   fi
 
+  # 定价规则种子（config/pricing/default.yaml），启动时 EnsureSeededFromYAML 使用
+  if [ -d "${REPO_ROOT}/config/pricing" ]; then
+    rm -rf "${APP_DIR}/config/pricing"
+    mkdir -p "${APP_DIR}/config/pricing"
+    cp -R "${REPO_ROOT}/config/pricing/." "${APP_DIR}/config/pricing/"
+    echo "  定价规则: $(find "${APP_DIR}/config/pricing" -type f | wc -l) 个文件"
+  fi
+
   # update_config.yml（Native 模式需要）
   if [ -f "${REPO_ROOT}/config/initdata/update/update_config.yml" ]; then
     cp "${REPO_ROOT}/config/initdata/update/update_config.yml" "${APP_DIR}/update_config.yml"
