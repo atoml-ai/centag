@@ -218,6 +218,140 @@ func (s *FileStore) ListCategories(ctx context.Context, userID int64, tenantID s
 	return cats, nil
 }
 
+// sessionMatchesQuery reports whether a session matches the delete selection.
+func sessionMatchesQuery(sess *Session, q DeleteSessionsQuery) bool {
+	if sess == nil {
+		return false
+	}
+	if len(q.IDs) > 0 {
+		for _, id := range q.IDs {
+			if id == sess.ID {
+				return true
+			}
+		}
+		return false
+	}
+	if q.UserID != 0 && sess.UserID != q.UserID {
+		return false
+	}
+	if q.TenantID != "" && sess.TenantID != q.TenantID {
+		return false
+	}
+	if q.Category != "" && sess.Category != q.Category {
+		return false
+	}
+	if !q.Since.IsZero() && sess.UpdatedAt.Before(q.Since) {
+		return false
+	}
+	if !q.Until.IsZero() && sess.UpdatedAt.After(q.Until) {
+		return false
+	}
+	return true
+}
+
+func (s *FileStore) DeleteSessions(ctx context.Context, q DeleteSessionsQuery) (int64, error) {
+	entries, err := os.ReadDir(s.root)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return 0, nil
+		}
+		return 0, err
+	}
+	var deleted int64
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		sess, err := s.readSessionMeta(filepath.Join(s.root, e.Name(), "session.json"))
+		if err != nil || sess == nil {
+			continue
+		}
+		if !sessionMatchesQuery(sess, q) {
+			continue
+		}
+		if err := os.RemoveAll(filepath.Join(s.root, e.Name())); err != nil {
+			return deleted, err
+		}
+		deleted++
+	}
+	return deleted, nil
+}
+
+func (s *FileStore) DeleteMessages(ctx context.Context, q DeleteMessagesQuery) (int64, error) {
+	if q.SessionID == "" {
+		return 0, nil
+	}
+	lk := s.sessionLock(q.SessionID)
+	lk.Lock()
+	defer lk.Unlock()
+
+	dir := s.sessionDir(q.SessionID)
+	path := filepath.Join(dir, "messages.jsonl")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return 0, nil
+		}
+		return 0, err
+	}
+	var kept []*Message
+	var deleted int64
+	for _, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		var m Message
+		if json.Unmarshal([]byte(line), &m) != nil {
+			continue
+		}
+		if messageMatchesQuery(&m, q) {
+			deleted++
+			continue
+		}
+		kept = append(kept, &m)
+	}
+	if deleted == 0 {
+		return 0, nil
+	}
+	f, err := os.Create(path)
+	if err != nil {
+		return 0, err
+	}
+	enc := json.NewEncoder(f)
+	for _, m := range kept {
+		if err := enc.Encode(m); err != nil {
+			f.Close()
+			return 0, err
+		}
+	}
+	if err := f.Close(); err != nil {
+		return 0, err
+	}
+
+	metaPath := filepath.Join(dir, "session.json")
+	if sess, err := s.readSessionMeta(metaPath); err == nil && sess != nil {
+		sess.MessageCount = len(kept)
+		_ = writeJSON(metaPath, sess)
+	}
+	return deleted, nil
+}
+
+func messageMatchesQuery(m *Message, q DeleteMessagesQuery) bool {
+	if m == nil {
+		return false
+	}
+	if len(q.IDs) > 0 {
+		for _, id := range q.IDs {
+			if id == m.ID {
+				return true
+			}
+		}
+		return false
+	}
+	return q.Role != "" && m.Role == q.Role
+}
+
 func (s *FileStore) readSessionMeta(path string) (*Session, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {

@@ -234,6 +234,133 @@ func (s *SQLStore) ListCategories(ctx context.Context, userID int64, tenantID st
 	return cats, rows.Err()
 }
 
+// deleteSessionConds builds the WHERE conditions (and args) selecting sessions to delete.
+func deleteSessionConds(q DeleteSessionsQuery) ([]string, []interface{}) {
+	var conds []string
+	var args []interface{}
+	if len(q.IDs) > 0 {
+		conds = append(conds, "id IN ("+strings.Repeat("?,", len(q.IDs)-1)+"?)")
+		for _, id := range q.IDs {
+			args = append(args, id)
+		}
+		return conds, args
+	}
+	if q.UserID != 0 {
+		conds = append(conds, "user_id = ?")
+		args = append(args, q.UserID)
+	}
+	if q.TenantID != "" {
+		conds = append(conds, "tenant_id = ?")
+		args = append(args, q.TenantID)
+	}
+	if q.Category != "" {
+		conds = append(conds, "category = ?")
+		args = append(args, q.Category)
+	}
+	if !q.Since.IsZero() {
+		conds = append(conds, "updated_at >= ?")
+		args = append(args, q.Since)
+	}
+	if !q.Until.IsZero() {
+		conds = append(conds, "updated_at <= ?")
+		args = append(args, q.Until)
+	}
+	return conds, args
+}
+
+func (s *SQLStore) DeleteSessions(ctx context.Context, q DeleteSessionsQuery) (int64, error) {
+	conds, args := deleteSessionConds(q)
+	where := "1=1"
+	if len(conds) > 0 {
+		where = strings.Join(conds, " AND ")
+	}
+	idQuery := s.rebind(fmt.Sprintf(`SELECT id FROM conversation_sessions WHERE %s`, where))
+	rows, err := s.db.QueryContext(ctx, idQuery, args...)
+	if err != nil {
+		return 0, err
+	}
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			rows.Close()
+			return 0, err
+		}
+		ids = append(ids, id)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return 0, err
+	}
+	if len(ids) == 0 {
+		return 0, nil
+	}
+
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	in := strings.Repeat("?,", len(ids)-1) + "?"
+	msgArgs := make([]interface{}, 0, len(ids))
+	for _, id := range ids {
+		msgArgs = append(msgArgs, id)
+	}
+	_, err = tx.ExecContext(ctx, s.rebind(`DELETE FROM conversation_messages WHERE session_id IN (`+in+`)`), msgArgs...)
+	if err != nil {
+		return 0, fmt.Errorf("delete messages: %w", err)
+	}
+	res, err := tx.ExecContext(ctx, s.rebind(`DELETE FROM conversation_sessions WHERE id IN (`+in+`)`), msgArgs...)
+	if err != nil {
+		return 0, fmt.Errorf("delete sessions: %w", err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return int64(len(ids)), tx.Commit()
+	}
+	if err := tx.Commit(); err != nil {
+		return 0, err
+	}
+	return n, nil
+}
+
+func (s *SQLStore) DeleteMessages(ctx context.Context, q DeleteMessagesQuery) (int64, error) {
+	var conds []string
+	var args []interface{}
+	if q.SessionID != "" {
+		conds = append(conds, "session_id = ?")
+		args = append(args, q.SessionID)
+	}
+	if len(q.IDs) > 0 {
+		conds = append(conds, "id IN ("+strings.Repeat("?,", len(q.IDs)-1)+"?)")
+		for _, id := range q.IDs {
+			args = append(args, id)
+		}
+	} else if q.Role != "" {
+		conds = append(conds, "role = ?")
+		args = append(args, q.Role)
+	}
+	if len(conds) == 0 {
+		return 0, nil
+	}
+	where := strings.Join(conds, " AND ")
+	query := s.rebind(`DELETE FROM conversation_messages WHERE ` + where)
+	res, err := s.db.ExecContext(ctx, query, args...)
+	if err != nil {
+		return 0, err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return 0, err
+	}
+	if q.SessionID != "" && n > 0 {
+		uq := s.rebind(`UPDATE conversation_sessions SET message_count = (SELECT COUNT(*) FROM conversation_messages WHERE session_id = ?) WHERE id = ?`)
+		_, _ = s.db.ExecContext(ctx, uq, q.SessionID, q.SessionID)
+	}
+	return n, nil
+}
+
 type scannable interface {
 	Scan(dest ...interface{}) error
 }

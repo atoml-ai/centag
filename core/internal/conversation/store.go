@@ -53,6 +53,25 @@ type PageQuery struct {
 	Offset int
 }
 
+// DeleteSessionsQuery selects sessions to delete.
+// IDs takes precedence; otherwise the filter fields (same as ListSessionsQuery) select matches.
+type DeleteSessionsQuery struct {
+	IDs      []string
+	UserID   int64
+	TenantID string
+	Category string
+	Since    time.Time
+	Until    time.Time
+}
+
+// DeleteMessagesQuery selects messages to delete within one session.
+// IDs takes precedence; otherwise Role matches messages of that role.
+type DeleteMessagesQuery struct {
+	SessionID string
+	IDs       []string
+	Role      string
+}
+
 // Store is the unified conversation persistence API.
 // Implementations: FileStore (minimal), SQLiteStore (personal), PostgresStore (team).
 type Store interface {
@@ -62,4 +81,8 @@ type Store interface {
 	GetSession(ctx context.Context, id string) (*Session, error)
 	ListMessages(ctx context.Context, sessionID string, q PageQuery) ([]*Message, error)
 	ListCategories(ctx context.Context, userID int64, tenantID string) ([]string, error)
+	// DeleteSessions removes matched sessions and their messages, returning how many were deleted.
+	DeleteSessions(ctx context.Context, q DeleteSessionsQuery) (int64, error)
+	// DeleteMessages removes matched messages within a session, returning how many were deleted.
+	DeleteMessages(ctx context.Context, q DeleteMessagesQuery) (int64, error)
 }
