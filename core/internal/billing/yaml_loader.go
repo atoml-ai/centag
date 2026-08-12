@@ -8,6 +8,7 @@ import (
 	"time"
 
 	billingpkg "centag/core/pkg/billing"
+	"centag/core/pkg/bootstrap"
 	"gopkg.in/yaml.v3"
 )
 
@@ -16,6 +17,14 @@ var DefaultPricingFileCandidates = []string{
 	"config/pricing/default.yaml",
 	filepath.Join("..", "config", "pricing", "default.yaml"),
 	filepath.Join("..", "..", "config", "pricing", "default.yaml"),
+}
+
+// projectRootPricingCandidate anchors the default pricing file at ProjectRoot().
+// It covers install layouts (~/.centag/lib/<edition>/config/pricing) and the
+// release bundle (APP_DIR/config/pricing) where the working directory is not
+// guaranteed to be the project root.
+func projectRootPricingCandidate() string {
+	return filepath.Join(bootstrap.ProjectRoot(), "config", "pricing", "default.yaml")
 }
 
 // ResolveDefaultPricingPath returns an existing default pricing YAML path.
@@ -32,7 +41,12 @@ func ResolveDefaultPricingPath() (string, error) {
 			return c, nil
 		}
 	}
-	return "", fmt.Errorf("pricing YAML not found (tried %v)", DefaultPricingFileCandidates)
+	if c := projectRootPricingCandidate(); c != "" {
+		if _, err := os.Stat(c); err == nil {
+			return c, nil
+		}
+	}
+	return "", fmt.Errorf("pricing YAML not found (tried %v, plus %q)", DefaultPricingFileCandidates, projectRootPricingCandidate())
 }
 
 type pricingRuleYAML struct {
