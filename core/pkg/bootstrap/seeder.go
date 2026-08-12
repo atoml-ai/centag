@@ -16,7 +16,8 @@
 //
 // 其他可覆盖的环境变量:
 //	LLM_PROXY_ADMIN_USERNAME      (default: admin)
-//	LLM_PROXY_ADMIN_PASSWORD      (default: centag123)
+//	LLM_PROXY_ADMIN_PASSWORD      首次启动前显式设置可预置口令；未设置时
+//	                              personal/minimal/team 一律强制首启设置密码
 //	LLM_PROXY_DEFAULT_MODE             (default: transparent-proxy)
 //	LLM_PROXY_DEFAULT_BACKEND_ID       (default: ollama-local)
 //	LLM_PROXY_DEFAULT_MODEL            (default: qwen2.5:1.5b)
@@ -62,8 +63,8 @@ func AdminUsername() string {
 }
 
 // AdminPassword returns the initial admin password from environment variable.
-// Returns empty string for personal/minimal editions — the user must set it via
-// the first-run setup dialog.
+// Returns empty string when unset — for all editions (personal/minimal/team)
+// the user must set it via the first-run setup dialog.
 func AdminPassword() string {
 	edition := strings.ToLower(strings.TrimSpace(os.Getenv("CENTAG_EDITION")))
 	if edition == "personal" || edition == "minimal" {
@@ -73,7 +74,9 @@ func AdminPassword() string {
 	if v := strings.TrimSpace(os.Getenv("LLM_PROXY_ADMIN_PASSWORD")); v != "" {
 		return v
 	}
-	return "centag123"
+	// 其它商业版（team 等）：同样不内置默认口令，走首启设置密码流程。
+	// 需要部署时自动预置口令请显式设置 LLM_PROXY_ADMIN_PASSWORD。
+	return ""
 }
 
 // Seed checks whether the database has been initialised and, if not, populates
