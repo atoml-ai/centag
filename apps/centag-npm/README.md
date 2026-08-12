@@ -107,8 +107,8 @@ centag --help
 ## 默认登录
 
 - 用户名: `admin`
-- 密码: `centag123`  
-  （首次启动前设置 `LLM_PROXY_ADMIN_PASSWORD` 可覆盖）
+- 无预置密码：首次启动通过初始化向导设置
+  （首次启动前设置 `LLM_PROXY_ADMIN_PASSWORD` 可预置覆盖）
 
 ## 环境变量
 

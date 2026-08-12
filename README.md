@@ -148,8 +148,7 @@ centag wrap run -- opencode
 
 Done. Traffic flows through Centag: shared backend pools, failover, model routing, cost visibility.
 
-> **Default login credentials:** username `admin` / password `centag123`
-> (change after first login; override via `LLM_PROXY_ADMIN_PASSWORD` before first start)
+> **Default login:** username `admin` — set your own password in the first-run setup dialog (no preset password). Optionally preset one via `LLM_PROXY_ADMIN_PASSWORD` before first start.
 
 ### Other install methods
 

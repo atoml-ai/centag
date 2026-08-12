@@ -148,8 +148,7 @@ centag wrap run -- opencode
 
 Listo. El tráfico pasa por Centag: pools de backends compartidos, failover, enrutado de modelos, visibilidad de costes.
 
-> **Credenciales por defecto:** usuario `admin` / contraseña `centag123`
-> (cambiar tras el primer inicio de sesión; se puede sobreescribir con `LLM_PROXY_ADMIN_PASSWORD` antes del primer arranque)
+> **Credenciales por defecto:** usuario `admin` — establece tu contraseña en el asistente de primera ejecución (sin contraseña predefinida). Opcionalmente predefinela con `LLM_PROXY_ADMIN_PASSWORD` antes del primer arranque.
 
 ### Otros métodos de instalación
 
