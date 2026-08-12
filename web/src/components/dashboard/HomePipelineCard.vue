@@ -103,7 +103,7 @@
             <PipelineFeatureGuard
               feature="pipelineExport"
               :pipeline="pipeline"
-              :is-admin="authStore.isAdmin"
+              :unrestricted="unrestricted"
               :action-label="t('homePipelineCard.exportAction')"
             >
               <template #default="{ disabled }">
@@ -119,7 +119,7 @@
               </template>
             </PipelineFeatureGuard>
             <el-tooltip
-              v-if="canCreatePipeline"
+              v-if="canCreatePipeline && !unrestricted"
               :content="isSystemPipeline(pipeline) ? t('homePipelineCard.cloneFromSystem') : t('homePipelineCard.cloneAction')"
               placement="top"
             >
@@ -137,7 +137,7 @@
             <PipelineFeatureGuard
               feature="pipelineEdit"
               :pipeline="pipeline"
-              :is-admin="authStore.isAdmin"
+              :unrestricted="unrestricted"
               :action-label="t('homePipelineCard.editAction')"
             >
               <template #default="{ disabled }">
@@ -240,8 +240,6 @@ import type { PipelineCreateInfo } from '@/components/pipeline/PipelineCreateDia
 import PipelineEditorDialog from '@/components/pipeline/PipelineEditorDialog.vue'
 import PipelineFeatureGuard from '@/components/pipeline/PipelineFeatureGuard.vue'
 import CapabilitySlotsDialog from '@/components/pipeline/CapabilitySlotsDialog.vue'
-import { useEdition } from '@/composables/useEdition'
-import { useAuthStore } from '@/stores/auth'
 import { useUserResourceAccess } from '@/composables/useUserResourceAccess'
 import { canConfigureCapabilitySlots } from '@/utils/capabilitySlots'
 import { isSystemPipeline } from '@/utils/pipeline/features'
@@ -269,8 +267,6 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
-const { isPersonal, isMinimal, isTeam } = useEdition()
-const authStore = useAuthStore()
 
 const pipelines = ref<AgentPatternPipeline[]>([])
 const selectedDefaultId = ref('')
@@ -294,22 +290,10 @@ const importConflictResolve = ref<((value: 'overwrite' | 'skip' | 'cancel') => v
 const routeAssignVisible = ref(false)
 const routeAssignPipelineId = ref('')
 
-const { canAddOwnPipelines, canChangeDefaultPipeline } = useUserResourceAccess()
-const canEdit = computed(
-  () =>
-    authStore.isAdmin ||
-    isPersonal.value ||
-    isMinimal.value ||
-    (isTeam.value && canAddOwnPipelines.value)
-)
+const { canAddOwnPipelines, canChangeDefaultPipeline, unrestricted } = useUserResourceAccess()
+const canEdit = computed(() => canAddOwnPipelines.value)
 const canCreatePipeline = computed(() => canEdit.value)
-const canSetDefault = computed(
-  () =>
-    authStore.isAdmin ||
-    isPersonal.value ||
-    isMinimal.value ||
-    (isTeam.value && canChangeDefaultPipeline.value)
-)
+const canSetDefault = computed(() => canChangeDefaultPipeline.value)
 const selectable = computed(() => canEdit.value)
 const canTest = computed(() => true)
 

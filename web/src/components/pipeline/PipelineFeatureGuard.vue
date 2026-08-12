@@ -22,7 +22,7 @@ const { t } = useI18n()
 const props = withDefaults(defineProps<{
   feature: PipelineFeatureKey
   pipeline: Pipeline
-  isAdmin: boolean
+  unrestricted: boolean
   actionLabel?: string
   placement?: 'top' | 'top-start' | 'top-end' | 'bottom' | 'bottom-start' | 'bottom-end' | 'left' | 'left-start' | 'left-end' | 'right' | 'right-start' | 'right-end'
   showTooltipWhenEnabled?: boolean
@@ -33,7 +33,7 @@ const props = withDefaults(defineProps<{
 })
 
 const support = computed(() =>
-  resolvePipelineFeatureSupport(props.feature, props.pipeline, { isAdmin: props.isAdmin })
+  resolvePipelineFeatureSupport(props.feature, props.pipeline, { unrestricted: props.unrestricted })
 )
 
 const tooltipText = computed(() => {

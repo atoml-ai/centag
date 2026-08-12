@@ -203,8 +203,6 @@ import {
   toBackendEntry
 } from '@/utils/shared-modules'
 import api from '@/api'
-import { useAuthStore } from '@/stores/auth'
-import { useEdition } from '@/composables/useEdition'
 import { useUserResourceAccess } from '@/composables/useUserResourceAccess'
 
 const props = defineProps<{
@@ -217,17 +215,9 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
-const authStore = useAuthStore()
-const { isPersonal, isMinimal, isTeam } = useEdition()
-const { canAddOwnBackends } = useUserResourceAccess()
 // personal / minimal / 超管不受限；team 普通用户受 can_add_own_backends 控制
-const canWrite = computed(
-  () =>
-    authStore.isAdmin ||
-    isPersonal.value ||
-    isMinimal.value ||
-    (isTeam.value && canAddOwnBackends.value)
-)
+const { canAddOwnBackends } = useUserResourceAccess()
+const canWrite = computed(() => canAddOwnBackends.value)
 
 const editorRef = ref<InstanceType<typeof BackendEditorDialog> | null>(null)
 const editorVisible = ref(false)

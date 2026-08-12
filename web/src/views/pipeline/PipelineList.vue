@@ -57,7 +57,7 @@
           <template #default="{ row }">
             <div class="action-btns">
               <el-button
-                v-if="canAddOwnPipelines"
+                v-if="canAddOwnPipelines && !unrestricted"
                 size="default"
                 :type="isSystemPipeline(row) ? 'warning' : 'default'"
                 :loading="cloningId === row.id"
@@ -69,7 +69,7 @@
               <PipelineFeatureGuard
                 feature="pipelineEdit"
                 :pipeline="row"
-                :is-admin="authStore.isAdmin"
+                :unrestricted="unrestricted"
                 :action-label="t('pipelineList.edit')"
               >
                 <template #default="{ disabled }">
@@ -83,7 +83,7 @@
               <PipelineFeatureGuard
                 feature="pipelineExport"
                 :pipeline="row"
-                :is-admin="authStore.isAdmin"
+                :unrestricted="unrestricted"
                 :action-label="t('pipelineList.export')"
               >
                 <template #default="{ disabled }">
@@ -97,7 +97,7 @@
               <PipelineFeatureGuard
                 feature="pipelineDelete"
                 :pipeline="row"
-                :is-admin="authStore.isAdmin"
+                :unrestricted="unrestricted"
                 :action-label="t('pipelineList.delete')"
               >
                 <template #default="{ disabled }">
@@ -125,14 +125,12 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Search, Plus, Edit, Delete, Download, CopyDocument } from '@element-plus/icons-vue'
 import { getPipelines, deletePipeline, exportPipeline, clonePipeline, parsePipelinesResponse, type Pipeline } from '@/api/pipeline'
 import { resolvePipelineFeatureSupport, isSystemPipeline, type PipelineFeatureKey } from '@/utils/pipeline/features'
-import { useAuthStore } from '@/stores/auth'
 import { useUserResourceAccess } from '@/composables/useUserResourceAccess'
 import PipelineFeatureGuard from '@/components/pipeline/PipelineFeatureGuard.vue'
 
 const { t } = useI18n()
 const router = useRouter()
-const authStore = useAuthStore()
-const { canAddOwnPipelines } = useUserResourceAccess()
+const { canAddOwnPipelines, unrestricted } = useUserResourceAccess()
 const loading = ref(false)
 const pipelines = ref<Pipeline[]>([])
 const searchText = ref('')
@@ -153,7 +151,7 @@ const handleSelectionChange = (rows: Pipeline[]) => {
 }
 
 const getPipelineFeatureSupport = (feature: PipelineFeatureKey, row: Pipeline) => {
-  return resolvePipelineFeatureSupport(feature, row, { isAdmin: authStore.isAdmin })
+  return resolvePipelineFeatureSupport(feature, row, { unrestricted })
 }
 
 const canBatchDeleteSelected = computed(() => {

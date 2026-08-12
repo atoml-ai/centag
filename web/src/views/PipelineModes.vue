@@ -102,7 +102,7 @@
                 v-if="(row.shortcut_code || '') !== (row._originalShortcutCode || '')"
                 feature="pipelineShortcutUpdate"
                 :pipeline="row"
-                :is-admin="authStore.isAdmin"
+                :unrestricted="unrestricted"
                 :action-label="t('pipelineModes.table.saveShortcut')"
               >
                 <template #default="{ disabled }">
@@ -149,7 +149,7 @@
           <template #default="{ row }">
             <PipelineRowActions
               :row="row"
-              :is-admin="authStore.isAdmin"
+              :unrestricted="unrestricted"
               :default-pipeline-id="defaultPipelineId"
               @command="(cmd) => handleRowCommand(cmd, row)"
             />
@@ -191,7 +191,7 @@
             <PipelineRowActions
               class="pipeline-card__actions"
               :row="row"
-              :is-admin="authStore.isAdmin"
+              :unrestricted="unrestricted"
               :default-pipeline-id="defaultPipelineId"
               @command="(cmd) => handleRowCommand(cmd, row)"
             />
@@ -218,7 +218,7 @@
                 v-if="(row.shortcut_code || '') !== (row._originalShortcutCode || '')"
                 feature="pipelineShortcutUpdate"
                 :pipeline="row"
-                :is-admin="authStore.isAdmin"
+                :unrestricted="unrestricted"
                 :action-label="t('pipelineModes.table.saveShortcut')"
               >
                 <template #default="{ disabled }">
@@ -371,7 +371,6 @@ import CapabilitySlotsDialog from '@/components/pipeline/CapabilitySlotsDialog.v
 import type { PipelineCreateInfo } from '@/components/pipeline/PipelineCreateDialog.vue'
 import ExecutionHistory from '@/components/pipeline/ExecutionHistory.vue'
 import MinimalChat from '@/views/MinimalChat.vue'
-import { useAuthStore } from '@/stores/auth'
 import { useUserResourceAccess } from '@/composables/useUserResourceAccess'
 import { resolvePipelineFeatureSupport, isSystemPipeline } from '@/utils/pipeline/features'
 import { downloadPipelineYaml, downloadPipelinesAsZip } from '@/utils/pipeline/importExport'
@@ -380,8 +379,7 @@ import { isTeamEdition } from '@/utils/edition'
 const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
-const authStore = useAuthStore()
-const { canAddOwnPipelines } = useUserResourceAccess()
+const { canAddOwnPipelines, unrestricted } = useUserResourceAccess()
 
 const loading = ref(false)
 const canvasVisible = ref(false)
@@ -464,7 +462,7 @@ const handleSelectionChange = (rows: Pipeline[]) => {
 }
 
 const getPipelineFeatureSupport = (feature: 'pipelineBatchDelete', row: Pipeline) => {
-  return resolvePipelineFeatureSupport(feature, row, { isAdmin: authStore.isAdmin })
+  return resolvePipelineFeatureSupport(feature, row, { unrestricted })
 }
 
 const canBatchDeleteSelected = computed(() => {

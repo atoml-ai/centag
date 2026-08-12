@@ -9,8 +9,14 @@ export type PipelineFeatureKey =
   | 'executionHistory'
   | 'pipelineExport'
 
+/**
+ * 前后端一致的单一权限概念：unrestricted=true 表示「不受限」。
+ * 仅 team 普通用户受限（后端 useraccess.Applies == team && RoleNormal）；
+ * team 管理员 / personal / minimal 均不受限。
+ * 派生：unrestricted = isAdmin || personal || minimal || !team
+ */
 export interface PipelineFeatureContext {
-  isAdmin: boolean
+  unrestricted: boolean
 }
 
 export interface PipelineFeatureSupport {
@@ -116,10 +122,10 @@ export function resolvePipelineFeatureSupport(
   if (!rule) {
     return { visible: false, enabled: false, reason: '未知特性' }
   }
-  if (rule.requiresAdmin && !ctx.isAdmin) {
+  if (rule.requiresAdmin && !ctx.unrestricted) {
     return { visible: false, enabled: false, reason: '仅管理员可用' }
   }
-  if (rule.requiresOwnOrAdmin && !ctx.isAdmin && isSystemPipeline(pipeline)) {
+  if (rule.requiresOwnOrAdmin && !ctx.unrestricted && isSystemPipeline(pipeline)) {
     return {
       visible: true,
       enabled: false,

@@ -21,7 +21,7 @@
         <el-dropdown-item v-if="canConfigureCapabilitySlots(row)" command="configure" :icon="Connection">
           {{ t('pipelineModes.table.configureModel') }}
         </el-dropdown-item>
-        <el-dropdown-item command="clone" :icon="CopyDocument">
+        <el-dropdown-item v-if="!unrestricted" command="clone" :icon="CopyDocument">
           {{ isSystemPipeline(row) ? t('pipelineModes.table.createCopy') : t('pipelineModes.table.clone') }}
         </el-dropdown-item>
         <div
@@ -73,7 +73,7 @@
         <PipelineFeatureGuard
           feature="pipelineDelete"
           :pipeline="row"
-          :is-admin="isAdmin"
+          :unrestricted="unrestricted"
           :action-label="t('pipelineModes.table.delete')"
         >
           <template #default="{ disabled }">
@@ -100,7 +100,7 @@ import type { Pipeline } from '@/api/pipeline'
 
 const props = defineProps<{
   row: Pipeline
-  isAdmin: boolean
+  unrestricted: boolean
   defaultPipelineId: string
 }>()
 
@@ -108,9 +108,9 @@ const emit = defineEmits<{ (e: 'command', command: string): void }>()
 
 const { t } = useI18n()
 
-const editDisabled = computed(() => !resolvePipelineFeatureSupport('pipelineEdit', props.row, props.isAdmin))
-const historyDisabled = computed(() => !resolvePipelineFeatureSupport('executionHistory', props.row, props.isAdmin))
-const exportDisabled = computed(() => !resolvePipelineFeatureSupport('pipelineExport', props.row, props.isAdmin))
+const editDisabled = computed(() => !resolvePipelineFeatureSupport('pipelineEdit', props.row, { unrestricted: props.unrestricted }))
+const historyDisabled = computed(() => !resolvePipelineFeatureSupport('executionHistory', props.row, { unrestricted: props.unrestricted }))
+const exportDisabled = computed(() => !resolvePipelineFeatureSupport('pipelineExport', props.row, { unrestricted: props.unrestricted }))
 
 const submenuOpen = ref(false)
 const submenuRef = ref<HTMLElement | null>(null)

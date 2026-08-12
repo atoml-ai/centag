@@ -27,6 +27,7 @@ export function useUserResourceAccess() {
   })
 
   return {
+    unrestricted,
     canAddOwnBackends,
     canAddOwnPipelines,
     canChangeDefaultPipeline

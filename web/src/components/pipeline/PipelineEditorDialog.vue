@@ -42,7 +42,7 @@
       <PipelineFeatureGuard
         feature="routeAutoBuild"
         :pipeline="localPipeline"
-        :is-admin="authStore.isAdmin"
+        :unrestricted="unrestricted"
         :action-label="t('pipelineEditor.autoConfigureRoute')"
       >
         <template #default="{ disabled }">
@@ -201,7 +201,7 @@ import PipelineCanvas from '@/components/PipelineCanvas.vue'
 import PipelineFeatureGuard from '@/components/pipeline/PipelineFeatureGuard.vue'
 import AddCategoryDialog from '@/components/pipeline/AddCategoryDialog.vue'
 import CapabilitySlotsDialog from '@/components/pipeline/CapabilitySlotsDialog.vue'
-import { useAuthStore } from '@/stores/auth'
+import { useUserResourceAccess } from '@/composables/useUserResourceAccess'
 import {
   createPipeline,
   getPipeline,
@@ -215,7 +215,7 @@ import api from '@/api'
 import { canConfigureCapabilitySlots, listRouterNodes } from '@/utils/capabilitySlots'
 
 const { t } = useI18n()
-const authStore = useAuthStore()
+const { unrestricted } = useUserResourceAccess()
 
 const props = defineProps<{
   modelValue: boolean
