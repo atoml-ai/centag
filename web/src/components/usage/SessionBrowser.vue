@@ -26,6 +26,16 @@
                 <ArrowRight v-else />
               </el-icon>
               {{ s.title || s.id }}
+              <el-button
+                class="compact-delete"
+                text
+                type="danger"
+                size="small"
+                :aria-label="t('sessionBrowser.delete')"
+                @click.stop="deleteOneSession(s)"
+              >
+                <el-icon><Delete /></el-icon>
+              </el-button>
             </div>
             <div class="session-meta">
               <span>{{ s.category || t('sessionBrowser.categoryGeneral') }}</span>
@@ -78,11 +88,24 @@
             v-model="category"
             clearable
             :placeholder="t('sessionBrowser.allCategories')"
-            style="width: 160px"
-            @change="reload"
+            style="width: 150px"
+            @change="onFilterChange"
           >
             <el-option v-for="c in categories" :key="c" :label="c" :value="c" />
           </el-select>
+          <el-date-picker
+            v-model="dateRange"
+            type="datetimerange"
+            range-separator="~"
+            :start-placeholder="t('sessionBrowser.since')"
+            :end-placeholder="t('sessionBrowser.until')"
+            :shortcuts="dateShortcuts"
+            style="width: 280px"
+            @change="onFilterChange"
+          />
+          <el-button type="danger" plain :disabled="!hasFilter" @click="deleteFilteredSessions">
+            {{ t('sessionBrowser.deleteFiltered') }}
+          </el-button>
           <el-button type="primary" :loading="loading" @click="reload">{{ t('sessionBrowser.refresh') }}</el-button>
         </div>
       </div>
@@ -91,26 +114,59 @@
         <el-col :xs="24" :md="10" :lg="9">
           <el-card shadow="never" class="list-card">
             <template #header>
-              <span>{{ t('sessionBrowser.sessionList') }}</span>
-              <span class="muted">{{ t('sessionBrowser.totalCount', { count: sessions.length }) }}</span>
+              <div class="list-head">
+                <div class="list-title">
+                  <span>{{ t('sessionBrowser.sessionList') }}</span>
+                  <span class="muted">{{ t('sessionBrowser.totalCount', { count: sessions.length }) }}</span>
+                </div>
+                <div class="list-actions">
+                  <el-checkbox
+                    v-model="allSessionsChecked"
+                    :indeterminate="someSessionsChecked"
+                    size="small"
+                  >
+                    {{ t('sessionBrowser.selectAll') }}
+                  </el-checkbox>
+                  <el-button
+                    type="danger"
+                    plain
+                    size="small"
+                    :disabled="checkedSessionIds.length === 0"
+                    @click="deleteSelectedSessions"
+                  >
+                    {{ t('sessionBrowser.deleteSelected') }}
+                  </el-button>
+                </div>
+              </div>
             </template>
             <el-empty v-if="!loading && sessions.length === 0" :description="t('sessionBrowser.noSessionsFull')" />
             <div v-else class="session-list full-list">
-              <button
+              <div
                 v-for="s in sessions"
                 :key="s.id"
-                type="button"
-                class="session-item button-item"
+                class="session-row"
                 :class="{ active: selectedId === s.id }"
-                @click="selectSession(s)"
               >
-                <div class="session-title">{{ s.title || s.id }}</div>
-                <div class="session-meta">
-                  <el-tag size="small" type="info">{{ s.category || 'general' }}</el-tag>
-                  <span>{{ t('sessionBrowser.messagesCount', { count: s.message_count }) }}</span>
-                  <span>{{ formatTime(s.updated_at) }}</span>
-                </div>
-              </button>
+                <el-checkbox v-model="checkedSessionIds" :value="s.id" size="small" class="row-checkbox" @click.stop />
+                <button type="button" class="session-item button-item" @click="selectSession(s)">
+                  <div class="session-title">{{ s.title || s.id }}</div>
+                  <div class="session-meta">
+                    <el-tag size="small" type="info">{{ s.category || 'general' }}</el-tag>
+                    <span>{{ t('sessionBrowser.messagesCount', { count: s.message_count }) }}</span>
+                    <span>{{ formatTime(s.updated_at) }}</span>
+                  </div>
+                </button>
+                <el-button
+                  class="row-delete"
+                  text
+                  type="danger"
+                  size="small"
+                  :aria-label="t('sessionBrowser.delete')"
+                  @click.stop="deleteOneSession(s)"
+                >
+                  <el-icon><Delete /></el-icon>
+                </el-button>
+              </div>
             </div>
           </el-card>
         </el-col>
@@ -123,26 +179,80 @@
                   <span>{{ t('sessionBrowser.messagesTitle') }}</span>
                   <span v-if="selected" class="muted">{{ selected.id }}</span>
                 </div>
-                <el-button
-                  v-if="selectedId"
-                  text
-                  type="primary"
-                  size="small"
-                  @click="openRelatedCache"
-                >
-                  {{ t('sessionBrowser.viewRelatedCache') }}
-                </el-button>
+                <div class="detail-actions">
+                  <el-checkbox
+                    v-if="selectedId"
+                    v-model="allMessagesChecked"
+                    :indeterminate="someMessagesChecked"
+                    size="small"
+                  >
+                    {{ t('sessionBrowser.selectAllMessages') }}
+                  </el-checkbox>
+                  <el-button
+                    v-if="selectedId"
+                    text
+                    type="danger"
+                    size="small"
+                    :disabled="checkedMessageIds.length === 0"
+                    @click="deleteSelectedMessages"
+                  >
+                    {{ t('sessionBrowser.deleteSelected') }}
+                  </el-button>
+                  <el-select
+                    v-if="selectedId"
+                    v-model="messageRoleFilter"
+                    :placeholder="t('sessionBrowser.allRoles')"
+                    size="small"
+                    clearable
+                    style="width: 110px"
+                  >
+                    <el-option :label="t('sessionBrowser.roleUser')" value="user" />
+                    <el-option :label="t('sessionBrowser.roleAssistant')" value="assistant" />
+                  </el-select>
+                  <el-button
+                    v-if="selectedId"
+                    text
+                    type="danger"
+                    size="small"
+                    :disabled="!messageRoleFilter"
+                    @click="deleteMessagesByRole"
+                  >
+                    {{ t('sessionBrowser.deleteByRole') }}
+                  </el-button>
+                  <el-button
+                    v-if="selectedId"
+                    text
+                    type="primary"
+                    size="small"
+                    @click="openRelatedCache"
+                  >
+                    {{ t('sessionBrowser.viewRelatedCache') }}
+                  </el-button>
+                </div>
               </div>
             </template>
             <el-empty v-if="!selectedId" :description="t('sessionBrowser.selectSessionHint')" />
             <div v-else v-loading="messagesLoading" class="message-list">
               <div v-for="m in messages" :key="m.id" class="message" :class="m.role">
-                <div class="message-role">{{ roleLabel(m.role) }}</div>
+                <div class="message-head">
+                  <div class="message-role">{{ roleLabel(m.role) }}</div>
+                  <el-checkbox v-model="checkedMessageIds" :value="m.id" size="small" @click.stop />
+                </div>
                 <pre class="message-content">{{ displayContent(m) }}</pre>
                 <div class="message-meta">
                   <span v-if="m.model">{{ m.model }}</span>
                   <span v-if="m.backend">{{ m.backend }}</span>
                   <span>{{ formatTime(m.created_at) }}</span>
+                  <el-button
+                    class="msg-delete"
+                    text
+                    type="danger"
+                    size="small"
+                    :aria-label="t('sessionBrowser.delete')"
+                    @click="deleteOneMessage(m)"
+                  >
+                    <el-icon><Delete /></el-icon>
+                  </el-button>
                 </div>
               </div>
               <el-empty
@@ -161,8 +271,8 @@
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
-import { ArrowDown, ArrowRight } from '@element-plus/icons-vue'
-import { ElMessage } from 'element-plus'
+import { ArrowDown, ArrowRight, Delete } from '@element-plus/icons-vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import * as convApi from '@/api/conversations'
 import type { ConversationMessage, ConversationSession } from '@/api/conversations'
 
@@ -186,11 +296,84 @@ const selected = ref<ConversationSession | null>(null)
 const messages = ref<ConversationMessage[]>([])
 const page = ref(1)
 const pageSize = ref(5)
+const dateRange = ref<[Date, Date] | null>(null)
+const checkedSessionIds = ref<string[]>([])
+const checkedMessageIds = ref<string[]>([])
+const messageRoleFilter = ref('')
+
+const dateShortcuts = [
+  {
+    text: () => t('sessionBrowser.lastDay'),
+    value: () => {
+      const end = new Date()
+      const start = new Date()
+      start.setTime(start.getTime() - 3600 * 1000 * 24)
+      return [start, end]
+    }
+  },
+  {
+    text: () => t('sessionBrowser.last7Days'),
+    value: () => {
+      const end = new Date()
+      const start = new Date()
+      start.setTime(start.getTime() - 3600 * 1000 * 24 * 7)
+      return [start, end]
+    }
+  },
+  {
+    text: () => t('sessionBrowser.last30Days'),
+    value: () => {
+      const end = new Date()
+      const start = new Date()
+      start.setTime(start.getTime() - 3600 * 1000 * 24 * 30)
+      return [start, end]
+    }
+  }
+]
+
+const allSessionsChecked = computed({
+  get: () => sessions.value.length > 0 && sessions.value.every((s) => checkedSessionIds.value.includes(s.id)),
+  set: (v: boolean) => {
+    checkedSessionIds.value = v ? sessions.value.map((s) => s.id) : []
+  }
+})
+const someSessionsChecked = computed(
+  () => checkedSessionIds.value.length > 0 && checkedSessionIds.value.length < sessions.value.length
+)
+
+const allMessagesChecked = computed({
+  get: () => messages.value.length > 0 && messages.value.every((m) => checkedMessageIds.value.includes(m.id)),
+  set: (v: boolean) => {
+    checkedMessageIds.value = v ? messages.value.map((m) => m.id) : []
+  }
+})
+const someMessagesChecked = computed(
+  () => checkedMessageIds.value.length > 0 && checkedMessageIds.value.length < messages.value.length
+)
+
+const hasFilter = computed(
+  () => category.value !== '' || (dateRange.value != null && dateRange.value[0] != null && dateRange.value[1] != null)
+)
 
 const pagedSessions = computed(() => {
   const start = (page.value - 1) * pageSize.value
   return sessions.value.slice(start, start + pageSize.value)
 })
+
+function filterParams() {
+  const params: { category?: string; since?: string; until?: string } = {}
+  if (props.mode === 'full' && category.value) params.category = category.value
+  if (dateRange.value && dateRange.value[0] && dateRange.value[1]) {
+    params.since = new Date(dateRange.value[0]).toISOString()
+    params.until = new Date(dateRange.value[1]).toISOString()
+  }
+  return params
+}
+
+function onFilterChange() {
+  checkedSessionIds.value = []
+  reload()
+}
 
 function formatTime(v?: string) {
   if (!v) return ''
@@ -260,11 +443,13 @@ async function reload() {
   loading.value = true
   try {
     const res = await convApi.listSessions({
-      category: props.mode === 'full' ? category.value || undefined : undefined,
+      ...filterParams(),
       limit: props.mode === 'compact' ? 500 : 100,
       offset: 0
     })
     sessions.value = res?.sessions ?? []
+    const kept = checkedSessionIds.value.filter((id) => sessions.value.some((s) => s.id === id))
+    checkedSessionIds.value = kept
     const maxPage = Math.max(1, Math.ceil(sessions.value.length / pageSize.value) || 1)
     if (page.value > maxPage) page.value = maxPage
     if (selectedId.value && !sessions.value.some((s) => s.id === selectedId.value)) {
@@ -286,6 +471,7 @@ async function toggleSession(id: string) {
     return
   }
   selectedId.value = id
+  checkedMessageIds.value = []
   messagesLoading.value = true
   messages.value = []
   try {
@@ -302,6 +488,7 @@ async function toggleSession(id: string) {
 async function selectSession(s: ConversationSession) {
   selectedId.value = s.id
   selected.value = s
+  checkedMessageIds.value = []
   messagesLoading.value = true
   try {
     const res = await convApi.listMessages(s.id, { limit: 200 })
@@ -318,6 +505,129 @@ function collapseSession() {
   selectedId.value = ''
   selected.value = null
   messages.value = []
+  checkedMessageIds.value = []
+}
+
+async function deleteOneSession(s: ConversationSession) {
+  try {
+    await ElMessageBox.confirm(
+      t('sessionBrowser.deleteOneConfirm', { title: s.title || s.id }),
+      t('sessionBrowser.deleteConfirmTitle'),
+      { type: 'warning' }
+    )
+    await convApi.deleteSession(s.id)
+    ElMessage.success(t('sessionBrowser.deleteSuccess'))
+    if (selectedId.value === s.id) collapseSession()
+    checkedSessionIds.value = checkedSessionIds.value.filter((id) => id !== s.id)
+    reload()
+  } catch (e: any) {
+    if (e !== 'cancel') {
+      ElMessage.error(t('sessionBrowser.deleteFailed') + ' ' + (e?.message || e))
+    }
+  }
+}
+
+async function deleteSelectedSessions() {
+  if (checkedSessionIds.value.length === 0) return
+  try {
+    await ElMessageBox.confirm(
+      t('sessionBrowser.deleteSelectedConfirm', { count: checkedSessionIds.value.length }),
+      t('sessionBrowser.deleteConfirmTitle'),
+      { type: 'warning' }
+    )
+    const res = await convApi.deleteSessions({ ids: checkedSessionIds.value })
+    ElMessage.success(t('sessionBrowser.deleteCount', { count: res.deleted ?? 0 }))
+    if (selectedId.value && checkedSessionIds.value.includes(selectedId.value)) collapseSession()
+    checkedSessionIds.value = []
+    reload()
+  } catch (e: any) {
+    if (e !== 'cancel') {
+      ElMessage.error(t('sessionBrowser.deleteFailed') + ' ' + (e?.message || e))
+    }
+  }
+}
+
+async function deleteFilteredSessions() {
+  const params = filterParams()
+  const hasCategory = !!params.category
+  const hasDate = !!params.since && !!params.until
+  if (!hasCategory && !hasDate) {
+    ElMessage.info(t('sessionBrowser.noFilterHint'))
+    return
+  }
+  try {
+    await ElMessageBox.confirm(
+      t('sessionBrowser.deleteFilteredConfirm'),
+      t('sessionBrowser.deleteConfirmTitle'),
+      { type: 'warning' }
+    )
+    const res = await convApi.deleteSessions(params)
+    ElMessage.success(t('sessionBrowser.deleteCount', { count: res.deleted ?? 0 }))
+    checkedSessionIds.value = []
+    collapseSession()
+    reload()
+  } catch (e: any) {
+    if (e !== 'cancel') {
+      ElMessage.error(t('sessionBrowser.deleteFailed') + ' ' + (e?.message || e))
+    }
+  }
+}
+
+async function deleteOneMessage(m: ConversationMessage) {
+  if (!selectedId.value) return
+  try {
+    await ElMessageBox.confirm(
+      t('sessionBrowser.deleteOneMessageConfirm'),
+      t('sessionBrowser.deleteConfirmTitle'),
+      { type: 'warning' }
+    )
+    await convApi.deleteMessages(selectedId.value, { ids: [m.id] })
+    ElMessage.success(t('sessionBrowser.deleteSuccess'))
+    messages.value = messages.value.filter((x) => x.id !== m.id)
+    checkedMessageIds.value = checkedMessageIds.value.filter((id) => id !== m.id)
+  } catch (e: any) {
+    if (e !== 'cancel') {
+      ElMessage.error(t('sessionBrowser.deleteFailed') + ' ' + (e?.message || e))
+    }
+  }
+}
+
+async function deleteSelectedMessages() {
+  if (!selectedId.value || checkedMessageIds.value.length === 0) return
+  try {
+    await ElMessageBox.confirm(
+      t('sessionBrowser.deleteSelectedMessagesConfirm', { count: checkedMessageIds.value.length }),
+      t('sessionBrowser.deleteConfirmTitle'),
+      { type: 'warning' }
+    )
+    const res = await convApi.deleteMessages(selectedId.value, { ids: checkedMessageIds.value })
+    ElMessage.success(t('sessionBrowser.deleteCount', { count: res.deleted ?? 0 }))
+    messages.value = messages.value.filter((x) => !checkedMessageIds.value.includes(x.id))
+    checkedMessageIds.value = []
+  } catch (e: any) {
+    if (e !== 'cancel') {
+      ElMessage.error(t('sessionBrowser.deleteFailed') + ' ' + (e?.message || e))
+    }
+  }
+}
+
+async function deleteMessagesByRole() {
+  if (!selectedId.value || !messageRoleFilter.value) return
+  try {
+    await ElMessageBox.confirm(
+      t('sessionBrowser.deleteByRoleConfirm', { role: roleLabel(messageRoleFilter.value) }),
+      t('sessionBrowser.deleteConfirmTitle'),
+      { type: 'warning' }
+    )
+    const res = await convApi.deleteMessages(selectedId.value, { role: messageRoleFilter.value })
+    ElMessage.success(t('sessionBrowser.deleteCount', { count: res.deleted ?? 0 }))
+    messages.value = messages.value.filter((x) => x.role !== messageRoleFilter.value)
+    checkedMessageIds.value = []
+  } catch (e: any) {
+    if (e !== 'cancel') {
+      ElMessage.error(t('sessionBrowser.deleteFailed') + ' ' + (e?.message || e))
+    }
+  }
 }
 
 async function reloadKeepSelection() {
@@ -470,6 +780,36 @@ defineExpose({ reload: reloadKeepSelection })
   width: 100%;
   gap: 8px;
 }
+.list-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  gap: 8px;
+}
+.list-title {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+.list-actions,
+.detail-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.list-actions :deep(.el-checkbox),
+.detail-actions :deep(.el-checkbox) {
+  margin-right: 0;
+  white-space: nowrap;
+}
+.list-actions :deep(.el-button),
+.detail-actions :deep(.el-button) {
+  margin-left: 0;
+  margin-right: 0;
+}
 .list-card :deep(.el-card__header),
 .detail-card :deep(.el-card__header) {
   display: flex;
@@ -480,12 +820,40 @@ defineExpose({ reload: reloadKeepSelection })
   color: var(--el-text-color-secondary);
   font-size: 0.85rem;
 }
+.compact-delete {
+  flex-shrink: 0;
+  margin-left: auto;
+}
 .full-list {
   display: flex;
   flex-direction: column;
   gap: 8px;
   max-height: 70vh;
   overflow: auto;
+}
+.session-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.row-checkbox {
+  flex-shrink: 0;
+}
+.row-delete {
+  flex-shrink: 0;
+  margin-left: auto;
+}
+.msg-delete {
+  margin-left: auto;
+}
+.message-meta {
+  margin-top: 6px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 0.75rem;
+  color: var(--el-text-color-secondary);
+  align-items: center;
 }
 .button-item {
   text-align: left;

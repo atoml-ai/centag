@@ -65,3 +65,34 @@ export function listCategories() {
     method: 'get'
   }) as Promise<{ categories: string[] }>
 }
+
+export function deleteSession(id: string) {
+  return api({
+    url: `/api/v1/conversations/sessions/${encodeURIComponent(id)}`,
+    method: 'delete'
+  }) as Promise<{ deleted: number }>
+}
+
+export interface DeleteSessionsParams {
+  ids?: string[]
+  all?: boolean
+  category?: string
+  since?: string
+  until?: string
+}
+
+export function deleteSessions(body: DeleteSessionsParams) {
+  return api({
+    url: '/api/v1/conversations/sessions/delete',
+    method: 'post',
+    data: body
+  }) as Promise<{ deleted: number }>
+}
+
+export function deleteMessages(id: string, body: { ids?: string[]; role?: string }) {
+  return api({
+    url: `/api/v1/conversations/sessions/${encodeURIComponent(id)}/messages/delete`,
+    method: 'post',
+    data: body
+  }) as Promise<{ deleted: number }>
+}
