@@ -57,7 +57,6 @@
         class="usage-table"
         max-height="500"
       >
-        <el-table-column prop="date" :label="t('personalUsage.table.date')" width="120" />
         <el-table-column prop="model" :label="t('personalUsage.table.model')" width="140" />
         <el-table-column prop="backend_id" :label="t('personalUsage.table.backend')" width="120" />
         <el-table-column :label="t('personalUsage.table.inputTokens')" width="100">
@@ -131,6 +130,7 @@
 import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
+import { getUsageBreakdown, getSelfLimit } from '@/api/token-usage'
 import { formatTokens } from '@/utils/format'
 
 const { t } = useI18n()
@@ -139,13 +139,16 @@ const loading = ref(false)
 const dateRange = ref<[Date, Date] | null>(null)
 
 interface UsageRecord {
-  date: string
-  model: string
   backend_id: string
+  model: string
+  request_count: number
   input_tokens: number
   output_tokens: number
+  total_tokens: number
   cost_input_price: number
   cost_output_price: number
+  input_cost: number
+  output_cost: number
   total_cost: number
 }
 
@@ -185,26 +188,19 @@ async function loadUsage() {
   try {
     const params: Record<string, string> = {}
     if (dateRange.value) {
-      params.start_date = dateRange.value[0].toISOString().split('T')[0]
-      params.end_date = dateRange.value[1].toISOString().split('T')[0]
+      params.from = dateRange.value[0].toISOString().split('T')[0]
+      params.to = dateRange.value[1].toISOString().split('T')[0]
     }
 
-    // Load usage records
-    const usageResponse = await fetch('/api/v1/user/usage?' + new URLSearchParams(params))
-    if (usageResponse.ok) {
-      const usageData = await usageResponse.json()
-      usageRecords.value = usageData.records || []
-      if (usageData.summary) {
-        usageSummary.value = usageData.summary
-      }
+    // Load usage breakdown (per backend × model)
+    const usageData = await getUsageBreakdown(params)
+    usageRecords.value = usageData.records || []
+    if (usageData.summary) {
+      usageSummary.value = usageData.summary
     }
 
     // Load self-limit configuration
-    const limitResponse = await fetch('/api/v1/user/usage/self-limit')
-    if (limitResponse.ok) {
-      const limitData = await limitResponse.json()
-      selfLimit.value = limitData
-    }
+    selfLimit.value = await getSelfLimit()
   } catch (e: unknown) {
     ElMessage.error(e instanceof Error ? e.message : t('personalUsage.message.loadFailed'))
   } finally {

@@ -7,6 +7,7 @@
       show-billing-button
       @open-billing="openBillingRules"
     />
+    <UsageBreakdownTable ref="breakdownRef" mode="compact" />
     <SessionBrowser ref="sessionsRef" mode="compact" />
   </div>
 </template>
@@ -16,6 +17,7 @@ import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import UsageMetricsSummary from '@/components/usage/UsageMetricsSummary.vue'
+import UsageBreakdownTable from '@/components/usage/UsageBreakdownTable.vue'
 import SessionBrowser from '@/components/usage/SessionBrowser.vue'
 
 const { t } = useI18n()
@@ -31,6 +33,7 @@ withDefaults(
 )
 
 const metricsRef = ref<InstanceType<typeof UsageMetricsSummary> | null>(null)
+const breakdownRef = ref<InstanceType<typeof UsageBreakdownTable> | null>(null)
 const sessionsRef = ref<InstanceType<typeof SessionBrowser> | null>(null)
 
 function openBillingRules() {
@@ -38,7 +41,11 @@ function openBillingRules() {
 }
 
 async function reload() {
-  await Promise.all([metricsRef.value?.reload(), sessionsRef.value?.reload()])
+  await Promise.all([
+    metricsRef.value?.reload(),
+    breakdownRef.value?.reload(),
+    sessionsRef.value?.reload()
+  ])
 }
 
 defineExpose({ reload })

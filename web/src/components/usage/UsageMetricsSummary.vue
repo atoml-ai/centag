@@ -78,7 +78,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { getUserUsage } from '@/api/token-usage'
+import { getUserUsage, getUsageBreakdown } from '@/api/token-usage'
 import * as costApi from '@/api/cost'
 import { useAuthStore } from '@/stores/auth'
 import { useEdition } from '@/composables/useEdition'
@@ -194,6 +194,12 @@ async function loadCostSummary() {
       summary.value = await getUserBillingSummary({ group_by: groupBy.value })
       return
     }
+    // Personal (non-team) non-admin: admin cost APIs are disabled; derive the
+    // total + groups from the user-scoped metering/pricing breakdown.
+    if (!authStore.isAdmin) {
+      summary.value = await loadUserCostSummary(params)
+      return
+    }
     summary.value = await costApi.getCostSummary(params)
   } catch (err: any) {
     const status = err?.response?.status ?? err?.status
@@ -205,6 +211,43 @@ async function loadCostSummary() {
     if (status === 403) {
       console.warn('[usage] cost/summary unavailable (403)')
     }
+  }
+}
+
+// User-scoped fallback: rebuild CostSummary from the per-(backend, model)
+// metering/pricing breakdown so personal non-admin users still get costs.
+async function loadUserCostSummary(params: costApi.CostSummaryParams): Promise<costApi.CostSummary> {
+  const res: any = await getUsageBreakdown(
+    params.from && params.to ? { from: params.from, to: params.to } : undefined
+  )
+  const records: any[] = res?.records ?? []
+  const sum = res?.summary ?? {}
+  const totalCost = Number(sum.total_cost || 0)
+  const totalTokens = Number(sum.total_tokens || 0)
+  const rangeKey = res?.from ? `${res.from} ~ ${res.to}` : ''
+
+  const map = new Map<string, costApi.CostGroup>()
+  for (const r of records) {
+    const k =
+      groupBy.value === 'backend' ? r.backend_id : groupBy.value === 'date' ? rangeKey : r.model
+    if (!k) continue
+    const g = map.get(k) ?? { key: k, cost_usd: 0, tokens: 0, request_count: 0 }
+    g.cost_usd += Number(r.total_cost || 0)
+    g.tokens += Number(r.total_tokens || 0)
+    g.request_count += Number(r.request_count || 0)
+    map.set(k, g)
+  }
+
+  return {
+    total_cost_usd: totalCost,
+    total_tokens: totalTokens,
+    cache_saved_usd: 0,
+    currency: 'USD',
+    usd_to_cny: 7.2,
+    groups: [...map.values()].sort((a, b) => b.cost_usd - a.cost_usd),
+    from: res?.from ?? '',
+    to: res?.to ?? '',
+    group_by: groupBy.value
   }
 }
 

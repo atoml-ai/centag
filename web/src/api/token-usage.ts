@@ -33,5 +33,22 @@ export function getBackendStats(params?: { days?: number }) {
   })
 }
 
+// 用户计量计价明细：按 (backend_id, model) 聚合，含单价与成本
+export function getUsageBreakdown(params?: { from?: string; to?: string }) {
+  return api({
+    url: '/api/v1/user/usage',
+    method: 'get',
+    params,
+  })
+}
+
+// 用户自我限额（已移除，返回 enabled=false）
+export function getSelfLimit() {
+  return api({
+    url: '/api/v1/user/usage/self-limit',
+    method: 'get',
+  })
+}
+
 // Admin all-users / ranking / quotas APIs live in Team SKU (centag-pro pack);
 // open-core Host only exposes user self-service helpers above.

@@ -1,0 +1,16 @@
+{
+  "title": "Metering & Pricing Breakdown",
+  "backend": "Backend",
+  "model": "Model",
+  "requests": "Requests",
+  "inputTokens": "Input Tokens",
+  "outputTokens": "Output Tokens",
+  "inputPrice": "Input Price",
+  "outputPrice": "Output Price",
+  "inputCost": "Input Cost",
+  "outputCost": "Output Cost",
+  "totalCost": "Total Cost",
+  "emptyText": "No breakdown records.",
+  "pricePerM": "$/1M tokens",
+  "refresh": "Refresh"
+}
