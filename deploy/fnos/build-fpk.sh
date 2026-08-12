@@ -573,8 +573,27 @@ elif [ "$MODE" = "native" ]; then
     cd "$REPO_ROOT/web"
     export CENTAG_INSTALL_ROOT CENTAG_EDITION="${DIST_NAME}" CENTAG_STATIC_DIR="${local_static_dir}"
     mkdir -p "${local_static_dir}"
-    if [ -f package-lock.json ]; then npm ci --silent; else npm install --silent; fi
-    npm run build 2>&1 | tail -3
+    WEB_BUILD_LOG="${BUILD_DIR}/web-build.log"
+    if [ -f package-lock.json ]; then
+      npm ci --no-audit --no-fund > "${WEB_BUILD_LOG}" 2>&1 || {
+        echo "[ERROR] npm ci 安装依赖失败，完整日志: ${WEB_BUILD_LOG}" >&2
+        tail -40 "${WEB_BUILD_LOG}" >&2
+        exit 1
+      }
+    else
+      npm install --no-audit --no-fund > "${WEB_BUILD_LOG}" 2>&1 || {
+        echo "[ERROR] npm install 安装依赖失败，完整日志: ${WEB_BUILD_LOG}" >&2
+        tail -40 "${WEB_BUILD_LOG}" >&2
+        exit 1
+      }
+    fi
+    npm run build > "${WEB_BUILD_LOG}" 2>&1 || {
+      echo "[ERROR] 前端构建失败，完整日志: ${WEB_BUILD_LOG}" >&2
+      echo "--- 日志尾部（最近 40 行）---" >&2
+      tail -40 "${WEB_BUILD_LOG}" >&2
+      exit 1
+    }
+    tail -3 "${WEB_BUILD_LOG}"
     cd "$REPO_ROOT"
     echo "[OK] 前端构建完成 → ${local_static_dir}"
   else
