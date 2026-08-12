@@ -1341,6 +1341,8 @@ func (s *Server) setupRoutes() {
 			userAPI.GET("/token-usage/daily", s.tokenUsageHandler.GetDailyUsage)
 			userAPI.GET("/token-usage/models", s.tokenUsageHandler.GetModelStats)
 			userAPI.GET("/token-usage/backends", s.tokenUsageHandler.GetBackendStats)
+			userAPI.GET("/usage", s.tokenUsageHandler.GetUsageBreakdown)
+			userAPI.GET("/usage/self-limit", s.tokenUsageHandler.GetSelfLimit)
 		}
 
 		// Personal 计费配置只读 API

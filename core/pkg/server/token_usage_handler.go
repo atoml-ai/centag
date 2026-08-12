@@ -31,6 +31,23 @@ func NewTokenUsageHandler(service *tokenusage.Service) *TokenUsageHandler {
 	return &TokenUsageHandler{service: service}
 }
 
+// parseUsageRange parses from/to query params (YYYY-MM-DD); defaults to last 30 days.
+func parseUsageRange(c *gin.Context) (time.Time, time.Time) {
+	from := time.Now().AddDate(0, 0, -30)
+	to := time.Now()
+	if v := c.Query("from"); v != "" {
+		if t, err := time.Parse("2006-01-02", v); err == nil {
+			from = t
+		}
+	}
+	if v := c.Query("to"); v != "" {
+		if t, err := time.Parse("2006-01-02", v); err == nil {
+			to = t
+		}
+	}
+	return from, to
+}
+
 // GetUserUsage 获取用户使用情况
 func (h *TokenUsageHandler) GetUserUsage(c *gin.Context) {
 	userID, ok := requireUserID(c)
@@ -38,22 +55,7 @@ func (h *TokenUsageHandler) GetUserUsage(c *gin.Context) {
 		return
 	}
 
-	fromStr := c.Query("from")
-	toStr := c.Query("to")
-
-	from := time.Now().AddDate(0, 0, -30)
-	to := time.Now()
-
-	if fromStr != "" {
-		if t, err := time.Parse("2006-01-02", fromStr); err == nil {
-			from = t
-		}
-	}
-	if toStr != "" {
-		if t, err := time.Parse("2006-01-02", toStr); err == nil {
-			to = t
-		}
-	}
+	from, to := parseUsageRange(c)
 
 	stats, err := h.service.GetUserUsage(c.Request.Context(), userID, from, to)
 	if err != nil {
@@ -65,6 +67,39 @@ func (h *TokenUsageHandler) GetUserUsage(c *gin.Context) {
 		"stats": stats,
 		"from":  from.Format("2006-01-02"),
 		"to":    to.Format("2006-01-02"),
+	})
+}
+
+// GetUsageBreakdown GET /api/v1/user/usage — user-scoped detailed metering/billing
+// grouped per (backend_id, model), including unit prices and costs.
+func (h *TokenUsageHandler) GetUsageBreakdown(c *gin.Context) {
+	userID, ok := requireUserID(c)
+	if !ok {
+		return
+	}
+
+	from, to := parseUsageRange(c)
+
+	breakdown, err := h.service.GetUsageBreakdown(c.Request.Context(), userID, from, to)
+	if err != nil {
+		RespondError(c, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	RespondSuccess(c, breakdown)
+}
+
+// GetSelfLimit GET /api/v1/user/usage/self-limit — user self-limits.
+// User-level daily/monthly limits were removed; enforcement lives on effective
+// plans, so self-limit reports "not set" (enabled=false).
+func (h *TokenUsageHandler) GetSelfLimit(c *gin.Context) {
+	if _, ok := requireUserID(c); !ok {
+		return
+	}
+	RespondSuccess(c, gin.H{
+		"enabled":              false,
+		"daily_token_limit":    nil,
+		"monthly_budget_limit": nil,
 	})
 }
 
