@@ -1,9 +1,13 @@
 package pipeline
 
 import (
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"centag/core/pkg/bootstrap"
+	"gopkg.in/yaml.v3"
 )
 
 // TestEducationPipelineStorageConfig 验证教育流水线模板中的存储配置
@@ -252,10 +256,53 @@ func TestPipelineTemplateLoading_AllTemplatesWithStorageConfig(t *testing.T) {
 		}
 	}
 
+	// extras/ templates are not auto-loaded but may ship storage hooks
+	// (e.g. coding-agent.yaml moved out of common/). Scan them too so the
+	// storage-hook parse guard stays meaningful for the full template set.
+	storageEnabled = append(storageEnabled, scanExtrasStorageTemplates(t)...)
+
 	// Builtin set may only ship coding-agent with storage; education-scene lives in external business repos.
 	if len(storageEnabled) < 1 {
 		t.Errorf("expected at least 1 template with storage enabled, got %d: %v", len(storageEnabled), storageEnabled)
 	}
 
 	t.Logf("Templates with storage hooks enabled (%d): %v", len(storageEnabled), storageEnabled)
+}
+
+// scanExtrasStorageTemplates loads YAML from config/initdata/pipeline-templates/extras/
+// and returns IDs of templates whose pipeline global config enables a storage hook.
+func scanExtrasStorageTemplates(t *testing.T) []string {
+	t.Helper()
+	root := mustProjectRoot(t)
+	extrasDir := filepath.Join(root, "config", "initdata", "pipeline-templates", "extras")
+	entries, err := os.ReadDir(extrasDir)
+	if err != nil {
+		t.Logf("extras dir not found, skip: %v", err)
+		return nil
+	}
+
+	var ids []string
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		name := strings.ToLower(entry.Name())
+		if !strings.HasSuffix(name, ".yaml") && !strings.HasSuffix(name, ".yml") {
+			continue
+		}
+		data, readErr := os.ReadFile(filepath.Join(extrasDir, entry.Name()))
+		if readErr != nil {
+			t.Logf("read extras template %s: %v", entry.Name(), readErr)
+			continue
+		}
+		var raw bootstrap.InitialPipelineTemplate
+		if yamlErr := yaml.Unmarshal(data, &raw); yamlErr != nil {
+			t.Fatalf("parse extras template %s: %v", entry.Name(), yamlErr)
+		}
+		tmpl := convertBootstrapTemplate(raw)
+		if tmpl.GlobalConfig != nil && tmpl.GlobalConfig.HasStorageHook() {
+			ids = append(ids, raw.ID)
+		}
+	}
+	return ids
 }
