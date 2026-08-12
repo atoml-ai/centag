@@ -1,7 +1,8 @@
 import { ref, computed, watch } from 'vue'
-import { getUserUsage } from '@/api/token-usage'
+import { getUserUsage, getUsageBreakdown } from '@/api/token-usage'
 import { getCostSummary } from '@/api/cost'
 import { useAuthStore } from '@/stores/auth'
+import { useEdition } from '@/composables/useEdition'
 import { storeToRefs } from 'pinia'
 import {
   currencySymbol,
@@ -14,6 +15,7 @@ import { formatTokens } from '@/utils/format'
 /** 状态栏：总费用 + 总 Token（鉴权就绪后加载） */
 export function useUsageTotals(options?: { enabled?: boolean }) {
   const authStore = useAuthStore()
+  const { isTeam } = useEdition()
   const { isAuthenticated } = storeToRefs(authStore)
   const enabled = options?.enabled ?? true
 
@@ -39,7 +41,7 @@ export function useUsageTotals(options?: { enabled?: boolean }) {
     if (!enabled || !isAuthenticated.value || loading) return
     loading = true
     try {
-      const [usageRes, costRes] = await Promise.allSettled([getUserUsage(), getCostSummary()])
+      const [usageRes, costRes] = await Promise.allSettled([getUserUsage(), loadCostSummary()])
 
       if (usageRes.status === 'fulfilled') {
         const res: any = usageRes.value
@@ -48,12 +50,13 @@ export function useUsageTotals(options?: { enabled?: boolean }) {
       }
 
       if (costRes.status === 'fulfilled' && costRes.value) {
-        totalCostUsd.value = Number(costRes.value.total_cost_usd || 0)
-        if (costRes.value.usd_to_cny) {
-          usdToCny.value = Number(costRes.value.usd_to_cny)
+        const cs: any = costRes.value
+        totalCostUsd.value = Number(cs.total_cost_usd || 0)
+        if (cs.usd_to_cny) {
+          usdToCny.value = Number(cs.usd_to_cny)
         }
-        if (!totalTokens.value && costRes.value.total_tokens) {
-          totalTokens.value = Number(costRes.value.total_tokens)
+        if (!totalTokens.value && cs.total_tokens) {
+          totalTokens.value = Number(cs.total_tokens)
         }
       }
     } catch (error) {
@@ -61,6 +64,21 @@ export function useUsageTotals(options?: { enabled?: boolean }) {
     } finally {
       loading = false
     }
+  }
+
+  // Personal/minimal disable admin cost APIs; derive totals from the
+  // user-scoped metering/pricing breakdown regardless of role.
+  async function loadCostSummary(): Promise<any> {
+    if (!isTeam.value) {
+      const res: any = await getUsageBreakdown()
+      const sum: any = res?.summary ?? {}
+      return { total_cost_usd: Number(sum.total_cost || 0), total_tokens: Number(sum.total_tokens || 0) }
+    }
+    if (!authStore.isAdmin) {
+      const { getUserBillingSummary } = await import('@/api/billing')
+      return getUserBillingSummary({ group_by: 'model' })
+    }
+    return getCostSummary()
   }
 
   watch(

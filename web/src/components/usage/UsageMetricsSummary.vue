@@ -188,16 +188,17 @@ async function loadCostSummary() {
       params.from = dateRange.value[0]
       params.to = dateRange.value[1]
     }
-    // Team normal users cannot call admin cost APIs; use user billing summary (billed).
-    if (isTeam.value && !authStore.isAdmin) {
-      const { getUserBillingSummary } = await import('@/api/billing')
-      summary.value = await getUserBillingSummary({ group_by: groupBy.value })
+    // Personal/minimal editions disable admin cost APIs entirely; always derive
+    // the total + groups from the user-scoped metering/pricing breakdown,
+    // regardless of the local account role.
+    if (!isTeam.value) {
+      summary.value = await loadUserCostSummary(params)
       return
     }
-    // Personal (non-team) non-admin: admin cost APIs are disabled; derive the
-    // total + groups from the user-scoped metering/pricing breakdown.
+    // Team normal users cannot call admin cost APIs; use user billing summary (billed).
     if (!authStore.isAdmin) {
-      summary.value = await loadUserCostSummary(params)
+      const { getUserBillingSummary } = await import('@/api/billing')
+      summary.value = await getUserBillingSummary({ group_by: groupBy.value })
       return
     }
     summary.value = await costApi.getCostSummary(params)
