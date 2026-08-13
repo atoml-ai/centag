@@ -83,7 +83,8 @@ CREATE TABLE IF NOT EXISTS token_usage (
     completion_tokens INTEGER DEFAULT 0,
     total_tokens INTEGER DEFAULT 0,
     request_id TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    source TEXT NOT NULL DEFAULT 'real'  -- 038: 'real' 或 'estimated'
 );
 
 -- Token 使用统计表

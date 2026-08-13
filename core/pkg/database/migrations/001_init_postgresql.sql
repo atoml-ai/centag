@@ -95,7 +95,8 @@ CREATE TABLE IF NOT EXISTS token_usage (
     completion_tokens INTEGER DEFAULT 0,
     total_tokens INTEGER DEFAULT 0,
     request_id VARCHAR(100),
-    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    source VARCHAR(20) NOT NULL DEFAULT 'real'  -- 038: 'real' 或 'estimated'
 );
 
 -- Token 使用统计表（按天聚合，加速查询）
