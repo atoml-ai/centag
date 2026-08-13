@@ -178,6 +178,9 @@ core/pkg/server/data/
 # npm centag-npm build artifacts (cross-compiled binaries, generated during publish)
 apps/centag-npm/bin/vendor/
 apps/centag-npm/static/
+# npm centag-wrap build artifacts (cross-compiled binaries, generated during publish)
+apps/wrap-npm/bin/vendor/
+apps/wrap-npm/static/
 
 # Build artifacts
 node.tar.xz
