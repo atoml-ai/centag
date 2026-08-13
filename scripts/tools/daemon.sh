@@ -22,6 +22,44 @@ NC='\033[0m' # No Color
 # 跟踪 tail -f 进程 PID，用于在退出时清理
 TAIL_PID=""
 
+# 清理本安装目录下遗留的日志跟踪进程（旧 daemon 被强制终止（SIGKILL）后残留的 tail -f）
+# 仅匹配当前 LOG_FILE，不会误伤其它安装目录。
+kill_stale_tails() {
+    local log_file="$1"
+    local stale_pids=""
+
+    if [ -z "$log_file" ]; then
+        return 0
+    fi
+
+    # 优先用 pgrep -f 按完整命令行匹配
+    if command -v pgrep >/dev/null 2>&1; then
+        stale_pids=$(pgrep -f "tail[[:space:]]+-f[[:space:]]+${log_file}" 2>/dev/null || true)
+    fi
+    # 备用：用 ps 文本匹配
+    if [ -z "$stale_pids" ] && command -v ps >/dev/null 2>&1; then
+        stale_pids=$(ps -eo pid=,cmd= 2>/dev/null | grep -F "tail -f ${log_file}" | grep -v "grep" | awk '{print $1}' | sort -u || true)
+    fi
+
+    stale_pids=$(echo "$stale_pids" | grep -v '^$' | sort -u || true)
+    if [ -n "$stale_pids" ]; then
+        echo -e "${YELLOW}⚠️  清理遗留的日志跟踪进程...${NC}"
+        echo "$stale_pids" | while IFS= read -r pid; do
+            if [ -n "$pid" ] && [ "$pid" != "$$" ] && kill -0 "$pid" 2>/dev/null; then
+                kill -TERM "$pid" 2>/dev/null || true
+            fi
+        done
+        sleep 1
+        echo "$stale_pids" | while IFS= read -r pid; do
+            if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+                kill -KILL "$pid" 2>/dev/null || true
+            fi
+        done
+        echo -e "${GREEN}✅ 遗留日志跟踪进程已清理${NC}"
+    fi
+    return 0
+}
+
 # 信号处理
 cleanup() {
     echo ""
@@ -30,11 +68,14 @@ cleanup() {
     # 设置退出标志，停止主循环
     DAEMON_EXIT=1
     
-    # 停止日志跟踪进程
+    # 停止日志跟踪进程（清理本安装目录下所有残留 tail，含历史孤儿）
+    if [ -n "$LOG_FILE" ]; then
+        kill_stale_tails "$LOG_FILE"
+    fi
     if [ -n "$TAIL_PID" ] && kill -0 "$TAIL_PID" 2>/dev/null; then
         kill -TERM "$TAIL_PID" 2>/dev/null || true
-        TAIL_PID=""
     fi
+    TAIL_PID=""
 
     # 停止服务进程
     if [ -n "$SERVICE_PID" ] && kill -0 "$SERVICE_PID" 2>/dev/null; then
@@ -472,24 +513,16 @@ check_and_stop_existing_daemon() {
         fi
     fi
     
-    # 通过进程名查找其他守护进程实例
+    # 通过进程名查找其他守护进程实例（仅限同一工作目录，避免误杀其它安装）
     if command -v pgrep >/dev/null 2>&1; then
-        local script_name=$(basename "${BASH_SOURCE[0]}")
-        local other_daemon_pids=$(pgrep -f "bash.*$script_name" 2>/dev/null | grep -v "^$$$" || true)
+        local other_daemon_pids=""
+        if command -v ps >/dev/null 2>&1; then
+            other_daemon_pids=$(ps -eo pid=,args= 2>/dev/null | grep -E "daemon\.sh[[:space:]]+${WORK_DIR}([[:space:]]|$)" | awk '{print $1}' | grep -v "^$$$" | sort -u || true)
+        else
+            other_daemon_pids=$(pgrep -f "daemon\.sh[[:space:]]+${WORK_DIR}" 2>/dev/null | grep -v "^$$$" || true)
+        fi
         if [ -n "$other_daemon_pids" ]; then
-            for pid in $other_daemon_pids; do
-                if kill -0 "$pid" 2>/dev/null; then
-                    local cmdline=""
-                    if [ -f "/proc/$pid/cmdline" ]; then
-                        cmdline=$(cat "/proc/$pid/cmdline" 2>/dev/null | tr '\0' ' ' || echo "")
-                    elif command -v ps >/dev/null 2>&1; then
-                        cmdline=$(ps -p "$pid" -o cmd= 2>/dev/null || echo "")
-                    fi
-                    if echo "$cmdline" | grep -q "$script_name"; then
-                        found_pids="$found_pids $pid"
-                    fi
-                fi
-            done
+            found_pids="$found_pids $other_daemon_pids"
         fi
     fi
     
@@ -521,6 +554,9 @@ check_and_stop_existing_daemon() {
         
         rm -f "$daemon_pid_file" 2>/dev/null || true
     fi
+    
+    # 清理旧守护进程遗留的孤儿 tail 进程（历史 SIGKILL 残留）
+    kill_stale_tails "$LOG_FILE"
     
     # 创建守护进程PID文件
     mkdir -p "$(dirname "$daemon_pid_file")" 2>/dev/null || true
