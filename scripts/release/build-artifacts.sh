@@ -99,10 +99,12 @@ HOST_GOARCH="$(go env GOARCH)"
 STATIC_SRC="${CENTAG_STATIC_DIR}"
 if need_component personal || need_component minimal; then
   if [[ "$SKIP_FRONTEND" != "1" ]]; then
-    log "building frontend → ${STATIC_SRC}"
+    # Derive edition from the first requested component for the frontend build.
+    FRONTEND_EDITION="${COMP_ARR[0]%% *}"
+    log "building frontend → ${STATIC_SRC} (edition=${FRONTEND_EDITION})"
     (
       cd "${ROOT}/web"
-      export CENTAG_INSTALL_ROOT CENTAG_EDITION="$EDITION" CENTAG_STATIC_DIR="${STATIC_SRC}"
+      export CENTAG_INSTALL_ROOT CENTAG_EDITION="$FRONTEND_EDITION" CENTAG_STATIC_DIR="${STATIC_SRC}"
       if [[ -f package-lock.json ]]; then npm ci; else npm install; fi
       npm run build
     )

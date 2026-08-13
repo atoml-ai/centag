@@ -45,6 +45,16 @@ RELEASE=0
 if ! command -v go >/dev/null 2>&1; then echo "error: go is required" >&2; exit 1; fi
 if ! command -v npm >/dev/null 2>&1; then echo "error: npm is required" >&2; exit 1; fi
 
+sha256_of() {
+  if command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "$1" | awk '{print $1}'
+  elif command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$1" | awk '{print $1}'
+  else
+    fail "neither shasum nor sha256sum found"
+  fi
+}
+
 echo "==> version: ${VERSION} (release tag ${RELEASE_TAG})"
 
 # --- 1. Cross-compile -------------------------------------------------------
@@ -98,7 +108,7 @@ for p in "${PLATFORMS[@]}"; do
   goos="${p%-*}"; goarch="${p##*-}"
   ext=""; [[ "$goos" == "windows" ]] && ext=".exe"
   f="${VENDOR_DIR}/${p}/centag-personal${ext}"
-  sha="$(shasum -a 256 "$f" | awk '{print $1}')"
+  sha="$(sha256_of "$f")"
   printf '%s  %s/centag-personal%s\n' "$sha" "$p" "$ext" >> "${VENDOR_DIR}/checksums.txt"
 done
 cat "${VENDOR_DIR}/checksums.txt"
