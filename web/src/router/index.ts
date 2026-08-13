@@ -257,9 +257,14 @@ router.beforeEach(async (to, _from, next) => {
     return next({ path: '/login', query: { redirect: to.fullPath } })
   }
 
-  // Admin-only routes.
+  // Admin-only routes — personal/minimal are exempted (single-user editions,
+  // no privilege escalation risk; capabilities + component-level guards handle
+  // sensitive sections like deployment).
   if (to.meta.requiresAdmin && !authStore.isAdmin) {
-    return next('/dashboard')
+    const edition = currentEdition()
+    if (edition !== 'personal' && edition !== 'minimal') {
+      return next('/dashboard')
+    }
   }
 
   // Capability / edition 路由意图（列表 redirect、深链放行、无独立对话页等）

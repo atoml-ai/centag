@@ -461,13 +461,14 @@ import type { UploadInstance, UploadFile } from 'element-plus'
 const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
-const { edition } = useEdition()
+const { edition, isPersonal, isMinimal } = useEdition()
 const { t } = useI18n()
 
 type ConfigSection = 'overview' | 'http' | 'fallback' | 'deployment' | 'system-update'
 
 const isAdmin = computed(() => authStore.isAdmin)
-const canSystemUpdate = computed(() => authStore.isAdmin)
+// personal/minimal 单用户版同样支持 OTA 系统更新（后端 /system/update* 已开放）
+const canSystemUpdate = computed(() => authStore.isAdmin || isPersonal.value || isMinimal.value)
 
 const navItems = computed(() => {
   const items: Array<{ id: ConfigSection; labelKey: string; icon: Component }> = [
