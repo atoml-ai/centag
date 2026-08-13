@@ -51,7 +51,6 @@ import pluginSelector from './pluginSelector.json'
 import liveLogSidebar from './liveLogSidebar.json'
 import sessionBrowser from './sessionBrowser.json'
 import usageMetricsSummary from './usageMetricsSummary.json'
-import usageBreakdown from './usageBreakdown.json'
 import capabilitySlotsDialog from './capabilitySlotsDialog.json'
 import minimalApiKeysPanel from './minimalApiKeysPanel.json'
 import nodePluginList from './nodePluginList.json'
@@ -121,7 +120,6 @@ const ru = {
   liveLogSidebar,
   sessionBrowser,
   usageMetricsSummary,
-  usageBreakdown,
   capabilitySlotsDialog,
   minimalApiKeysPanel,
   nodePluginList,

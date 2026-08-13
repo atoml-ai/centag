@@ -42,6 +42,15 @@ export function getUsageBreakdown(params?: { from?: string; to?: string }) {
   })
 }
 
+// 会话计量计价汇总：批量返回多个会话的计量与计价摘要（键为 session_id）
+export function getSessionsUsageBreakdown(ids: string[]) {
+  return api({
+    url: '/api/v1/user/usage/sessions',
+    method: 'get',
+    params: { ids: ids.join(',') }
+  })
+}
+
 // 用户自我限额（已移除，返回 enabled=false）
 export function getSelfLimit() {
   return api({

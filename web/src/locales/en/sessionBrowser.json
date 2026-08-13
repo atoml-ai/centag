@@ -45,6 +45,11 @@
   "selectAllMessages": "Select all messages",
   "allRoles": "All roles",
   "deleteByRole": "Delete by role",
-  "deleteByRoleConfirm": "Delete all \"{role}\" messages? This action cannot be undone."
+  "deleteByRoleConfirm": "Delete all \"{role}\" messages? This action cannot be undone.",
+  "inputTokens": "Input Tokens",
+  "outputTokens": "Output Tokens",
+  "inputPrice": "Input Price",
+  "outputPrice": "Output Price",
+  "totalCost": "Total Cost"
 }
 

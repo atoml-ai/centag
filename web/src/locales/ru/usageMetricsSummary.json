@@ -2,9 +2,6 @@
   "dateSeparator": "—",
   "dateStart": "Начало",
   "dateEnd": "Конец",
-  "groupByModel": "По модели",
-  "groupByBackend": "По бэкенду",
-  "groupByDate": "По дате",
   "refresh": "Обновить метрики",
   "billingRules": "Правила тарификации",
   "currencyUSD": "USD",
@@ -14,11 +11,11 @@
   "requests": "Запросы",
   "input": "Ввод",
   "output": "Вывод",
-  "costDistribution": "Распределение затрат",
+  "byBackend": "По бэкенду",
+  "byModel": "По модели",
   "costColumn": "Стоимость",
   "tokenColumn": "Токены",
   "requestColumn": "Запросы",
   "groupByBackendLabel": "Бэкенд",
-  "groupByDateLabel": "Дата",
   "groupByModelLabel": "Модель"
 }

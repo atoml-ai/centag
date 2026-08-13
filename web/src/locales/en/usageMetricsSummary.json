@@ -2,9 +2,6 @@
   "dateSeparator": "to",
   "dateStart": "Start",
   "dateEnd": "End",
-  "groupByModel": "By Model",
-  "groupByBackend": "By Backend",
-  "groupByDate": "By Date",
   "refresh": "Refresh Metrics",
   "billingRules": "Billing Rules",
   "currencyUSD": "USD",
@@ -15,11 +12,11 @@
   "requests": "Requests",
   "input": "Input",
   "output": "Output",
-  "costDistribution": "Cost Distribution",
+  "byBackend": "By Backend",
+  "byModel": "By Model",
   "costColumn": "Amount",
   "tokenColumn": "Token",
   "requestColumn": "Requests",
   "groupByBackendLabel": "Backend",
-  "groupByDateLabel": "Date",
   "groupByModelLabel": "Model"
 }

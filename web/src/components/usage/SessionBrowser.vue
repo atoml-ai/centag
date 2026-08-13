@@ -41,6 +41,28 @@
               <span>{{ s.category || t('sessionBrowser.categoryGeneral') }}</span>
               <span>{{ t('sessionBrowser.messagesCount', { count: s.message_count || 0 }) }}</span>
             </div>
+            <div v-if="sessionUsage[s.id]" class="session-usage">
+              <span class="usage-item">
+                <span class="usage-label">{{ t('sessionBrowser.inputTokens') }}</span>
+                {{ formatTokens(sessionUsage[s.id].input_tokens) }}
+              </span>
+              <span class="usage-item">
+                <span class="usage-label">{{ t('sessionBrowser.outputTokens') }}</span>
+                {{ formatTokens(sessionUsage[s.id].output_tokens) }}
+              </span>
+              <span class="usage-item">
+                <span class="usage-label">{{ t('sessionBrowser.inputPrice') }}</span>
+                ${{ formatPrice(sessionUsage[s.id].cost_input_price) }}
+              </span>
+              <span class="usage-item">
+                <span class="usage-label">{{ t('sessionBrowser.outputPrice') }}</span>
+                ${{ formatPrice(sessionUsage[s.id].cost_output_price) }}
+              </span>
+              <span class="usage-item usage-cost">
+                <span class="usage-label">{{ t('sessionBrowser.totalCost') }}</span>
+                ${{ formatCost(sessionUsage[s.id].total_cost) }}
+              </span>
+            </div>
           </li>
         </ul>
 
@@ -268,12 +290,14 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { ArrowDown, ArrowRight, Delete } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import * as convApi from '@/api/conversations'
+import { getSessionsUsageBreakdown } from '@/api/token-usage'
+import { formatTokens } from '@/utils/format'
 import type { ConversationMessage, ConversationSession } from '@/api/conversations'
 
 const { t } = useI18n()
@@ -300,6 +324,21 @@ const dateRange = ref<[Date, Date] | null>(null)
 const checkedSessionIds = ref<string[]>([])
 const checkedMessageIds = ref<string[]>([])
 const messageRoleFilter = ref('')
+
+// 每个会话的计量计价汇总（键为 session_id，来自批量接口）
+interface SessionUsageSummary {
+  session_id: string
+  request_count: number
+  input_tokens: number
+  output_tokens: number
+  total_tokens: number
+  cost_input_price: number
+  cost_output_price: number
+  input_cost: number
+  output_cost: number
+  total_cost: number
+}
+const sessionUsage = ref<Record<string, SessionUsageSummary>>({})
 
 const dateShortcuts = [
   {
@@ -359,6 +398,35 @@ const pagedSessions = computed(() => {
   const start = (page.value - 1) * pageSize.value
   return sessions.value.slice(start, start + pageSize.value)
 })
+
+async function loadSessionUsage() {
+  if (props.mode !== 'compact' || pagedSessions.value.length === 0) return
+  try {
+    const data: any = await getSessionsUsageBreakdown(pagedSessions.value.map((s) => s.id))
+    sessionUsage.value = data?.sessions ?? {}
+  } catch {
+    sessionUsage.value = {}
+  }
+}
+
+function formatPrice(n: number | undefined | null): string {
+  return Number(n || 0).toFixed(6)
+}
+
+function formatCost(n: number | undefined | null): string {
+  const v = Number(n || 0)
+  if (v === 0) return '0.00'
+  if (v < 0.01) return v.toFixed(6)
+  if (v < 1000) return v.toFixed(4)
+  return v.toFixed(2)
+}
+
+watch(
+  () => [page.value, pageSize.value],
+  () => {
+    void loadSessionUsage()
+  }
+)
 
 function filterParams() {
   const params: { category?: string; since?: string; until?: string } = {}
@@ -455,6 +523,7 @@ async function reload() {
     if (selectedId.value && !sessions.value.some((s) => s.id === selectedId.value)) {
       collapseSession()
     }
+    void loadSessionUsage()
   } catch (e: any) {
     sessions.value = []
     if (props.mode === 'full') {
@@ -696,6 +765,27 @@ defineExpose({ reload: reloadKeepSelection })
   gap: 10px;
   font-size: 12px;
   color: var(--el-text-color-secondary);
+}
+.session-usage {
+  margin-top: 4px;
+  margin-left: 18px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  font-size: 11px;
+  color: var(--el-text-color-secondary);
+  line-height: 1.6;
+}
+.usage-item {
+  white-space: nowrap;
+}
+.usage-label {
+  margin-right: 2px;
+  color: var(--el-text-color-placeholder);
+}
+.usage-cost {
+  font-weight: 600;
+  color: var(--el-text-color-primary);
 }
 .pager {
   margin-top: 8px;

@@ -2,9 +2,6 @@
   "dateSeparator": "a",
   "dateStart": "Inicio",
   "dateEnd": "Fin",
-  "groupByModel": "Por modelo",
-  "groupByBackend": "Por backend",
-  "groupByDate": "Por fecha",
   "refresh": "Actualizar métricas",
   "billingRules": "Reglas de facturación",
   "currencyUSD": "USD",
@@ -14,11 +11,11 @@
   "requests": "Solicitudes",
   "input": "Entrada",
   "output": "Salida",
-  "costDistribution": "Distribución de costos",
+  "byBackend": "Por backend",
+  "byModel": "Por modelo",
   "costColumn": "Costo",
   "tokenColumn": "Token",
   "requestColumn": "Solicitudes",
   "groupByBackendLabel": "Backend",
-  "groupByDateLabel": "Fecha",
   "groupByModelLabel": "Modelo"
 }

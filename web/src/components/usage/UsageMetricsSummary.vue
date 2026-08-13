@@ -12,11 +12,6 @@
         style="width: 260px"
         @change="reload"
       />
-      <el-select v-model="groupBy" size="small" style="width: 120px" @change="reload">
-        <el-option :label="t('usageMetricsSummary.groupByModel')" value="model" />
-        <el-option :label="t('usageMetricsSummary.groupByBackend')" value="backend" />
-        <el-option :label="t('usageMetricsSummary.groupByDate')" value="date" />
-      </el-select>
       <el-button size="small" :loading="loading" @click="reload">{{ t('usageMetricsSummary.refresh') }}</el-button>
       <el-button v-if="effectiveShowBilling" size="small" type="primary" plain @click="emit('open-billing')">
         {{ t('usageMetricsSummary.billingRules') }}
@@ -57,18 +52,33 @@
       </div>
     </div>
 
-    <div v-if="summary.groups?.length" class="groups-block">
-      <div class="block-title">{{ t('usageMetricsSummary.costDistribution') }}</div>
-      <el-table :data="summary.groups" size="small" stripe :max-height="mode === 'compact' ? 180 : 320">
-        <el-table-column prop="key" :label="groupByLabel" min-width="120" />
-        <el-table-column :label="t('usageMetricsSummary.costColumn')" width="110">
-          <template #default="{ row }">{{ currencySymbol }}{{ formatCost(row.cost_usd) }}</template>
-        </el-table-column>
-        <el-table-column prop="tokens" :label="t('usageMetricsSummary.tokenColumn')" width="100">
-          <template #default="{ row }">{{ formatTokens(row.tokens) }}</template>
-        </el-table-column>
-        <el-table-column prop="request_count" :label="t('usageMetricsSummary.requestColumn')" width="80" />
-      </el-table>
+    <div class="distribution-row">
+      <div v-if="backendGroups.length" class="groups-block">
+        <div class="block-title">{{ t('usageMetricsSummary.byBackend') }}</div>
+        <el-table :data="backendGroups" size="small" stripe :max-height="mode === 'compact' ? 180 : 320">
+          <el-table-column prop="key" :label="t('usageMetricsSummary.groupByBackendLabel')" min-width="120" />
+          <el-table-column :label="t('usageMetricsSummary.costColumn')" width="110">
+            <template #default="{ row }">{{ currencySymbol }}{{ formatCost(row.cost_usd) }}</template>
+          </el-table-column>
+          <el-table-column prop="tokens" :label="t('usageMetricsSummary.tokenColumn')" width="100">
+            <template #default="{ row }">{{ formatTokens(row.tokens) }}</template>
+          </el-table-column>
+          <el-table-column prop="request_count" :label="t('usageMetricsSummary.requestColumn')" width="80" />
+        </el-table>
+      </div>
+      <div v-if="modelGroups.length" class="groups-block">
+        <div class="block-title">{{ t('usageMetricsSummary.byModel') }}</div>
+        <el-table :data="modelGroups" size="small" stripe :max-height="mode === 'compact' ? 180 : 320">
+          <el-table-column prop="key" :label="t('usageMetricsSummary.groupByModelLabel')" min-width="120" />
+          <el-table-column :label="t('usageMetricsSummary.costColumn')" width="110">
+            <template #default="{ row }">{{ currencySymbol }}{{ formatCost(row.cost_usd) }}</template>
+          </el-table-column>
+          <el-table-column prop="tokens" :label="t('usageMetricsSummary.tokenColumn')" width="100">
+            <template #default="{ row }">{{ formatTokens(row.tokens) }}</template>
+          </el-table-column>
+          <el-table-column prop="request_count" :label="t('usageMetricsSummary.requestColumn')" width="80" />
+        </el-table>
+      </div>
     </div>
 
     <p v-if="hint" class="hint">{{ hint }}</p>
@@ -119,7 +129,6 @@ const emit = defineEmits<{
 
 const loading = ref(false)
 const dateRange = ref<[string, string] | null>(null)
-const groupBy = ref<'model' | 'backend' | 'date'>('model')
 
 const stats = reactive({
   total_tokens: 0,
@@ -140,14 +149,12 @@ const summary = ref<costApi.CostSummary>({
   group_by: 'model'
 })
 
+const backendGroups = ref<costApi.CostGroup[]>([])
+const modelGroups = ref<costApi.CostGroup[]>([])
+
 const displayCurrency = ref<DisplayCurrency>(getDisplayCurrency())
 const usdToCny = computed(() => summary.value.usd_to_cny || 7.2)
 const currencySymbol = computed(() => symbolOf(displayCurrency.value))
-const groupByLabel = computed(() => {
-  if (groupBy.value === 'backend') return t('usageMetricsSummary.groupByBackendLabel')
-  if (groupBy.value === 'date') return t('usageMetricsSummary.groupByDateLabel')
-  return t('usageMetricsSummary.groupByModelLabel')
-})
 
 function formatNumber(n: number | undefined | null): string {
   if (!n) return '0'
@@ -183,7 +190,7 @@ async function loadUsage() {
 
 async function loadCostSummary() {
   try {
-    const params: costApi.CostSummaryParams = { group_by: groupBy.value }
+    const params: costApi.CostSummaryParams = {}
     if (dateRange.value) {
       params.from = dateRange.value[0]
       params.to = dateRange.value[1]
@@ -192,16 +199,24 @@ async function loadCostSummary() {
     // the total + groups from the user-scoped metering/pricing breakdown,
     // regardless of the local account role.
     if (!isTeam.value) {
-      summary.value = await loadUserCostSummary(params)
+      await loadUserCostSummary(params)
       return
     }
     // Team normal users cannot call admin cost APIs; use user billing summary (billed).
     if (!authStore.isAdmin) {
       const { getUserBillingSummary } = await import('@/api/billing')
-      summary.value = await getUserBillingSummary({ group_by: groupBy.value })
+      const [back, model] = await Promise.all([
+        getUserBillingSummary({ group_by: 'backend' }),
+        getUserBillingSummary({ group_by: 'model' })
+      ])
+      applyCostSummary(back, model)
       return
     }
-    summary.value = await costApi.getCostSummary(params)
+    const [back, model] = await Promise.all([
+      costApi.getCostSummary({ ...params, group_by: 'backend' }),
+      costApi.getCostSummary({ ...params, group_by: 'model' })
+    ])
+    applyCostSummary(back, model)
   } catch (err: any) {
     const status = err?.response?.status ?? err?.status
     summary.value = {
@@ -209,15 +224,28 @@ async function loadCostSummary() {
       total_cost_usd: 0,
       groups: []
     }
+    backendGroups.value = []
+    modelGroups.value = []
     if (status === 403) {
       console.warn('[usage] cost/summary unavailable (403)')
     }
   }
 }
 
-// User-scoped fallback: rebuild CostSummary from the per-(backend, model)
+function applyCostSummary(back: costApi.CostSummary, model: costApi.CostSummary) {
+  summary.value = {
+    ...(back || {}),
+    total_cost_usd: back?.total_cost_usd || 0,
+    total_tokens: back?.total_tokens || 0,
+    usd_to_cny: back?.usd_to_cny || 7.2
+  }
+  backendGroups.value = back?.groups ?? []
+  modelGroups.value = model?.groups ?? []
+}
+
+// User-scoped fallback: rebuild both cost distributions from the per-(backend, model)
 // metering/pricing breakdown so personal non-admin users still get costs.
-async function loadUserCostSummary(params: costApi.CostSummaryParams): Promise<costApi.CostSummary> {
+async function loadUserCostSummary(params: costApi.CostSummaryParams): Promise<void> {
   const res: any = await getUsageBreakdown(
     params.from && params.to ? { from: params.from, to: params.to } : undefined
   )
@@ -225,12 +253,26 @@ async function loadUserCostSummary(params: costApi.CostSummaryParams): Promise<c
   const sum = res?.summary ?? {}
   const totalCost = Number(sum.total_cost || 0)
   const totalTokens = Number(sum.total_tokens || 0)
-  const rangeKey = res?.from ? `${res.from} ~ ${res.to}` : ''
 
+  summary.value = {
+    total_cost_usd: totalCost,
+    total_tokens: totalTokens,
+    cache_saved_usd: 0,
+    currency: 'USD',
+    usd_to_cny: 7.2,
+    groups: [],
+    from: res?.from ?? '',
+    to: res?.to ?? '',
+    group_by: 'backend'
+  }
+  backendGroups.value = groupRecords(records, (r) => r.backend_id)
+  modelGroups.value = groupRecords(records, (r) => r.model)
+}
+
+function groupRecords(records: any[], keyOf: (r: any) => string | undefined): costApi.CostGroup[] {
   const map = new Map<string, costApi.CostGroup>()
   for (const r of records) {
-    const k =
-      groupBy.value === 'backend' ? r.backend_id : groupBy.value === 'date' ? rangeKey : r.model
+    const k = keyOf(r)
     if (!k) continue
     const g = map.get(k) ?? { key: k, cost_usd: 0, tokens: 0, request_count: 0 }
     g.cost_usd += Number(r.total_cost || 0)
@@ -238,18 +280,7 @@ async function loadUserCostSummary(params: costApi.CostSummaryParams): Promise<c
     g.request_count += Number(r.request_count || 0)
     map.set(k, g)
   }
-
-  return {
-    total_cost_usd: totalCost,
-    total_tokens: totalTokens,
-    cache_saved_usd: 0,
-    currency: 'USD',
-    usd_to_cny: 7.2,
-    groups: [...map.values()].sort((a, b) => b.cost_usd - a.cost_usd),
-    from: res?.from ?? '',
-    to: res?.to ?? '',
-    group_by: groupBy.value
-  }
+  return [...map.values()].sort((a, b) => b.cost_usd - a.cost_usd)
 }
 
 async function reload() {
@@ -319,6 +350,17 @@ defineExpose({
   border: 1px solid var(--el-border-color-lighter);
   border-radius: 8px;
   padding: 8px;
+  flex: 1 1 0;
+  min-width: 0;
+}
+.distribution-row {
+  display: flex;
+  gap: 12px;
+}
+@media (max-width: 900px) {
+  .distribution-row {
+    flex-direction: column;
+  }
 }
 .block-title {
   font-size: 13px;

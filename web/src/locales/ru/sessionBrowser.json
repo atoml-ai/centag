@@ -45,6 +45,11 @@
   "selectAllMessages": "Выбрать все сообщения",
   "allRoles": "Все роли",
   "deleteByRole": "Удалить по роли",
-  "deleteByRoleConfirm": "Удалить все сообщения роли «{role}»? Это действие нельзя отменить."
+  "deleteByRoleConfirm": "Удалить все сообщения роли «{role}»? Это действие нельзя отменить.",
+  "inputTokens": "Токены на входе",
+  "outputTokens": "Токены на выходе",
+  "inputPrice": "Цена входа",
+  "outputPrice": "Цена выхода",
+  "totalCost": "Общая стоимость"
 }
 

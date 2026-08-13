@@ -2,9 +2,6 @@
   "dateSeparator": "~",
   "dateStart": "시작",
   "dateEnd": "종료",
-  "groupByModel": "모델별",
-  "groupByBackend": "백엔드별",
-  "groupByDate": "날짜별",
   "refresh": "메트릭 새로고침",
   "billingRules": "결제 규칙",
   "currencyUSD": "USD",
@@ -14,11 +11,11 @@
   "requests": "요청 수",
   "input": "입력",
   "output": "출력",
-  "costDistribution": "비용 분포",
+  "byBackend": "백엔드별",
+  "byModel": "모델별",
   "costColumn": "비용",
   "tokenColumn": "토큰",
   "requestColumn": "요청",
   "groupByBackendLabel": "백엔드",
-  "groupByDateLabel": "날짜",
   "groupByModelLabel": "모델"
 }

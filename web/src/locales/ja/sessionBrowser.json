@@ -45,6 +45,11 @@
   "selectAllMessages": "メッセージをすべて選択",
   "allRoles": "すべてのロール",
   "deleteByRole": "ロール別に削除",
-  "deleteByRoleConfirm": "「{role}」のメッセージをすべて削除しますか？この操作は元に戻せません。"
+  "deleteByRoleConfirm": "「{role}」のメッセージをすべて削除しますか？この操作は元に戻せません。",
+  "inputTokens": "入力トークン",
+  "outputTokens": "出力トークン",
+  "inputPrice": "入力単価",
+  "outputPrice": "出力単価",
+  "totalCost": "合計コスト"
 }
 

@@ -45,6 +45,11 @@
   "selectAllMessages": "Seleccionar todos los mensajes",
   "allRoles": "Todos los roles",
   "deleteByRole": "Eliminar por rol",
-  "deleteByRoleConfirm": "¿Eliminar todos los mensajes del rol \"{role}\"? Esta acción no se puede deshacer."
+  "deleteByRoleConfirm": "¿Eliminar todos los mensajes del rol \"{role}\"? Esta acción no se puede deshacer.",
+  "inputTokens": "Tokens de entrada",
+  "outputTokens": "Tokens de salida",
+  "inputPrice": "Precio de entrada",
+  "outputPrice": "Precio de salida",
+  "totalCost": "Costo total"
 }
 

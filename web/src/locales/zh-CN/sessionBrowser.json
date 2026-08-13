@@ -45,6 +45,11 @@
   "selectAllMessages": "全选消息",
   "allRoles": "全部角色",
   "deleteByRole": "删除角色消息",
-  "deleteByRoleConfirm": "确定删除全部「{role}」角色消息？该操作不可撤销。"
+  "deleteByRoleConfirm": "确定删除全部「{role}」角色消息？该操作不可撤销。",
+  "inputTokens": "输入 Token",
+  "outputTokens": "输出 Token",
+  "inputPrice": "输入单价",
+  "outputPrice": "输出单价",
+  "totalCost": "总成本"
 }
 

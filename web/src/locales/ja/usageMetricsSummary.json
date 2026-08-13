@@ -2,9 +2,6 @@
   "dateSeparator": "〜",
   "dateStart": "開始",
   "dateEnd": "終了",
-  "groupByModel": "モデル別",
-  "groupByBackend": "バックエンド別",
-  "groupByDate": "日付別",
   "refresh": "メトリクスを更新",
   "billingRules": "課金ルール",
   "currencyUSD": "USD",
@@ -14,11 +11,11 @@
   "requests": "リクエスト数",
   "input": "入力",
   "output": "出力",
-  "costDistribution": "コスト分布",
+  "byBackend": "バックエンド別",
+  "byModel": "モデル別",
   "costColumn": "コスト",
   "tokenColumn": "トークン",
   "requestColumn": "リクエスト",
   "groupByBackendLabel": "バックエンド",
-  "groupByDateLabel": "日付",
   "groupByModelLabel": "モデル"
 }
