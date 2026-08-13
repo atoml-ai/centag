@@ -81,6 +81,7 @@ type UsageRecord struct {
 	RequestID        string  `json:"request_id"`
 	ClientIP         string  `json:"client_ip"`
 	AgentType        string  `json:"agent_type"`
+	Source           string  `json:"source"` // 038: "real" or "estimated" (token usage estimation)
 }
 
 // UsageStats 使用统计
@@ -223,6 +224,7 @@ func (s *Service) RecordUsage(ctx context.Context, record *UsageRecord) error {
 
 	// 1. 插入明细记录（client_ip 列尚未迁移，暂不写入）
 	// pricing_rule_id: use NULL when 0 (no rule / legacy fallback)
+	// source: 038 添加字段区分真实/估算 token 用量
 	var ruleID interface{}
 	if record.PricingRuleID > 0 {
 		ruleID = record.PricingRuleID
@@ -232,8 +234,8 @@ func (s *Service) RecordUsage(ctx context.Context, record *UsageRecord) error {
 		(user_id, api_key_id, backend_id, model, prompt_tokens, completion_tokens, total_tokens,
 		 cost_usd, input_cost, output_cost, cost_input_price, cost_output_price,
 		 revenue_usd, revenue_input_price, revenue_output_price,
-		 pricing_rule_id, success, tenant_id, group_id, dept_tag, request_id, agent_type)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
+		 pricing_rule_id, success, tenant_id, group_id, dept_tag, request_id, agent_type, source)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23)
 	`)
 	_, err = tx.ExecContext(ctx, insertQuery,
 		record.UserID, record.APIKeyID, record.BackendID, record.Model,
@@ -244,6 +246,7 @@ func (s *Service) RecordUsage(ctx context.Context, record *UsageRecord) error {
 		ruleID, success, nullIfEmpty(record.TenantID), nullIfEmpty(groupID),
 		nullIfEmpty(record.DeptTag),
 		record.RequestID, normalizedAgentType,
+		sourceOrDefault(record.Source), // 038: 数据来源，空值默认为 "real"
 	)
 	if err != nil {
 		return err
@@ -728,6 +731,14 @@ func (s *Service) UpdateQuotaUsage(ctx context.Context) error {
 func nullIfEmpty(s string) interface{} {
 	if strings.TrimSpace(s) == "" {
 		return nil
+	}
+	return strings.TrimSpace(s)
+}
+
+// sourceOrDefault returns the source string, defaulting to "real" if empty.
+func sourceOrDefault(s string) string {
+	if strings.TrimSpace(s) == "" {
+		return "real"
 	}
 	return strings.TrimSpace(s)
 }

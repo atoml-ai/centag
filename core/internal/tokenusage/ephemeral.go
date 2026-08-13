@@ -37,7 +37,8 @@ CREATE TABLE IF NOT EXISTS token_usage (
 	success INTEGER NOT NULL DEFAULT 1,
 	dept_tag TEXT,
 	agent_type TEXT,
-	group_id TEXT
+	group_id TEXT,
+	source TEXT NOT NULL DEFAULT 'real'
 );
 CREATE TABLE IF NOT EXISTS token_usage_daily (
 	id INTEGER PRIMARY KEY AUTOINCREMENT,

@@ -128,6 +128,9 @@ type TokenUsage struct {
 
 	// AgentType Agent 类型（可选）
 	AgentType string `json:"agent_type,omitempty"`
+
+	// Source 数据来源（038）： "real" 或 "estimated"
+	Source string `json:"source,omitempty"`
 }
 
 // RequestLog 请求日志。

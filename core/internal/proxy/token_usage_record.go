@@ -28,6 +28,7 @@ func maybeRecordTokenUsage(c *gin.Context, output *pipeline.PipelineOutput, fall
 	}
 
 	prompt, completion, total := tokenCountsFromOutput(output)
+	source := "real" // 038: 默认为真实值
 	if total <= 0 {
 		// transparent_forward 流式：Content 常为完整上游 SSE，优先解析 usage 字段
 		if p, cTok, t := tokenCountsFromSSEContent(output.Content); t > 0 {
@@ -46,6 +47,7 @@ func maybeRecordTokenUsage(c *gin.Context, output *pipeline.PipelineOutput, fall
 		}
 		prompt = approx
 		total = prompt
+		source = "estimated" // 038: 标记为估算值
 	}
 
 	model := extractModelFromPipelineOutput(output)
@@ -74,6 +76,7 @@ func maybeRecordTokenUsage(c *gin.Context, output *pipeline.PipelineOutput, fall
 		TotalTokens:  total,
 		Success:      output.ExecutionLog == nil || output.ExecutionLog.Success,
 		DeptTag:      deptTag,
+		Source:       source, // 038: 数据来源
 	}
 
 	// 用户自建后端（TenantID 非空 = 用户私有）：用量归属到用户 scope，
@@ -102,6 +105,7 @@ func maybeRecordTokenUsage(c *gin.Context, output *pipeline.PipelineOutput, fall
 				RequestID:        usage.RequestID,
 				ClientIP:         clientIP,
 				Success:          usage.Success,
+				Source:           usage.Source, // 038: 数据来源
 			})
 		}
 		pipeline.RecordSchedulerMetricsFromOutput(output)
