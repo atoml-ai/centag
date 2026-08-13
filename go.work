@@ -7,6 +7,7 @@ use (
 	./dist/personal
 	./dist/minimal
 	./plugins/backend/anthropic
+	./plugins/business/rag_retrieval
 	./plugins/backend/azure
 	./plugins/backend/gemini
 	./plugins/backend/ollama

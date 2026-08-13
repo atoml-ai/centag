@@ -10,6 +10,7 @@ require (
 	centag/plugins/backend/gemini v0.0.0-00010101000000-000000000000
 	centag/plugins/backend/ollama v0.0.0-00010101000000-000000000000
 	centag/plugins/backend/openai v0.0.0-00010101000000-000000000000
+	centag/plugins/business/rag_retrieval v0.0.0
 	centag/plugins/database/postgresql v0.0.0
 	centag/plugins/database/sqlite v0.0.0
 	centag/plugins/protocol/anthropic v0.0.0-00010101000000-000000000000
@@ -86,6 +87,7 @@ replace (
 	centag/plugins/backend/gemini => ../../plugins/backend/gemini
 	centag/plugins/backend/ollama => ../../plugins/backend/ollama
 	centag/plugins/backend/openai => ../../plugins/backend/openai
+	centag/plugins/business/rag_retrieval => ../../plugins/business/rag_retrieval
 
 	centag/plugins/database/postgresql => ../../plugins/database/postgresql
 	centag/plugins/database/sqlite => ../../plugins/database/sqlite
