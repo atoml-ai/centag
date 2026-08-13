@@ -3,6 +3,7 @@ package tokenusage
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -103,6 +104,81 @@ func (s *Service) GetUsageBreakdown(ctx context.Context, userID int64, from, to 
 		TotalOutputTokens: totalOutput,
 		TotalTokens:       totalTokens,
 		TotalCost:         totalCost,
+	}
+	return out, nil
+}
+
+// SessionUsageSummary aggregates one session's metering + billing rows.
+// Unit prices are the highest rate recorded within the session (consistent with
+// GetUsageBreakdown); costs are summed.
+type SessionUsageSummary struct {
+	SessionID       string  `json:"session_id"`
+	RequestCount    int64   `json:"request_count"`
+	InputTokens     int64   `json:"input_tokens"`
+	OutputTokens    int64   `json:"output_tokens"`
+	TotalTokens     int64   `json:"total_tokens"`
+	CostInputPrice  float64 `json:"cost_input_price"`
+	CostOutputPrice float64 `json:"cost_output_price"`
+	InputCost       float64 `json:"input_cost"`
+	OutputCost      float64 `json:"output_cost"`
+	TotalCost       float64 `json:"total_cost"`
+}
+
+// GetSessionsUsageBreakdown returns per-session metering + billing summaries for
+// the given session IDs (success-only). Sessions with no usage are absent from the map.
+func (s *Service) GetSessionsUsageBreakdown(ctx context.Context, userID int64, sessionIDs []string) (map[string]*SessionUsageSummary, error) {
+	out := make(map[string]*SessionUsageSummary, len(sessionIDs))
+	if len(sessionIDs) == 0 {
+		return out, nil
+	}
+	successFilter := "COALESCE(success, TRUE) = TRUE"
+	if !s.isPostgres() {
+		successFilter = "COALESCE(success, 1) = 1"
+	}
+	placeholders := make([]string, len(sessionIDs))
+	args := make([]any, 0, len(sessionIDs)+1)
+	args = append(args, userID)
+	for i, id := range sessionIDs {
+		placeholders[i] = fmt.Sprintf("$%d", i+2)
+		args = append(args, id)
+	}
+	query := s.q(fmt.Sprintf(`
+		SELECT
+			session_id,
+			COUNT(*),
+			COALESCE(SUM(prompt_tokens), 0),
+			COALESCE(SUM(completion_tokens), 0),
+			COALESCE(SUM(total_tokens), 0),
+			COALESCE(MAX(cost_input_price), 0),
+			COALESCE(MAX(cost_output_price), 0),
+			COALESCE(SUM(input_cost), 0),
+			COALESCE(SUM(output_cost), 0),
+			COALESCE(SUM(cost_usd), 0)
+		FROM token_usage
+		WHERE user_id = $1 AND session_id IN (%s) AND %s
+		GROUP BY session_id
+	`, strings.Join(placeholders, ","), successFilter))
+
+	rows, err := s.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("query sessions usage breakdown: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var r SessionUsageSummary
+		if err := rows.Scan(
+			&r.SessionID, &r.RequestCount,
+			&r.InputTokens, &r.OutputTokens, &r.TotalTokens,
+			&r.CostInputPrice, &r.CostOutputPrice,
+			&r.InputCost, &r.OutputCost, &r.TotalCost,
+		); err != nil {
+			return nil, fmt.Errorf("scan sessions usage breakdown: %w", err)
+		}
+		out[r.SessionID] = &r
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate sessions usage breakdown: %w", err)
 	}
 	return out, nil
 }

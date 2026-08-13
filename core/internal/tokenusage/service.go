@@ -58,30 +58,31 @@ func isMissingColumn(err error) bool {
 
 // UsageRecord Token 使用记录
 type UsageRecord struct {
-	UserID           int64   `json:"user_id"`
-	APIKeyID         int64   `json:"api_key_id"`
-	BackendID        string  `json:"backend_id"`
-	Model            string  `json:"model"`
-	PromptTokens     int     `json:"prompt_tokens"`
-	CompletionTokens int     `json:"completion_tokens"`
-	TotalTokens      int     `json:"total_tokens"`
-	CostUSD          float64 `json:"cost_usd"` // 成本侧金额（列名历史遗留 *_usd）
-	InputCost        float64 `json:"input_cost"`
-	OutputCost       float64 `json:"output_cost"`
-	CostInputPrice   float64 `json:"cost_input_price"`  // 成本侧 input 单价（USD per 1M tokens）
-	CostOutputPrice  float64 `json:"cost_output_price"` // 成本侧 output 单价（USD per 1M tokens）
+	UserID             int64   `json:"user_id"`
+	APIKeyID           int64   `json:"api_key_id"`
+	BackendID          string  `json:"backend_id"`
+	Model              string  `json:"model"`
+	PromptTokens       int     `json:"prompt_tokens"`
+	CompletionTokens   int     `json:"completion_tokens"`
+	TotalTokens        int     `json:"total_tokens"`
+	CostUSD            float64 `json:"cost_usd"` // 成本侧金额（列名历史遗留 *_usd）
+	InputCost          float64 `json:"input_cost"`
+	OutputCost         float64 `json:"output_cost"`
+	CostInputPrice     float64 `json:"cost_input_price"`     // 成本侧 input 单价（USD per 1M tokens）
+	CostOutputPrice    float64 `json:"cost_output_price"`    // 成本侧 output 单价（USD per 1M tokens）
 	RevenueUSD         float64 `json:"revenue_usd"`          // 收益侧金额
 	RevenueInputPrice  float64 `json:"revenue_input_price"`  // 收益侧 input 单价（/1M）
 	RevenueOutputPrice float64 `json:"revenue_output_price"` // 收益侧 output 单价（/1M）
-	PricingRuleID    int64   `json:"pricing_rule_id"`
-	Success          bool    `json:"success"`
-	TenantID         string  `json:"tenant_id"`
-	GroupID          string  `json:"group_id"` // 036: resolved group (shared metering pool), "" when single-user
-	DeptTag          string  `json:"dept_tag"`
-	RequestID        string  `json:"request_id"`
-	ClientIP         string  `json:"client_ip"`
-	AgentType        string  `json:"agent_type"`
-	Source           string  `json:"source"` // 038: "real" or "estimated" (token usage estimation)
+	PricingRuleID      int64   `json:"pricing_rule_id"`
+	Success            bool    `json:"success"`
+	TenantID           string  `json:"tenant_id"`
+	GroupID            string  `json:"group_id"` // 036: resolved group (shared metering pool), "" when single-user
+	DeptTag            string  `json:"dept_tag"`
+	RequestID          string  `json:"request_id"`
+	ClientIP           string  `json:"client_ip"`
+	AgentType          string  `json:"agent_type"`
+	Source             string  `json:"source"`     // 038: "real" or "estimated" (token usage estimation)
+	SessionID          string  `json:"session_id"` // 039: 会话 ID（对话记录关联，支持按会话查询计量计价明细）
 }
 
 // UsageStats 使用统计
@@ -234,8 +235,8 @@ func (s *Service) RecordUsage(ctx context.Context, record *UsageRecord) error {
 		(user_id, api_key_id, backend_id, model, prompt_tokens, completion_tokens, total_tokens,
 		 cost_usd, input_cost, output_cost, cost_input_price, cost_output_price,
 		 revenue_usd, revenue_input_price, revenue_output_price,
-		 pricing_rule_id, success, tenant_id, group_id, dept_tag, request_id, agent_type, source)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23)
+		 pricing_rule_id, success, tenant_id, group_id, dept_tag, request_id, agent_type, source, session_id)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24)
 	`)
 	_, err = tx.ExecContext(ctx, insertQuery,
 		record.UserID, record.APIKeyID, record.BackendID, record.Model,
@@ -247,6 +248,7 @@ func (s *Service) RecordUsage(ctx context.Context, record *UsageRecord) error {
 		nullIfEmpty(record.DeptTag),
 		record.RequestID, normalizedAgentType,
 		sourceOrDefault(record.Source), // 038: 数据来源，空值默认为 "real"
+		nullIfEmpty(record.SessionID),  // 039: 会话 ID，空值存 NULL
 	)
 	if err != nil {
 		return err

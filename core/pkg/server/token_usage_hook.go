@@ -27,6 +27,7 @@ func wireTokenUsagePersistence(svc *tokenusage.Service, hm hooks.HookManager) {
 			Success:      true,
 			DeptTag:      req.DeptTag,
 			AgentType:    req.AgentType,
+			SessionID:    req.SessionID, // 039: 会话 ID
 		}
 		if hm != nil {
 			_ = hm.TriggerTokenUsedHooks(ctx, usage)

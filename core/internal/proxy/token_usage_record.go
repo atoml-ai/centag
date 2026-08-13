@@ -105,7 +105,8 @@ func maybeRecordTokenUsage(c *gin.Context, output *pipeline.PipelineOutput, fall
 				RequestID:        usage.RequestID,
 				ClientIP:         clientIP,
 				Success:          usage.Success,
-				Source:           usage.Source, // 038: 数据来源
+				Source:           usage.Source,    // 038: 数据来源
+				SessionID:        usage.SessionID, // 039: 会话 ID
 			})
 		}
 		pipeline.RecordSchedulerMetricsFromOutput(output)

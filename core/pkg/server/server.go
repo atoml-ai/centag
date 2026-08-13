@@ -18,9 +18,9 @@ import (
 	"centag/core/internal/auth"
 	"centag/core/internal/billing"
 	"centag/core/internal/cache"
-	cacheexpansion "centag/core/internal/cache/expansion"
 	evalmanager "centag/core/internal/cache/evaluation/manager"
 	evaluationplugins "centag/core/internal/cache/evaluation/plugins"
+	cacheexpansion "centag/core/internal/cache/expansion"
 	cachestrategy "centag/core/internal/cache/strategy"
 	"centag/core/internal/conversation"
 	"centag/core/internal/edition"
@@ -35,6 +35,7 @@ import (
 	"centag/core/internal/strategy"
 	"centag/core/internal/tokenusage"
 	"centag/core/internal/webhook"
+	"centag/core/pkg/abevalapi"
 	"centag/core/pkg/agentmemory"
 	"centag/core/pkg/backend"
 	"centag/core/pkg/config"
@@ -50,7 +51,6 @@ import (
 	pluginregistry "centag/core/pkg/plugin/registry"
 	"centag/core/pkg/processor"
 	"centag/core/pkg/proxymode"
-	"centag/core/pkg/abevalapi"
 	"centag/core/pkg/storage"
 	"centag/core/pkg/systemupdateapi"
 	"centag/core/pkg/tokenusageapi"
@@ -61,56 +61,56 @@ import (
 
 // Server HTTP 服务器
 type Server struct {
-	router               *gin.Engine
-	server               *http.Server
-	cfg                  *config.Config
-	pluginManager        *plugin.Manager
-	backendManager       *backend.Manager
-	storageManager       *storage.Manager
-	cacheManager         *cache.Manager
-	proxyCache           *cache.ProxyCache
-	proxyHandler         *proxy.Handler
-	backendHandler       *BackendHandler
-	storageHandler       *StorageHandler
-	dataStoreHandler     *DataStoreHandler
-	cacheHandler         *CacheHandler
-	metricsHandler       *MetricsHandler
-	configHandler        *ConfigHandler
-	authHandler          *AuthHandler
-	userHandler          *UserHandler
-	apiKeyHandler        *APIKeyHandler
-	strategyHandler      *handler.StrategyHandler
-	proxyHandlerExt      *handler.ProxyHandler
-	clashHandler         *ClashHandler
-	evaluationHandler    *EvaluationHandler
-	evaluationManager    *evalmanager.Manager
-	logHandler           *LogHandler
-	mitmServer           *mitm.Server
-	mitmMu               sync.Mutex // 保护 mitmServer 的并发访问
-	hostProxyServer      *hostproxy.Server
-	hostProxyHandler     *hostproxy.Handler
-	systemUpdate         *internal.SystemUpdateHandler
-	tokenUsageHandler   *TokenUsageHandler
-	costHandler         *CostHandler
-	billingRulesHandler *BillingRulesHandler
+	router                 *gin.Engine
+	server                 *http.Server
+	cfg                    *config.Config
+	pluginManager          *plugin.Manager
+	backendManager         *backend.Manager
+	storageManager         *storage.Manager
+	cacheManager           *cache.Manager
+	proxyCache             *cache.ProxyCache
+	proxyHandler           *proxy.Handler
+	backendHandler         *BackendHandler
+	storageHandler         *StorageHandler
+	dataStoreHandler       *DataStoreHandler
+	cacheHandler           *CacheHandler
+	metricsHandler         *MetricsHandler
+	configHandler          *ConfigHandler
+	authHandler            *AuthHandler
+	userHandler            *UserHandler
+	apiKeyHandler          *APIKeyHandler
+	strategyHandler        *handler.StrategyHandler
+	proxyHandlerExt        *handler.ProxyHandler
+	clashHandler           *ClashHandler
+	evaluationHandler      *EvaluationHandler
+	evaluationManager      *evalmanager.Manager
+	logHandler             *LogHandler
+	mitmServer             *mitm.Server
+	mitmMu                 sync.Mutex // 保护 mitmServer 的并发访问
+	hostProxyServer        *hostproxy.Server
+	hostProxyHandler       *hostproxy.Handler
+	systemUpdate           *internal.SystemUpdateHandler
+	tokenUsageHandler      *TokenUsageHandler
+	costHandler            *CostHandler
+	billingRulesHandler    *BillingRulesHandler
 	personalBillingHandler *PersonalBillingHandler
-	pricingService      billing.PricingService
-	memoryHandler       *MemoryHandler
-	modeManager          *proxymode.ModeManager
-	proxyModeHandler     *ProxyModeHandler
-	pipelineHandler      *PipelineHandler
-	webhookHandler       *webhook.Handler
-	pluginRegistryAPI    *pluginregistry.Handler
-	sessionStore         *session.ProxyModeStore
-	userQuotaMiddleware  *middleware.UserQuotaMiddleware // v2.1: User-level quota
-	edition              edition.Edition
-	agentHandler         *AgentHandler
-	agentProviderHandler *agentpkg.AgentProviderHandler
-	mcpProxyHandler      *MCPProxyHandler
-	hookManager          *hooks.DefaultHookManager
-	conversationHandler *ConversationHandler
-	conversationStore   conversation.Store
-	extensionHost       *extension.RuntimeHost
+	pricingService         billing.PricingService
+	memoryHandler          *MemoryHandler
+	modeManager            *proxymode.ModeManager
+	proxyModeHandler       *ProxyModeHandler
+	pipelineHandler        *PipelineHandler
+	webhookHandler         *webhook.Handler
+	pluginRegistryAPI      *pluginregistry.Handler
+	sessionStore           *session.ProxyModeStore
+	userQuotaMiddleware    *middleware.UserQuotaMiddleware // v2.1: User-level quota
+	edition                edition.Edition
+	agentHandler           *AgentHandler
+	agentProviderHandler   *agentpkg.AgentProviderHandler
+	mcpProxyHandler        *MCPProxyHandler
+	hookManager            *hooks.DefaultHookManager
+	conversationHandler    *ConversationHandler
+	conversationStore      conversation.Store
+	extensionHost          *extension.RuntimeHost
 
 	// 流水线默认模式相关 handler
 	pipelineDefaultsHandler *handler.PipelineDefaultsHandler
@@ -963,53 +963,53 @@ func New(cfg *config.Config) *Server {
 
 	// 创建服务器实例
 	srv := &Server{
-		router:               router,
-		cfg:                  cfg,
-		pluginManager:        pluginManager,
-		backendManager:       backendManager,
-		storageManager:       storageManager,
-		cacheManager:         cacheManager,
-		proxyCache:           proxyCache,
-		proxyHandler:         proxyHandler,
-		backendHandler:       backendHandler,
-		storageHandler:       storageHandler,
-		dataStoreHandler:     dataStoreHandler,
-		cacheHandler:         cacheHandler,
-		metricsHandler:       metricsHandler,
-		configHandler:        configHandler,
-		authHandler:          authHandler,
-		userHandler:          userHandler,
-		apiKeyHandler:        apiKeyHandler,
-		tokenUsageHandler:    tokenUsageHandler,
-		costHandler:          costHandler,
-		billingRulesHandler: billingRulesHandler,
+		router:                 router,
+		cfg:                    cfg,
+		pluginManager:          pluginManager,
+		backendManager:         backendManager,
+		storageManager:         storageManager,
+		cacheManager:           cacheManager,
+		proxyCache:             proxyCache,
+		proxyHandler:           proxyHandler,
+		backendHandler:         backendHandler,
+		storageHandler:         storageHandler,
+		dataStoreHandler:       dataStoreHandler,
+		cacheHandler:           cacheHandler,
+		metricsHandler:         metricsHandler,
+		configHandler:          configHandler,
+		authHandler:            authHandler,
+		userHandler:            userHandler,
+		apiKeyHandler:          apiKeyHandler,
+		tokenUsageHandler:      tokenUsageHandler,
+		costHandler:            costHandler,
+		billingRulesHandler:    billingRulesHandler,
 		personalBillingHandler: personalBillingHandler,
-		pricingService:      pricingService,
-		memoryHandler:       memoryHandler,
-		strategyHandler:      strategyHandler,
-		proxyHandlerExt:      proxyHandlerExt,
-		clashHandler:         clashHandler,
-		evaluationHandler:    evaluationHandler,
-		evaluationManager:    evaluationManager,
-		logHandler:           logHandler,
-		mitmServer:           mitmServer,
-		hostProxyServer:      hostProxyServer,
-		hostProxyHandler:     hostProxyHandler,
-		systemUpdate:         systemUpdate,
-		modeManager:          modeMgr,
-		proxyModeHandler:     proxyModeHandler,
-		pipelineHandler:      pipelineHandler,
-		webhookHandler:       webhookHandler,
-		pluginRegistryAPI:    pluginRegistryAPI,
-		sessionStore:         sessionStore,
-		userQuotaMiddleware:  userQuotaMiddleware, // v2.1: User-level quota
-		edition:              edition.Parse(cfg.Server.Edition),
-		agentHandler:         agentHandler,
-		agentProviderHandler: agentProviderHandler,
-		mcpProxyHandler:      mcpProxyHandler,
-		hookManager:         hookManager,
-		conversationStore:   conversationStore,
-		conversationHandler: conversationHandler,
+		pricingService:         pricingService,
+		memoryHandler:          memoryHandler,
+		strategyHandler:        strategyHandler,
+		proxyHandlerExt:        proxyHandlerExt,
+		clashHandler:           clashHandler,
+		evaluationHandler:      evaluationHandler,
+		evaluationManager:      evaluationManager,
+		logHandler:             logHandler,
+		mitmServer:             mitmServer,
+		hostProxyServer:        hostProxyServer,
+		hostProxyHandler:       hostProxyHandler,
+		systemUpdate:           systemUpdate,
+		modeManager:            modeMgr,
+		proxyModeHandler:       proxyModeHandler,
+		pipelineHandler:        pipelineHandler,
+		webhookHandler:         webhookHandler,
+		pluginRegistryAPI:      pluginRegistryAPI,
+		sessionStore:           sessionStore,
+		userQuotaMiddleware:    userQuotaMiddleware, // v2.1: User-level quota
+		edition:                edition.Parse(cfg.Server.Edition),
+		agentHandler:           agentHandler,
+		agentProviderHandler:   agentProviderHandler,
+		mcpProxyHandler:        mcpProxyHandler,
+		hookManager:            hookManager,
+		conversationStore:      conversationStore,
+		conversationHandler:    conversationHandler,
 		// 流水线默认模式相关 handler
 		pipelineDefaultsHandler: pipelineDefaultsHandler,
 		startTime:               time.Now(),
@@ -1342,6 +1342,7 @@ func (s *Server) setupRoutes() {
 			userAPI.GET("/token-usage/models", s.tokenUsageHandler.GetModelStats)
 			userAPI.GET("/token-usage/backends", s.tokenUsageHandler.GetBackendStats)
 			userAPI.GET("/usage", s.tokenUsageHandler.GetUsageBreakdown)
+			userAPI.GET("/usage/sessions", s.tokenUsageHandler.GetSessionsUsage)
 			userAPI.GET("/usage/self-limit", s.tokenUsageHandler.GetSelfLimit)
 		}
 

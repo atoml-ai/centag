@@ -18,6 +18,7 @@ type TokenUsagePersistRequest struct {
 	DeptTag          string
 	RequestID        string
 	AgentType        string
+	SessionID        string // 039: 会话 ID
 }
 
 // PersistTokenUsage optionally records token usage to persistent storage.
@@ -44,6 +45,7 @@ func persistTokenUsageFromRecord(ctx context.Context, input *NodeInput, record m
 		req.TenantID = tokenRecordString(input.Metadata["tenant_id"])
 		req.DeptTag = tokenRecordString(input.Metadata["dept_tag"])
 		req.AgentType = tokenRecordString(input.Metadata["agent_type"])
+		req.SessionID = tokenRecordString(input.Metadata["session_id"]) // 039: 会话 ID
 		if uid := tokenRecordString(input.Metadata["user_id"]); uid != "" {
 			if id, err := parseUserIDInt(uid); err == nil {
 				req.UserID = id

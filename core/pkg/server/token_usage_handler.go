@@ -3,6 +3,7 @@ package server
 import (
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"centag/core/internal/auth"
@@ -87,6 +88,30 @@ func (h *TokenUsageHandler) GetUsageBreakdown(c *gin.Context) {
 	}
 
 	RespondSuccess(c, breakdown)
+}
+
+// GetSessionsUsage GET /api/v1/user/usage/sessions — per-session metering/billing
+// summaries (keyed by session_id) for the current user's sessions.
+func (h *TokenUsageHandler) GetSessionsUsage(c *gin.Context) {
+	userID, ok := requireUserID(c)
+	if !ok {
+		return
+	}
+
+	var ids []string
+	for _, p := range strings.Split(c.Query("ids"), ",") {
+		if id := strings.TrimSpace(p); id != "" {
+			ids = append(ids, id)
+		}
+	}
+
+	summaries, err := h.service.GetSessionsUsageBreakdown(c.Request.Context(), userID, ids)
+	if err != nil {
+		RespondError(c, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	RespondSuccess(c, gin.H{"sessions": summaries})
 }
 
 // GetSelfLimit GET /api/v1/user/usage/self-limit — user self-limits.
