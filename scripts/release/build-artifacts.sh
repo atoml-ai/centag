@@ -102,7 +102,7 @@ if need_component personal || need_component minimal; then
     log "building frontend → ${STATIC_SRC}"
     (
       cd "${ROOT}/web"
-      export CENTAG_INSTALL_ROOT CENTAG_EDITION CENTAG_STATIC_DIR="${STATIC_SRC}"
+      export CENTAG_INSTALL_ROOT CENTAG_EDITION="$EDITION" CENTAG_STATIC_DIR="${STATIC_SRC}"
       if [[ -f package-lock.json ]]; then npm ci; else npm install; fi
       npm run build
     )
