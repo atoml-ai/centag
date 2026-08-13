@@ -332,6 +332,10 @@ jobs:
 
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" "${UPLOAD[@]}" --clobber
+            if [[ -z "$DRAFT_FLAG" ]]; then
+              # A previously-created draft would stay invisible; publish it when draft=false.
+              gh release edit "$TAG" --draft=false
+            fi
           else
             # shellcheck disable=SC2086
             gh release create "$TAG" $DRAFT_FLAG \
