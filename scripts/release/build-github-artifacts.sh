@@ -2,14 +2,14 @@
 # Build GitHub Release assets for install.sh (channel: github).
 #
 # Strategy:
-#   CLI (all platforms, cross-compile OK):
-#     centag-cli-personal-{darwin,linux,windows}-{amd64,arm64}.tar.gz
-#   Desktop (host/native CGO only; optional):
+#   CLI (linux only; cross-compile OK):
+#     centag-cli-personal-linux-{amd64,arm64}.tar.gz
+#   Desktop (host/native CGO only; optional — darwin/windows built on native CI runners):
 #     centag-desktop-personal-macos-<arch>.{dmg,zip}
 #     centag-desktop-personal-windows-<arch>.zip
 #
-# install.sh defaults to CLI on every OS; use --desktop for desktop packages.
-# npm channel is separate (also full-matrix CLI).
+# GitHub channel: Win/mac ship desktop only (no CLI); Linux ships CLI. install.sh
+# falls back to desktop on darwin/windows. npm channel is separate (full-matrix CLI).
 #
 # Usage:
 #   ./scripts/release/build-github-artifacts.sh [--version 0.2.9] [--skip-frontend]
@@ -29,7 +29,7 @@ fail() { echo "error: $*" >&2; exit 1; }
 VERSION=""
 SKIP_FRONTEND=0
 BUILD_DESKTOP="${CENTAG_RELEASE_GITHUB_DESKTOP:-1}"
-CLI_PLATFORMS="${CENTAG_RELEASE_GITHUB_CLI_PLATFORMS:-darwin-amd64,darwin-arm64,linux-amd64,linux-arm64,windows-amd64,windows-arm64}"
+CLI_PLATFORMS="${CENTAG_RELEASE_GITHUB_CLI_PLATFORMS:-linux-amd64,linux-arm64}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -52,9 +52,9 @@ fi
 command -v go >/dev/null 2>&1 || fail "go is required"
 HOST_GOOS="$(go env GOOS)"
 
-log "GitHub artifacts: full CLI matrix + host desktop (GOOS=${HOST_GOOS})"
+log "GitHub artifacts: linux CLI + host desktop (GOOS=${HOST_GOOS})"
 
-# 1) CLI — all platforms (install.sh default)
+# 1) CLI — linux only (install.sh on linux; npm channel covers win/mac CLI)
 CLI_ARGS=("${VER_ARGS[@]}" --components personal --platforms "${CLI_PLATFORMS}")
 if [[ "$SKIP_FRONTEND" == "1" ]]; then
   CLI_ARGS+=(--skip-frontend)

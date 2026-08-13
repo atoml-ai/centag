@@ -14,12 +14,15 @@
 #   Piped bash is a child process; it cannot change your interactive shell PATH.
 #   Chain: … | bash && . ~/.centag/env
 #
-# Default (no args): personal CLI from GitHub Release (all OS, including Win/mac).
-# Asset convention (tag v<version>):
-#   CLI (default): centag-cli-personal-<goos>-<goarch>.tar.gz
-#   Desktop (opt): centag-desktop-personal-macos-<arch>.{zip,dmg} / …-windows-<arch>.zip
+# Default (no args): personal from GitHub Release.
+#   Linux → CLI; macOS/Windows → desktop (GitHub channel ships no CLI for them;
+#   the CLI is npm-only on Win/mac). Asset convention (tag v<version>):
+#   CLI:        centag-cli-personal-linux-<goarch>.tar.gz
+#   Desktop:    centag-desktop-personal-macos-<arch>.{zip,dmg} / …-windows-<arch>.zip
+#   fnOS:       centag-personal-native-<arch>.fpk
+#   OTA:        update-package-centag-personal-<ver>-linux-<arch>.tar.gz
 #   checksums.txt
-# Use --desktop on darwin/windows to install the tray desktop package instead.
+# Use --desktop to force the tray desktop package on Win/mac.
 # Optional/legacy: wrap tarball / old centag-personal-* / Centag-* names still tried.
 #
 # Ordinary installs download Release assets only. Source builds require --from-source.
@@ -57,7 +60,7 @@ Options:
   --only <personal|wrap>        Same as positional component
   --with <a,b>                  Explicit list (comma-separated)
   -v, --version <ver>           Pin version (or pass as 2nd positional: personal 0.2.7)
-  --desktop                     Win/mac: install tray desktop zip (default is CLI)
+  --desktop                     Win/mac: install tray desktop zip (default on Win/mac; Linux is CLI)
   --from-source                 Explicitly clone + build (NOT used automatically)
   --prefix <dir>                Install root (default: ~/.centag)
   --bin-dir <dir>               PATH directory (default: <prefix>/bin)
@@ -200,6 +203,13 @@ detect_platform() {
 }
 
 detect_platform
+
+# GitHub channel: Win/mac ship desktop only (no CLI asset). Default to desktop
+# on those OS; the CLI is available there via npm (install.sh --from-source too).
+if [[ "$install_desktop" == false && ( "$GOOS" == "darwin" || "$GOOS" == "windows" ) ]]; then
+  warn "GitHub channel has no CLI for ${GOOS}; installing the desktop package (CLI is npm-only on ${GOOS})"
+  install_desktop=true
+fi
 
 need_cmd() {
   command -v "$1" >/dev/null 2>&1 || fail "'$1' is required but not installed"

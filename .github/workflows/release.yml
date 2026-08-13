@@ -46,7 +46,7 @@ jobs:
       - name: Require version branch
         run: bash scripts/release/require-release-branch.sh --ci --version "${{ steps.ver.outputs.version }}"
 
-  # GitHub: full-matrix CLI (cross-compile on ubuntu).
+  # GitHub: linux CLI (cross-compile on ubuntu). Win/mac CLI stays npm-only.
   github-cli:
     needs: [guard-branch]
     runs-on: ubuntu-latest
@@ -65,12 +65,12 @@ jobs:
           cache: npm
           cache-dependency-path: web/package-lock.json
 
-      - name: Build CLI (all platforms)
+      - name: Build CLI (linux)
         run: |
           bash scripts/release/build-artifacts.sh \
             --version "${{ needs.guard-branch.outputs.version }}" \
             --components personal \
-            --platforms darwin-amd64,darwin-arm64,linux-amd64,linux-arm64,windows-amd64,windows-arm64
+            --platforms linux-amd64,linux-arm64
 
       - name: Upload CLI artifacts
         uses: actions/upload-artifact@v7
@@ -79,10 +79,17 @@ jobs:
           path: .centag/var/release/${{ needs.guard-branch.outputs.version }}/
           if-no-files-found: error
 
-  # GitHub: macOS desktop (native CGO; optional via install.sh --desktop).
+  # GitHub: macOS desktop (native CGO per-arch; HOST_GOARCH comes from the runner).
   github-macos-desktop:
     needs: [guard-branch]
-    runs-on: macos-14
+    strategy:
+      matrix:
+        include:
+          - runner: macos-13
+            arch: amd64
+          - runner: macos-14
+            arch: arm64
+    runs-on: ${{ matrix.runner }}
     env:
       CENTAG_INSTALL_ROOT: ${{ github.workspace }}/.centag
       GOPROXY: https://proxy.golang.org,direct
@@ -99,7 +106,7 @@ jobs:
           cache: npm
           cache-dependency-path: web/package-lock.json
 
-      - name: Build macOS desktop
+      - name: Build macOS desktop (${{ matrix.arch }})
         run: |
           bash scripts/release/package-desktop.sh \
             --version "${{ needs.guard-branch.outputs.version }}" \
@@ -108,17 +115,21 @@ jobs:
       - name: Upload macOS artifacts
         uses: actions/upload-artifact@v7
         with:
-          name: github-macos-${{ needs.guard-branch.outputs.version }}
+          name: github-macos-${{ matrix.arch }}-${{ needs.guard-branch.outputs.version }}
           path: .centag/var/release/${{ needs.guard-branch.outputs.version }}/
           if-no-files-found: error
 
-  # GitHub: Windows desktop (native CGO; optional via install.sh --desktop).
+  # GitHub: Windows desktop (amd64 native; arm64 cross-compile, no CGO in the launcher).
   github-windows-desktop:
     needs: [guard-branch]
+    strategy:
+      matrix:
+        arch: [amd64, arm64]
     runs-on: windows-latest
     env:
       CENTAG_INSTALL_ROOT: ${{ github.workspace }}/.centag
       GOPROXY: https://proxy.golang.org,direct
+      GOARCH: ${{ matrix.arch }}
     steps:
       - uses: actions/checkout@v6
 
@@ -136,7 +147,7 @@ jobs:
         shell: bash
         run: choco install zip -y || true
 
-      - name: Build Windows desktop
+      - name: Build Windows desktop (${{ matrix.arch }})
         shell: bash
         run: |
           bash scripts/release/package-desktop.sh \
@@ -146,12 +157,81 @@ jobs:
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v7
         with:
-          name: github-windows-${{ needs.guard-branch.outputs.version }}
+          name: github-windows-${{ matrix.arch }}-${{ needs.guard-branch.outputs.version }}
           path: .centag/var/release/${{ needs.guard-branch.outputs.version }}/
           if-no-files-found: error
 
+  # GitHub: fnOS install packages (native, per-arch; falls back to manual packing on CI).
+  github-fnos:
+    needs: [guard-branch]
+    strategy:
+      matrix:
+        arch: [amd64, arm64]
+    runs-on: ubuntu-latest
+    env:
+      CENTAG_INSTALL_ROOT: ${{ github.workspace }}/.centag
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Build fnOS package (${{ matrix.arch }})
+        run: |
+          bash deploy/fnos/build-fpk.sh \
+            --mode native \
+            --edition personal \
+            --arch ${{ matrix.arch }} \
+            --output "${{ github.workspace }}/fnos-out"
+
+      - name: Upload fnOS package
+        uses: actions/upload-artifact@v7
+        with:
+          name: github-fnos-${{ matrix.arch }}-${{ needs.guard-branch.outputs.version }}
+          path: ${{ github.workspace }}/fnos-out/
+          if-no-files-found: error
+
+  # GitHub: OTA update packages (linux amd64/arm64; explicit release version).
+  github-ota:
+    needs: [guard-branch]
+    runs-on: ubuntu-latest
+    env:
+      CENTAG_INSTALL_ROOT: ${{ github.workspace }}/.centag
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Build OTA packages
+        run: |
+          bash scripts/release/build-ota.sh \
+            --version "${{ needs.guard-branch.outputs.version }}" \
+            --platforms linux-amd64,linux-arm64
+
+      - name: Upload OTA packages
+        uses: actions/upload-artifact@v7
+        with:
+          name: github-ota-${{ needs.guard-branch.outputs.version }}
+          path: .centag/var/packages/
+          if-no-files-found: error
+
   publish:
-    needs: [guard-branch, github-cli, github-macos-desktop, github-windows-desktop]
+    needs: [guard-branch, github-cli, github-macos-desktop, github-windows-desktop, github-fnos, github-ota]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -177,6 +257,8 @@ jobs:
             -name 'centag-desktop-*.dmg' -o \
             -name 'centag-desktop-*.zip' -o \
             -name 'centag-personal-*.tar.gz' -o \
+            -name 'centag-*-native-*.fpk' -o \
+            -name 'update-package-*.tar.gz' -o \
             -name 'Centag-*.dmg' -o \
             -name 'Centag-*.zip' \
           \) -exec cp -f {} "$OUT/" \;
@@ -184,7 +266,8 @@ jobs:
           (
             cd "$OUT"
             for f in centag-cli-*.tar.gz centag-desktop-*.dmg centag-desktop-*.zip \
-                     centag-personal-*.tar.gz Centag-*.dmg Centag-*.zip; do
+                     centag-personal-*.tar.gz centag-*-native-*.fpk update-package-*.tar.gz \
+                     Centag-*.dmg Centag-*.zip; do
               [[ -f "$f" ]] || continue
               printf '%s  %s\n' "$(sha256sum "$f" | awk '{print $1}')" "$f" >> checksums.txt
             done
@@ -215,11 +298,11 @@ jobs:
             echo "### Install"
             echo ""
             echo '```bash'
-            echo "# GitHub / install.sh — CLI on all platforms (default)"
+            echo "# Linux — CLI (default)"
             echo "curl -fsSL https://raw.githubusercontent.com/${REPO}/${TAG}/scripts/install.sh | bash -s ${V} && . \"\$HOME/.centag/env\""
             echo ""
-            echo "# Win/mac desktop (optional)"
-            echo "curl -fsSL https://raw.githubusercontent.com/${REPO}/${TAG}/scripts/install.sh | bash -s -- --desktop ${V}"
+            echo "# macOS / Windows — desktop (default on these OS; no CLI on GitHub channel)"
+            echo "curl -fsSL https://raw.githubusercontent.com/${REPO}/${TAG}/scripts/install.sh | bash -s ${V} && . \"\$HOME/.centag/env\""
             echo ""
             echo "# npm — CLI on all platforms"
             echo "npm install -g centag"
@@ -227,9 +310,11 @@ jobs:
             echo ""
             echo "### Artifacts"
             echo ""
-            echo "- \`centag-cli-personal-<goos>-<goarch>.tar.gz\` — CLI (install.sh default)"
+            echo "- \`centag-cli-personal-linux-<arch>.tar.gz\` — Linux CLI (install.sh default)"
             echo "- \`centag-desktop-personal-macos-<arch>.dmg\` / \`.zip\` — macOS desktop"
             echo "- \`centag-desktop-personal-windows-<arch>.zip\` — Windows desktop"
+            echo "- \`centag-personal-native-<arch>.fpk\` — fnOS install package"
+            echo "- \`update-package-centag-personal-<ver>-linux-<arch>.tar.gz\` — OTA update"
             echo "- \`checksums.txt\` — SHA-256 sums"
           } > "$NOTES_FILE"
 
@@ -240,6 +325,8 @@ jobs:
             -name 'centag-cli-*.tar.gz' -o \
             -name 'centag-desktop-*.dmg' -o \
             -name 'centag-desktop-*.zip' -o \
+            -name 'centag-*-native-*.fpk' -o \
+            -name 'update-package-*.tar.gz' -o \
             -name 'checksums.txt' \
           \) | sort)
 
