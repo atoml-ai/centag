@@ -165,3 +165,27 @@ Native 模式的 `cmd/main` 脚本参考 fnOS 官方 [Notepad 示例](https://de
    - **`LLM_PROXY_API_KEY_STORAGE_SECRET`**（可选）：`PACKAGE_API_KEY_STORAGE_SECRET` / `.env`；均空则打包或启动时**自动生成**（默认可二次复制完整 Key）
    - **已安装过的数据目录**若已有用户/Key，不会被新包覆盖——需清空数据卷后重装，或在 Web 新建 Key
 5. **发行版**：默认 `minimal`；`--edition personal|team` 分别对应个人全功能 / 团队版。
+
+---
+
+## 已知限制 / TODO
+
+### 向量存储需先配置向量化模型
+
+当前部署下 `设置 → 存储` 中的缓存后端（Redis / ES / ChromaDB / PG）默认全部关闭，语义（向量）缓存不可用。启用向量存储需要同时具备：
+
+1. **向量存储后端**：启用其一（ChromaDB / pgvector / ES），在 `设置 → 存储` 中开启；
+2. **向量化（Embedding）模型**：配置语义缓存/记忆所需的嵌入服务，两者二选一：
+   - 在线：OpenAI `text-embedding-3-small` / `text-embedding-3-large`（1536 / 3072 维）；
+   - 本地：Ollama `nomic-embed-text` / `all-minilm` / `bge-m3`；
+3. **启用语义匹配**：将 `cache.backend` 设为 `semantic`（或流水线节点策略），并指定 `vector_storage_name` 与 `embedding_model`。
+
+参考：`docs/guide/Semantic-Cache-Guide.md`、`docs/guide/Cache-Guide.md`、`docs/guide/profile-getting-started.md`（`cached` / `agent-memory` Profile 默认 PG+pgvector + Ollama bge-m3）。
+
+> TODO：fnOS 打包流程后续可考虑将 embedding 模型选择与向量存储开关纳入 `config_init`/`config_callback` 初始化配置。
+
+### HTTPS / 反向代理
+
+Centag 只监听明文 HTTP（`0.0.0.0:20060`），无内置 TLS 终止；HTTPS 属部署运维层问题，需外部反向代理终止 TLS。
+
+- 完整方案（Caddy / nginx / mkcert 内部 CA / Centag 收口配置 / 验证清单）见 **[reverse-proxy.md](reverse-proxy.md)**。
