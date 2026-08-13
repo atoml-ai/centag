@@ -82,7 +82,8 @@ func isFreeTierRateLimit(err error, model string) bool {
 		return false
 	}
 	typ, code, _ := classifyNodeError(err)
-	if typ == "http_status" && code == http.StatusTooManyRequests {
+	// 临时限流（rate_limit）或 429 http_status 均豁免熔断
+	if typ == "rate_limit" || (typ == "http_status" && code == http.StatusTooManyRequests) {
 		return true
 	}
 	return strings.Contains(strings.ToLower(err.Error()), "rate limit")

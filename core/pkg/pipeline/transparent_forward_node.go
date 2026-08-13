@@ -244,9 +244,10 @@ func (n *TransparentForwardNode) Execute(ctx context.Context, input *NodeInput) 
 	triedAccounts := map[string]bool{}
 
 	var (
-		statusCode  int
-		contentType string
-		respBody    []byte
+		statusCode    int
+		contentType   string
+		respBody      []byte
+		poolExhausted bool
 	)
 	for attempt := 0; attempt < maxAttempts; attempt++ {
 		attemptReq, reqErr := http.NewRequestWithContext(ctx, method, targetURL, strings.NewReader(string(body)))
@@ -363,6 +364,13 @@ func (n *TransparentForwardNode) Execute(ctx context.Context, input *NodeInput) 
 		break
 	}
 
+	// 账户池耗尽判定：循环自然结束（所有 attempt 用完）且池已配置、已尝试过账户、
+	// 最后一次返回的是可轮换失败（429/5xx 等）。此时 executeWithRetry 不应再重试，
+	// 否则 N 个 Key × M 次重试 = N×M 倍请求放大（免费额度按次计费场景下尤其致命）。
+	if pool != nil && len(triedAccounts) > 0 && retryableAccountFailure(statusCode, string(respBody)) {
+		poolExhausted = true
+	}
+
 	bodyStr := string(respBody)
 
 	// 账户池已耗尽（或未配置）后：同后端换模型 → 备用后端；最后向上返回 error 供 FallbackGroups。
@@ -371,7 +379,7 @@ func (n *TransparentForwardNode) Execute(ctx context.Context, input *NodeInput) 
 		if out, ok := n.retryWithSystemBillingFallback(ctx, client, method, meta, body, backendID, resolvedModel, clientModel, requestPath, bridgeToChat, anthropicToChat); ok {
 			return out, nil
 		}
-		return nil, newTransparentUpstreamError(n.id, backendID, resolvedModel, targetURL, statusCode, bodyStr)
+		return nil, newTransparentUpstreamError(n.id, backendID, resolvedModel, targetURL, statusCode, bodyStr, poolExhausted)
 	}
 
 	// 模型不存在 / Router.Unavailable：池 Key 已轮换完毕后，再同后端换模型。
@@ -379,12 +387,12 @@ func (n *TransparentForwardNode) Execute(ctx context.Context, input *NodeInput) 
 		if out, ok := n.retryWithSystemBillingFallback(ctx, client, method, meta, body, backendID, resolvedModel, clientModel, requestPath, bridgeToChat, anthropicToChat); ok {
 			return out, nil
 		}
-		return nil, newTransparentUpstreamError(n.id, backendID, resolvedModel, targetURL, statusCode, bodyStr)
+		return nil, newTransparentUpstreamError(n.id, backendID, resolvedModel, targetURL, statusCode, bodyStr, poolExhausted)
 	}
 
 	// 对可重试的 HTTP 错误码返回 error，触发上层重试/降级逻辑（此时同后端 Key 已尝试过）。
 	if config.IsRetryableStatusCode(statusCode) {
-		return nil, newTransparentUpstreamError(n.id, backendID, resolvedModel, targetURL, statusCode, bodyStr)
+		return nil, newTransparentUpstreamError(n.id, backendID, resolvedModel, targetURL, statusCode, bodyStr, poolExhausted)
 	}
 
 	out := n.buildTransparentOutput(targetURL, statusCode, contentType, respBody, backendID, resolvedModel, clientModel, requestPath, bridgeToChat, anthropicToChat, nil)

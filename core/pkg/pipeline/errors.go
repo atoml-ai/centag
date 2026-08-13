@@ -17,6 +17,10 @@ type UpstreamError struct {
 	Model        string
 	URL          string
 	Message      string // 原始错误文案（含上游响应片段；对客户端输出前需脱敏）
+	// PoolExhausted 标记账户池已耗尽（所有 Key 均已尝试且失败）。
+	// 用于 classifyNodeError 将此错误分类为不可重试，避免 executeWithRetry
+	// 重复执行已耗尽的账户池轮换（否则 N 个 Key × M 次重试 = N×M 倍请求放大）。
+	PoolExhausted bool
 }
 
 func (e *UpstreamError) Error() string {
@@ -31,12 +35,14 @@ func (e *UpstreamError) Error() string {
 
 // newTransparentUpstreamError 构造 transparent_forward 节点的上游错误。
 // 保持原有文案格式（兼容按字符串匹配的旧逻辑），但额外携带结构化状态码。
-func newTransparentUpstreamError(nodeID, backendID, model, targetURL string, statusCode int, body string) error {
+func newTransparentUpstreamError(nodeID, backendID, model, targetURL string, statusCode int, body string, poolExhausted ...bool) error {
+	pe := len(poolExhausted) > 0 && poolExhausted[0]
 	return &UpstreamError{
-		StatusCode: statusCode,
-		BackendID:  backendID,
-		Model:      model,
-		URL:        targetURL,
+		StatusCode:    statusCode,
+		BackendID:     backendID,
+		Model:         model,
+		URL:           targetURL,
+		PoolExhausted: pe,
 		Message: fmt.Sprintf("transparent_forward node %q: backend=%s model=%s url=%s upstream returned %d: %s",
 			nodeID, backendID, model, targetURL, statusCode, truncateBody([]byte(body), 512)),
 	}

@@ -4,8 +4,24 @@ import (
 	"strings"
 )
 
-// IsBillingOrQuotaFailure 判断是否为余额/额度类失败（应触发降级，且默认不计入熔断）。
+// IsTemporaryRateLimit 判断是否为临时限流（429 + "try again later" 等），而非永久额度耗尽。
+// 临时限流应等待后重试同 Key，不应换 Key / 换模型 / 换后端。
+// 注意："Rate limit exceeded" 不在此列——OpenCode Zen 的 FreeUsageLimitError 也用此文案，
+// 但实际上是永久额度耗尽（FreeUsageLimitError），不是临时限流。
+func IsTemporaryRateLimit(statusCode int, body string) bool {
+	if statusCode != 429 {
+		return false
+	}
+	lower := strings.ToLower(body)
+	return strings.Contains(lower, "try again later") ||
+		strings.Contains(lower, "too many requests") ||
+		strings.Contains(lower, "请求过于频繁")
+}
+
+// IsBillingOrQuotaFailure 判断是否为余额/额度类永久失败（应触发降级，且默认不计入熔断）。
 // statusCode 可为 0（仅按消息判断）。401/403 仅在正文/消息命中计费关键词时成立，避免把鉴权错误当成可降级。
+// 注意：429 临时限流（FreeUsageLimitError + "try again later"）虽然也命中此函数，
+// 但调用方应通过 IsTemporaryRateLimit 优先识别，走等待重试路径，而非换模型/换后端。
 func IsBillingOrQuotaFailure(statusCode int, bodyOrMsg string) bool {
 	if statusCode == 402 {
 		return true
@@ -116,9 +132,19 @@ func IsNetworkRetryable() bool {
 }
 
 // IsRetryableError 综合判断一个错误是否应触发重试/降级。
-// errorType 来自 pipeline 层分类："http_status" | "timeout" | "network" | "provider_error" | "billing" | "unknown"。
+// errorType 来自 pipeline 层分类：
+//   - "rate_limit": 临时限流（429 + "try again later"），可重试但不触发换模型/换后端降级
+//   - "pool_exhausted": 账户池已耗尽，不应重试（避免 N×M 倍放大）
+//   - "http_status" | "timeout" | "network" | "provider_error" | "billing" | "unknown"
 func IsRetryableError(errorType string, statusCode int, providerErrorCode string) bool {
 	switch errorType {
+	case "rate_limit":
+		// 临时限流：可重试（executeWithRetry 会等待后重试同节点），
+		// 但不触发 billing fallback（不换模型/不换后端）。
+		return true
+	case "pool_exhausted":
+		// 账户池已耗尽：不再重试（已尝试所有 Key，重试只会重复失败）。
+		return false
 	case "http_status":
 		if IsRetryableStatusCode(statusCode) {
 			return true

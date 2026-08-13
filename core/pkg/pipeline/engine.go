@@ -2,6 +2,7 @@ package pipeline
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"regexp"
 	"strconv"
@@ -2283,6 +2284,14 @@ func classifyNodeError(err error) (string, int, string) {
 	if err == nil {
 		return "unknown", 0, ""
 	}
+
+	// 账户池已耗尽：所有 Key 均已尝试且失败，executeWithRetry 不应再重试，
+	// 否则 N 个 Key × M 次重试 = N×M 倍请求放大。
+	var upstreamErr *UpstreamError
+	if errors.As(err, &upstreamErr) && upstreamErr.PoolExhausted {
+		return "pool_exhausted", upstreamErr.StatusCode, ""
+	}
+
 	msg := err.Error()
 
 	// 超时错误
@@ -2298,6 +2307,13 @@ func classifyNodeError(err error) (string, int, string) {
 		strings.Contains(msg, "network") ||
 		strings.Contains(msg, "dial tcp") {
 		return "network", 0, ""
+	}
+
+	// 临时限流（429 + "try again later"）：可重试，但不应触发换模型/换后端降级。
+	// 必须优先于 IsBillingOrQuotaFailure 判断——后者会把 429 + FreeUsageLimitError
+	// 归为 billing，但 "try again later" 明确指示应等待后重试同 Key。
+	if code := upstreamStatusCodeOf(err); code == 429 && config.IsTemporaryRateLimit(code, msg) {
+		return "rate_limit", 429, ""
 	}
 
 	// 余额/额度类（含 CreditsError）优先归为 billing，供降级路径识别
