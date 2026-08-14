@@ -38,6 +38,7 @@ const PipelineModes = () => import('@/views/PipelineModes.vue')
 const PluginRegistry = () => import('@/views/plugin/PluginRegistry.vue')
 const AgentSetup = () => import('@/views/AgentSetup.vue')
 const AgentRun = () => import('@/views/AgentRun.vue')
+const Agent = () => import('@/views/Agent/index.vue')
 const StorageKVBrowser = () => import('@/views/StorageKVBrowser.vue')
 
 const routes = [
@@ -65,6 +66,7 @@ const routes = [
   { path: '/chat', name: 'Chat', component: Chat, meta: { titleKey: 'route.chat' } },
   { path: '/agent-setup', name: 'AgentSetup', component: AgentSetup, meta: { titleKey: 'route.agentSetup' } },
   { path: '/agent-run', name: 'AgentRun', component: AgentRun, meta: { titleKey: 'route.agentRun' } },
+  { path: '/agent', name: 'Agent', component: Agent, meta: { titleKey: 'route.agent' } },
   { path: '/agent-providers', redirect: '/agent-setup' },
   {
     path: '/proxy-modes',

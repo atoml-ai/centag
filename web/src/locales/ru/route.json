@@ -7,6 +7,7 @@
   "chat": "AI-чат",
   "agentSetup": "Конфиг Agent",
   "agentRun": "Запуск Agent",
+  "agent": "Agent-ассистент",
   "proxyModes": "Режимы прокси",
   "sessionMode": "Тест режима сессии",
   "pipelines": "Пайплайны",

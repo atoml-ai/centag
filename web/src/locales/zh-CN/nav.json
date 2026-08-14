@@ -4,6 +4,7 @@
   "fallbackPolicies": "降级策略",
   "pipelines": "策略管理",
   "agentSetup": "Agent配置",
+  "agent": "Agent助手",
   "agentProviders": "Agent 供应商",
   "nodePlugins": "节点插件",
   "chat": "对话",

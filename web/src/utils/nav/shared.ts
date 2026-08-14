@@ -38,6 +38,10 @@ export function agentSetupNav(opts?: LeafOpts): NavItem {
   return withOpts({ id: 'agent-setup', labelKey: 'nav.agentSetup', icon: 'Link', path: '/agent-setup' }, opts)
 }
 
+export function agentNav(opts?: LeafOpts): NavItem {
+  return withOpts({ id: 'agent', labelKey: 'nav.agent', icon: 'ChatDotRound', path: '/agent' }, opts)
+}
+
 export function agentProvidersNav(opts?: LeafOpts): NavItem {
   return withOpts(
     { id: 'agent-providers', labelKey: 'nav.agentProviders', icon: 'Connection', path: '/agent-providers' },
@@ -178,13 +182,13 @@ export function usageNavGroup(caps?: { role?: string }): NavItem {
   return navGroup('usage', 'nav.usage', 'TrendCharts', children, children[0]?.path)
 }
 
-/** 接入：系统代理 + Agent 配置 */
+/** 接入：系统代理 + Agent 配置 + 内置 Agent 助手 */
 export function accessNavGroup(): NavItem {
   return navGroup(
     'access',
     'nav.access',
     'Link',
-    [systemProxyNav(), agentSetupNav()],
+    [systemProxyNav(), agentSetupNav(), agentNav()],
     '/system-proxy'
   )
 }

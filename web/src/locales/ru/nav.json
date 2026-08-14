@@ -40,5 +40,6 @@
   "overview": "Обзор",
   "userGroupManagement": "Операции",
   "myBilling": "Мои платежи",
-  "planTemplates": "Шаблоны квот"
+  "planTemplates": "Шаблоны квот",
+  "agent": ""
 }

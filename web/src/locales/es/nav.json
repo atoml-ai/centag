@@ -40,5 +40,6 @@
   "overview": "Resumen",
   "userGroupManagement": "Operaciones",
   "myBilling": "Mi facturación",
-  "planTemplates": "Plantillas de cuota"
+  "planTemplates": "Plantillas de cuota",
+  "agent": ""
 }

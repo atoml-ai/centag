@@ -40,5 +40,6 @@
   "overview": "概要",
   "userGroupManagement": "運営管理",
   "myBilling": "マイ請求",
-  "planTemplates": "利用枠テンプレート"
+  "planTemplates": "利用枠テンプレート",
+  "agent": ""
 }

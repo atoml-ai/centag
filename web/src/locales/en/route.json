@@ -7,6 +7,7 @@
   "chat": "AI Chat",
   "agentSetup": "Agent Config",
   "agentRun": "Run Agent",
+  "agent": "Agent Assistant",
   "proxyModes": "Proxy Modes",
   "sessionMode": "Session Mode Test",
   "pipelines": "Pipelines",

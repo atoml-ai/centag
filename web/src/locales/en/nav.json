@@ -4,6 +4,7 @@
   "fallbackPolicies": "Fallback Policies",
   "pipelines": "Pipelines",
   "agentSetup": "Agent Config",
+  "agent": "Agent Assistant",
   "agentProviders": "Agent Providers",
   "nodePlugins": "Node Plugins",
   "chat": "Chat",
