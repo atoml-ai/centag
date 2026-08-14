@@ -106,6 +106,7 @@ type Server struct {
 	edition                edition.Edition
 	agentHandler           *AgentHandler
 	agentProviderHandler   *agentpkg.AgentProviderHandler
+	builtinAgentHandler    *BuiltinAgentHandler
 	mcpProxyHandler        *MCPProxyHandler
 	hookManager            *hooks.DefaultHookManager
 	conversationHandler    *ConversationHandler
@@ -593,6 +594,43 @@ func New(cfg *config.Config) *Server {
 	}
 	agentProviderMgr.SeedDefaults()
 
+	// 创建内置 Agent 处理器
+	// 数据库未配置 agent 字段时应用默认值（否则工具/权限为空导致 agent 不可用）
+	defAgent := agentpkg.DefaultAgentConfig()
+	builtinAgentConfig := &agentpkg.AgentConfig{
+		Enabled:     cfg.Agent.Enabled,
+		MaxTurns:    firstNonZero(cfg.Agent.MaxTurns, defAgent.MaxTurns),
+		MaxTokens:   firstNonZero(cfg.Agent.MaxTokens, defAgent.MaxTokens),
+		Timeout:     firstDuration(cfg.Agent.Timeout, defAgent.Timeout),
+		ToolTimeout: firstDuration(cfg.Agent.ToolTimeout, defAgent.ToolTimeout),
+		Filesystem: agentpkg.FilesystemConfig{
+			AllowedDirs: firstStrings(cfg.Agent.Filesystem.AllowedDirs, defAgent.Filesystem.AllowedDirs),
+			DeniedDirs:  firstStrings(cfg.Agent.Filesystem.DeniedDirs, defAgent.Filesystem.DeniedDirs),
+		},
+		Database: agentpkg.DatabaseConfig{
+			AllowedTables:  firstStrings(cfg.Agent.Database.AllowedTables, defAgent.Database.AllowedTables),
+			ReadOnlyTables: firstStrings(cfg.Agent.Database.ReadOnlyTables, defAgent.Database.ReadOnlyTables),
+			DeniedTables:   firstStrings(cfg.Agent.Database.DeniedTables, defAgent.Database.DeniedTables),
+		},
+		Tools: agentpkg.ToolsConfig{
+			Allowed:        firstStrings(cfg.Agent.Tools.Allowed, defAgent.Tools.Allowed),
+			Denied:         firstStrings(cfg.Agent.Tools.Denied, defAgent.Tools.Denied),
+			RequireConfirm: firstStrings(cfg.Agent.Tools.RequireConfirm, defAgent.Tools.RequireConfirm),
+		},
+		Skills: agentpkg.SkillsConfig{
+			InternalOnly: cfg.Agent.Skills.InternalOnly,
+			Enabled:      firstStrings(cfg.Agent.Skills.Enabled, defAgent.Skills.Enabled),
+		},
+	}
+	dataDir := os.Getenv("CENTAG_DATA_DIR")
+	if dataDir == "" {
+		dataDir = os.Getenv("HOME") + "/.centag"
+	}
+	builtinAgentProvider := NewAgentDataProvider(backendManager, pipelineRegistry, cfg)
+	baseURL := fmt.Sprintf("http://127.0.0.1:%d", cfg.Server.Port)
+	dbPath := resolveAgentDBPath(dataDir)
+	builtinAgentHandler := NewBuiltinAgentHandler(builtinAgentConfig, dataDir, database.Get().GetDB(), builtinAgentProvider, baseURL, dbPath)
+
 	// 创建 MCP 代理处理器
 	mcpProxyHandler := NewMCPProxyHandler()
 
@@ -1006,6 +1044,7 @@ func New(cfg *config.Config) *Server {
 		edition:                edition.Parse(cfg.Server.Edition),
 		agentHandler:           agentHandler,
 		agentProviderHandler:   agentProviderHandler,
+		builtinAgentHandler:    builtinAgentHandler,
 		mcpProxyHandler:        mcpProxyHandler,
 		hookManager:            hookManager,
 		conversationStore:      conversationStore,
@@ -1754,6 +1793,23 @@ func (s *Server) setupRoutes() {
 		}
 	}
 
+	// 内置 Agent（需要 JWT 认证）
+	if s.builtinAgentHandler != nil {
+		builtinAgent := v1Protected.Group("/builtin-agent")
+		{
+			builtinAgent.GET("/health", s.builtinAgentHandler.Health)
+			builtinAgent.POST("/sessions", s.builtinAgentHandler.CreateSession)
+			builtinAgent.GET("/sessions", s.builtinAgentHandler.ListSessions)
+			builtinAgent.GET("/sessions/:id", s.builtinAgentHandler.GetSession)
+			builtinAgent.DELETE("/sessions/:id", s.builtinAgentHandler.DeleteSession)
+			builtinAgent.POST("/sessions/:id/messages", s.builtinAgentHandler.SendMessage)
+			builtinAgent.GET("/sessions/:id/messages", s.builtinAgentHandler.ListMessages)
+			builtinAgent.GET("/skills", s.builtinAgentHandler.ListSkills)
+			builtinAgent.POST("/sessions/:id/confirm", s.builtinAgentHandler.ConfirmTool)
+			builtinAgent.POST("/sessions/:id/cancel", s.builtinAgentHandler.CancelExecution)
+		}
+	}
+
 	// wrap run：本机终端启动第三方 Agent（personal/minimal 或 loopback）
 	wrapAPI := v1Protected.Group("/wrap")
 	{
@@ -2141,4 +2197,62 @@ func registerBuiltinPluginsToStore(nodeRegistry *pipeline.NodeRegistry, pluginRe
 			logger.Infof("Registered builtin plugin %s to registry store", desc.Implementation)
 		}
 	}
+}
+
+// firstNonZero 返回第一个非零值
+func firstNonZero(v int, def int) int {
+	if v == 0 {
+		return def
+	}
+	return v
+}
+
+// firstDuration 返回第一个非零时长
+func firstDuration(v time.Duration, def time.Duration) time.Duration {
+	if v <= 0 {
+		return def
+	}
+	return v
+}
+
+// firstStrings 返回第一个非空切片
+func firstStrings(v []string, def []string) []string {
+	if len(v) == 0 {
+		return def
+	}
+	return v
+}
+
+// resolveAgentDBPath 解析数据库文件路径（供 centag_info 工具展示）
+func resolveAgentDBPath(dataDir string) string {
+	// 优先环境变量
+	if p := os.Getenv("SQLITE_PATH"); p != "" {
+		return p
+	}
+	// 探测数据目录下常见位置
+	candidates := []string{
+		filepath.Join(dataDir, "storage", "centag.db"),
+		filepath.Join(dataDir, "var", "centag.db"),
+		filepath.Join(dataDir, "lib", "personal", "storage", "centag.db"),
+		filepath.Join(dataDir, "lib", "minimal", "storage", "centag.db"),
+		filepath.Join(dataDir, "lib", "team", "storage", "centag.db"),
+	}
+	for _, c := range candidates {
+		if fi, err := os.Stat(c); err == nil && !fi.IsDir() {
+			return c
+		}
+	}
+	// 递归探测
+	var found string
+	_ = filepath.WalkDir(dataDir, func(path string, d os.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return nil
+		}
+		if d.Name() == "centag.db" {
+			found = path
+			return filepath.SkipAll
+		}
+		return nil
+	})
+	return found
 }
