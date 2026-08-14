@@ -23,4 +23,5 @@ use (
 	./plugins/storage/file
 	./plugins/storage/postgresql
 	./plugins/storage/redis
+	../edgeag
 )
