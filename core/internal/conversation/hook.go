@@ -24,8 +24,10 @@ const (
 	metaInputTok    = "input_tokens"
 	metaOutputTok   = "output_tokens"
 
-	// dedupWindow 同一 session 内相同 user_content 的去重时间窗口。
-	// 覆盖"并发辅助请求（标题生成等）"和"客户端短期重试"场景。
+	// dedupWindow 同一 session 内相同 user_content 的整轮去重时间窗口。
+	// 仅用于"客户端短期重试"：同内容且同回复（assistant 相同）在窗口内视为重放，整轮跳过。
+	// 同内容但回复不同（如 agent 多轮推理的每轮追问同一任务）不属于重试：
+	// user 消息只记录一次，assistant 每轮均保留，用于展示各轮次差异。
 	dedupWindow = 30 * time.Second
 )
 
@@ -51,8 +53,9 @@ type pendingTurn struct {
 }
 
 type recentUser struct {
-	content string
-	at      time.Time
+	content   string
+	at        time.Time
+	assistant string // 上一次记录的 assistant 回复（用于识别"同内容同回复"的重试）
 }
 
 // NewLoggingHook creates a conversation logging hook.
@@ -126,8 +129,11 @@ func (h *LoggingHook) OnRequest(ctx context.Context, req *types.UnifiedRequest) 
 }
 
 // OnResponse appends user + assistant messages asynchronously.
-// Skips client-internal auxiliary requests (title generation, summarisation, etc.)
-// and deduplicates identical user content within a short time window.
+// Skips client-internal auxiliary requests (title generation, summarisation, etc.).
+// 去重策略（同一 session 内）：
+//   - 相同 user_content + 相同 assistant 且在 dedupWindow 内 → 视为客户端短期重试，整轮跳过；
+//   - 相同 user_content 但 assistant 不同（agent 多轮推理）→ user 只记一次，assistant 每轮保留；
+//   - 不同 user_content → 完整记录。
 func (h *LoggingHook) OnResponse(ctx context.Context, resp *types.UnifiedResponse) error {
 	if h == nil || h.store == nil || resp == nil {
 		return nil
@@ -180,24 +186,31 @@ func (h *LoggingHook) OnResponse(ctx context.Context, resp *types.UnifiedRespons
 		now := time.Now().UTC()
 
 		if pending.userContent != "" {
+			writeUser := true
 			h.mu.Lock()
 			if r, ok := h.recent[pending.sessionID]; ok {
-				if pending.userContent == r.content && now.Sub(r.at) < dedupWindow {
-					h.mu.Unlock()
-					return
+				if pending.userContent == r.content {
+					writeUser = false
+					// 同内容 + 同回复且在窗口内 → 客户端短期重试，整轮跳过。
+					if now.Sub(r.at) < dedupWindow && assistant != "" && assistant == r.assistant {
+						h.mu.Unlock()
+						return
+					}
 				}
 			}
-			h.recent[pending.sessionID] = recentUser{content: pending.userContent, at: now}
+			h.recent[pending.sessionID] = recentUser{content: pending.userContent, at: now, assistant: assistant}
 			h.mu.Unlock()
 
-			_ = h.store.AppendMessage(bg, &Message{
-				SessionID:  pending.sessionID,
-				Role:       "user",
-				Content:    pending.userContent,
-				RequestID:  pending.requestID,
-				PipelineID: pipelineID,
-				CreatedAt:  now,
-			})
+			if writeUser {
+				_ = h.store.AppendMessage(bg, &Message{
+					SessionID:  pending.sessionID,
+					Role:       "user",
+					Content:    pending.userContent,
+					RequestID:  pending.requestID,
+					PipelineID: pipelineID,
+					CreatedAt:  now,
+				})
+			}
 		}
 		if assistant != "" {
 			_ = h.store.AppendMessage(bg, &Message{

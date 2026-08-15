@@ -104,18 +104,60 @@ func TestLoggingHook_DedupSameContentWithinWindow(t *testing.T) {
 
 	sessionID := "sess-dedup"
 	content := "你是使用的什么大模型"
+	reply := "正常回复"
 
 	// first request — should be recorded.
-	msgs1 := roundTrip(t, hm, store, sessionID, "r_first", content, "正常回复", nil)
+	msgs1 := roundTrip(t, hm, store, sessionID, "r_first", content, reply, nil)
 	if len(msgs1) < 2 {
 		t.Fatalf("first request should produce 2 messages, got %d", len(msgs1))
 	}
 
-	// second request with identical content within dedupWindow — should be skipped.
+	// second request with identical content AND identical reply within dedupWindow
+	// — 视为客户端短期重试，整轮跳过。
 	time.Sleep(50 * time.Millisecond) // tiny gap, well within dedupWindow
-	msgs2 := roundTrip(t, hm, store, sessionID, "r_dup", content, "重复回复", nil)
+	msgs2 := roundTrip(t, hm, store, sessionID, "r_dup", content, reply, nil)
 	if len(msgs2) > len(msgs1) {
-		t.Fatalf("duplicate content within window should be skipped, got %d messages (was %d)", len(msgs2), len(msgs1))
+		t.Fatalf("retry with same content+reply within window should be skipped, got %d messages (was %d)", len(msgs2), len(msgs1))
+	}
+}
+
+func TestLoggingHook_AgentTurns_UserOnceAssistantPerTurn(t *testing.T) {
+	store := NewFileStore(t.TempDir())
+	hook := NewLoggingHook(store)
+	hm := hooks.NewManager()
+	hm.RegisterStorageHook(hook)
+
+	sessionID := "sess-agent"
+	content := "执行系统状态检查" // agent 多轮推理每轮复用同一任务输入
+
+	// 首轮：记录 user + assistant。
+	msgs1 := roundTrip(t, hm, store, sessionID, "r_turn1", content, "第1轮：调用工具读取日志", nil)
+	if len(msgs1) < 2 {
+		t.Fatalf("first turn should produce 2 messages, got %d", len(msgs1))
+	}
+
+	// 后续轮：同内容、不同回复 —— user 不重复记录，assistant 每轮保留。
+	msgs2 := roundTrip(t, hm, store, sessionID, "r_turn2", content, "第2轮：继续分析", nil)
+	if len(msgs2) != len(msgs1)+1 {
+		t.Fatalf("second turn should append only assistant (1), got +%d messages", len(msgs2)-len(msgs1))
+	}
+	if last := msgs2[len(msgs2)-1]; last.Role != "assistant" || last.Content != "第2轮：继续分析" {
+		t.Fatalf("last message = %s/%q, want assistant/第2轮：继续分析", last.Role, last.Content)
+	}
+
+	// 第三轮：依旧只追加 assistant。
+	msgs3 := roundTrip(t, hm, store, sessionID, "r_turn3", content, "第3轮：输出最终报告", nil)
+	if len(msgs3) != len(msgs2)+1 {
+		t.Fatalf("third turn should append only assistant (1), got +%d messages", len(msgs3)-len(msgs2))
+	}
+	userCount := 0
+	for _, m := range msgs3 {
+		if m.Role == "user" {
+			userCount++
+		}
+	}
+	if userCount != 1 {
+		t.Fatalf("user message should be recorded once, got %d", userCount)
 	}
 }
 
