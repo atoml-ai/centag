@@ -21,6 +21,8 @@ type RuntimeEngine struct {
 	// BackendConfig 由 server 层注入（指向 centag 自身代理）
 	backendHTTP *agentcore.HTTPBackend
 	backendID   string // 当前 backend 的 ID（用于检测切换后重建）
+	// currentPipelineID 当前透传的 pipeline ID（用于检测变化后更新 X-Pipeline-ID）
+	currentPipelineID string
 }
 
 // AgentEngineOptions 构造 Agent 运行时所需的 backend 信息
@@ -33,6 +35,8 @@ type AgentEngineOptions struct {
 	BackendID string
 	// Model 指定模型（空=使用系统默认）
 	Model string
+	// PipelineID 指定 skill 挂接的 pipeline（空=透传模式，不注入 X-Pipeline-ID）
+	PipelineID string
 }
 
 // NewRuntimeEngine 创建 Agent 运行时引擎
@@ -51,6 +55,7 @@ func (e *RuntimeEngine) SetDBPath(p string) {
 
 // EnsureBackend 初始化 HTTP backend（指向 centag 自身代理）。
 // 指定后端变化时重建，以更新 X-Backend-ID。
+// PipelineID 非空时透传 X-Pipeline-ID（skill pipeline 路由）。
 func (e *RuntimeEngine) EnsureBackend(opts AgentEngineOptions) {
 	if e.backendHTTP == nil || e.backendID != opts.BackendID {
 		e.backendHTTP = agentcore.NewHTTPBackend(agentcore.HTTPBackendConfig{
@@ -63,10 +68,15 @@ func (e *RuntimeEngine) EnsureBackend(opts AgentEngineOptions) {
 			ProxyMode: "transparent",
 		})
 		e.backendID = opts.BackendID
+		e.backendHTTP.SetStrategy("", opts.PipelineID)
 		return
 	}
 	if opts.Token != "" {
 		e.backendHTTP.SetToken(opts.Token)
+	}
+	if opts.PipelineID != e.currentPipelineID {
+		e.backendHTTP.SetStrategy("", opts.PipelineID)
+		e.currentPipelineID = opts.PipelineID
 	}
 }
 
@@ -107,11 +117,22 @@ func (e *RuntimeEngine) RefreshToken(token string) {
 	}
 }
 
-// registerTools 注册 centag 内置工具
-func (e *RuntimeEngine) registerTools(registry agentcore.ToolRegistry) error {
+// registerTools 注册 centag 内置工具。
+// skillTools 非空时按「skill 工具集 ∩ 全局白名单」收敛（T8）；为空时仅受全局白名单约束。
+func (e *RuntimeEngine) registerTools(registry agentcore.ToolRegistry, skillTools ...[]string) error {
 	allowed := make(map[string]bool)
 	for _, t := range e.config.Tools.Allowed {
 		allowed[t] = true
+	}
+
+	// skill 工具集（存在时）与全局白名单求交集，作为实际注册集
+	var effective []string
+	if len(skillTools) > 0 {
+		effective = tools.IntersectAllowedTools(skillTools[0], e.config.Tools.Allowed)
+	}
+	skillSet := make(map[string]bool, len(effective))
+	for _, t := range effective {
+		skillSet[t] = true
 	}
 
 	readConfig := tools.NewReadConfigTool(e.dataDir)
@@ -123,22 +144,27 @@ func (e *RuntimeEngine) registerTools(registry agentcore.ToolRegistry) error {
 	centagInfo := tools.NewCentagInfoTool(e.dataDir, e.dbPath)
 
 	for _, tool := range []agentcore.Tool{readConfig, readLog, readDB, writeConfig, analyze, systemInfo, centagInfo} {
-		if allowed[tool.Name()] {
-			registry.Register(tool)
+		if !allowed[tool.Name()] {
+			continue
 		}
+		if len(effective) > 0 && !skillSet[tool.Name()] {
+			continue
+		}
+		registry.Register(tool)
 	}
 	return nil
 }
 
 // NewSession 创建一次会话对应的 agentcore.Agent 实例。
 // systemPrompt 非空时作为 system 消息注入。
-func (e *RuntimeEngine) NewSession(systemPrompt string) (*agentcore.Agent, error) {
+// skillTools 非空时按 skill 工具集 ∩ 全局白名单注册工具（T8）。
+func (e *RuntimeEngine) NewSession(systemPrompt string, skillTools ...[]string) (*agentcore.Agent, error) {
 	if e.backendHTTP == nil {
 		return nil, fmt.Errorf("agent backend not initialized")
 	}
 
 	registry := agentcore.NewToolRegistry()
-	if err := e.registerTools(registry); err != nil {
+	if err := e.registerTools(registry, skillTools...); err != nil {
 		return nil, err
 	}
 

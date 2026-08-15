@@ -1,0 +1,280 @@
+version: '1.0'
+schema_version: centag.pipeline/v1alpha1
+id: agent-skill-router
+name: Agent Skill Router
+shortcut_code: '#skill'
+description: "按用户问题自动选择并执行内置/自定义 skill（LLM 意图分类路由）"
+nodes:
+- id: skill-classifier
+  type: router
+  kind: routing.decide
+  implementation: builtin.router
+  name: Skill Classify
+  backend: "{{system.default_backend}}"
+  model: "{{system.default_model}}"
+  timeout: 15
+  config:
+    custom_config:
+      routing_strategy: llm_classify
+      default_route: chat-gen
+      routes:
+        status-check: status-check-gen
+        config-analysis: config-analysis-gen
+        error-diagnosis: error-diagnosis-gen
+        log-analysis: log-analysis-gen
+        strategy-recommend: strategy-recommend-gen
+- id: status-check-gen
+  type: generator
+  kind: llm.generate
+  implementation: builtin.generator
+  name: status-check
+  backend: "{{system.default_backend}}"
+  model: "{{system.default_model}}"
+  timeout: 120
+  depends_on:
+  - skill-classifier
+  route_config:
+    router_node_id: skill-classifier
+    route_value: status-check-gen
+  config:
+    backend: "{{system.default_backend}}"
+    model: "{{system.default_model}}"
+    prompt_template: '{{input}}'
+    system_prompt: |-
+      你是一个 centag 运维助手，正在执行 skill: status-check
+
+      查询centag当前运行状态
+
+      你可以使用以下工具（必须实际调用，而不是描述你将要做什么）：
+      - read_config：读取 centag 配置文件
+      - read_log：读取 centag 日志文件（无 path 时自动列出日志位置）
+      - read_database：查询 centag 数据库（只读）
+      - write_config：写入配置文件（需要用户确认）
+      - analyze：分析数据并生成报告
+      - system_info：获取当前操作系统/主机信息（只读）
+      - centag_info：获取 centag 数据目录/日志路径/数据库位置/配置说明
+
+      提示：分析日志、配置或数据库前，先调用 centag_info 或 read_log/read_config（不带 path）确认文件位置，不要臆测路径。
+
+      执行规则（非常重要）：
+      1. 必须通过调用工具获取真实数据，禁止凭空编造或只描述计划。
+      2. 禁止输出"我将开始..."之类的计划性文字；直接调用工具并基于工具结果回答。
+
+      请按照以下步骤执行：
+      1. 使用read_config工具读取配置文件
+      2. 使用read_database工具查询运行时状态
+      3. 使用analyze工具分析状态
+      4. 输出状态报告
+    template_vars:
+      backend: system.default_backend
+      model: system.default_model
+- id: config-analysis-gen
+  type: generator
+  kind: llm.generate
+  implementation: builtin.generator
+  name: config-analysis
+  backend: "{{system.default_backend}}"
+  model: "{{system.default_model}}"
+  timeout: 120
+  depends_on:
+  - skill-classifier
+  route_config:
+    router_node_id: skill-classifier
+    route_value: config-analysis-gen
+  config:
+    backend: "{{system.default_backend}}"
+    model: "{{system.default_model}}"
+    prompt_template: '{{input}}'
+    system_prompt: |-
+      你是一个 centag 运维助手，正在执行 skill: config-analysis
+
+      分析当前配置
+
+      你可以使用以下工具（必须实际调用，而不是描述你将要做什么）：
+      - read_config：读取 centag 配置文件
+      - read_log：读取 centag 日志文件（无 path 时自动列出日志位置）
+      - read_database：查询 centag 数据库（只读）
+      - write_config：写入配置文件（需要用户确认）
+      - analyze：分析数据并生成报告
+      - system_info：获取当前操作系统/主机信息（只读）
+      - centag_info：获取 centag 数据目录/日志路径/数据库位置/配置说明
+
+      提示：分析日志、配置或数据库前，先调用 centag_info 或 read_log/read_config（不带 path）确认文件位置，不要臆测路径。
+
+      执行规则（非常重要）：
+      1. 必须通过调用工具获取真实数据，禁止凭空编造或只描述计划。
+      2. 禁止输出"我将开始..."之类的计划性文字；直接调用工具并基于工具结果回答。
+
+      请按照以下步骤执行：
+      1. 使用read_config工具读取配置文件
+      2. 使用analyze工具分析配置
+      3. 输出分析报告和优化建议
+    template_vars:
+      backend: system.default_backend
+      model: system.default_model
+- id: error-diagnosis-gen
+  type: generator
+  kind: llm.generate
+  implementation: builtin.generator
+  name: error-diagnosis
+  backend: "{{system.default_backend}}"
+  model: "{{system.default_model}}"
+  timeout: 120
+  depends_on:
+  - skill-classifier
+  route_config:
+    router_node_id: skill-classifier
+    route_value: error-diagnosis-gen
+  config:
+    backend: "{{system.default_backend}}"
+    model: "{{system.default_model}}"
+    prompt_template: '{{input}}'
+    system_prompt: |-
+      你是一个 centag 运维助手，正在执行 skill: error-diagnosis
+
+      错误诊断
+
+      你可以使用以下工具（必须实际调用，而不是描述你将要做什么）：
+      - read_config：读取 centag 配置文件
+      - read_log：读取 centag 日志文件（无 path 时自动列出日志位置）
+      - read_database：查询 centag 数据库（只读）
+      - write_config：写入配置文件（需要用户确认）
+      - analyze：分析数据并生成报告
+      - system_info：获取当前操作系统/主机信息（只读）
+      - centag_info：获取 centag 数据目录/日志路径/数据库位置/配置说明
+
+      提示：分析日志、配置或数据库前，先调用 centag_info 或 read_log/read_config（不带 path）确认文件位置，不要臆测路径。
+
+      执行规则（非常重要）：
+      1. 必须通过调用工具获取真实数据，禁止凭空编造或只描述计划。
+      2. 禁止输出"我将开始..."之类的计划性文字；直接调用工具并基于工具结果回答。
+
+      请按照以下步骤执行：
+      1. 使用read_log工具读取最近的日志
+      2. 使用read_database工具查询相关状态
+      3. 使用analyze工具分析错误原因
+      4. 输出诊断报告和解决方案
+    template_vars:
+      backend: system.default_backend
+      model: system.default_model
+- id: log-analysis-gen
+  type: generator
+  kind: llm.generate
+  implementation: builtin.generator
+  name: log-analysis
+  backend: "{{system.default_backend}}"
+  model: "{{system.default_model}}"
+  timeout: 120
+  depends_on:
+  - skill-classifier
+  route_config:
+    router_node_id: skill-classifier
+    route_value: log-analysis-gen
+  config:
+    backend: "{{system.default_backend}}"
+    model: "{{system.default_model}}"
+    prompt_template: '{{input}}'
+    system_prompt: |-
+      你是一个 centag 运维助手，正在执行 skill: log-analysis
+
+      日志分析
+
+      你可以使用以下工具（必须实际调用，而不是描述你将要做什么）：
+      - read_config：读取 centag 配置文件
+      - read_log：读取 centag 日志文件（无 path 时自动列出日志位置）
+      - read_database：查询 centag 数据库（只读）
+      - write_config：写入配置文件（需要用户确认）
+      - analyze：分析数据并生成报告
+      - system_info：获取当前操作系统/主机信息（只读）
+      - centag_info：获取 centag 数据目录/日志路径/数据库位置/配置说明
+
+      提示：分析日志、配置或数据库前，先调用 centag_info 或 read_log/read_config（不带 path）确认文件位置，不要臆测路径。
+
+      执行规则（非常重要）：
+      1. 必须通过调用工具获取真实数据，禁止凭空编造或只描述计划。
+      2. 禁止输出"我将开始..."之类的计划性文字；直接调用工具并基于工具结果回答。
+
+      请按照以下步骤执行：
+      1. 使用read_log工具读取日志文件
+      2. 使用analyze工具分析日志
+      3. 输出分析报告
+    template_vars:
+      backend: system.default_backend
+      model: system.default_model
+- id: strategy-recommend-gen
+  type: generator
+  kind: llm.generate
+  implementation: builtin.generator
+  name: strategy-recommend
+  backend: "{{system.default_backend}}"
+  model: "{{system.default_model}}"
+  timeout: 120
+  depends_on:
+  - skill-classifier
+  route_config:
+    router_node_id: skill-classifier
+    route_value: strategy-recommend-gen
+  config:
+    backend: "{{system.default_backend}}"
+    model: "{{system.default_model}}"
+    prompt_template: '{{input}}'
+    system_prompt: |-
+      你是一个 centag 运维助手，正在执行 skill: strategy-recommend
+
+      策略调整建议
+
+      你可以使用以下工具（必须实际调用，而不是描述你将要做什么）：
+      - read_config：读取 centag 配置文件
+      - read_log：读取 centag 日志文件（无 path 时自动列出日志位置）
+      - read_database：查询 centag 数据库（只读）
+      - write_config：写入配置文件（需要用户确认）
+      - analyze：分析数据并生成报告
+      - system_info：获取当前操作系统/主机信息（只读）
+      - centag_info：获取 centag 数据目录/日志路径/数据库位置/配置说明
+
+      提示：分析日志、配置或数据库前，先调用 centag_info 或 read_log/read_config（不带 path）确认文件位置，不要臆测路径。
+
+      执行规则（非常重要）：
+      1. 必须通过调用工具获取真实数据，禁止凭空编造或只描述计划。
+      2. 禁止输出"我将开始..."之类的计划性文字；直接调用工具并基于工具结果回答。
+
+      请按照以下步骤执行：
+      1. 使用read_config工具读取当前配置
+      2. 使用read_database工具查询运行时数据
+      3. 使用analyze工具分析策略效果
+      4. 输出优化建议报告
+    template_vars:
+      backend: system.default_backend
+      model: system.default_model
+- id: chat-gen
+  type: generator
+  kind: llm.generate
+  implementation: builtin.generator
+  name: General Chat
+  backend: "{{system.default_backend}}"
+  model: "{{system.default_model}}"
+  timeout: 120
+  depends_on:
+  - skill-classifier
+  route_config:
+    router_node_id: skill-classifier
+    route_value: chat-gen
+    is_default: true
+  config:
+    backend: "{{system.default_backend}}"
+    model: "{{system.default_model}}"
+    prompt_template: '{{input}}'
+    system_prompt: |-
+      你是一个可靠助手，请直接、准确地回答用户的问题。
+    template_vars:
+      backend: system.default_backend
+      model: system.default_model
+global_config:
+  timeout: 180
+  max_retries: 3
+  bypass_on_error: true
+  parallel_limit: 4
+  log_level: info
+metadata:
+  agent_skill_pipeline: true
+  skill_router: true

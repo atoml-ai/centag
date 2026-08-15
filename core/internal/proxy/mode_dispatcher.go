@@ -256,7 +256,24 @@ func (d *ModeDispatcher) resolvePipelineID(c *gin.Context, mode ProxyMode) strin
 	if c != nil {
 		headerPID = c.GetHeader("X-Pipeline-ID")
 	}
-	return d.resolver.Resolve(mode, headerPID)
+	basePID, _ := splitForcedRoutePipelineID(headerPID)
+	return d.resolver.Resolve(mode, basePID)
+}
+
+// splitForcedRoutePipelineID 解析 X-Pipeline-ID 中约定的强制路由后缀。
+// 形如 "agent-skill-router:status-check" → ("agent-skill-router", "status-check")。
+// 无后缀时返回原值与空串（forced_route 供 router 节点跳过 LLM 分类）。
+func splitForcedRoutePipelineID(header string) (base, forcedRoute string) {
+	header = strings.TrimSpace(header)
+	if idx := strings.Index(header, ":"); idx > 0 {
+		base = strings.TrimSpace(header[:idx])
+		forcedRoute = strings.TrimSpace(header[idx+1:])
+		if base == "" {
+			return "", forcedRoute
+		}
+		return base, forcedRoute
+	}
+	return header, ""
 }
 
 // registerBuiltinPipeline 从内置模板注册流水线
@@ -402,7 +419,11 @@ func (d *ModeDispatcher) buildMetadata(
 		metadata["proxy_type"] = proxyType
 	}
 	if pipelineID := headers["X-Pipeline-ID"]; pipelineID != "" {
-		metadata["pipeline_id"] = pipelineID
+		basePID, forcedRoute := splitForcedRoutePipelineID(pipelineID)
+		metadata["pipeline_id"] = basePID
+		if forcedRoute != "" {
+			metadata["forced_route"] = forcedRoute
+		}
 	}
 
 	// Per-request cache switches (X-Cache-Read/Write); consumed by CacheNode via ExecutionContext.

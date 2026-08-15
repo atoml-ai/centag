@@ -91,8 +91,11 @@ func (t *WriteConfigTool) Execute(ctx context.Context, params map[string]any) (*
 		return &agentcore.ToolResult{IsError: true, Content: fmt.Sprintf("内容不是有效的JSON格式: %v", err)}, nil
 	}
 	
-	// 构建完整路径
-	fullPath := filepath.Join(t.dataDir, path)
+	// 路径隔离校验（任务9 / R03）：拒绝逃逸 dataDir 的路径
+	fullPath, err := secureResolve(t.dataDir, path)
+	if err != nil {
+		return &agentcore.ToolResult{IsError: true, Content: fmt.Sprintf("写入配置文件失败: %v", err)}, nil
+	}
 	
 	// 确保目录存在
 	dir := filepath.Dir(fullPath)

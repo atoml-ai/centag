@@ -4,6 +4,8 @@ import (
 	"database/sql"
 	"fmt"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -11,7 +13,9 @@ import (
 	"centag/core/internal/agent"
 	"centag/core/internal/agent/skills"
 	"centag/core/internal/agent/tools"
+	"centag/core/pkg/bootstrap"
 	"centag/core/pkg/logger"
+	"centag/core/pkg/pipeline"
 
 	"edgeag/pkg/agentcore"
 
@@ -21,18 +25,23 @@ import (
 
 // BuiltinAgentHandler 内置Agent处理器
 type BuiltinAgentHandler struct {
-	config        *agent.AgentConfig
-	dataDir       string
-	db            *sql.DB
-	skillRegistry *skills.SkillRegistry
-	toolRegistry  *tools.ToolRegistry
-	provider      AgentDataProvider
-	engine        *agent.RuntimeEngine
-	baseURL       string
-	sessions      map[string]*AgentSession
-	sessionsMu    sync.RWMutex
-	messages      map[string][]*AgentMessage // sessionID -> messages
-	messagesMu    sync.RWMutex
+	config              *agent.AgentConfig
+	dataDir             string
+	db                  *sql.DB
+	skillRegistry       *skills.SkillRegistry
+	skillPluginRegistry *skills.SkillPluginRegistry
+	manifestStore       *skills.FileManifestStore
+	pipelineRegistry    *pipeline.PipelineRegistry
+	defaultBackend      string
+	defaultModel        string
+	toolRegistry        *tools.ToolRegistry
+	provider            AgentDataProvider
+	engine              *agent.RuntimeEngine
+	baseURL             string
+	sessions            map[string]*AgentSession
+	sessionsMu          sync.RWMutex
+	messages            map[string][]*AgentMessage // sessionID -> messages
+	messagesMu          sync.RWMutex
 }
 
 // AgentSession Agent会话
@@ -62,10 +71,20 @@ type AgentMessage struct {
 }
 
 // NewBuiltinAgentHandler 创建内置Agent处理器
-func NewBuiltinAgentHandler(config *agent.AgentConfig, dataDir string, db *sql.DB, provider AgentDataProvider, baseURL, dbPath string) *BuiltinAgentHandler {
+func NewBuiltinAgentHandler(config *agent.AgentConfig, dataDir string, db *sql.DB, provider AgentDataProvider, baseURL, dbPath string, skillPluginRegistry *skills.SkillPluginRegistry, pipelineRegistry *pipeline.PipelineRegistry, defaultBackend, defaultModel string) *BuiltinAgentHandler {
 	// 创建Skill注册表
 	skillRegistry := skills.NewSkillRegistry()
-	skills.LoadBuiltinSkills(skillRegistry)
+
+	// 内置 manifest 加载成功时以 manifest 为权威来源注册 Skill；
+	// 否则回退硬编码构造器（保持行为不变）。
+	if skillPluginRegistry != nil {
+		for _, p := range skillPluginRegistry.ListAll() {
+			skillRegistry.RegisterSkill(skills.SkillFromPlugin(p))
+		}
+	}
+	if len(skillRegistry.ListSkills()) == 0 {
+		skills.LoadBuiltinSkills(skillRegistry)
+	}
 	
 	// 创建工具注册表
 	toolRegistry := tools.NewToolRegistry(dataDir, db, config.Database.AllowedTables)
@@ -75,16 +94,21 @@ func NewBuiltinAgentHandler(config *agent.AgentConfig, dataDir string, db *sql.D
 	engine.SetDBPath(dbPath)
 	
 	return &BuiltinAgentHandler{
-		config:        config,
-		dataDir:       dataDir,
-		db:            db,
-		skillRegistry: skillRegistry,
-		toolRegistry:  toolRegistry,
-		provider:      provider,
-		engine:        engine,
-		baseURL:       baseURL,
-		sessions:      make(map[string]*AgentSession),
-		messages:      make(map[string][]*AgentMessage),
+		config:              config,
+		dataDir:             dataDir,
+		db:                  db,
+		skillRegistry:       skillRegistry,
+		skillPluginRegistry: skillPluginRegistry,
+		manifestStore:       skills.NewFileManifestStore(filepath.Join(dataDir, "agent-skills")),
+		pipelineRegistry:    pipelineRegistry,
+		defaultBackend:      defaultBackend,
+		defaultModel:        defaultModel,
+		toolRegistry:        toolRegistry,
+		provider:            provider,
+		engine:              engine,
+		baseURL:             baseURL,
+		sessions:            make(map[string]*AgentSession),
+		messages:            make(map[string][]*AgentMessage),
 	}
 }
 
@@ -94,6 +118,45 @@ func (h *BuiltinAgentHandler) Health(c *gin.Context) {
 		"status":  "ok",
 		"enabled": h.config.Enabled,
 	})
+}
+
+// loadBuiltinSkillPlugins 从内置 initdata 目录加载 agent-skill-*.yaml manifest。
+// 目录不存在或全部解析失败时返回 nil（调用方回退硬编码构造器）。
+func loadBuiltinSkillPlugins() *skills.SkillPluginRegistry {
+	registry := skills.NewSkillPluginRegistry()
+	sources := builtinSkillManifestSources()
+	if len(sources) == 0 {
+		return nil
+	}
+	if err := registry.LoadFromSources(sources); err != nil {
+		logger.Warnf("agent: 内置 skill manifest 加载失败: %v", err)
+		return nil
+	}
+	if len(registry.ListAll()) == 0 {
+		return nil
+	}
+	logger.Infof("agent: 内置 skill manifest 注册 %d 个 skill", len(registry.ListAll()))
+	return registry
+}
+
+// builtinSkillManifestSources 返回内置 skill manifest 的扫描来源（initdata pipeline-templates/common 与 team 目录）。
+func builtinSkillManifestSources() []skills.ManifestSource {
+	globalRoot, profileRoot := bootstrap.InitdataRoots()
+	var sources []skills.ManifestSource
+	seen := make(map[string]bool)
+	for _, root := range []string{profileRoot, globalRoot} {
+		if root == "" || seen[root] {
+			continue
+		}
+		seen[root] = true
+		for _, sub := range []string{"common", "team"} {
+			dir := filepath.Join(root, "pipeline-templates", sub)
+			if st, err := os.Stat(dir); err == nil && st.IsDir() {
+				sources = append(sources, skills.ManifestSource{Dir: dir, Custom: false})
+			}
+		}
+	}
+	return sources
 }
 
 // CreateSession 创建会话
@@ -282,16 +345,20 @@ func (h *BuiltinAgentHandler) runAgent(c *gin.Context, session *AgentSession, sk
 		return "", fmt.Errorf("agent engine not initialized")
 	}
 
+	// skill → pipeline id（空 skill 不注入 X-Pipeline-ID）
+	pipelineID := h.resolveSkillPipelineID(skillName)
+
 	// 构造 backend（指向 centag 自身代理）
 	token := ""
 	if auth := c.GetHeader("Authorization"); auth != "" {
 		token = strings.TrimPrefix(auth, "Bearer ")
 	}
 	h.engine.EnsureBackend(agent.AgentEngineOptions{
-		BaseURL:   h.baseURL,
-		Token:     token,
-		BackendID: session.BackendID,
-		Model:     session.Model,
+		BaseURL:    h.baseURL,
+		Token:      token,
+		BackendID:  session.BackendID,
+		Model:      session.Model,
+		PipelineID: pipelineID,
 	})
 	// 每次刷新 token（refresh 后 JWT 会轮换）
 	h.engine.RefreshToken(token)
@@ -299,7 +366,7 @@ func (h *BuiltinAgentHandler) runAgent(c *gin.Context, session *AgentSession, sk
 	// 首次会话：创建 agentcore.Agent 并注入 skill 上下文
 	if session.agentCore == nil {
 		systemPrompt := h.buildSystemPrompt(skillName)
-		ag, err := h.engine.NewSession(systemPrompt)
+		ag, err := h.engine.NewSession(systemPrompt, h.skillTools(skillName))
 		if err != nil {
 			return "", err
 		}
@@ -327,6 +394,52 @@ func (h *BuiltinAgentHandler) buildSystemPrompt(skillName string) string {
 		return sk.BuildPrompt("")
 	}
 	return defaultAgentSystemPrompt()
+}
+
+// resolveSkillPipelineID 返回 skill 对应的 X-Pipeline-ID 值。
+//   - skill 为空：自动路由，统一走 agent-skill-router（router 节点 LLM 分类决定 skill）。
+//   - skill 已注册：显式指定，用 agent-skill-router:<skill> 强制 router 走该分支（跳过 LLM 分类）。
+//   - skill 未注册或 skill 插件未初始化：返回空串（不注入 X-Pipeline-ID，回落透传）。
+func (h *BuiltinAgentHandler) resolveSkillPipelineID(skillName string) string {
+	if h.skillPluginRegistry == nil {
+		return ""
+	}
+	if skillName == "" {
+		return skills.AgentSkillRouterPipelineID
+	}
+	if p, ok := h.skillPluginRegistry.Get(skillName); ok && p.Enabled() {
+		return skills.ForcedRoutePipelineID(skillName)
+	}
+	return ""
+}
+
+// unionSkillTools 返回全部启用 skill 的工具集并集（会话级）。
+// 自动路由下 skill 在消息级才确定，无法在会话创建时按单 skill 收敛，
+// 因此改为「全部可用 skill 工具 ∪ 全局白名单」的交集由 registerTools 处理（技术方案 §8.2 演进）。
+func (h *BuiltinAgentHandler) unionSkillTools() []string {
+	if h.skillPluginRegistry == nil {
+		return nil
+	}
+	seen := make(map[string]bool)
+	var out []string
+	for _, p := range h.skillPluginRegistry.ListAll() {
+		if !p.Enabled() {
+			continue
+		}
+		for _, t := range p.GetSkillDefinition().Tools {
+			if !seen[t] {
+				seen[t] = true
+				out = append(out, t)
+			}
+		}
+	}
+	return out
+}
+
+// skillTools 返回会话级 skill 工具集（全部启用 skill 工具并集）。
+// 兼容旧调用签名：参数不再用于单 skill 收敛。
+func (h *BuiltinAgentHandler) skillTools(skillName string) []string {
+	return h.unionSkillTools()
 }
 
 // defaultAgentSystemPrompt 默认运维助手提示词
@@ -399,7 +512,27 @@ func (h *BuiltinAgentHandler) replyForSkill(skillName, userInput string) string 
 // ListSkills 获取可用Skills
 func (h *BuiltinAgentHandler) ListSkills(c *gin.Context) {
 	skillsList := h.skillRegistry.ListSkills()
-	c.JSON(http.StatusOK, gin.H{"skills": skillsList})
+
+	// 附加 manifest 元数据（pipeline_id / custom / system_prompt），供前端展示与编辑
+	type skillView struct {
+		*skills.Skill
+		PipelineID   string `json:"pipeline_id"`
+		Custom       bool   `json:"custom"`
+		SystemPrompt string `json:"system_prompt"`
+	}
+	views := make([]skillView, 0, len(skillsList))
+	for _, sk := range skillsList {
+		view := skillView{Skill: sk}
+		if h.skillPluginRegistry != nil {
+			if p, ok := h.skillPluginRegistry.Get(sk.Name); ok {
+				view.PipelineID = p.PipelineID()
+				view.Custom = !p.Internal()
+				view.SystemPrompt = p.GetSkillDefinition().SystemPrompt
+			}
+		}
+		views = append(views, view)
+	}
+	c.JSON(http.StatusOK, gin.H{"skills": views})
 }
 
 // ConfirmTool 确认工具执行

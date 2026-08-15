@@ -1,6 +1,7 @@
 package bootstrap
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"sort"
@@ -135,11 +136,15 @@ func loadYAMLFilesFromDir(dirPath string, tmplMap map[string]InitialPipelineTemp
 		if !strings.HasSuffix(lower, ".yaml") && !strings.HasSuffix(lower, ".yml") {
 			continue
 		}
-
 		fullPath := filepath.Join(dirPath, name)
 		data, readErr := os.ReadFile(fullPath)
 		if readErr != nil {
 			logger.Warnf("bootstrap: 读取流水线模板文件失败 %s: %v", fullPath, readErr)
+			continue
+		}
+		// skill manifest（kind: agent.skill）由 SkillPluginRegistry 加载，不视为流水线模板。
+		// agent-skill-router.yaml 是 pipeline 模板（schema centag.pipeline），照常加载。
+		if bytes.Contains(data, []byte("kind: agent.skill")) {
 			continue
 		}
 

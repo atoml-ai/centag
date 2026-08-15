@@ -480,7 +480,7 @@ func TestRouterNodeKeywordRouting(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			target, matched, _ := router.selectRoute(context.Background(), tt.input)
+			target, matched, _ := router.selectRoute(context.Background(), tt.input, "")
 			if target != tt.expected {
 				t.Errorf("input=%q: expected target=%q, got target=%q (matched=%q)",
 					tt.input, tt.expected, target, matched)
@@ -821,6 +821,78 @@ func TestRouterNode_LLMClassify_NoBroker(t *testing.T) {
 	}
 	if output.Metadata["matched"] != "__llm_error_fallback__" {
 		t.Errorf("expected matched=__llm_error_fallback__, got %v", output.Metadata["matched"])
+	}
+}
+
+// TestRouterNode_ForcedRoute 验证 forced_route 跳过 LLM 分类强制路由
+func TestRouterNode_ForcedRoute(t *testing.T) {
+	// LLM 若被调用会返回 unknown_category，forced_route 下不应触发 LLM。
+	router := newLLMClassifyRouter(t, "unknown_category", nil, map[string]string{
+		"code":      "code-generator",
+		"translate": "translate-gen",
+	})
+
+	ctx := context.Background()
+
+	// 1. forced_route = skill 名（routes 的 key）
+	output, err := router.Execute(ctx, &NodeInput{
+		Content:  "随便聊聊",
+		Metadata: map[string]interface{}{"forced_route": "translate"},
+	})
+	if err != nil {
+		t.Fatalf("Execute failed: %v", err)
+	}
+	if output.Metadata["selected_route"] != "translate-gen" {
+		t.Errorf("forced_route(translate): expected selected_route=translate-gen, got %v", output.Metadata["selected_route"])
+	}
+	if output.Metadata["matched"] != "translate" {
+		t.Errorf("forced_route(translate): expected matched=translate, got %v", output.Metadata["matched"])
+	}
+	if _, hasRaw := output.Metadata["llm_raw_response"]; hasRaw {
+		t.Errorf("forced_route should not invoke LLM, but llm_raw_response present")
+	}
+	if output.Metadata["forced_route"] != "translate" {
+		t.Errorf("expected forced_route metadata propagated, got %v", output.Metadata["forced_route"])
+	}
+
+	// 2. forced_route = 目标节点 ID（routes 的 value）
+	output, err = router.Execute(ctx, &NodeInput{
+		Content:  "hello",
+		Metadata: map[string]interface{}{"forced_route": "code-generator"},
+	})
+	if err != nil {
+		t.Fatalf("Execute failed: %v", err)
+	}
+	if output.Metadata["selected_route"] != "code-generator" {
+		t.Errorf("forced_route(code-generator): expected selected_route=code-generator, got %v", output.Metadata["selected_route"])
+	}
+
+	// 3. forced_route = 未注册 skill → 回退 default_route
+	output, err = router.Execute(ctx, &NodeInput{
+		Content:  "hello",
+		Metadata: map[string]interface{}{"forced_route": "no-such-skill"},
+	})
+	if err != nil {
+		t.Fatalf("Execute failed: %v", err)
+	}
+	if output.Metadata["selected_route"] != "chat-generator" {
+		t.Errorf("forced_route(unknown): expected fallback to chat-generator, got %v", output.Metadata["selected_route"])
+	}
+
+	// 4. 无 forced_route → 走正常 LLM 分类
+	routerLLM := newLLMClassifyRouter(t, "code", nil, map[string]string{
+		"code":      "code-generator",
+		"translate": "translate-gen",
+	})
+	output, err = routerLLM.Execute(ctx, &NodeInput{Content: "用python写个hello world"})
+	if err != nil {
+		t.Fatalf("Execute failed: %v", err)
+	}
+	if output.Metadata["selected_route"] != "code-generator" {
+		t.Errorf("no forced_route: expected selected_route=code-generator, got %v", output.Metadata["selected_route"])
+	}
+	if _, hasRaw := output.Metadata["llm_raw_response"]; !hasRaw {
+		t.Errorf("no forced_route should invoke LLM, but llm_raw_response missing")
 	}
 }
 

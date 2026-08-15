@@ -102,8 +102,11 @@ func (t *ReadLogTool) Execute(ctx context.Context, params map[string]any) (*agen
 		return listLogCandidates(t.dataDir)
 	}
 
-	// 构建完整路径：支持绝对路径或相对 dataDir
-	fullPath := resolvePath(t.dataDir, path)
+	// 路径隔离校验（任务9 / R03）：拒绝逃逸 dataDir 的路径
+	fullPath, err := secureResolve(t.dataDir, path)
+	if err != nil {
+		return &agentcore.ToolResult{IsError: true, Content: fmt.Sprintf("打开日志文件失败: %v", err)}, nil
+	}
 
 	// 打开文件
 	file, err := os.Open(fullPath)

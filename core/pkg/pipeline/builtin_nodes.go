@@ -1077,7 +1077,13 @@ func (n *RouterNode) Validate() error {
 }
 
 func (n *RouterNode) Execute(ctx context.Context, input *NodeInput) (*NodeOutput, error) {
-	selectedRoute, matched, llmRaw := n.selectRoute(ctx, input.Content)
+	forcedRoute := ""
+	if input != nil && input.Metadata != nil {
+		if v, ok := input.Metadata["forced_route"].(string); ok {
+			forcedRoute = strings.TrimSpace(v)
+		}
+	}
+	selectedRoute, matched, llmRaw := n.selectRoute(ctx, input.Content, forcedRoute)
 	meta := map[string]interface{}{
 		"routing_strategy": n.strategy,
 		"selected_route":   selectedRoute,
@@ -1091,13 +1097,38 @@ func (n *RouterNode) Execute(ctx context.Context, input *NodeInput) (*NodeOutput
 	if llmRaw != "" {
 		meta["llm_raw_response"] = llmRaw
 	}
+	if forcedRoute != "" {
+		meta["forced_route"] = forcedRoute
+	}
 	return &NodeOutput{
 		Content:  input.Content,
 		Metadata: meta,
 	}, nil
 }
 
-func (n *RouterNode) selectRoute(ctx context.Context, content string) (targetID, matched, llmRaw string) {
+func (n *RouterNode) selectRoute(ctx context.Context, content, forcedRoute string) (targetID, matched, llmRaw string) {
+	// 强制路由优先（如显式指定 skill 时跳过 LLM 分类）。forced_route 可为
+	// 类别名（routes 的 key，如 skill 名）或目标节点 ID（routes 的 value）。
+	if forcedRoute != "" {
+		if target, ok := n.legacyRoutes[forcedRoute]; ok && target != "" {
+			return target, forcedRoute, ""
+		}
+		for k, target := range n.legacyRoutes {
+			if strings.EqualFold(k, forcedRoute) && target != "" {
+				return target, k, ""
+			}
+		}
+		for _, target := range n.legacyRoutes {
+			if target == forcedRoute {
+				return target, forcedRoute, ""
+			}
+		}
+		if n.defaultRoute != "" {
+			return n.defaultRoute, "__forced_route__", ""
+		}
+		return "", "__forced_route_no_match__", ""
+	}
+
 	// llm_classify：通过 LLM 语义分类
 	if n.strategy == "llm_classify" {
 		category, raw, err := n.classifyWithLLM(ctx, content)

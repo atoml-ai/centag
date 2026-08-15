@@ -12,6 +12,8 @@ type Skill struct {
 	Steps       []string `json:"steps"`
 	Enabled     bool     `json:"enabled"`
 	Internal    bool     `json:"internal"`
+	// Prompt 为 manifest 提供的完整系统提示词；为空时回退 BuildPrompt 默认文案。
+	Prompt string `json:"-"`
 }
 
 // NewSkill 创建Skill
@@ -28,8 +30,14 @@ func NewSkill(name, description, version, category string, tools, steps []string
 	}
 }
 
-// BuildPrompt 构建系统提示词
+// BuildPrompt 构建系统提示词。当 Prompt 字段非空（manifest 提供）时直接返回。
 func (s *Skill) BuildPrompt(userInput string) string {
+	if s.Prompt != "" {
+		if userInput != "" {
+			return s.Prompt + "\n用户请求: " + userInput + "\n"
+		}
+		return s.Prompt
+	}
 	prompt := `你是一个 centag 运维助手，正在执行 skill: ` + s.Name + `
 
 ` + s.Description + `

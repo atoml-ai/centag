@@ -75,8 +75,11 @@ func (t *ReadConfigTool) Execute(ctx context.Context, params map[string]any) (*a
 		return listConfigCandidates(t.dataDir)
 	}
 
-	// 构建完整路径
-	fullPath := filepath.Join(t.dataDir, path)
+	// 路径隔离校验（任务9 / R03）：拒绝逃逸 dataDir 的路径
+	fullPath, err := secureResolve(t.dataDir, path)
+	if err != nil {
+		return &agentcore.ToolResult{IsError: true, Content: fmt.Sprintf("读取配置文件失败: %v", err)}, nil
+	}
 	
 	// 读取文件
 	data, err := os.ReadFile(fullPath)
