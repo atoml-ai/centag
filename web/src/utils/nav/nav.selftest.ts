@@ -79,7 +79,8 @@ function run() {
       name: 'team_user worker',
       edition: 'team',
       isAdmin: false,
-      mustHave: ['dashboard', 'usage', 'access', 'memory', 'more', 'metering-billing', 'logs'],
+      // 与 personal 对齐：顶栏仅概览/统计管理/接入管理；更多/记忆等随 personal 暂隐
+      mustHave: ['dashboard', 'usage', 'access', 'metering-billing'],
       mustNot: [
         'chat',
         'backends',
@@ -90,7 +91,10 @@ function run() {
         'local-proxy',
         'host-proxy',
         'clash-rules',
-        'fallback-policies'
+        'fallback-policies',
+        'more',
+        'memory',
+        'logs'
       ]
     },
     {
@@ -159,11 +163,9 @@ function run() {
   assert(!personalMoreIds.has('config-basic'), 'personal more stash must not include system config')
   assert(!personalMoreIds.has('fallback-policies'), 'personal more stash must not include fallback nav')
 
-  assert(
-    !getNavMenu('team', false).some((n) => n.id === 'memory'),
-    'team_user: memory not top-level (lives under more)'
-  )
-  assert(idsOf('team', false).has('memory'), 'team_user: memory available under more')
+  // team_user 与 personal 对齐：记忆入口整体暂隐（随「更多」整体隐藏）
+  assert(!idsOf('team', false).has('memory'), 'team_user: memory hidden (aligned with personal)')
+  assert(!idsOf('team', false).has('more'), 'team_user: more menu hidden (aligned with personal)')
 
   console.log('nav.selftest: OK')
 }

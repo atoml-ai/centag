@@ -10,6 +10,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+
+      - name: Checkout edgeag (go.work sibling module)
+        uses: actions/checkout@v6
+        with:
+          repository: atoml-ai/edgeag
+          path: ../edgeag
+          ref: main
+
       - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod

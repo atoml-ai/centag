@@ -36,8 +36,8 @@ function run() {
     'user: storage → dashboard'
   )
   assert(
-    resolveCapabilityRouteRedirect('/memory', userCaps, 'team') === null,
-    'user: memory allowed'
+    resolveCapabilityRouteRedirect('/memory', userCaps, 'team') === '/dashboard',
+    'user: memory blocked (aligned with personal)'
   )
 
   const personalCaps = getCapabilities('personal', true)

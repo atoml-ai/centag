@@ -63,7 +63,7 @@ function run() {
       expect: {
         layout: 'lite',
         headerActions: true,
-        liteChatDrawer: true,
+        liteChatDrawer: false,
         usageEphemeralHint: true,
         accessQuickLinks: false
       }
