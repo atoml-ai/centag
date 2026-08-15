@@ -10,6 +10,10 @@
       />
     </div>
     <div class="agent-main">
+      <div class="agent-toolbar">
+        <span class="agent-toolbar-title">内置 Agent</span>
+        <el-button size="small" @click="openSkillManager">管理 Skills</el-button>
+      </div>
       <ChatArea
         :session="currentSession"
         :messages="messages"
@@ -19,17 +23,26 @@
         @send-message="sendMessage"
         @cancel-execution="cancelExecution"
       />
+      <SkillManager v-model="skillManagerVisible" :skills="skills" />
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useAgentStore } from '@/stores/agent'
 import SessionList from './components/SessionList.vue'
 import ChatArea from './components/ChatArea.vue'
+import SkillManager from './components/SkillManager.vue'
 
 const agentStore = useAgentStore()
+
+const skillManagerVisible = ref(false)
+
+const openSkillManager = async () => {
+  await agentStore.loadSkills()
+  skillManagerVisible.value = true
+}
 
 const sessions = computed(() => agentStore.sessions)
 const skills = computed(() => agentStore.skills)
@@ -91,5 +104,19 @@ onMounted(async () => {
   flex-direction: column;
   min-width: 0;
   background: var(--el-fill-color-light);
+}
+
+.agent-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--el-border-color-light);
+  background: var(--el-fill-color-blank);
+}
+
+.agent-toolbar-title {
+  font-size: 14px;
+  font-weight: 500;
 }
 </style>
