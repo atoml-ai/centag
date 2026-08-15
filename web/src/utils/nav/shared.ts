@@ -186,7 +186,7 @@ export function usageNavGroup(caps?: { role?: string }): NavItem {
   return navGroup('usage', 'nav.usage', 'TrendCharts', children, children[0]?.path)
 }
 
-/** 接入：系统代理 + Agent 配置 + 内置 Agent 助手 */
+/** 接入：系统代理 + Agent 配置 + 内置 Agent 助手（Skill 管理已改为 Agent 页内对话框） */
 export function accessNavGroup(): NavItem {
   return navGroup(
     'access',

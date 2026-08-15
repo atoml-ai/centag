@@ -42,6 +42,7 @@
   "myBilling": "マイ請求",
   "planTemplates": "利用枠テンプレート",
   "agent": "",
+  "skillManager": "",
   "meteringBilling": "使用量計測",
   "billingStatements": "請求書",
   "modelConfig": "モデル変数"

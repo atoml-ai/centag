@@ -34,5 +34,6 @@
   "storage": "存储管理",
   "storageKv": "KV 数据浏览",
   "dataStores": "数据存储管理",
+  "skillManager": "Skill 管理",
   "modelConfig": "模型变量配置"
 }

@@ -42,6 +42,7 @@
   "myBilling": "Mi facturación",
   "planTemplates": "Plantillas de cuota",
   "agent": "",
+  "skillManager": "",
   "meteringBilling": "Medición y facturación",
   "billingStatements": "Estados de cuenta",
   "modelConfig": "Variables de modelo"

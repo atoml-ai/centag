@@ -30,5 +30,6 @@
   "storage": "ストレージ",
   "storageKv": "KV ブラウザ",
   "dataStores": "データストア",
+  "skillManager": "",
   "modelConfig": "モデル変数設定"
 }

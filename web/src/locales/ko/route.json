@@ -30,5 +30,6 @@
   "storage": "스토리지",
   "storageKv": "KV 브라우저",
   "dataStores": "데이터 스토어",
+  "skillManager": "",
   "modelConfig": "모델 변수 설정"
 }

@@ -34,5 +34,6 @@
   "storage": "Storage",
   "storageKv": "KV Browser",
   "dataStores": "Data Stores",
+  "skillManager": "Skill Manager",
   "modelConfig": "Model Variables"
 }

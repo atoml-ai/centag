@@ -30,5 +30,6 @@
   "storage": "Almacenamiento",
   "storageKv": "Navegador KV",
   "dataStores": "Almacenes de datos",
+  "skillManager": "",
   "modelConfig": "Variables de modelo"
 }

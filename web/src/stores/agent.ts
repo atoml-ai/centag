@@ -82,6 +82,30 @@ export const useAgentStore = defineStore('agent', () => {
     currentSkill.value = skill
   }
 
+  // 任务 7/11：自定义 skill CRUD，成功后刷新列表
+  const createSkill = async (form: { name: string; description?: string; category?: string; tools?: string[]; steps?: string[]; system_prompt?: string }) => {
+    const result = await agentApi.createSkill(form)
+    await loadSkills()
+    return result
+  }
+
+  const updateSkill = async (name: string, form: { name: string; description?: string; category?: string; tools?: string[]; steps?: string[]; system_prompt?: string }) => {
+    const result = await agentApi.updateSkill(name, form)
+    await loadSkills()
+    return result
+  }
+
+  const deleteSkill = async (name: string) => {
+    await agentApi.deleteSkill(name)
+    await loadSkills()
+  }
+
+  const cloneSkill = async (name: string, targetName?: string) => {
+    const result = await agentApi.cloneSkill(name, targetName)
+    await loadSkills()
+    return result
+  }
+
   const isResponding = ref(false)
 
   const sendMessage = async (
@@ -148,6 +172,10 @@ export const useAgentStore = defineStore('agent', () => {
     createSession,
     deleteSession,
     setCurrentSkill,
+    createSkill,
+    updateSkill,
+    deleteSkill,
+    cloneSkill,
     sendMessage,
     cancelExecution
   }

@@ -30,5 +30,6 @@
   "storage": "Хранилище",
   "storageKv": "KV-браузер",
   "dataStores": "Хранилища данных",
+  "skillManager": "",
   "modelConfig": "Настройка переменных модели"
 }

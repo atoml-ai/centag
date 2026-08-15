@@ -42,6 +42,7 @@
   "myBilling": "내 결제",
   "planTemplates": "한도 템플릿",
   "agent": "",
+  "skillManager": "",
   "meteringBilling": "사용량 측정",
   "billingStatements": "청구서",
   "modelConfig": "모델 변수"

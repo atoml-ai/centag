@@ -32,6 +32,19 @@ export interface Skill {
   steps: string[]
   enabled: boolean
   internal: boolean
+  pipeline_id?: string
+  custom?: boolean
+  system_prompt?: string
+}
+
+// 自定义 skill 表单（任务 7/11）
+export interface SkillForm {
+  name: string
+  description?: string
+  category?: string
+  tools?: string[]
+  steps?: string[]
+  system_prompt?: string
 }
 
 export const agentApi = {
@@ -84,6 +97,29 @@ export const agentApi = {
   async listSkills() {
     const data = (await api.get('/api/v1/builtin-agent/skills')) as { skills: Skill[] }
     return data.skills as Skill[]
+  },
+
+  // 创建自定义 skill（任务 7/11）
+  async createSkill(form: SkillForm) {
+    return (await api.post('/api/v1/builtin-agent/skills', form)) as { skill: string; pipeline_id: string }
+  },
+
+  // 更新自定义 skill
+  async updateSkill(name: string, form: SkillForm) {
+    return (await api.put(`/api/v1/builtin-agent/skills/${name}`, form)) as { skill: string; pipeline_id: string }
+  },
+
+  // 删除自定义 skill
+  async deleteSkill(name: string) {
+    return await api.delete(`/api/v1/builtin-agent/skills/${name}`)
+  },
+
+  // 复制 skill 为副本
+  async cloneSkill(name: string, targetName?: string) {
+    return (await api.post(`/api/v1/builtin-agent/skills/${name}/clone`, { name: targetName })) as {
+      skill: string
+      pipeline_id: string
+    }
   },
 
   // 确认工具执行

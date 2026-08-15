@@ -66,6 +66,7 @@ import defaultSettings from './defaultSettings.json'
 import config from './config.json'
 import modelConfig from './modelConfig.json'
 import settings from './settings.json'
+import skillManager from './skillManager.json'
 
 const es = {
   ...common,
@@ -135,7 +136,8 @@ const es = {
   defaultSettings,
   config,
   modelConfig,
-  settings
+  settings,
+  skillManager
 }
 
 export default es

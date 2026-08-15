@@ -42,6 +42,7 @@
   "myBilling": "Мои платежи",
   "planTemplates": "Шаблоны квот",
   "agent": "",
+  "skillManager": "",
   "meteringBilling": "Биллинг",
   "billingStatements": "Выписки",
   "modelConfig": "Переменные модели"
