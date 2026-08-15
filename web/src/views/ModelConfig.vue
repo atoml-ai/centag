@@ -72,7 +72,7 @@
           </template>
         </el-table-column>
         <el-table-column :label="t('modelConfig.source')" width="120">
-          <template #default="{ row }">
+          <template #default>
             <el-tag size="small" type="info">
               {{ t('modelConfig.sourceSystem') }}
             </el-tag>

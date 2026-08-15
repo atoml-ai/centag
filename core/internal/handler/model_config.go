@@ -29,15 +29,15 @@ func NewModelConfigHandler(cfg *config.Config) *ModelConfigHandler {
 func (h *ModelConfigHandler) GetModelVariables(c *gin.Context) {
 	uid, _ := auth.GetUserID(c)
 	isAdmin := auth.IsAdmin(c)
-	edition := config.Get().Server.Edition
+	cfg := config.Get()
+	if cfg == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "config not initialized"})
+		return
+	}
+	edition := cfg.Server.Edition
 
 	// Team admin reads system-wide defaults from config.
 	if edition == "team" && isAdmin {
-		cfg := config.Get()
-		if cfg == nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "config not initialized"})
-			return
-		}
 		systemVars := config.ListSystemVariables(cfg)
 		userVars := config.ListUserVariables(cfg)
 		c.JSON(http.StatusOK, gin.H{
@@ -52,7 +52,7 @@ func (h *ModelConfigHandler) GetModelVariables(c *gin.Context) {
 
 	// Team user: merge system vars (read-only from config) with per-user overrides.
 	if edition == "team" && uid > 0 {
-		systemVars := config.ListSystemVariables(config.Get())
+		systemVars := config.ListSystemVariables(cfg)
 		userVars := h.getUserModelVars(uid)
 
 		// User overrides take precedence over system for display.
@@ -69,11 +69,6 @@ func (h *ModelConfigHandler) GetModelVariables(c *gin.Context) {
 	}
 
 	// Personal / minimal: read system-wide config.
-	cfg := config.Get()
-	if cfg == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "config not initialized"})
-		return
-	}
 	systemVars := config.ListSystemVariables(cfg)
 	userVars := config.ListUserVariables(cfg)
 
@@ -91,7 +86,12 @@ func (h *ModelConfigHandler) GetModelVariables(c *gin.Context) {
 func (h *ModelConfigHandler) UpdateModelVariables(c *gin.Context) {
 	uid, _ := auth.GetUserID(c)
 	isAdmin := auth.IsAdmin(c)
-	edition := config.Get().Server.Edition
+	cfg := config.Get()
+	if cfg == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "config not initialized"})
+		return
+	}
+	edition := cfg.Server.Edition
 
 	var req struct {
 		Variables map[string]string `json:"variables"`
@@ -129,7 +129,12 @@ func (h *ModelConfigHandler) UpdateModelVariables(c *gin.Context) {
 func (h *ModelConfigHandler) DeleteUserVariable(c *gin.Context) {
 	uid, _ := auth.GetUserID(c)
 	isAdmin := auth.IsAdmin(c)
-	edition := config.Get().Server.Edition
+	cfg := config.Get()
+	if cfg == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "config not initialized"})
+		return
+	}
+	edition := cfg.Server.Edition
 
 	name := c.Param("name")
 	if name == "" {
