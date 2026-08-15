@@ -11,10 +11,10 @@
   "yamlExport": "backends YAML",
   "initdataPack": "initdata パッケージ (ZIP)",
   "allProbe": "すべてプローブ",
+  "modelVariables": "モデル変数",
   "addProvider": "+ プロバイダー追加",
   "default": "デフォルト",
   "defaultEndpoint": "デフォルトエンドポイント",
-  "defaultModel": "デフォルトモデル：",
   "weight": "重み",
   "modelsCount": "{count} モデル",
   "currentDefault": "現在のデフォルト",
@@ -30,8 +30,6 @@
   "unhealthy": "異常",
   "probeFailed": "プローブ失敗：",
   "allProbeCompleted": "すべてのプローブが完了しました",
-  "cannotDeleteDefault": "現在のデフォルトバックエンドは削除できません。先に別のバックエンドをデフォルトに設定してください",
-  "batchDeleteConfirmSkipped": "選択された {count} 個のバックエンドを削除します（現在のデフォルトはスキップ）。この操作は元に戻せません。",
   "batchDeleteConfirm": "選択された {count} 個のバックエンドを削除してもよろしいですか？この操作は元に戻せません。",
   "batchDeleteTitle": "一括削除",
   "confirmDelete": "削除",
@@ -70,5 +68,8 @@
   "statusUnknown": "未プローブ",
   "keysCount": "{enabled}/{total} Keys",
   "scopeSystem": "システム",
-  "scopeMine": "自分"
+  "scopeMine": "自分",
+  "defaultModelVar": "デフォルトモデル：",
+  "defaultModelSaved": "",
+  "defaultModelSaveFailed": ""
 }

@@ -11,10 +11,10 @@
   "yamlExport": "backends YAML",
   "initdataPack": "initdata Package (ZIP)",
   "allProbe": "Probe All",
+  "modelVariables": "Model Variables",
   "addProvider": "+ Add Provider",
   "default": "Default",
   "defaultEndpoint": "Default Endpoint",
-  "defaultModel": "Default Model: ",
   "weight": "Weight",
   "modelsCount": "{count} Models",
   "currentDefault": "Current Default",
@@ -30,8 +30,6 @@
   "unhealthy": "Unhealthy",
   "probeFailed": "Probe failed: ",
   "allProbeCompleted": "All probes completed",
-  "cannotDeleteDefault": "Cannot delete the current default backend. Please set another backend as default first",
-  "batchDeleteConfirmSkipped": "Will delete {count} selected backends (skipped current default). This action cannot be undone.",
   "batchDeleteConfirm": "Are you sure you want to delete {count} selected backends? This action cannot be undone.",
   "batchDeleteTitle": "Batch Delete",
   "confirmDelete": "Delete",
@@ -70,5 +68,8 @@
   "statusUnknown": "Not probed",
   "keysCount": "{enabled}/{total} Keys",
   "scopeSystem": "System",
-  "scopeMine": "Mine"
+  "scopeMine": "Mine",
+  "defaultModelVar": "Default model:",
+  "defaultModelSaved": "默认模型已更新为「{model}」",
+  "defaultModelSaveFailed": "默认模型保存失败"
 }

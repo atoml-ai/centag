@@ -33,5 +33,6 @@
   "config": "系统配置",
   "storage": "存储管理",
   "storageKv": "KV 数据浏览",
-  "dataStores": "数据存储管理"
+  "dataStores": "数据存储管理",
+  "modelConfig": "模型变量配置"
 }

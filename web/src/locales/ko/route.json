@@ -29,5 +29,6 @@
   "config": "시스템 설정",
   "storage": "스토리지",
   "storageKv": "KV 브라우저",
-  "dataStores": "데이터 스토어"
+  "dataStores": "데이터 스토어",
+  "modelConfig": "모델 변수 설정"
 }

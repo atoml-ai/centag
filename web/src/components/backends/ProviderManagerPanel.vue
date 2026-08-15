@@ -44,6 +44,7 @@
         >
            {{ t('providerManager.allProbe') }}
         </el-button>
+        <el-button size="small" @click="router.push('/model-config')">{{ t('providerManager.modelVariables') }}</el-button>
         <el-button type="primary" size="small" @click="openCreate">{{ t('providerManager.addProvider') }}</el-button>
       </div>
     </div>
@@ -114,9 +115,6 @@
         </div>
 
         <div class="backend-card-body">
-          <div v-if="b.probe_model || b.default_model" class="backend-default-model">
-            {{ t('providerManager.defaultModel') }}<span class="model-name">{{ b.default_model || b.probe_model }}</span>
-          </div>
           <div class="backend-stats">
             <span>{{ t('providerManager.weight') }} {{ b.weight ?? 1 }}</span>
             <span v-if="b.supported_models?.length">{{ t('providerManager.modelsCount', { count: b.supported_models.length }) }}</span>
@@ -127,6 +125,28 @@
             >
               {{ t('providerManager.keysCount', { enabled: b.account_pool_summary.enabled_accounts, total: b.account_pool_summary.total_accounts }) }}
             </span>
+          </div>
+          <div v-if="defaultBackendId === b.id && canWrite" class="default-model-row">
+            <div class="default-model-label">
+              {{ t('providerManager.defaultModelVar') }}
+            </div>
+            <el-select
+              :model-value="defaultModel"
+              size="small"
+              filterable
+              allow-create
+              default-first-option
+              placeholder="默认模型"
+              style="width: 100%"
+              @change="(m) => handleDefaultModelChange(m)"
+            >
+              <el-option
+                v-for="m in b.supported_models"
+                :key="m.actual_model || m.requested_model || m"
+                :label="m.actual_model || m.requested_model || m"
+                :value="m.actual_model || m.requested_model || m"
+              />
+            </el-select>
           </div>
         </div>
 
@@ -158,7 +178,6 @@
                 <el-dropdown-item
                   command="delete"
                   divided
-                  :disabled="defaultBackendId === b.id"
                 >
                   {{ t('providerManager.delete') }}
                 </el-dropdown-item>
@@ -190,6 +209,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ArrowDown } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -214,6 +234,7 @@ const emit = defineEmits<{
   'backend-updated': [backend: any]
 }>()
 
+const router = useRouter()
 const { t } = useI18n()
 // personal / minimal / 超管不受限；team 普通用户受 can_add_own_backends 控制
 const { canAddOwnBackends } = useUserResourceAccess()
@@ -233,6 +254,7 @@ const probingMap = reactive<Record<string, boolean>>({})
 const healthStatuses = reactive<Record<string, boolean | undefined>>({})
 const healthErrors = reactive<Record<string, string>>({})
 const defaultBackendId = ref('')
+const defaultModel = ref('')
 const selectedIds = ref<string[]>([])
 
 const allSelected = computed(
@@ -260,8 +282,25 @@ async function loadDefaultBackend() {
     const res: any = await api.get('/api/v1/config/proxy')
     const data = res?.data ?? res
     defaultBackendId.value = data?.default_backend_id || ''
+    defaultModel.value = data?.default_model || ''
   } catch {
     /* ignore */
+  }
+}
+
+// 修改默认模型：写入 config/proxy.default_model，供 {{system.default_model}} 模板变量使用
+async function handleDefaultModelChange(model: string) {
+  const prev = defaultModel.value
+  defaultModel.value = model
+  try {
+    await api.put('/api/v1/config/proxy', {
+      default_backend_id: defaultBackendId.value,
+      default_model: model
+    })
+    ElMessage.success(t('providerManager.defaultModelSaved', { model: model || '（空）' }))
+  } catch (error: any) {
+    defaultModel.value = prev
+    ElMessage.error(error?.response?.data?.message || t('providerManager.defaultModelSaveFailed'))
   }
 }
 
@@ -359,17 +398,10 @@ async function handleProbeAll() {
 
 async function handleBatchDelete() {
   if (!selectedIds.value.length) return
-  const ids = selectedIds.value.filter((id) => id !== defaultBackendId.value)
-  if (!ids.length) {
-    ElMessage.warning(t('providerManager.cannotDeleteDefault'))
-    return
-  }
-  const skippedDefault = ids.length < selectedIds.value.length
+  const ids = selectedIds.value
   try {
     await ElMessageBox.confirm(
-      skippedDefault
-        ? t('providerManager.batchDeleteConfirmSkipped', { count: ids.length })
-        : t('providerManager.batchDeleteConfirm', { count: ids.length }),
+      t('providerManager.batchDeleteConfirm', { count: ids.length }),
       t('providerManager.batchDeleteTitle'),
       { confirmButtonText: t('providerManager.confirmDelete'), cancelButtonText: t('providerManager.cancel'), type: 'warning' }
     )
@@ -400,9 +432,10 @@ async function handleSetDefault(backend: any) {
       backend.probe_model ||
       (sm[0] && (sm[0].actual_model || sm[0].requested_model)) ||
       ''
+    // 设为默认时同步写入默认模型，保证 {{system.default_model}} 模板变量可用
     await api.put('/api/v1/config/proxy', {
       default_backend_id: backend.id,
-      default_model: ''
+      default_model: defaultModel
     })
     defaultBackendId.value = backend.id
     ElMessage.success(
@@ -475,10 +508,6 @@ function handleEdit(backend: any) {
 }
 
 async function handleDelete(backend: any) {
-  if (defaultBackendId.value === backend.id) {
-    ElMessage.warning(t('providerManager.cannotDeleteDefault'))
-    return
-  }
   try {
     await ElMessageBox.confirm(
       t('providerManager.confirmDeleteText', { name: backend.name || backend.id }),
@@ -812,16 +841,6 @@ defineExpose({ openCreate, reloadDefault })
   min-height: 0;
 }
 
-.backend-default-model {
-  font-size: 0.75rem;
-  color: #6b7280;
-}
-
-.backend-default-model .model-name {
-  color: #409eff;
-  font-weight: 500;
-}
-
 .backend-stats {
   display: flex;
   flex-wrap: wrap;
@@ -829,6 +848,18 @@ defineExpose({ openCreate, reloadDefault })
   margin-top: 8px;
   font-size: 0.75rem;
   color: #9ca3af;
+}
+
+.default-model-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.default-model-label {
+  font-size: 0.75rem;
+  color: #6b7280;
 }
 
 .account-pool-badge {

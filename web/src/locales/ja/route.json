@@ -29,5 +29,6 @@
   "config": "システム設定",
   "storage": "ストレージ",
   "storageKv": "KV ブラウザ",
-  "dataStores": "データストア"
+  "dataStores": "データストア",
+  "modelConfig": "モデル変数設定"
 }

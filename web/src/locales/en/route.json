@@ -33,5 +33,6 @@
   "config": "System Config",
   "storage": "Storage",
   "storageKv": "KV Browser",
-  "dataStores": "Data Stores"
+  "dataStores": "Data Stores",
+  "modelConfig": "Model Variables"
 }

@@ -29,5 +29,6 @@
   "config": "Configuración del sistema",
   "storage": "Almacenamiento",
   "storageKv": "Navegador KV",
-  "dataStores": "Almacenes de datos"
+  "dataStores": "Almacenes de datos",
+  "modelConfig": "Variables de modelo"
 }

@@ -11,10 +11,10 @@
   "yamlExport": "backends YAML",
   "initdataPack": "initdata пакет (ZIP)",
   "allProbe": "Проверить все",
+  "modelVariables": "Переменные модели",
   "addProvider": "+ Добавить провайдера",
   "default": "По умолчанию",
   "defaultEndpoint": "Эндпоинт по умолчанию",
-  "defaultModel": "Модель по умолчанию: ",
   "weight": "Вес",
   "modelsCount": "{count} моделей",
   "currentDefault": "Текущий по умолчанию",
@@ -30,8 +30,6 @@
   "unhealthy": "Нездоров",
   "probeFailed": "Проба не удалась: ",
   "allProbeCompleted": "Все пробы завершены",
-  "cannotDeleteDefault": "Нельзя удалить текущий бэкенд по умолчанию. Сначала установите другой бэкенд по умолчанию",
-  "batchDeleteConfirmSkipped": "Будут удалены {count} выбранных бэкендов (текущий по умолчанию пропущен). Это действие необратимо.",
   "batchDeleteConfirm": "Вы уверены, что хотите удалить {count} выбранных бэкендов? Это действие необратимо.",
   "batchDeleteTitle": "Пакетное удаление",
   "confirmDelete": "Удалить",
@@ -70,5 +68,8 @@
   "statusUnknown": "Не проверен",
   "keysCount": "{enabled}/{total} Keys",
   "scopeSystem": "Система",
-  "scopeMine": "Моё"
+  "scopeMine": "Моё",
+  "defaultModelVar": "Модель по умолчанию:",
+  "defaultModelSaved": "",
+  "defaultModelSaveFailed": ""
 }

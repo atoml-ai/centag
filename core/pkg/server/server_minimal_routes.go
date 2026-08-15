@@ -147,6 +147,16 @@ func (s *Server) setupMinimalRoutes(configHandler *MinimalConfigHandler, pluginR
 			backends.PUT("/:id", s.backendHandler.UpdateBackend)
 			backends.DELETE("/:id", s.backendHandler.DeleteBackend)
 			backends.POST("/:id/probe", s.backendHandler.ProbeBackend)
+
+			// 账户池 CRUD（与完整版 setupRoutes 对齐）
+			backends.GET("/:id/accounts", s.backendHandler.ListBackendAccounts)
+			backends.PUT("/:id/account-pool", s.backendHandler.UpdateAccountPool)
+			backends.GET("/:id/accounts/stats", s.backendHandler.GetAccountPoolStats)
+			backends.GET("/:id/accounts/:accountId", s.backendHandler.GetBackendAccount)
+			backends.POST("/:id/accounts", s.backendHandler.CreateBackendAccount)
+			backends.PUT("/:id/accounts/:accountId", s.backendHandler.UpdateBackendAccount)
+			backends.DELETE("/:id/accounts/:accountId", s.backendHandler.DeleteBackendAccount)
+			backends.POST("/:id/accounts/:accountId/reset-breaker", s.backendHandler.ResetAccountBreaker)
 		}
 
 		if s.pipelineHandler != nil {
@@ -165,6 +175,16 @@ func (s *Server) setupMinimalRoutes(configHandler *MinimalConfigHandler, pluginR
 		protected.GET("/config/proxy", s.handleGetProxyConfig)
 		protected.PUT("/config/proxy", s.handleSaveProxyConfig)
 
+		// 模型变量配置
+		if s.modelConfigHandler != nil {
+			configGroup := protected.Group("/config")
+			{
+				configGroup.GET("/model-variables", s.modelConfigHandler.GetModelVariables)
+				configGroup.PUT("/model-variables", s.modelConfigHandler.UpdateModelVariables)
+				configGroup.DELETE("/model-variables/:name", s.modelConfigHandler.DeleteUserVariable)
+			}
+		}
+
 		userAPI := protected.Group("/user")
 		if s.tokenUsageHandler != nil {
 			// Process-wide totals so proxy traffic (often user_id=0) still appears in WebUI.
@@ -172,6 +192,10 @@ func (s *Server) setupMinimalRoutes(configHandler *MinimalConfigHandler, pluginR
 			userAPI.GET("/token-usage/daily", s.tokenUsageHandler.GetDailyUsage)
 			userAPI.GET("/token-usage/models", s.tokenUsageHandler.GetModelStats)
 			userAPI.GET("/token-usage/backends", s.tokenUsageHandler.GetBackendStats)
+			// 计量计价明细（前端 useUsageTotals / UsageMetricsSummary 等共用）
+			userAPI.GET("/usage", s.tokenUsageHandler.GetUsageBreakdown)
+			userAPI.GET("/usage/sessions", s.tokenUsageHandler.GetSessionsUsage)
+			userAPI.GET("/usage/self-limit", s.tokenUsageHandler.GetSelfLimit)
 		} else {
 			userAPI.GET("/token-usage", s.handleMinimalTokenUsage)
 			userAPI.GET("/token-usage/daily", s.handleMinimalTokenUsageDaily)

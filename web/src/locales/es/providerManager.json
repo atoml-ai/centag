@@ -11,10 +11,10 @@
   "yamlExport": "backends YAML",
   "initdataPack": "Paquete initdata (ZIP)",
   "allProbe": "Sondear todo",
+  "modelVariables": "Variables de modelo",
   "addProvider": "+ Agregar proveedor",
   "default": "Predeterminado",
   "defaultEndpoint": "Endpoint predeterminado",
-  "defaultModel": "Modelo predeterminado: ",
   "weight": "Peso",
   "modelsCount": "{count} modelos",
   "currentDefault": "Actual predeterminado",
@@ -30,8 +30,6 @@
   "unhealthy": "No saludable",
   "probeFailed": "Sonda fallida: ",
   "allProbeCompleted": "Todas las sondas completadas",
-  "cannotDeleteDefault": "No se puede eliminar el backend predeterminado actual. Primero establezca otro backend como predeterminado",
-  "batchDeleteConfirmSkipped": "Se eliminarán {count} backends seleccionados (se omitió el predeterminado actual). Esta acción no se puede deshacer.",
   "batchDeleteConfirm": "¿Está seguro de eliminar {count} backends seleccionados? Esta acción no se puede deshacer.",
   "batchDeleteTitle": "Eliminación por lotes",
   "confirmDelete": "Eliminar",
@@ -70,5 +68,8 @@
   "statusUnknown": "No sondado",
   "keysCount": "{enabled}/{total} Keys",
   "scopeSystem": "Sistema",
-  "scopeMine": "Mío"
+  "scopeMine": "Mío",
+  "defaultModelVar": "Modelo predeterminado:",
+  "defaultModelSaved": "",
+  "defaultModelSaveFailed": ""
 }

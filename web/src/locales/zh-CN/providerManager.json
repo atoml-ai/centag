@@ -11,10 +11,10 @@
   "yamlExport": "backends YAML",
   "initdataPack": "initdata 打包 (ZIP)",
   "allProbe": "全部探测",
+  "modelVariables": "模型变量",
   "addProvider": "+ 添加 Provider",
   "default": "默认",
   "defaultEndpoint": "默认端点",
-  "defaultModel": "默认模型：",
   "weight": "权重",
   "modelsCount": "{count} 模型",
   "currentDefault": "当前默认",
@@ -30,8 +30,6 @@
   "unhealthy": "不健康",
   "probeFailed": "探测失败：",
   "allProbeCompleted": "全部探测完成",
-  "cannotDeleteDefault": "不能删除当前默认后端，请先设置其他后端为默认",
-  "batchDeleteConfirmSkipped": "将删除选中的 {count} 个后端（已跳过当前默认），此操作不可恢复。",
   "batchDeleteConfirm": "确定删除选中的 {count} 个后端吗？此操作不可恢复。",
   "batchDeleteTitle": "批量删除",
   "confirmDelete": "删除",
@@ -70,5 +68,8 @@
   "statusUnknown": "未检测",
   "keysCount": "{enabled}/{total} Keys",
   "scopeSystem": "系统",
-  "scopeMine": "我的"
+  "scopeMine": "我的",
+  "defaultModelVar": "默认模型：",
+  "defaultModelSaved": "默认模型已更新为「{model}」",
+  "defaultModelSaveFailed": "默认模型保存失败"
 }

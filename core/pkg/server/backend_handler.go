@@ -296,6 +296,9 @@ func (h *BackendHandler) DeleteBackend(c *gin.Context) {
 		}
 	}
 
+	// 删除前记录该后端是否当前系统默认
+	wasDefault := isCurrentDefaultBackend(id)
+
 	err := h.backendManager.Delete(id)
 	if err != nil {
 		if strings.Contains(err.Error(), "cannot delete system backend") {
@@ -309,6 +312,11 @@ func (h *BackendHandler) DeleteBackend(c *gin.Context) {
 	if err := h.backendManager.Save(); err != nil {
 		RespondInternalError(c, "Failed to save config: "+err.Error())
 		return
+	}
+
+	// 若删除的是默认后端，自动切换到下一个后端/模型；无剩余后端则置空。
+	if wasDefault {
+		resyncDefaultAfterBackendDelete()
 	}
 
 	RespondSuccessWithMessage(c, "Backend deleted successfully")
