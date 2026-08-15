@@ -8,13 +8,18 @@ import { fileURLToPath } from 'url'
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
 /**
- * E3: Team pack — prefer web/.centag-team-pack symlink (deps resolve under web/),
- * else CENTAG_TEAM_PACK, else empty stub for personal/minimal.
+ * E3: Team pack — only Team builds (build-web-team.sh sets CENTAG_EDITION=team)
+ * may embed the commercial pack. A stale web/.centag-team-pack left by a previous
+ * team build must NOT leak into personal/minimal builds, otherwise the team-only
+ * pages (计量计费/套餐与对账) silently appear in those editions.
  */
 function resolveTeamPackDir(): string {
-  const linked = resolve(__dirname, '.centag-team-pack')
-  if (existsSync(linked)) return linked
-  if (process.env.CENTAG_TEAM_PACK) return resolve(process.env.CENTAG_TEAM_PACK)
+  const isTeamBuild = process.env.CENTAG_EDITION === 'team' || !!process.env.CENTAG_TEAM_PACK
+  if (isTeamBuild) {
+    const linked = resolve(__dirname, '.centag-team-pack')
+    if (existsSync(linked)) return linked
+    if (process.env.CENTAG_TEAM_PACK) return resolve(process.env.CENTAG_TEAM_PACK)
+  }
   return resolve(__dirname, 'src/packs/team-stub')
 }
 

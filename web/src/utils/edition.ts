@@ -51,7 +51,11 @@ export function syncEditionFromStatus(status: { edition?: string } | null | unde
 /** Team product UI (E3 pack). `/cost` excluded per D1 — personal may use cost API/UI. */
 export const TEAM_ONLY_ROUTE_PREFIXES = [
   '/ab-comparison',
-  '/system/users'
+  '/system/users',
+  // 计量计费（含「套餐与对账」tab）与个人对账页仅 team 发行版开放
+  '/metering-billing',
+  '/my-billing',
+  '/billing/statements'
 ] as const
 
 /**

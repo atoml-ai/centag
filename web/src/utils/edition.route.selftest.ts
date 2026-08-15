@@ -131,6 +131,40 @@ function run() {
     'edition: personal /system/users blocked'
   )
 
+  // 计量计费（套餐与对账）仅 team 发行版：personal/minimal 一律踢回概览
+  assert(
+    resolveEditionRouteRedirect('/metering-billing', 'personal', false) === '/dashboard',
+    'edition: personal metering-billing blocked'
+  )
+  assert(
+    resolveEditionRouteRedirect('/metering-billing', 'personal', true) === '/dashboard',
+    'edition: personal admin metering-billing blocked'
+  )
+  assert(
+    resolveEditionRouteRedirect('/metering-billing', 'minimal', false) === '/dashboard',
+    'edition: minimal metering-billing blocked'
+  )
+  assert(
+    resolveEditionRouteRedirect('/my-billing', 'personal', false) === '/dashboard',
+    'edition: personal my-billing blocked'
+  )
+  assert(
+    resolveEditionRouteRedirect('/my-billing/statement', 'personal', false) === '/dashboard',
+    'edition: personal my-billing/statement blocked'
+  )
+  assert(
+    resolveEditionRouteRedirect('/billing/statements', 'personal', true) === '/dashboard',
+    'edition: personal admin statements blocked'
+  )
+  assert(
+    resolveEditionRouteRedirect('/metering-billing', 'team', false) === null,
+    'edition: team user metering-billing allowed'
+  )
+  assert(
+    resolveEditionRouteRedirect('/billing/statements', 'team', true) === null,
+    'edition: team admin statements allowed'
+  )
+
   console.log('edition.route.selftest: OK')
 }
 
