@@ -371,6 +371,7 @@ func seedAdminUserConfig(ctx context.Context, db *database.Manager, adminID int6
 		Scheduling:    schedulingJSON,
 		CacheControl:  cacheControlJSON,
 		AuthSettings:  `{"require_api_key":false,"allow_no_auth":true}`,
+		ModelVars:     "{}",
 	}
 
 	return db.UserConfigStore().Upsert(ctx, cfg)

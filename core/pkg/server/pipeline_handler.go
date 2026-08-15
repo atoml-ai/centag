@@ -13,6 +13,7 @@ import (
 	"centag/core/internal/auth"
 	"centag/core/internal/edition"
 	"centag/core/pkg/backend"
+	"centag/core/pkg/config"
 	"centag/core/pkg/database"
 	"centag/core/pkg/logger"
 	"centag/core/pkg/pipeline"
@@ -1033,6 +1034,7 @@ func (h *PipelineHandler) RegisterPipelineRoutes(router *gin.RouterGroup) {
 		pipelines.POST("/:id/validate", h.ValidatePipeline)
 		pipelines.GET("/:id/export", h.ExportPipeline)
 		pipelines.GET("/:id/executions", h.ListExecutionHistory)
+		pipelines.GET("/:id/available-variables", h.GetAvailableVariables)
 		// 节点配置管理 API
 		nodes := pipelines.Group("/:id/nodes/:nodeId")
 		{
@@ -1406,5 +1408,36 @@ func (h *PipelineHandler) GetExecutionDetail(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"data":    record,
+	})
+}
+
+// GetAvailableVariables 获取流水线可用变量列表
+// GET /api/v1/pipelines/:id/available-variables
+func (h *PipelineHandler) GetAvailableVariables(c *gin.Context) {
+	cfg := config.Get()
+	if cfg == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": "config not initialized"})
+		return
+	}
+
+	systemVars := config.ListSystemVariables(cfg)
+	userVars := config.ListUserVariables(cfg)
+
+	// Node variables are derived from the pipeline's node definitions
+	// For now, return common node variable patterns
+	nodeVars := []map[string]string{
+		{"name": "{{node.generator.content}}", "description": "生成器节点输出"},
+		{"name": "{{node.reviewer.content}}", "description": "审核器节点输出"},
+		{"name": "{{node.reviewer.score}}", "description": "审核器评分"},
+		{"name": "{{node.reviewer.passed}}", "description": "审核器是否通过"},
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data": gin.H{
+			"system_variables": systemVars,
+			"user_variables":   userVars,
+			"node_variables":   nodeVars,
+		},
 	})
 }

@@ -223,6 +223,7 @@ func DefaultUserConfig(userID int64) *UserConfig {
 		Scheduling:    "{}",
 		CacheControl:  "{}",
 		AuthSettings:  `{"require_api_key":false,"allow_no_auth":true}`,
+		ModelVars:     "{}",
 		UpdatedAt:     time.Now().UTC(),
 	}
 }

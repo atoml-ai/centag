@@ -123,6 +123,7 @@ func (h *ConfigHandler) GetAllConfig(c *gin.Context) {
 		"default_storage": cfg.DefaultStorage,
 		"model_matching":  cfg.ModelMatching, // 添加模型调度配置
 		"scheduler":       cfg.Scheduler,     // 智能调度配置
+		"model_variables": cfg.ModelVariables, // 模型变量配置
 		"deployment":      depView,           // 部署级配置（fnOS 安装包）
 	}
 
@@ -166,7 +167,8 @@ func (h *ConfigHandler) SaveAllConfig(c *gin.Context) {
 		Storages       []config.StorageConfig      `json:"storages"`
 		DefaultStorage string                      `json:"default_storage"`
 		ModelMatching  *config.ModelMatchingConfig `json:"model_matching"`
-		Scheduler      config.SchedulerConfig      `json:"scheduler"` // 值类型，非指针
+		Scheduler      config.SchedulerConfig      `json:"scheduler"`      // 值类型，非指针
+		ModelVariables *config.ModelVariables      `json:"model_variables"`
 		Deployment     *config.DeploymentConfig    `json:"deployment"`
 	}
 
@@ -508,6 +510,11 @@ func (h *ConfigHandler) SaveAllConfig(c *gin.Context) {
 		}
 	} else {
 		logger.Warnf("No scheduler config in request body")
+	}
+
+	// 模型变量配置更新
+	if req.ModelVariables != nil {
+		cfg.ModelVariables = *req.ModelVariables
 	}
 
 	// 部署级配置（fnOS 等安装包）：合并保存到 ${CENTAG_DATA_DIR}/centag.conf，

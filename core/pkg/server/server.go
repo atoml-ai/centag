@@ -115,6 +115,8 @@ type Server struct {
 
 	// 流水线默认模式相关 handler
 	pipelineDefaultsHandler *handler.PipelineDefaultsHandler
+	// 模型变量配置 handler
+	modelConfigHandler *handler.ModelConfigHandler
 
 	startTime time.Time
 	mitmWg    sync.WaitGroup
@@ -508,6 +510,9 @@ func New(cfg *config.Config) *Server {
 
 	// 创建流水线默认模式相关 handler
 	pipelineDefaultsHandler := handler.NewPipelineDefaultsHandler(cfg, pipelineRegistry)
+
+	// 创建模型变量配置 handler
+	modelConfigHandler := handler.NewModelConfigHandler(cfg)
 
 	// 初始化默认流水线解析器
 	defaultPipelineResolver := proxy.NewDefaultPipelineResolver(cfg)
@@ -1051,6 +1056,8 @@ func New(cfg *config.Config) *Server {
 		conversationHandler:    conversationHandler,
 		// 流水线默认模式相关 handler
 		pipelineDefaultsHandler: pipelineDefaultsHandler,
+		// 模型变量配置 handler
+		modelConfigHandler:      modelConfigHandler,
 		startTime:               time.Now(),
 	}
 	backendHandler.SetEdition(srv.edition)
@@ -1495,6 +1502,10 @@ func (s *Server) setupRoutes() {
 			config.GET("/proxy", s.handleGetProxyConfig)
 			// Team 普通用户写入自己的 user_config.proxy_settings；管理员写系统默认。
 			config.PUT("/proxy", s.handleSaveProxyConfig)
+			// 模型变量配置
+			config.GET("/model-variables", s.modelConfigHandler.GetModelVariables)
+			config.PUT("/model-variables", s.modelConfigHandler.UpdateModelVariables)
+			config.DELETE("/model-variables/:name", s.modelConfigHandler.DeleteUserVariable)
 		}
 
 		// 监控统计

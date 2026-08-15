@@ -76,6 +76,7 @@ type UserConfig struct {
 	Scheduling    string    `json:"scheduling"`     // JSON ModelMatchingConfig
 	CacheControl  string    `json:"cache_control"`  // JSON CacheControlConfig
 	AuthSettings  string    `json:"auth_settings"`  // JSON AuthSettings
+	ModelVars     string    `json:"model_vars"`     // JSON ModelVariables (per-user overrides)
 	CreatedAt     time.Time `json:"created_at"`
 	UpdatedAt     time.Time `json:"updated_at"`
 }

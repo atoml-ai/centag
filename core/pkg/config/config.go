@@ -95,8 +95,9 @@ type Config struct {
 	ModelMatching     ModelMatchingConfig  `json:"model_matching"`
 	CacheControl      CacheControlConfig   `json:"cache_control"`
 	Scheduler         SchedulerConfig      `json:"scheduler"`
-	Deployment        DeploymentConfig     `json:"deployment"` // 部署级配置（fnOS 等安装包），不写入 DB
-	Agent             AgentConfig          `json:"agent"`      // Agent配置
+	ModelVariables    ModelVariables       `json:"model_variables"` // 模型变量配置
+	Deployment        DeploymentConfig     `json:"deployment"`      // 部署级配置（fnOS 等安装包），不写入 DB
+	Agent             AgentConfig          `json:"agent"`           // Agent配置
 }
 
 // AgentConfig Agent配置
