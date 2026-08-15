@@ -95,6 +95,7 @@
   "systemUpdateDeleteConfirm": "Are you sure to delete this update record?",
   "systemUpdateDeleteTitle": "Delete Confirmation",
   "systemUpdateDeleteSuccess": "Record deleted",
+  "navModelConfig": "Model Variables",
   "navDeployment": "Deployment & Data",
   "deploymentTitle": "Deployment & Data",
   "deploymentDesc": "Database selection and data-retention policy on uninstall (for fnOS / install-package deployments)",

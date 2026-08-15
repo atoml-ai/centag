@@ -71,5 +71,6 @@
   "geminiHintDesc": "直接接入 Gemini 官方 API，支持所有原生特性。",
   "keyFormat": "Key 格式：",
   "defaultEndpoint": "默认端点：",
-  "probeModelCheck": "请完善表单"
+  "probeModelCheck": "请完善表单",
+  "modelVariables": "模型变量"
 }

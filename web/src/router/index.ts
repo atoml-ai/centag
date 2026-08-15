@@ -40,6 +40,7 @@ const AgentSetup = () => import('@/views/AgentSetup.vue')
 const AgentRun = () => import('@/views/AgentRun.vue')
 const Agent = () => import('@/views/Agent/index.vue')
 const StorageKVBrowser = () => import('@/views/StorageKVBrowser.vue')
+const ModelConfig = () => import('@/views/ModelConfig.vue')
 
 const routes = [
   // ── Public ────────────────────────────────────────────────────────────────
@@ -188,6 +189,12 @@ const routes = [
     name: 'Config',
     component: Config,
     meta: { titleKey: 'route.config', requiresAdmin: true }
+  },
+  {
+    path: '/model-config',
+    name: 'ModelConfig',
+    component: ModelConfig,
+    meta: { titleKey: 'route.modelConfig' }
   },
   {
     path: '/storage',

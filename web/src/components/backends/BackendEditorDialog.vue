@@ -201,6 +201,9 @@
               <el-button @click="onAddModel" :disabled="!newModelName.trim()" type="primary" plain>
                 {{ t('backendEditor.addModel') }}
               </el-button>
+              <el-button type="default" size="small" @click="openModelConfig">
+                {{ t('backendEditor.modelVariables') }}
+              </el-button>
             </div>
             <div class="model-preview" :class="{ empty: form.models.length === 0 }">
               <div v-if="form.models.length > 0" class="model-tags">
@@ -320,6 +323,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed, watch, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import {
   Delete,
@@ -348,6 +352,7 @@ import {
 import type { ProviderFormModel, ProviderDef } from '@/utils/shared-modules'
 
 const { t } = useI18n()
+const router = useRouter()
 
 const props = withDefaults(defineProps<{
   modelValue: boolean
@@ -509,6 +514,11 @@ function onAddModel() {
   }
 }
 
+function openModelConfig() {
+  dialogVisible.value = false
+  router.push('/model-config')
+}
+
 function onRemoveModel(index: number) {
   removeModelFromForm(form, index)
 }
@@ -553,9 +563,23 @@ function getPrimaryApiKey(): string {
 
 // ── 数据加载 ──────────────────────────────────────────────────
 
-function populateFromApi(row: any) {
+async function populateFromApi(row: any) {
   Object.assign(form, fromApiBackend(row))
   captureConnectivitySnapshot()
+
+  // 如果是默认后端，用全局 proxy.default_model 覆盖表单的 default_model
+  // （fromApiBackend 从 probe_model 取值，但用户在卡片上选的是 proxy.default_model）
+  try {
+    const proxyRes: any = await api.get('/api/v1/config/proxy')
+    const proxyData = proxyRes?.data ?? proxyRes
+    const globalDefaultBackendId = proxyData?.default_backend_id || ''
+    const globalDefaultModel = proxyData?.default_model || ''
+    if (row.id && row.id === globalDefaultBackendId && globalDefaultModel) {
+      form.default_model = globalDefaultModel
+    }
+  } catch {
+    /* ignore — keep probe_model fallback */
+  }
 
   apiKeys.value = []
   accountPool.strategy = row.account_pool_summary?.strategy || 'round_robin'
@@ -720,6 +744,19 @@ const save = async () => {
       await api.put(`/api/v1/backends/${form.id}`, payload)
       ElMessage.success(t('backendEditor.providerUpdated'))
     }
+
+    // 如果这是默认后端，同步 proxy.default_model
+    try {
+      const proxyRes: any = await api.get('/api/v1/config/proxy')
+      const proxyData = proxyRes?.data ?? proxyRes
+      const currentDefaultBackendId = proxyData?.default_backend_id || ''
+      if (backendId && backendId === currentDefaultBackendId && form.default_model) {
+        await api.put('/api/v1/config/proxy', {
+          default_backend_id: currentDefaultBackendId,
+          default_model: form.default_model
+        })
+      }
+    } catch { /* ignore */ }
 
     dialogVisible.value = false
     emit('saved')

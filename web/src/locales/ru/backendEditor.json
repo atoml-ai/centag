@@ -71,5 +71,6 @@
   "geminiHintDesc": "Прямое подключение к официальному API Gemini с поддержкой всех нативных функций.",
   "keyFormat": "Формат ключа: ",
   "defaultEndpoint": "Эндпоинт по умолчанию: ",
-  "probeModelCheck": "Пожалуйста, заполните форму"
+  "probeModelCheck": "Пожалуйста, заполните форму",
+  "modelVariables": "Переменные модели"
 }

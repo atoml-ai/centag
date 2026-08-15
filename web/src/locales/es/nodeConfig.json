@@ -252,5 +252,8 @@
   "warnCannotConvertSoleGenerator": "No convierta el único generador en nodo de uso de tokens. Mantenga el generador y agregue un nodo de uso por separado.",
   "defaultNameNewNode": "Nuevo nodo",
   "successNodeUpdated": "Configuración del nodo actualizada. Haga clic en «Guardar» para persistir en el servidor.",
-  "defaultNameEgressForward": "Reenvío saliente"
+  "defaultNameEgressForward": "Reenvío saliente",
+  "systemModelVars": "Variables de modelo del sistema",
+  "userVars": "Variables del usuario",
+  "insertVariable": "Insertar variable"
 }

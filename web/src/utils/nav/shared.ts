@@ -147,6 +147,10 @@ export function configNav(opts?: LeafOpts): NavItem {
   return withOpts({ id: 'config-basic', labelKey: 'nav.config', icon: 'Setting', path: '/config' }, opts)
 }
 
+export function modelConfigNav(opts?: LeafOpts): NavItem {
+  return withOpts({ id: 'model-config', labelKey: 'nav.modelConfig', icon: 'Setting', path: '/model-config' }, opts)
+}
+
 /** 通用分组（可嵌套） */
 export function navGroup(
   id: string,
@@ -290,9 +294,10 @@ export function buildMoreNavChildren(caps: Capabilities): NavItem[] {
   moreChildren.push(logsNav())
 
   const systemChildren: NavItem[] = []
-  // 系统配置：personal 走右上角用户菜单，不进「更多」
+  // 系统配置：personal 走右上角用户菜单/工具栏，不进「更多」
   if (caps.systemConfig && caps.role !== 'personal') {
     systemChildren.push(configNav())
+    systemChildren.push(modelConfigNav())
   }
   // 独立降级导航仅 team_admin 等仍可能使用；personal 已并入系统配置韧性页
   if (caps.navFallbackPolicy) {
@@ -452,6 +457,7 @@ export function systemAdminGroup(options?: { teamExtras?: boolean; relaxedAccess
   const leafAdmin = admin ? ({ requiresAdmin: true } as LeafOpts) : undefined
   const children: NavItem[] = [
     configNav(leafAdmin),
+    modelConfigNav(leafAdmin),
     {
       id: 'system-users',
       labelKey: 'nav.users',

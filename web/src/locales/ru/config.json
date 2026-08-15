@@ -46,5 +46,6 @@
   "loadFailed": "Ошибка загрузки",
   "unknownError": "Неизвестная ошибка",
   "configSaved": "Конфигурация сохранена",
-  "saveFailed": "Ошибка сохранения"
+  "saveFailed": "Ошибка сохранения",
+  "navModelConfig": "Переменные модели"
 }

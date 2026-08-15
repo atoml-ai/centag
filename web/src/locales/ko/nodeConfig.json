@@ -252,5 +252,8 @@
   "warnCannotConvertSoleGenerator": "유일한 제너레이터를 토큰 사용량으로 변환하지 마세요. 제너레이터 노드를 유지하고 별도의 사용량 노드를 추가하세요.",
   "defaultNameNewNode": "새 노드",
   "successNodeUpdated": "노드 설정이 업데이트되었습니다. '저장'을 클릭하여 서버에 저장하세요.",
-  "defaultNameEgressForward": "아웃바운드 포워딩"
+  "defaultNameEgressForward": "아웃바운드 포워딩",
+  "systemModelVars": "시스템 모델 변수",
+  "userVars": "사용자 변수",
+  "insertVariable": "변수 삽입"
 }

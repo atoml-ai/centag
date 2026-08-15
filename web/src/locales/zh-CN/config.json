@@ -95,6 +95,7 @@
   "systemUpdateDeleteConfirm": "确定删除此更新记录？",
   "systemUpdateDeleteTitle": "删除确认",
   "systemUpdateDeleteSuccess": "记录已删除",
+  "navModelConfig": "模型变量",
   "navDeployment": "部署与数据",
   "deploymentTitle": "部署与数据",
   "deploymentDesc": "数据库选择与卸载时的数据保留策略（适用于 fnOS 等安装包部署）",

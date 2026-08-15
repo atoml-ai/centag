@@ -71,5 +71,6 @@
   "geminiHintDesc": "Directly connect to the Gemini official API, supporting all native features.",
   "keyFormat": "Key Format: ",
   "defaultEndpoint": "Default Endpoint: ",
-  "probeModelCheck": "Please complete the form"
+  "probeModelCheck": "Please complete the form",
+  "modelVariables": "Model Variables"
 }

@@ -71,5 +71,6 @@
   "geminiHintDesc": "Conéctese directamente a la API oficial de Gemini, compatible con todas las funciones nativas.",
   "keyFormat": "Formato de clave: ",
   "defaultEndpoint": "Endpoint predeterminado: ",
-  "probeModelCheck": "Por favor complete el formulario"
+  "probeModelCheck": "Por favor complete el formulario",
+  "modelVariables": "Variables de modelo"
 }

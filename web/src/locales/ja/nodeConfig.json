@@ -252,5 +252,8 @@
   "warnCannotConvertSoleGenerator": "唯一のジェネレーターをトークン使用量に変更しないでください。ジェネレーターノードを維持し、別途使用量ノードを追加してください。",
   "defaultNameNewNode": "新規ノード",
   "successNodeUpdated": "ノード設定が更新されました。「保存」をクリックしてサーバーに永続化してください。",
-  "defaultNameEgressForward": "送信転送"
+  "defaultNameEgressForward": "送信転送",
+  "systemModelVars": "システムモデル変数",
+  "userVars": "ユーザー変数",
+  "insertVariable": "変数を挿入"
 }

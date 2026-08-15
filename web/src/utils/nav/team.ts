@@ -7,6 +7,7 @@ import {
   cacheManagementNavGroup,
   navGroup,
   configNav,
+  modelConfigNav,
   userTenantGroup,
   proxyStrategyGroup,
   appGroup,
@@ -30,6 +31,7 @@ export const NAV_MENU_TEAM_ADMIN: NavItem[] = [
     'Setting',
     [
       configNav({ requiresAdmin: true }),
+      modelConfigNav({ requiresAdmin: true }),
       {
         id: 'ab-comparison',
         labelKey: 'nav.abComparison',

@@ -46,5 +46,6 @@
   "loadFailed": "Error al cargar",
   "unknownError": "Error desconocido",
   "configSaved": "Configuración guardada",
-  "saveFailed": "Error al guardar"
+  "saveFailed": "Error al guardar",
+  "navModelConfig": "Variables de modelo"
 }

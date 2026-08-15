@@ -252,5 +252,8 @@
   "warnCannotConvertSoleGenerator": "Do not convert the sole generator into a Token Usage node. Please keep the generator node and add a separate usage node.",
   "defaultNameNewNode": "New Node",
   "successNodeUpdated": "Node config updated. Please click 'Save' to persist to the server.",
-  "defaultNameEgressForward": "Outbound Forward"
+  "defaultNameEgressForward": "Outbound Forward",
+  "systemModelVars": "System Model Variables",
+  "userVars": "User Variables",
+  "insertVariable": "Insert Variable"
 }

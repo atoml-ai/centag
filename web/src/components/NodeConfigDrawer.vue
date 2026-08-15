@@ -68,23 +68,30 @@
         <el-row :gutter="12">
           <el-col :span="12">
             <el-form-item :label="t('nodeConfig.backend')" prop="backend">
-              <BackendSelector
-                v-model="localNode.backend"
-                :placeholder="t('nodeConfig.backendPlaceholder')"
-                style="width: 100%"
-                @change="onBackendChange"
-              />
+              <div class="selector-row">
+                <BackendSelector
+                  v-model="localNode.backend"
+                  :placeholder="t('nodeConfig.backendPlaceholder')"
+                  style="flex: 1"
+                  @change="onBackendChange"
+                />
+                <VariablePopover @select="(name: string) => localNode.backend = `{{${name}}}`" />
+              </div>
             </el-form-item>
           </el-col>
           <el-col :span="12">
             <el-form-item :label="t('nodeConfig.model')" prop="model">
-              <ModelSelector
-                v-model="localNode.model"
-                :backend-id="localNode.backend"
-                :placeholder="t('nodeConfig.modelPlaceholder')"
-                :allow-create="true"
-                :default-first-option="true"
-              />
+              <div class="selector-row">
+                <ModelSelector
+                  v-model="localNode.model"
+                  :backend-id="localNode.backend"
+                  :placeholder="t('nodeConfig.modelPlaceholder')"
+                  :allow-create="true"
+                  :default-first-option="true"
+                  style="flex: 1"
+                />
+                <VariablePopover @select="(name: string) => localNode.model = `{{${name}}}`" />
+              </div>
             </el-form-item>
           </el-col>
         </el-row>
@@ -588,6 +595,17 @@
                     </td>
                     <td class="var-desc">{{ v.desc }}</td>
                   </tr>
+                  <tr class="var-section-row">
+                    <td colspan="2" class="var-section-label">{{ t('nodeConfig.systemModelVars') }}</td>
+                  </tr>
+                  <tr v-for="v in systemModelVars" :key="v.name">
+                    <td>
+                      <el-tag class="var-chip" type="info" size="small" @click="insertVar(v.name)">
+                        {{ varLabel(v.name) }}
+                      </el-tag>
+                    </td>
+                    <td class="var-desc">{{ v.desc }}</td>
+                  </tr>
                 </tbody>
               </table>
             </div>
@@ -836,6 +854,7 @@ import { ElMessage } from 'element-plus'
 import { Delete, Plus } from '@element-plus/icons-vue'
 import BackendSelector from './BackendSelector.vue'
 import ModelSelector from './ModelSelector.vue'
+import VariablePopover from './VariablePopover.vue'
 import PluginSelector from './pipeline/PluginSelector.vue'
 import { getBackends, getBackendModels } from '../api/backend'
 import { getNodePlugins, parseNodePluginsResponse, PluginDescriptor, updateNodeConfig } from '../api/pipeline'
@@ -1521,6 +1540,18 @@ const contextVars = [
   { name: 'user_id',    desc: t('nodeConfig.contextVarUserIdDesc') },
   { name: 'session_id', desc: t('nodeConfig.contextVarSessionIdDesc') },
   { name: 'pipeline_id',desc: t('nodeConfig.contextVarPipelineIdDesc') },
+]
+
+// 系统模型变量（来自后端配置）
+const systemModelVars = [
+  { name: 'system.default_backend', desc: '默认后端' },
+  { name: 'system.default_model', desc: '默认模型' },
+  { name: 'system.fallback_backend', desc: '备用后端' },
+  { name: 'system.fallback_model', desc: '备用模型' },
+  { name: 'system.embedding_backend', desc: '向量化后端' },
+  { name: 'system.embedding_model', desc: '向量化模型' },
+  { name: 'system.rerank_backend', desc: '重排序后端' },
+  { name: 'system.rerank_model', desc: '重排序模型' },
 ]
 
 const usesSystemPrompt = computed(() => {
@@ -2280,6 +2311,13 @@ onMounted(() => {
 <style scoped>
 .node-drawer-form {
   padding-bottom: 8px;
+}
+
+.selector-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
 }
 
 .drawer-section {

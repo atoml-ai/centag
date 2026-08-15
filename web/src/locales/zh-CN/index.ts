@@ -64,6 +64,7 @@ import backendEditor from './backendEditor.json'
 import providerManager from './providerManager.json'
 import defaultSettings from './defaultSettings.json'
 import config from './config.json'
+import modelConfig from './modelConfig.json'
 import settings from './settings.json'
 
 const zhCN = {
@@ -133,6 +134,7 @@ const zhCN = {
   providerManager,
   defaultSettings,
   config,
+  modelConfig,
   settings
 }
 

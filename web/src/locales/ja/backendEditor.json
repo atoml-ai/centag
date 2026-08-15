@@ -71,5 +71,6 @@
   "geminiHintDesc": "Gemini 公式 API に直接接続し、すべてのネイティブ機能をサポートします。",
   "keyFormat": "キー形式：",
   "defaultEndpoint": "デフォルトエンドポイント：",
-  "probeModelCheck": "フォームを完成させてください"
+  "probeModelCheck": "フォームを完成させてください",
+  "modelVariables": "モデル変数"
 }

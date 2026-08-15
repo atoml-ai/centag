@@ -46,5 +46,6 @@
   "loadFailed": "読み込み失敗",
   "unknownError": "不明なエラー",
   "configSaved": "設定を保存しました",
-  "saveFailed": "保存に失敗しました"
+  "saveFailed": "保存に失敗しました",
+  "navModelConfig": "モデル変数"
 }

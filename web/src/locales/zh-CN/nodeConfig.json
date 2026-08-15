@@ -252,5 +252,8 @@
   "warnCannotConvertSoleGenerator": "请勿将唯一的生成器改成 Token 计量。请保留生成器节点，并单独新增计量节点。",
   "defaultNameNewNode": "新节点",
   "successNodeUpdated": "节点配置已更新，请点击\"保存\"按钮持久化到服务器",
-  "defaultNameEgressForward": "出站转发"
+  "defaultNameEgressForward": "出站转发",
+  "systemModelVars": "系统模型变量",
+  "userVars": "用户变量",
+  "insertVariable": "插入变量"
 }

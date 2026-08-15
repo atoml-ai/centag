@@ -71,5 +71,6 @@
   "geminiHintDesc": "Gemini 공식 API에 직접 연결하여 모든 네이티브 기능을 지원합니다.",
   "keyFormat": "키 형식: ",
   "defaultEndpoint": "기본 엔드포인트: ",
-  "probeModelCheck": "양식을 작성해주세요"
+  "probeModelCheck": "양식을 작성해주세요",
+  "modelVariables": "모델 변수"
 }
