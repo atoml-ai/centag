@@ -359,6 +359,7 @@ func (h *BuiltinAgentHandler) runAgent(c *gin.Context, session *AgentSession, sk
 		BackendID:  session.BackendID,
 		Model:      session.Model,
 		PipelineID: pipelineID,
+		SessionID:  session.ID,
 	})
 	// 每次刷新 token（refresh 后 JWT 会轮换）
 	h.engine.RefreshToken(token)

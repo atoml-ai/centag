@@ -127,6 +127,35 @@ func TestRuntimeEngine_EnsureBackend_PipelineChange(t *testing.T) {
 	}
 }
 
+func TestRuntimeEngine_EnsureBackend_SessionChange(t *testing.T) {
+	cfg := &AgentConfig{Tools: ToolsConfig{Allowed: []string{}}}
+	e := NewRuntimeEngine(cfg, "", nil)
+
+	e.EnsureBackend(AgentEngineOptions{BackendID: "b1", SessionID: "sess-1"})
+	_, _, sid1 := e.backendHTTP.Strategy()
+	if sid1 != "sess-1" {
+		t.Fatalf("first sessionID = %q, want sess-1", sid1)
+	}
+
+	// 同一后端、不同 session → 不重建，仅更新 X-Session-ID。
+	prevBackend := e.backendHTTP
+	e.EnsureBackend(AgentEngineOptions{BackendID: "b1", SessionID: "sess-2"})
+	if e.backendHTTP != prevBackend {
+		t.Fatal("EnsureBackend() should reuse backend when backendID unchanged")
+	}
+	_, _, sid2 := e.backendHTTP.Strategy()
+	if sid2 != "sess-2" {
+		t.Errorf("changed sessionID = %q, want sess-2", sid2)
+	}
+
+	// 相同 session → 不重复更新。
+	e.EnsureBackend(AgentEngineOptions{BackendID: "b1", SessionID: "sess-2"})
+	_, _, sid3 := e.backendHTTP.Strategy()
+	if sid3 != "sess-2" {
+		t.Errorf("unchanged sessionID = %q, want sess-2", sid3)
+	}
+}
+
 func TestRuntimeEngine_EnsureBackend_TokenRefresh(t *testing.T) {
 	cfg := &AgentConfig{Tools: ToolsConfig{Allowed: []string{}}}
 	e := NewRuntimeEngine(cfg, "", nil)

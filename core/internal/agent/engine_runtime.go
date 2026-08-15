@@ -23,6 +23,8 @@ type RuntimeEngine struct {
 	backendID   string // 当前 backend 的 ID（用于检测切换后重建）
 	// currentPipelineID 当前透传的 pipeline ID（用于检测变化后更新 X-Pipeline-ID）
 	currentPipelineID string
+	// currentSessionID 当前透传的 session ID（用于检测变化后更新 X-Session-ID）
+	currentSessionID string
 }
 
 // AgentEngineOptions 构造 Agent 运行时所需的 backend 信息
@@ -37,6 +39,9 @@ type AgentEngineOptions struct {
 	Model string
 	// PipelineID 指定 skill 挂接的 pipeline（空=透传模式，不注入 X-Pipeline-ID）
 	PipelineID string
+	// SessionID 指定代理侧会话 ID（透传 X-Session-ID）。
+	// 同一 agent 会话的所有 LLM 调用共享同一 session，使多轮推理合并为一条对话记录。
+	SessionID string
 }
 
 // NewRuntimeEngine 创建 Agent 运行时引擎
@@ -56,6 +61,7 @@ func (e *RuntimeEngine) SetDBPath(p string) {
 // EnsureBackend 初始化 HTTP backend（指向 centag 自身代理）。
 // 指定后端变化时重建，以更新 X-Backend-ID。
 // PipelineID 非空时透传 X-Pipeline-ID（skill pipeline 路由）。
+// SessionID 非空时透传 X-Session-ID（agent 会话 → 代理侧对话记录）。
 func (e *RuntimeEngine) EnsureBackend(opts AgentEngineOptions) {
 	if e.backendHTTP == nil || e.backendID != opts.BackendID {
 		e.backendHTTP = agentcore.NewHTTPBackend(agentcore.HTTPBackendConfig{
@@ -66,8 +72,11 @@ func (e *RuntimeEngine) EnsureBackend(opts AgentEngineOptions) {
 			Model:     opts.Model,
 			BackendID: opts.BackendID,
 			ProxyMode: "transparent",
+			SessionID: opts.SessionID,
 		})
 		e.backendID = opts.BackendID
+		e.currentPipelineID = opts.PipelineID
+		e.currentSessionID = opts.SessionID
 		e.backendHTTP.SetStrategy("", opts.PipelineID)
 		return
 	}
@@ -77,6 +86,10 @@ func (e *RuntimeEngine) EnsureBackend(opts AgentEngineOptions) {
 	if opts.PipelineID != e.currentPipelineID {
 		e.backendHTTP.SetStrategy("", opts.PipelineID)
 		e.currentPipelineID = opts.PipelineID
+	}
+	if opts.SessionID != e.currentSessionID {
+		e.backendHTTP.SetSessionID(opts.SessionID)
+		e.currentSessionID = opts.SessionID
 	}
 }
 
