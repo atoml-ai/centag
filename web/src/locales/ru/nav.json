@@ -1,5 +1,5 @@
 {
-  "dashboard": "Главная",
+  "dashboard": "Обзор",
   "backends": "Бэкенды",
   "fallbackPolicies": "Политики отката",
   "pipelines": "Конвейеры",
@@ -26,9 +26,9 @@
   "config": "Системные настройки",
   "users": "Пользователи и группы",
   "systemUpdate": "Обновление системы",
-  "usage": "Использование",
+  "usage": "Статистика",
   "access": "Доступ",
-  "more": "Еще",
+  "more": "Система",
   "system": "Система",
   "storageConfig": "Настройки хранилища",
   "cacheManagement": "Управление кешем",
@@ -41,5 +41,8 @@
   "userGroupManagement": "Операции",
   "myBilling": "Мои платежи",
   "planTemplates": "Шаблоны квот",
-  "agent": ""
+  "agent": "",
+  "meteringBilling": "Биллинг",
+  "billingStatements": "Выписки",
+  "modelConfig": "Переменные модели"
 }

@@ -69,6 +69,7 @@ export const TEAM_ADMIN_ALLOWED_ROUTE_PREFIXES = [
   '/system/users',
   '/system/update',
   '/config',
+  '/model-config',
   '/cost',
   '/billing',
   '/profile',
@@ -85,8 +86,7 @@ export const TEAM_ADMIN_BUSINESS_ROUTE_PREFIXES = [
 
 /** Routes allowed in minimal lite WebUI (plus /login). */
 export const MINIMAL_ALLOWED_ROUTE_PREFIXES = [
-  '/dashboard',
-  '/config'
+  '/dashboard'
 ] as const
 
 export function isTeamOnlyRoute(path: string): boolean {

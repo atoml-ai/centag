@@ -54,7 +54,7 @@ export function sectionsFromCapabilities(caps: Capabilities): DashboardSections 
       teamAccessInStatus: false,
       pluginsStorage: false,
       proxyControls: false,
-      accessPanel: true,
+      accessPanel: caps.role !== 'minimal',
       accessQuickLinks: false,
       accessCompact: true,
       backends: caps.homeBackendsPanel,

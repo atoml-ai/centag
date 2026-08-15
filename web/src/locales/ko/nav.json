@@ -1,5 +1,5 @@
 {
-  "dashboard": "대시보드",
+  "dashboard": "개요",
   "backends": "백엔드",
   "fallbackPolicies": "폴백 정책",
   "pipelines": "파이프라인",
@@ -26,9 +26,9 @@
   "config": "시스템 설정",
   "users": "사용자 및 그룹",
   "systemUpdate": "시스템 업데이트",
-  "usage": "사용량",
-  "access": "접속",
-  "more": "더보기",
+  "usage": "통계 관리",
+  "access": "접속 관리",
+  "more": "시스템",
   "system": "시스템",
   "storageConfig": "스토리지 설정",
   "cacheManagement": "캐시 관리",
@@ -41,5 +41,8 @@
   "userGroupManagement": "운영 관리",
   "myBilling": "내 결제",
   "planTemplates": "한도 템플릿",
-  "agent": ""
+  "agent": "",
+  "meteringBilling": "사용량 측정",
+  "billingStatements": "청구서",
+  "modelConfig": "모델 변수"
 }

@@ -1,5 +1,5 @@
 {
-  "dashboard": "ダッシュボード",
+  "dashboard": "概要",
   "backends": "バックエンド",
   "fallbackPolicies": "フォールバックポリシー",
   "pipelines": "パイプライン",
@@ -26,9 +26,9 @@
   "config": "システム設定",
   "users": "ユーザーとグループ",
   "systemUpdate": "システム更新",
-  "usage": "使用量",
-  "access": "アクセス",
-  "more": "その他",
+  "usage": "統計管理",
+  "access": "アクセス管理",
+  "more": "システム",
   "system": "システム",
   "storageConfig": "ストレージ設定",
   "cacheManagement": "キャッシュ管理",
@@ -41,5 +41,8 @@
   "userGroupManagement": "運営管理",
   "myBilling": "マイ請求",
   "planTemplates": "利用枠テンプレート",
-  "agent": ""
+  "agent": "",
+  "meteringBilling": "使用量計測",
+  "billingStatements": "請求書",
+  "modelConfig": "モデル変数"
 }

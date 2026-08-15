@@ -1,5 +1,5 @@
 {
-  "dashboard": "Dashboard",
+  "dashboard": "Overview",
   "backends": "Backends",
   "fallbackPolicies": "Fallback Policies",
   "pipelines": "Pipelines",
@@ -28,9 +28,9 @@
   "users": "Users & Groups",
   "planTemplates": "Plan Templates",
   "systemUpdate": "System Update",
-  "usage": "Usage",
+  "usage": "Statistics",
   "access": "Access",
-  "more": "More",
+  "more": "System",
   "system": "System",
   "storageConfig": "Storage Config",
   "cacheManagement": "Cache Management",
@@ -43,5 +43,6 @@
   "userGroupManagement": "Operations",
   "myBilling": "Metering & billing",
   "meteringBilling": "Metering & billing",
-  "billingStatements": "Statements"
+  "billingStatements": "Statements",
+  "modelConfig": "Model Variables"
 }

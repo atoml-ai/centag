@@ -1,5 +1,5 @@
 {
-  "dashboard": "首页",
+  "dashboard": "概览",
   "backends": "后端配置",
   "fallbackPolicies": "降级策略",
   "pipelines": "策略管理",
@@ -28,9 +28,9 @@
   "users": "用户与组",
   "planTemplates": "额度模板",
   "systemUpdate": "系统更新",
-  "usage": "用量",
-  "access": "接入",
-  "more": "更多",
+  "usage": "统计管理",
+  "access": "接入管理",
+  "more": "系统",
   "system": "系统",
   "storageConfig": "存储配置",
   "cacheManagement": "缓存管理",
@@ -43,5 +43,6 @@
   "userGroupManagement": "运营管理",
   "myBilling": "计量计费",
   "meteringBilling": "计量计费",
-  "billingStatements": "对账单"
+  "billingStatements": "对账单",
+  "modelConfig": "模型变量"
 }

@@ -1,5 +1,5 @@
 {
-  "dashboard": "Panel principal",
+  "dashboard": "Resumen",
   "backends": "Backends",
   "fallbackPolicies": "Políticas de respaldo",
   "pipelines": "Tuberías",
@@ -26,9 +26,9 @@
   "config": "Configuración del sistema",
   "users": "Usuarios y grupos",
   "systemUpdate": "Actualización del sistema",
-  "usage": "Uso",
+  "usage": "Estadísticas",
   "access": "Acceso",
-  "more": "Más",
+  "more": "Sistema",
   "system": "Sistema",
   "storageConfig": "Configuración de almacenamiento",
   "cacheManagement": "Gestión de caché",
@@ -41,5 +41,8 @@
   "userGroupManagement": "Operaciones",
   "myBilling": "Mi facturación",
   "planTemplates": "Plantillas de cuota",
-  "agent": ""
+  "agent": "",
+  "meteringBilling": "Medición y facturación",
+  "billingStatements": "Estados de cuenta",
+  "modelConfig": "Variables de modelo"
 }

@@ -100,6 +100,11 @@ export function getCapabilities(edition: Edition, isAdmin = false): Capabilities
     return {
       role,
       ...WORKER_CAPS,
+      manageBackends: true,
+      managePipelines: true,
+      homeBackendsPanel: true,
+      homePipelinesPanel: true,
+      pipelineTestChat: false,
       localProxy: false,
       storageConfig: false,
       navMoreMenu: false,
@@ -109,8 +114,9 @@ export function getCapabilities(edition: Edition, isAdmin = false): Capabilities
       navFallbackPolicy: false,
       memoryQuery: false,
       memoryFull: false,
+      usageBilling: false,
       agentSetup: false,
-      systemConfig: true
+      systemConfig: false
     }
   }
 
@@ -127,8 +133,10 @@ export function getCapabilities(edition: Edition, isAdmin = false): Capabilities
       navDataStores: false,
       navEvaluation: false,
       navFallbackPolicy: false,
+      memoryQuery: false,
       memoryFull: false,
-      systemConfig: false
+      navMoreMenu: false,
+      systemConfig: true
     }
   }
 
