@@ -49,6 +49,18 @@ func (s *Server) teamResourceModelGuard() gin.HandlerFunc {
 // the centag-pro UserPlanEnforcer on the same request chain.
 func (s *Server) enforcePolicyAllowLists(c *gin.Context, pol *groupmodel.EffectivePolicy) {
 	model := peekRequestModel(c)
+	// X-Pipeline-ID 请求头显式指定流水线（内置 agent 等客户端通过该头
+	// 选中流水线，body model 仅为占位符）。按 core 的解析优先级
+	// （X-Pipeline-ID 请求头 > 模式字符串）优先按 pipeline 白名单检查。
+	if headerPID := peekPipelineIDHeader(c); headerPID != "" {
+		if !pol.IsAllowedPipeline(headerPID) {
+			RespondError(c, http.StatusForbidden, "pipeline not allowed for this user")
+			c.Abort()
+			return
+		}
+		c.Next()
+		return
+	}
 	if pid, ok := pipelineIDFromModel(model); ok {
 		if pid != "" && !pol.IsAllowedPipeline(pid) {
 			RespondError(c, http.StatusForbidden, "pipeline not allowed for this user")
@@ -75,6 +87,23 @@ func (s *Server) enforcePolicyAllowLists(c *gin.Context, pol *groupmodel.Effecti
 		return
 	}
 	c.Next()
+}
+
+// peekPipelineIDHeader 解析 X-Pipeline-ID 请求头中的 base pipeline id，
+// 剥离强制路由后缀（如 agent-skill-router:status-check → agent-skill-router）。
+func peekPipelineIDHeader(c *gin.Context) string {
+	header := strings.TrimSpace(c.GetHeader("X-Pipeline-ID"))
+	if header == "" {
+		return ""
+	}
+	if idx := strings.Index(header, ":"); idx > 0 {
+		base := strings.TrimSpace(header[:idx])
+		if base == "" {
+			return ""
+		}
+		return base
+	}
+	return header
 }
 
 func peekRequestModel(c *gin.Context) string {
