@@ -237,24 +237,14 @@
 
       <el-card v-if="sections.pipelines" class="info-card config-card dash-card dash-card--pipelines">
         <template #header>
-          <div class="card-head" :class="{ 'card-head--actions': sections.pipelineCreateButton }">
-            <div class="card-head-main">
-              <el-icon class="card-icon pipeline-color"><Share /></el-icon>
-              <span>{{ $t('dashboard.pipelineConfig') }}</span>
-              <span v-if="sections.pipelineCreateButton" class="card-badge">{{ $t('dashboard.items', { count: pipelineCount }) }}</span>
-            </div>
-            <div v-if="sections.pipelineCreateButton" class="card-actions">
-              <el-button size="small" plain @click="pipelinePanelRef?.openImport()">
-                {{ $t('dashboard.importBtn') }}
-              </el-button>
-              <el-button type="primary" size="small" @click="pipelinePanelRef?.openCreate()">
-                + {{ $t('dashboard.createPipeline') }}
-              </el-button>
-            </div>
+          <div class="card-head">
+            <span>{{ $t('dashboard.pipelineConfig') }}</span>
+            <span v-if="sections.pipelineCreateButton" class="card-badge">{{ $t('dashboard.items', { count: pipelineCount }) }}</span>
           </div>
         </template>
         <HomePipelineCard
           ref="pipelinePanelRef"
+          :show-create-button="sections.pipelineCreateButton"
           @update:count="pipelineCount = $event"
           @test="openPipelineChat"
         />
@@ -462,7 +452,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   Document, CircleCheck, TrendCharts, Warning,
   Timer, Stopwatch, Coin, Monitor, DataBoard, DataLine, DataAnalysis,
-    CopyDocument, Cpu, List, Share, ChatDotRound
+    CopyDocument, Cpu, List, Share, ChatDotRound, Plus, Upload
   } from '@element-plus/icons-vue'
 import VChart from 'vue-echarts'
 import { use } from 'echarts/core'

@@ -15,153 +15,94 @@
       </div>
 
       <div v-if="selectable" class="list-toolbar">
-        <el-checkbox
-          :model-value="allSelected"
-          :indeterminate="partialSelected"
-          @change="toggleSelectAll"
-        >
-          {{ t('homePipelineCard.select') }}
-        </el-checkbox>
-        <template v-if="selectedIds.length > 0">
-          <span class="toolbar-count">{{ t('homePipelineCard.selectedCount', { count: selectedIds.length }) }}</span>
-          <el-button size="small" :loading="batchExporting" @click="handleBatchExport">
-            {{ t('homePipelineCard.batchExport') }}
-          </el-button>
-          <el-button size="small" type="danger" :loading="batchDeleting" @click="handleBatchDelete">
-            {{ t('homePipelineCard.batchDelete') }}
-          </el-button>
-          <el-button size="small" text @click="clearSelection">{{ t('homePipelineCard.cancelSelect') }}</el-button>
-        </template>
+        <div class="list-toolbar-left">
+          <template v-if="props.showCreateButton">
+            <el-button v-if="canCreatePipeline" type="primary" size="small" @click="openCreate">
+              <el-icon><Plus /></el-icon>
+              {{ t('homePipelineCard.createPipeline') }}
+            </el-button>
+            <el-button size="small" :loading="importing" @click="triggerImport">
+              <el-icon><Upload /></el-icon>
+              {{ t('homePipelineCard.importPipeline') }}
+            </el-button>
+          </template>
+        </div>
+        <div class="list-toolbar-right">
+          <el-checkbox
+            :model-value="allSelected"
+            :indeterminate="partialSelected"
+            @change="toggleSelectAll"
+          >
+            {{ t('homePipelineCard.select') }}
+          </el-checkbox>
+          <template v-if="selectedIds.length > 0">
+            <span class="toolbar-count">{{ t('homePipelineCard.selectedCount', { count: selectedIds.length }) }}</span>
+            <el-button size="small" :loading="batchExporting" @click="handleBatchExport">
+              {{ t('homePipelineCard.batchExport') }}
+            </el-button>
+            <el-button size="small" type="danger" :loading="batchDeleting" @click="handleBatchDelete">
+              {{ t('homePipelineCard.batchDelete') }}
+            </el-button>
+            <el-button size="small" text @click="clearSelection">{{ t('homePipelineCard.cancelSelect') }}</el-button>
+          </template>
+        </div>
       </div>
 
-      <div class="pipeline-list">
+      <div class="pipeline-cards">
         <div
           v-for="pipeline in pipelines"
           :key="pipeline.id"
-          class="pipeline-row"
+          class="pipeline-card"
           :class="{
             'is-default': pipeline.id === selectedDefaultId,
-            selected: selectedIds.includes(pipeline.id)
+            'is-selected': selectedIds.includes(pipeline.id)
           }"
         >
-          <el-checkbox
-            v-if="selectable"
-            :model-value="selectedIds.includes(pipeline.id)"
-            class="row-checkbox"
-            @change="(checked) => toggleSelect(pipeline.id, !!checked)"
-            @click.stop
-          />
-          <div class="pipeline-main">
-            <div class="pipeline-title-row">
-              <span class="pipeline-name">{{ pipeline.name }}</span>
-              <el-tag size="small" :type="pipeline.tenant_id ? 'warning' : 'info'" effect="plain">
-                {{ pipeline.tenant_id ? t('pipelineModes.table.scopeMine') : t('pipelineModes.table.scopeSystem') }}
+          <div class="pipeline-card__head">
+            <el-checkbox
+              v-if="selectable"
+              :model-value="selectedIds.includes(pipeline.id)"
+              @change="(checked) => toggleSelect(pipeline.id, !!checked)"
+              @click.stop
+            />
+            <div class="pipeline-card__title">
+              <span class="pipeline-card__name">{{ pipeline.name }}</span>
+              <el-tag v-if="isSystemPipeline(pipeline)" type="info" size="small" effect="plain">
+                {{ t('pipelineModes.table.scopeSystem') }}
+              </el-tag>
+              <el-tag v-else type="warning" size="small" effect="plain">
+                {{ t('pipelineModes.table.scopeMine') }}
               </el-tag>
               <el-tag
                 v-if="pipeline.id === selectedDefaultId"
-                size="small"
                 type="success"
+                size="small"
                 effect="light"
               >
-                {{ t('homePipelineCard.defaultTag') }}
+                <el-icon style="margin-right: 2px; vertical-align: -2px;"><StarFilled /></el-icon>
+                {{ t('pipelineModes.table.defaultPipeline') }}
               </el-tag>
             </div>
-            <div class="pipeline-meta">
-              <span class="mono">{{ pipeline.id }}</span>
-              <span class="meta-sep">·</span>
-              <span>{{ t('homePipelineCard.nodeCount', { count: pipeline.nodes?.length || 0 }) }}</span>
-            </div>
+            <PipelineRowActions
+              class="pipeline-card__actions"
+              :row="pipeline"
+              :unrestricted="unrestricted"
+              :default-pipeline-id="selectedDefaultId"
+              @command="(cmd) => handleRowCommand(cmd, pipeline)"
+            />
           </div>
-          <div class="pipeline-actions">
-            <el-button
-              v-if="canTest"
-              size="small"
-              @click="handleTest(pipeline)"
-            >
-              {{ t('homePipelineCard.test') }}
-            </el-button>
-            <el-button
-              v-if="canSetDefault"
-              size="small"
-              :type="pipeline.id === selectedDefaultId ? 'success' : 'default'"
-              :plain="pipeline.id !== selectedDefaultId"
-              :disabled="pipeline.id === selectedDefaultId || (savingDefault && pendingDefaultId === pipeline.id)"
-              :loading="savingDefault && pendingDefaultId === pipeline.id"
-              @click="selectDefault(pipeline.id)"
-            >
-              {{ pipeline.id === selectedDefaultId ? t('homePipelineCard.currentDefault') : t('homePipelineCard.setDefault') }}
-            </el-button>
-            <el-button
-              v-if="canEdit && canConfigureCapabilitySlots(pipeline)"
-              size="small"
-              type="warning"
-              plain
-              @click="openRouteAssign(pipeline)"
-            >
-              {{ t('homePipelineCard.configureModel') }}
-            </el-button>
-            <PipelineFeatureGuard
-              feature="pipelineExport"
-              :pipeline="pipeline"
-              :unrestricted="unrestricted"
-              :action-label="t('homePipelineCard.exportAction')"
-            >
-              <template #default="{ disabled }">
-                <el-button
-                  size="small"
-                  plain
-                  :disabled="disabled || exportingId === pipeline.id"
-                  :loading="exportingId === pipeline.id"
-                  @click="handleExportOne(pipeline)"
-                >
-                  {{ t('homePipelineCard.exportAction') }}
-                </el-button>
-              </template>
-            </PipelineFeatureGuard>
-            <el-tooltip
-              v-if="canCreatePipeline && !unrestricted"
-              :content="isSystemPipeline(pipeline) ? t('homePipelineCard.cloneFromSystem') : t('homePipelineCard.cloneAction')"
-              placement="top"
-            >
-              <el-button
-                size="small"
-                :type="isSystemPipeline(pipeline) ? 'warning' : 'default'"
-                :plain="!isSystemPipeline(pipeline)"
-                :loading="cloningId === pipeline.id"
-                @click="handleClone(pipeline)"
-              >
-                <el-icon><CopyDocument /></el-icon>
-                {{ isSystemPipeline(pipeline) ? t('homePipelineCard.cloneFromSystemShort') : t('homePipelineCard.cloneAction') }}
-              </el-button>
-            </el-tooltip>
-            <PipelineFeatureGuard
-              feature="pipelineEdit"
-              :pipeline="pipeline"
-              :unrestricted="unrestricted"
-              :action-label="t('homePipelineCard.editAction')"
-            >
-              <template #default="{ disabled }">
-                <el-button
-                  size="small"
-                  type="primary"
-                  plain
-                  :disabled="disabled"
-                  @click="openEditor(pipeline)"
-                >
-                  <el-icon><Edit /></el-icon>
-                  {{ t('homePipelineCard.editAction') }}
-                </el-button>
-              </template>
-            </PipelineFeatureGuard>
-            <el-button
-              v-if="canEdit"
-              size="small"
-              type="danger"
-              plain
-              @click="handleDelete(pipeline)"
-            >
-              {{ t('homePipelineCard.deleteAction') }}
-            </el-button>
+          <div class="pipeline-card__body">
+            <div class="pipeline-card__row">
+              <el-tag type="info" size="small">{{ pipeline.id }}</el-tag>
+            </div>
+            <p class="pipeline-card__desc">{{ pipeline.description || '—' }}</p>
+          </div>
+          <div class="pipeline-card__footer">
+            <span class="pipeline-card__stat">
+              <el-icon><Connection /></el-icon>
+              {{ pipeline.nodes?.length || 0 }} {{ t('pipelineModes.table.nodeUnit') }}
+            </span>
+            <span class="pipeline-card__stat">v{{ pipeline.version }}</span>
           </div>
         </div>
       </div>
@@ -203,6 +144,17 @@
       @saved="handleRouteAssignSaved"
     />
 
+    <ExecutionHistory
+      v-model="historyVisible"
+      :pipeline-id="historyPipelineId"
+      :pipeline-name="historyPipelineName"
+    />
+
+    <MinimalChat
+      v-model="testChatVisible"
+      :initial-pipeline-id="testChatPipelineId"
+    />
+
     <el-dialog
       v-model="importConflictVisible"
       :title="t('homePipelineCard.importConflictTitle')"
@@ -234,14 +186,15 @@
 import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { CopyDocument, Edit } from '@element-plus/icons-vue'
+import { Connection, Plus, StarFilled, Upload } from '@element-plus/icons-vue'
 import PipelineCreateDialog from '@/components/pipeline/PipelineCreateDialog.vue'
 import type { PipelineCreateInfo } from '@/components/pipeline/PipelineCreateDialog.vue'
 import PipelineEditorDialog from '@/components/pipeline/PipelineEditorDialog.vue'
-import PipelineFeatureGuard from '@/components/pipeline/PipelineFeatureGuard.vue'
+import PipelineRowActions from '@/components/pipeline/PipelineRowActions.vue'
 import CapabilitySlotsDialog from '@/components/pipeline/CapabilitySlotsDialog.vue'
+import ExecutionHistory from '@/components/pipeline/ExecutionHistory.vue'
+import MinimalChat from '@/views/MinimalChat.vue'
 import { useUserResourceAccess } from '@/composables/useUserResourceAccess'
-import { canConfigureCapabilitySlots } from '@/utils/capabilitySlots'
 import { isSystemPipeline } from '@/utils/pipeline/features'
 import {
   getPipelines,
@@ -261,9 +214,14 @@ import {
   type ParsedPipelineTemplate
 } from '@/utils/pipeline/importExport'
 
+const props = withDefaults(defineProps<{
+  showCreateButton?: boolean
+}>(), {
+  showCreateButton: false
+})
+
 const emit = defineEmits<{
   'update:count': [count: number]
-  test: [pipelineId: string]
 }>()
 
 const { t } = useI18n()
@@ -289,13 +247,17 @@ const importConflictItems = ref<ParsedPipelineTemplate[]>([])
 const importConflictResolve = ref<((value: 'overwrite' | 'skip' | 'cancel') => void) | null>(null)
 const routeAssignVisible = ref(false)
 const routeAssignPipelineId = ref('')
+const historyVisible = ref(false)
+const historyPipelineId = ref('')
+const historyPipelineName = ref('')
+const testChatVisible = ref(false)
+const testChatPipelineId = ref('')
 
 const { canAddOwnPipelines, canChangeDefaultPipeline, unrestricted } = useUserResourceAccess()
 const canEdit = computed(() => canAddOwnPipelines.value)
 const canCreatePipeline = computed(() => canEdit.value)
 const canSetDefault = computed(() => canChangeDefaultPipeline.value)
 const selectable = computed(() => canEdit.value)
-const canTest = computed(() => true)
 
 const allSelected = computed(() =>
   pipelines.value.length > 0 && selectedIds.value.length === pipelines.value.length
@@ -327,10 +289,6 @@ function toggleSelectAll(checked: boolean | string | number) {
 
 function clearSelection() {
   selectedIds.value = []
-}
-
-function handleTest(pipeline: AgentPatternPipeline) {
-  emit('test', pipeline.id)
 }
 
 async function loadPipelines() {
@@ -612,6 +570,38 @@ function handleRouteAssignSaved(saved: AgentPatternPipeline) {
   }
 }
 
+function handleRowCommand(command: string, pipeline: AgentPatternPipeline) {
+  switch (command) {
+    case 'setDefault':
+      selectDefault(pipeline.id)
+      break
+    case 'test':
+      testChatPipelineId.value = pipeline.id || ''
+      testChatVisible.value = true
+      break
+    case 'configure':
+      openRouteAssign(pipeline)
+      break
+    case 'edit':
+      openEditor(pipeline)
+      break
+    case 'history':
+      historyPipelineId.value = pipeline.id
+      historyPipelineName.value = pipeline.name || pipeline.id
+      historyVisible.value = true
+      break
+    case 'export':
+      handleExportOne(pipeline)
+      break
+    case 'clone':
+      handleClone(pipeline)
+      break
+    case 'delete':
+      handleDelete(pipeline)
+      break
+  }
+}
+
 function openCreate() {
   createInfoVisible.value = true
 }
@@ -726,9 +716,33 @@ defineExpose({ reload: loadPipelines, openCreate, openImport: triggerImport })
 .list-toolbar {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 10px;
   flex-wrap: wrap;
-  padding: 4px 0 2px;
+  padding: 12px 16px;
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  margin-bottom: 8px;
+}
+
+.list-toolbar-left,
+.list-toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.list-toolbar .el-button {
+  border-radius: 8px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.list-toolbar .el-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
 .toolbar-count {
@@ -736,85 +750,117 @@ defineExpose({ reload: loadPipelines, openCreate, openImport: triggerImport })
   color: #6b7280;
 }
 
-.pipeline-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+.pipeline-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 16px;
   flex: 1;
   min-height: 0;
-  max-height: none;
   overflow-y: auto;
   padding-right: 4px;
 }
 
-.pipeline-row {
+.pipeline-card {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 10px 12px;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  background: #f9fafb;
-  transition: all 0.2s;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid #e4e7ed;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
 }
 
-.pipeline-row.is-default {
-  background: #f0f9eb;
-  border-color: #b3e19d;
+.pipeline-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
 }
 
-.pipeline-row.selected {
+.pipeline-card.is-default {
+  border-color: #67c23a;
+  background: linear-gradient(180deg, #f0fdf4 0%, #ffffff 60%);
+}
+
+.pipeline-card.is-selected {
   border-color: #93c5fd;
   background: #eff6ff;
 }
 
-.pipeline-row.is-default.selected {
-  background: #ecfdf5;
-  border-color: #86efac;
+.pipeline-card.is-default.is-selected {
+  background: linear-gradient(180deg, #ecfdf5 0%, #f0f9ff 60%);
+  border-color: #67c23a;
 }
 
-.row-checkbox {
-  flex-shrink: 0;
+.pipeline-card__head {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
 }
 
-.pipeline-main {
+.pipeline-card__title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  flex: 1;
   min-width: 0;
+}
+
+.pipeline-card__name {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: #1f2937;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pipeline-card__body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
   flex: 1;
 }
 
-.pipeline-title-row {
+.pipeline-card__row {
   display: flex;
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
 }
 
-.pipeline-name {
-  font-weight: 500;
-  color: #1f2937;
+.pipeline-card__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #f1f3f5;
 }
 
-.pipeline-meta {
-  margin-top: 4px;
-  font-size: 0.75rem;
+.pipeline-card__stat {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.8125rem;
   color: #6b7280;
 }
 
-.meta-sep {
-  margin: 0 4px;
+.pipeline-card__desc {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: #6b7280;
+  line-height: 1.5;
+  min-height: 2.4em;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
-.pipeline-actions {
-  display: flex;
-  align-items: center;
-  gap: 4px;
+.pipeline-card__actions {
   flex-shrink: 0;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-}
-
-.mono {
-  font-family: 'SF Mono', 'Fira Code', monospace;
 }
 </style>
