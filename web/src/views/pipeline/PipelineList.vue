@@ -1,37 +1,41 @@
 <template>
   <div class="pipeline-list">
     <div class="page-header">
-      <h2>{{ t('pipelineList.title') }}</h2>
-      <div class="toolbar">
-        <el-input
-          v-model="searchText"
-          :placeholder="t('pipelineList.searchPlaceholder')"
-          clearable
-          style="width: 220px"
-        >
-          <template #prefix>
-            <el-icon><Search /></el-icon>
-          </template>
-        </el-input>
-        <span class="search-count" v-if="searchText">
-          {{ t('pipelineList.searchCount', { n: filteredPipelines.length }) }}
-        </span>
-        <el-tooltip v-if="selectedPipelines.length > 0" :content="batchDeleteTooltip" placement="top" :disabled="canBatchDeleteSelected">
-          <span>
-            <el-button type="danger" :disabled="!canBatchDeleteSelected" @click="handleBatchDelete">
-              <el-icon><Delete /></el-icon>
-              {{ t('pipelineList.batchDelete', { n: selectedPipelines.length }) }}
-            </el-button>
+      <div class="header-left">
+        <div class="toolbar">
+          <el-button v-if="canAddOwnPipelines" type="primary" @click="handleCreate">
+            <el-icon><Plus /></el-icon>
+            {{ t('pipelineList.createPipeline') }}
+          </el-button>
+          <el-button :loading="loading" @click="loadPipelines">
+            <el-icon><Refresh /></el-icon>
+            {{ t('pipelineList.refresh') }}
+          </el-button>
+          <el-tooltip v-if="selectedPipelines.length > 0" :content="batchDeleteTooltip" placement="top" :disabled="canBatchDeleteSelected">
+            <span>
+              <el-button type="danger" :disabled="!canBatchDeleteSelected" @click="handleBatchDelete">
+                <el-icon><Delete /></el-icon>
+                {{ t('pipelineList.batchDelete', { n: selectedPipelines.length }) }}
+              </el-button>
+            </span>
+          </el-tooltip>
+          <el-input
+            v-model="searchText"
+            :placeholder="t('pipelineList.searchPlaceholder')"
+            clearable
+            style="width: 220px"
+          >
+            <template #prefix>
+              <el-icon><Search /></el-icon>
+            </template>
+          </el-input>
+          <span class="search-count" v-if="searchText">
+            {{ t('pipelineList.searchCount', { n: filteredPipelines.length }) }}
           </span>
-        </el-tooltip>
-        <el-button :loading="loading" @click="loadPipelines">
-          <el-icon><Refresh /></el-icon>
-          {{ t('pipelineList.refresh') }}
-        </el-button>
-        <el-button v-if="canAddOwnPipelines" type="primary" @click="handleCreate">
-          <el-icon><Plus /></el-icon>
-          {{ t('pipelineList.createPipeline') }}
-        </el-button>
+        </div>
+      </div>
+      <div class="header-right">
+        <h2>{{ t('pipelineList.title') }}</h2>
       </div>
     </div>
 
@@ -122,7 +126,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Search, Plus, Edit, Delete, Download, CopyDocument } from '@element-plus/icons-vue'
+import { Search, Plus, Edit, Delete, Download, CopyDocument, Refresh } from '@element-plus/icons-vue'
 import { getPipelines, deletePipeline, exportPipeline, clonePipeline, parsePipelinesResponse, type Pipeline } from '@/api/pipeline'
 import { resolvePipelineFeatureSupport, isSystemPipeline, type PipelineFeatureKey } from '@/utils/pipeline/features'
 import { useUserResourceAccess } from '@/composables/useUserResourceAccess'
@@ -284,6 +288,19 @@ onMounted(() => {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 16px;
+  padding: 12px 16px;
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+}
+
+.header-left {
+  flex: 1;
+  min-width: 0;
+}
+
+.header-right {
+  flex-shrink: 0;
 }
 
 .page-header h2 {
@@ -298,6 +315,17 @@ onMounted(() => {
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
+}
+
+.toolbar .el-button {
+  border-radius: 8px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.toolbar .el-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
 .search-count {

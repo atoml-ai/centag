@@ -2,14 +2,14 @@
   <div class="fallback-policy-page" :class="{ embedded }">
     <div v-if="!embedded" class="hermes-header">
       <div class="hermes-header-left">
-        <h1 class="hermes-title">{{ t('fallbackPolicy.pageTitle') }}</h1>
-        <p class="hermes-subtitle">{{ t('fallbackPolicy.pageDescription') }}</p>
-      </div>
-      <div class="hermes-header-right">
         <el-button type="primary" @click="openCreateDialog">
           <el-icon><Plus /></el-icon>
           {{ t('fallbackPolicy.newPolicy') }}
         </el-button>
+      </div>
+      <div class="hermes-header-right">
+        <h1 class="hermes-title">{{ t('fallbackPolicy.pageTitle') }}</h1>
+        <p class="hermes-subtitle">{{ t('fallbackPolicy.pageDescription') }}</p>
       </div>
     </div>
     <div v-else class="embedded-toolbar">
@@ -382,6 +382,11 @@ async function testPolicy(policy: FallbackPolicy) {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  padding: 12px 16px;
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  margin-bottom: 16px;
 }
 
 .hermes-title {
@@ -394,5 +399,16 @@ async function testPolicy(policy: FallbackPolicy) {
   margin: 4px 0 0;
   color: #909399;
   font-size: 14px;
+}
+
+.hermes-header-left .el-button {
+  border-radius: 8px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.hermes-header-left .el-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 </style>

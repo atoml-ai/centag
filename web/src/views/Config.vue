@@ -2,18 +2,20 @@
   <div class="config-page">
     <div class="page-header">
       <div class="header-left">
+        <div v-if="showConfigActions" class="header-actions">
+          <el-button type="primary" :loading="saving" @click="save">
+            <el-icon><Check /></el-icon>
+            {{ t('config.saveConfig') }}
+          </el-button>
+          <el-button :loading="loading" @click="load">
+            <el-icon><Refresh /></el-icon>
+            {{ t('config.refresh') }}
+          </el-button>
+        </div>
+      </div>
+      <div class="header-right">
         <h1 class="page-title">{{ t('config.title') }}</h1>
         <p class="page-description">{{ t('config.description') }}</p>
-      </div>
-      <div v-if="showConfigActions" class="header-actions">
-        <el-button :loading="loading" @click="load">
-          <el-icon><Refresh /></el-icon>
-          {{ t('config.refresh') }}
-        </el-button>
-        <el-button type="primary" :loading="saving" @click="save">
-          <el-icon><Check /></el-icon>
-          {{ t('config.saveConfig') }}
-        </el-button>
       </div>
     </div>
 
@@ -823,11 +825,21 @@ function formatSuTime(raw: string): string {
   align-items: flex-start;
   gap: 16px;
   margin-bottom: 24px;
+  padding: 12px 16px;
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
 }
 
 .header-left {
   flex: 1;
   min-width: 0;
+}
+
+.header-right {
+  flex: 1;
+  min-width: 0;
+  text-align: right;
 }
 
 .page-title {
@@ -848,6 +860,17 @@ function formatSuTime(raw: string): string {
   align-items: center;
   flex-shrink: 0;
   padding-top: 4px;
+}
+
+.header-actions .el-button {
+  border-radius: 8px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.header-actions .el-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
 .config-layout {

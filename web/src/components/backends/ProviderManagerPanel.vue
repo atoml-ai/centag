@@ -5,6 +5,42 @@
     </div>
     <div v-if="canWrite" class="mgr-toolbar">
       <div class="mgr-toolbar-left">
+        <el-button type="primary" size="small" @click="openCreate">
+          <el-icon><Plus /></el-icon>
+          {{ t('providerManager.addProvider') }}
+        </el-button>
+        <el-button size="small" :disabled="busy" @click="handleImport">
+          <el-icon><Upload /></el-icon>
+          {{ t('providerManager.import') }}
+        </el-button>
+        <el-dropdown trigger="click" :disabled="busy" @command="handleExportCommand">
+          <el-button size="small" :disabled="busy">
+            <el-icon><Download /></el-icon>
+            {{ t('providerManager.export') }}
+          </el-button>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item command="json">{{ t('providerManager.jsonBackup') }}</el-dropdown-item>
+              <el-dropdown-item command="yaml">{{ t('providerManager.yamlExport') }}</el-dropdown-item>
+              <el-dropdown-item command="zip">{{ t('providerManager.initdataPack') }}</el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
+        <el-button
+          v-if="backends.length > 0"
+          size="small"
+          :loading="probingAll"
+          @click="handleProbeAll"
+        >
+          <el-icon><Connection /></el-icon>
+          {{ t('providerManager.allProbe') }}
+        </el-button>
+        <el-button size="small" @click="router.push('/model-config')">
+          <el-icon><Setting /></el-icon>
+          {{ t('providerManager.modelVariables') }}
+        </el-button>
+      </div>
+      <div class="mgr-toolbar-right">
         <el-checkbox
           v-if="backends.length > 0"
           :model-value="allSelected"
@@ -23,29 +59,6 @@
           </el-button>
           <el-button size="small" text @click="clearSelection">{{ t('providerManager.cancelSelection') }}</el-button>
         </template>
-      </div>
-      <div class="mgr-toolbar-right">
-        <el-button size="small" :disabled="busy" @click="handleImport">{{ t('providerManager.import') }}</el-button>
-        <el-dropdown trigger="click" :disabled="busy" @command="handleExportCommand">
-          <el-button size="small" :disabled="busy">{{ t('providerManager.export') }} ▾</el-button>
-          <template #dropdown>
-            <el-dropdown-menu>
-              <el-dropdown-item command="json">{{ t('providerManager.jsonBackup') }}</el-dropdown-item>
-              <el-dropdown-item command="yaml">{{ t('providerManager.yamlExport') }}</el-dropdown-item>
-              <el-dropdown-item command="zip">{{ t('providerManager.initdataPack') }}</el-dropdown-item>
-            </el-dropdown-menu>
-          </template>
-        </el-dropdown>
-        <el-button
-          v-if="backends.length > 0"
-          size="small"
-          :loading="probingAll"
-          @click="handleProbeAll"
-        >
-           {{ t('providerManager.allProbe') }}
-        </el-button>
-        <el-button size="small" @click="router.push('/model-config')">{{ t('providerManager.modelVariables') }}</el-button>
-        <el-button type="primary" size="small" @click="openCreate">{{ t('providerManager.addProvider') }}</el-button>
       </div>
     </div>
 
@@ -211,7 +224,7 @@
 import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { ArrowDown } from '@element-plus/icons-vue'
+import { ArrowDown, Plus, Upload, Download, Connection, Setting } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import * as yaml from 'js-yaml'
 import BackendEditorDialog from '@/components/backends/BackendEditorDialog.vue'
@@ -710,6 +723,10 @@ defineExpose({ openCreate, reloadDefault })
   justify-content: space-between;
   gap: 10px;
   flex-wrap: wrap;
+  padding: 12px 16px;
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
 }
 
 .mgr-toolbar-left,
@@ -718,6 +735,17 @@ defineExpose({ openCreate, reloadDefault })
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
+}
+
+.mgr-toolbar-left .el-button {
+  border-radius: 8px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.mgr-toolbar-left .el-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
 .toolbar-count {
