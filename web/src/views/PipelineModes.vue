@@ -1,24 +1,27 @@
 <template>
   <div class="pipeline-modes-page">
+    <div class="page-header">
+      <h1 class="page-title">{{ t('pipelineModes.title') }}</h1>
+      <p class="page-subtitle">{{ t('pipelineModes.subtitle') }}</p>
+    </div>
     <div class="header-with-toolbar">
-      <h1 class="page-title">
-        <el-icon><SetUp /></el-icon>
-        {{ t('pipelineModes.title') }}
-      </h1>
       <div class="toolbar-actions">
-        <el-input
-          v-model="searchText"
-          :placeholder="t('pipelineModes.searchPlaceholder')"
-          clearable
-          style="width: 200px"
-        >
-          <template #prefix>
-            <el-icon><Search /></el-icon>
-          </template>
-        </el-input>
-        <span class="search-count" v-if="searchText">
-          {{ t('pipelineModes.searchCount', { count: filteredPipelines.length }) }}
-        </span>
+        <el-button v-if="canAddOwnPipelines" type="primary" @click="openCreate">
+          <el-icon><Plus /></el-icon>
+          {{ t('pipelineModes.createPipeline') }}
+        </el-button>
+        <el-button @click="openTemplateDialog">
+          <el-icon><DocumentCopy /></el-icon>
+          {{ t('pipelineModes.createFromTemplate') }}
+        </el-button>
+        <el-button @click="triggerImportTemplate">
+          <el-icon><Upload /></el-icon>
+          {{ t('pipelineModes.importPipeline') }}
+        </el-button>
+        <el-button :loading="loading" @click="loadData">
+          <el-icon><Refresh /></el-icon>
+          {{ t('pipelineModes.refresh') }}
+        </el-button>
         <el-button
           v-if="selectedPipelines.length > 0"
           :loading="batchExporting"
@@ -39,129 +42,24 @@
             </el-button>
           </span>
         </el-tooltip>
-        <el-button :loading="loading" @click="loadData">
-          <el-icon><Refresh /></el-icon>
-          {{ t('pipelineModes.refresh') }}
-        </el-button>
-        <el-button @click="openTemplateDialog">
-          <el-icon><DocumentCopy /></el-icon>
-          {{ t('pipelineModes.createFromTemplate') }}
-        </el-button>
-        <el-button @click="triggerImportTemplate">
-          <el-icon><Upload /></el-icon>
-          {{ t('pipelineModes.importPipeline') }}
-        </el-button>
-        <input
-          ref="importTemplateInputRef"
-          type="file"
-          accept=".yaml,.yml,text/yaml"
-          multiple
-          style="display: none"
-          @change="handleImportTemplateFile"
-        />
-        <el-button v-if="canAddOwnPipelines" type="primary" @click="openCreate">
-          <el-icon><Plus /></el-icon>
-          {{ t('pipelineModes.createPipeline') }}
-        </el-button>
+        <el-input
+          v-model="searchText"
+          :placeholder="t('pipelineModes.searchPlaceholder')"
+          clearable
+          style="width: 200px"
+        >
+          <template #prefix>
+            <el-icon><Search /></el-icon>
+          </template>
+        </el-input>
+        <span class="search-count" v-if="searchText">
+          {{ t('pipelineModes.searchCount', { count: filteredPipelines.length }) }}
+        </span>
       </div>
     </div>
 
-    <!-- 流水线列表 -->
-    <el-card v-if="!isTeamView" class="table-card" v-loading="loading">
-      <el-table
-        :data="filteredPipelines"
-        stripe
-        size="large"
-        highlight-current-row
-        row-key="id"
-        :row-class-name="pipelineRowClass"
-        @selection-change="handleSelectionChange"
-      >
-        <el-table-column type="selection" width="50" />
-        <el-table-column prop="id" :label="t('pipelineModes.table.id')" width="120" show-overflow-tooltip sortable>
-          <template #default="{ row }">
-            <el-tag type="info" size="small">{{ row.id }}</el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column prop="shortcut_code" :label="t('pipelineModes.table.shortcutCode')" width="150" align="center" sortable>
-          <template #default="{ row }">
-            <div style="display: flex; align-items: center; gap: 4px;">
-              <el-input
-                v-model="row.shortcut_code"
-                :placeholder="t('pipelineModes.table.shortcutPlaceholder')"
-                clearable
-                size="small"
-                :loading="row.shortcutLoading"
-                style="flex: 1"
-              >
-                <template #prefix>
-                  <el-icon><SetUp /></el-icon>
-                </template>
-              </el-input>
-              <PipelineFeatureGuard
-                v-if="(row.shortcut_code || '') !== (row._originalShortcutCode || '')"
-                feature="pipelineShortcutUpdate"
-                :pipeline="row"
-                :unrestricted="unrestricted"
-                :action-label="t('pipelineModes.table.saveShortcut')"
-              >
-                <template #default="{ disabled }">
-                  <el-button
-                    size="small"
-                    type="primary"
-                    :loading="row.shortcutLoading"
-                    :disabled="disabled"
-                    @click="handleShortcutSave(row)"
-                    :title="t('pipelineModes.table.save')"
-                  >
-                    <el-icon><Check /></el-icon>
-                  </el-button>
-                </template>
-              </PipelineFeatureGuard>
-            </div>
-          </template>
-        </el-table-column>
-        <el-table-column prop="name" :label="t('pipelineModes.table.name')" min-width="180" sortable>
-          <template #default="{ row }">
-            <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
-              <span style="font-weight: 500">{{ row.name }}</span>
-              <el-tag v-if="isSystemPipeline(row)" type="info" size="small" effect="plain">
-                {{ t('pipelineModes.table.scopeSystem') }}
-              </el-tag>
-              <el-tag v-else type="warning" size="small" effect="plain">
-                {{ t('pipelineModes.table.scopeMine') }}
-              </el-tag>
-              <el-tag v-if="row.id === defaultPipelineId" type="success" size="small" effect="light">
-                <el-icon style="margin-right: 2px; vertical-align: -2px;"><StarFilled /></el-icon>
-                {{ t('pipelineModes.table.defaultPipeline') }}
-              </el-tag>
-            </div>
-          </template>
-        </el-table-column>
-        <el-table-column prop="description" :label="t('pipelineModes.table.description')" min-width="200" show-overflow-tooltip sortable />
-        <el-table-column :label="t('pipelineModes.table.nodeCount')" width="80" align="center" sortable :sort-method="sortByNodeCount">
-          <template #default="{ row }">
-            <el-tag type="primary" size="small">{{ row.nodes?.length || 0 }} {{ t('pipelineModes.table.nodeUnit') }}</el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column prop="version" :label="t('pipelineModes.table.version')" width="80" align="center" sortable />
-        <el-table-column :label="t('pipelineModes.table.actions')" width="130" align="center" fixed="right">
-          <template #default="{ row }">
-            <PipelineRowActions
-              :row="row"
-              :unrestricted="unrestricted"
-              :default-pipeline-id="defaultPipelineId"
-              @command="(cmd) => handleRowCommand(cmd, row)"
-            />
-          </template>
-        </el-table-column>
-      </el-table>
-
-      <el-empty v-if="!loading && pipelines.length === 0" :description="t('pipelineModes.empty')" :image-size="120" />
-    </el-card>
-
-    <!-- 流水线卡片视图（Team 版） -->
-    <div v-else class="pipeline-cards-wrap" v-loading="loading">
+    <!-- 流水线卡片视图 -->
+    <div class="pipeline-cards-wrap" v-loading="loading">
       <el-empty v-if="!loading && filteredPipelines.length === 0" :description="t('pipelineModes.empty')" :image-size="120" />
       <div class="pipeline-cards">
         <div
@@ -374,8 +272,6 @@ import MinimalChat from '@/views/MinimalChat.vue'
 import { useUserResourceAccess } from '@/composables/useUserResourceAccess'
 import { resolvePipelineFeatureSupport, isSystemPipeline } from '@/utils/pipeline/features'
 import { downloadPipelineYaml, downloadPipelinesAsZip } from '@/utils/pipeline/importExport'
-import { isTeamEdition } from '@/utils/edition'
-
 const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
@@ -412,8 +308,6 @@ const testChatPipelineId = ref('')
 
 type PipelineRow = Pipeline & { shortcutLoading?: boolean; _originalShortcutCode?: string }
 
-const isTeamView = isTeamEdition()
-
 function isCardSelected(row: Pipeline): boolean {
   return selectedPipelines.value.some((p) => p.id === row.id)
 }
@@ -424,10 +318,6 @@ function toggleCardSelection(row: Pipeline, checked: boolean | string | number) 
   } else {
     selectedPipelines.value = selectedPipelines.value.filter((p) => p.id !== row.id)
   }
-}
-
-function pipelineRowClass({ row }: { row: PipelineRow }) {
-  return row.id === defaultPipelineId.value ? 'is-default-pipeline-row' : ''
 }
 
 const filteredPipelines = computed(() => {
@@ -455,10 +345,6 @@ function upsertPipelineInList(pipeline: Pipeline) {
   } else {
     pipelines.value = [...pipelines.value, row]
   }
-}
-
-const handleSelectionChange = (rows: Pipeline[]) => {
-  selectedPipelines.value = rows
 }
 
 const getPipelineFeatureSupport = (feature: 'pipelineBatchDelete', row: Pipeline) => {
@@ -809,10 +695,6 @@ const openHistory = (row: Pipeline) => {
   historyVisible.value = true
 }
 
-const sortByNodeCount = (a: Pipeline, b: Pipeline): number => {
-  return (a.nodes?.length || 0) - (b.nodes?.length || 0)
-}
-
 const handleExport = async (row: Pipeline) => {
   try {
     await downloadPipelineYaml(row.id, row.name || row.id)
@@ -964,24 +846,33 @@ onMounted(() => {
   padding: 0 0 24px;
 }
 
-.header-with-toolbar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+.page-header {
   margin-bottom: 16px;
-  flex-wrap: wrap;
-  gap: 12px;
 }
 
 .page-title {
+  margin: 0 0 4px;
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--el-text-color-primary);
+}
+
+.page-subtitle {
+  margin: 0;
+  font-size: 13px;
+  color: var(--el-text-color-secondary);
+}
+
+.header-with-toolbar {
   display: flex;
   align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
   gap: 10px;
-  margin: 0;
-  font-size: 26px;
-  font-weight: 600;
-  color: #1f2937;
-  flex-shrink: 0;
+  padding: 12px 16px;
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
 }
 
 .toolbar-actions {
@@ -991,9 +882,15 @@ onMounted(() => {
   flex-wrap: wrap;
 }
 
-.table-card {
-  border-radius: 12px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+.toolbar-actions .el-button {
+  border-radius: 8px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.toolbar-actions .el-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
 .pipeline-cards-wrap {
@@ -1105,26 +1002,10 @@ onMounted(() => {
   color: #6b7280;
 }
 
-.toolbar-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
 .search-count {
   font-size: 13px;
   color: #64748b;
   white-space: nowrap;
-}
-
-/* 默认流水线行绿色高亮 */
-:deep(.el-table__row.is-default-pipeline-row > td.el-table__cell) {
-  background-color: #f0fdf4;
-}
-
-:deep(.el-table--enable-row-hover .el-table__body tr.is-default-pipeline-row:hover > td.el-table__cell) {
-  background-color: #e8f8ee;
 }
 
 </style>
