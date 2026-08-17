@@ -27,7 +27,7 @@ func TestProxyConfigEffectiveDefaultPipeline(t *testing.T) {
 			want:  "direct-backend",
 		},
 		{
-			name:  "hard fallback is transparent-proxy",
+			name:  "hard fallback is transparent",
 			proxy: ProxyConfig{},
 			want:  DefaultSystemPipelineID,
 		},

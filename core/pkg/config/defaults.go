@@ -14,7 +14,7 @@ import (
 // Routing fields can be overridden via environment variables
 // (config/secrets/.env 由 scripts/generate-secrets.sh 生成时会写入「四 B」节)：
 //
-//	LLM_PROXY_DEFAULT_MODE              (default: transparent-proxy；各发行版首轮初始化统一透明模式)
+//	LLM_PROXY_DEFAULT_MODE              (default: transparent；各发行版首轮初始化统一透明模式)
 //	LLM_PROXY_DEFAULT_BACKEND_ID        (default: ollama-local)
 //	LLM_PROXY_DEFAULT_MODEL             (default: qwen2.5:1.5b，Ollama 常见对话模型)
 //	LLM_PROXY_ALLOW_HEADER_OVERRIDE     (default: true，允许 X-Proxy-Mode 头覆盖流水线路由)

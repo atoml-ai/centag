@@ -376,7 +376,7 @@ type PipelineConfig struct {
 }
 
 // DefaultSystemPipelineID 是各发行版 / 运行方式在初始化时的统一系统默认流水线（透明模式，不注入 system prompt）。
-const DefaultSystemPipelineID = "transparent-proxy"
+const DefaultSystemPipelineID = "transparent"
 
 // EffectiveDefaultPipeline 返回无头请求应使用的默认流水线 ID。
 // 优先级：pipeline_config.default_pipeline → proxy.default_mode → DefaultSystemPipelineID。

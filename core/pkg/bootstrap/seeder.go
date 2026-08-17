@@ -18,7 +18,7 @@
 //	LLM_PROXY_ADMIN_USERNAME      (default: admin)
 //	LLM_PROXY_ADMIN_PASSWORD      首次启动前显式设置可预置口令；未设置时
 //	                              personal/minimal/team 一律强制首启设置密码
-//	LLM_PROXY_DEFAULT_MODE             (default: transparent-proxy)
+//	LLM_PROXY_DEFAULT_MODE             (default: transparent)
 //	LLM_PROXY_DEFAULT_BACKEND_ID       (default: ollama-local)
 //	LLM_PROXY_DEFAULT_MODEL            (default: qwen2.5:1.5b)
 //	LLM_PROXY_DEFAULT_EMBEDDING_MODEL  (default: bge-m3:latest)
@@ -400,10 +400,10 @@ func buildDefaultPresetModes() string {
 			Mode:        "direct-backend",
 		},
 		{
-			ID:          "transparent-proxy",
+			ID:          "transparent",
 			Name:        "透明模式",
-			Description: "直连已配置后端，不注入网关 system prompt",
-			Mode:        "transparent-proxy",
+			Description: "简单直接的透传转发：直连已配置后端，不注入网关 system prompt",
+			Mode:        "transparent",
 		},
 		{
 			ID:          "fixed-egress",
