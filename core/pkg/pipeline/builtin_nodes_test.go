@@ -4,6 +4,8 @@ import (
 	"context"
 	"strings"
 	"testing"
+
+	"centag/core/pkg/config"
 )
 
 // mockBackendClient 用于测试的模拟后端客户端
@@ -372,48 +374,48 @@ func TestRouterNodeKeywordRouting(t *testing.T) {
 			"default_route":    "chat-generator",
 			"routes": map[string]interface{}{
 				// 代码生成
-				"code":         "code-generator",
+				"code":       "code-generator",
 				"代码":         "code-generator",
-				"python":       "code-generator",
-				"java":         "code-generator",
-				"go":           "code-generator",
-				"golang":       "code-generator",
-				"rust":         "code-generator",
-				"javascript":   "code-generator",
-				"js":           "code-generator",
-				"typescript":   "code-generator",
-				"ts":           "code-generator",
-				"cpp":          "code-generator",
-				"c++":          "code-generator",
-				"csharp":       "code-generator",
-				"c#":           "code-generator",
-				"php":          "code-generator",
-				"ruby":         "code-generator",
-				"swift":        "code-generator",
-				"kotlin":       "code-generator",
-				"sql":          "code-generator",
-				"shell":        "code-generator",
-				"bash":         "code-generator",
+				"python":     "code-generator",
+				"java":       "code-generator",
+				"go":         "code-generator",
+				"golang":     "code-generator",
+				"rust":       "code-generator",
+				"javascript": "code-generator",
+				"js":         "code-generator",
+				"typescript": "code-generator",
+				"ts":         "code-generator",
+				"cpp":        "code-generator",
+				"c++":        "code-generator",
+				"csharp":     "code-generator",
+				"c#":         "code-generator",
+				"php":        "code-generator",
+				"ruby":       "code-generator",
+				"swift":      "code-generator",
+				"kotlin":     "code-generator",
+				"sql":        "code-generator",
+				"shell":      "code-generator",
+				"bash":       "code-generator",
 				"程序":         "code-generator",
 				"函数":         "code-generator",
 				"方法":         "code-generator",
 				"脚本":         "code-generator",
 				"算法":         "code-generator",
-				"类":           "code-generator",
+				"类":          "code-generator",
 				"接口":         "code-generator",
 				"模块":         "code-generator",
-				"库":           "code-generator",
-				"leetcode":     "code-generator",
+				"库":          "code-generator",
+				"leetcode":   "code-generator",
 				"实现":         "code-generator",
 				"编写":         "code-generator",
 				// 翻译
-				"translate":    "translate-gen",
-				"translation":  "translate-gen",
-				"翻译":         "translate-gen",
+				"translate":   "translate-gen",
+				"translation": "translate-gen",
+				"翻译":          "translate-gen",
 				// 摘要
-				"summary":      "summary-gen",
-				"摘要":         "summary-gen",
-				"总结":         "summary-gen",
+				"summary": "summary-gen",
+				"摘要":      "summary-gen",
+				"总结":      "summary-gen",
 			},
 		},
 	}
@@ -824,6 +826,133 @@ func TestRouterNode_LLMClassify_NoBroker(t *testing.T) {
 	}
 }
 
+// captureBroker 记录 GetLLMClient 的权限，用于验证 router 分类调用使用的 backend/model。
+type captureBroker struct {
+	mockCapabilityBroker
+	perms []string
+}
+
+func (m *captureBroker) GetLLMClient(ctx context.Context, permissions []string) (LLMClient, error) {
+	m.perms = permissions
+	return m.llmClient, nil
+}
+
+// TestRouterNode_LLMClassify_UsesSystemClassifyVars 验证系统 classify 变量被用于分类调用。
+// 当 system.classify_backend / system.classify_model 配置后，分类应走该快速后端，
+// 而非节点自身的默认后端/模型。
+func TestRouterNode_LLMClassify_UsesSystemClassifyVars(t *testing.T) {
+	prev := config.Get()
+	config.Set(&config.Config{
+		Proxy: config.ProxyConfig{
+			DefaultBackendID: "default-backend",
+			DefaultModel:     "default-model",
+		},
+		ModelVariables: config.ModelVariables{
+			SystemVariables: map[string]string{
+				"system.classify_backend": "fast-classify-be",
+				"system.classify_model":   "fast-classify-model",
+			},
+		},
+	})
+	defer config.Set(prev)
+
+	router := newLLMClassifyRouter(t, "code", nil, map[string]string{
+		"code": "code-generator",
+	})
+	broker := &captureBroker{}
+	broker.llmClient = &mockBackendClient{response: "code"}
+	router.SetCapabilityBroker(broker)
+
+	output, err := router.Execute(context.Background(), &NodeInput{Content: "用python实现快排"})
+	if err != nil {
+		t.Fatalf("Execute failed: %v", err)
+	}
+	if output.Metadata["selected_route"] != "code-generator" {
+		t.Errorf("selected_route = %v, want code-generator", output.Metadata["selected_route"])
+	}
+	if len(broker.perms) == 0 || broker.perms[0] != "llm.call:{{system.classify_backend}}:{{system.classify_model}}" {
+		t.Errorf("classify perms = %v, want llm.call:{{system.classify_backend}}:{{system.classify_model}}", broker.perms)
+	}
+}
+
+// TestRouterNode_LLMClassify_NodeClassifyConfig 验证节点级 classify 配置优先于系统变量，
+// 且节点 custom_config 里未配置 classify_backend/model 时回落系统变量。
+func TestRouterNode_LLMClassify_NodeClassifyConfig(t *testing.T) {
+	prev := config.Get()
+	config.Set(&config.Config{
+		Proxy: config.ProxyConfig{
+			DefaultBackendID: "default-backend",
+			DefaultModel:     "default-model",
+		},
+		ModelVariables: config.ModelVariables{
+			SystemVariables: map[string]string{
+				"system.classify_backend": "system-classify-be",
+				"system.classify_model":   "system-classify-model",
+			},
+		},
+	})
+	defer config.Set(prev)
+
+	// 节点 custom_config 显式指定 classify_backend/classify_model（系统变量被覆盖）
+	cfg := NodeConfig{
+		Backend: "test-backend",
+		Model:   "glm-4-flash",
+		CustomConfig: map[string]interface{}{
+			"routing_strategy": "llm_classify",
+			"default_route":    "chat-generator",
+			"routes":           toRouteMap(map[string]string{"code": "code-generator"}),
+			"classify_backend": "node-classify-be",
+			"classify_model":   "node-classify-model",
+		},
+	}
+	node, err := NewRouterNode(cfg)
+	if err != nil {
+		t.Fatalf("NewRouterNode failed: %v", err)
+	}
+	router := node.(*RouterNode)
+	router.SetID("classifier")
+	broker := &captureBroker{}
+	broker.llmClient = &mockBackendClient{response: "code"}
+	router.SetCapabilityBroker(broker)
+
+	if _, err := router.Execute(context.Background(), &NodeInput{Content: "hello"}); err != nil {
+		t.Fatalf("Execute failed: %v", err)
+	}
+	if len(broker.perms) == 0 || broker.perms[0] != "llm.call:node-classify-be:node-classify-model" {
+		t.Errorf("classify perms = %v, want llm.call:node-classify-be:node-classify-model", broker.perms)
+	}
+}
+
+// TestRouterNode_LLMClassify_FallbackToNodeBackend 验证未配置 classify 变量/字段时，
+// 分类调用回落节点自身 backend/model。
+func TestRouterNode_LLMClassify_FallbackToNodeBackend(t *testing.T) {
+	prev := config.Get()
+	config.Set(&config.Config{
+		Proxy: config.ProxyConfig{
+			DefaultBackendID: "default-backend",
+			DefaultModel:     "default-model",
+		},
+		ModelVariables: config.ModelVariables{
+			SystemVariables: map[string]string{},
+		},
+	})
+	defer config.Set(prev)
+
+	router := newLLMClassifyRouter(t, "code", nil, map[string]string{
+		"code": "code-generator",
+	})
+	broker := &captureBroker{}
+	broker.llmClient = &mockBackendClient{response: "code"}
+	router.SetCapabilityBroker(broker)
+
+	if _, err := router.Execute(context.Background(), &NodeInput{Content: "hello"}); err != nil {
+		t.Fatalf("Execute failed: %v", err)
+	}
+	if len(broker.perms) == 0 || broker.perms[0] != "llm.call:test-backend:glm-4-flash" {
+		t.Errorf("classify perms = %v, want llm.call:test-backend:glm-4-flash", broker.perms)
+	}
+}
+
 // TestRouterNode_ForcedRoute 验证 forced_route 跳过 LLM 分类强制路由
 func TestRouterNode_ForcedRoute(t *testing.T) {
 	// LLM 若被调用会返回 unknown_category，forced_route 下不应触发 LLM。
@@ -1051,11 +1180,11 @@ var _ = strings.TrimSpace
 
 // capturingBroker 捕获被请求的 permissions，便于断言节点构造的权限是否正确
 type capturingBroker struct {
-	llmClient     LLMClient
-	llmGetErr     error
+	llmClient       LLMClient
+	llmGetErr       error
 	returnNilClient bool
-	receivedPerms []string
-	calls         int
+	receivedPerms   []string
+	calls           int
 }
 
 func (c *capturingBroker) GetLLMClient(ctx context.Context, permissions []string) (LLMClient, error) {
@@ -1275,4 +1404,3 @@ func TestLoggerFromContext(t *testing.T) {
 		t.Errorf("wrong-typed ctx value should yield nil logger, got %T", l)
 	}
 }
-

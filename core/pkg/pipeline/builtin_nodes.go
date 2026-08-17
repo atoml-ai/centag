@@ -2,20 +2,20 @@ package pipeline
 
 import (
 	"bytes"
+	"centag/core/internal/cache"
+	evalplugin "centag/core/internal/cache/evaluation/plugin"
+	"centag/core/pkg/backend"
+	"centag/core/pkg/config"
+	"centag/core/pkg/embedding"
+	"centag/core/pkg/plugin"
+	"centag/core/pkg/processor"
+	"centag/core/pkg/storage"
+	"centag/core/pkg/utils"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"centag/core/pkg/backend"
-	"centag/core/internal/cache"
-	evalplugin "centag/core/internal/cache/evaluation/plugin"
-	"centag/core/pkg/config"
-	"centag/core/pkg/embedding"
-	"centag/core/pkg/plugin"
-	"centag/core/pkg/storage"
-	"centag/core/pkg/processor"
-	"centag/core/pkg/utils"
 	"regexp"
 	"sort"
 	"strconv"
@@ -261,13 +261,13 @@ func (n *GeneratorNode) Execute(ctx context.Context, input *NodeInput) (*NodeOut
 			ReasoningContent: resp.ReasoningContent,
 		}),
 		Metadata: map[string]interface{}{
-			"model":          resp.Model,
-			"backend_id":     n.config.Backend,
-			"tokens":         resp.TokenUsage,
-			"prompt_tokens":  len(input.Content) / 4,
-			"temperature":    n.Temperature,
-			"max_tokens":     n.MaxTokens,
-			"finish_reason":  resp.FinishReason,
+			"model":         resp.Model,
+			"backend_id":    n.config.Backend,
+			"tokens":        resp.TokenUsage,
+			"prompt_tokens": len(input.Content) / 4,
+			"temperature":   n.Temperature,
+			"max_tokens":    n.MaxTokens,
+			"finish_reason": resp.FinishReason,
 		},
 	}, nil
 }
@@ -886,10 +886,16 @@ type RouterNode struct {
 	rules          []pipelineRouterRule
 	classifyPrompt string // llm_classify 自定义分类 Prompt（空则使用内置默认）
 
+	// classifyBackend / classifyModel：LLM 分类专用后端/模型（custom_config 显式指定，
+	// 可为 {{system.*}} 模板或字面量；为空时按 resolveClassifyBackendModel 逐级回退）。
+	// 适用于「用低成本/快速模型做意图分类」的典型场景。
+	classifyBackend string
+	classifyModel   string
+
 	// keyword_then_intent options
-	enableLLMClassifier   bool
-	confidenceThreshold   float64
-	enableIntentResolver  bool
+	enableLLMClassifier  bool
+	confidenceThreshold  float64
+	enableIntentResolver bool
 }
 
 func NewRouterNode(config NodeConfig) (PipelineNode, error) {
@@ -925,6 +931,12 @@ func NewRouterNode(config NodeConfig) (PipelineNode, error) {
 		}
 		if p, ok := cc["classify_prompt"].(string); ok {
 			node.classifyPrompt = p
+		}
+		if b, ok := cc["classify_backend"].(string); ok {
+			node.classifyBackend = strings.TrimSpace(b)
+		}
+		if m, ok := cc["classify_model"].(string); ok {
+			node.classifyModel = strings.TrimSpace(m)
 		}
 		node.enableIntentResolver = true
 		node.confidenceThreshold = 0.55
@@ -1212,6 +1224,38 @@ func (n *RouterNode) selectRoute(ctx context.Context, content, forcedRoute strin
 	return "", "", ""
 }
 
+// resolveClassifyBackendModel 解析 LLM 分类调用应使用的 backend 与 model。
+// 优先级：节点 custom_config.classify_backend/classify_model >
+// 系统 system.classify_backend/system.classify_model（默认快速分类后端/模型）>
+// 节点自身 config.Backend/config.Model。
+// 返回的 backend/model 可能为 {{system.*}} 模板，交由 CreateClient 解析。
+func (n *RouterNode) resolveClassifyBackendModel() (backendID, model string) {
+	backendID = n.classifyBackend
+	model = n.classifyModel
+	if backendID == "" || model == "" {
+		if cfg := config.Get(); cfg != nil {
+			mv := cfg.ModelVariables.SystemVariables
+			if backendID == "" {
+				if v := mv["system.classify_backend"]; v != "" {
+					backendID = "{{system.classify_backend}}"
+				}
+			}
+			if model == "" {
+				if v := mv["system.classify_model"]; v != "" {
+					model = "{{system.classify_model}}"
+				}
+			}
+		}
+	}
+	if backendID == "" {
+		backendID = n.config.Backend
+	}
+	if model == "" {
+		model = n.config.Model
+	}
+	return backendID, model
+}
+
 // classifyWithLLM 通过 LLM 对用户输入做意图分类
 // 返回: (category, raw_response, error)
 //   - category: 清洗后小写、与 routes 的 key 完全匹配的类别名；未命中时为空字符串
@@ -1235,15 +1279,16 @@ func (n *RouterNode) classifyWithLLM(ctx context.Context, content string) (strin
 		return "", "", fmt.Errorf("render classify prompt: %w", err)
 	}
 
+	backendID, model := n.resolveClassifyBackendModel()
 	req := &LLMRequest{
-		Model: n.config.Model,
+		Model: model,
 		Messages: []Message{
 			{Role: "user", Content: prompt},
 		},
 		Temperature: 0,
 		MaxTokens:   16,
 	}
-	resp, err := n.CallLLM(ctx, "router", req)
+	resp, err := n.CallLLMWithBackend(ctx, "router", req, backendID, model)
 	if err != nil {
 		return "", "", err
 	}
@@ -4713,9 +4758,9 @@ func (n *ToolCallInjectorNode) Execute(ctx context.Context, input *NodeInput) (*
 		Content:   input.Content,
 		ToolCalls: toolCalls,
 		Metadata: map[string]interface{}{
-			"node_type":        "tool_call_injector",
-			"injected_count":   len(toolCalls),
-			"tool_call_ids":    n.extractToolCallIDs(toolCalls),
+			"node_type":      "tool_call_injector",
+			"injected_count": len(toolCalls),
+			"tool_call_ids":  n.extractToolCallIDs(toolCalls),
 		},
 	}, nil
 }

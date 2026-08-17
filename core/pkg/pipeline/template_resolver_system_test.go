@@ -20,8 +20,10 @@ func TestTemplateVarResolver_SystemVariables(t *testing.T) {
 		},
 		ModelVariables: config.ModelVariables{
 			SystemVariables: map[string]string{
-				"system.rerank_backend": "cohere",
-				"system.rerank_model":   "rerank-v3",
+				"system.rerank_backend":   "cohere",
+				"system.rerank_model":     "rerank-v3",
+				"system.classify_backend": "groq",
+				"system.classify_model":   "llama-3.1-8b",
 			},
 		},
 	}
@@ -44,6 +46,8 @@ func TestTemplateVarResolver_SystemVariables(t *testing.T) {
 		{path: "system.embedding_model", want: "bge-m3"},
 		{path: "system.rerank_backend", want: "cohere"},
 		{path: "system.rerank_model", want: "rerank-v3"},
+		{path: "system.classify_backend", want: "groq"},
+		{path: "system.classify_model", want: "llama-3.1-8b"},
 		{path: "system.unknown_field", wantErr: true},
 		{path: "system", wantErr: true},
 	}
@@ -79,7 +83,7 @@ func TestTemplateVarResolver_SystemRerankEmpty(t *testing.T) {
 
 	r := NewTemplateVarResolver(&NodeInput{Content: "hello"}, nil)
 
-	for _, path := range []string{"system.rerank_backend", "system.rerank_model"} {
+	for _, path := range []string{"system.rerank_backend", "system.rerank_model", "system.classify_backend", "system.classify_model"} {
 		got, err := r.Resolve(path)
 		if err != nil {
 			t.Fatalf("Resolve(%q) error = %v", path, err)

@@ -2734,6 +2734,11 @@ func ResolveVirtualVarsContext(ctx context.Context, backendID, model string) (st
 		if strings.TrimSpace(resolvedBackend) == "" {
 			resolvedBackend = defaultBackend
 		}
+	case "{{system.classify_backend}}":
+		resolvedBackend = cfg.ModelVariables.SystemVariables["system.classify_backend"]
+		if strings.TrimSpace(resolvedBackend) == "" {
+			resolvedBackend = defaultBackend
+		}
 	}
 
 	switch model {
@@ -2743,6 +2748,11 @@ func ResolveVirtualVarsContext(ctx context.Context, backendID, model string) (st
 		// 未配置时保持空，由下方挑选「不同于 default_model」的免费档；勿直接回落 PreferredDefaultModel
 		// （probe/default 常相同，会导致 forward_fallback 与主路打同一不可用模型）。
 		resolvedModel = cfg.Proxy.FallbackModel
+	case "{{system.classify_model}}":
+		resolvedModel = cfg.ModelVariables.SystemVariables["system.classify_model"]
+		if strings.TrimSpace(resolvedModel) == "" {
+			resolvedModel = defaultModel
+		}
 	}
 
 	if strings.TrimSpace(resolvedModel) == "" && strings.TrimSpace(resolvedBackend) != "" {

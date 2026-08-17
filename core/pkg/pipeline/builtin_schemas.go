@@ -1,9 +1,9 @@
 package pipeline
 
 type NodeTypeSchemas struct {
-	ConfigSchema  JSONSchema
-	InputSchema   JSONSchema
-	OutputSchema  JSONSchema
+	ConfigSchema JSONSchema
+	InputSchema  JSONSchema
+	OutputSchema JSONSchema
 }
 
 var BuiltinNodeSchemas = map[NodeType]NodeTypeSchemas{
@@ -135,7 +135,7 @@ var BuiltinNodeSchemas = map[NodeType]NodeTypeSchemas{
 		OutputSchema: JSONSchema{
 			"type": "object",
 			"properties": map[string]interface{}{
-				"content":  map[string]interface{}{"type": "string"},
+				"content": map[string]interface{}{"type": "string"},
 				"messages": map[string]interface{}{
 					"type": "array",
 				},
@@ -174,6 +174,14 @@ var BuiltinNodeSchemas = map[NodeType]NodeTypeSchemas{
 						"classify_prompt": map[string]interface{}{
 							"type":        "string",
 							"description": "llm_classify 策略下可选的自定义分类 Prompt（留空使用内置默认）。可用变量：{{.input}}",
+						},
+						"classify_backend": map[string]interface{}{
+							"type":        "string",
+							"description": "llm_classify 分类调用专用的后端（可为 {{system.classify_backend}} 模板）。留空时按系统默认快速分类后端 → 节点自身后端逐级回退。",
+						},
+						"classify_model": map[string]interface{}{
+							"type":        "string",
+							"description": "llm_classify 分类调用专用的模型（可为 {{system.classify_model}} 模板）。留空时按系统默认快速分类模型 → 节点自身模型逐级回退。",
 						},
 					},
 				},
@@ -277,11 +285,11 @@ var BuiltinNodeSchemas = map[NodeType]NodeTypeSchemas{
 		OutputSchema: JSONSchema{
 			"type": "object",
 			"properties": map[string]interface{}{
-				"content":   map[string]interface{}{"type": "string"},
-				"metadata":  map[string]interface{}{"type": "object"},
-				"passed":    map[string]interface{}{"type": "boolean"},
-				"score":     map[string]interface{}{"type": "number"},
-				"feedback":  map[string]interface{}{"type": "string"},
+				"content":  map[string]interface{}{"type": "string"},
+				"metadata": map[string]interface{}{"type": "object"},
+				"passed":   map[string]interface{}{"type": "boolean"},
+				"score":    map[string]interface{}{"type": "number"},
+				"feedback": map[string]interface{}{"type": "string"},
 			},
 		},
 		ConfigSchema: JSONSchema{
@@ -622,9 +630,9 @@ var BuiltinNodeSchemas = map[NodeType]NodeTypeSchemas{
 						"check": map[string]interface{}{
 							"type": "object",
 							"properties": map[string]interface{}{
-								"enabled":        map[string]interface{}{"type": "boolean"},
-								"deny_patterns":  map[string]interface{}{"type": "array", "items": map[string]interface{}{"type": "string"}},
-								"on_hit":         map[string]interface{}{"type": "string", "enum": []interface{}{"log", "redact", "block"}},
+								"enabled":       map[string]interface{}{"type": "boolean"},
+								"deny_patterns": map[string]interface{}{"type": "array", "items": map[string]interface{}{"type": "string"}},
+								"on_hit":        map[string]interface{}{"type": "string", "enum": []interface{}{"log", "redact", "block"}},
 							},
 						},
 						"optimize": map[string]interface{}{

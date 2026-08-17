@@ -60,6 +60,54 @@ func TestResolveVirtualVars_FallbackPlaceholders(t *testing.T) {
 	}
 }
 
+func TestResolveVirtualVars_ClassifyPlaceholders(t *testing.T) {
+	prev := config.Get()
+	config.Set(&config.Config{
+		Proxy: config.ProxyConfig{
+			DefaultBackendID: "default-be",
+			DefaultModel:     "default-model",
+		},
+		ModelVariables: config.ModelVariables{
+			SystemVariables: map[string]string{
+				"system.classify_backend": "fast-be",
+				"system.classify_model":   "fast-model",
+			},
+		},
+	})
+	defer config.Set(prev)
+
+	gotBackend, gotModel := ResolveVirtualVars("{{system.classify_backend}}", "{{system.classify_model}}")
+	if gotBackend != "fast-be" {
+		t.Fatalf("backend=%q", gotBackend)
+	}
+	if gotModel != "fast-model" {
+		t.Fatalf("model=%q", gotModel)
+	}
+}
+
+func TestResolveVirtualVars_ClassifyPlaceholdersFallbackToDefault(t *testing.T) {
+	prev := config.Get()
+	config.Set(&config.Config{
+		Proxy: config.ProxyConfig{
+			DefaultBackendID: "default-be",
+			DefaultModel:     "default-model",
+		},
+		ModelVariables: config.ModelVariables{
+			SystemVariables: map[string]string{},
+		},
+	})
+	defer config.Set(prev)
+
+	// 未配置快速分类变量时回落到默认后端/模型
+	gotBackend, gotModel := ResolveVirtualVars("{{system.classify_backend}}", "{{system.classify_model}}")
+	if gotBackend != "default-be" {
+		t.Fatalf("backend=%q", gotBackend)
+	}
+	if gotModel != "default-model" {
+		t.Fatalf("model=%q", gotModel)
+	}
+}
+
 func TestResolveVirtualVars_EmptyFallbackPicksDistinctFreeTier(t *testing.T) {
 	mgr := backend.NewManager()
 	_ = mgr.Add(&backend.BackendConfig{

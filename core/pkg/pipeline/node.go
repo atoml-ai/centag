@@ -16,22 +16,22 @@ import (
 type NodeType string
 
 const (
-	NodeTypeGenerator        NodeType = "generator"
-	NodeTypeProcessor        NodeType = "processor"
-	NodeTypeReviewer         NodeType = "reviewer"
-	NodeTypeRouter           NodeType = "router"
-	NodeTypeAggregator       NodeType = "aggregator"
-	NodeTypeMemory           NodeType = "memory"
-	NodeTypeAudit            NodeType = "audit"
-	NodeTypeOptimize         NodeType = "optimize"
-	NodeTypeLoopController   NodeType = "loop_controller"   // 循环控制器节点
-	NodeTypeCache            NodeType = "cache"             // Phase 4: 缓存节点
-	NodeTypeTokenUsage       NodeType = "token_usage"       // Phase 4: Token 计量节点
-	NodeTypeScheduler        NodeType = "scheduler"         // 智能调度节点
+	NodeTypeGenerator          NodeType = "generator"
+	NodeTypeProcessor          NodeType = "processor"
+	NodeTypeReviewer           NodeType = "reviewer"
+	NodeTypeRouter             NodeType = "router"
+	NodeTypeAggregator         NodeType = "aggregator"
+	NodeTypeMemory             NodeType = "memory"
+	NodeTypeAudit              NodeType = "audit"
+	NodeTypeOptimize           NodeType = "optimize"
+	NodeTypeLoopController     NodeType = "loop_controller"     // 循环控制器节点
+	NodeTypeCache              NodeType = "cache"               // Phase 4: 缓存节点
+	NodeTypeTokenUsage         NodeType = "token_usage"         // Phase 4: Token 计量节点
+	NodeTypeScheduler          NodeType = "scheduler"           // 智能调度节点
 	NodeTypeTransparentForward NodeType = "transparent_forward" // 透明 HTTP 转发节点
-	NodeTypeToolCallInjector   NodeType = "tool_call_injector"   // 工具调用注入节点
-	NodeTypeUserPromptOps     NodeType = "user_prompt_ops"      // 用户 Prompt 操作节点
-	NodeTypeOutputPostOps     NodeType = "output_post_ops"      // 输出后处理节点
+	NodeTypeToolCallInjector   NodeType = "tool_call_injector"  // 工具调用注入节点
+	NodeTypeUserPromptOps      NodeType = "user_prompt_ops"     // 用户 Prompt 操作节点
+	NodeTypeOutputPostOps      NodeType = "output_post_ops"     // 输出后处理节点
 )
 
 func (nt NodeType) String() string {
@@ -131,11 +131,30 @@ func (n *BaseNode) resolveLLMPermissions() []string {
 // 返回的 error 涵盖 broker 不可用、client 获取失败、Chat 失败等所有场景，
 // 由 caller 决定是 fallback 还是直接终止 pipeline。
 func (n *BaseNode) CallLLM(ctx context.Context, kind string, req *LLMRequest) (*LLMResponse, error) {
+	return n.callLLM(ctx, kind, req, n.resolveLLMPermissions(), n.config.Backend, n.config.Model)
+}
+
+// CallLLMWithBackend 通过 CapabilityBroker 发起一次 LLM 调用（非流式），
+// 但显式指定 backend_id 与 model（而非沿用节点自身的 config.Backend/config.Model）。
+// 适用于需要将子调用（如 router 的 LLM 意图分类）路由到独立后端的场景。
+// 与 CallLLM 相同：若节点已显式配置 permissions 则优先使用之。
+func (n *BaseNode) CallLLMWithBackend(ctx context.Context, kind string, req *LLMRequest, backendID, model string) (*LLMResponse, error) {
+	perms := n.GetPermissions()
+	if len(perms) == 0 {
+		if backendID != "" && model != "" {
+			perms = []string{fmt.Sprintf("llm.call:%s:%s", backendID, model)}
+		} else {
+			perms = []string{"llm.call"}
+		}
+	}
+	return n.callLLM(ctx, kind, req, perms, backendID, model)
+}
+
+func (n *BaseNode) callLLM(ctx context.Context, kind string, req *LLMRequest, perms []string, backendID, configModel string) (*LLMResponse, error) {
 	broker := n.capabilityBroker
 	if broker == nil {
 		return nil, fmt.Errorf("%s node %q: capability broker not available", kind, n.id)
 	}
-	perms := n.resolveLLMPermissions()
 	client, err := broker.GetLLMClient(ctx, perms)
 	if err != nil {
 		return nil, fmt.Errorf("%s node %q: get llm client: %w", kind, n.id, err)
@@ -148,10 +167,9 @@ func (n *BaseNode) CallLLM(ctx context.Context, kind string, req *LLMRequest) (*
 	}
 
 	log := LoggerFromContext(ctx)
-	backendID := n.config.Backend
 	model := req.Model
 	if model == "" {
-		model = n.config.Model
+		model = configModel
 	}
 	if log != nil {
 		reqFields := AppendRequestIDFields(ctx,

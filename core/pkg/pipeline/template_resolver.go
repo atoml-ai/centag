@@ -187,8 +187,18 @@ func (r *TemplateVarResolver) resolveSystem(parts []string) (interface{}, error)
 			return v, nil
 		}
 		return "", nil
+	case "classify_backend":
+		if v, ok := cfg.ModelVariables.SystemVariables["system.classify_backend"]; ok {
+			return v, nil
+		}
+		return "", nil
+	case "classify_model":
+		if v, ok := cfg.ModelVariables.SystemVariables["system.classify_model"]; ok {
+			return v, nil
+		}
+		return "", nil
 	default:
-		return nil, fmt.Errorf("unknown system field: %s (支持: default_backend / default_model / fallback_backend / fallback_model / embedding_backend / embedding_model / rerank_backend / rerank_model)", parts[0])
+		return nil, fmt.Errorf("unknown system field: %s (支持: default_backend / default_model / fallback_backend / fallback_model / embedding_backend / embedding_model / rerank_backend / rerank_model / classify_backend / classify_model)", parts[0])
 	}
 }
 
