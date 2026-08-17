@@ -94,7 +94,7 @@ X-Cache: HIT-EXACT
 3. Apply system strategy `replace` when gateway prompt is non-empty (see [prompt-strategy.md](./prompt-strategy.md))
 
 **Shortcut**: `#d`  
-**Template**: `config/initdata/pipeline-templates/common/direct-backend.yaml`
+**Template**: `config/initdata/pipeline-templates/common/transparent.yaml` (direct-backend 为别名，经兼容层映射)
 
 **Request Example** (standard OpenAI client — only `base_url` / API key needed):
 
@@ -124,7 +124,7 @@ Optional: `X-Backend-ID` / `X-Backend-Name` still work for forcing a backend whe
 3. Optional: attach `user_prompt_ops` / `output_post_ops` nodes for inbound/outbound normalization (see [prompt-strategy.md](./prompt-strategy.md))
 
 **Shortcuts**: `#t`, `#tf`  
-**Templates**: `transparent-proxy.yaml`, `transparent-fast.yaml`
+**Template**: `config/initdata/pipeline-templates/common/transparent.yaml` (transparent-proxy 为别名，经兼容层映射)
 
 ```bash
 curl -X POST http://localhost:20060/v1/chat/completions \
@@ -146,7 +146,7 @@ curl -X POST http://localhost:20060/v1/chat/completions \
 **Description**: Centag acts as a fixed-egress jump board via `builtin.transparent_forward` with `route_policy=fixed`. Uses the system default backend/model (or explicit `X-Backend-ID`); no cross-backend model matching; does not inject system prompt. (Formerly `raw-forward` / `#raw` — retired.)
 
 **Shortcut**: `#j`  
-**Template**: `config/initdata/pipeline-templates/common/fixed-egress.yaml`
+**Template**: `config/initdata/pipeline-templates/common/transparent.yaml` (fixed-egress 为别名，经兼容层映射)
 
 ```bash
 curl -X POST http://localhost:20060/v1/chat/completions \
@@ -386,9 +386,9 @@ curl -X POST http://localhost:20060/v1/chat/completions \
 
 **Per-request cache control** (`X-Cache-Read` / `X-Cache-Write`) is honored inside the DAG — same semantics as `#ch`.
 
-**Cache storage**: default template uses `redis` (L1 exact) + `chromadb-main` (L2 semantic vector store name). The `cached` Profile overlays `config/profiles/cached/initdata/pipeline-templates/18-rag-mode.yaml` with PostgreSQL (`pg`) + pgvector. Enable the matching storage backend in WebUI **设置 → 存储** before expecting cache hits.
+**Cache storage**: default template uses `redis` (L1 exact) + `chromadb-main` (L2 semantic vector store name). The `cached` Profile overlays `config/profiles/cached/initdata/pipeline-templates/cache-pipeline.yaml` with PostgreSQL (`pg`) + pgvector. Enable the matching storage backend in WebUI **设置 → 存储** before expecting cache hits.
 
-**Template**: `config/initdata/pipeline-templates/18-rag-mode.yaml` (`rag-mode`, shortcut `#rag`)
+**Template**: `config/initdata/pipeline-templates/common/cache-pipeline.yaml` (`rag-mode`, shortcut `#rag`; `18-rag-mode` 为别名，经兼容层映射)
 
 ### 14. Security Firewall Mode
 
@@ -760,7 +760,7 @@ export LLM_PROXY_MODE_P_TEMPLATE_ENABLED=true   # Pipeline mode
 | `#p` (Pipeline) | `10-pipeline-mode.json` | Generic multi-stage pipeline |
 | `#s` (Smart Scheduling) | `12-smart-scheduling.json` | Router-based intelligent scheduling |
 | `#mem0` (Mem0 Memory) | `17-mem0-memory.json` | Generator → business.mem0 storage |
-| `#rag` (RAG Gateway) | `18-rag-mode.yaml` | cache_read → rag_retrieval → generator → cache_write |
+| `#rag` (RAG Gateway) | `cache-pipeline.yaml` | cache_read → rag_retrieval → generator → cache_write |
 
 ### Dynamic Configuration via Headers
 
