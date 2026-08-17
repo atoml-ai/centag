@@ -66,9 +66,9 @@
             </template>
           </template>
         </el-table-column>
-        <el-table-column :label="t('modelConfig.description')" width="140">
+        <el-table-column :label="t('modelConfig.description')" min-width="260">
           <template #default="{ row }">
-            <span class="var-desc">{{ row.description }}</span>
+            <span class="var-desc">{{ varDescription(row.name) }}</span>
           </template>
         </el-table-column>
         <el-table-column :label="t('modelConfig.source')" width="120">
@@ -234,10 +234,28 @@ const presetVarNames = [
   'user.tone'
 ]
 
-const editableSystemVars = ['system.rerank_backend', 'system.rerank_model']
+const editableSystemVars = ['system.rerank_backend', 'system.rerank_model', 'system.classify_backend', 'system.classify_model']
 
 function isEditableSystemVar(name: string): boolean {
   return editableSystemVars.includes(name)
+}
+
+const systemVarDescKeys: Record<string, string> = {
+  'system.default_backend': 'nodeConfig.systemVarInfo.default_backend.usage',
+  'system.default_model': 'nodeConfig.systemVarInfo.default_model.usage',
+  'system.fallback_backend': 'nodeConfig.systemVarInfo.fallback_backend.usage',
+  'system.fallback_model': 'nodeConfig.systemVarInfo.fallback_model.usage',
+  'system.classify_backend': 'nodeConfig.systemVarInfo.classify_backend.usage',
+  'system.classify_model': 'nodeConfig.systemVarInfo.classify_model.usage',
+  'system.embedding_backend': 'nodeConfig.systemVarInfo.embedding_backend.usage',
+  'system.embedding_model': 'nodeConfig.systemVarInfo.embedding_model.usage',
+  'system.rerank_backend': 'nodeConfig.systemVarInfo.rerank_backend.usage',
+  'system.rerank_model': 'nodeConfig.systemVarInfo.rerank_model.usage',
+}
+
+function varDescription(name: string): string {
+  const key = systemVarDescKeys[name]
+  return key ? t(key) : ''
 }
 
 function isBackendVar(name: string): boolean {

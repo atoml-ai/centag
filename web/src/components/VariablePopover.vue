@@ -22,8 +22,11 @@
         class="var-item"
         @click="handleSelect(v.name)"
       >
-        <code class="var-name">{{ v.name }}</code>
-        <span class="var-desc">{{ v.desc }}</span>
+        <div class="var-head">
+          <code class="var-name">{{ v.name }}</code>
+          <span class="var-desc">{{ v.desc }}</span>
+        </div>
+        <div class="var-usage">{{ v.usage }}</div>
       </div>
       <template v-if="userVariables.length">
         <el-divider style="margin: 8px 0" />
@@ -43,7 +46,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useModelConfigStore } from '@/stores/model-config'
 
@@ -54,16 +57,18 @@ const emit = defineEmits<{
   select: [variableName: string]
 }>()
 
-const systemModelVars = [
-  { name: 'system.default_backend', desc: '默认后端' },
-  { name: 'system.default_model', desc: '默认模型' },
-  { name: 'system.fallback_backend', desc: '备用后端' },
-  { name: 'system.fallback_model', desc: '备用模型' },
-  { name: 'system.embedding_backend', desc: '向量化后端' },
-  { name: 'system.embedding_model', desc: '向量化模型' },
-  { name: 'system.rerank_backend', desc: '重排序后端' },
-  { name: 'system.rerank_model', desc: '重排序模型' },
-]
+const systemModelVars = computed(() => [
+  { name: 'system.default_backend', desc: t('nodeConfig.systemVarInfo.default_backend.desc'), usage: t('nodeConfig.systemVarInfo.default_backend.usage') },
+  { name: 'system.default_model', desc: t('nodeConfig.systemVarInfo.default_model.desc'), usage: t('nodeConfig.systemVarInfo.default_model.usage') },
+  { name: 'system.fallback_backend', desc: t('nodeConfig.systemVarInfo.fallback_backend.desc'), usage: t('nodeConfig.systemVarInfo.fallback_backend.usage') },
+  { name: 'system.fallback_model', desc: t('nodeConfig.systemVarInfo.fallback_model.desc'), usage: t('nodeConfig.systemVarInfo.fallback_model.usage') },
+  { name: 'system.classify_backend', desc: t('nodeConfig.systemVarInfo.classify_backend.desc'), usage: t('nodeConfig.systemVarInfo.classify_backend.usage') },
+  { name: 'system.classify_model', desc: t('nodeConfig.systemVarInfo.classify_model.desc'), usage: t('nodeConfig.systemVarInfo.classify_model.usage') },
+  { name: 'system.embedding_backend', desc: t('nodeConfig.systemVarInfo.embedding_backend.desc'), usage: t('nodeConfig.systemVarInfo.embedding_backend.usage') },
+  { name: 'system.embedding_model', desc: t('nodeConfig.systemVarInfo.embedding_model.desc'), usage: t('nodeConfig.systemVarInfo.embedding_model.usage') },
+  { name: 'system.rerank_backend', desc: t('nodeConfig.systemVarInfo.rerank_backend.desc'), usage: t('nodeConfig.systemVarInfo.rerank_backend.usage') },
+  { name: 'system.rerank_model', desc: t('nodeConfig.systemVarInfo.rerank_model.desc'), usage: t('nodeConfig.systemVarInfo.rerank_model.usage') },
+])
 
 const userVariables = ref<{ name: string; value: string }[]>([])
 
@@ -104,9 +109,6 @@ onMounted(() => {
   font-weight: 500;
 }
 .var-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
   padding: 6px 8px;
   border-radius: 4px;
   cursor: pointer;
@@ -115,11 +117,22 @@ onMounted(() => {
 .var-item:hover {
   background: #f0f7ff;
 }
+.var-item .var-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
 .var-item .var-name {
   font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
   font-size: 12px;
   color: #409eff;
   flex-shrink: 0;
+}
+.var-item .var-usage {
+  margin-top: 2px;
+  font-size: 11px;
+  color: #a8abb2;
+  line-height: 1.5;
 }
 .var-item .var-desc,
 .var-item .var-value {

@@ -255,5 +255,47 @@
   "defaultNameEgressForward": "Outbound Forward",
   "systemModelVars": "System Model Variables",
   "userVars": "User Variables",
-  "insertVariable": "Insert Variable"
+  "insertVariable": "Insert Variable",
+  "systemVarInfo": {
+    "default_backend": {
+      "desc": "Default backend",
+      "usage": "The global default LLM backend. Fallback backend used when a node does not explicitly specify a backend; typically used for main chat and general generation scenarios."
+    },
+    "default_model": {
+      "desc": "Default model",
+      "usage": "The global default model, usually paired with system.default_backend; used for main chat and general generation scenarios."
+    },
+    "fallback_backend": {
+      "desc": "Fallback backend",
+      "usage": "Backup backend that the system switches to automatically when the default backend fails (auth failure, rate limit, timeout, error); improves availability and fault tolerance."
+    },
+    "fallback_model": {
+      "desc": "Fallback model",
+      "usage": "Backup model used when the default model is unavailable; paired with system.fallback_backend for automatic failover."
+    },
+    "classify_backend": {
+      "desc": "Fast classify backend",
+      "usage": "Dedicated low-cost, low-latency backend for LLM intent classification in router nodes (llm_classify / keyword_then_intent), significantly reducing classification overhead; falls back to the default backend when unset."
+    },
+    "classify_model": {
+      "desc": "Fast classify model",
+      "usage": "Small, low-latency model dedicated to LLM intent classification in router nodes. Classification needs little model capability, so a cheap small model works well; usually paired with system.classify_backend and falls back to the default model when unset."
+    },
+    "embedding_backend": {
+      "desc": "Embedding backend",
+      "usage": "Backend used for text embedding (vectorization) calls, such as semantic search, vector store write/query, and RAG retrieval."
+    },
+    "embedding_model": {
+      "desc": "Embedding model",
+      "usage": "Text embedding model whose output dimensions must match the vector index; used with system.embedding_backend for semantic search and RAG knowledge bases."
+    },
+    "rerank_backend": {
+      "desc": "Rerank backend",
+      "usage": "Backend used for reranking RAG retrieval results, re-scoring recalled items by relevance to improve final hit quality."
+    },
+    "rerank_model": {
+      "desc": "Rerank model",
+      "usage": "Rerank model (usually a cross-encoder type) that scores and re-sorts recalled results; paired with system.rerank_backend and often used alongside vector search."
+    }
+  }
 }

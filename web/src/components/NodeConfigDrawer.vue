@@ -604,7 +604,10 @@
                         {{ varLabel(v.name) }}
                       </el-tag>
                     </td>
-                    <td class="var-desc">{{ v.desc }}</td>
+                    <td class="var-desc">
+                      <div>{{ v.desc }}</div>
+                      <div class="var-usage">{{ v.usage }}</div>
+                    </td>
                   </tr>
                 </tbody>
               </table>
@@ -1543,16 +1546,18 @@ const contextVars = [
 ]
 
 // 系统模型变量（来自后端配置）
-const systemModelVars = [
-  { name: 'system.default_backend', desc: '默认后端' },
-  { name: 'system.default_model', desc: '默认模型' },
-  { name: 'system.fallback_backend', desc: '备用后端' },
-  { name: 'system.fallback_model', desc: '备用模型' },
-  { name: 'system.embedding_backend', desc: '向量化后端' },
-  { name: 'system.embedding_model', desc: '向量化模型' },
-  { name: 'system.rerank_backend', desc: '重排序后端' },
-  { name: 'system.rerank_model', desc: '重排序模型' },
-]
+const systemModelVars = computed(() => [
+  { name: 'system.default_backend', desc: t('nodeConfig.systemVarInfo.default_backend.desc'), usage: t('nodeConfig.systemVarInfo.default_backend.usage') },
+  { name: 'system.default_model', desc: t('nodeConfig.systemVarInfo.default_model.desc'), usage: t('nodeConfig.systemVarInfo.default_model.usage') },
+  { name: 'system.fallback_backend', desc: t('nodeConfig.systemVarInfo.fallback_backend.desc'), usage: t('nodeConfig.systemVarInfo.fallback_backend.usage') },
+  { name: 'system.fallback_model', desc: t('nodeConfig.systemVarInfo.fallback_model.desc'), usage: t('nodeConfig.systemVarInfo.fallback_model.usage') },
+  { name: 'system.classify_backend', desc: t('nodeConfig.systemVarInfo.classify_backend.desc'), usage: t('nodeConfig.systemVarInfo.classify_backend.usage') },
+  { name: 'system.classify_model', desc: t('nodeConfig.systemVarInfo.classify_model.desc'), usage: t('nodeConfig.systemVarInfo.classify_model.usage') },
+  { name: 'system.embedding_backend', desc: t('nodeConfig.systemVarInfo.embedding_backend.desc'), usage: t('nodeConfig.systemVarInfo.embedding_backend.usage') },
+  { name: 'system.embedding_model', desc: t('nodeConfig.systemVarInfo.embedding_model.desc'), usage: t('nodeConfig.systemVarInfo.embedding_model.usage') },
+  { name: 'system.rerank_backend', desc: t('nodeConfig.systemVarInfo.rerank_backend.desc'), usage: t('nodeConfig.systemVarInfo.rerank_backend.usage') },
+  { name: 'system.rerank_model', desc: t('nodeConfig.systemVarInfo.rerank_model.desc'), usage: t('nodeConfig.systemVarInfo.rerank_model.usage') },
+])
 
 const usesSystemPrompt = computed(() => {
   if (localNode.value.type === 'generator') return true
@@ -2516,6 +2521,13 @@ onMounted(() => {
 
 .var-desc {
   color: #606266;
+  line-height: 1.5;
+}
+
+.var-usage {
+  margin-top: 2px;
+  font-size: 11px;
+  color: #a8abb2;
   line-height: 1.5;
 }
 

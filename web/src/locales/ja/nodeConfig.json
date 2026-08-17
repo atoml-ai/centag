@@ -255,5 +255,47 @@
   "defaultNameEgressForward": "送信転送",
   "systemModelVars": "システムモデル変数",
   "userVars": "ユーザー変数",
-  "insertVariable": "変数を挿入"
+  "insertVariable": "変数を挿入",
+  "systemVarInfo": {
+    "default_backend": {
+      "desc": "デフォルトバックエンド",
+      "usage": "グローバルで使われる既定のLLMバックエンド。ノードがバックエンドを明示指定しない場合に使用されるフォールバック先で、主に一般的なチャット・生成などの推論シーンに利用します。"
+    },
+    "default_model": {
+      "desc": "デフォルトモデル",
+      "usage": "グローバルで使われる既定のモデル。system.default_backend と組み合わせて使うことが多く、主なチャット・生成などの推論シーンに利用します。"
+    },
+    "fallback_backend": {
+      "desc": "フォールバックバックエンド",
+      "usage": "デフォルトバックエンドが利用できない場合（認証失敗・レート制限・タイムアウト・エラー）に自動で切り替わる予備のバックエンド。可用性・耐障害性を高めます。"
+    },
+    "fallback_model": {
+      "desc": "フォールバックモデル",
+      "usage": "デフォルトモデルが使えない場合に利用する予備のモデル。system.fallback_backend と組み合わせて自動フェイルオーバーを実現します。"
+    },
+    "classify_backend": {
+      "desc": "高速分類バックエンド",
+      "usage": "router ノードの LLM 意図分類（llm_classify / keyword_then_intent）専用の低コスト・低遅延バックエンド。分類コストを大幅に削減できます。未設定の場合はデフォルトバックエンドにフォールバックします。"
+    },
+    "classify_model": {
+      "desc": "高速分類モデル",
+      "usage": "router ノードの LLM 意図分類に特化した小型・低遅延モデル。分類は大きなモデル能力を必要としないため、低コストな小型モデルで十分です。通常は system.classify_backend と組み合わせ、未設定の場合はデフォルトモデルにフォールバックします。"
+    },
+    "embedding_backend": {
+      "desc": "埋め込みバックエンド",
+      "usage": "テキストのベクトル化（Embedding）呼び出しに利用するバックエンド。意味検索、ベクトルストアの書き込み・検索、RAG の取得などに使用します。"
+    },
+    "embedding_model": {
+      "desc": "埋め込みモデル",
+      "usage": "テキスト埋め込みモデル。出力次元はベクトルインデックスと一致させる必要があります。system.embedding_backend と合わせて意味検索や RAG ナレッジベースでよく使います。"
+    },
+    "rerank_backend": {
+      "desc": "リランクバックエンド",
+      "usage": "RAG の検索結果をリランク（再順位付け）するためのバックエンド。取得結果を関連度で再スコアリングし、最終的なヒット品質を高めます。"
+    },
+    "rerank_model": {
+      "desc": "リランクモデル",
+      "usage": "取得結果をスコアリングして再並べ替えするリランクモデル（通常は cross-encoder 系）。system.rerank_backend と組み合わせ、ベクトル検索と併用されることが多いです。"
+    }
+  }
 }

@@ -255,5 +255,47 @@
   "defaultNameEgressForward": "아웃바운드 포워딩",
   "systemModelVars": "시스템 모델 변수",
   "userVars": "사용자 변수",
-  "insertVariable": "변수 삽입"
+  "insertVariable": "변수 삽입",
+  "systemVarInfo": {
+    "default_backend": {
+      "desc": "기본 백엔드",
+      "usage": "전역 기본 LLM 백엔드입니다. 노드가 백엔드를 명시하지 않았을 때 사용되는 폴백 백엔드로, 주로 일반적인 채팅·생성 등 추론 시나리오에 사용합니다."
+    },
+    "default_model": {
+      "desc": "기본 모델",
+      "usage": "전역 기본 모델로, 보통 system.default_backend와 함께 사용합니다. 주로 일반적인 채팅·생성 등 추론 시나리오에 사용합니다."
+    },
+    "fallback_backend": {
+      "desc": "예비 백엔드",
+      "usage": "기본 백엔드를 사용할 수 없을 때(인증 실패, 속도 제한, 타임아웃, 오류) 자동으로 전환되는 예비 백엔드입니다. 가용성과 장애 허용성을 높입니다."
+    },
+    "fallback_model": {
+      "desc": "예비 모델",
+      "usage": "기본 모델을 사용할 수 없을 때 사용하는 예비 모델로, system.fallback_backend와 함께 자동 장애 전환을 구현합니다."
+    },
+    "classify_backend": {
+      "desc": "빠른 분류 백엔드",
+      "usage": "router 노드의 LLM 의도 분류(llm_classify / keyword_then_intent) 전용 저비용·저지연 백엔드로, 분류 오버헤드를 크게 줄입니다. 설정하지 않으면 기본 백엔드로 폴백합니다."
+    },
+    "classify_model": {
+      "desc": "빠른 분류 모델",
+      "usage": "router 노드의 LLM 의도 분류에 특화된 소형·저지연 모델입니다. 분류는 높은 모델 성능이 필요하지 않으므로 저비용 소형 모델로 충분합니다. 보통 system.classify_backend와 함께 사용하며, 설정하지 않으면 기본 모델로 폴백합니다."
+    },
+    "embedding_backend": {
+      "desc": "임베딩 백엔드",
+      "usage": "텍스트 임베딩(벡터화) 호출에 사용하는 백엔드로, 의미 검색, 벡터 스토어 쓰기·조회, RAG 검색 등에 사용합니다."
+    },
+    "embedding_model": {
+      "desc": "임베딩 모델",
+      "usage": "텍스트 임베딩 모델로, 출력 차원이 벡터 인덱스와 일치해야 합니다. system.embedding_backend와 함께 의미 검색·RAG 지식 베이스에 흔히 사용합니다."
+    },
+    "rerank_backend": {
+      "desc": "리랭크 백엔드",
+      "usage": "RAG 검색 결과를 리랭크(재순위화)하는 백엔드로, 검색된 결과를 관련성에 따라 재점수화하여 최종 적중 품질을 높입니다."
+    },
+    "rerank_model": {
+      "desc": "리랭크 모델",
+      "usage": "검색 결과를 점수화해 다시 정렬하는 리랭크 모델(보통 cross-encoder 계열)입니다. system.rerank_backend와 함께 사용하며, 벡터 검색과 병행해 자주 씁니다."
+    }
+  }
 }

@@ -255,5 +255,47 @@
   "defaultNameEgressForward": "Reenvío saliente",
   "systemModelVars": "Variables de modelo del sistema",
   "userVars": "Variables del usuario",
-  "insertVariable": "Insertar variable"
+  "insertVariable": "Insertar variable",
+  "systemVarInfo": {
+    "default_backend": {
+      "desc": "Backend predeterminado",
+      "usage": "Backend LLM global predeterminado. Se usa como respaldo cuando un nodo no especifica un backend explícitamente; se emplea en escenarios de chat general y generación."
+    },
+    "default_model": {
+      "desc": "Modelo predeterminado",
+      "usage": "Modelo global predeterminado, normalmente usado junto con system.default_backend; se emplea en escenarios de chat general y generación."
+    },
+    "fallback_backend": {
+      "desc": "Backend de respaldo",
+      "usage": "Backend alternativo al que el sistema cambia automáticamente si el backend predeterminado falla (error de autenticación, límite de velocidad, tiempo de espera, error); mejora la disponibilidad y la tolerancia a fallos."
+    },
+    "fallback_model": {
+      "desc": "Modelo de respaldo",
+      "usage": "Modelo alternativo usado cuando el modelo predeterminado no está disponible; junto con system.fallback_backend implementa la conmutación automática por error."
+    },
+    "classify_backend": {
+      "desc": "Backend de clasificación rápida",
+      "usage": "Backend dedicado de bajo coste y baja latencia para la clasificación de intenciones por LLM en nodos router (llm_classify / keyword_then_intent), lo que reduce notablemente el coste de clasificación; si no se configura, se usa el backend predeterminado."
+    },
+    "classify_model": {
+      "desc": "Modelo de clasificación rápida",
+      "usage": "Modelo pequeño y de baja latencia dedicado a la clasificación de intenciones por LLM en nodos router. La clasificación no exige mucha capacidad del modelo, por lo que basta un modelo pequeño y económico; suele usarse con system.classify_backend y, si no se configura, se usa el modelo predeterminado."
+    },
+    "embedding_backend": {
+      "desc": "Backend de embedding",
+      "usage": "Backend usado para las llamadas de vectorización de texto (embeddings), como búsqueda semántica, escritura y consulta en el almacén vectorial, y recuperación RAG."
+    },
+    "embedding_model": {
+      "desc": "Modelo de embedding",
+      "usage": "Modelo de vectorización de texto cuya dimensionalidad de salida debe coincidir con el índice vectorial; se usa con system.embedding_backend para búsqueda semántica y bases de conocimiento RAG."
+    },
+    "rerank_backend": {
+      "desc": "Backend de reranking",
+      "usage": "Backend usado para rerankear los resultados de búsqueda RAG, re-puntuando los elementos recuperados por relevancia para mejorar la calidad final."
+    },
+    "rerank_model": {
+      "desc": "Modelo de reranking",
+      "usage": "Modelo de reranking (normalmente de tipo cross-encoder) que puntúa y reordena los resultados recuperados; se usa con system.rerank_backend y a menudo junto con la búsqueda vectorial."
+    }
+  }
 }

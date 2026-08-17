@@ -255,5 +255,47 @@
   "defaultNameEgressForward": "出站转发",
   "systemModelVars": "系统模型变量",
   "userVars": "用户变量",
-  "insertVariable": "插入变量"
+  "insertVariable": "插入变量",
+  "systemVarInfo": {
+    "default_backend": {
+      "desc": "默认后端",
+      "usage": "全局默认的 LLM 后端。节点未显式指定后端时使用的兜底后端，一般用于主对话、通用生成等推理场景。"
+    },
+    "default_model": {
+      "desc": "默认模型",
+      "usage": "全局默认模型，通常与 system.default_backend 搭配使用，用于主对话、通用生成等推理场景。"
+    },
+    "fallback_backend": {
+      "desc": "备用后端",
+      "usage": "默认后端不可用（鉴权失败、限流、超时、报错）时自动切换的降级后端，用于提升服务可用性与容错能力。"
+    },
+    "fallback_model": {
+      "desc": "备用模型",
+      "usage": "默认模型不可用时的降级模型，配合 system.fallback_backend 实现自动容错切换。"
+    },
+    "classify_backend": {
+      "desc": "快速分类后端",
+      "usage": "router 节点做 LLM 意图分类（llm_classify / keyword_then_intent）时专用的低成本、低延迟后端，可显著降低分类开销；未配置时回落默认后端。"
+    },
+    "classify_model": {
+      "desc": "快速分类模型",
+      "usage": "router 节点 LLM 意图分类专用的小体积、低延迟模型。分类任务对模型能力要求低，适合选用低成本小模型；通常与 system.classify_backend 搭配，未配置时回落默认模型。"
+    },
+    "embedding_backend": {
+      "desc": "向量化后端",
+      "usage": "文本向量化（Embedding）调用使用的后端，用于语义检索、向量库写入与查询、RAG 召回等场景。"
+    },
+    "embedding_model": {
+      "desc": "向量化模型",
+      "usage": "文本向量化模型，输出维度需与向量索引一致；配合 system.embedding_backend 使用，常用于语义检索、RAG 知识库。"
+    },
+    "rerank_backend": {
+      "desc": "重排序后端",
+      "usage": "RAG 检索结果重排序（Rerank）使用的后端，对召回结果按相关性精排，提升最终命中质量。"
+    },
+    "rerank_model": {
+      "desc": "重排序模型",
+      "usage": "重排序模型（通常为 cross-encoder 类），用于对召回结果打分精排；与 system.rerank_backend 搭配，常与向量检索配合使用。"
+    }
+  }
 }
