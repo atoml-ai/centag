@@ -61,9 +61,9 @@ func TestManifestPipelineIDConsistency(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parse: %v", err)
 	}
-	// 单一路由管线：PipelineID 为共享 agent-skill-router
-	if p.PipelineID() != AgentSkillRouterPipelineID {
-		t.Errorf("PipelineID = %q, want %q", p.PipelineID(), AgentSkillRouterPipelineID)
+	// 单一路由管线：PipelineID 为共享 centag-ops-router
+	if p.PipelineID() != CentagOpsRouterPipelineID {
+		t.Errorf("PipelineID = %q, want %q", p.PipelineID(), CentagOpsRouterPipelineID)
 	}
 	// 兼容保留 implementation → 旧 pipeline id 推导函数（供历史/回退使用）
 	if got := PipelineIDFromImplementation("builtin.agent-skill-status-check"); got != "agent-skill-status-check" {

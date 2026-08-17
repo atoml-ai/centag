@@ -72,7 +72,7 @@ func TestSkillCRUD(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("list code = %d", rec.Code)
 	}
-	if !strings.Contains(rec.Body.String(), `"name":"health-check"`) || !strings.Contains(rec.Body.String(), `"pipeline_id":"`+agentSkillRouterPipelineID+`"`) {
+	if !strings.Contains(rec.Body.String(), `"name":"health-check"`) || !strings.Contains(rec.Body.String(), `"pipeline_id":"`+centagOpsRouterPipelineID+`"`) {
 		t.Errorf("list body missing custom skill:\n%s", rec.Body.String())
 	}
 

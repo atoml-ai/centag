@@ -29,9 +29,9 @@ func TestLegacyClientCompatibility(t *testing.T) {
 	}
 
 	if reg != nil {
-		// 空 skill：自动路由，统一走 agent-skill-router
-		if got := h.resolveSkillPipelineID(""); got != skills.AgentSkillRouterPipelineID {
-			t.Errorf("empty skill pipeline = %q, want %q", got, skills.AgentSkillRouterPipelineID)
+		// 空 skill：自动路由，统一走 centag-ops-router
+		if got := h.resolveSkillPipelineID(""); got != skills.CentagOpsRouterPipelineID {
+			t.Errorf("empty skill pipeline = %q, want %q", got, skills.CentagOpsRouterPipelineID)
 		}
 	} else {
 		if got := h.resolveSkillPipelineID(""); got != "" {

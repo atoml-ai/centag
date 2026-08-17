@@ -18,8 +18,8 @@ func TestBuildSkillRouterPipeline(t *testing.T) {
 	if err != nil {
 		t.Fatalf("BuildSkillRouterPipeline failed: %v", err)
 	}
-	if pp.ID != agentSkillRouterPipelineID {
-		t.Errorf("pipeline id = %q, want %q", pp.ID, agentSkillRouterPipelineID)
+	if pp.ID != centagOpsRouterPipelineID {
+		t.Errorf("pipeline id = %q, want %q", pp.ID, centagOpsRouterPipelineID)
 	}
 	// classifier + 5 skill 分支 + chat-gen
 	wantNodes := 7
@@ -91,7 +91,7 @@ func TestBuildSkillRouterPipeline(t *testing.T) {
 	}
 
 	if !pp.Metadata[skillPipelineMetadataKey].(bool) {
-		t.Error("metadata agent_skill_pipeline should be true")
+		t.Error("metadata centag_ops_pipeline should be true")
 	}
 }
 
@@ -115,17 +115,17 @@ func TestRegisterSkillRouter(t *testing.T) {
 	pr := pipeline.NewPipelineRegistry()
 
 	id := registerSkillRouter(reg, pr, "default-backend", "default-model")
-	if id != agentSkillRouterPipelineID {
-		t.Fatalf("registered id = %q, want %q", id, agentSkillRouterPipelineID)
+	if id != centagOpsRouterPipelineID {
+		t.Fatalf("registered id = %q, want %q", id, centagOpsRouterPipelineID)
 	}
-	if pr.Get(agentSkillRouterPipelineID) == nil {
-		t.Errorf("pipeline %s not in registry", agentSkillRouterPipelineID)
+	if pr.Get(centagOpsRouterPipelineID) == nil {
+		t.Errorf("pipeline %s not in registry", centagOpsRouterPipelineID)
 	}
 
 	// 幂等：重复注册不报错
 	id2 := registerSkillRouter(reg, pr, "default-backend", "default-model")
-	if id2 != agentSkillRouterPipelineID {
-		t.Fatalf("re-register id = %q, want %q", id2, agentSkillRouterPipelineID)
+	if id2 != centagOpsRouterPipelineID {
+		t.Fatalf("re-register id = %q, want %q", id2, centagOpsRouterPipelineID)
 	}
 }
 
@@ -149,13 +149,13 @@ func TestSkillRouterTemplate_Loaded(t *testing.T) {
 	found := map[string]bool{}
 	for _, tpl := range resolvePipelineTemplatesWithEdition("team") {
 		found[tpl.ID] = true
-		if tpl.ID == agentSkillRouterPipelineID {
+		if tpl.ID == centagOpsRouterPipelineID {
 			c := tpl
 			tmpl = &c
 		}
 	}
 	if tmpl == nil {
-		t.Fatalf("initdata template %q not loaded", agentSkillRouterPipelineID)
+		t.Fatalf("initdata template %q not loaded", centagOpsRouterPipelineID)
 	}
 	if found["agent-skill-status-check"] {
 		t.Error("skill manifest agent-skill-status-check should NOT be a pipeline template")
@@ -163,7 +163,7 @@ func TestSkillRouterTemplate_Loaded(t *testing.T) {
 
 	pp := pipeline.CreatePipelineFromTemplate(*tmpl, nil)
 	if pp == nil {
-		t.Fatalf("CreatePipelineFromTemplate(%q) = nil", agentSkillRouterPipelineID)
+		t.Fatalf("CreatePipelineFromTemplate(%q) = nil", centagOpsRouterPipelineID)
 	}
 	if err := pp.Validate(); err != nil {
 		t.Fatalf("template pipeline Validate: %v", err)

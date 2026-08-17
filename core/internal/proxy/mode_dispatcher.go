@@ -261,7 +261,7 @@ func (d *ModeDispatcher) resolvePipelineID(c *gin.Context, mode ProxyMode) strin
 }
 
 // splitForcedRoutePipelineID 解析 X-Pipeline-ID 中约定的强制路由后缀。
-// 形如 "agent-skill-router:status-check" → ("agent-skill-router", "status-check")。
+// 形如 "centag-ops-router:status-check" → ("centag-ops-router", "status-check")。
 // 无后缀时返回原值与空串（forced_route 供 router 节点跳过 LLM 分类）。
 func splitForcedRoutePipelineID(header string) (base, forcedRoute string) {
 	header = strings.TrimSpace(header)

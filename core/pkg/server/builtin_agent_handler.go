@@ -398,15 +398,15 @@ func (h *BuiltinAgentHandler) buildSystemPrompt(skillName string) string {
 }
 
 // resolveSkillPipelineID 返回 skill 对应的 X-Pipeline-ID 值。
-//   - skill 为空：自动路由，统一走 agent-skill-router（router 节点 LLM 分类决定 skill）。
-//   - skill 已注册：显式指定，用 agent-skill-router:<skill> 强制 router 走该分支（跳过 LLM 分类）。
+//   - skill 为空：自动路由，统一走 centag-ops-router（router 节点 LLM 分类决定 skill）。
+//   - skill 已注册：显式指定，用 centag-ops-router:<skill> 强制 router 走该分支（跳过 LLM 分类）。
 //   - skill 未注册或 skill 插件未初始化：返回空串（不注入 X-Pipeline-ID，回落透传）。
 func (h *BuiltinAgentHandler) resolveSkillPipelineID(skillName string) string {
 	if h.skillPluginRegistry == nil {
 		return ""
 	}
 	if skillName == "" {
-		return skills.AgentSkillRouterPipelineID
+		return skills.CentagOpsRouterPipelineID
 	}
 	if p, ok := h.skillPluginRegistry.Get(skillName); ok && p.Enabled() {
 		return skills.ForcedRoutePipelineID(skillName)

@@ -12,15 +12,15 @@ const SkillPluginSchemaVersion = "centag.agent-skill/v1alpha1"
 // SkillPluginKind 标识 skill 插件（区别于节点插件 kind: pipeline.node）。
 const SkillPluginKind = "agent.skill"
 
-// AgentSkillRouterPipelineID 全部 skill 共用的单一路由管线 id。
-// 由 skill 插件注册时自动生成一次（agent-skill-router），router 节点按用户问题
+// CentagOpsRouterPipelineID 全部 skill 共用的单一路由管线 id。
+// 由 skill 插件注册时自动生成一次（centag-ops-router），router 节点按用户问题
 // 自动分类路由到对应 skill 分支，替代「每个 skill 一条独立 pipeline」的挂接模型。
-const AgentSkillRouterPipelineID = "agent-skill-router"
+const CentagOpsRouterPipelineID = "centag-ops-router"
 
 // ForcedRoutePipelineID 返回显式指定 skill 时使用的 X-Pipeline-ID 值。
-// 约定：agent-skill-router:<skill>，proxy 侧解析出强制路由并跳过 LLM 分类。
+// 约定：centag-ops-router:<skill>，proxy 侧解析出强制路由并跳过 LLM 分类。
 func ForcedRoutePipelineID(skillName string) string {
-	return AgentSkillRouterPipelineID + ":" + skillName
+	return CentagOpsRouterPipelineID + ":" + skillName
 }
 
 // SkillPlugin 接口：agent skill 插件契约。
@@ -92,7 +92,7 @@ func (p *skillPlugin) Descriptor() SkillPluginDescriptor    { return p.descripto
 func (p *skillPlugin) GetSkillDefinition() SkillDefinition { return p.definition }
 func (p *skillPlugin) Enabled() bool                       { return p.enabled }
 func (p *skillPlugin) Internal() bool                      { return p.internal }
-func (p *skillPlugin) PipelineID() string                  { return AgentSkillRouterPipelineID }
+func (p *skillPlugin) PipelineID() string                  { return CentagOpsRouterPipelineID }
 
 // ParseSkillPluginManifest 将 agent-skill-*.yaml 内容解析为 SkillPlugin。
 // 解析规则：

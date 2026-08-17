@@ -12,12 +12,12 @@ import (
 const skillPipelineSchemaVersion = "centag.pipeline/v1alpha1"
 
 // skillPipelineMetadataKey 标记该 pipeline 由 skill 插件自动生成。
-const skillPipelineMetadataKey = "agent_skill_pipeline"
+const skillPipelineMetadataKey = "centag_ops_pipeline"
 
-// agentSkillRouterPipelineID 所有 skill 共用的单一路由管线 id。
+// centagOpsRouterPipelineID 所有 skill 共用的单一路由管线 id。
 // 执行时通过 X-Pipeline-ID 选中该管线，由 router 节点对用户问题做 LLM 分类，
 // 自动路由到对应 skill 分支（技术方案「单一路由 + skill 分支」模型）。
-const agentSkillRouterPipelineID = "agent-skill-router"
+const centagOpsRouterPipelineID = "centag-ops-router"
 
 // agentSkillRouterClassifierID router 管线中的意图分类节点 id。
 const agentSkillRouterClassifierID = "skill-classifier"
@@ -31,9 +31,9 @@ func skillBranchNodeID(skillName string) string {
 	return skillName + "-gen"
 }
 
-// BuildSkillRouterPipeline 由全部启用 skill 插件生成单一路由管线（agent-skill-router）。
+// BuildSkillRouterPipeline 由全部启用 skill 插件生成单一路由管线（centag-ops-router）。
 //
-// 结构（技术方案「单一路由 + skill 分支」模型，对齐 config/initdata router-mode.yaml）：
+// 结构（技术方案「单一路由 + skill 分支」模型，对齐 config/initdata agent-skill-router.yaml）：
 //   - skill-classifier：router 节点，routing_strategy=llm_classify，
 //     routes = {skill 注册名 → <skill>-gen}，default_route=chat-gen；
 //     请求 metadata 带 forced_route（显式指定 skill，X-Pipeline-ID 后缀）时跳过 LLM 分类强制路由。
@@ -123,7 +123,7 @@ func BuildSkillRouterPipeline(plugins []skills.SkillPlugin, defaultBackend, defa
 
 	return &pipeline.AgentPatternPipeline{
 		SchemaVersion: skillPipelineSchemaVersion,
-		ID:            agentSkillRouterPipelineID,
+		ID:            centagOpsRouterPipelineID,
 		Name:          "Agent Skill Router",
 		Description:   "按用户问题自动选择并执行内置/自定义 skill（LLM 意图分类）",
 		Version:       "1.0",

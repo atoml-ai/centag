@@ -82,7 +82,7 @@ func TestRuntimeEngine_EnsureBackend(t *testing.T) {
 		BaseURL:    "http://127.0.0.1:20060",
 		BackendID:  "openai",
 		Model:      "gpt-4o",
-		PipelineID: "agent-skill-router:status-check",
+		PipelineID: "centag-ops-router:status-check",
 	})
 	if e.backendHTTP == nil {
 		t.Fatal("EnsureBackend() did not construct backend")
@@ -91,8 +91,8 @@ func TestRuntimeEngine_EnsureBackend(t *testing.T) {
 		t.Errorf("backendID = %q, want openai", e.backendID)
 	}
 	proxyMode, pipelineID, _ := e.backendHTTP.Strategy()
-	if pipelineID != "agent-skill-router:status-check" {
-		t.Errorf("pipelineID = %q, want agent-skill-router:status-check", pipelineID)
+	if pipelineID != "centag-ops-router:status-check" {
+		t.Errorf("pipelineID = %q, want centag-ops-router:status-check", pipelineID)
 	}
 	if proxyMode != "transparent" {
 		t.Errorf("proxyMode = %q, want transparent", proxyMode)

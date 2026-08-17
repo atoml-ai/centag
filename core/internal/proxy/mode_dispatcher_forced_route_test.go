@@ -14,9 +14,9 @@ func TestSplitForcedRoutePipelineID(t *testing.T) {
 		wantBase        string
 		wantForcedRoute string
 	}{
-		{"agent-skill-router:status-check", "agent-skill-router", "status-check"},
-		{"agent-skill-router", "agent-skill-router", ""},
-		{" agent-skill-router : config-analysis ", "agent-skill-router", "config-analysis"},
+		{"centag-ops-router:status-check", "centag-ops-router", "status-check"},
+		{"centag-ops-router", "centag-ops-router", ""},
+		{" centag-ops-router : config-analysis ", "centag-ops-router", "config-analysis"},
 		{"direct-backend", "direct-backend", ""},
 		{"", "", ""},
 	}
@@ -34,19 +34,19 @@ func TestSplitForcedRoutePipelineID(t *testing.T) {
 //  2. 无后缀时 forced_route 为空。
 func TestForcedRouteMetadata(t *testing.T) {
 	d := &ModeDispatcher{}
-	headers := map[string]string{"X-Pipeline-ID": "agent-skill-router:status-check"}
+	headers := map[string]string{"X-Pipeline-ID": "centag-ops-router:status-check"}
 	meta := d.buildMetadata(testForcedRouteGinContext(headers), ModeDefault, headers, map[string]string{})
-	if meta["pipeline_id"] != "agent-skill-router" {
-		t.Errorf("pipeline_id = %v, want agent-skill-router", meta["pipeline_id"])
+	if meta["pipeline_id"] != "centag-ops-router" {
+		t.Errorf("pipeline_id = %v, want centag-ops-router", meta["pipeline_id"])
 	}
 	if meta["forced_route"] != "status-check" {
 		t.Errorf("forced_route = %v, want status-check", meta["forced_route"])
 	}
 
-	headers2 := map[string]string{"X-Pipeline-ID": "agent-skill-router"}
+	headers2 := map[string]string{"X-Pipeline-ID": "centag-ops-router"}
 	meta2 := d.buildMetadata(testForcedRouteGinContext(headers2), ModeDefault, headers2, map[string]string{})
-	if meta2["pipeline_id"] != "agent-skill-router" {
-		t.Errorf("pipeline_id = %v, want agent-skill-router", meta2["pipeline_id"])
+	if meta2["pipeline_id"] != "centag-ops-router" {
+		t.Errorf("pipeline_id = %v, want centag-ops-router", meta2["pipeline_id"])
 	}
 	if _, ok := meta2["forced_route"]; ok {
 		t.Errorf("forced_route should be absent without suffix, got %v", meta2["forced_route"])

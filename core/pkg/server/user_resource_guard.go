@@ -90,7 +90,7 @@ func (s *Server) enforcePolicyAllowLists(c *gin.Context, pol *groupmodel.Effecti
 }
 
 // peekPipelineIDHeader 解析 X-Pipeline-ID 请求头中的 base pipeline id，
-// 剥离强制路由后缀（如 agent-skill-router:status-check → agent-skill-router）。
+// 剥离强制路由后缀（如 centag-ops-router:status-check → centag-ops-router）。
 func peekPipelineIDHeader(c *gin.Context) string {
 	header := strings.TrimSpace(c.GetHeader("X-Pipeline-ID"))
 	if header == "" {

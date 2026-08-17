@@ -19,9 +19,9 @@ func TestSkillPipelineManifestRoundtrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("BuildSkillRouterPipeline: %v", err)
 	}
-	// 单一路由管线：id 与共享 AgentSkillRouterPipelineID 一致
-	if pp.ID != skills.AgentSkillRouterPipelineID {
-		t.Errorf("pipeline id %q != AgentSkillRouterPipelineID %q", pp.ID, skills.AgentSkillRouterPipelineID)
+	// 单一路由管线：id 与共享 CentagOpsRouterPipelineID 一致
+	if pp.ID != skills.CentagOpsRouterPipelineID {
+		t.Errorf("pipeline id %q != CentagOpsRouterPipelineID %q", pp.ID, skills.CentagOpsRouterPipelineID)
 	}
 	for _, p := range reg.ListAll() {
 		def := p.GetSkillDefinition()
@@ -83,7 +83,7 @@ skill:
 	if id != "" {
 		t.Errorf("evil skill should be rejected by admission, got registered router %q", id)
 	}
-	if pr.Get(agentSkillRouterPipelineID) != nil {
-		t.Errorf("evil skill should not produce a router pipeline, but %s exists", agentSkillRouterPipelineID)
+	if pr.Get(centagOpsRouterPipelineID) != nil {
+		t.Errorf("evil skill should not produce a router pipeline, but %s exists", centagOpsRouterPipelineID)
 	}
 }

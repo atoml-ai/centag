@@ -68,11 +68,11 @@ func TestParseSkillPluginManifest_Valid(t *testing.T) {
 	if !p.Enabled() || !p.Internal() {
 		t.Errorf("Enabled/Internal = %v/%v, want true/true", p.Enabled(), p.Internal())
 	}
-	if p.PipelineID() != AgentSkillRouterPipelineID {
-		t.Errorf("PipelineID = %q, want %q (shared router pipeline)", p.PipelineID(), AgentSkillRouterPipelineID)
+	if p.PipelineID() != CentagOpsRouterPipelineID {
+		t.Errorf("PipelineID = %q, want %q (shared router pipeline)", p.PipelineID(), CentagOpsRouterPipelineID)
 	}
-	if got := ForcedRoutePipelineID("status-check"); got != "agent-skill-router:status-check" {
-		t.Errorf("ForcedRoutePipelineID = %q, want agent-skill-router:status-check", got)
+	if got := ForcedRoutePipelineID("status-check"); got != "centag-ops-router:status-check" {
+		t.Errorf("ForcedRoutePipelineID = %q, want centag-ops-router:status-check", got)
 	}
 }
 
