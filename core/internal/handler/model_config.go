@@ -189,7 +189,8 @@ func (h *ModelConfigHandler) updateSystemVariables(vars map[string]string) {
 			cfg.Embedding.BackendID = v
 		case "system.embedding_model":
 			cfg.Embedding.Model = v
-		case "system.rerank_backend", "system.rerank_model":
+		case "system.rerank_backend", "system.rerank_model",
+			"system.classify_backend", "system.classify_model":
 			if cfg.ModelVariables.SystemVariables == nil {
 				cfg.ModelVariables.SystemVariables = map[string]string{}
 			}

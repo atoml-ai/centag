@@ -166,7 +166,7 @@ func TestModelConfig_Update_RerankStoredInSystemVars(t *testing.T) {
 	h := NewModelConfigHandler(cfg)
 	router := setupModelConfigRouter(h)
 
-	body := `{"variables":{"system.rerank_backend":"cohere","system.rerank_model":"rerank-v3"}}`
+	body := `{"variables":{"system.rerank_backend":"cohere","system.rerank_model":"rerank-v3","system.classify_backend":"groq","system.classify_model":"llama-3.1-8b"}}`
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest("PUT", "/config/model-variables", bytes.NewBufferString(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -178,8 +178,17 @@ func TestModelConfig_Update_RerankStoredInSystemVars(t *testing.T) {
 	if got := cfg.ModelVariables.SystemVariables["system.rerank_backend"]; got != "cohere" {
 		t.Errorf("SystemVariables[system.rerank_backend] = %q, want cohere", got)
 	}
+	if got := cfg.ModelVariables.SystemVariables["system.classify_backend"]; got != "groq" {
+		t.Errorf("SystemVariables[system.classify_backend] = %q, want groq", got)
+	}
+	if got := cfg.ModelVariables.SystemVariables["system.classify_model"]; got != "llama-3.1-8b" {
+		t.Errorf("SystemVariables[system.classify_model] = %q, want llama-3.1-8b", got)
+	}
 	if _, ok := cfg.ModelVariables.UserVariables["system.rerank_backend"]; ok {
 		t.Error("rerank vars should not be stored in UserVariables")
+	}
+	if _, ok := cfg.ModelVariables.UserVariables["system.classify_backend"]; ok {
+		t.Error("classify vars should not be stored in UserVariables")
 	}
 }
 

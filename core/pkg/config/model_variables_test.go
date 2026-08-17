@@ -36,8 +36,10 @@ func TestListSystemVariables(t *testing.T) {
 		},
 		ModelVariables: ModelVariables{
 			SystemVariables: map[string]string{
-				"system.rerank_backend": "cohere",
-				"system.rerank_model":   "rerank-v3",
+				"system.rerank_backend":   "cohere",
+				"system.rerank_model":     "rerank-v3",
+				"system.classify_backend": "groq",
+				"system.classify_model":   "llama-3.1-8b",
 			},
 		},
 	}
@@ -45,14 +47,16 @@ func TestListSystemVariables(t *testing.T) {
 	items := ListSystemVariables(cfg)
 
 	want := map[string]string{
-		"system.default_backend":  "openai",
-		"system.default_model":    "gpt-4o",
-		"system.fallback_backend": "ollama",
-		"system.fallback_model":   "qwen2.5",
+		"system.default_backend":   "openai",
+		"system.default_model":     "gpt-4o",
+		"system.fallback_backend":  "ollama",
+		"system.fallback_model":    "qwen2.5",
 		"system.embedding_backend": "ollama-local",
 		"system.embedding_model":   "bge-m3",
 		"system.rerank_backend":    "cohere",
 		"system.rerank_model":      "rerank-v3",
+		"system.classify_backend":  "groq",
+		"system.classify_model":    "llama-3.1-8b",
 	}
 
 	if len(items) != len(want) {
@@ -76,8 +80,8 @@ func TestListSystemVariables(t *testing.T) {
 
 func TestListSystemVariables_RerankFallback(t *testing.T) {
 	cfg := &Config{
-		Proxy:    ProxyConfig{DefaultBackendID: "openai"},
-		Embedding: EmbeddingConfig{},
+		Proxy:          ProxyConfig{DefaultBackendID: "openai"},
+		Embedding:      EmbeddingConfig{},
 		ModelVariables: ModelVariables{SystemVariables: map[string]string{}},
 	}
 
@@ -88,6 +92,12 @@ func TestListSystemVariables_RerankFallback(t *testing.T) {
 		}
 		if it.Name == "system.rerank_model" && it.Value != "" {
 			t.Errorf("system.rerank_model = %q, want empty when not configured", it.Value)
+		}
+		if it.Name == "system.classify_backend" && it.Value != "" {
+			t.Errorf("system.classify_backend = %q, want empty when not configured", it.Value)
+		}
+		if it.Name == "system.classify_model" && it.Value != "" {
+			t.Errorf("system.classify_model = %q, want empty when not configured", it.Value)
 		}
 	}
 }
@@ -112,6 +122,11 @@ func TestListSystemVariables_NilSystemVars(t *testing.T) {
 			found = true
 			if it.Value != "" {
 				t.Errorf("system.rerank_backend = %q, want empty", it.Value)
+			}
+		}
+		if it.Name == "system.classify_backend" {
+			if it.Value != "" {
+				t.Errorf("system.classify_backend = %q, want empty", it.Value)
 			}
 		}
 	}
