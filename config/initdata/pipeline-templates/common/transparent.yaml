@@ -1,0 +1,159 @@
+id: transparent
+name: 透明模式
+description: |
+  简单直接的透传转发流水线：主转发节点 + 备份节点。
+  可通过参数配置转发规则与提示词：
+  - route_policy: match_model（匹配客户端模型）/ fixed（固定后端）
+  - inject_system_prompt: false（透传）/ true（替换为网关prompt）
+  - system_prompt_strategy: passthrough（透传）/ replace（替换）/ append（追加）
+version: "1.0"
+shortcut_code: '#t'
+nodes:
+  - id: forward
+    type: transparent_forward
+    kind: proxy.transparent_forward
+    implementation: builtin.transparent_forward
+    name: Transparent Forward
+    backend: "{{system.default_backend}}"
+    model: "{{system.default_model}}"
+    config:
+      backend: "{{system.default_backend}}"
+      model: "{{system.default_model}}"
+      template_vars:
+        backend: "system.default_backend"
+        model: "system.default_model"
+      custom_config:
+        default_scheme: https
+        route_policy: "{{pipeline.route_policy | default: 'match_model'}}"
+        system_prompt_strategy: "{{pipeline.system_prompt_strategy | default: 'passthrough'}}"
+        inject_system_prompt: "{{pipeline.inject_system_prompt | default: false}}"
+        redirect_policy: never
+        max_redirects: 5
+    timeout: 120
+    retry:
+      max_attempts: 0
+      backoff_strategy: exponential
+      initial_delay: 1000
+      max_delay: 30000
+    next_nodes:
+      - forward_fallback
+  - id: forward_fallback
+    type: transparent_forward
+    kind: proxy.transparent_forward
+    implementation: builtin.transparent_forward
+    name: Transparent Fallback Forward
+    backend: "{{system.fallback_backend}}"
+    model: "{{system.fallback_model}}"
+    config:
+      backend: "{{system.fallback_backend}}"
+      model: "{{system.fallback_model}}"
+      template_vars:
+        backend: "system.fallback_backend"
+        model: "system.fallback_model"
+      custom_config:
+        default_scheme: https
+        route_policy: fixed
+        system_prompt_strategy: passthrough
+        inject_system_prompt: false
+        redirect_policy: never
+        max_redirects: 5
+        is_fallback: true
+    timeout: 90
+    retry:
+      max_attempts: 0
+      backoff_strategy: exponential
+      initial_delay: 1000
+      max_delay: 30000
+    depends_on:
+      - forward
+global_config:
+  timeout: 180
+  max_retries: 3
+  bypass_on_error: true
+  parallel_limit: 4
+  log_level: info
+  fallback_groups:
+    - primary_node_id: forward
+      fallback_nodes:
+        - forward_fallback
+      max_attempts: 2
+metadata:
+  # 模式映射：不同旧流水线ID对应的参数
+  mode_mappings:
+    transparent-proxy:
+      route_policy: match_model
+      inject_system_prompt: false
+      system_prompt_strategy: passthrough
+    direct-backend:
+      route_policy: fixed
+      inject_system_prompt: true
+      system_prompt_strategy: replace
+    fixed-egress:
+      route_policy: fixed
+      inject_system_prompt: false
+      system_prompt_strategy: passthrough
+  # 默认参数（可通过pipeline覆盖）
+  default_route_policy: match_model
+  default_inject_system_prompt: false
+  default_system_prompt_strategy: passthrough
+  # 代理模式对齐
+  aligned_proxy_mode: transparent
+  # 功能特性
+  features:
+    - transparent_forward
+    - configurable_route_policy
+    - system_prompt_inject
+    - key_rewrite
+    - billing_fallback
+  # 配置说明
+  config_description:
+    route_policy:
+      description: "路由策略"
+      options:
+        - value: match_model
+          description: "匹配客户端模型（推荐）"
+        - value: fixed
+          description: "固定后端"
+    inject_system_prompt:
+      description: "是否注入system prompt"
+      options:
+        - value: false
+          description: "透传客户端prompt（推荐）"
+        - value: true
+          description: "替换为网关prompt"
+    system_prompt_strategy:
+      description: "system prompt策略"
+      options:
+        - value: passthrough
+          description: "透传（推荐）"
+        - value: replace
+          description: "替换"
+        - value: append
+          description: "追加"
+  # 配置示例
+  config_examples:
+    transparent_proxy:
+      name: "透明代理（默认）"
+      description: "透传客户端请求，匹配客户端模型"
+      config:
+        route_policy: match_model
+        inject_system_prompt: false
+        system_prompt_strategy: passthrough
+    direct_backend:
+      name: "直连后端"
+      description: "固定后端，注入网关system prompt"
+      config:
+        route_policy: fixed
+        inject_system_prompt: true
+        system_prompt_strategy: replace
+        system_prompt: "你是一个可靠助手，请直接、准确地回答用户的问题。"
+    fixed_egress:
+      name: "固定出站"
+      description: "固定后端，不注入system prompt"
+      config:
+        route_policy: fixed
+        inject_system_prompt: false
+        system_prompt_strategy: passthrough
+  lastUpdated: '2026-08-18T00:00:00.000Z'
+  layoutVersion: '2.0'
+  template_scope: mode-id-alignment

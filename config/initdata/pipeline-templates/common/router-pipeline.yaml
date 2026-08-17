@@ -1,0 +1,221 @@
+id: router-pipeline
+name: Router Pipeline
+description: |
+  通用路由流水线，支持关键词匹配、LLM分类、混合路由等多种策略。
+  通过 routing_strategy 参数控制路由策略：
+  - keyword_contains: 关键词匹配（推荐）
+  - keyword_prefix: 关键词前缀匹配
+  - regex_only: 正则表达式匹配
+  - llm_classify: LLM分类（需要配置后端和模型）
+  - keyword_then_intent: 混合路由（关键词优先，兜底LLM分类）
+version: "1.0"
+shortcut_code: '#r'
+nodes:
+  - id: classifier
+    type: router
+    kind: routing.decide
+    implementation: builtin.router
+    name: Route Classify
+    timeout: 15
+    config:
+      custom_config:
+        routing_strategy: "{{pipeline.routing_strategy | default: 'keyword_contains'}}"
+        default_route: "{{pipeline.default_route | default: 'chat-generator'}}"
+        routes: "{{pipeline.routes}}"
+        # LLM分类配置
+        classify_backend: "{{pipeline.classify_backend | default: system.default_backend}}"
+        classify_model: "{{pipeline.classify_model | default: system.default_model}}"
+        # 混合路由配置
+        hybrid_config:
+          keyword_priority: "{{pipeline.keyword_priority | default: 1}}"
+          confidence_threshold: "{{pipeline.confidence_threshold | default: 0.55}}"
+  - id: code-generator
+    type: generator
+    kind: llm.generate
+    implementation: builtin.generator
+    name: Code Generate
+    backend: "{{system.default_backend}}"
+    model: "{{system.default_model}}"
+    timeout: 120
+    depends_on:
+      - classifier
+    route_config:
+      router_node_id: classifier
+      route_value: code-generator
+    config:
+      backend: "{{system.default_backend}}"
+      model: "{{system.default_model}}"
+      prompt_template: '{{input}}'
+      system_prompt: |
+        你是资深软件工程师。请直接给出可运行、可维护的代码方案，并附简要说明。
+      template_vars:
+        backend: system.default_backend
+        model: system.default_model
+  - id: translate-gen
+    type: generator
+    kind: llm.generate
+    implementation: builtin.generator
+    name: Translate Generate
+    backend: "{{system.default_backend}}"
+    model: "{{system.default_model}}"
+    timeout: 120
+    depends_on:
+      - classifier
+    route_config:
+      router_node_id: classifier
+      route_value: translate-gen
+    config:
+      backend: "{{system.default_backend}}"
+      model: "{{system.default_model}}"
+      prompt_template: '{{input}}'
+      system_prompt: |
+        你是专业翻译。请准确、自然地翻译用户内容；未指定目标语言时，中英互译。
+      template_vars:
+        backend: system.default_backend
+        model: system.default_model
+  - id: summary-gen
+    type: generator
+    kind: llm.generate
+    implementation: builtin.generator
+    name: Summarize Generate
+    backend: "{{system.default_backend}}"
+    model: "{{system.default_model}}"
+    timeout: 120
+    depends_on:
+      - classifier
+    route_config:
+      router_node_id: classifier
+      route_value: summary-gen
+    config:
+      backend: "{{system.default_backend}}"
+      model: "{{system.default_model}}"
+      prompt_template: '{{input}}'
+      system_prompt: |
+        你是摘要助手。请提炼要点，使用简洁条目输出，保留关键事实与结论。
+      template_vars:
+        backend: system.default_backend
+        model: system.default_model
+  - id: chat-generator
+    type: generator
+    kind: llm.generate
+    implementation: builtin.generator
+    name: General Chat
+    backend: "{{system.default_backend}}"
+    model: "{{system.default_model}}"
+    timeout: 120
+    depends_on:
+      - classifier
+    route_config:
+      router_node_id: classifier
+      route_value: chat-generator
+      is_default: true
+    config:
+      backend: "{{system.default_backend}}"
+      model: "{{system.default_model}}"
+      prompt_template: '{{input}}'
+      system_prompt: |
+        你是一个可靠助手，请直接、准确地回答用户的问题。
+      template_vars:
+        backend: system.default_backend
+        model: system.default_model
+global_config:
+  timeout: 180
+  max_retries: 2
+  bypass_on_error: true
+  parallel_limit: 4
+  log_level: info
+metadata:
+  # 策略映射：不同旧流水线ID对应的参数
+  strategy_mappings:
+    router-mode:
+      routing_strategy: keyword_contains
+      routes:
+        code: code-generator
+        代码: code-generator
+        python: code-generator
+        java: code-generator
+        go: code-generator
+        translate: translate-gen
+        翻译: translate-gen
+        summary: summary-gen
+        摘要: summary-gen
+    centag-ops-router:
+      routing_strategy: llm_classify
+      routes:
+        status-check: status-check-gen
+        config-analysis: config-analysis-gen
+        error-diagnosis: error-diagnosis-gen
+        log-analysis: log-analysis-gen
+        strategy-recommend: strategy-recommend-gen
+  # 默认配置
+  default_routing_strategy: keyword_contains
+  default_routes:
+    code: code-generator
+    代码: code-generator
+    python: code-generator
+    translate: translate-gen
+    翻译: translate-gen
+    summary: summary-gen
+    摘要: summary-gen
+  # 流水线类型标识
+  router_pipeline: true
+  # 代理模式对齐
+  aligned_proxy_mode: router-pipeline
+  # 功能特性
+  features:
+    - keyword_routing
+    - llm_classify_routing
+    - hybrid_routing
+    - capability_slots
+    - route_model_targets
+  # 配置说明
+  config_description:
+    routing_strategy:
+      description: "路由策略"
+      options:
+        - value: keyword_contains
+          description: "关键词匹配（推荐）"
+        - value: keyword_prefix
+          description: "关键词前缀匹配"
+        - value: regex_only
+          description: "正则表达式匹配"
+        - value: llm_classify
+          description: "LLM分类（需要配置后端和模型）"
+        - value: keyword_then_intent
+          description: "混合路由（关键词优先，兜底LLM分类）"
+    default_route:
+      description: "默认路由目标"
+      default: "chat-generator"
+    routes:
+      description: "路由规则映射"
+  # 配置示例
+  config_examples:
+    keyword_routing:
+      name: "关键词路由（默认）"
+      description: "按关键词匹配到不同处理节点"
+      config:
+        routing_strategy: keyword_contains
+        default_route: chat-generator
+        routes:
+          code: code-generator
+          代码: code-generator
+          python: code-generator
+          translate: translate-gen
+          翻译: translate-gen
+          summary: summary-gen
+          摘要: summary-gen
+    llm_classify_routing:
+      name: "LLM分类路由"
+      description: "使用LLM进行意图分类路由"
+      config:
+        routing_strategy: llm_classify
+        default_route: chat-generator
+        classify_backend: "{{system.default_backend}}"
+        classify_model: "{{system.default_model}}"
+        routes:
+          status-check: status-check-gen
+          config-analysis: config-analysis-gen
+          error-diagnosis: error-diagnosis-gen
+  lastUpdated: '2026-08-18T00:00:00.000Z'
+  layoutVersion: '2.0'
+  template_scope: mode-id-alignment

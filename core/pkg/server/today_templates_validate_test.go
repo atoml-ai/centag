@@ -12,7 +12,7 @@ func TestTodayTemplatesValidateWithProjectRoot(t *testing.T) {
 	t.Setenv("PROJECT_ROOT", mustFindProjectRoot(t))
 
 	// Builtin initdata only; business templates (e.g. security-mode) live outside this repo.
-	targets := []string{"transparent-proxy", "direct-backend"}
+	targets := []string{"transparent", "router-pipeline", "cache-pipeline", "centag-ops-router"}
 	found := make(map[string]bool)
 
 	for _, tmpl := range resolvePipelineTemplates() {

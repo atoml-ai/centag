@@ -1,0 +1,199 @@
+id: cache-pipeline
+name: Cache Pipeline
+description: |
+  统一缓存流水线，支持缓存读写、RAG检索增强生成等多种模式。
+  通过缓存配置参数控制行为：
+  - enable_cache_read: 启用缓存读取
+  - enable_cache_write: 启用缓存写入
+  - cache_strategy: 缓存策略（exact=精确匹配 / semantic=语义匹配）
+version: "1.0"
+shortcut_code: '#cache'
+nodes:
+  - id: cache_read
+    type: cache
+    kind: cache.access
+    implementation: builtin.cache
+    name: Cache Read
+    description: 尝试从缓存读取，命中则跳过后续生成
+    config:
+      custom_config:
+        operation: read
+        strategy: "{{pipeline.cache_strategy | default: 'exact'}}"
+        storage_type: redis
+        read_storage_name: redis
+        key_template: '{{model}}:{{hash}}'
+        vector_storage_name: chromadb-main
+        embedding_model: text-embedding-3-small
+        semantic_threshold: 0.8
+        semantic_top_k: 5
+    timeout: 5
+  - id: question_splitter
+    type: question_splitter
+    kind: processing.question_split
+    implementation: business.question_splitter
+    name: Question Splitter
+    description: 缓存未命中时，可选的多问题拆分
+    config:
+      custom_config: {}
+    timeout: 30
+    condition: '{{.cache_read.metadata.cache_hit}} == false'
+    depends_on:
+      - cache_read
+  - id: rag_retrieval
+    type: rag_retrieval
+    kind: retrieval.rag
+    implementation: business.rag_retrieval
+    name: RAG Retrieval
+    description: 检索知识片段用于提示增强
+    config:
+      custom_config:
+        top_k: 5
+        threshold: 0.7
+        allow_mock: false
+    timeout: 30
+    condition: '{{.cache_read.metadata.cache_hit}} == false'
+    depends_on:
+      - question_splitter
+  - id: generator
+    type: generator
+    kind: llm.generate
+    implementation: builtin.generator
+    name: Content Generate
+    description: 使用检索到的上下文生成内容
+    backend: "{{system.default_backend}}"
+    model: "{{system.default_model}}"
+    config:
+      backend: "{{system.default_backend}}"
+      model: "{{system.default_model}}"
+      template_vars:
+        backend: "system.default_backend"
+        model: "system.default_model"
+      system_prompt: |
+        你是知识助手。请结合检索到的上下文回答用户问题；若上下文不足请明确说明。
+    timeout: 120
+    condition: '{{.cache_read.metadata.cache_hit}} == false'
+    depends_on:
+      - rag_retrieval
+  - id: answer_synthesizer
+    type: answer_synthesizer
+    kind: processing.answer_synth
+    implementation: business.answer_synthesizer
+    name: Answer Synthesizer
+    description: 当问题被拆分时，合并/引用答案
+    config:
+      custom_config:
+        enable_citation: true
+    timeout: 30
+    condition: '{{.cache_read.metadata.cache_hit}} == false'
+    depends_on:
+      - generator
+  - id: cache_write
+    type: cache
+    kind: cache.access
+    implementation: builtin.cache
+    name: Cache Write
+    description: 将最终答案写回缓存
+    config:
+      custom_config:
+        operation: write
+        strategy: "{{pipeline.cache_strategy | default: 'exact'}}"
+        storage_type: redis
+        write_storage_name: redis
+        ttl: 3600
+        key_template: '{{model}}:{{hash}}'
+        vector_storage_name: chromadb-main
+        embedding_model: text-embedding-3-small
+    timeout: 5
+    condition: '{{.cache_read.metadata.cache_hit}} == false'
+    depends_on:
+      - answer_synthesizer
+  - id: token_usage
+    type: token_usage
+    kind: metrics.token_usage
+    implementation: builtin.token_usage
+    name: Token Metering
+    config:
+      custom_config:
+        operation: record
+    timeout: 5
+    depends_on:
+      - cache_write
+global_config:
+  timeout: 180
+  max_retries: 1
+  bypass_on_error: false
+  parallel_limit: 1
+  log_level: info
+metadata:
+  # 缓存配置
+  cache_config:
+    enable_cache_read: true
+    enable_cache_write: true
+    cache_strategy: exact
+  # 缓存模式映射
+  cache_mode_mappings:
+    cache-hit:
+      enable_cache_read: true
+      enable_cache_write: false
+      cache_strategy: exact
+    cache-mode:
+      enable_cache_read: true
+      enable_cache_write: true
+      cache_strategy: exact
+    rag-mode:
+      enable_cache_read: true
+      enable_cache_write: true
+      cache_strategy: semantic
+      enable_rag: true
+  # 流水线类型标识
+  cache_pipeline: true
+  # 代理模式对齐
+  aligned_proxy_mode: cache-pipeline
+  # 功能特性
+  features:
+    - cache
+    - rag
+    - retrieval
+    - token_metering
+  # 配置说明
+  config_description:
+    enable_cache_read:
+      description: "启用缓存读取"
+      default: true
+    enable_cache_write:
+      description: "启用缓存写入"
+      default: true
+    cache_strategy:
+      description: "缓存策略"
+      options:
+        - value: exact
+          description: "精确匹配（推荐）"
+        - value: semantic
+          description: "语义匹配（需要向量存储）"
+  # 配置示例
+  config_examples:
+    cache_hit:
+      name: "缓存命中模式"
+      description: "仅读取缓存，不写入"
+      config:
+        enable_cache_read: true
+        enable_cache_write: false
+        cache_strategy: exact
+    cache_mode:
+      name: "缓存模式"
+      description: "读写缓存，精确匹配"
+      config:
+        enable_cache_read: true
+        enable_cache_write: true
+        cache_strategy: exact
+    rag_mode:
+      name: "RAG模式"
+      description: "缓存优先的RAG检索增强生成"
+      config:
+        enable_cache_read: true
+        enable_cache_write: true
+        cache_strategy: semantic
+        enable_rag: true
+  lastUpdated: '2026-08-18T00:00:00.000Z'
+  layoutVersion: '2.0'
+  template_scope: mode-id-alignment
