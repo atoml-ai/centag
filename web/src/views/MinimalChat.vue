@@ -916,7 +916,7 @@ watch(() => props.initialPipelineId, (id) => {
 }
 
 .message-stack {
-  max-width: min(92%, 520px);
+  max-width: 92%;
   display: flex;
   flex-direction: column;
   gap: 8px;
