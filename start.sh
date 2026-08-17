@@ -2734,7 +2734,7 @@ _dist_docker_build() {
                     ;;
             esac
 
-            # 首启无预置后端（由 WebUI「添加 Provider」配置；勿塞无 Key 的占位后端）
+            # 首启无预置后端（由 WebUI「添加后端」配置；勿塞无 Key 的占位后端）
             cat > initial-backends.yaml << 'INITDATA_EOF'
 version: "2.0"
 description: First-boot empty backends — add providers in WebUI

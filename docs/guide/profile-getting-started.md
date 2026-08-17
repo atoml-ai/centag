@@ -96,7 +96,7 @@ personal **故意不**把 `deploy/stack/.env` 注入容器，避免 `POSTGRES_*`
 
 **后端**（`initial-backends.yaml`，Profile 为唯一种子源）：
 
-首启 **`backends: []`**（无预置 OpenAI 等占位）。请在 WebUI「添加 Provider」配置；供应商参考见 `config/profiles/_shared/initdata/backends-catalog.yaml`（非运行时 seed）。
+首启 **`backends: []`**（无预置 OpenAI 等占位）。请在 WebUI「添加后端」配置；供应商参考见 `config/profiles/_shared/initdata/backends-catalog.yaml`（非运行时 seed）。
 
 **流水线**（`pipeline-templates/pipeline-default.yaml`，覆盖全局 `direct-backend`）：
 
