@@ -21,6 +21,7 @@ export interface UpdateUserRequest {
   can_add_own_backends?: boolean
   can_add_own_pipelines?: boolean
   can_change_default_pipeline?: boolean
+  group_id?: string | null
 }
 
 export interface UpdateProfileRequest {
