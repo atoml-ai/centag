@@ -28,6 +28,7 @@ func maybeRecordCacheSaving(c *gin.Context, output *pipeline.PipelineOutput, fal
 	if model == "" {
 		model = strings.TrimSpace(fallbackModel)
 	}
+	model = sanitizeUsageModel(model)
 	backendID := extractBackendFromPipelineOutput(output)
 
 	prompt, completion, total := tokenusage.EstimateSavedTokensFromResponse(output.Content, 0)

@@ -4377,7 +4377,7 @@ func (n *TokenUsageNode) executeRecord(ctx context.Context, input *NodeInput) (*
 
 	// 从当前节点 Metadata 补充/覆盖
 	if input.Metadata != nil {
-		if model, ok := input.Metadata["model"].(string); ok && model != "" {
+		if model, ok := input.Metadata["model"].(string); ok && model != "" && !strings.Contains(model, "{{") {
 			record["model"] = model
 		}
 		if pt := tokenRecordInt(input.Metadata["prompt_tokens"]); pt > 0 {
@@ -4389,7 +4389,7 @@ func (n *TokenUsageNode) executeRecord(ctx context.Context, input *NodeInput) (*
 		if tt := tokenRecordInt(input.Metadata["total_tokens"]); tt > 0 {
 			record["total_tokens"] = tt
 		}
-		if backendID, ok := input.Metadata["backend_id"].(string); ok {
+		if backendID, ok := input.Metadata["backend_id"].(string); ok && !strings.Contains(backendID, "{{") {
 			record["backend_id"] = backendID
 		}
 		if userID, ok := input.Metadata["user_id"].(string); ok {
@@ -4402,7 +4402,7 @@ func (n *TokenUsageNode) executeRecord(ctx context.Context, input *NodeInput) (*
 
 	// 3. 从 input.Metadata 获取 backend（如果没有 backend_id）
 	if record["backend_id"] == nil {
-		if backend, ok := input.Metadata["backend"].(string); ok {
+		if backend, ok := input.Metadata["backend"].(string); ok && !strings.Contains(backend, "{{") {
 			record["backend_id"] = backend
 		}
 	}
@@ -4525,12 +4525,12 @@ func mergeTokenUsageFromNodeMetadata(record, meta map[string]interface{}) {
 	if record == nil || meta == nil {
 		return
 	}
-	if model := tokenRecordString(meta["model"]); model != "" {
+	if model := tokenRecordString(meta["model"]); model != "" && !strings.Contains(model, "{{") {
 		record["model"] = model
 	}
-	if backendID := tokenRecordString(meta["backend_id"]); backendID != "" {
+	if backendID := tokenRecordString(meta["backend_id"]); backendID != "" && !strings.Contains(backendID, "{{") {
 		record["backend_id"] = backendID
-	} else if backend := tokenRecordString(meta["backend"]); backend != "" {
+	} else if backend := tokenRecordString(meta["backend"]); backend != "" && !strings.Contains(backend, "{{") {
 		record["backend_id"] = backend
 	}
 	total := tokenRecordInt(meta["tokens"])

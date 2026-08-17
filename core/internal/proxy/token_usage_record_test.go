@@ -91,3 +91,21 @@ func TestApproximateTokensFromPassthroughContent_UsesDeltaText(t *testing.T) {
 	}
 }
 
+func TestSanitizeUsageModel(t *testing.T) {
+	cases := map[string]string{
+		"pipeline.transparent-proxy": "",
+		"pipeline.direct-backend":    "",
+		"pipeline_router-mode":       "",
+		"centag/transparent-proxy":   "",
+		"deepseek-v4-flash":          "deepseek-v4-flash",
+		"glm-4-flash":                "glm-4-flash",
+		"{{system.default_model}}":   "",
+		"":                          "",
+	}
+	for in, want := range cases {
+		if got := sanitizeUsageModel(in); got != want {
+			t.Errorf("sanitizeUsageModel(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+

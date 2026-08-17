@@ -128,6 +128,7 @@ func triggerConversationResponseHooks(c *gin.Context, output *pipeline.PipelineO
 			model = m
 		}
 	}
+	model = sanitizeUsageModel(model)
 	category := strings.TrimSpace(c.GetHeader("X-Conversation-Category"))
 	if category == "" {
 		category = "general"

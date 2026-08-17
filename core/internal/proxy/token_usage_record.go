@@ -54,6 +54,7 @@ func maybeRecordTokenUsage(c *gin.Context, output *pipeline.PipelineOutput, fall
 	if model == "" {
 		model = strings.TrimSpace(fallbackModel)
 	}
+	model = sanitizeUsageModel(model)
 
 	deptTag := strings.TrimSpace(c.GetHeader("X-Dept-Tag"))
 	if deptTag == "" && output.Metadata != nil {
@@ -70,7 +71,7 @@ func maybeRecordTokenUsage(c *gin.Context, output *pipeline.PipelineOutput, fall
 		RequestID:    c.GetHeader("X-Request-ID"),
 		SessionID:    strings.TrimSpace(c.GetHeader("X-Session-ID")),
 		Model:        model,
-		Backend:      extractBackendFromPipelineOutput(output),
+		Backend:      sanitizeUsageValue(extractBackendFromPipelineOutput(output)),
 		InputTokens:  prompt,
 		OutputTokens: completion,
 		TotalTokens:  total,
@@ -267,4 +268,30 @@ func approximateTokensFromPassthroughContent(content string) int {
 		return 1
 	}
 	return n
+}
+
+// sanitizeUsageValue returns empty string for unresolved template variables,
+// preventing them from being stored in usage/billing tables.
+func sanitizeUsageValue(s string) string {
+	s = strings.TrimSpace(s)
+	if s == "" || strings.Contains(s, "{{") {
+		return ""
+	}
+	return s
+}
+
+// sanitizeUsageModel 过滤虚拟流水线模型名（pipeline.xxx / pipeline_xxx / centag/xxx），
+// 防止其泄漏到用量/计费统计。真实模型名由 pipeline 输出解析提供；
+// 仅当 pipeline 未解析出模型、回退到请求 model 时，需要过滤掉虚拟流水线名。
+// 注意：不能在此处清空请求 body 的 model 字段，否则 OpenAI/Anthropic 协议
+// 校验会因 model 为空而拒绝请求（HTTP 400 "model is required"）。
+func sanitizeUsageModel(s string) string {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return ""
+	}
+	if strings.HasPrefix(s, "pipeline.") || strings.HasPrefix(s, "pipeline_") || strings.HasPrefix(s, "centag/") {
+		return ""
+	}
+	return sanitizeUsageValue(s)
 }

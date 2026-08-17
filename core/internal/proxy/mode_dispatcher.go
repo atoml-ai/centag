@@ -2295,7 +2295,9 @@ func extractBackendFromPipelineOutput(output *pipeline.PipelineOutput) string {
 	}
 	for _, key := range []string{"backend_id", "executor_backend", "backend"} {
 		if v, ok := output.Metadata[key].(string); ok && v != "" {
-			return v
+			if !strings.Contains(v, "{{") {
+				return v
+			}
 		}
 	}
 	if output.NodeOutputs != nil {
@@ -2304,7 +2306,9 @@ func extractBackendFromPipelineOutput(output *pipeline.PipelineOutput) string {
 				continue
 			}
 			if v, ok := nodeOutput.Metadata["backend_id"].(string); ok && v != "" {
-				return v
+				if !strings.Contains(v, "{{") {
+					return v
+				}
 			}
 		}
 	}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"strconv"
+	"strings"
 )
 
 // TokenUsagePersistRequest is passed to the optional usage persistence hook.
@@ -34,8 +35,8 @@ func persistTokenUsageFromRecord(ctx context.Context, input *NodeInput, record m
 		return
 	}
 	req := TokenUsagePersistRequest{
-		BackendID:        tokenRecordString(record["backend_id"]),
-		Model:            tokenRecordString(record["model"]),
+		BackendID:        sanitizeUsageValue(tokenRecordString(record["backend_id"])),
+		Model:            sanitizeUsageValue(tokenRecordString(record["model"])),
 		PromptTokens:     tokenRecordInt(record["prompt_tokens"]),
 		CompletionTokens: tokenRecordInt(record["completion_tokens"]),
 		TotalTokens:      total,
@@ -77,4 +78,14 @@ func persistTokenUsageFromRecord(ctx context.Context, input *NodeInput, record m
 
 func parseUserIDInt(uid string) (int64, error) {
 	return strconv.ParseInt(uid, 10, 64)
+}
+
+// sanitizeUsageValue returns empty string for unresolved template variables or
+// non-concrete identifiers, preventing them from being stored in usage tables.
+func sanitizeUsageValue(s string) string {
+	s = strings.TrimSpace(s)
+	if s == "" || strings.Contains(s, "{{") {
+		return ""
+	}
+	return s
 }
