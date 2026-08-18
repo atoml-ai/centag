@@ -164,23 +164,23 @@
         </div>
 
         <div v-if="canWrite" class="backend-actions">
-          <el-button
-            size="small"
-            :type="defaultBackendId === b.id ? 'success' : 'default'"
-            :plain="defaultBackendId !== b.id"
-            :disabled="defaultBackendId === b.id || settingDefaultMap[b.id]"
-            :loading="settingDefaultMap[b.id]"
-            @click="handleSetDefault(b)"
-          >
-            {{ defaultBackendId === b.id ? t('providerManager.currentDefault') : t('providerManager.setDefault') }}
-          </el-button>
+          <el-tooltip :content="defaultBackendId === b.id ? t('providerManager.currentDefault') : t('providerManager.setDefault')" placement="top">
+            <el-icon
+              class="action-star"
+              :class="{ 'is-default': defaultBackendId === b.id }"
+              :disabled="defaultBackendId === b.id || settingDefaultMap[b.id]"
+              @click="handleSetDefault(b)"
+            >
+              <StarFilled v-if="defaultBackendId === b.id" />
+              <Star v-else />
+            </el-icon>
+          </el-tooltip>
           <el-dropdown
             trigger="click"
             @command="(cmd: string) => handleCardAction(cmd, b)"
           >
-            <el-button size="small">
-              {{ t('providerManager.actions') }}
-              <el-icon class="el-icon--right"><ArrowDown /></el-icon>
+            <el-button circle plain size="small">
+              <el-icon><MoreFilled /></el-icon>
             </el-button>
             <template #dropdown>
               <el-dropdown-menu>
@@ -224,7 +224,7 @@
 import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { ArrowDown, Plus, Upload, Download, Connection, Setting } from '@element-plus/icons-vue'
+import { Plus, Upload, Download, Connection, Setting, Star, StarFilled, MoreFilled } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import * as yaml from 'js-yaml'
 import BackendEditorDialog from '@/components/backends/BackendEditorDialog.vue'
@@ -918,10 +918,47 @@ defineExpose({ openCreate, reloadDefault })
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 8px;
   padding-top: 8px;
   border-top: 1px solid rgba(15, 23, 42, 0.06);
+}
+
+.action-star {
+  width: 32px;
+  height: 32px;
+  font-size: 14px;
+  cursor: pointer;
+  color: #9ca3af;
+  transition: color 0.2s, background 0.2s;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 1px solid var(--el-border-color-lighter);
+  background: var(--el-bg-color);
+}
+
+.action-star:hover {
+  color: #f59e0b;
+  border-color: #f59e0b;
+  background: rgba(245, 158, 11, 0.1);
+}
+
+.action-star.is-default {
+  color: #f59e0b;
+  border-color: #f59e0b;
+}
+
+.action-star[disabled] {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.backend-actions :deep(.el-button.is-circle) {
+  width: 32px;
+  height: 32px;
+  padding: 8px;
 }
 
 .empty-tip {
