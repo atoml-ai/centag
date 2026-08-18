@@ -20,7 +20,7 @@ func TestAccountPoolSelector_RoundRobin(t *testing.T) {
 	// 多次选择应该轮询
 	selected := make(map[string]int)
 	for i := 0; i < 6; i++ {
-		result, err := selector.SelectAccountForRequest(context.Background(), pool, "")
+		result, err := selector.SelectAccountForRequest(context.Background(), pool, "", "test-backend")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -46,7 +46,7 @@ func TestAccountPoolSelector_WeightedRoundRobin(t *testing.T) {
 	}
 	selected := map[string]int{}
 	for i := 0; i < 8; i++ {
-		result, err := selector.SelectAccountForRequest(context.Background(), pool, "")
+		result, err := selector.SelectAccountForRequest(context.Background(), pool, "", "test-backend")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -73,13 +73,13 @@ func TestAccountPoolSelector_LeastUsage(t *testing.T) {
 	}
 
 	// 第一次选择
-	result1, err := selector.SelectAccountForRequest(context.Background(), pool, "")
+	result1, err := selector.SelectAccountForRequest(context.Background(), pool, "", "test-backend")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
 	// 第二次应该选择另一个（请求次数相同）
-	result2, err := selector.SelectAccountForRequest(context.Background(), pool, "")
+	result2, err := selector.SelectAccountForRequest(context.Background(), pool, "", "test-backend")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -103,13 +103,13 @@ func TestAccountPoolSelector_StickySession(t *testing.T) {
 	sessionKey := "user-123"
 
 	// 第一次选择
-	result1, err := selector.SelectAccountForRequest(context.Background(), pool, sessionKey)
+	result1, err := selector.SelectAccountForRequest(context.Background(), pool, sessionKey, "test-backend")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
 	// 第二次应该选择同一个（会话亲和）
-	result2, err := selector.SelectAccountForRequest(context.Background(), pool, sessionKey)
+	result2, err := selector.SelectAccountForRequest(context.Background(), pool, sessionKey, "test-backend")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -131,7 +131,7 @@ func TestAccountPoolSelector_FilterDisabled(t *testing.T) {
 	}
 
 	// 应该只选择启用的账户
-	result, err := selector.SelectAccountForRequest(context.Background(), pool, "")
+	result, err := selector.SelectAccountForRequest(context.Background(), pool, "", "test-backend")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -152,7 +152,7 @@ func TestAccountPoolSelector_AllDisabled(t *testing.T) {
 		},
 	}
 
-	_, err := selector.SelectAccountForRequest(context.Background(), pool, "")
+	_, err := selector.SelectAccountForRequest(context.Background(), pool, "", "test-backend")
 	if err == nil {
 		t.Error("expected error when all accounts are disabled")
 	}
@@ -166,7 +166,7 @@ func TestAccountPoolSelector_EmptyPool(t *testing.T) {
 		Accounts: []BackendAccount{},
 	}
 
-	_, err := selector.SelectAccountForRequest(context.Background(), pool, "")
+	_, err := selector.SelectAccountForRequest(context.Background(), pool, "", "test-backend")
 	if err == nil {
 		t.Error("expected error for empty pool")
 	}
@@ -546,7 +546,7 @@ func TestAccountPoolStreamParity(t *testing.T) {
 	// 模拟流式请求（连续快速选择）
 	streamResults := make([]string, 0, 6)
 	for i := 0; i < 6; i++ {
-		result, err := selector.SelectAccountForRequest(context.Background(), pool, "")
+		result, err := selector.SelectAccountForRequest(context.Background(), pool, "", "test-backend")
 		if err != nil {
 			t.Fatalf("stream request %d: unexpected error: %v", i, err)
 		}
@@ -559,7 +559,7 @@ func TestAccountPoolStreamParity(t *testing.T) {
 	// 模拟非流式请求（相同模式）
 	nonStreamResults := make([]string, 0, 6)
 	for i := 0; i < 6; i++ {
-		result, err := selector.SelectAccountForRequest(context.Background(), pool, "")
+		result, err := selector.SelectAccountForRequest(context.Background(), pool, "", "test-backend")
 		if err != nil {
 			t.Fatalf("non-stream request %d: unexpected error: %v", i, err)
 		}
@@ -590,23 +590,23 @@ func TestAccountPoolStickySessionConsistency(t *testing.T) {
 	sessionKey := "user-123"
 
 	// 流式请求
-	result1, err := selector.SelectAccountForRequest(context.Background(), pool, sessionKey)
+	result1, err := selector.SelectAccountForRequest(context.Background(), pool, sessionKey, "test-backend")
 	if err != nil {
 		t.Fatalf("stream request 1: unexpected error: %v", err)
 	}
 
-	result2, err := selector.SelectAccountForRequest(context.Background(), pool, sessionKey)
+	result2, err := selector.SelectAccountForRequest(context.Background(), pool, sessionKey, "test-backend")
 	if err != nil {
 		t.Fatalf("stream request 2: unexpected error: %v", err)
 	}
 
 	// 非流式请求（相同 session key）
-	result3, err := selector.SelectAccountForRequest(context.Background(), pool, sessionKey)
+	result3, err := selector.SelectAccountForRequest(context.Background(), pool, sessionKey, "test-backend")
 	if err != nil {
 		t.Fatalf("non-stream request 1: unexpected error: %v", err)
 	}
 
-	result4, err := selector.SelectAccountForRequest(context.Background(), pool, sessionKey)
+	result4, err := selector.SelectAccountForRequest(context.Background(), pool, sessionKey, "test-backend")
 	if err != nil {
 		t.Fatalf("non-stream request 2: unexpected error: %v", err)
 	}
@@ -634,7 +634,7 @@ func TestAccountPoolLeastUsageConsistency(t *testing.T) {
 	// 模拟 3 个流式请求
 	results := make([]string, 0, 3)
 	for i := 0; i < 3; i++ {
-		result, err := selector.SelectAccountForRequest(context.Background(), pool, "")
+		result, err := selector.SelectAccountForRequest(context.Background(), pool, "", "test-backend")
 		if err != nil {
 			t.Fatalf("request %d: unexpected error: %v", i, err)
 		}
@@ -667,7 +667,7 @@ func TestAccountPoolWeightedSelection(t *testing.T) {
 	results := make([]string, 0, 6)
 	counts := map[string]int{}
 	for i := 0; i < 6; i++ {
-		result, err := selector.SelectAccountForRequest(context.Background(), pool, "")
+		result, err := selector.SelectAccountForRequest(context.Background(), pool, "", "test-backend")
 		if err != nil {
 			t.Fatalf("request %d: unexpected error: %v", i, err)
 		}
@@ -704,7 +704,7 @@ func TestAccountPoolConcurrentAccess(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		go func() {
 			for j := 0; j < 100; j++ {
-				_, err := selector.SelectAccountForRequest(context.Background(), pool, "")
+				_, err := selector.SelectAccountForRequest(context.Background(), pool, "", "test-backend")
 				if err != nil {
 					t.Errorf("unexpected error: %v", err)
 				}
@@ -780,7 +780,7 @@ func TestAccountPoolDisabledAccountSelection(t *testing.T) {
 
 	// 选择 5 次，应该只选择 key-2
 	for i := 0; i < 5; i++ {
-		result, err := selector.SelectAccountForRequest(context.Background(), pool, "")
+		result, err := selector.SelectAccountForRequest(context.Background(), pool, "", "test-backend")
 		if err != nil {
 			t.Fatalf("request %d: unexpected error: %v", i, err)
 		}

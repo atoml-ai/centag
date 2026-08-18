@@ -207,7 +207,7 @@ func (b *Backend) CallModel(ctx context.Context, req *plugin.ProxyRequest) (*plu
 		apiKey := backendCfg.APIKey
 		currentAccountID := ""
 		if backend.HasAccountPool(backendCfg) {
-			result, selErr := b.accountSelector.SelectAccountForRequest(ctx, backendCfg.AccountPool, sessionKey)
+			result, selErr := b.accountSelector.SelectAccountForRequest(ctx, backendCfg.AccountPool, sessionKey, backendCfg.ID)
 			if selErr != nil {
 				return nil, fmt.Errorf("account pool select: %w", selErr)
 			}
@@ -242,7 +242,7 @@ func (b *Backend) CallModel(ctx context.Context, req *plugin.ProxyRequest) (*plu
 		if resp.StatusCode != http.StatusOK {
 			if resp.StatusCode == http.StatusTooManyRequests && backend.HasAccountPool(backendCfg) && attempt < maxAttempts-1 {
 				log.Printf("[Anthropic Backend] 429 rate limit on account %s, rotating to next (attempt %d/%d)", currentAccountID, attempt+1, maxAttempts)
-				b.accountSelector.DisableAccountTemporarily(backendCfg.AccountPool, currentAccountID)
+				b.accountSelector.DisableAccountTemporarily(backendCfg.AccountPool, currentAccountID, backendCfg.ID)
 				lastErr = fmt.Errorf("API 429 on account %s", currentAccountID)
 				continue
 			}
@@ -331,7 +331,7 @@ func (b *Backend) CallModelStream(ctx context.Context, req *plugin.ProxyRequest)
 		apiKey := backendCfg.APIKey
 		currentAccountID := ""
 		if backend.HasAccountPool(backendCfg) {
-			result, selErr := b.accountSelector.SelectAccountForRequest(ctx, backendCfg.AccountPool, sessionKey)
+			result, selErr := b.accountSelector.SelectAccountForRequest(ctx, backendCfg.AccountPool, sessionKey, backendCfg.ID)
 			if selErr != nil {
 				ch <- plugin.StreamChunk{Error: fmt.Errorf("account pool select: %w", selErr)}
 				return
@@ -363,7 +363,7 @@ func (b *Backend) CallModelStream(ctx context.Context, req *plugin.ProxyRequest)
 		if resp.StatusCode != http.StatusOK {
 			if resp.StatusCode == http.StatusTooManyRequests && backend.HasAccountPool(backendCfg) {
 				log.Printf("[Anthropic Backend] 429 rate limit on stream account %s, disabling", currentAccountID)
-				b.accountSelector.DisableAccountTemporarily(backendCfg.AccountPool, currentAccountID)
+				b.accountSelector.DisableAccountTemporarily(backendCfg.AccountPool, currentAccountID, backendCfg.ID)
 			}
 			body, _ := io.ReadAll(resp.Body)
 			ch <- plugin.StreamChunk{Error: fmt.Errorf("API error (status %d): %s", resp.StatusCode, string(body))}

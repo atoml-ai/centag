@@ -263,7 +263,7 @@ func (n *TransparentForwardNode) Execute(ctx context.Context, input *NodeInput) 
 		auth := resolveTransparentUpstreamAuth(backendID, meta)
 		accountID := ""
 		if pool != nil && selector != nil {
-			result, selErr := selectUnusedPoolAccount(ctx, selector, pool, sessionKey, triedAccounts, maxAttempts)
+			result, selErr := selectUnusedPoolAccount(ctx, selector, pool, sessionKey, triedAccounts, maxAttempts, backendID)
 			if selErr == nil && result != nil {
 				auth = "Bearer " + backend.NormalizeOpenAICompatibleAPIKey(result.Key)
 				accountID = result.Account.ID
@@ -316,7 +316,7 @@ func (n *TransparentForwardNode) Execute(ctx context.Context, input *NodeInput) 
 					logger.GetField("attempt", attempt+1),
 					logger.GetField("max_attempts", maxAttempts),
 				)
-				selector.DisableAccountTemporarily(pool, accountID)
+				selector.DisableAccountTemporarily(pool, accountID, backendID)
 				continue
 			}
 			return nil, fmt.Errorf("transparent_forward node %q: upstream request failed: %w", n.id, doErr)
@@ -354,7 +354,7 @@ func (n *TransparentForwardNode) Execute(ctx context.Context, input *NodeInput) 
 				logger.GetField("attempt", attempt+1),
 				logger.GetField("max_attempts", maxAttempts),
 			)
-			selector.DisableAccountTemporarily(pool, accountID)
+			selector.DisableAccountTemporarily(pool, accountID, backendID)
 			continue
 		}
 
@@ -466,10 +466,11 @@ func selectUnusedPoolAccount(
 	sessionKey string,
 	tried map[string]bool,
 	maxTries int,
+	backendID string,
 ) (*backend.AccountPoolResult, error) {
 	var lastErr error
 	for i := 0; i < maxTries; i++ {
-		result, err := selector.SelectAccountForRequest(ctx, pool, sessionKey)
+		result, err := selector.SelectAccountForRequest(ctx, pool, sessionKey, backendID)
 		if err != nil {
 			return nil, err
 		}
@@ -479,7 +480,7 @@ func selectUnusedPoolAccount(
 		if !tried[result.Account.ID] {
 			return result, nil
 		}
-		selector.DisableAccountTemporarily(pool, result.Account.ID)
+		selector.DisableAccountTemporarily(pool, result.Account.ID, backendID)
 		lastErr = fmt.Errorf("account %s already tried", result.Account.ID)
 	}
 	if lastErr == nil {

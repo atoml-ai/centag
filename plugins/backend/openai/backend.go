@@ -255,7 +255,7 @@ func (b *Backend) CallModel(ctx context.Context, req *plugin.ProxyRequest) (*plu
 			var result *backend.AccountPoolResult
 			var selErr error
 			for skip := 0; skip < maxAttempts; skip++ {
-				result, selErr = b.accountSelector.SelectAccountForRequest(ctx, backendCfg.AccountPool, sessionKey)
+				result, selErr = b.accountSelector.SelectAccountForRequest(ctx, backendCfg.AccountPool, sessionKey, backendCfg.ID)
 				if selErr != nil {
 					break
 				}
@@ -263,7 +263,7 @@ func (b *Backend) CallModel(ctx context.Context, req *plugin.ProxyRequest) (*plu
 					break
 				}
 				if result != nil {
-					b.accountSelector.DisableAccountTemporarily(backendCfg.AccountPool, result.Account.ID)
+					b.accountSelector.DisableAccountTemporarily(backendCfg.AccountPool, result.Account.ID, backendCfg.ID)
 				}
 				result = nil
 			}
@@ -294,7 +294,7 @@ func (b *Backend) CallModel(ctx context.Context, req *plugin.ProxyRequest) (*plu
 		if doErr != nil {
 			lastErr = fmt.Errorf("failed to send request: %w", doErr)
 			if currentAccountID != "" && attempt < maxAttempts-1 {
-				b.accountSelector.DisableAccountTemporarily(backendCfg.AccountPool, currentAccountID)
+				b.accountSelector.DisableAccountTemporarily(backendCfg.AccountPool, currentAccountID, backendCfg.ID)
 				continue
 			}
 			continue
@@ -312,7 +312,7 @@ func (b *Backend) CallModel(ctx context.Context, req *plugin.ProxyRequest) (*plu
 		if resp.StatusCode != http.StatusOK {
 			if shouldRotateOpenAIAccount(resp.StatusCode, string(respBody)) && backend.HasAccountPool(backendCfg) && currentAccountID != "" && attempt < maxAttempts-1 {
 				log.Printf("[OpenAI Backend] rotate account %s status=%d (attempt %d/%d)", currentAccountID, resp.StatusCode, attempt+1, maxAttempts)
-				b.accountSelector.DisableAccountTemporarily(backendCfg.AccountPool, currentAccountID)
+				b.accountSelector.DisableAccountTemporarily(backendCfg.AccountPool, currentAccountID, backendCfg.ID)
 				lastErr = fmt.Errorf("API error (status %d) on account %s", resp.StatusCode, currentAccountID)
 				continue
 			}
@@ -459,7 +459,7 @@ func (b *Backend) CallModelStream(ctx context.Context, req *plugin.ProxyRequest)
 				var result *backend.AccountPoolResult
 				var selErr error
 				for skip := 0; skip < maxAttempts; skip++ {
-					result, selErr = b.accountSelector.SelectAccountForRequest(ctx, backendCfg.AccountPool, sessionKey)
+					result, selErr = b.accountSelector.SelectAccountForRequest(ctx, backendCfg.AccountPool, sessionKey, backendCfg.ID)
 					if selErr != nil {
 						break
 					}
@@ -467,7 +467,7 @@ func (b *Backend) CallModelStream(ctx context.Context, req *plugin.ProxyRequest)
 						break
 					}
 					if result != nil {
-						b.accountSelector.DisableAccountTemporarily(backendCfg.AccountPool, result.Account.ID)
+						b.accountSelector.DisableAccountTemporarily(backendCfg.AccountPool, result.Account.ID, backendCfg.ID)
 					}
 					result = nil
 				}
@@ -501,7 +501,7 @@ func (b *Backend) CallModelStream(ctx context.Context, req *plugin.ProxyRequest)
 			if doErr != nil {
 				lastErr = fmt.Errorf("failed to send request: %w", doErr)
 				if currentAccountID != "" && attempt < maxAttempts-1 {
-					b.accountSelector.DisableAccountTemporarily(backendCfg.AccountPool, currentAccountID)
+					b.accountSelector.DisableAccountTemporarily(backendCfg.AccountPool, currentAccountID, backendCfg.ID)
 					continue
 				}
 				ch <- plugin.StreamChunk{Error: lastErr}
@@ -518,7 +518,7 @@ func (b *Backend) CallModelStream(ctx context.Context, req *plugin.ProxyRequest)
 			resp = nil
 			if shouldRotateOpenAIAccount(statusCode, string(body)) && currentAccountID != "" && attempt < maxAttempts-1 {
 				log.Printf("[OpenAI Backend] rotate stream account %s status=%d (attempt %d/%d)", currentAccountID, statusCode, attempt+1, maxAttempts)
-				b.accountSelector.DisableAccountTemporarily(backendCfg.AccountPool, currentAccountID)
+				b.accountSelector.DisableAccountTemporarily(backendCfg.AccountPool, currentAccountID, backendCfg.ID)
 				lastErr = fmt.Errorf("API error (status %d) on account %s", statusCode, currentAccountID)
 				continue
 			}

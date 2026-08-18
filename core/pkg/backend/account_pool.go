@@ -14,8 +14,8 @@ import (
 type AccountPoolSelector struct {
 	mu             sync.RWMutex
 	sessions       map[string]string    // session_key -> account_id (sticky_session 用)
-	counters       map[string]int       // account_id -> request_count (round_robin/least_usage 用)
-	disabledUntil  map[string]time.Time // account_id -> 禁用截止时间（429 故障转移用）
+	counters       map[string]int       // backendID:account_id -> request_count (round_robin/least_usage 用)
+	disabledUntil  map[string]time.Time // backendID:account_id -> 禁用截止时间（故障转移用，按后端隔离避免跨后端 ID 冲突）
 }
 
 // NewAccountPoolSelector 创建账户池选择器
@@ -33,12 +33,19 @@ type AccountPoolResult struct {
 	Key     string // 选择的 API Key
 }
 
+// disabledKey 生成 disabledUntil 的复合 key，格式 backendID:accountID，避免跨后端 ID 冲突。
+func disabledKey(backendID, accountID string) string {
+	return backendID + ":" + accountID
+}
+
 // SelectAccountForRequest 为请求选择账户（统一入口，流/非流共用）
 // sessionKey 用于 sticky_session 策略，可从 context 或请求头提取
+// backendID 用于隔离不同后端的账户禁用状态，避免跨后端同 ID 冲突
 func (s *AccountPoolSelector) SelectAccountForRequest(
 	ctx context.Context,
 	pool *AccountPoolConfig,
 	sessionKey string,
+	backendID string,
 ) (*AccountPoolResult, error) {
 	if pool == nil || len(pool.Accounts) == 0 {
 		return nil, fmt.Errorf("account pool is empty")
@@ -51,9 +58,10 @@ func (s *AccountPoolSelector) SelectAccountForRequest(
 		if !acc.Enabled {
 			continue
 		}
-		// 检查是否被临时禁用（429 故障转移）
+		// 检查是否被临时禁用（故障转移）
+		key := disabledKey(backendID, acc.ID)
 		s.mu.RLock()
-		disabled, exists := s.disabledUntil[acc.ID]
+		disabled, exists := s.disabledUntil[key]
 		s.mu.RUnlock()
 		if exists && now.Before(disabled) {
 			continue
@@ -61,7 +69,7 @@ func (s *AccountPoolSelector) SelectAccountForRequest(
 		// 禁用过期，清除记录
 		if exists && !now.Before(disabled) {
 			s.mu.Lock()
-			delete(s.disabledUntil, acc.ID)
+			delete(s.disabledUntil, key)
 			s.mu.Unlock()
 		}
 		healthyAccounts = append(healthyAccounts, acc)
@@ -386,18 +394,19 @@ func GetEffectiveAPIKey(cfg *BackendConfig) string {
 	return cfg.APIKey
 }
 
-// DisableAccountTemporarily 临时禁用账户（429 故障转移），默认禁用 30 秒
-func (s *AccountPoolSelector) DisableAccountTemporarily(pool *AccountPoolConfig, accountID string) {
+// DisableAccountTemporarily 临时禁用账户（故障转移），默认禁用 30 秒
+// backendID 用于隔离不同后端的账户禁用状态，避免跨后端同 ID 冲突
+func (s *AccountPoolSelector) DisableAccountTemporarily(pool *AccountPoolConfig, accountID string, backendID string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.disabledUntil[accountID] = time.Now().Add(30 * time.Second)
+	s.disabledUntil[disabledKey(backendID, accountID)] = time.Now().Add(30 * time.Second)
 }
 
 // IsAccountDisabled 检查账户是否被临时禁用
-func (s *AccountPoolSelector) IsAccountDisabled(accountID string) bool {
+func (s *AccountPoolSelector) IsAccountDisabled(accountID string, backendID string) bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	disabled, exists := s.disabledUntil[accountID]
+	disabled, exists := s.disabledUntil[disabledKey(backendID, accountID)]
 	if !exists {
 		return false
 	}

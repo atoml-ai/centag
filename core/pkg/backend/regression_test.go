@@ -56,7 +56,7 @@ func TestAccountPool429Failover(t *testing.T) {
 	}
 
 	// 第一次选择
-	result1, err := selector.SelectAccountForRequest(context.Background(), pool, "")
+	result1, err := selector.SelectAccountForRequest(context.Background(), pool, "", "test-backend")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -70,7 +70,7 @@ func TestAccountPool429Failover(t *testing.T) {
 	}
 
 	// 第二次选择应该选择不同的账户
-	result2, err := selector.SelectAccountForRequest(context.Background(), pool, "")
+	result2, err := selector.SelectAccountForRequest(context.Background(), pool, "", "test-backend")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -88,7 +88,7 @@ func TestAccountPool429Failover(t *testing.T) {
 	}
 
 	// 第三次选择应该可以选择恢复的账户
-	result3, err := selector.SelectAccountForRequest(context.Background(), pool, "")
+	result3, err := selector.SelectAccountForRequest(context.Background(), pool, "", "test-backend")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -113,13 +113,13 @@ func TestAccountScopedBreaker(t *testing.T) {
 	}
 
 	// 选择第一个账户
-	result1, err := selector.SelectAccountForRequest(context.Background(), pool, "")
+	result1, err := selector.SelectAccountForRequest(context.Background(), pool, "", "test-backend")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
 	// 选择第二个账户
-	result2, err := selector.SelectAccountForRequest(context.Background(), pool, "")
+	result2, err := selector.SelectAccountForRequest(context.Background(), pool, "", "test-backend")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -155,7 +155,7 @@ func TestAccountPoolReset(t *testing.T) {
 	sessionKey := "user-123"
 
 	// 第一次选择
-	result1, err := selector.SelectAccountForRequest(context.Background(), pool, sessionKey)
+	result1, err := selector.SelectAccountForRequest(context.Background(), pool, sessionKey, "test-backend")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -173,7 +173,7 @@ func TestAccountPoolReset(t *testing.T) {
 	selector = NewAccountPoolSelector()
 
 	// 再次选择应该可以选择不同的账户
-	result2, err := selector.SelectAccountForRequest(context.Background(), pool, sessionKey)
+	result2, err := selector.SelectAccountForRequest(context.Background(), pool, sessionKey, "test-backend")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -204,7 +204,7 @@ func TestAccountPoolHealthCheck(t *testing.T) {
 	// 多次选择应该只选择启用的账户
 	selected := make(map[string]int)
 	for i := 0; i < 6; i++ {
-		result, err := selector.SelectAccountForRequest(context.Background(), pool, "")
+		result, err := selector.SelectAccountForRequest(context.Background(), pool, "", "test-backend")
 		if err != nil {
 			t.Fatalf("request %d: unexpected error: %v", i, err)
 		}
@@ -230,13 +230,13 @@ func TestAccountPoolErrorHandling(t *testing.T) {
 	selector := NewAccountPoolSelector()
 
 	// 测试 nil pool
-	_, err := selector.SelectAccountForRequest(context.Background(), nil, "")
+	_, err := selector.SelectAccountForRequest(context.Background(), nil, "", "test-backend")
 	if err == nil {
 		t.Error("expected error for nil pool")
 	}
 
 	// 测试空 pool
-	_, err = selector.SelectAccountForRequest(context.Background(), &AccountPoolConfig{}, "")
+	_, err = selector.SelectAccountForRequest(context.Background(), &AccountPoolConfig{}, "", "test-backend")
 	if err == nil {
 		t.Error("expected error for empty pool")
 	}
@@ -246,7 +246,7 @@ func TestAccountPoolErrorHandling(t *testing.T) {
 		Accounts: []BackendAccount{
 			{ID: "key-1", APIKey: "sk-1", Enabled: false},
 		},
-	}, "")
+	}, "", "test-backend")
 	if err == nil {
 		t.Error("expected error when all accounts are disabled")
 	}
@@ -488,7 +488,7 @@ func TestAccountPoolConcurrentOperations(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		go func() {
 			for j := 0; j < 100; j++ {
-				_, err := selector.SelectAccountForRequest(context.Background(), pool, "")
+				_, err := selector.SelectAccountForRequest(context.Background(), pool, "", "test-backend")
 				if err != nil {
 					t.Errorf("unexpected error: %v", err)
 				}
