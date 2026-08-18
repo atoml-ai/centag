@@ -1,6 +1,6 @@
 api_version: centag.agent-skill/v1alpha1
 implementation: builtin.agent-skill-config-analysis
-name: 配置分析
+name: Config Analysis
 kind: agent.skill
 version: 1.0.0
 description: 分析当前配置

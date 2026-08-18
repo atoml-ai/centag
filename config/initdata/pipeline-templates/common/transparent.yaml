@@ -1,5 +1,5 @@
 id: transparent
-name: 透明模式
+name: Transparent Mode
 description: |
   简单直接的透传转发流水线：主转发节点 + 备份节点。
   可通过参数配置转发规则与提示词：

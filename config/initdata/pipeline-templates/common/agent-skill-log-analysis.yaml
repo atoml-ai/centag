@@ -1,6 +1,6 @@
 api_version: centag.agent-skill/v1alpha1
 implementation: builtin.agent-skill-log-analysis
-name: 日志分析
+name: Log Analysis
 kind: agent.skill
 version: 1.0.0
 description: 日志分析

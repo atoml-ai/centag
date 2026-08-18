@@ -1,6 +1,6 @@
 api_version: centag.agent-skill/v1alpha1
 implementation: builtin.agent-skill-status-check
-name: 状态检查
+name: Status Check
 kind: agent.skill
 version: 1.0.0
 description: 查询centag当前运行状态

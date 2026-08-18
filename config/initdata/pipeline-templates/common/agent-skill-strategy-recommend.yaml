@@ -1,6 +1,6 @@
 api_version: centag.agent-skill/v1alpha1
 implementation: builtin.agent-skill-strategy-recommend
-name: 策略建议
+name: Strategy Recommend
 kind: agent.skill
 version: 1.0.0
 description: 策略调整建议
