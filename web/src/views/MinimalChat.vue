@@ -35,6 +35,15 @@
               </div>
             </el-option>
           </el-select>
+          <div class="pipeline-mode-toggle">
+            <el-radio-group v-model="chatMode" :disabled="loading" size="small">
+              <el-radio-button value="traditional">{{ t('minimalChat.modeTraditional') }}</el-radio-button>
+              <el-radio-button value="agent">{{ t('minimalChat.modeAgent') }}</el-radio-button>
+            </el-radio-group>
+            <span v-if="chatMode === 'agent' && agentSessionId" class="agent-hint">
+              {{ agentSessionId.slice(0, 8) }}…
+            </span>
+          </div>
         </div>
         <div v-if="selectedPipeline" class="pipeline-row pipeline-row-meta">
           <el-tag size="small" type="info" effect="plain">{{ selectedPipeline.id }}</el-tag>
@@ -177,6 +186,21 @@
                   </el-collapse-item>
                 </el-collapse>
               </div>
+
+              <!-- Agent 模式：工具执行步骤 -->
+              <div v-if="msg.role === 'assistant' && msg.agentSteps?.length" class="trace-card agent-trace">
+                <div class="agent-trace-title">{{ t('minimalChat.agentThinking') }}</div>
+                <div class="agent-steps">
+                  <div v-for="(step, si) in msg.agentSteps" :key="si" class="agent-step">
+                    <el-icon v-if="step.type === 'tool_call'" :size="14" color="#e6a23c"><Loading /></el-icon>
+                    <el-icon v-else-if="step.type === 'tool_result'" :size="14" color="#67c23a"><CircleCheckFilled /></el-icon>
+                    <el-icon v-else-if="step.type === 'error'" :size="14" color="#f56c6c"><CircleCloseFilled /></el-icon>
+                    <el-icon v-else :size="14" color="#909399"><InfoFilled /></el-icon>
+                    <span class="agent-step-label">{{ step.label }}</span>
+                    <span v-if="step.detail" class="agent-step-detail">{{ step.detail }}</span>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -197,7 +221,7 @@
             :autosize="{ minRows: 1, maxRows: 4 }"
             :placeholder="t('minimalChat.inputMessage')"
             :disabled="loading"
-            @keydown.enter.exact.prevent="sendMessage"
+            @keydown="handleKeydown"
           />
           <el-button
             type="primary"
@@ -219,10 +243,11 @@ import { ref, computed, nextTick, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
   Promotion, User, Monitor, ChatDotRound, WarningFilled,
-  CircleCheckFilled, CircleCloseFilled, RemoveFilled,
+  CircleCheckFilled, CircleCloseFilled, RemoveFilled, Loading, InfoFilled,
 } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { getPipelines, getPipelineDefaults, type AgentPatternPipeline } from '@/api/pipeline'
+import { agentApi, type Session as AgentSession } from '@/api/agent'
 import { useAuthStore } from '@/stores/auth'
 import api from '@/api'
 
@@ -232,7 +257,7 @@ interface FlowStep {
   label: string
   sub?: string
   status: 'ok' | 'fail' | 'skip' | 'pending' | 'info'
-  kind?: 'client' | 'pipeline' | 'node' | 'fallback' | 'backend' | 'result'
+  kind?: 'client' | 'pipeline' | 'routing' | 'node' | 'fallback' | 'backend' | 'result'
 }
 
 interface TraceInfo {
@@ -256,11 +281,18 @@ interface TraceInfo {
   rawMeta?: Record<string, unknown>
 }
 
+interface AgentStep {
+  type: 'tool_call' | 'tool_result' | 'info' | 'error'
+  label: string
+  detail?: string
+}
+
 interface ChatMsg {
   role: 'user' | 'assistant'
   content: string
   error?: string
   trace?: TraceInfo
+  agentSteps?: AgentStep[]
 }
 
 const visible = defineModel<boolean>({ default: false })
@@ -279,6 +311,11 @@ const inputText = ref('')
 const loading = ref(false)
 const messagesContainer = ref<HTMLElement>()
 const cachedTestAPIKey = ref('')
+
+// Agent mode state
+const chatMode = ref<'traditional' | 'agent'>('traditional')
+const agentSessionId = ref('')
+const agentSessionLoading = ref(false)
 
 const selectedPipeline = computed(() =>
   pipelines.value.find(p => p.id === selectedPipelineId.value)
@@ -323,6 +360,11 @@ function detailRows(trace: TraceInfo) {
   }
   push(t('minimalChat.pipeline'), trace.pipelineId)
   push(t('minimalChat.proxyMode'), trace.proxyMode)
+  if (trace.rawMeta) {
+    push(t('minimalChat.routingStrategy'), trace.rawMeta.routing_strategy as string)
+    push(t('minimalChat.selectedRoute'), trace.rawMeta.selected_route as string)
+    push(t('minimalChat.routeCategory'), trace.rawMeta.route_category as string)
+  }
   push(t('minimalChat.backend'), trace.backendId)
   push(t('minimalChat.model'), trace.model || trace.executorModel)
   push(t('minimalChat.duration'), trace.durationMs != null ? `${trace.durationMs}ms` : undefined)
@@ -406,6 +448,26 @@ function buildFlowSteps(
     status: 'ok',
     kind: 'pipeline',
   })
+
+  // 路由/分类步骤（router 节点输出的分类决策信息）
+  const routingStrategy = String(meta.routing_strategy || '')
+  const selectedRoute = String(meta.selected_route || '')
+  const routeCategory = String(meta.route_category || meta.category || '')
+  if (routingStrategy || selectedRoute) {
+    const subParts = [routingStrategy].filter(Boolean)
+    if (routeCategory && routeCategory !== selectedRoute) {
+      subParts.push(`→ ${routeCategory}`)
+    }
+    if (selectedRoute) {
+      subParts.push(`→ ${selectedRoute}`)
+    }
+    steps.push({
+      label: t('minimalChat.stepRouting'),
+      sub: subParts.join(' · ') || undefined,
+      status: 'ok',
+      kind: 'routing',
+    })
+  }
 
   const nodeResults: any[] = Array.isArray(meta.node_results) ? meta.node_results : []
   const nodes = pipeline?.nodes || []
@@ -637,7 +699,78 @@ async function resolveProxyAuthHeader(): Promise<Record<string, string>> {
   return {}
 }
 
+function handleKeydown(event: KeyboardEvent) {
+  if (event.key === 'Enter' && event.ctrlKey) {
+    event.preventDefault()
+    sendMessage()
+  }
+}
+
 async function sendMessage() {
+  if (chatMode.value === 'agent') {
+    return sendAgentMessage()
+  }
+  return sendTraditionalMessage()
+}
+
+async function sendAgentMessage() {
+  const text = inputText.value.trim()
+  if (!text || !selectedPipelineId.value || loading.value) return
+
+  messages.value.push({ role: 'user', content: text })
+  inputText.value = ''
+  loading.value = true
+  agentSessionLoading.value = true
+  await scrollToBottom()
+
+  const assistantMsg: ChatMsg = { role: 'assistant', content: '', agentSteps: [] }
+  messages.value.push(assistantMsg)
+
+  try {
+    // Create session if needed
+    if (!agentSessionId.value) {
+      const session = await agentApi.createSession({
+        skill: '',
+        backend_id: '',
+        model: ''
+      })
+      agentSessionId.value = session.id
+      assistantMsg.agentSteps!.push({
+        type: 'info',
+        label: `${t('minimalChat.agentSession')}: ${session.id.slice(0, 8)}…`
+      })
+    }
+
+    // Send message via builtin-agent API
+    const response = await agentApi.sendMessage(agentSessionId.value, {
+      content: text
+    })
+
+    assistantMsg.content = response.content || ''
+
+    // Parse agent steps from the response content if it contains tool execution info
+    // The backend returns the final answer; we show it directly
+    assistantMsg.agentSteps!.push({
+      type: 'info',
+      label: t('minimalChat.agentThinking'),
+      detail: assistantMsg.content ? assistantMsg.content.slice(0, 100) + (assistantMsg.content.length > 100 ? '...' : '') : ''
+    })
+  } catch (e: any) {
+    assistantMsg.error = e.message || t('minimalChat.agentError')
+    assistantMsg.agentSteps!.push({
+      type: 'error',
+      label: t('minimalChat.agentError'),
+      detail: assistantMsg.error
+    })
+    ElMessage.error(assistantMsg.error)
+  } finally {
+    loading.value = false
+    agentSessionLoading.value = false
+    await scrollToBottom()
+  }
+}
+
+async function sendTraditionalMessage() {
   const text = inputText.value.trim()
   if (!text || !selectedPipelineId.value || loading.value) return
 
@@ -772,12 +905,15 @@ watch(visible, (val) => {
   if (val) {
     messages.value = []
     inputText.value = ''
+    chatMode.value = 'traditional'
+    agentSessionId.value = ''
     if (props.initialPipelineId) {
       selectedPipelineId.value = props.initialPipelineId
     }
     loadPipelines()
   } else {
     selectedPipelineId.value = ''
+    agentSessionId.value = ''
   }
 })
 
@@ -816,6 +952,14 @@ watch(() => props.initialPipelineId, (id) => {
 
 .pipeline-row-select {
   width: 100%;
+  gap: 12px;
+}
+
+.pipeline-mode-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
 }
 
 .pipeline-row-meta {
@@ -1250,6 +1394,45 @@ watch(() => props.initialPipelineId, (id) => {
   box-shadow: none;
   resize: none;
   border-radius: 8px;
+}
+
+.pipeline-row-mode {
+  gap: 12px;
+  align-items: center;
+}
+.agent-hint {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+.agent-trace {
+  border-left: 3px solid var(--el-color-primary);
+}
+.agent-trace-title {
+  font-weight: 600;
+  margin-bottom: 8px;
+  color: var(--el-color-primary);
+}
+.agent-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.agent-step {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+.agent-step-label {
+  font-weight: 500;
+}
+.agent-step-detail {
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 400px;
 }
 </style>
 
