@@ -102,6 +102,15 @@ func resolvePipelineModeAlias(modeStr string) string {
 		return "router-mode"
 	case "#edu", "edu", "education-scene":
 		return "education-scene"
+	case "transparent-proxy", "transparent-fast", "transparent-passthrough",
+		"direct-backend", "fixed-egress":
+		return "transparent"
+	case "router-mode":
+		return "router-pipeline"
+	case "cache-hit", "cache-mode", "18-rag-mode":
+		return "cache-pipeline"
+	case "agent-skill-router":
+		return "centag-ops-router"
 	default:
 		return ""
 	}

@@ -394,22 +394,22 @@ func buildDefaultPresetModes() string {
 			Mode:        "smart-scheduling",
 		},
 		{
-			ID:          "direct-backend",
-			Name:        "直连后端",
-			Description: "直接连接到指定的默认后端",
-			Mode:        "direct-backend",
-		},
-		{
 			ID:          "transparent",
 			Name:        "透明模式",
 			Description: "简单直接的透传转发：直连已配置后端，不注入网关 system prompt",
 			Mode:        "transparent",
 		},
 		{
-			ID:          "fixed-egress",
-			Name:        "跳板模式",
-			Description: "固定出站跳板：走系统默认后端/模型，不做跨后端模型匹配",
-			Mode:        "fixed-egress",
+			ID:          "router-pipeline",
+			Name:        "路由模式",
+			Description: "按关键词或 LLM 分类自动路由到指定后端/模型",
+			Mode:        "router-pipeline",
+		},
+		{
+			ID:          "cache-pipeline",
+			Name:        "缓存模式",
+			Description: "支持缓存读写的统一缓存流水线",
+			Mode:        "cache-pipeline",
 		},
 	}
 	data, _ := json.Marshal(modes)
