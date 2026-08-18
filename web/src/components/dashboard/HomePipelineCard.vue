@@ -83,6 +83,23 @@
                 {{ t('pipelineModes.table.defaultPipeline') }}
               </el-tag>
             </div>
+            <div class="pipeline-card__icons">
+              <el-tooltip :content="pipeline.id === selectedDefaultId ? t('pipelineModes.table.currentDefault') : t('pipelineModes.table.setDefault')" placement="top">
+                <el-icon
+                  class="pipeline-card__star"
+                  :class="{ 'is-default': pipeline.id === selectedDefaultId }"
+                  @click="handleSetDefault(pipeline)"
+                >
+                  <StarFilled v-if="pipeline.id === selectedDefaultId" />
+                  <Star v-else />
+                </el-icon>
+              </el-tooltip>
+              <el-tooltip :content="t('pipelineModes.table.test')" placement="top">
+                <el-icon class="pipeline-card__test" @click="handleTest(pipeline)">
+                  <ChatDotRound />
+                </el-icon>
+              </el-tooltip>
+            </div>
             <PipelineRowActions
               class="pipeline-card__actions"
               :row="pipeline"
@@ -186,7 +203,7 @@
 import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Connection, Plus, StarFilled, Upload } from '@element-plus/icons-vue'
+import { Connection, Plus, Star, StarFilled, ChatDotRound, Upload } from '@element-plus/icons-vue'
 import PipelineCreateDialog from '@/components/pipeline/PipelineCreateDialog.vue'
 import type { PipelineCreateInfo } from '@/components/pipeline/PipelineCreateDialog.vue'
 import PipelineEditorDialog from '@/components/pipeline/PipelineEditorDialog.vue'
@@ -339,6 +356,15 @@ function selectDefault(pipelineId: string) {
   if (pipelineId === selectedDefaultId.value) return
   selectedDefaultId.value = pipelineId
   persistDefault(pipelineId)
+}
+
+function handleSetDefault(pipeline: AgentPatternPipeline) {
+  selectDefault(pipeline.id)
+}
+
+function handleTest(pipeline: AgentPatternPipeline) {
+  testChatPipelineId.value = pipeline.id || ''
+  testChatVisible.value = true
 }
 
 async function reassignDefaultIfNeeded(deletedIds: string[]) {
@@ -572,13 +598,6 @@ function handleRouteAssignSaved(saved: AgentPatternPipeline) {
 
 function handleRowCommand(command: string, pipeline: AgentPatternPipeline) {
   switch (command) {
-    case 'setDefault':
-      selectDefault(pipeline.id)
-      break
-    case 'test':
-      testChatPipelineId.value = pipeline.id || ''
-      testChatVisible.value = true
-      break
     case 'configure':
       openRouteAssign(pipeline)
       break
@@ -815,6 +834,46 @@ defineExpose({ reload: loadPipelines, openCreate, openImport: triggerImport })
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.pipeline-card__icons {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.pipeline-card__star,
+.pipeline-card__test {
+  width: 32px;
+  height: 32px;
+  font-size: 14px;
+  cursor: pointer;
+  color: #9ca3af;
+  transition: color 0.2s, background 0.2s;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 1px solid var(--el-border-color-lighter);
+  background: var(--el-bg-color);
+}
+
+.pipeline-card__star:hover {
+  color: #f59e0b;
+  border-color: #f59e0b;
+  background: rgba(245, 158, 11, 0.1);
+}
+
+.pipeline-card__star.is-default {
+  color: #f59e0b;
+  border-color: #f59e0b;
+}
+
+.pipeline-card__test:hover {
+  color: #3b82f6;
+  border-color: #3b82f6;
+  background: rgba(59, 130, 246, 0.1);
 }
 
 .pipeline-card__body {

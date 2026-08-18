@@ -86,6 +86,23 @@
                 {{ t('pipelineModes.table.defaultPipeline') }}
               </el-tag>
             </div>
+            <div class="pipeline-card__icons">
+              <el-tooltip :content="row.id === defaultPipelineId ? t('pipelineModes.table.currentDefault') : t('pipelineModes.table.setDefault')" placement="top">
+                <el-icon
+                  class="pipeline-card__star"
+                  :class="{ 'is-default': row.id === defaultPipelineId }"
+                  @click="handleSetDefault(row)"
+                >
+                  <StarFilled v-if="row.id === defaultPipelineId" />
+                  <Star v-else />
+                </el-icon>
+              </el-tooltip>
+              <el-tooltip :content="t('pipelineModes.table.test')" placement="top">
+                <el-icon class="pipeline-card__test" @click="openPipelineTest(row)">
+                  <ChatDotRound />
+                </el-icon>
+              </el-tooltip>
+            </div>
             <PipelineRowActions
               class="pipeline-card__actions"
               :row="row"
@@ -246,7 +263,7 @@ import { ref, onMounted, computed, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Search, SetUp, Refresh, Plus, Delete, DocumentCopy, Upload, Check, Download, WarningFilled, CircleClose, Select, Connection, StarFilled } from '@element-plus/icons-vue'
+import { Search, SetUp, Refresh, Plus, Delete, DocumentCopy, Upload, Check, Download, WarningFilled, CircleClose, Select, Connection, Star, StarFilled, ChatDotRound } from '@element-plus/icons-vue'
 import * as yaml from 'js-yaml'
 import {
   getPipelines,
@@ -808,12 +825,6 @@ const handleDelete = async (row: Pipeline) => {
 
 const handleRowCommand = (command: string, row: Pipeline) => {
   switch (command) {
-    case 'setDefault':
-      handleSetDefault(row)
-      break
-    case 'test':
-      openPipelineTest(row)
-      break
     case 'configure':
       openRouteAssign(row)
       break
@@ -948,6 +959,46 @@ onMounted(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.pipeline-card__icons {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.pipeline-card__star,
+.pipeline-card__test {
+  width: 32px;
+  height: 32px;
+  font-size: 14px;
+  cursor: pointer;
+  color: #9ca3af;
+  transition: color 0.2s, background 0.2s;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 1px solid var(--el-border-color-lighter);
+  background: var(--el-bg-color);
+}
+
+.pipeline-card__star:hover {
+  color: #f59e0b;
+  border-color: #f59e0b;
+  background: rgba(245, 158, 11, 0.1);
+}
+
+.pipeline-card__star.is-default {
+  color: #f59e0b;
+  border-color: #f59e0b;
+}
+
+.pipeline-card__test:hover {
+  color: #3b82f6;
+  border-color: #3b82f6;
+  background: rgba(59, 130, 246, 0.1);
 }
 
 .pipeline-card__actions {
