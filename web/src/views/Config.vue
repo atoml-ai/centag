@@ -420,7 +420,7 @@
                   <el-table-column :label="t('config.systemUpdateAction')" width="80" align="center">
                     <template #default="{ row }">
                       <el-dropdown trigger="click">
-                        <el-button type="primary" link>
+                        <el-button circle plain>
                           <el-icon><MoreFilled /></el-icon>
                         </el-button>
                         <template #dropdown>

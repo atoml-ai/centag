@@ -47,7 +47,7 @@
         <el-table-column :label="t('fallbackPolicy.table.actions')" width="64" align="center">
           <template #default="{ row }">
             <el-dropdown trigger="click">
-              <el-button type="primary" link>
+              <el-button circle plain>
                 <el-icon><MoreFilled /></el-icon>
               </el-button>
               <template #dropdown>
@@ -405,6 +405,12 @@ async function testPolicy(policy: FallbackPolicy) {
   border-radius: 8px;
   font-weight: 500;
   transition: all 0.2s ease;
+}
+
+.el-button.is-circle {
+  width: 32px;
+  height: 32px;
+  padding: 8px;
 }
 
 .hermes-header-left .el-button:hover {

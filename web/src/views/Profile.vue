@@ -190,7 +190,7 @@
             <el-table-column :label="$t('profile.actions')" width="64" align="center">
               <template #default="{ row }">
                 <el-dropdown trigger="click">
-                  <el-button type="primary" link>
+                  <el-button circle plain>
                     <el-icon><MoreFilled /></el-icon>
                   </el-button>
                   <template #dropdown>

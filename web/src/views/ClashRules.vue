@@ -49,7 +49,7 @@
               </el-tag>
             </div>
             <el-dropdown trigger="click" @command="(cmd: string) => handleCmd(cmd, rule)">
-              <el-button type="primary" link>
+              <el-button circle plain>
                 <el-icon :size="18"><MoreFilled /></el-icon>
               </el-button>
               <template #dropdown>

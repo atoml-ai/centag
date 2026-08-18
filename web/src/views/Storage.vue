@@ -107,7 +107,7 @@
           <el-table-column :label="t('storage.table.actions')" width="80" align="center" fixed="right">
             <template #default="{ row }">
               <el-dropdown trigger="click" @command="(command) => handleCommand(command, row)">
-                <el-button type="primary" link>
+                <el-button circle plain>
                   <el-icon><MoreFilled /></el-icon>
                 </el-button>
                 <template #dropdown>
