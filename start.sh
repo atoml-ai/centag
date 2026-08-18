@@ -2030,8 +2030,42 @@ clean() {
         all)
             _clean_build
             _clean_install "$assume_yes"
+            _clean_local_runtime "$assume_yes"
             ;;
     esac
+}
+
+_clean_local_runtime() {
+    local assume_yes="${1:-0}"
+    local local_run="${PROJECT_ROOT}/bin/server"
+
+    if [ ! -e "$local_run" ]; then
+        print_warn "仓库内运行目录不存在，无需清理: $local_run"
+        return 0
+    fi
+
+    print_warn "将删除仓库内本地运行目录（含二进制、静态资源、DB/日志等运行时数据）:"
+    echo "  $local_run"
+    print_info "该目录由 ./start.sh debug 或 centag-pro ./start.sh debug team 等产生；删除后重新启动会重新初始化"
+    if [ "$assume_yes" != "1" ]; then
+        if [ ! -t 0 ]; then
+            print_error "非交互环境请加 -y/--yes 确认删除"
+            return 1
+        fi
+        local ans=""
+        read -r -p "确认删除以上目录？输入 yes 继续: " ans || true
+        if [ "$ans" != "yes" ]; then
+            print_warn "已取消"
+            return 1
+        fi
+    fi
+
+    print_info "先停止本机 centag 进程..."
+    stop 2>/dev/null || true
+
+    print_info "删除 $local_run ..."
+    rm -rf "$local_run"
+    print_success "已清除仓库内本地运行目录: $local_run"
 }
 
 _clean_build() {
@@ -3692,12 +3726,14 @@ _help_clean() {
     echo -e "  ./start.sh clean build           # 同上"
     echo -e "  ./start.sh clean install [-y]    # 删除安装根目录（默认 ~/.centag）"
     echo -e "  ./start.sh clean deploy [-y]     # 同 install"
-    echo -e "  ./start.sh clean all [-y]        # 构建产物 + 安装布局"
+    echo -e "  ./start.sh clean all [-y]        # 全部清空：构建产物 + 安装布局 + 仓库内运行数据"
     echo ""
     echo -e "${CYAN}说明:${NC}"
     echo -e "  ${GREEN}build${NC}   删除 \${CENTAG_EDITION_LIB}（当前: $BIN_DIR）"
     echo -e "  ${GREEN}install${NC} 停止进程后删除 \${CENTAG_INSTALL_ROOT}（当前: ${CENTAG_INSTALL_ROOT}）"
     echo -e "           含 bin/、lib/、var/（packages/release/cross）等；不删仓库 secrets"
+    echo -e "  ${GREEN}all${NC}     在 build + install 基础上，额外删除仓库内运行目录 bin/server"
+    echo -e "           （含 team 版 DB 等运行时数据，重新启动即重新初始化）"
     echo -e "  ${GREEN}-y${NC}      跳过交互确认（脚本/CI 用）"
     echo ""
     echo -e "${CYAN}示例:${NC}"
