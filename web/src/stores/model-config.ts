@@ -13,9 +13,11 @@ export const useModelConfigStore = defineStore('modelConfig', () => {
   const userVariables = ref<ModelVariableItem[]>([])
   const loading = ref(false)
   const saving = ref(false)
+  const skipWatch = ref(false)
 
   const loadConfig = async () => {
     loading.value = true
+    skipWatch.value = true
     try {
       const res = await getModelVariables()
       if (res) {
@@ -26,11 +28,13 @@ export const useModelConfigStore = defineStore('modelConfig', () => {
       console.error('Failed to load model variables:', error)
     } finally {
       loading.value = false
+      skipWatch.value = false
     }
   }
 
   const saveConfig = async (variables: Record<string, string>) => {
     saving.value = true
+    skipWatch.value = true
     try {
       await updateModelVariables(variables)
       await loadConfig()
@@ -40,6 +44,7 @@ export const useModelConfigStore = defineStore('modelConfig', () => {
       console.error('Failed to save model variables:', error)
     } finally {
       saving.value = false
+      skipWatch.value = false
     }
   }
 
@@ -67,6 +72,7 @@ export const useModelConfigStore = defineStore('modelConfig', () => {
     userVariables,
     loading,
     saving,
+    skipWatch,
     loadConfig,
     saveConfig,
     addVariable,

@@ -278,6 +278,35 @@
           </div>
         </section>
 
+        <!-- 配置导出 -->
+        <section v-if="canSystemUpdate" v-show="activeSection === 'system-update'" class="section-panel">
+          <el-card shadow="never" class="su-card" style="margin-bottom:24px">
+            <template #header>
+              <div class="su-card-hd">
+                <span class="su-section-icon" style="background:rgba(99,102,241,.12);color:#6366f1"><el-icon><Document /></el-icon></span>
+                <div>
+                  <div class="su-section-title">{{ t('config.configExportTitle') }}</div>
+                  <div class="su-section-sub">{{ t('config.configExportDesc') }}</div>
+                </div>
+              </div>
+            </template>
+            <div class="config-export-body">
+              <p class="config-export-desc">
+                {{ t('config.configExportDetail') }}
+              </p>
+              <el-button
+                type="primary"
+                size="large"
+                :loading="configExporting"
+                @click="handleConfigExport"
+              >
+                <el-icon><Download /></el-icon>
+                {{ configExporting ? t('config.configExporting') : t('config.configExportBtn') }}
+              </el-button>
+            </div>
+          </el-card>
+        </section>
+
         <!-- 系统更新 -->
         <section v-if="canSystemUpdate" v-show="activeSection === 'system-update'" class="section-panel">
           <div class="su-section-hd">
@@ -683,6 +712,39 @@ onMounted(() => {
   applyRouteQuery()
   void load()
 })
+
+// ── 配置导出 ──────────────────────────────────────────────────────────────────
+
+const configExporting = ref(false)
+
+async function handleConfigExport() {
+  configExporting.value = true
+  try {
+    const { ConfigBuilder, fromApiBackend, toBackendEntry } = await import('@/utils/shared-modules')
+    const res: any = await api.get('/api/v1/backends/export')
+    const rows = Array.isArray(res) ? res : Array.isArray(res?.backends) ? res.backends : []
+    const entries = rows.map((row: any) => {
+      const form = fromApiBackend(row)
+      form.api_key = row.api_key || ''
+      return toBackendEntry(form)
+    })
+    if (!entries.length) {
+      ElMessage.warning(t('config.configExportNoData'))
+      return
+    }
+    const templateIds = Object.keys(ConfigBuilder.PIPELINE_TEMPLATES_DATA || {})
+    const blob = await ConfigBuilder.exportAsArchive(entries, templateIds)
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url; a.download = 'centag-initdata.zip'; a.click()
+    URL.revokeObjectURL(url)
+    ElMessage.success(t('config.configExportSuccess'))
+  } catch (e: any) {
+    ElMessage.error(t('config.configExportFailed') + (e.message || ''))
+  } finally {
+    configExporting.value = false
+  }
+}
 
 // ── 系统更新 ──────────────────────────────────────────────────────────────────
 
@@ -1182,6 +1244,19 @@ function formatSuTime(raw: string): string {
   font-size: .8125rem;
   color: var(--el-text-color-secondary);
   margin-top: 2px;
+}
+
+.config-export-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.config-export-desc {
+  margin: 0;
+  font-size: .875rem;
+  color: var(--el-text-color-secondary);
+  line-height: 1.6;
 }
 
 .su-log {

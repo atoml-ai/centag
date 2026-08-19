@@ -22,7 +22,6 @@
             <el-dropdown-menu>
               <el-dropdown-item command="json">{{ t('providerManager.jsonBackup') }}</el-dropdown-item>
               <el-dropdown-item command="yaml">{{ t('providerManager.yamlExport') }}</el-dropdown-item>
-              <el-dropdown-item command="zip">{{ t('providerManager.initdataPack') }}</el-dropdown-item>
             </el-dropdown-menu>
           </template>
         </el-dropdown>
@@ -582,7 +581,6 @@ async function fetchExportRows() {
 function handleExportCommand(command: string) {
   if (command === 'json') return handleExportJSON()
   if (command === 'yaml') return handleExportYAML()
-  if (command === 'zip') return handleExportZip()
 }
 
 async function handleExportJSON() {
@@ -615,26 +613,6 @@ async function handleExportYAML() {
     ElMessage.success(t('providerManager.exportYamlSuccess'))
   } catch {
     ElMessage.error(t('providerManager.exportYamlFailed'))
-  } finally {
-    busy.value = false
-  }
-}
-
-async function handleExportZip() {
-  busy.value = true
-  try {
-    const rows = await fetchExportRows()
-    const entries = exportRowsToEntries(rows)
-    if (!entries.length) {
-      ElMessage.warning(t('providerManager.noExportData'))
-      return
-    }
-    const templateIds = Object.keys(ConfigBuilder.PIPELINE_TEMPLATES_DATA || {})
-    const blob = await ConfigBuilder.exportAsArchive(entries, templateIds)
-    triggerDownload(blob, 'centag-initdata.zip')
-    ElMessage.success(t('providerManager.exportZipSuccess'))
-  } catch {
-    ElMessage.error(t('providerManager.exportZipFailed'))
   } finally {
     busy.value = false
   }

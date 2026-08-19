@@ -112,5 +112,13 @@
   "deploymentPgDb": "数据库名",
   "deploymentUninstall": "卸载数据保留",
   "deploymentCleanData": "卸载时清除所有数据",
-  "deploymentCleanDataDesc": "默认保留数据，重装后配置与密钥可恢复。开启后卸载应用时会连同数据目录一并清除。"
+  "deploymentCleanDataDesc": "默认保留数据，重装后配置与密钥可恢复。开启后卸载应用时会连同数据目录一并清除。",
+  "configExportTitle": "配置导出",
+  "configExportDesc": "导出当前后端配置与流水线模板，用于快速恢复或迁移到空环境",
+  "configExportDetail": "导出的 ZIP 包包含：后端配置（initial-backends.yaml）、流水线模板、环境变量模板（.env）及使用说明。下载后在新环境解压并填写 API Key 即可使用。",
+  "configExportBtn": "导出配置包（initdata.zip）",
+  "configExporting": "导出中…",
+  "configExportNoData": "暂无后端配置可导出",
+  "configExportSuccess": "配置包导出成功",
+  "configExportFailed": "导出失败："
 }

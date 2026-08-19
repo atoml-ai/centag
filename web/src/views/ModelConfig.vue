@@ -115,11 +115,7 @@
       </div>
     </el-card>
 
-    <div class="footer-buttons">
-      <el-button type="primary" :loading="store.saving" @click="handleSave">
-        {{ t('modelConfig.save') }}
-      </el-button>
-    </div>
+
 
     <!-- 使用说明 -->
     <el-card class="section-card usage-card">
@@ -211,7 +207,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useModelConfigStore } from '@/stores/model-config'
 import { getBackends } from '@/api/backend'
@@ -319,6 +315,25 @@ const handleSave = async () => {
   await store.saveConfig(variables)
 }
 
+let saveTimeout: ReturnType<typeof setTimeout> | null = null
+
+function debouncedSave() {
+  if (saveTimeout) clearTimeout(saveTimeout)
+  saveTimeout = setTimeout(() => {
+    handleSave()
+  }, 500)
+}
+
+watch(
+  () => store.systemVariables.map(v => v.value),
+  () => {
+    if (!store.skipWatch) {
+      debouncedSave()
+    }
+  },
+  { deep: true, flush: 'sync' }
+)
+
 function openAddDialog() {
   newVar.value = { name: '', value: '' }
   showAddDialog.value = true
@@ -395,14 +410,6 @@ onMounted(() => {
   text-align: center;
   padding: 20px;
   color: #999;
-}
-
-.footer-buttons {
-  display: flex;
-  justify-content: flex-end;
-  gap: 12px;
-  margin-top: 20px;
-  margin-bottom: 20px;
 }
 
 .usage-card {

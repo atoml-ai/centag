@@ -283,6 +283,40 @@
         </el-form-item>
       </section>
 
+      <!-- ═══════ 2d2. Scheduler Core ═══════ -->
+      <section v-if="localNode.type === 'scheduler'" class="drawer-section">
+        <div class="section-title">{{ t('nodeConfig.sectionScheduler') }}</div>
+        <el-form-item :label="t('nodeConfig.schedulerStrategy')">
+          <el-select v-model="schedulerConfig.strategy" style="width: 100%">
+            <el-option :label="t('nodeConfig.strategyBalance')" value="balance" />
+            <el-option :label="t('nodeConfig.strategyFast')" value="fast" />
+            <el-option :label="t('nodeConfig.strategyCostOptimal')" value="cost_optimal" />
+            <el-option :label="t('nodeConfig.strategyQualityFirst')" value="quality_first" />
+            <el-option :label="t('nodeConfig.strategyLatencyFirst')" value="latency_first" />
+          </el-select>
+        </el-form-item>
+        <el-form-item :label="t('nodeConfig.schedulerClassifyBackend')">
+          <BackendSelector v-model="schedulerConfig.classifyBackend" :placeholder="t('nodeConfig.classifyBackendPlaceholder')" style="width: 100%" />
+        </el-form-item>
+        <el-form-item :label="t('nodeConfig.schedulerClassifyModel')">
+          <ModelSelector
+            v-model="schedulerConfig.classifyModel"
+            :backend-id="schedulerConfig.classifyBackend"
+            :placeholder="t('nodeConfig.classifyModelPlaceholder')"
+            :allow-create="true"
+            :default-first-option="true"
+          />
+        </el-form-item>
+        <el-form-item :label="t('nodeConfig.classifyPrompt')">
+          <el-input
+            v-model="schedulerConfig.classifyPrompt"
+            type="textarea"
+            :rows="5"
+            :placeholder="t('nodeConfig.classifyPromptPlaceholder')"
+          />
+        </el-form-item>
+      </section>
+
       <!-- ═══════ 2e. Cache Core ═══════ -->
       <section v-if="localNode.type === 'cache'" class="drawer-section">
         <div class="section-title">{{ t('nodeConfig.sectionCache') }}</div>
@@ -968,6 +1002,93 @@ const buildRouterCustomConfig = (): Record<string, any> => {
     routerConfig.value.classifyPrompt.trim() !== ''
   ) {
     result.classify_prompt = routerConfig.value.classifyPrompt
+  }
+  return result
+}
+
+// ─── Scheduler 节点配置 (Smart Scheduling) ──────────────────────────────────
+
+interface SchedulerConfigState {
+  strategy: string
+  classifyBackend: string
+  classifyModel: string
+  classifyPrompt: string
+}
+
+const schedulerConfig = ref<SchedulerConfigState>({
+  strategy: 'balance',
+  classifyBackend: '{{system.classify_backend}}',
+  classifyModel: '{{system.classify_model}}',
+  classifyPrompt: '',
+})
+
+// 从节点的 custom_config 加载调度配置
+const loadSchedulerConfig = (node: any) => {
+  const cc = node.config?.custom_config || {}
+  const strategy = String(cc.strategy || 'balance')
+  const classifyBackend = String(cc.classify_backend || '{{system.classify_backend}}')
+  const classifyModel = String(cc.classify_model || '{{system.classify_model}}')
+  let classifyPrompt = String(cc.classify_prompt || '')
+  // 如果未配置分类提示词，填入默认提示词
+  if (!classifyPrompt) {
+    classifyPrompt = `你是一个任务分类专家。请分析用户的问题，并给出以下维度的判断：
+
+1. 任务类型 (task_type):
+   - code_generation: 代码生成、修改、调试、技术问题
+   - simple_chat: 简单问答、闲聊、日常对话
+   - complex_reasoning: 复杂推理、数学问题、逻辑分析、科学问题
+   - long_text: 长文档分析、总结、文章写作
+   - embedding: 向量生成、语义搜索、相似度匹配
+   - translation: 翻译任务、语言转换
+   - creative: 创意写作、故事生成、诗歌创作
+   - analysis: 数据分析、图表解读、商业分析
+
+2. 复杂度 (complexity): low/medium/high
+   - low: 简单问题，<1K tokens
+   - medium: 中等难度，1K-10K tokens
+   - high: 复杂问题，>10K tokens
+
+3. 敏感度 (sensitivity): public/internal/confidential
+   - public: 公开信息，无敏感内容
+   - internal: 内部信息，一般敏感
+   - confidential: 敏感数据，隐私信息，商业机密
+
+4. 时效要求 (urgency): low/medium/high
+   - low: 可接受延迟，批量任务
+   - medium: 正常响应，一般对话
+   - high: 实时响应，紧急任务
+
+5. 预估 token 数 (estimated_tokens): 根据问题长度估算
+
+用户问题：{{.question}}
+
+请只返回 JSON 格式，不要其他内容。格式如下：
+{
+  "task_type": "任务类型",
+  "confidence": 0.95,
+  "complexity": "low/medium/high",
+  "sensitivity": "public/internal/confidential",
+  "urgency": "low/medium/high",
+  "estimated_tokens": 100,
+  "reasoning": "分类理由"
+}`
+  }
+  schedulerConfig.value = { strategy, classifyBackend, classifyModel, classifyPrompt }
+}
+
+const buildSchedulerCustomConfig = (): Record<string, any> => {
+  const result: Record<string, any> = {
+    strategy: schedulerConfig.value.strategy,
+  }
+  // 写入分类器配置（非空时）
+  if (schedulerConfig.value.classifyBackend) {
+    result.classify_backend = schedulerConfig.value.classifyBackend
+  }
+  if (schedulerConfig.value.classifyModel) {
+    result.classify_model = schedulerConfig.value.classifyModel
+  }
+  if (schedulerConfig.value.classifyPrompt && schedulerConfig.value.classifyPrompt.trim() !== '') {
+    result.classify_prompt = schedulerConfig.value.classifyPrompt
   }
   return result
 }
@@ -2044,6 +2165,13 @@ const saveNode = async () => {
       localNode.value.config.custom_config = cc
     }
 
+    // Scheduler 节点：保存 custom_config（分类器配置）
+    if (localNode.value.type === 'scheduler') {
+      const cc = buildSchedulerCustomConfig()
+      localNode.value.config = localNode.value.config || {}
+      localNode.value.config.custom_config = cc
+    }
+
     if (localNode.value.type === 'token_usage') {
       ensureTokenUsageNodeFields()
       ensureTokenUsageDependsOn()
@@ -2244,6 +2372,10 @@ watch(() => props.node, (newNode) => {
     // 加载 Router 节点专用配置
     if (localNode.value.type === 'router') {
       loadRouterConfig(newNode)
+    }
+    // 加载 Scheduler 节点专用配置
+    if (localNode.value.type === 'scheduler') {
+      loadSchedulerConfig(newNode)
     }
     // 加载出站转发策略
     if (localNode.value.type === 'transparent_forward') {

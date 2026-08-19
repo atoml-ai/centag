@@ -255,6 +255,14 @@
         </div>
       </template>
     </el-dialog>
+    <input
+      ref="importTemplateInputRef"
+      type="file"
+      accept=".yaml,.yml"
+      multiple
+      style="display: none"
+      @change="handleImportTemplateFile"
+    />
   </div>
 </template>
 

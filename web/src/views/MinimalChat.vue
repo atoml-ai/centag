@@ -272,6 +272,7 @@ interface TraceInfo {
   fallbackFrom?: string
   fallbackTo?: string
   fallbackNotice?: string
+  fallbackReason?: string
   targetBaseUrl?: string
   requestId?: string
   sessionId?: string
@@ -371,6 +372,7 @@ function detailRows(trace: TraceInfo) {
   push(t('minimalChat.fallback'), trace.fallbackUsed ? t('minimalChat.yes') : t('minimalChat.no'))
   push(t('minimalChat.fallbackFrom'), trace.fallbackFrom)
   push(t('minimalChat.fallbackTo'), trace.fallbackTo)
+  push('降级原因', trace.fallbackReason)
   push(t('minimalChat.targetUrl'), trace.targetBaseUrl)
   push('Request ID', trace.requestId)
   push('Session ID', trace.sessionId)
@@ -387,7 +389,7 @@ function collectResponseHeaders(res: Response): Record<string, string> {
     'x-pipeline-id', 'x-pipeline-executed', 'x-pipeline-success', 'x-pipeline-duration-ms',
     'x-proxy-mode', 'x-backend-id', 'x-model', 'x-executor-model', 'x-executor-backend',
     'x-fallback-used', 'x-fallback-from-model', 'x-fallback-to-model', 'x-fallback-notice',
-    'x-target-baseurl', 'x-session-id', 'x-request-id', 'x-cache-hit', 'x-response-trace',
+    'x-fallback-reason', 'x-target-baseurl', 'x-session-id', 'x-request-id', 'x-cache-hit', 'x-response-trace',
     'x-pipeline-bypass', 'x-pipeline-bypass-node', 'x-pipeline-bypass-reason',
   ]
   const out: Record<string, string> = {}
@@ -614,6 +616,7 @@ function buildTraceFromMeta(
     fallbackFrom: String(mergedMeta.fallback_from_model || headers['x-fallback-from-model'] || ''),
     fallbackTo: String(mergedMeta.fallback_to_model || headers['x-fallback-to-model'] || observedModel || ''),
     fallbackNotice: String(mergedMeta.fallback_notice || headers['x-fallback-notice'] || ''),
+    fallbackReason: String(mergedMeta.fallback_reason || headers['x-fallback-reason'] || ''),
     targetBaseUrl: String(mergedMeta.target_base_url || headers['x-target-baseurl'] || ''),
     requestId: headers['x-request-id'] || undefined,
     sessionId: headers['x-session-id'] || undefined,
@@ -1269,6 +1272,7 @@ watch(() => props.initialPipelineId, (id) => {
   font-size: 12px;
   color: var(--el-color-warning-dark-2);
   line-height: 1.4;
+  white-space: pre-line;
 }
 
 .trace-collapse {
