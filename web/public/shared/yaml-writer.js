@@ -108,3 +108,7 @@ class YamlWriter {
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = { YamlWriter }
 }
+
+if (typeof globalThis !== 'undefined') {
+  globalThis.YamlWriter = YamlWriter
+}
