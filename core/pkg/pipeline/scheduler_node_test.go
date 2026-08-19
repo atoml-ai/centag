@@ -100,3 +100,52 @@ func TestApplySchedulingOverrides(t *testing.T) {
 		t.Errorf("model = %q, want deepseek-v3", nodeConfig.Model)
 	}
 }
+
+func TestApplySchedulingOverrides_SkipsFallbackNode(t *testing.T) {
+	// 降级节点使用 {{system.fallback_backend}} / {{system.fallback_model}}，不能被调度决策覆盖
+	nodeConfig := NodeConfig{
+		Backend: "{{system.fallback_backend}}",
+		Model:   "{{system.fallback_model}}",
+	}
+	input := &NodeInput{
+		UpstreamResults: map[string]*NodeOutput{
+			"scheduler": {
+				Metadata: map[string]interface{}{
+					"scheduler_decision": true,
+					"backend_id":         "ppinfra",
+					"model":              "deepseek-v3",
+				},
+			},
+		},
+	}
+	applySchedulingOverrides(&nodeConfig, input, nil)
+	if nodeConfig.Backend != "{{system.fallback_backend}}" {
+		t.Errorf("fallback node backend was overridden to %q", nodeConfig.Backend)
+	}
+	if nodeConfig.Model != "{{system.fallback_model}}" {
+		t.Errorf("fallback node model was overridden to %q", nodeConfig.Model)
+	}
+}
+
+func TestIsFallbackNodeConfig(t *testing.T) {
+	cases := []struct {
+		name string
+		cfg  NodeConfig
+		want bool
+	}{
+		{"nil", NodeConfig{}, false},
+		{"is_fallback true", NodeConfig{CustomConfig: map[string]interface{}{"is_fallback": true}}, true},
+		{"is_fallback string", NodeConfig{CustomConfig: map[string]interface{}{"is_fallback": "true"}}, true},
+		{"is_fallback false", NodeConfig{CustomConfig: map[string]interface{}{"is_fallback": false}}, false},
+		{"fallback backend template", NodeConfig{Backend: "{{system.fallback_backend}}"}, true},
+		{"fallback model template", NodeConfig{Model: "{{system.fallback_model}}"}, true},
+		{"default backend template", NodeConfig{Backend: "{{system.default_backend}}"}, false},
+	}
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := isFallbackNodeConfig(&tt.cfg); got != tt.want {
+				t.Errorf("isFallbackNodeConfig() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

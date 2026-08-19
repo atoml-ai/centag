@@ -59,7 +59,7 @@ func NewScheduler(config *SchedulerConfig, backendMgr *backend.Manager) *Schedul
 
 	scheduler := &Scheduler{
 		config:     config,
-		classifier: NewIntentClassifier(config.IntentClassifier),
+		classifier: NewIntentClassifier(config.IntentClassifier, backendMgr),
 		backendMgr: backendMgr,
 		selector:   NewTaskTypeSelector(), // 后端选择器；#s 默认走多维评分
 		scorer:     NewMultiDimensionScorer(),
@@ -77,9 +77,9 @@ func NewScheduler(config *SchedulerConfig, backendMgr *backend.Manager) *Schedul
 
 	// 安全日志输出（logger 可能未初始化）
 	if config.EnableLogging {
-		logger.Infof("[Scheduler] Initialized with model=%s, addr=%s",
-			config.IntentClassifier.LocalModel,
-			config.IntentClassifier.OllamaAddr)
+		logger.Infof("[Scheduler] Initialized with backend_id=%s, model=%s",
+			config.IntentClassifier.BackendID,
+			config.IntentClassifier.Model)
 	}
 
 	return scheduler
@@ -198,6 +198,69 @@ func (s *Scheduler) ScheduleWithStrategy(question string, requestedModel string,
 	}
 
 	return decision, nil
+}
+
+// ScheduleWithClassifyConfig 使用指定的分类配置进行调度（支持流水线节点级配置覆盖）
+func (s *Scheduler) ScheduleWithClassifyConfig(question string, requestedModel string, strategy string,
+	classifyBackend string, classifyModel string, classifyPrompt string) (*ScheduleDecision, error) {
+	startTime := time.Now()
+
+	logger.Infof("[Scheduler] ScheduleWithClassifyConfig: backend=%q model=%q prompt_len=%d",
+		classifyBackend, classifyModel, len(classifyPrompt))
+
+	// 如果提供了分类配置，创建临时分类器进行分类
+	if classifyBackend != "" && s.backendMgr != nil {
+		tempClassifier := s.classifier
+		// 临时使用流水线节点指定的分类配置
+		if classifyModel != "" || classifyPrompt != "" {
+			tempConfig := s.config.IntentClassifier
+			if classifyBackend != "" {
+				tempConfig.BackendID = classifyBackend
+			}
+			if classifyModel != "" {
+				tempConfig.Model = classifyModel
+			}
+			if classifyPrompt != "" {
+				tempConfig.ClassifyPrompt = classifyPrompt
+			}
+			tempClassifier = NewIntentClassifier(tempConfig, s.backendMgr)
+			defer tempClassifier.Close()
+		}
+
+		intent, err := tempClassifier.Classify(question)
+		if err != nil {
+			logger.Warnf("[Scheduler] Classification failed, using fallback: %v", err)
+			intent = tempClassifier.getDefaultClassification(question)
+		}
+
+		if s.config.EnableStats {
+			s.updateStats(intent, time.Since(startTime))
+		}
+
+		decision := s.makeDecision(intent, requestedModel, strategy)
+		if s.config.EnableLogging {
+			logger.Infof("[Scheduler] Decision: task=%s, backend=%s, model=%s, reason=%s, strategy=%s",
+				intent.TaskType, decision.RecommendedBackendID, decision.RecommendedModel, decision.Reason, strategy)
+		}
+		return decision, nil
+	}
+
+	// 未提供分类配置，使用默认流程
+	return s.ScheduleWithStrategy(question, requestedModel, strategy)
+}
+
+// makeDecision 根据意图与策略推荐后端
+func (s *Scheduler) makeDecision(intent *ClassificationResult, requestedModel string, strategy string) *ScheduleDecision {
+	var decision *ScheduleDecision
+	if strategy == "fast" && s.fastMatcher != nil {
+		decision = s.fastMatcher.RecommendBackend(intent.TaskType, strategy)
+	} else if shouldUseScoring(strategy) && s.scorer != nil {
+		decision = s.recommendByScoring(intent, requestedModel, strategy)
+	} else {
+		decision = s.recommendBackend(intent, requestedModel)
+	}
+	decision.Intent = intent
+	return decision
 }
 
 // recommendBackend 根据意图推荐后端
@@ -644,9 +707,10 @@ func (s *Scheduler) ReloadConfig(config *SchedulerConfig) {
 
 	s.config = config
 	if config != nil {
-		s.classifier = NewIntentClassifier(config.IntentClassifier)
-		logger.Infof("[Scheduler] Configuration reloaded: model=%s",
-			config.IntentClassifier.LocalModel)
+		s.classifier = NewIntentClassifier(config.IntentClassifier, s.backendMgr)
+		logger.Infof("[Scheduler] Configuration reloaded: backend_id=%s, model=%s",
+			config.IntentClassifier.BackendID,
+			config.IntentClassifier.Model)
 	}
 }
 

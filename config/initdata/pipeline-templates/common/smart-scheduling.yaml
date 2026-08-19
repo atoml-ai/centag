@@ -9,6 +9,9 @@ nodes:
   config:
     custom_config:
       strategy: balance
+      classify_backend: "{{system.classify_backend}}"
+      classify_model: "{{system.classify_model}}"
+      classify_prompt: ""
 - id: generator
   type: generator
   kind: llm.generate
@@ -23,8 +26,38 @@ nodes:
       backend: "system.default_backend"
       model: "system.default_model"
   timeout: 120
+  retry:
+    max_attempts: 0
+    backoff_strategy: exponential
+    initial_delay: 1000
+    max_delay: 30000
+  next_nodes:
+    - generator_fallback
   depends_on:
   - scheduler
+- id: generator_fallback
+  type: generator
+  kind: llm.generate
+  implementation: builtin.generator
+  name: Scheduled Fallback Generate
+  backend: "{{system.fallback_backend}}"
+  model: "{{system.fallback_model}}"
+  config:
+    backend: "{{system.fallback_backend}}"
+    model: "{{system.fallback_model}}"
+    custom_config:
+      is_fallback: true
+    template_vars:
+      backend: "system.fallback_backend"
+      model: "system.fallback_model"
+  timeout: 120
+  retry:
+    max_attempts: 0
+    backoff_strategy: exponential
+    initial_delay: 1000
+    max_delay: 30000
+  depends_on:
+    - generator
 schema_version: centag.pipeline/v1alpha1
 id: smart-scheduling
 name: Smart Scheduling
@@ -35,7 +68,12 @@ global_config:
   bypass_on_error: true
   parallel_limit: 4
   log_level: info
-description: "Smart scheduling (strategy unchanged): builtin.scheduler classifies intent and scores backends/models, then generates; contrasts with transparent mode (follow client model) and direct mode (inject prompt + fixed backend/model)"
+  fallback_groups:
+    - primary_node_id: generator
+      fallback_nodes:
+        - generator_fallback
+      max_attempts: 2
+description: "Smart scheduling: builtin.scheduler classifies intent and scores backends/models, then generates; contrasts with transparent mode (follow client model) and direct mode (inject prompt + fixed backend/model)"
 metadata:
   aligned_proxy_mode: smart-scheduling
   lastUpdated: '2026-07-21T00:00:00.000Z'

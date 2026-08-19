@@ -56,20 +56,21 @@ type ClassificationResult struct {
 
 // IntentClassifierConfig 意图分类器配置
 type IntentClassifierConfig struct {
-	Enabled      bool   `json:"enabled"`       // 是否启用
-	LocalModel   string `json:"local_model"`   // 本地小模型 (如 qwen2.5:1.5b)
-	OllamaAddr   string `json:"ollama_addr"`   // Ollama 地址 (如 http://localhost:21434)
-	CacheEnabled bool   `json:"cache_enabled"` // 是否启用缓存
-	CacheTTL     int    `json:"cache_ttl"`     // 缓存 TTL (秒)
-	Timeout      int    `json:"timeout"`       // 请求超时 (秒)
+	Enabled           bool   `json:"enabled"`                      // 是否启用
+	BackendID         string `json:"backend_id"`                   // 分类主后端 ID
+	FallbackBackendID string `json:"fallback_backend_id"`          // 分类备用后端 ID
+	Model             string `json:"model"`                        // 分类主模型
+	FallbackModel     string `json:"fallback_model"`               // 分类备用模型
+	ClassifyPrompt    string `json:"classify_prompt,omitempty"`    // 自定义分类提示词（可选，为空时使用默认）
+	CacheEnabled      bool   `json:"cache_enabled"`                // 是否启用缓存
+	CacheTTL          int    `json:"cache_ttl"`                    // 缓存 TTL (秒)
+	Timeout           int    `json:"timeout"`                      // 请求超时 (秒)
 }
 
 // DefaultIntentClassifierConfig 返回默认配置
 func DefaultIntentClassifierConfig() IntentClassifierConfig {
 	return IntentClassifierConfig{
 		Enabled:      true,
-		LocalModel:   "qwen2.5:1.5b",
-		OllamaAddr:   "http://localhost:21434",
 		CacheEnabled: true,
 		CacheTTL:     300, // 5 分钟
 		Timeout:      10,

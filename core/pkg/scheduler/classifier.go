@@ -5,48 +5,31 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"regexp"
 	"strings"
 	"sync"
 	"time"
 
+	"centag/core/pkg/backend"
 	"centag/core/pkg/logger"
 	"centag/core/pkg/utils"
 )
 
 // IntentClassifier 意图分类器
 type IntentClassifier struct {
-	config    IntentClassifierConfig
-	client    *http.Client
-	cache     map[string]*cacheEntry
-	cacheMu   sync.RWMutex
-	cacheSize int
+	config     IntentClassifierConfig
+	backendMgr *backend.Manager
+	client     *http.Client
+	cache      map[string]*cacheEntry
+	cacheMu    sync.RWMutex
+	cacheSize  int
 }
 
 type cacheEntry struct {
 	result    *ClassificationResult
 	expiresAt time.Time
-}
-
-// classificationRequest Ollama API 请求结构
-type classificationRequest struct {
-	Model    string `json:"model"`
-	Prompt   string `json:"prompt"`
-	Stream   bool   `json:"stream"`
-	Format   string `json:"format,omitempty"`
-	Options  struct {
-		Temperature float64 `json:"temperature,omitempty"`
-		TopP        float64 `json:"top_p,omitempty"`
-	} `json:"options,omitempty"`
-}
-
-// classificationResponse Ollama API 响应结构
-type classificationResponse struct {
-	Model     string `json:"model"`
-	Response  string `json:"response"`
-	Done      bool   `json:"done"`
-	CreatedAt string `json:"created_at"`
 }
 
 // classificationOutput 分类器输出结构（从小模型响应解析）
@@ -104,22 +87,17 @@ const classifierPromptTemplate = `你是一个任务分类专家。请分析用�
 }`
 
 // NewIntentClassifier 创建意图分类器
-func NewIntentClassifier(config IntentClassifierConfig) *IntentClassifier {
-	if config.LocalModel == "" {
-		config.LocalModel = "qwen2.5:1.5b"
-	}
-	if config.OllamaAddr == "" {
-		config.OllamaAddr = "http://localhost:21434"
-	}
+func NewIntentClassifier(config IntentClassifierConfig, backendMgr *backend.Manager) *IntentClassifier {
 	if config.Timeout == 0 {
 		config.Timeout = 10
 	}
 
 	return &IntentClassifier{
-		config:    config,
-		client:    &http.Client{Timeout: time.Duration(config.Timeout) * time.Second},
-		cache:     make(map[string]*cacheEntry, 100),
-		cacheSize: 100,
+		config:     config,
+		backendMgr: backendMgr,
+		client:     &http.Client{Timeout: time.Duration(config.Timeout) * time.Second},
+		cache:      make(map[string]*cacheEntry, 100),
+		cacheSize:  100,
 	}
 }
 
@@ -153,33 +131,101 @@ func (c *IntentClassifier) Classify(question string) (*ClassificationResult, err
 	return result, nil
 }
 
-// classifyWithModel 使用小模型进行分类
+// classifyWithModel 使用后端模型进行分类
 func (c *IntentClassifier) classifyWithModel(question string) (*ClassificationResult, error) {
-	// 构建提示词
-	prompt := strings.ReplaceAll(classifierPromptTemplate, "{{.question}}", question)
-
-	// 构建请求
-	reqBody := classificationRequest{
-		Model:  c.config.LocalModel,
-		Prompt: prompt,
-		Stream: false,
-		Format: "json",
+	// 使用自定义提示词或默认提示词
+	prompt := c.config.ClassifyPrompt
+	if prompt == "" {
+		prompt = classifierPromptTemplate
 	}
-	reqBody.Options.Temperature = 0.1 // 低温度，保证输出稳定
-	reqBody.Options.TopP = 0.9
+	prompt = strings.ReplaceAll(prompt, "{{.question}}", question)
 
-	jsonData, err := json.Marshal(reqBody)
+	// 必须配置 BackendID 才能调用 LLM
+	if c.config.BackendID == "" || c.backendMgr == nil {
+		return nil, fmt.Errorf("classifier backend not configured")
+	}
+
+	// 尝试主后端
+	result, err := c.callBackend(prompt, c.config.BackendID, c.config.Model)
+	if err == nil {
+		return result, nil
+	}
+	logger.Warnf("[IntentClassifier] Primary backend failed: %v", err)
+
+	// 尝试备用后端
+	if c.config.FallbackBackendID != "" {
+		result, err = c.callBackend(prompt, c.config.FallbackBackendID, c.config.FallbackModel)
+		if err == nil {
+			return result, nil
+		}
+		logger.Warnf("[IntentClassifier] Fallback backend failed: %v", err)
+	}
+
+	return nil, fmt.Errorf("all classifier backends failed")
+}
+
+// callBackend 通过 backendMgr 调用指定后端进行分类
+func (c *IntentClassifier) callBackend(prompt, backendID, model string) (*ClassificationResult, error) {
+	// 1. 获取后端配置
+	backendCfg, err := c.backendMgr.Get(backendID)
+	if err != nil {
+		return nil, fmt.Errorf("backend %q not found: %w", backendID, err)
+	}
+	if !backendCfg.Enabled {
+		return nil, fmt.Errorf("backend %q is disabled", backendID)
+	}
+
+	// 2. 确定模型
+	if model == "" {
+		model = backend.PreferredDefaultModel(backendCfg)
+	}
+	if model == "" {
+		return nil, fmt.Errorf("no model specified for backend %q", backendID)
+	}
+
+	// 3. 构建请求 URL
+	apiURL := c.buildAPIURL(backendCfg)
+
+	logger.Infof("[IntentClassifier] calling backend: backend_id=%s, model=%s, url=%s",
+		backendID, model, apiURL)
+
+	// 4. 构建请求体（根据后端类型选择格式）
+	var jsonData []byte
+	if backendCfg.Type == "ollama" {
+		reqBody := map[string]interface{}{
+			"model":  model,
+			"prompt": prompt,
+			"stream": false,
+			"format": "json",
+			"options": map[string]interface{}{
+				"temperature": 0.1,
+				"top_p":       0.9,
+			},
+		}
+		jsonData, err = json.Marshal(reqBody)
+	} else {
+		reqBody := map[string]interface{}{
+			"model": model,
+			"messages": []map[string]string{
+				{"role": "user", "content": prompt},
+			},
+			"temperature": 0.1,
+		}
+		jsonData, err = json.Marshal(reqBody)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("marshal request failed: %w", err)
 	}
 
-	// 发送请求
-	url := strings.TrimSuffix(c.config.OllamaAddr, "/") + "/api/generate"
-	req, err := http.NewRequestWithContext(context.Background(), "POST", url, bytes.NewBuffer(jsonData))
+	// 5. 发送请求
+	req, err := http.NewRequestWithContext(context.Background(), "POST", apiURL, bytes.NewBuffer(jsonData))
 	if err != nil {
 		return nil, fmt.Errorf("create request failed: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
+	if apiKey := backend.NormalizeOpenAICompatibleAPIKey(backendCfg.APIKey); apiKey != "" {
+		req.Header.Set("Authorization", "Bearer "+apiKey)
+	}
 
 	resp, err := c.client.Do(req)
 	if err != nil {
@@ -187,27 +233,102 @@ func (c *IntentClassifier) classifyWithModel(question string) (*ClassificationRe
 	}
 	defer resp.Body.Close()
 
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read response failed: %w", err)
+	}
+
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("ollama returned status %d", resp.StatusCode)
+		return nil, fmt.Errorf("backend %q returned status %d: %s", backendID, resp.StatusCode, string(bodyBytes))
 	}
 
-	// 解析响应
-	var ollamaResp classificationResponse
-	if err := json.NewDecoder(resp.Body).Decode(&ollamaResp); err != nil {
-		return nil, fmt.Errorf("decode response failed: %w", err)
+	// 6. 解析响应
+	rawResponse, err := c.parseResponse(backendCfg.Type, bodyBytes)
+	if err != nil {
+		return nil, err
 	}
 
-	// 解析分类结果
-	result := c.parseClassificationResult(ollamaResp.Response, question)
-	result.RawResponse = ollamaResp.Response
+	result := c.parseClassificationResult(rawResponse, "")
+	result.RawResponse = rawResponse
 
-	// 安全日志输出（logger 可能未初始化）
 	if logger.Sugar != nil {
 		logger.Infof("[IntentClassifier] Classification result: task=%s, confidence=%.2f, complexity=%s",
 			result.TaskType, result.Confidence, result.Complexity)
 	}
 
 	return result, nil
+}
+
+// buildAPIURL 根据后端配置构建 API URL
+func (c *IntentClassifier) buildAPIURL(b *backend.BackendConfig) string {
+	baseURL := b.BaseURL
+	if baseURL == "" {
+		baseURL = "http://localhost:11434"
+	}
+	baseURL = strings.TrimSuffix(baseURL, "/")
+
+	hasAPIPrefix := strings.Contains(baseURL, "/api")
+
+	switch b.Type {
+	case "ollama":
+		if hasAPIPrefix {
+			return baseURL + "/generate"
+		}
+		return baseURL + "/api/generate"
+	default:
+		// 与 plugins/backend/openai 的 buildOpenAIChatURL 对齐：仅当 baseURL 以 /vN 结尾时才直接拼接，
+		// 避免 bigmodel 等 /v4 网关被错误拼成 /v4/v1/chat/completions。
+		if hasAPIVersionPrefix(baseURL) {
+			return baseURL + "/chat/completions"
+		}
+		return baseURL + "/v1/chat/completions"
+	}
+}
+
+// hasAPIVersionPrefix 检查 baseURL 是否以 /vN（如 /v1、/v4）结尾。
+func hasAPIVersionPrefix(baseURL string) bool {
+	trimmed := strings.TrimSuffix(baseURL, "/")
+	if idx := strings.LastIndex(trimmed, "/"); idx >= 0 {
+		seg := trimmed[idx+1:]
+		if len(seg) > 1 && seg[0] == 'v' {
+			for _, ch := range seg[1:] {
+				if ch < '0' || ch > '9' {
+					return false
+				}
+			}
+			return true
+		}
+	}
+	return false
+}
+
+// parseResponse 根据后端类型解析响应
+func (c *IntentClassifier) parseResponse(backendType string, bodyBytes []byte) (string, error) {
+	if backendType == "ollama" {
+		var resp struct {
+			Response string `json:"response"`
+		}
+		if err := json.Unmarshal(bodyBytes, &resp); err != nil {
+			return "", fmt.Errorf("decode ollama response failed: %w", err)
+		}
+		return resp.Response, nil
+	}
+
+	// OpenAI 兼容格式
+	var resp struct {
+		Choices []struct {
+			Message struct {
+				Content string `json:"content"`
+			} `json:"message"`
+		} `json:"choices"`
+	}
+	if err := json.Unmarshal(bodyBytes, &resp); err != nil {
+		return "", fmt.Errorf("decode openai response failed: %w", err)
+	}
+	if len(resp.Choices) == 0 {
+		return "", fmt.Errorf("no choices in response")
+	}
+	return resp.Choices[0].Message.Content, nil
 }
 
 // parseClassificationResult 解析分类结果
@@ -399,32 +520,54 @@ func (c *IntentClassifier) getDefaultClassification(question string) *Classifica
 		complexity = ComplexityHigh
 	}
 
-	// 简单的关键词检测
+	// 关键词检测
 	q := strings.ToLower(question)
 	var taskType TaskType
+	var confidence float64
+
 	switch {
-	case strings.Contains(q, "代码") || strings.Contains(q, "code") || strings.Contains(q, "编程") ||
-		strings.Contains(q, "实现") || strings.Contains(q, "编写") || strings.Contains(q, "go "):
+	case containsAny(q, "代码", "code", "编程", "实现", "编写", "function", "bug", "debug", "refactor", "go ", "python", "java"):
 		taskType = TaskCodeGeneration
-	case strings.Contains(q, "翻译") || strings.Contains(q, "translate"):
+		confidence = 0.8
+	case containsAny(q, "翻译", "translate", "译成", "译为"):
 		taskType = TaskTranslation
-	case strings.Contains(q, "总结") || strings.Contains(q, "summary") || length > 500:
+		confidence = 0.8
+	case containsAny(q, "总结", "summary", "概括", "摘要", "summarize") || length > 500:
 		taskType = TaskLongText
-	case strings.Contains(q, "分析") || strings.Contains(q, "analyze") || strings.Contains(q, "数据"):
+		confidence = 0.8
+	case containsAny(q, "分析", "analyze", "数据", "data", "图表", "chart", "统计"):
 		taskType = TaskAnalysis
+		confidence = 0.8
+	case containsAny(q, "推理", "reasoning", "数学", "math", "逻辑", "logic", "证明", "prove", "为什么", "why"):
+		taskType = TaskComplexReasoning
+		confidence = 0.7
+	case containsAny(q, "故事", "story", "诗", "poem", "创意", "creative", "写作", "writing", "小说"):
+		taskType = TaskCreative
+		confidence = 0.7
 	default:
 		taskType = TaskSimpleChat
+		confidence = 0.6
 	}
 
 	return &ClassificationResult{
 		TaskType:        taskType,
-		Confidence:      0.5,
+		Confidence:      confidence,
 		Complexity:      complexity,
 		Sensitivity:     SensitivityPublic,
 		Urgency:         UrgencyMedium,
 		EstimatedTokens: length / 3,
-		Reasoning:       "默认分类（小模型不可用）",
+		Reasoning:       "默认分类（分类模型不可用）",
 	}
+}
+
+// containsAny 检查字符串是否包含任一子串
+func containsAny(s string, substrs ...string) bool {
+	for _, sub := range substrs {
+		if strings.Contains(s, sub) {
+			return true
+		}
+	}
+	return false
 }
 
 // getCached 从缓存获取结果

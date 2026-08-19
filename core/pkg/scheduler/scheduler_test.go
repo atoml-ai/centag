@@ -7,12 +7,10 @@ import (
 func TestIntentClassifier_parseTaskType(t *testing.T) {
 	config := IntentClassifierConfig{
 		Enabled:      false,
-		LocalModel:   "qwen2.5:1.5b",
-		OllamaAddr:   "http://localhost:21434",
 		CacheEnabled: false,
 		Timeout:      10,
 	}
-	classifier := NewIntentClassifier(config)
+	classifier := NewIntentClassifier(config, nil)
 	defer classifier.Close()
 
 	tests := []struct {
@@ -42,10 +40,9 @@ func TestIntentClassifier_parseTaskType(t *testing.T) {
 func TestIntentClassifier_parseComplexity(t *testing.T) {
 	config := IntentClassifierConfig{
 		Enabled:      false,
-		LocalModel:   "qwen2.5:1.5b",
 		CacheEnabled: false,
 	}
-	classifier := NewIntentClassifier(config)
+	classifier := NewIntentClassifier(config, nil)
 	defer classifier.Close()
 
 	tests := []struct {
@@ -71,10 +68,9 @@ func TestIntentClassifier_parseComplexity(t *testing.T) {
 func TestIntentClassifier_parseSensitivity(t *testing.T) {
 	config := IntentClassifierConfig{
 		Enabled:      false,
-		LocalModel:   "qwen2.5:1.5b",
 		CacheEnabled: false,
 	}
-	classifier := NewIntentClassifier(config)
+	classifier := NewIntentClassifier(config, nil)
 	defer classifier.Close()
 
 	tests := []struct {
@@ -100,10 +96,9 @@ func TestIntentClassifier_parseSensitivity(t *testing.T) {
 func TestIntentClassifier_parseUrgency(t *testing.T) {
 	config := IntentClassifierConfig{
 		Enabled:      false,
-		LocalModel:   "qwen2.5:1.5b",
 		CacheEnabled: false,
 	}
-	classifier := NewIntentClassifier(config)
+	classifier := NewIntentClassifier(config, nil)
 	defer classifier.Close()
 
 	tests := []struct {
@@ -129,10 +124,9 @@ func TestIntentClassifier_parseUrgency(t *testing.T) {
 func TestIntentClassifier_cleanJSONResponse(t *testing.T) {
 	config := IntentClassifierConfig{
 		Enabled:      false,
-		LocalModel:   "qwen2.5:1.5b",
 		CacheEnabled: false,
 	}
-	classifier := NewIntentClassifier(config)
+	classifier := NewIntentClassifier(config, nil)
 	defer classifier.Close()
 
 	tests := []struct {
@@ -194,21 +188,23 @@ func TestClassificationResult_String(t *testing.T) {
 func TestIntentClassifier_getDefaultClassification(t *testing.T) {
 	config := IntentClassifierConfig{
 		Enabled:      false,
-		LocalModel:   "qwen2.5:1.5b",
 		CacheEnabled: false,
 	}
-	classifier := NewIntentClassifier(config)
+	classifier := NewIntentClassifier(config, nil)
 	defer classifier.Close()
 
 	tests := []struct {
-		question string
-		wantType TaskType
+		question   string
+		wantType   TaskType
+		wantConfid float64
 	}{
-		{"帮我写代码", TaskCodeGeneration},
-		{"翻译这句话", TaskTranslation},
-		{"请总结这篇文章", TaskLongText},
-		{"分析数据", TaskAnalysis},
-		{"你好", TaskSimpleChat},
+		{"帮我写代码", TaskCodeGeneration, 0.8},
+		{"翻译这句话", TaskTranslation, 0.8},
+		{"请总结这篇文章", TaskLongText, 0.8},
+		{"分析数据", TaskAnalysis, 0.8},
+		{"推理这个问题", TaskComplexReasoning, 0.7},
+		{"写一个故事", TaskCreative, 0.7},
+		{"你好", TaskSimpleChat, 0.6},
 	}
 
 	for _, tt := range tests {
@@ -220,10 +216,53 @@ func TestIntentClassifier_getDefaultClassification(t *testing.T) {
 		if result.TaskType != tt.wantType {
 			t.Errorf("getDefaultClassification(%q) taskType = %v, want %v", tt.question, result.TaskType, tt.wantType)
 		}
-		if result.Confidence != 0.5 {
-			t.Errorf("getDefaultClassification() confidence = %v, want 0.5", result.Confidence)
+		if result.Confidence != tt.wantConfid {
+			t.Errorf("getDefaultClassification(%q) confidence = %v, want %v", tt.question, result.Confidence, tt.wantConfid)
 		}
-		t.Logf("Question: %s -> Task: %s, Complexity: %s", tt.question, result.TaskType, result.Complexity)
+		t.Logf("Question: %s -> Task: %s, Confidence: %.2f, Complexity: %s", tt.question, result.TaskType, result.Confidence, result.Complexity)
+	}
+}
+
+func TestContainsAny(t *testing.T) {
+	tests := []struct {
+		s        string
+		substrs  []string
+		want     bool
+	}{
+		{"hello world", []string{"hello", "world"}, true},
+		{"hello world", []string{"foo", "bar"}, false},
+		{"hello world", []string{"world"}, true},
+		{"hello world", []string{}, false},
+		{"", []string{"hello"}, false},
+	}
+
+	for _, tt := range tests {
+		got := containsAny(tt.s, tt.substrs...)
+		if got != tt.want {
+			t.Errorf("containsAny(%q, %v) = %v, want %v", tt.s, tt.substrs, got, tt.want)
+		}
+	}
+}
+
+func TestIntentClassifier_Classify_NoBackend(t *testing.T) {
+	config := IntentClassifierConfig{
+		Enabled:      true,
+		CacheEnabled: false,
+	}
+	classifier := NewIntentClassifier(config, nil)
+	defer classifier.Close()
+
+	// 没有配置 BackendID，应该降级到关键词匹配
+	result, err := classifier.Classify("帮我写代码")
+	if err != nil {
+		t.Errorf("Classify() returned unexpected error: %v", err)
+	}
+	if result == nil {
+		t.Errorf("Classify() returned nil")
+		return
+	}
+	if result.TaskType != TaskCodeGeneration {
+		t.Errorf("Classify() taskType = %v, want %v", result.TaskType, TaskCodeGeneration)
 	}
 }
 
