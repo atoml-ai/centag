@@ -1851,10 +1851,29 @@ func (n *SchedulerNode) Execute(ctx context.Context, input *NodeInput) (*NodeOut
 		return nil, fmt.Errorf("scheduler node %q: ScheduleBackend hook not wired", n.id)
 	}
 
+	// 从 CustomConfig 读取分类器配置
+	classifyBackend := ""
+	classifyModel := ""
+	classifyPrompt := ""
+	if n.config.CustomConfig != nil {
+		if v, ok := n.config.CustomConfig["classify_backend"].(string); ok {
+			classifyBackend = v
+		}
+		if v, ok := n.config.CustomConfig["classify_model"].(string); ok {
+			classifyModel = v
+		}
+		if v, ok := n.config.CustomConfig["classify_prompt"].(string); ok {
+			classifyPrompt = v
+		}
+	}
+
 	result, err := ScheduleBackend(ScheduleRequest{
-		Question:       question,
-		RequestedModel: requestedModel,
-		Strategy:       n.Strategy,
+		Question:        question,
+		RequestedModel:  requestedModel,
+		Strategy:        n.Strategy,
+		ClassifyBackend: classifyBackend,
+		ClassifyModel:   classifyModel,
+		ClassifyPrompt:  classifyPrompt,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("scheduler node %q: schedule failed: %w", n.id, err)
@@ -1883,7 +1902,7 @@ func (n *SchedulerNode) Execute(ctx context.Context, input *NodeInput) (*NodeOut
 	}
 
 	return &NodeOutput{
-		Content: question,
+		Content: "",
 		Metadata: map[string]interface{}{
 			"scheduler_decision":   true,
 			"backend_id":           result.BackendID,

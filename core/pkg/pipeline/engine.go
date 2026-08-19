@@ -1459,6 +1459,7 @@ func (e *PipelineEngine) executeLayerNode(ctx context.Context, graph *ExecutionG
 				output.Metadata["fallback_used"] = true
 				output.Metadata["fallback_from_node"] = nodeID
 				output.Metadata["fallback_from_backend"] = resolvedBackendID
+				output.Metadata["fallback_reason"] = MaskSensitiveData(err.Error())
 				if from := resolveClientRequestedModel(nodeInput, ""); from != "" {
 					output.Metadata["fallback_from_model"] = from
 				}
@@ -1506,6 +1507,12 @@ func (e *PipelineEngine) executeLayerNode(ctx context.Context, graph *ExecutionG
 						"node_id", nodeID,
 						"fallback_output_len", len(strings.TrimSpace(output.Content)),
 					)
+					execCtx.AddNodeLog(NodeExecutionLog{
+						NodeID:       nodeID,
+						NodeType:     execNode.Config.Type,
+						Success:      true,
+						ErrorMessage: "",
+					})
 				} else {
 					e.logger.Error("node execution failed and bypass fallback is unavailable",
 						"node_id", nodeID,
@@ -2730,9 +2737,14 @@ func ResolveVirtualVarsContext(ctx context.Context, backendID, model string) (st
 	case "{{system.default_backend}}", "":
 		resolvedBackend = defaultBackend
 	case "{{system.fallback_backend}}":
-		resolvedBackend = cfg.Proxy.FallbackBackendID
-		if strings.TrimSpace(resolvedBackend) == "" {
-			resolvedBackend = defaultBackend
+		// 优先从 ModelVariables 读取（Model Config 页面配置的值）
+		if v, ok := cfg.ModelVariables.SystemVariables["system.fallback_backend"]; ok && v != "" {
+			resolvedBackend = v
+		} else {
+			resolvedBackend = cfg.Proxy.FallbackBackendID
+			if strings.TrimSpace(resolvedBackend) == "" {
+				resolvedBackend = defaultBackend
+			}
 		}
 	case "{{system.classify_backend}}":
 		resolvedBackend = cfg.ModelVariables.SystemVariables["system.classify_backend"]
@@ -2745,9 +2757,13 @@ func ResolveVirtualVarsContext(ctx context.Context, backendID, model string) (st
 	case "{{system.default_model}}", "":
 		resolvedModel = defaultModel
 	case "{{system.fallback_model}}":
-		// 未配置时保持空，由下方挑选「不同于 default_model」的免费档；勿直接回落 PreferredDefaultModel
-		// （probe/default 常相同，会导致 forward_fallback 与主路打同一不可用模型）。
-		resolvedModel = cfg.Proxy.FallbackModel
+		// 优先从 ModelVariables 读取（Model Config 页面配置的值）
+		if v, ok := cfg.ModelVariables.SystemVariables["system.fallback_model"]; ok && v != "" {
+			resolvedModel = v
+		} else {
+			// 未配置时保持空，由下方挑选「不同于 default_model」的免费档
+			resolvedModel = cfg.Proxy.FallbackModel
+		}
 	case "{{system.classify_model}}":
 		resolvedModel = cfg.ModelVariables.SystemVariables["system.classify_model"]
 		if strings.TrimSpace(resolvedModel) == "" {

@@ -22,7 +22,8 @@ func AnnotateFallbackNotice(out *NodeOutput) {
 	}
 
 	from, to := fallbackModelPair(out.Metadata)
-	notice := formatFallbackNotice(from, to)
+	reason := firstMetaString(out.Metadata, "fallback_reason")
+	notice := formatFallbackNotice(from, to, reason)
 	out.Metadata["fallback_notice"] = strings.TrimSpace(notice)
 	out.Metadata["fallback_notice_applied"] = true
 	out.Metadata["fallback_used"] = true
@@ -70,17 +71,26 @@ func firstMetaString(meta map[string]interface{}, keys ...string) string {
 	return ""
 }
 
-func formatFallbackNotice(from, to string) string {
+func formatFallbackNotice(from, to, reason string) string {
 	from = strings.TrimSpace(from)
 	to = strings.TrimSpace(to)
+	reason = strings.TrimSpace(reason)
+
+	var notice string
 	switch {
 	case from != "" && to != "" && !strings.EqualFold(from, to):
-		return fmt.Sprintf("⚠️ 模型已降级：%s → %s\n\n", from, to)
+		notice = fmt.Sprintf("⚠️ 模型已降级：%s → %s", from, to)
 	case to != "":
-		return fmt.Sprintf("⚠️ 模型已降级，当前使用：%s\n\n", to)
+		notice = fmt.Sprintf("⚠️ 模型已降级，当前使用：%s", to)
 	default:
-		return "⚠️ 模型已降级（上游原模型不可用）\n\n"
+		notice = "⚠️ 模型已降级（上游原模型不可用）"
 	}
+
+	if reason != "" {
+		notice += fmt.Sprintf("\n原因：%s", reason)
+	}
+
+	return notice + "\n\n"
 }
 
 func looksLikeOpenAISSEContent(body string) bool {

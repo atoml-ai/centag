@@ -170,8 +170,16 @@ func (r *TemplateVarResolver) resolveSystem(parts []string) (interface{}, error)
 	case "default_model":
 		return cfg.Proxy.DefaultModel, nil
 	case "fallback_backend":
+		// 优先从 ModelVariables 读取（Model Config 页面配置的值）
+		if v, ok := cfg.ModelVariables.SystemVariables["system.fallback_backend"]; ok && v != "" {
+			return v, nil
+		}
 		return cfg.Proxy.FallbackBackendID, nil
 	case "fallback_model":
+		// 优先从 ModelVariables 读取（Model Config 页面配置的值）
+		if v, ok := cfg.ModelVariables.SystemVariables["system.fallback_model"]; ok && v != "" {
+			return v, nil
+		}
 		return cfg.Proxy.FallbackModel, nil
 	case "embedding_backend":
 		return cfg.Embedding.BackendID, nil

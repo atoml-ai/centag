@@ -376,7 +376,7 @@ func (n *TransparentForwardNode) Execute(ctx context.Context, input *NodeInput) 
 	// 账户池已耗尽（或未配置）后：同后端换模型 → 备用后端；最后向上返回 error 供 FallbackGroups。
 	// 纯鉴权 401（池已穷尽）仍透传给客户端。
 	if config.IsBillingOrQuotaFailure(statusCode, bodyStr) {
-		if out, ok := n.retryWithSystemBillingFallback(ctx, client, method, meta, body, backendID, resolvedModel, clientModel, requestPath, bridgeToChat, anthropicToChat); ok {
+		if out, ok := n.retryWithSystemBillingFallback(ctx, client, method, meta, body, backendID, resolvedModel, clientModel, requestPath, bridgeToChat, anthropicToChat, statusCode, bodyStr); ok {
 			return out, nil
 		}
 		return nil, newTransparentUpstreamError(n.id, backendID, resolvedModel, targetURL, statusCode, bodyStr, poolExhausted)
@@ -384,7 +384,7 @@ func (n *TransparentForwardNode) Execute(ctx context.Context, input *NodeInput) 
 
 	// 模型不存在 / Router.Unavailable：池 Key 已轮换完毕后，再同后端换模型。
 	if statusCode >= 400 && (isUpstreamModelOrPlaceholderError(bodyStr) || isUpstreamRouterUnavailable(bodyStr)) {
-		if out, ok := n.retryWithSystemBillingFallback(ctx, client, method, meta, body, backendID, resolvedModel, clientModel, requestPath, bridgeToChat, anthropicToChat); ok {
+		if out, ok := n.retryWithSystemBillingFallback(ctx, client, method, meta, body, backendID, resolvedModel, clientModel, requestPath, bridgeToChat, anthropicToChat, statusCode, bodyStr); ok {
 			return out, nil
 		}
 		return nil, newTransparentUpstreamError(n.id, backendID, resolvedModel, targetURL, statusCode, bodyStr, poolExhausted)
@@ -534,6 +534,7 @@ func (n *TransparentForwardNode) retryWithSystemBillingFallback(
 	body []byte,
 	primaryBackend, primaryModel, clientModel, requestPath string,
 	bridgeToChat, anthropicToChat bool,
+	primaryStatusCode int, primaryRespBody string,
 ) (*NodeOutput, bool) {
 	// 只把「实际发出去的 model」标为失败。resolvedModel 可能已是免费档，但 body 仍是付费名。
 	failedModels := map[string]bool{}
@@ -551,7 +552,7 @@ func (n *TransparentForwardNode) retryWithSystemBillingFallback(
 		return nil, false
 	}
 	for _, cand := range cands {
-		out, ok := n.doBillingFallbackAttempt(ctx, client, method, meta, body, primaryBackend, primaryModel, clientModel, requestPath, bridgeToChat, anthropicToChat, cand.backendID, cand.model)
+		out, ok := n.doBillingFallbackAttempt(ctx, client, method, meta, body, primaryBackend, primaryModel, clientModel, requestPath, bridgeToChat, anthropicToChat, cand.backendID, cand.model, primaryStatusCode, primaryRespBody)
 		if ok {
 			return out, true
 		}
@@ -645,6 +646,7 @@ func (n *TransparentForwardNode) doBillingFallbackAttempt(
 	primaryBackend, primaryModel, clientModel, requestPath string,
 	bridgeToChat, anthropicToChat bool,
 	fbBackend, fbModel string,
+	primaryStatusCode int, primaryRespBody string,
 ) (*NodeOutput, bool) {
 	retryBody := body
 	if rewritten, ok := rewriteTransparentBodyModel(body, fbModel); ok {
@@ -707,6 +709,7 @@ func (n *TransparentForwardNode) doBillingFallbackAttempt(
 		"fallback_from_model":           fromModel,
 		"fallback_to_model":             fbModel,
 		"fallback_used":                 true,
+		"fallback_reason":               MaskSensitiveData(fmt.Sprintf("HTTP %d: %s", primaryStatusCode, truncateRespBody(primaryRespBody, 200))),
 	}
 	out := n.buildTransparentOutput(targetURL, resp.StatusCode, resp.Header.Get("Content-Type"), respBody, fbBackend, fbModel, clientModel, requestPath, attemptBridge, attemptAnthropic, extra)
 	applyReasoningRoundtripOnResponse(meta, body, respBody, resp.StatusCode)
@@ -1360,4 +1363,11 @@ func parseChatBody(body []byte) ([]promptstrategy.Message, error) {
 	}
 
 	return messages, nil
+}
+
+func truncateRespBody(body string, maxLen int) string {
+	if len(body) <= maxLen {
+		return body
+	}
+	return body[:maxLen] + "..."
 }
