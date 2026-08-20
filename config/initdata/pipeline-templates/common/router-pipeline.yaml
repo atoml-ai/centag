@@ -19,12 +19,20 @@ nodes:
     timeout: 15
     config:
       custom_config:
-        routing_strategy: "{{pipeline.routing_strategy | default: 'keyword_contains'}}"
-        default_route: "{{pipeline.default_route | default: 'chat-generator'}}"
-        routes: "{{pipeline.routes}}"
+        routing_strategy: keyword_contains
+        default_route: chat-generator
+        routes:
+          # 默认路由规则（与 metadata.default_routes 一致；可在画布节点配置中增删）
+          code: code-generator
+          代码: code-generator
+          python: code-generator
+          translate: translate-gen
+          翻译: translate-gen
+          summary: summary-gen
+          摘要: summary-gen
         # LLM分类配置
-        classify_backend: "{{pipeline.classify_backend | default: system.default_backend}}"
-        classify_model: "{{pipeline.classify_model | default: system.default_model}}"
+        classify_backend: "{{system.default_backend}}"
+        classify_model: "{{system.default_model}}"
         # 混合路由配置
         hybrid_config:
           keyword_priority: "{{pipeline.keyword_priority | default: 1}}"
