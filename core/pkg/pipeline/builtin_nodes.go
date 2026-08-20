@@ -973,7 +973,12 @@ func NewRouterNode(config NodeConfig) (PipelineNode, error) {
 		for k := range node.legacyRoutes {
 			keys = append(keys, k)
 		}
-		sort.Slice(keys, func(i, j int) bool { return len(keys[i]) > len(keys[j]) })
+		sort.Slice(keys, func(i, j int) bool {
+			if len(keys[i]) != len(keys[j]) {
+				return len(keys[i]) > len(keys[j])
+			}
+			return keys[i] < keys[j]
+		})
 		for _, k := range keys {
 			kind := "contains"
 			if node.strategy == "keyword_prefix" {

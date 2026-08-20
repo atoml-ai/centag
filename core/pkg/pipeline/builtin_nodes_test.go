@@ -491,6 +491,66 @@ func TestRouterNodeKeywordRouting(t *testing.T) {
 	}
 }
 
+// TestRouterNodeKeywordRoutingDeterministic 验证多关键词冲突时的路由确定性。
+// legacyRoutes 编译为 rules 时按关键词字节长度降序排序，长度相同的按字典序排序，
+// 保证 Go map 遍历顺序不影响匹配结果（历史缺陷：等长关键词顺序随机导致路由不确定）。
+func TestRouterNodeKeywordRoutingDeterministic(t *testing.T) {
+	config := NodeConfig{
+		CustomConfig: map[string]interface{}{
+			"routing_strategy": "keyword_contains",
+			"default_route":    "chat-generator",
+			"routes": map[string]interface{}{
+				"code":      "code-generator",
+				"python":    "code-generator",
+				"代码":        "code-generator",
+				"translate": "translate-gen",
+				"翻译":        "translate-gen",
+				"summary":   "summary-gen",
+				"摘要":        "summary-gen",
+			},
+		},
+	}
+	node, err := NewRouterNode(config)
+	if err != nil {
+		t.Fatalf("Failed to create router node: %v", err)
+	}
+	router := node.(*RouterNode)
+
+	// rules 必须按字节长度降序、等长按字典序排列（确定性）
+	for i := 1; i < len(router.rules); i++ {
+		prev, cur := router.rules[i-1], router.rules[i]
+		if len(prev.pattern) < len(cur.pattern) {
+			t.Fatalf("rules not sorted by length desc: %q(%d) before %q(%d)",
+				prev.pattern, len(prev.pattern), cur.pattern, len(cur.pattern))
+		}
+		if len(prev.pattern) == len(cur.pattern) && prev.pattern > cur.pattern {
+			t.Fatalf("equal-length rules not sorted lexicographically: %q before %q",
+				prev.pattern, cur.pattern)
+		}
+	}
+
+	// 多关键词冲突：同一输入多次匹配必须得到相同目标
+	conflicts := []string{
+		"用python翻译这段代码",         // python/code/翻译 冲突
+		"写个python代码做个摘要",        // python/代码/摘要 冲突
+		"代码摘要",                  // 代码/摘要 等长冲突
+		"摘要代码",                  // 等长冲突，顺序颠倒
+		"翻译摘要代码",                // 三者等长冲突
+		"translate and summary", // translate/summary 冲突
+	}
+	for _, input := range conflicts {
+		first, _, _ := router.selectRoute(context.Background(), input, "")
+		for i := 0; i < 30; i++ {
+			got, _, _ := router.selectRoute(context.Background(), input, "")
+			if got != first {
+				t.Errorf("input=%q: non-deterministic routing: first=%q then=%q",
+					input, first, got)
+				break
+			}
+		}
+	}
+}
+
 func TestRegisterBuiltinNodes(t *testing.T) {
 	registry := NewNodeRegistry()
 
