@@ -138,19 +138,20 @@
               {{ t('providerManager.keysCount', { enabled: b.account_pool_summary.enabled_accounts, total: b.account_pool_summary.total_accounts }) }}
             </span>
           </div>
-          <div v-if="defaultBackendId === b.id && canWrite" class="default-model-row">
+          <div class="default-model-row">
             <div class="default-model-label">
               {{ t('providerManager.defaultModelVar') }}
             </div>
             <el-select
-              :model-value="defaultModel"
+              :model-value="backendDefaultModel(b)"
               size="small"
               filterable
               allow-create
               default-first-option
               placeholder="默认模型"
               style="width: 100%"
-              @change="(m) => handleDefaultModelChange(m)"
+              :disabled="!canEditBackendModel(b)"
+              @change="(m) => handleBackendDefaultModelChange(b, m)"
             >
               <el-option
                 v-for="m in b.supported_models"
@@ -249,7 +250,7 @@ const emit = defineEmits<{
 const router = useRouter()
 const { t } = useI18n()
 // personal / minimal / 超管不受限；team 普通用户受 can_add_own_backends 控制
-const { canAddOwnBackends } = useUserResourceAccess()
+const { canAddOwnBackends, unrestricted } = useUserResourceAccess()
 const canWrite = computed(() => canAddOwnBackends.value)
 
 const editorRef = ref<InstanceType<typeof BackendEditorDialog> | null>(null)
@@ -300,18 +301,35 @@ async function loadDefaultBackend() {
   }
 }
 
-// 修改默认模型：写入 config/proxy.default_model，供 {{system.default_model}} 模板变量使用
-async function handleDefaultModelChange(model: string) {
-  const prev = defaultModel.value
-  defaultModel.value = model
+// 卡片展示的默认模型：后端自身 default_model，无则回退 probe_model / 首个支持模型
+function backendDefaultModel(b: any): string {
+  const first = b?.supported_models?.[0]
+  const firstModel = first && (first.actual_model || first.requested_model || first)
+  return b?.default_model || b?.probe_model || firstModel || ''
+}
+
+// team 普通用户：自己添加的后端（有 tenant_id）可编辑；管理权限添加的系统后端只读
+function canEditBackendModel(b: any): boolean {
+  if (!canWrite.value) return false
+  if (unrestricted.value) return true
+  return !!b?.tenant_id
+}
+
+// 修改卡片默认模型：写入后端 default_model 并同步 probe_model；
+// 若该卡片为全局默认后端，同时写入 config/proxy.default_model，供 {{system.default_model}} 模板变量使用
+async function handleBackendDefaultModelChange(b: any, model: string) {
   try {
-    await api.put('/api/v1/config/proxy', {
-      default_backend_id: defaultBackendId.value,
-      default_model: model
-    })
+    const updated = await updateBackend(b.id, { ...b, default_model: model, probe_model: model })
+    emit('backend-updated', updated)
+    if (defaultBackendId.value === b.id && model !== defaultModel.value) {
+      defaultModel.value = model
+      await api.put('/api/v1/config/proxy', {
+        default_backend_id: defaultBackendId.value,
+        default_model: model
+      })
+    }
     ElMessage.success(t('providerManager.defaultModelSaved', { model: model || '（空）' }))
   } catch (error: any) {
-    defaultModel.value = prev
     ElMessage.error(error?.response?.data?.message || t('providerManager.defaultModelSaveFailed'))
   }
 }
