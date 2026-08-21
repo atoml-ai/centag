@@ -40,12 +40,26 @@ func NewTemplateVarResolver(input *NodeInput, execCtx *ExecutionContext) *Templa
 }
 
 // Resolve 解析单条路径表达式，返回对应的值。
+// 支持管道语法：pipeline.xxx | default: 'value'
 func (r *TemplateVarResolver) Resolve(path string) (interface{}, error) {
 	if strings.HasPrefix(path, "literal:") {
 		return path[len("literal:"):], nil
 	}
 
-	parts := strings.SplitN(path, ".", 3)
+	// 处理管道语法：path | default: 'value'
+	var defaultValue string
+	actualPath := path
+	if idx := strings.Index(path, "|"); idx != -1 {
+		actualPath = strings.TrimSpace(path[:idx])
+		rest := strings.TrimSpace(path[idx+1:])
+		if strings.HasPrefix(rest, "default:") {
+			defaultValue = strings.TrimSpace(rest[len("default:"):])
+			// 移除引号
+			defaultValue = strings.Trim(defaultValue, "'\"")
+		}
+	}
+
+	parts := strings.SplitN(actualPath, ".", 3)
 	switch parts[0] {
 	case "input":
 		return r.resolveInput(parts[1:])
@@ -54,10 +68,17 @@ func (r *TemplateVarResolver) Resolve(path string) (interface{}, error) {
 	case "context":
 		return r.resolveContext(parts[1:])
 	case "pipeline":
-		return r.resolvePipeline(parts[1:])
+		result, err := r.resolvePipeline(parts[1:])
+		if err != nil && defaultValue != "" {
+			return defaultValue, nil
+		}
+		return result, err
 	case "system":
 		return r.resolveSystem(parts[1:])
 	default:
+		if defaultValue != "" {
+			return defaultValue, nil
+		}
 		return nil, fmt.Errorf("unknown path prefix %q (支持: input / node / context / pipeline / system / literal:)", parts[0])
 	}
 }

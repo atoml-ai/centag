@@ -3168,8 +3168,69 @@ func (n *CacheNode) Validate() error {
 func (n *CacheNode) Execute(ctx context.Context, input *NodeInput) (*NodeOutput, error) {
 	logger, _ := ctx.Value(loggerContextKey{}).(Logger)
 
-	// 请求级参数覆盖：从执行上下文读取动态配置（优先级高于模板默认值）
+	// 获取执行上下文
 	execCtx, _ := ctx.Value(executionContextKey{}).(*ExecutionContext)
+
+	// 解析模板变量（在请求级覆盖之前）
+	if execCtx != nil {
+		resolver := NewTemplateVarResolver(input, execCtx)
+
+		// 解析 ReadStorageName
+		if strings.Contains(n.ReadStorageName, "{{") {
+			if resolved, err := resolver.Resolve(strings.Trim(n.ReadStorageName, "{} ")); err == nil {
+				if s, ok := resolved.(string); ok && s != "" {
+					n.ReadStorageName = s
+				}
+			}
+		}
+
+		// 解析 WriteStorageName
+		if strings.Contains(n.WriteStorageName, "{{") {
+			if resolved, err := resolver.Resolve(strings.Trim(n.WriteStorageName, "{} ")); err == nil {
+				if s, ok := resolved.(string); ok && s != "" {
+					n.WriteStorageName = s
+				}
+			}
+		}
+
+		// 解析 Strategy
+		if strings.Contains(n.Strategy, "{{") {
+			if resolved, err := resolver.Resolve(strings.Trim(n.Strategy, "{} ")); err == nil {
+				if s, ok := resolved.(string); ok && s != "" {
+					n.Strategy = s
+				}
+			}
+		}
+
+		// 解析 VectorStorageName
+		if strings.Contains(n.VectorStorageName, "{{") {
+			if resolved, err := resolver.Resolve(strings.Trim(n.VectorStorageName, "{} ")); err == nil {
+				if s, ok := resolved.(string); ok && s != "" {
+					n.VectorStorageName = s
+				}
+			}
+		}
+
+		// 解析 EmbeddingModel
+		if strings.Contains(n.EmbeddingModel, "{{") {
+			if resolved, err := resolver.Resolve(strings.Trim(n.EmbeddingModel, "{} ")); err == nil {
+				if s, ok := resolved.(string); ok && s != "" {
+					n.EmbeddingModel = s
+				}
+			}
+		}
+
+		// 解析 EmbeddingBackendID
+		if strings.Contains(n.EmbeddingBackendID, "{{") {
+			if resolved, err := resolver.Resolve(strings.Trim(n.EmbeddingBackendID, "{} ")); err == nil {
+				if s, ok := resolved.(string); ok && s != "" {
+					n.EmbeddingBackendID = s
+				}
+			}
+		}
+	}
+
+	// 请求级参数覆盖：从执行上下文读取动态配置（优先级高于模板默认值）
 	if execCtx != nil {
 		if strategy, ok := execCtx.GetVariable("cache_strategy"); ok {
 			if s, ok := strategy.(string); ok && s != "" {
@@ -4389,6 +4450,32 @@ func (n *TokenUsageNode) Validate() error {
 
 func (n *TokenUsageNode) Execute(ctx context.Context, input *NodeInput) (*NodeOutput, error) {
 	logger, _ := ctx.Value(loggerContextKey{}).(Logger)
+
+	// 获取执行上下文
+	execCtx, _ := ctx.Value(executionContextKey{}).(*ExecutionContext)
+
+	// 解析模板变量
+	if execCtx != nil {
+		resolver := NewTemplateVarResolver(input, execCtx)
+
+		// 解析 Operation
+		if strings.Contains(n.Operation, "{{") {
+			if resolved, err := resolver.Resolve(strings.Trim(n.Operation, "{} ")); err == nil {
+				if s, ok := resolved.(string); ok && s != "" {
+					n.Operation = s
+				}
+			}
+		}
+
+		// 解析 StorageType
+		if strings.Contains(n.StorageType, "{{") {
+			if resolved, err := resolver.Resolve(strings.Trim(n.StorageType, "{} ")); err == nil {
+				if s, ok := resolved.(string); ok && s != "" {
+					n.StorageType = s
+				}
+			}
+		}
+	}
 
 	if logger != nil {
 		logger.Info(fmt.Sprintf("[TokenUsageNode] Executing %s operation on %s storage",
