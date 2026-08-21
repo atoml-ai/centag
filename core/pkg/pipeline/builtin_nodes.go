@@ -5011,6 +5011,11 @@ func (n *QuestionSplitterNode) Execute(ctx context.Context, input *NodeInput) (*
 		}
 	}
 
+	// 空输入校验
+	if question == "" || strings.TrimSpace(question) == "" {
+		return nil, fmt.Errorf("input question cannot be empty")
+	}
+
 	// 内置 fallback：不拆分，直接透传原始问题
 	// 返回 should_split=false，让后续节点知道不需要处理子问题
 	output := &NodeOutput{

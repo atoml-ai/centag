@@ -47,6 +47,35 @@
       <el-form-item v-if="form.backend === 'semantic'" :label="t('cache.config.threshold')">
         <el-slider v-model="form.semantic.threshold" :min="0" :max="1" :step="0.01" show-input style="width: 360px" />
       </el-form-item>
+      <el-form-item v-if="form.backend === 'semantic'" :label="t('cache.config.topK')">
+        <el-input-number v-model="form.semantic.top_k" :min="1" :max="20" :step="1" />
+      </el-form-item>
+      <el-form-item v-if="form.backend === 'semantic'" :label="t('cache.config.embeddingBackend')">
+        <el-select v-model="form.semantic.embedding_backend_id" style="width: 240px" clearable>
+          <el-option
+            v-for="b in embeddingBackends"
+            :key="b.id"
+            :label="b.name"
+            :value="b.id"
+          />
+        </el-select>
+        <div class="hint">{{ t('cache.config.embeddingBackendHint') }}</div>
+      </el-form-item>
+      <el-form-item v-if="form.backend === 'semantic'" :label="t('cache.config.embeddingModel')">
+        <el-select v-model="form.semantic.embedding_model" style="width: 240px" clearable filterable>
+          <el-option
+            v-for="m in embeddingModels"
+            :key="m.id"
+            :label="m.name"
+            :value="m.id"
+          />
+        </el-select>
+        <div class="hint">{{ t('cache.config.embeddingModelHint') }}</div>
+      </el-form-item>
+      <el-form-item v-if="form.backend === 'semantic'" :label="t('cache.config.vectorStorage')">
+        <el-input v-model="form.semantic.vector_storage_name" style="width: 240px" placeholder="chromadb-main" />
+        <div class="hint">{{ t('cache.config.vectorStorageHint') }}</div>
+      </el-form-item>
       <el-alert
         v-if="form.backend === 'external'"
         type="info"
@@ -67,10 +96,10 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
+import { onMounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
-import { getConfig, saveConfig } from '@/api'
+import { getConfig, saveConfig, getBackends } from '@/api'
 
 const emit = defineEmits<{ saved: [backend: string] }>()
 const { t } = useI18n()
@@ -87,8 +116,58 @@ const form = reactive({
   enable_cache_read: true,
   enable_cache_write: true,
   default_ttl: 3600,
-  semantic: { threshold: 0.85, top_k: 5, enable_auto_embedding: true, distance_type: 'cosine' }
+  semantic: {
+    threshold: 0.85,
+    top_k: 5,
+    enable_auto_embedding: true,
+    distance_type: 'cosine',
+    embedding_backend_id: '',
+    embedding_model: '',
+    vector_storage_name: 'chromadb-main'
+  }
 })
+
+const embeddingBackends = ref<Array<{ id: string; name: string; models: Array<{ id: string; name: string; type: string } }>>([])
+const embeddingModels = ref<Array<{ id: string; name: string }>>([])
+
+async function loadEmbeddingBackends() {
+  try {
+    const res = await getBackends()
+    const backends = Array.isArray(res) ? res : (res?.data || res?.backends || [])
+    // 过滤只支持 embedding 的后端
+    embeddingBackends.value = backends
+      .filter((b: any) => {
+        const features = b.capabilities?.features || []
+        return features.includes('embedding') || 
+               (b.supported_models || []).some((m: any) => m.type === 'embedding')
+      })
+      .map((b: any) => ({
+        id: b.id,
+        name: b.name,
+        models: (b.supported_models || [])
+          .filter((m: any) => m.type === 'embedding')
+          .map((m: any) => ({ 
+            id: m.actual_model || m.requested_model || m.id, 
+            name: m.actual_model || m.requested_model || m.name || m.id, 
+            type: 'embedding' 
+          }))
+      }))
+    updateEmbeddingModels()
+  } catch (e) {
+    console.warn('Failed to load embedding backends:', e)
+  }
+}
+
+function updateEmbeddingModels() {
+  const backendId = form.semantic.embedding_backend_id
+  if (backendId) {
+    const backend = embeddingBackends.value.find(b => b.id === backendId)
+    embeddingModels.value = backend?.models || []
+  } else {
+    // 显示所有 embedding 模型
+    embeddingModels.value = embeddingBackends.value.flatMap(b => b.models)
+  }
+}
 
 async function load() {
   loading.value = true
@@ -110,9 +189,13 @@ async function load() {
       threshold: c.semantic?.threshold ?? 0.85,
       top_k: c.semantic?.top_k ?? 5,
       enable_auto_embedding: c.semantic?.enable_auto_embedding !== false,
-      distance_type: c.semantic?.distance_type || 'cosine'
+      distance_type: c.semantic?.distance_type || 'cosine',
+      embedding_backend_id: c.semantic?.embedding_backend_id || c.embedding_backend_id || '',
+      embedding_model: c.semantic?.embedding_model || c.embedding_model || '',
+      vector_storage_name: c.semantic?.vector_storage_name || c.vector_storage_name || 'chromadb-main'
     }
     emit('saved', form.backend)
+    await loadEmbeddingBackends()
   } catch (e: any) {
     ElMessage.error(t('cache.message.loadFailed') + ': ' + (e.message || t('cache.message.unknownError')))
   } finally {
@@ -135,7 +218,10 @@ async function save() {
         enable_cache_read: form.enable_cache_read,
         enable_cache_write: form.enable_cache_write,
         default_ttl: form.default_ttl,
-        semantic: form.semantic
+        semantic: form.semantic,
+        embedding_backend_id: form.semantic.embedding_backend_id,
+        embedding_model: form.semantic.embedding_model,
+        vector_storage_name: form.semantic.vector_storage_name
       }
     }
     await saveConfig(payload)
@@ -152,6 +238,10 @@ async function save() {
 }
 
 onMounted(load)
+
+watch(() => form.semantic.embedding_backend_id, () => {
+  updateEmbeddingModels()
+})
 
 defineExpose({ load })
 </script>

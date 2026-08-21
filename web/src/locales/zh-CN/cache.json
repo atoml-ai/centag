@@ -103,6 +103,13 @@
     "write": "允许写",
     "defaultTtl": "默认 TTL（秒）",
     "threshold": "语义阈值",
+    "topK": "语义 TopK",
+    "embeddingBackend": "向量化后端",
+    "embeddingBackendHint": "选择支持 Embedding 的后端，仅语义匹配时需要",
+    "embeddingModel": "向量化模型",
+    "embeddingModelHint": "选择 Embedding 模型，仅语义匹配时需要",
+    "vectorStorage": "向量存储",
+    "vectorStorageHint": "向量存储名称，如 chromadb-main",
     "externalHint": "S3 需配置 cache.external.plugin，且插件实现 CacheRecallBackend。"
   },
   "confirm": {
