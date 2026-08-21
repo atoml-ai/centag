@@ -127,7 +127,7 @@ const form = reactive({
   }
 })
 
-const embeddingBackends = ref<Array<{ id: string; name: string; models: Array<{ id: string; name: string; type: string } }>>([])
+const embeddingBackends = ref<Array<{ id: string; name: string; models: Array<{ id: string; name: string; type: string }> }>>([])
 const embeddingModels = ref<Array<{ id: string; name: string }>>([])
 
 async function loadEmbeddingBackends() {
