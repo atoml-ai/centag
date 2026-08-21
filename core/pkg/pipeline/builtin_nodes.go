@@ -3294,23 +3294,15 @@ func (n *CacheNode) Execute(ctx context.Context, input *NodeInput) (*NodeOutput,
 	}
 
 	if logger != nil {
-		// 显示实际使用的存储名称，而不是旧的 StorageType 字段
-		storageInfo := n.StorageType // 默认值
-		if n.ReadStorageName != "" {
-			storageInfo = n.ReadStorageName
-		}
-		if n.WriteStorageName != "" {
-			storageInfo = n.WriteStorageName
-		}
-		if n.ReadStorage != nil {
-			storageInfo = fmt.Sprintf("%s (ReadStorage initialized)", storageInfo)
-		}
-		if n.WriteStorage != nil {
-			storageInfo = fmt.Sprintf("%s (WriteStorage initialized)", storageInfo)
-		}
-		logger.Info("[CacheNode] Executing %s operation with %s strategy (read_storage=%s, write_storage=%s, ReadStorage=%v, WriteStorage=%v)",
-			n.Operation, n.Strategy, n.ReadStorageName, n.WriteStorageName, n.ReadStorage != nil, n.WriteStorage != nil)
-		_ = storageInfo // storageInfo is used for potential future logging extensions
+		logger.Info("[CacheNode] executing operation",
+			"operation", n.Operation,
+			"strategy", n.Strategy,
+			"read_storage", n.ReadStorageName,
+			"write_storage", n.WriteStorageName,
+			"read_storage_ready", n.ReadStorage != nil,
+			"write_storage_ready", n.WriteStorage != nil,
+			"facade_ready", n.cacheFacade != nil,
+		)
 	}
 
 	// 构建缓存键
@@ -3843,6 +3835,17 @@ func (n *CacheNode) executeRead(ctx context.Context, key string, input *NodeInpu
 			Metadata: metadata,
 		}
 
+		// 透传缓存条目中的模型与 token 用量，供 TokenUsageNode 精确计量
+		if cachedEntry != nil && cachedEntry.Metadata != nil {
+			for _, mk := range []string{"model", "backend", "prompt_tokens", "completion_tokens", "total_tokens"} {
+				if v, ok := cachedEntry.Metadata[mk]; ok && v != nil {
+					if s, isStr := v.(string); !isStr || s != "" {
+						metadata[mk] = v
+					}
+				}
+			}
+		}
+
 		// 如果有缓存的 messages，也传递
 		if cachedEntry != nil && cachedEntry.Metadata != nil {
 			if msgs, ok := cachedEntry.Metadata["messages"].([]Message); ok {
@@ -4060,6 +4063,14 @@ func (n *CacheNode) executeWrite(ctx context.Context, key string, input *NodeInp
 		"read_storage":  n.ReadStorageName,
 		"is_stream":     isStream,
 		"stream_chunks": len(streamData),
+	}
+	// 记录 token 用量，供缓存命中时 TokenUsageNode 精确计量（避免用输入长度估算）
+	if input != nil && input.Metadata != nil {
+		for _, tk := range []string{"prompt_tokens", "completion_tokens", "total_tokens"} {
+			if v := tokenRecordInt(input.Metadata[tk]); v > 0 {
+				meta[tk] = v
+			}
+		}
 	}
 	meta = cache.AttachRequestContextMetadata(meta, sessionID, requestID, backendName)
 	if modelName != "" {
