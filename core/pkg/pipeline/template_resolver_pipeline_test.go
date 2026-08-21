@@ -61,6 +61,52 @@ func TestPipelineMetadataResolution(t *testing.T) {
 	}
 }
 
+func TestEmptyStringDefaultResolution(t *testing.T) {
+	// 回归：显式 default: '' 必须生效（cache-pipeline.yaml 的
+	// vector_storage_name / embedding_backend_id / embedding_model 均使用该语法），
+	// 解析失败时应返回空字符串而非残留字面 {{...}} 模板。
+	pipeline := &AgentPatternPipeline{
+		ID:       "cache-pipeline",
+		Metadata: map[string]interface{}{},
+	}
+	execCtx := NewExecutionContext(pipeline)
+	input := &NodeInput{Content: "test"}
+	resolver := NewTemplateVarResolver(input, execCtx)
+
+	tests := []struct {
+		path     string
+		expected string
+	}{
+		{"pipeline.vector_storage | default: ''", ""},
+		{"pipeline.embedding_backend | default: ''", ""},
+		{"pipeline.embedding_model | default: ''", ""},
+		{"pipeline.missing_key | default: 'postgresql'", "postgresql"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.path, func(t *testing.T) {
+			result, err := resolver.Resolve(tt.path)
+			if err != nil {
+				t.Errorf("Resolve(%q) error: %v", tt.path, err)
+				return
+			}
+			s, ok := result.(string)
+			if !ok {
+				t.Errorf("Resolve(%q) = %T, want string", tt.path, result)
+				return
+			}
+			if s != tt.expected {
+				t.Errorf("Resolve(%q) = %q, want %q", tt.path, s, tt.expected)
+			}
+		})
+	}
+
+	// 无 default 时缺失 key 仍应返回错误（不静默吞掉）
+	if _, err := resolver.Resolve("pipeline.missing_key"); err == nil {
+		t.Error("Resolve without default should error on missing key")
+	}
+}
+
 func TestCacheNodeTemplateResolution(t *testing.T) {
 	// 模拟流水线 metadata
 	metadata := map[string]interface{}{
@@ -107,7 +153,7 @@ func TestCacheNodeTemplateResolution(t *testing.T) {
 		if err != nil {
 			t.Errorf("Resolve ReadStorageName error: %v", err)
 		} else {
-			if s, ok := resolved.(string); ok && s != "" {
+			if s, ok := resolved.(string); ok {
 				node.ReadStorageName = s
 			}
 		}
@@ -118,7 +164,7 @@ func TestCacheNodeTemplateResolution(t *testing.T) {
 		if err != nil {
 			t.Errorf("Resolve WriteStorageName error: %v", err)
 		} else {
-			if s, ok := resolved.(string); ok && s != "" {
+			if s, ok := resolved.(string); ok {
 				node.WriteStorageName = s
 			}
 		}
@@ -129,7 +175,7 @@ func TestCacheNodeTemplateResolution(t *testing.T) {
 		if err != nil {
 			t.Errorf("Resolve Strategy error: %v", err)
 		} else {
-			if s, ok := resolved.(string); ok && s != "" {
+			if s, ok := resolved.(string); ok {
 				node.Strategy = s
 			}
 		}

@@ -2951,6 +2951,8 @@ type storageManagerKey struct{}
 
 // InitializeStorages 初始化存储后端（从 context 或全局获取存储管理器）
 func (n *CacheNode) InitializeStorages(ctx context.Context) error {
+	logger, _ := ctx.Value(loggerContextKey{}).(Logger)
+
 	// 1. 尝试从 context 获取 storage.Manager
 	var storageMgr *storage.Manager
 	if ctx != nil {
@@ -2965,34 +2967,43 @@ func (n *CacheNode) InitializeStorages(ctx context.Context) error {
 	}
 
 	if storageMgr == nil {
-		fmt.Printf("[CacheNode] InitializeStorages: ERROR - storage manager not initialized\n")
-		// 尝试列出当前所有已注册的存储（用于诊断）
-		fmt.Printf("[CacheNode] InitializeStorages: no storage manager available, will use fallback cache behavior\n")
+		if logger != nil {
+			logger.Error("[CacheNode] InitializeStorages: storage manager not initialized, will use fallback cache behavior")
+		}
 		return fmt.Errorf("storage manager not initialized")
 	}
 
-	fmt.Printf("[CacheNode] InitializeStorages: initializing storages for node (read_storage_name=%s, write_storage_name=%s)\n",
-		n.ReadStorageName, n.WriteStorageName)
+	if logger != nil {
+		logger.Info("[CacheNode] InitializeStorages: initializing storages for node",
+			"read_storage_name", n.ReadStorageName,
+			"write_storage_name", n.WriteStorageName)
+	}
+
+	listStorageNames := func() []string {
+		storages := storageMgr.ListStorages()
+		names := make([]string, len(storages))
+		for i, s := range storages {
+			names[i] = s.Name
+		}
+		return names
+	}
 
 	// 初始化读取存储
 	if n.ReadStorageName != "" && n.ReadStorage == nil {
-		fmt.Printf("[CacheNode] InitializeStorages: getting read KVStore '%s'\n", n.ReadStorageName)
 		kvStore, err := storageMgr.GetKVStore(n.ReadStorageName)
 		if err != nil {
-			fmt.Printf("[CacheNode] InitializeStorages: ERROR - failed to get read KVStore '%s': %v\n", n.ReadStorageName, err)
-			// 列出可用的存储，帮助诊断
-			storages := storageMgr.ListStorages()
-			fmt.Printf("[CacheNode] InitializeStorages: available storages: %v\n", func() []string {
-				names := make([]string, len(storages))
-				for i, s := range storages {
-					names[i] = s.Name
-				}
-				return names
-			}())
+			if logger != nil {
+				logger.Error("[CacheNode] InitializeStorages: failed to get read KVStore",
+					"storage", n.ReadStorageName,
+					"available_storages", listStorageNames(),
+					"error", err.Error())
+			}
 			return fmt.Errorf("failed to get read KVStore '%s': %w", n.ReadStorageName, err)
 		}
 		n.ReadStorage = kvStore
-		fmt.Printf("[CacheNode] InitializeStorages: read KVStore '%s' initialized successfully\n", n.ReadStorageName)
+		if logger != nil {
+			logger.Debug("[CacheNode] InitializeStorages: read KVStore initialized", "storage", n.ReadStorageName)
+		}
 
 		// 如果策略是 semantic 或 hybrid，还需要向量存储
 		if n.Strategy == "semantic" || n.Strategy == "hybrid" {
@@ -3002,37 +3013,39 @@ func (n *CacheNode) InitializeStorages(ctx context.Context) error {
 				vectorStorageName = n.ReadStorageName
 			}
 
-			fmt.Printf("[CacheNode] InitializeStorages: getting read VectorStore '%s'\n", vectorStorageName)
 			vectorStore, err := storageMgr.GetVectorStore(vectorStorageName)
 			if err != nil {
 				// 向量存储可选，记录警告但不失败
-				fmt.Printf("[CacheNode] InitializeStorages: warning - failed to get read VectorStore '%s': %v\n", vectorStorageName, err)
+				if logger != nil {
+					logger.Warn("[CacheNode] InitializeStorages: failed to get read VectorStore",
+						"vector_storage", vectorStorageName,
+						"error", err.Error())
+				}
 			} else {
 				n.ReadVectorStore = vectorStore
-				fmt.Printf("[CacheNode] InitializeStorages: read VectorStore '%s' initialized successfully\n", vectorStorageName)
+				if logger != nil {
+					logger.Debug("[CacheNode] InitializeStorages: read VectorStore initialized", "vector_storage", vectorStorageName)
+				}
 			}
 		}
 	}
 
 	// 初始化写入存储
 	if n.WriteStorageName != "" && n.WriteStorage == nil {
-		fmt.Printf("[CacheNode] InitializeStorages: getting write KVStore '%s'\n", n.WriteStorageName)
 		kvStore, err := storageMgr.GetKVStore(n.WriteStorageName)
 		if err != nil {
-			fmt.Printf("[CacheNode] InitializeStorages: ERROR - failed to get write KVStore '%s': %v\n", n.WriteStorageName, err)
-			// 列出可用的存储，帮助诊断
-			storages := storageMgr.ListStorages()
-			fmt.Printf("[CacheNode] InitializeStorages: available storages: %v\n", func() []string {
-				names := make([]string, len(storages))
-				for i, s := range storages {
-					names[i] = s.Name
-				}
-				return names
-			}())
+			if logger != nil {
+				logger.Error("[CacheNode] InitializeStorages: failed to get write KVStore",
+					"storage", n.WriteStorageName,
+					"available_storages", listStorageNames(),
+					"error", err.Error())
+			}
 			return fmt.Errorf("failed to get write KVStore '%s': %w", n.WriteStorageName, err)
 		}
 		n.WriteStorage = kvStore
-		fmt.Printf("[CacheNode] InitializeStorages: write KVStore '%s' initialized successfully\n", n.WriteStorageName)
+		if logger != nil {
+			logger.Debug("[CacheNode] InitializeStorages: write KVStore initialized", "storage", n.WriteStorageName)
+		}
 
 		// 如果策略是 semantic 或 hybrid，还需要向量存储
 		if n.Strategy == "semantic" || n.Strategy == "hybrid" {
@@ -3042,13 +3055,18 @@ func (n *CacheNode) InitializeStorages(ctx context.Context) error {
 				vectorStorageName = n.WriteStorageName
 			}
 
-			fmt.Printf("[CacheNode] InitializeStorages: getting write VectorStore '%s'\n", vectorStorageName)
 			vectorStore, err := storageMgr.GetVectorStore(vectorStorageName)
 			if err != nil {
-				fmt.Printf("[CacheNode] InitializeStorages: warning - failed to get write VectorStore '%s': %v\n", vectorStorageName, err)
+				if logger != nil {
+					logger.Warn("[CacheNode] InitializeStorages: failed to get write VectorStore",
+						"vector_storage", vectorStorageName,
+						"error", err.Error())
+				}
 			} else {
 				n.WriteVectorStore = vectorStore
-				fmt.Printf("[CacheNode] InitializeStorages: write VectorStore '%s' initialized successfully\n", vectorStorageName)
+				if logger != nil {
+					logger.Debug("[CacheNode] InitializeStorages: write VectorStore initialized", "vector_storage", vectorStorageName)
+				}
 			}
 		}
 	}
@@ -3056,23 +3074,31 @@ func (n *CacheNode) InitializeStorages(ctx context.Context) error {
 	// 初始化 Embedding 服务（语义缓存需要向量化）
 	if (n.Strategy == "semantic" || n.Strategy == "hybrid") && n.embeddingService == nil {
 		if n.EmbeddingBackendID != "" {
-			fmt.Printf("[CacheNode] InitializeStorages: initializing embedding service (backend_id=%s, model=%s)\n",
-				n.EmbeddingBackendID, n.EmbeddingModel)
-
 			embService, err := n.createEmbeddingService(ctx)
 			if err != nil {
-				fmt.Printf("[CacheNode] InitializeStorages: WARNING - failed to create embedding service: %v\n", err)
+				if logger != nil {
+					logger.Warn("[CacheNode] InitializeStorages: failed to create embedding service, degrading to exact match",
+						"backend_id", n.EmbeddingBackendID,
+						"model", n.EmbeddingModel,
+						"error", err.Error())
+				}
 				// 不返回错误，允许降级到精确匹配
 			} else {
 				n.embeddingService = embService
-				fmt.Printf("[CacheNode] InitializeStorages: embedding service initialized successfully\n")
+				if logger != nil {
+					logger.Debug("[CacheNode] InitializeStorages: embedding service initialized",
+						"backend_id", n.EmbeddingBackendID,
+						"model", n.EmbeddingModel)
+				}
 			}
-		} else {
-			fmt.Printf("[CacheNode] InitializeStorages: WARNING - semantic strategy selected but no embedding_backend_id configured\n")
+		} else if logger != nil {
+			logger.Warn("[CacheNode] InitializeStorages: semantic strategy selected but no embedding_backend_id configured")
 		}
 	}
 
-	fmt.Printf("[CacheNode] InitializeStorages: completed successfully\n")
+	if logger != nil {
+		logger.Debug("[CacheNode] InitializeStorages: completed")
+	}
 	return nil
 }
 
@@ -3159,9 +3185,9 @@ func (n *CacheNode) Validate() error {
 		return fmt.Errorf("invalid strategy: %s, must be exact/semantic/hybrid", n.Strategy)
 	}
 
-	validStorages := map[string]bool{"memory": true, "redis": true, "sqlite": true}
+	validStorages := map[string]bool{"memory": true, "redis": true, "sqlite": true, "postgresql": true}
 	if !validStorages[n.StorageType] {
-		return fmt.Errorf("invalid storage_type: %s, must be memory/redis/sqlite", n.StorageType)
+		return fmt.Errorf("invalid storage_type: %s, must be memory/redis/sqlite/postgresql", n.StorageType)
 	}
 
 	return nil
@@ -3180,7 +3206,7 @@ func (n *CacheNode) Execute(ctx context.Context, input *NodeInput) (*NodeOutput,
 		// 解析 ReadStorageName
 		if strings.Contains(n.ReadStorageName, "{{") {
 			if resolved, err := resolver.Resolve(strings.Trim(n.ReadStorageName, "{} ")); err == nil {
-				if s, ok := resolved.(string); ok && s != "" {
+				if s, ok := resolved.(string); ok {
 					n.ReadStorageName = s
 				}
 			}
@@ -3189,7 +3215,7 @@ func (n *CacheNode) Execute(ctx context.Context, input *NodeInput) (*NodeOutput,
 		// 解析 WriteStorageName
 		if strings.Contains(n.WriteStorageName, "{{") {
 			if resolved, err := resolver.Resolve(strings.Trim(n.WriteStorageName, "{} ")); err == nil {
-				if s, ok := resolved.(string); ok && s != "" {
+				if s, ok := resolved.(string); ok {
 					n.WriteStorageName = s
 				}
 			}
@@ -3198,7 +3224,7 @@ func (n *CacheNode) Execute(ctx context.Context, input *NodeInput) (*NodeOutput,
 		// 解析 Strategy
 		if strings.Contains(n.Strategy, "{{") {
 			if resolved, err := resolver.Resolve(strings.Trim(n.Strategy, "{} ")); err == nil {
-				if s, ok := resolved.(string); ok && s != "" {
+				if s, ok := resolved.(string); ok {
 					n.Strategy = s
 				}
 			}
@@ -3207,7 +3233,7 @@ func (n *CacheNode) Execute(ctx context.Context, input *NodeInput) (*NodeOutput,
 		// 解析 VectorStorageName
 		if strings.Contains(n.VectorStorageName, "{{") {
 			if resolved, err := resolver.Resolve(strings.Trim(n.VectorStorageName, "{} ")); err == nil {
-				if s, ok := resolved.(string); ok && s != "" {
+				if s, ok := resolved.(string); ok {
 					n.VectorStorageName = s
 				}
 			}
@@ -3216,7 +3242,7 @@ func (n *CacheNode) Execute(ctx context.Context, input *NodeInput) (*NodeOutput,
 		// 解析 EmbeddingModel
 		if strings.Contains(n.EmbeddingModel, "{{") {
 			if resolved, err := resolver.Resolve(strings.Trim(n.EmbeddingModel, "{} ")); err == nil {
-				if s, ok := resolved.(string); ok && s != "" {
+				if s, ok := resolved.(string); ok {
 					n.EmbeddingModel = s
 				}
 			}
@@ -3225,7 +3251,7 @@ func (n *CacheNode) Execute(ctx context.Context, input *NodeInput) (*NodeOutput,
 		// 解析 EmbeddingBackendID
 		if strings.Contains(n.EmbeddingBackendID, "{{") {
 			if resolved, err := resolver.Resolve(strings.Trim(n.EmbeddingBackendID, "{} ")); err == nil {
-				if s, ok := resolved.(string); ok && s != "" {
+				if s, ok := resolved.(string); ok {
 					n.EmbeddingBackendID = s
 				}
 			}
@@ -3337,9 +3363,28 @@ func (n *CacheNode) Execute(ctx context.Context, input *NodeInput) (*NodeOutput,
 		}
 
 		// 使用用户输入构建缓存键
+		// 键模型回退：扁平 input.Metadata 可能缺失 model（上游业务节点丢弃元数据），
+		// 从 generator 结果补齐，保证与 cache_read 侧的键一致
+		keyMetadata := input.Metadata
+		if keyMetadata == nil {
+			keyMetadata = map[string]interface{}{}
+		}
+		if m, _ := keyMetadata["model"].(string); m == "" {
+			if execCtx, ok := ctx.Value(executionContextKey{}).(*ExecutionContext); ok && execCtx != nil {
+				if genResult, ok := execCtx.GetResult("generator"); ok && genResult != nil && genResult.Metadata != nil {
+					if gm, ok := genResult.Metadata["model"].(string); ok && gm != "" {
+						merged := map[string]interface{}{"model": gm}
+						for k, v := range keyMetadata {
+							merged[k] = v
+						}
+						keyMetadata = merged
+					}
+				}
+			}
+		}
 		cacheKey = n.buildCacheKey(&NodeInput{
 			Content:  userInput,
-			Metadata: input.Metadata,
+			Metadata: keyMetadata,
 		})
 		if logger != nil {
 			logger.Info("[CacheNode] executeWrite: built cache key for write operation",
@@ -3742,6 +3787,15 @@ func (n *CacheNode) executeRead(ctx context.Context, key string, input *NodeInpu
 									cachedEntry.ExpiresAt = t
 								}
 							}
+							// 恢复计量元数据，供 TokenUsageNode 精确计量
+							for _, mk := range []string{"model", "backend", "prompt_tokens", "completion_tokens", "total_tokens"} {
+								if v, ok := best.Metadata[mk]; ok && v != nil {
+									if cachedEntry.Metadata == nil {
+										cachedEntry.Metadata = map[string]interface{}{}
+									}
+									cachedEntry.Metadata[mk] = v
+								}
+							}
 						}
 					} else {
 						if logger != nil {
@@ -3806,6 +3860,15 @@ func (n *CacheNode) executeRead(ctx context.Context, key string, input *NodeInpu
 							Request:   userInput,
 							Timestamp: time.Now(),
 							ExpiresAt: time.Now().Add(time.Duration(n.TTL) * time.Second),
+						}
+						// 恢复计量元数据，供 TokenUsageNode 精确计量
+						for _, mk := range []string{"model", "backend", "prompt_tokens", "completion_tokens", "total_tokens"} {
+							if v, ok := best.Metadata[mk]; ok && v != nil {
+								if cachedEntry.Metadata == nil {
+									cachedEntry.Metadata = map[string]interface{}{}
+								}
+								cachedEntry.Metadata[mk] = v
+							}
 						}
 					}
 				}
@@ -4072,6 +4135,51 @@ func (n *CacheNode) executeWrite(ctx context.Context, key string, input *NodeInp
 			}
 		}
 	}
+	// 兜底：从 generator 节点结果补齐计量元数据。
+	// 内置 answer_synthesizer 等业务节点不透传上游元数据，扁平 input.Metadata
+	// 可能缺失 model/backend/token 字段；直接读取 generator 结果确保缓存条目
+	// 携带真实用量，命中时 TokenUsageNode 可精确计量而非按输入长度估算。
+	if execCtxWrite != nil {
+		if genResult, ok := execCtxWrite.GetResult("generator"); ok && genResult != nil && genResult.Metadata != nil {
+			gm := genResult.Metadata
+			if modelName == "" {
+				if m, ok := gm["model"].(string); ok {
+					modelName = m
+					meta["model"] = m
+				}
+			}
+			if backendName == "" {
+				if b, ok := gm["backend_id"].(string); ok {
+					backendName = b
+					meta["backend"] = b
+				} else if b, ok := gm["backend"].(string); ok {
+					backendName = b
+					meta["backend"] = b
+				}
+			}
+			if _, exists := meta["total_tokens"]; !exists {
+				if v := tokenRecordInt(gm["total_tokens"]); v > 0 {
+					meta["total_tokens"] = v
+				} else if v := tokenRecordInt(gm["tokens"]); v > 0 {
+					meta["total_tokens"] = v
+				}
+			}
+			if _, exists := meta["prompt_tokens"]; !exists {
+				if v := tokenRecordInt(gm["prompt_tokens"]); v > 0 {
+					meta["prompt_tokens"] = v
+				}
+			}
+			if _, exists := meta["completion_tokens"]; !exists {
+				if pt, hasPT := meta["prompt_tokens"]; hasPT {
+					if tt, hasTT := meta["total_tokens"]; hasTT {
+						if ct := tokenRecordInt(tt) - tokenRecordInt(pt); ct > 0 {
+							meta["completion_tokens"] = ct
+						}
+					}
+				}
+			}
+		}
+	}
 	meta = cache.AttachRequestContextMetadata(meta, sessionID, requestID, backendName)
 	if modelName != "" {
 		if v, _ := meta["model"].(string); v == "" {
@@ -4133,16 +4241,23 @@ func (n *CacheNode) executeWrite(ctx context.Context, key string, input *NodeInp
 			// 向量化失败不阻塞主流程，继续往下走
 		} else if len(vector) > 0 {
 			// 构建向量数据
+			vecMeta := map[string]interface{}{
+				"key":        key,
+				"request":    userInput,
+				"response":   content,
+				"timestamp":  cacheEntry.Timestamp.Format(time.RFC3339),
+				"expires_at": cacheEntry.ExpiresAt.Format(time.RFC3339),
+			}
+			// 携带计量元数据，语义命中时可恢复真实用量供 TokenUsageNode 计量
+			for _, mk := range []string{"model", "backend", "prompt_tokens", "completion_tokens", "total_tokens"} {
+				if v, ok := meta[mk]; ok && v != nil {
+					vecMeta[mk] = v
+				}
+			}
 			vec := storage.Vector{
-				ID:     key,
-				Vector: vector,
-				Metadata: map[string]interface{}{
-					"key":        key,
-					"request":    userInput,
-					"response":   content,
-					"timestamp":  cacheEntry.Timestamp.Format(time.RFC3339),
-					"expires_at": cacheEntry.ExpiresAt.Format(time.RFC3339),
-				},
+				ID:       key,
+				Vector:   vector,
+				Metadata: vecMeta,
 			}
 
 			// 写入向量
@@ -4474,7 +4589,7 @@ func (n *TokenUsageNode) Execute(ctx context.Context, input *NodeInput) (*NodeOu
 		// 解析 Operation
 		if strings.Contains(n.Operation, "{{") {
 			if resolved, err := resolver.Resolve(strings.Trim(n.Operation, "{} ")); err == nil {
-				if s, ok := resolved.(string); ok && s != "" {
+				if s, ok := resolved.(string); ok {
 					n.Operation = s
 				}
 			}
@@ -4483,7 +4598,7 @@ func (n *TokenUsageNode) Execute(ctx context.Context, input *NodeInput) (*NodeOu
 		// 解析 StorageType
 		if strings.Contains(n.StorageType, "{{") {
 			if resolved, err := resolver.Resolve(strings.Trim(n.StorageType, "{} ")); err == nil {
-				if s, ok := resolved.(string); ok && s != "" {
+				if s, ok := resolved.(string); ok {
 					n.StorageType = s
 				}
 			}
@@ -5111,9 +5226,23 @@ func (n *QuestionSplitterNode) Execute(ctx context.Context, input *NodeInput) (*
 		}
 	}
 
-	// 空输入校验
+	// 空输入：跳过拆分并透传，不阻塞流水线（cache-pipeline 对该节点
+	// 未配置 bypass_on_error，硬报错会导致空输入请求整体失败）
 	if question == "" || strings.TrimSpace(question) == "" {
-		return nil, fmt.Errorf("input question cannot be empty")
+		return &NodeOutput{
+			Content: input.Content,
+			Metadata: map[string]interface{}{
+				"should_split":      false,
+				"complexity_score":  0.0,
+				"question_type":     "simple",
+				"strategy":          "passthrough",
+				"sub_questions":     []interface{}{},
+				"original_question": "",
+				"skipped":           true,
+				"reason":            "empty_input",
+				"builtin_fallback":  true,
+			},
+		}, nil
 	}
 
 	// 内置 fallback：不拆分，直接透传原始问题

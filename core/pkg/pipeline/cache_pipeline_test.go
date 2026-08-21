@@ -615,3 +615,141 @@ func TestCacheNodeDefaultSemanticConfig(t *testing.T) {
 
 	t.Logf("CacheNode default semantic config test passed")
 }
+
+// TestCacheWriteMergesGeneratorMetadata 回归测试：cache_write 在扁平 input.Metadata
+// 缺失计量字段时，必须从 generator 节点结果兜底合并 model/backend/token 用量，
+// 否则缓存命中时 TokenUsageNode 只能按输入长度估算。
+func TestCacheWriteMergesGeneratorMetadata(t *testing.T) {
+	cacheMgr := newMockCacheManager()
+
+	cacheWriteNode, err := NewCacheNode(NodeConfig{
+		CustomConfig: map[string]interface{}{
+			"operation":    "write",
+			"strategy":     "exact",
+			"storage_type": "memory",
+			"ttl":          float64(3600),
+			"key_template": "{{model}}:{{hash}}",
+		},
+	})
+	if err != nil {
+		t.Fatalf("Failed to create cache write node: %v", err)
+	}
+	cn, ok := cacheWriteNode.(*CacheNode)
+	if !ok {
+		t.Fatalf("Expected *CacheNode")
+	}
+	cn.SetCacheManager(cacheMgr)
+
+	pipeline := &AgentPatternPipeline{ID: "test-pipeline"}
+	execCtx := NewExecutionContext(pipeline)
+	execCtx.SetVariable("input", "python的用途")
+	execCtx.SetVariable("test_mode", true)
+
+	// 模拟 generator 已执行，但其元数据未透传到 cache_write 的扁平输入
+	// （内置 answer_synthesizer 会丢弃上游元数据）
+	execCtx.SetResult("generator", &NodeOutput{
+		Content: "Python是一种高级编程语言。",
+		Metadata: map[string]interface{}{
+			"model":         "GLM-4-flash",
+			"backend_id":    "bigmodel",
+			"tokens":        123,
+			"prompt_tokens": 45,
+		},
+	})
+
+	input := &NodeInput{
+		Content: "Python是一种高级编程语言。",
+		Metadata: map[string]interface{}{}, // 故意留空
+		Messages: []Message{
+			{Role: "user", Content: "python的用途"},
+			{Role: "assistant", Content: "Python是一种高级编程语言。"},
+		},
+	}
+
+	ctx := context.Background()
+	ctx = context.WithValue(ctx, executionContextKey{}, execCtx)
+
+	output, err := cacheWriteNode.Execute(ctx, input)
+	if err != nil {
+		t.Fatalf("Cache write execution failed: %v", err)
+	}
+	if written, _ := output.Metadata["written"].(bool); !written {
+		t.Fatalf("Expected cache written")
+	}
+
+	entry, exists := cacheMgr.data["GLM-4-flash:python的用途"]
+	if !exists {
+		t.Fatalf("Expected cache entry to exist, keys: %v", getMapKeys(cacheMgr.data))
+	}
+
+	if entry.Metadata == nil {
+		t.Fatal("Expected entry metadata to be present")
+	}
+	if m, _ := entry.Metadata["model"].(string); m != "GLM-4-flash" {
+		t.Errorf("entry model = %q, want GLM-4-flash", m)
+	}
+	if b, _ := entry.Metadata["backend"].(string); b != "bigmodel" {
+		t.Errorf("entry backend = %q, want bigmodel (from generator backend_id)", b)
+	}
+	if tt := tokenRecordInt(entry.Metadata["total_tokens"]); tt != 123 {
+		t.Errorf("entry total_tokens = %d, want 123 (from generator tokens)", tt)
+	}
+	if pt := tokenRecordInt(entry.Metadata["prompt_tokens"]); pt != 45 {
+		t.Errorf("entry prompt_tokens = %d, want 45", pt)
+	}
+	if ct := tokenRecordInt(entry.Metadata["completion_tokens"]); ct != 78 {
+		t.Errorf("entry completion_tokens = %d, want 78 (123-45)", ct)
+	}
+}
+
+// TestQuestionSplitterEmptyInputPassthrough 回归测试：空输入应跳过透传而非硬报错
+// （cache-pipeline 未对 question_splitter 配置 bypass_on_error）。
+func TestQuestionSplitterEmptyInputPassthrough(t *testing.T) {
+	node, err := NewQuestionSplitterNode(NodeConfig{})
+	if err != nil {
+		t.Fatalf("Failed to create question splitter node: %v", err)
+	}
+
+	for _, tc := range []struct {
+		name    string
+		content string
+	}{
+		{"empty string", ""},
+		{"whitespace only", "   \n\t  "},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, err := node.Execute(context.Background(), &NodeInput{Content: tc.content})
+			if err != nil {
+				t.Fatalf("Empty input should not error, got: %v", err)
+			}
+			if out == nil {
+				t.Fatal("Expected non-nil output")
+			}
+			if skipped, _ := out.Metadata["skipped"].(bool); !skipped {
+				t.Errorf("Expected skipped=true, got %v", out.Metadata["skipped"])
+			}
+			if reason, _ := out.Metadata["reason"].(string); reason != "empty_input" {
+				t.Errorf("Expected reason=empty_input, got %q", reason)
+			}
+		})
+	}
+}
+
+// TestCacheNodeValidateAcceptsPostgresql 回归测试：storage_type 默认值已改为
+// postgresql，Validate 白名单必须放行，否则校验路径会拒绝合法配置。
+func TestCacheNodeValidateAcceptsPostgresql(t *testing.T) {
+	for _, storageType := range []string{"memory", "redis", "sqlite", "postgresql"} {
+		node := &CacheNode{
+			BaseNode:    BaseNode{config: NodeConfig{}},
+			Operation:   "read",
+			Strategy:    "exact",
+			StorageType: storageType,
+		}
+		if err := node.Validate(); err != nil {
+			t.Errorf("Validate(storage_type=%s) error: %v", storageType, err)
+		}
+	}
+	if err := (&CacheNode{BaseNode: BaseNode{config: NodeConfig{}}, Operation: "read", Strategy: "exact", StorageType: "unknown"}).Validate(); err == nil {
+		t.Error("Validate(storage_type=unknown) should fail")
+	}
+}

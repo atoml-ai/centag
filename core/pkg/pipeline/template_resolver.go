@@ -47,12 +47,15 @@ func (r *TemplateVarResolver) Resolve(path string) (interface{}, error) {
 	}
 
 	// 处理管道语法：path | default: 'value'
+	// hasDefault 区分「未指定默认值」与「显式指定空字符串默认值」（default: ''）
 	var defaultValue string
+	hasDefault := false
 	actualPath := path
 	if idx := strings.Index(path, "|"); idx != -1 {
 		actualPath = strings.TrimSpace(path[:idx])
 		rest := strings.TrimSpace(path[idx+1:])
 		if strings.HasPrefix(rest, "default:") {
+			hasDefault = true
 			defaultValue = strings.TrimSpace(rest[len("default:"):])
 			// 移除引号
 			defaultValue = strings.Trim(defaultValue, "'\"")
@@ -69,14 +72,14 @@ func (r *TemplateVarResolver) Resolve(path string) (interface{}, error) {
 		return r.resolveContext(parts[1:])
 	case "pipeline":
 		result, err := r.resolvePipeline(parts[1:])
-		if err != nil && defaultValue != "" {
+		if err != nil && hasDefault {
 			return defaultValue, nil
 		}
 		return result, err
 	case "system":
 		return r.resolveSystem(parts[1:])
 	default:
-		if defaultValue != "" {
+		if hasDefault {
 			return defaultValue, nil
 		}
 		return nil, fmt.Errorf("unknown path prefix %q (支持: input / node / context / pipeline / system / literal:)", parts[0])
