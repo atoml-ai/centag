@@ -10,11 +10,14 @@ import requests
 import time
 from datetime import datetime
 
-BASE_URL = "http://192.168.1.4:20060"
-USERNAME = "admin"
-PASSWORD = "centag123"
+BASE_URL = os.environ.get("CENTAG_TEST_BASE_URL", "http://localhost:8080")
+USERNAME = os.environ.get("CENTAG_TEST_USERNAME", "admin")
+PASSWORD = os.environ.get("CENTAG_TEST_PASSWORD", "")
 PIPELINE_ID = "cache-pipeline"
 REPORT_DIR = "docs/test-reports"
+
+if not PASSWORD:
+    raise SystemExit("环境变量 CENTAG_TEST_PASSWORD 未设置，拒绝使用硬编码凭据")
 
 def login():
     resp = requests.post(f"{BASE_URL}/api/auth/login", json={"username": USERNAME, "password": PASSWORD})
