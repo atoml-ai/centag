@@ -2047,6 +2047,22 @@ func RegisterBuiltinNodes(registry *NodeRegistry) error {
 		return err
 	}
 
+	// 注册问题拆分节点（内置 fallback，当 business.question_splitter 未注册时使用）
+	questionSplitterFactory := func(config NodeConfig) (PipelineNode, error) {
+		return NewQuestionSplitterNode(config)
+	}
+	if err := registerBuiltinNodePlugin(registry, NodeTypeQuestionSplitter, questionSplitterFactory, "内置问题拆分节点", "问题拆分 fallback：直接透传原始问题，不做拆分（当 business.question_splitter 未注册时使用）", nil); err != nil {
+		return err
+	}
+
+	// 注册答案合成节点（内置 fallback，当 business.answer_synthesizer 未注册时使用）
+	answerSynthesizerFactory := func(config NodeConfig) (PipelineNode, error) {
+		return NewAnswerSynthesizerNode(config)
+	}
+	if err := registerBuiltinNodePlugin(registry, NodeTypeAnswerSynthesizer, answerSynthesizerFactory, "内置答案合成节点", "答案合成 fallback：直接返回第一个子答案或原始内容（当 business.answer_synthesizer 未注册时使用）", nil); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -4948,4 +4964,128 @@ func (n *ToolCallInjectorNode) extractToolCallIDs(toolCalls []ToolCall) []string
 		ids[i] = tc.ID
 	}
 	return ids
+}
+
+// ============================================================================
+// QuestionSplitterNode 问题拆分节点（内置 fallback）
+// ============================================================================
+
+// QuestionSplitterNode 问题拆分节点
+// 内置 fallback 实现：直接透传原始问题，不做拆分
+// 当 business.question_splitter 插件未注册时使用
+type QuestionSplitterNode struct {
+	BaseNode
+}
+
+// NewQuestionSplitterNode 创建问题拆分节点
+func NewQuestionSplitterNode(config NodeConfig) (PipelineNode, error) {
+	node := &QuestionSplitterNode{
+		BaseNode: BaseNode{
+			config:      config,
+			timeout:     30,
+			retryConfig: DefaultRetryConfig(),
+		},
+	}
+	if err := node.Validate(); err != nil {
+		return nil, err
+	}
+	return node, nil
+}
+
+func (n *QuestionSplitterNode) Validate() error { return nil }
+
+func (n *QuestionSplitterNode) Execute(ctx context.Context, input *NodeInput) (*NodeOutput, error) {
+	if input == nil {
+		return nil, fmt.Errorf("input cannot be nil")
+	}
+
+	question := input.Content
+	if question == "" {
+		if msgs := input.Messages; len(msgs) > 0 {
+			for _, m := range msgs {
+				if m.Role == "user" {
+					question = m.Content
+					break
+				}
+			}
+		}
+	}
+
+	// 内置 fallback：不拆分，直接透传原始问题
+	// 返回 should_split=false，让后续节点知道不需要处理子问题
+	output := &NodeOutput{
+		Content: question,
+		Metadata: map[string]interface{}{
+			"should_split":       false,
+			"complexity_score":   0.0,
+			"question_type":      "simple",
+			"strategy":           "passthrough",
+			"sub_questions":      []interface{}{},
+			"original_question":  question,
+			"builtin_fallback":   true,
+		},
+	}
+
+	return output, nil
+}
+
+// ============================================================================
+// AnswerSynthesizerNode 答案合成节点（内置 fallback）
+// ============================================================================
+
+// AnswerSynthesizerNode 答案合成节点
+// 内置 fallback 实现：直接返回第一个子答案或原始内容
+// 当 business.answer_synthesizer 插件未注册时使用
+type AnswerSynthesizerNode struct {
+	BaseNode
+}
+
+// NewAnswerSynthesizerNode 创建答案合成节点
+func NewAnswerSynthesizerNode(config NodeConfig) (PipelineNode, error) {
+	node := &AnswerSynthesizerNode{
+		BaseNode: BaseNode{
+			config:      config,
+			timeout:     30,
+			retryConfig: DefaultRetryConfig(),
+		},
+	}
+	if err := node.Validate(); err != nil {
+		return nil, err
+	}
+	return node, nil
+}
+
+func (n *AnswerSynthesizerNode) Validate() error { return nil }
+
+func (n *AnswerSynthesizerNode) Execute(ctx context.Context, input *NodeInput) (*NodeOutput, error) {
+	if input == nil {
+		return nil, fmt.Errorf("input cannot be nil")
+	}
+
+	content := input.Content
+
+	// 尝试从 metadata 中获取子答案
+	if input.Metadata != nil {
+		if subAnswers, ok := input.Metadata["sub_answers"]; ok {
+			if subAnswersList, ok := subAnswers.([]interface{}); ok && len(subAnswersList) > 0 {
+				// 内置 fallback：直接返回第一个子答案
+				if firstAnswer, ok := subAnswersList[0].(map[string]interface{}); ok {
+					if answer, ok := firstAnswer["answer"].(string); ok && answer != "" {
+						content = answer
+					}
+				}
+			}
+		}
+	}
+
+	output := &NodeOutput{
+		Content: content,
+		Metadata: map[string]interface{}{
+			"synthesis_strategy": "builtin_passthrough",
+			"sub_answer_count":   0,
+			"builtin_fallback":   true,
+		},
+	}
+
+	return output, nil
 }

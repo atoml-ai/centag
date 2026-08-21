@@ -32,6 +32,8 @@ const (
 	NodeTypeToolCallInjector   NodeType = "tool_call_injector"  // 工具调用注入节点
 	NodeTypeUserPromptOps      NodeType = "user_prompt_ops"     // 用户 Prompt 操作节点
 	NodeTypeOutputPostOps      NodeType = "output_post_ops"     // 输出后处理节点
+	NodeTypeQuestionSplitter   NodeType = "question_splitter"   // 问题拆分节点
+	NodeTypeAnswerSynthesizer  NodeType = "answer_synthesizer"  // 答案合成节点
 )
 
 func (nt NodeType) String() string {
@@ -44,7 +46,8 @@ func (nt NodeType) IsValid() bool {
 		NodeTypeRouter, NodeTypeAggregator,
 		NodeTypeMemory, NodeTypeAudit, NodeTypeOptimize, NodeTypeLoopController,
 		NodeTypeCache, NodeTypeTokenUsage, NodeTypeScheduler, NodeTypeTransparentForward,
-		NodeTypeToolCallInjector, NodeTypeUserPromptOps, NodeTypeOutputPostOps:
+		NodeTypeToolCallInjector, NodeTypeUserPromptOps, NodeTypeOutputPostOps,
+		NodeTypeQuestionSplitter, NodeTypeAnswerSynthesizer:
 		return true
 	}
 	return false
