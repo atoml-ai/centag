@@ -19,8 +19,8 @@ nodes:
       custom_config:
         operation: read
         strategy: "{{pipeline.cache_strategy | default: 'exact'}}"
-        storage_type: "{{pipeline.cache_storage | default: 'memory'}}"
-        read_storage_name: "{{pipeline.cache_read_storage | default: 'memory'}}"
+        storage_type: "{{pipeline.cache_storage | default: 'postgresql'}}"
+        read_storage_name: "{{pipeline.cache_read_storage | default: 'postgresql'}}"
         key_template: '{{model}}:{{hash}}'
         vector_storage_name: "{{pipeline.vector_storage | default: ''}}"
         embedding_backend_id: "{{pipeline.embedding_backend | default: ''}}"
@@ -98,8 +98,8 @@ nodes:
       custom_config:
         operation: write
         strategy: "{{pipeline.cache_strategy | default: 'exact'}}"
-        storage_type: "{{pipeline.cache_storage | default: 'memory'}}"
-        write_storage_name: "{{pipeline.cache_write_storage | default: 'memory'}}"
+        storage_type: "{{pipeline.cache_storage | default: 'postgresql'}}"
+        write_storage_name: "{{pipeline.cache_write_storage | default: 'postgresql'}}"
         ttl: 3600
         key_template: '{{model}}:{{hash}}'
         vector_storage_name: "{{pipeline.vector_storage | default: ''}}"
@@ -132,25 +132,25 @@ metadata:
     enable_cache_read: true
     enable_cache_write: true
     cache_strategy: exact
-    cache_storage: memory
+    cache_storage: postgresql
   # 缓存模式映射
   cache_mode_mappings:
     cache-hit:
       enable_cache_read: true
       enable_cache_write: false
       cache_strategy: exact
-      cache_storage: memory
+      cache_storage: postgresql
     cache-mode:
       enable_cache_read: true
       enable_cache_write: true
       cache_strategy: exact
-      cache_storage: memory
+      cache_storage: postgresql
     rag-mode:
       enable_cache_read: true
       enable_cache_write: true
       cache_strategy: semantic
-      cache_storage: memory
-      vector_storage: chromadb-main
+      cache_storage: postgresql
+      vector_storage: postgresql
       embedding_backend: "{{system.default_embedding_backend}}"
       embedding_model: "{{system.default_embedding_model}}"
       enable_rag: true
@@ -182,12 +182,14 @@ metadata:
     cache_storage:
       description: "缓存存储类型"
       options:
-        - value: memory
-          description: "内存存储（开发/测试）"
+        - value: postgresql
+          description: "PostgreSQL（推荐，复用应用数据库）"
         - value: redis
-          description: "Redis（生产环境推荐）"
-        - value: sqlite
-          description: "SQLite（轻量级持久化）"
+          description: "Redis（高性能缓存）"
+        - value: elasticsearch-main
+          description: "Elasticsearch（支持全文检索）"
+        - value: chromadb-main
+          description: "ChromaDB（向量存储）"
     embedding_backend:
       description: "向量化后端（语义匹配时需要）"
       depends_on: cache_strategy=semantic
@@ -203,7 +205,7 @@ metadata:
         enable_cache_read: true
         enable_cache_write: false
         cache_strategy: exact
-        cache_storage: memory
+        cache_storage: postgresql
     cache_mode:
       name: "缓存模式"
       description: "读写缓存，精确匹配"
@@ -211,7 +213,7 @@ metadata:
         enable_cache_read: true
         enable_cache_write: true
         cache_strategy: exact
-        cache_storage: memory
+        cache_storage: postgresql
     rag_mode:
       name: "RAG模式"
       description: "缓存优先的RAG检索增强生成"
@@ -219,8 +221,8 @@ metadata:
         enable_cache_read: true
         enable_cache_write: true
         cache_strategy: semantic
-        cache_storage: memory
-        vector_storage: chromadb-main
+        cache_storage: postgresql
+        vector_storage: postgresql
         embedding_backend: "{{system.default_embedding_backend}}"
         embedding_model: "{{system.default_embedding_model}}"
         enable_rag: true
