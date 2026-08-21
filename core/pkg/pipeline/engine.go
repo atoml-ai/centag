@@ -2077,6 +2077,18 @@ func (e *PipelineEngine) executeNode(ctx context.Context, config PipelineNodeCon
 		}
 	}
 
+	// 将 backendID 注入 context，供 CapabilityBroker 的 llm.call 使用。
+	nodeExecCtx := ctx
+	if config.Config.Backend != "" {
+		nodeExecCtx = context.WithValue(ctx, backendIDContextKey{}, config.Config.Backend)
+	}
+
+	// 将 storage.Manager 注入 context，供 CacheNode.InitializeStorages 使用。
+	// 必须在下方调用 InitializeStorages 之前注入，否则节点拿不到存储管理器。
+	if e.storageManager != nil {
+		nodeExecCtx = context.WithValue(nodeExecCtx, storageManagerKey{}, e.storageManager)
+	}
+
 	// 初始化缓存节点的存储后端（如果节点支持）
 	if initializer, ok := node.(interface {
 		InitializeStorages(ctx context.Context) error
@@ -2085,7 +2097,7 @@ func (e *PipelineEngine) executeNode(ctx context.Context, config PipelineNodeCon
 			"node_id", config.ID,
 			"node_type", config.Type,
 		)
-		if err := initializer.InitializeStorages(ctx); err != nil {
+		if err := initializer.InitializeStorages(nodeExecCtx); err != nil {
 			// 尝试从 Config.CustomConfig 获取存储名称（用于诊断）
 			readStorage := ""
 			writeStorage := ""
@@ -2115,17 +2127,6 @@ func (e *PipelineEngine) executeNode(ctx context.Context, config PipelineNodeCon
 			"node_id", config.ID,
 			"node_type", config.Type,
 		)
-	}
-
-	// 将 backendID 注入 context，供 CapabilityBroker 的 llm.call 使用。
-	nodeExecCtx := ctx
-	if config.Config.Backend != "" {
-		nodeExecCtx = context.WithValue(ctx, backendIDContextKey{}, config.Config.Backend)
-	}
-
-	// 将 storage.Manager 注入 context，供 CacheNode.InitializeStorages 使用
-	if e.storageManager != nil {
-		nodeExecCtx = context.WithValue(nodeExecCtx, storageManagerKey{}, e.storageManager)
 	}
 
 	// 特殊处理 LoopController 节点
