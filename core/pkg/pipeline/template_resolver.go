@@ -23,6 +23,7 @@ import (
 //	context.user_id                → 执行上下文中的用户 ID
 //	context.session_id             → 执行上下文中的会话 ID
 //	context.pipeline_id            → 当前流水线 ID
+//	pipeline.<key>                 → 流水线元数据字段（从 pipeline.metadata 读取）
 //	system.default_backend         → 系统默认后端 ID
 //	system.default_model           → 系统默认模型
 //	system.fallback_backend        → 系统降级后端 ID
@@ -52,10 +53,12 @@ func (r *TemplateVarResolver) Resolve(path string) (interface{}, error) {
 		return r.resolveNode(parts[1:])
 	case "context":
 		return r.resolveContext(parts[1:])
+	case "pipeline":
+		return r.resolvePipeline(parts[1:])
 	case "system":
 		return r.resolveSystem(parts[1:])
 	default:
-		return nil, fmt.Errorf("unknown path prefix %q (支持: input / node / context / system / literal:)", parts[0])
+		return nil, fmt.Errorf("unknown path prefix %q (支持: input / node / context / pipeline / system / literal:)", parts[0])
 	}
 }
 
@@ -114,6 +117,28 @@ func (r *TemplateVarResolver) resolveNode(parts []string) (interface{}, error) {
 	default:
 		return nil, fmt.Errorf("unknown node field: %s (支持: content / feedback / score / passed / metadata.<key>)", field)
 	}
+}
+
+// resolvePipeline 解析流水线元数据字段
+// pipeline.<key> → 从流水线 metadata 中读取
+func (r *TemplateVarResolver) resolvePipeline(parts []string) (interface{}, error) {
+	if len(parts) == 0 {
+		return nil, fmt.Errorf("pipeline path 需要字段名")
+	}
+
+	if r.execCtx == nil || r.execCtx.pipeline == nil {
+		return nil, fmt.Errorf("pipeline context not available")
+	}
+
+	// 从流水线 metadata 中读取
+	key := parts[0]
+	if r.execCtx.pipeline.Metadata != nil {
+		if v, ok := r.execCtx.pipeline.Metadata[key]; ok {
+			return v, nil
+		}
+	}
+
+	return nil, fmt.Errorf("pipeline metadata field %q not found", key)
 }
 
 func (r *TemplateVarResolver) resolveContext(parts []string) (interface{}, error) {
