@@ -844,3 +844,45 @@ func TestAccountPoolNormalize(t *testing.T) {
 		t.Errorf("expected weight 1, got %d", pool.Accounts[1].Weight)
 	}
 }
+
+// TestAccountPoolDisabledKeyCrossBackendIsolation 回归测试：disabledKey 为
+// backendID:accountID 复合键，在后端 A 临时禁用账户 key-1 不得影响后端 B
+// 的同名 ID 账户（9371251 修复的跨后端 ID 碰撞）。
+func TestAccountPoolDisabledKeyCrossBackendIsolation(t *testing.T) {
+	selector := NewAccountPoolSelector()
+
+	pool := &AccountPoolConfig{
+		Strategy: "round_robin",
+		Accounts: []BackendAccount{
+			{ID: "key-1", APIKey: "sk-1", Enabled: true},
+			{ID: "key-2", APIKey: "sk-2", Enabled: true},
+		},
+	}
+
+	// 在 backend-a 上临时禁用 key-1
+	selector.DisableAccountTemporarily(pool, "key-1", "backend-a")
+
+	// backend-a：只剩 key-2 可选
+	for i := 0; i < 3; i++ {
+		result, err := selector.SelectAccountForRequest(context.Background(), pool, "", "backend-a")
+		if err != nil {
+			t.Fatalf("backend-a request %d: unexpected error: %v", i, err)
+		}
+		if result.Account.ID != "key-2" {
+			t.Errorf("backend-a request %d: expected key-2 (key-1 disabled), got %s", i, result.Account.ID)
+		}
+	}
+
+	// backend-b：同名 ID key-1 不受影响，轮询应覆盖两个账户
+	seen := map[string]bool{}
+	for i := 0; i < 4; i++ {
+		result, err := selector.SelectAccountForRequest(context.Background(), pool, "", "backend-b")
+		if err != nil {
+			t.Fatalf("backend-b request %d: unexpected error: %v", i, err)
+		}
+		seen[result.Account.ID] = true
+	}
+	if !seen["key-1"] {
+		t.Error("backend-b: key-1 should still be selectable (isolation from backend-a disable)")
+	}
+}

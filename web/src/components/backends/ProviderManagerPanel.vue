@@ -317,16 +317,23 @@ function canEditBackendModel(b: any): boolean {
 
 // 修改卡片默认模型：写入后端 default_model 并同步 probe_model；
 // 若该卡片为全局默认后端，同时写入 config/proxy.default_model，供 {{system.default_model}} 模板变量使用
+// 任一步失败时回滚 UI 状态，避免前端展示与后端存储不一致
 async function handleBackendDefaultModelChange(b: any, model: string) {
+  const prevDefaultModel = defaultModel.value
   try {
     const updated = await updateBackend(b.id, { ...b, default_model: model, probe_model: model })
     emit('backend-updated', updated)
     if (defaultBackendId.value === b.id && model !== defaultModel.value) {
       defaultModel.value = model
-      await api.put('/api/v1/config/proxy', {
-        default_backend_id: defaultBackendId.value,
-        default_model: model
-      })
+      try {
+        await api.put('/api/v1/config/proxy', {
+          default_backend_id: defaultBackendId.value,
+          default_model: model
+        })
+      } catch (proxyErr) {
+        defaultModel.value = prevDefaultModel
+        throw proxyErr
+      }
     }
     ElMessage.success(t('providerManager.defaultModelSaved', { model: model || '（空）' }))
   } catch (error: any) {

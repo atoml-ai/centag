@@ -2,13 +2,14 @@ package pipeline
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
 	"centag/core/internal/cache"
 	"centag/core/internal/cache/evaluation/plugin"
-	"centag/core/pkg/storage"
 	"centag/core/pkg/processor"
+	"centag/core/pkg/storage"
 )
 
 // mockCacheManager 模拟缓存管理器用于测试
@@ -50,7 +51,7 @@ func (m *mockCacheManager) Stats() *cache.CacheStats {
 	}
 }
 
-func (m *mockCacheManager) Hit()   {}
+func (m *mockCacheManager) Hit()  {}
 func (m *mockCacheManager) Miss() {}
 
 // 添加缺失的方法以完整实现 cache.CacheManager 接口
@@ -658,7 +659,7 @@ func TestCacheWriteMergesGeneratorMetadata(t *testing.T) {
 	})
 
 	input := &NodeInput{
-		Content: "Python是一种高级编程语言。",
+		Content:  "Python是一种高级编程语言。",
 		Metadata: map[string]interface{}{}, // 故意留空
 		Messages: []Message{
 			{Role: "user", Content: "python的用途"},
@@ -751,5 +752,53 @@ func TestCacheNodeValidateAcceptsPostgresql(t *testing.T) {
 	}
 	if err := (&CacheNode{BaseNode: BaseNode{config: NodeConfig{}}, Operation: "read", Strategy: "exact", StorageType: "unknown"}).Validate(); err == nil {
 		t.Error("Validate(storage_type=unknown) should fail")
+	}
+}
+
+// TestCacheNodeInitStoragesResolvesTemplatesFirst 回归测试：引擎在节点创建期即调用
+// InitializeStorages，此时存储名称可能还是 {{pipeline.*}} 字面量；必须先解析再查库，
+// 否则 GetKVStore 失败、存储保持未初始化（只能靠 Execute 内重试兜底）。
+func TestCacheNodeInitStoragesResolvesTemplatesFirst(t *testing.T) {
+	node, err := NewCacheNode(NodeConfig{
+		CustomConfig: map[string]interface{}{
+			"operation":            "read",
+			"strategy":             "{{pipeline.cache_strategy | default: 'exact'}}",
+			"storage_type":         "postgresql",
+			"read_storage_name":    "{{pipeline.cache_read_storage | default: 'postgresql'}}",
+			"write_storage_name":   "{{pipeline.cache_write_storage | default: 'postgresql'}}",
+			"vector_storage_name":  "{{pipeline.vector_storage | default: ''}}",
+			"embedding_backend_id": "{{pipeline.embedding_backend | default: ''}}",
+		},
+	})
+	if err != nil {
+		t.Fatalf("Failed to create cache node: %v", err)
+	}
+	cn := node.(*CacheNode)
+
+	pipeline := &AgentPatternPipeline{ID: "cache-pipeline", Metadata: map[string]interface{}{}}
+	execCtx := NewExecutionContext(pipeline)
+
+	ctx := context.Background()
+	ctx = context.WithValue(ctx, executionContextKey{}, execCtx)
+
+	// 无存储管理器：InitializeStorages 返回错误，但模板解析必须已发生
+	if err := cn.InitializeStorages(ctx); err == nil {
+		t.Log("InitializeStorages without manager did not error (global manager present?)")
+	}
+
+	if cn.ReadStorageName != "postgresql" {
+		t.Errorf("ReadStorageName = %q, want resolved 'postgresql'", cn.ReadStorageName)
+	}
+	if cn.WriteStorageName != "postgresql" {
+		t.Errorf("WriteStorageName = %q, want resolved 'postgresql'", cn.WriteStorageName)
+	}
+	if cn.Strategy != "exact" {
+		t.Errorf("Strategy = %q, want resolved 'exact'", cn.Strategy)
+	}
+	if cn.VectorStorageName != "" {
+		t.Errorf("VectorStorageName = %q, want resolved ''", cn.VectorStorageName)
+	}
+	if strings.Contains(cn.EmbeddingBackendID, "{{") {
+		t.Errorf("EmbeddingBackendID still contains template: %q", cn.EmbeddingBackendID)
 	}
 }

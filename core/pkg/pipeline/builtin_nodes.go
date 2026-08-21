@@ -2953,6 +2953,13 @@ type storageManagerKey struct{}
 func (n *CacheNode) InitializeStorages(ctx context.Context) error {
 	logger, _ := ctx.Value(loggerContextKey{}).(Logger)
 
+	// 先解析存储名称中的模板变量：引擎在节点创建期即调用本方法，
+	// 此时名称可能还是 {{pipeline.*}} 字面量，直接查库会失败并留下
+	// 未初始化的存储（此前只能靠 Execute 内的重试兜底）。
+	if execCtx, ok := ctx.Value(executionContextKey{}).(*ExecutionContext); ok {
+		n.resolveStorageNameTemplates(execCtx)
+	}
+
 	// 1. 尝试从 context 获取 storage.Manager
 	var storageMgr *storage.Manager
 	if ctx != nil {
@@ -3193,70 +3200,40 @@ func (n *CacheNode) Validate() error {
 	return nil
 }
 
+// resolveStorageNameTemplates 解析存储相关字段中的模板变量（pipeline.* / system.* 路径）。
+// 引擎在节点创建期即调用 InitializeStorages，此时名称可能仍是 {{...}} 字面量，
+// 必须先解析再查库；Execute 内的解析与本方法幂等（已解析字段不含 {{ 直接跳过）。
+func (n *CacheNode) resolveStorageNameTemplates(execCtx *ExecutionContext) {
+	if execCtx == nil {
+		return
+	}
+	resolver := NewTemplateVarResolver(&NodeInput{}, execCtx)
+	for _, field := range []*string{
+		&n.ReadStorageName,
+		&n.WriteStorageName,
+		&n.Strategy,
+		&n.VectorStorageName,
+		&n.EmbeddingModel,
+		&n.EmbeddingBackendID,
+	} {
+		if strings.Contains(*field, "{{") {
+			if resolved, err := resolver.Resolve(strings.Trim(*field, "{} ")); err == nil {
+				if s, ok := resolved.(string); ok {
+					*field = s
+				}
+			}
+		}
+	}
+}
+
 func (n *CacheNode) Execute(ctx context.Context, input *NodeInput) (*NodeOutput, error) {
 	logger, _ := ctx.Value(loggerContextKey{}).(Logger)
 
 	// 获取执行上下文
 	execCtx, _ := ctx.Value(executionContextKey{}).(*ExecutionContext)
 
-	// 解析模板变量（在请求级覆盖之前）
-	if execCtx != nil {
-		resolver := NewTemplateVarResolver(input, execCtx)
-
-		// 解析 ReadStorageName
-		if strings.Contains(n.ReadStorageName, "{{") {
-			if resolved, err := resolver.Resolve(strings.Trim(n.ReadStorageName, "{} ")); err == nil {
-				if s, ok := resolved.(string); ok {
-					n.ReadStorageName = s
-				}
-			}
-		}
-
-		// 解析 WriteStorageName
-		if strings.Contains(n.WriteStorageName, "{{") {
-			if resolved, err := resolver.Resolve(strings.Trim(n.WriteStorageName, "{} ")); err == nil {
-				if s, ok := resolved.(string); ok {
-					n.WriteStorageName = s
-				}
-			}
-		}
-
-		// 解析 Strategy
-		if strings.Contains(n.Strategy, "{{") {
-			if resolved, err := resolver.Resolve(strings.Trim(n.Strategy, "{} ")); err == nil {
-				if s, ok := resolved.(string); ok {
-					n.Strategy = s
-				}
-			}
-		}
-
-		// 解析 VectorStorageName
-		if strings.Contains(n.VectorStorageName, "{{") {
-			if resolved, err := resolver.Resolve(strings.Trim(n.VectorStorageName, "{} ")); err == nil {
-				if s, ok := resolved.(string); ok {
-					n.VectorStorageName = s
-				}
-			}
-		}
-
-		// 解析 EmbeddingModel
-		if strings.Contains(n.EmbeddingModel, "{{") {
-			if resolved, err := resolver.Resolve(strings.Trim(n.EmbeddingModel, "{} ")); err == nil {
-				if s, ok := resolved.(string); ok {
-					n.EmbeddingModel = s
-				}
-			}
-		}
-
-		// 解析 EmbeddingBackendID
-		if strings.Contains(n.EmbeddingBackendID, "{{") {
-			if resolved, err := resolver.Resolve(strings.Trim(n.EmbeddingBackendID, "{} ")); err == nil {
-				if s, ok := resolved.(string); ok {
-					n.EmbeddingBackendID = s
-				}
-			}
-		}
-	}
+	// 解析模板变量（在请求级覆盖之前）；幂等，InitializeStorages 中可能已解析
+	n.resolveStorageNameTemplates(execCtx)
 
 	// 请求级参数覆盖：从执行上下文读取动态配置（优先级高于模板默认值）
 	if execCtx != nil {
