@@ -37,7 +37,7 @@ func (h *PipelineHandler) StartAutoBuildRebuildLoop(cfg autoBuildRebuildConfig) 
 		return
 	}
 	if strings.TrimSpace(cfg.PipelineID) == "" {
-		cfg.PipelineID = "router-mode"
+		cfg.PipelineID = "router-pipeline"
 	}
 	if normalizeAutoBuildStrategy(cfg.Strategy) == "" {
 		cfg.Strategy = "balance"
@@ -126,7 +126,7 @@ func loadAutoBuildRebuildConfigFromEnv() autoBuildRebuildConfig {
 	cfg := autoBuildRebuildConfig{
 		Enabled:       true,
 		Interval:      interval,
-		PipelineID:    strings.TrimSpace(getEnvOrDefault("LLM_PROXY_ROUTER_AUTOBUILD_PIPELINE_ID", "router-mode")),
+		PipelineID:    strings.TrimSpace(getEnvOrDefault("LLM_PROXY_ROUTER_AUTOBUILD_PIPELINE_ID", "router-pipeline")),
 		Strategy:      normalizeAutoBuildStrategy(getEnvOrDefault("LLM_PROXY_ROUTER_AUTOBUILD_STRATEGY", "balance")),
 		ProbeBackends: parseBoolEnv("LLM_PROXY_ROUTER_AUTOBUILD_PROBE_BACKENDS", false),
 		Canary:        parseBoolEnv("LLM_PROXY_ROUTER_AUTOBUILD_CANARY", false),

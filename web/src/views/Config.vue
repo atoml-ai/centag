@@ -579,7 +579,7 @@ const config = ref<any>({
   },
   proxy: {
     enabled: true,
-    default_mode: 'transparent-proxy',
+    default_mode: 'transparent',
     timeout: 30,
     response_trace_banner: false,
     retryable_status_codes: [429, 500, 502, 503, 504],

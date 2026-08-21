@@ -334,24 +334,28 @@ func (c *ConfigCompatLayer) IsLegacyPipeline(config map[string]interface{}) bool
 	return false
 }
 
+// NormalizePipelineID 将已废弃的旧流水线 ID 归一为现行流水线 ID。
+// 包级单一事实来源：执行层（pipeline_resolver）与 Team 计划强制层
+// （groupmodel 白名单）必须使用同一映射，避免“允许新名拒绝旧名”的裂缝。
+func NormalizePipelineID(id string) string {
+	switch strings.TrimSpace(id) {
+	case "transparent-proxy", "direct-backend", "fixed-egress", "transparent-passthrough":
+		return "transparent"
+	case "router-mode":
+		return "router-pipeline"
+	case "agent-skill-router":
+		return "centag-ops-router"
+	case "cache-hit", "cache-mode", "18-rag-mode":
+		return "cache-pipeline"
+	}
+	return id
+}
+
 // GetActualPipelineID 获取实际流水线ID（处理别名）
 func (c *ConfigCompatLayer) GetActualPipelineID(requestedID string) string {
-	aliases := map[string]string{
-		"transparent-proxy":      "transparent",
-		"direct-backend":         "transparent",
-		"fixed-egress":           "transparent",
-		"transparent-passthrough": "transparent",
-		"router-mode":            "router-pipeline",
-		"agent-skill-router":     "centag-ops-router",
-		"cache-hit":              "cache-pipeline",
-		"cache-mode":             "cache-pipeline",
-		"18-rag-mode":            "cache-pipeline",
-	}
-
-	if actualID, ok := aliases[requestedID]; ok {
+	if actualID := NormalizePipelineID(requestedID); actualID != requestedID {
 		return actualID
 	}
-
 	return requestedID
 }
 

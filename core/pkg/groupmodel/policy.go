@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"centag/core/pkg/backend"
+	"centag/core/pkg/pipeline"
 )
 
 // Policy mode values (users.policy_mode).
@@ -169,6 +170,10 @@ func (p *EffectivePolicy) IsAllowedModel(model string) bool {
 }
 
 // IsAllowedPipeline reports whether a pipeline is in the allowlist.
+// Both sides are normalized through pipeline.NormalizePipelineID so legacy
+// IDs (transparent-proxy / router-mode / …) keep matching their canonical
+// successors after the pipeline merge — an allowlist entry of either name
+// admits both.
 func (p *EffectivePolicy) IsAllowedPipeline(pipelineID string) bool {
 	if p == nil || !p.ResourcesConfigured {
 		return false
@@ -176,7 +181,13 @@ func (p *EffectivePolicy) IsAllowedPipeline(pipelineID string) bool {
 	if len(p.AllowPipelines) == 0 {
 		return true
 	}
-	return contains(p.AllowPipelines, pipelineID)
+	requested := pipeline.NormalizePipelineID(pipelineID)
+	for _, item := range p.AllowPipelines {
+		if pipeline.NormalizePipelineID(item) == requested {
+			return true
+		}
+	}
+	return false
 }
 
 // PricingOverride is a per-(backend, model, price_type) override from the

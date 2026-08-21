@@ -659,8 +659,8 @@ const isAdmin = computed(() => authStore.isAdmin)
 
 const activeTab = ref('setup')
 
-/** 系统默认流水线：透明模式 */
-const DEFAULT_PIPELINE_ID = 'transparent-proxy'
+/** 系统默认流水线：透明模式（transparent 为合并后的现行 ID，旧名 transparent-proxy 已废弃） */
+const DEFAULT_PIPELINE_ID = 'transparent'
 
 // ===================== 快速接入向导 =====================
 

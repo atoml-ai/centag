@@ -289,7 +289,7 @@ func (h *AgentHandler) RestoreConfig(c *gin.Context) {
 	// 仅需路径；用占位 BackendInfo 生成 ConfigFiles 列表
 	files, err := tmpl.ConfigFiles(&agent.BackendInfo{
 		Name:  "restore",
-		Model: "centag/transparent-proxy",
+		Model: "centag/transparent",
 		Host:  "localhost",
 		Port:  20060,
 	})
