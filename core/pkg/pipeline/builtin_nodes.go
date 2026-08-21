@@ -1997,7 +1997,9 @@ func RegisterBuiltinNodes(registry *NodeRegistry) error {
 	cacheFactory := func(config NodeConfig) (PipelineNode, error) {
 		return NewCacheNode(config)
 	}
-	if err := registerBuiltinNodePlugin(registry, NodeTypeCache, cacheFactory, "内置缓存节点", "提供缓存读写功能，支持 exact/semantic/hybrid 策略和 memory/redis/sqlite 存储", nil); err != nil {
+	// supportsStream=true 使 CreateFromConfig 返回原始 *CacheNode（而非 PluginBackedNode 包装），
+	// 这样 engine 才能直接注入 cacheFacade / CacheManager / 策略插件（engine.go executeNode 中的类型断言依赖具体类型）。
+	if err := registerBuiltinNodePlugin(registry, NodeTypeCache, cacheFactory, "内置缓存节点", "提供缓存读写功能，支持 exact/semantic/hybrid 策略和 memory/redis/sqlite 存储", nil, true); err != nil {
 		return err
 	}
 

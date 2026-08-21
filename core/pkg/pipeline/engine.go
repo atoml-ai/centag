@@ -2044,6 +2044,14 @@ func (e *PipelineEngine) executeNode(ctx context.Context, config PipelineNodeCon
 			if m := e.cacheFacade.Manager(); m != nil {
 				cn.SetCacheManager(m)
 			}
+			e.logger.Info("cache facade injected into node",
+				"node_id", config.ID,
+				"backend", e.cacheFacade.EffectiveBackend(),
+			)
+		} else if config.Type == NodeTypeCache && e.cacheFacade == nil {
+			e.logger.Warn("cache facade not available on engine, node will rely on storages only",
+				"node_id", config.ID,
+			)
 		}
 		if cacheNode, ok := node.(interface {
 			SetStrategyPlugin(CacheStrategyCapability)
