@@ -3339,29 +3339,13 @@ func (n *CacheNode) Execute(ctx context.Context, input *NodeInput) (*NodeOutput,
 			}
 		}
 
-		// 使用用户输入构建缓存键
-		// 键模型回退：扁平 input.Metadata 可能缺失 model（上游业务节点丢弃元数据），
-		// 从 generator 结果补齐，保证与 cache_read 侧的键一致
-		keyMetadata := input.Metadata
-		if keyMetadata == nil {
-			keyMetadata = map[string]interface{}{}
-		}
-		if m, _ := keyMetadata["model"].(string); m == "" {
-			if execCtx, ok := ctx.Value(executionContextKey{}).(*ExecutionContext); ok && execCtx != nil {
-				if genResult, ok := execCtx.GetResult("generator"); ok && genResult != nil && genResult.Metadata != nil {
-					if gm, ok := genResult.Metadata["model"].(string); ok && gm != "" {
-						merged := map[string]interface{}{"model": gm}
-						for k, v := range keyMetadata {
-							merged[k] = v
-						}
-						keyMetadata = merged
-					}
-				}
-			}
-		}
+		// 使用用户输入构建缓存键。
+		// 注意：键中的 {{model}} 只能取调用方传入的 input.Metadata["model"]，
+		// 不能回退 generator 的模型——读侧在生成前无法得知 model，
+		// 写侧若用 generator 模型会导致读写键不一致、缓存永不命中。
 		cacheKey = n.buildCacheKey(&NodeInput{
 			Content:  userInput,
-			Metadata: keyMetadata,
+			Metadata: input.Metadata,
 		})
 		if logger != nil {
 			logger.Info("[CacheNode] executeWrite: built cache key for write operation",

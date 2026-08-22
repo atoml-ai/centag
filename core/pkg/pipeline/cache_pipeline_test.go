@@ -678,7 +678,10 @@ func TestCacheWriteMergesGeneratorMetadata(t *testing.T) {
 		t.Fatalf("Expected cache written")
 	}
 
-	entry, exists := cacheMgr.data["GLM-4-flash:python的用途"]
+	// 键中的 model 只取调用方元数据（读侧无法得知 generator 模型，
+	// 写键若回退 generator 模型会导致读写键不一致、永不命中）；
+	// generator 的真实模型/用量进条目元数据供命中时计量。
+	entry, exists := cacheMgr.data["default:python的用途"]
 	if !exists {
 		t.Fatalf("Expected cache entry to exist, keys: %v", getMapKeys(cacheMgr.data))
 	}
@@ -800,5 +803,85 @@ func TestCacheNodeInitStoragesResolvesTemplatesFirst(t *testing.T) {
 	}
 	if strings.Contains(cn.EmbeddingBackendID, "{{") {
 		t.Errorf("EmbeddingBackendID still contains template: %q", cn.EmbeddingBackendID)
+	}
+}
+
+// TestCacheKeyConsistencyWithoutCallerModel 回归测试：调用方不传 model 元数据时
+// （cache-pipeline 经 answer_synthesizer 的典型场景），读键与写键必须一致
+// （同为 default:<hash>），否则缓存永不命中。
+// 写键不得回退 generator 模型——读侧在生成前无法得知 model（9630a46 后修复）。
+func TestCacheKeyConsistencyWithoutCallerModel(t *testing.T) {
+	cacheMgr := newMockCacheManager()
+	userInput := "python的用途"
+
+	// 1) 写入：模拟 generator 已执行（携带真实模型），但 cache_write 扁平输入无 model
+	writeNode, err := NewCacheNode(NodeConfig{
+		CustomConfig: map[string]interface{}{
+			"operation":    "write",
+			"strategy":     "exact",
+			"storage_type": "memory",
+			"key_template": "{{model}}:{{hash}}",
+		},
+	})
+	if err != nil {
+		t.Fatalf("create write node: %v", err)
+	}
+	writeNode.(*CacheNode).SetCacheManager(cacheMgr)
+
+	pipeline := &AgentPatternPipeline{ID: "cache-pipeline"}
+	execCtx := NewExecutionContext(pipeline)
+	execCtx.SetVariable("input", userInput)
+	execCtx.SetVariable("test_mode", true)
+	execCtx.SetResult("generator", &NodeOutput{
+		Content: "Python 是一种高级编程语言。",
+		Metadata: map[string]interface{}{
+			"model":      "stealth/ox-alpha",
+			"backend_id": "openrouter",
+			"tokens":     100,
+		},
+	})
+	writeInput := &NodeInput{
+		Content:  "Python 是一种高级编程语言。",
+		Metadata: map[string]interface{}{}, // 无 model
+		Messages: []Message{
+			{Role: "user", Content: userInput},
+			{Role: "assistant", Content: "Python 是一种高级编程语言。"},
+		},
+	}
+	wctx := context.WithValue(context.Background(), executionContextKey{}, execCtx)
+	if _, err := writeNode.Execute(wctx, writeInput); err != nil {
+		t.Fatalf("write execute: %v", err)
+	}
+
+	// 2) 读取：同样无 model 元数据，键必须与写键一致并命中
+	readNode, err := NewCacheNode(NodeConfig{
+		CustomConfig: map[string]interface{}{
+			"operation":    "read",
+			"strategy":     "exact",
+			"storage_type": "memory",
+			"key_template": "{{model}}:{{hash}}",
+		},
+	})
+	if err != nil {
+		t.Fatalf("create read node: %v", err)
+	}
+	readNode.(*CacheNode).SetCacheManager(cacheMgr)
+
+	rctx := context.WithValue(context.Background(), executionContextKey{}, execCtx)
+	out, err := readNode.Execute(rctx, &NodeInput{Content: userInput, Metadata: map[string]interface{}{}})
+	if err != nil {
+		t.Fatalf("read execute: %v", err)
+	}
+	if hit, _ := out.Metadata["cache_hit"].(bool); !hit {
+		keys := getMapKeys(cacheMgr.data)
+		t.Fatalf("expected cache hit with consistent keys, got miss; stored keys: %v", keys)
+	}
+
+	// 3) 命中输出应携带条目元数据中的真实模型与用量（计量链路）
+	if m, _ := out.Metadata["model"].(string); m != "stealth/ox-alpha" {
+		t.Errorf("hit output model = %q, want stealth/ox-alpha (from entry metadata)", m)
+	}
+	if tt := tokenRecordInt(out.Metadata["total_tokens"]); tt != 100 {
+		t.Errorf("hit output total_tokens = %d, want 100", tt)
 	}
 }
