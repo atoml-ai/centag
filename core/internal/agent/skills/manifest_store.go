@@ -9,7 +9,9 @@ import (
 )
 
 // ManifestStore skill manifest 持久化抽象（T7）。
-// personal：文件目录（data/agent-skills/）；team：system_config + DB（DBManifestStore）。
+// 所有发行版统一使用文件存储（<dataDir>/agent-skills/，FileManifestStore）；
+// 注释中曾规划的 DBManifestStore（team + system_config）从未实现，
+// 持久化已明确收口为文件存储（P1-C），自定义 skill 重启后由此重新载入。
 type ManifestStore interface {
 	// List 列出 store 内的自定义 manifest 文件名（不含扩展名）。
 	List() ([]string, error)
@@ -21,7 +23,7 @@ type ManifestStore interface {
 	Delete(name string) error
 }
 
-// FileManifestStore 文件版 skill manifest 存储（personal / minimal 发行版）。
+// FileManifestStore 文件版 skill manifest 存储（所有发行版统一的持久化方式）。
 // 目录：<dataDir>/agent-skills/
 type FileManifestStore struct {
 	dir string

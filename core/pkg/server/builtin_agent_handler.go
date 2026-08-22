@@ -99,7 +99,7 @@ func NewBuiltinAgentHandler(config *agent.AgentConfig, dataDir string, db *sql.D
 		store:               newAgentSessionStore(db, driver),
 		skillRegistry:       skillRegistry,
 		skillPluginRegistry: skillPluginRegistry,
-		manifestStore:       skills.NewFileManifestStore(filepath.Join(dataDir, "agent-skills")),
+		manifestStore:       skills.NewFileManifestStore(filepath.Join(dataDir, "agent-skills")), // 所有发行版统一的文件持久化（P1-C）
 		pipelineRegistry:    pipelineRegistry,
 		defaultBackend:      defaultBackend,
 		defaultModel:        defaultModel,
@@ -156,6 +156,24 @@ func builtinSkillManifestSources() []skills.ManifestSource {
 		}
 	}
 	return sources
+}
+
+// loadSkillPluginRegistry 加载内置 + 自定义（<dataDir>/agent-skills/）skill manifest。
+// 自定义 manifest 经 FileManifestStore 持久化，重启后由此重新载入（P1-C）。
+// 两者皆空时返回 nil（调用方回退硬编码构造器，保持 minimal 语义）。
+func loadSkillPluginRegistry(dataDir string) *skills.SkillPluginRegistry {
+	reg := loadBuiltinSkillPlugins()
+	if reg == nil {
+		reg = skills.NewSkillPluginRegistry()
+	}
+	store := skills.NewFileManifestStore(filepath.Join(dataDir, "agent-skills"))
+	if err := store.LoadToRegistry(reg); err != nil {
+		logger.Warnf("agent: 自定义 skill manifest 加载失败: %v", err)
+	}
+	if len(reg.ListAll()) == 0 {
+		return nil
+	}
+	return reg
 }
 
 // agentSessionVisible 会话归属校验：管理员可见全部；普通用户仅本人与共享

@@ -635,10 +635,11 @@ func New(cfg *config.Config) *Server {
 	baseURL := fmt.Sprintf("http://127.0.0.1:%d", cfg.Server.Port)
 	dbPath := resolveAgentDBPath(dataDir)
 
-	// skill 插件注册表：加载内置 manifest。centag-ops-router 仅由 manifest 生成
-	//（单一数据源，见 skill_pipeline.go），启动时幂等重建，与 skill CRUD 重建结果一致；
+	// skill 插件注册表：加载内置 manifest + 自定义 manifest（data/agent-skills/，
+	// 重启后重新载入）。centag-ops-router 仅由 manifest 生成（单一数据源，
+	// 见 skill_pipeline.go），启动时幂等重建，与 skill CRUD 重建结果一致；
 	// 静态 initdata 模板 agent-skill-router.yaml 已移除，不再作为路由真源。
-	skillPluginRegistry := loadBuiltinSkillPlugins()
+	skillPluginRegistry := loadSkillPluginRegistry(dataDir)
 	registeredSkillRouter := registerSkillRouterWithAdmission(skillPluginRegistry, pipelineRegistry, cfg.Proxy.DefaultBackendID, cfg.Proxy.DefaultModel, admissionChecker)
 	if registeredSkillRouter != "" {
 		logger.Infof("Skill router pipeline generated from manifests: %s", registeredSkillRouter)

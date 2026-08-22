@@ -1,9 +1,11 @@
 package server
 
 import (
+	"path/filepath"
 	"strings"
 	"testing"
 
+	"centag/core/internal/agent/skills"
 	"centag/core/pkg/pipeline"
 )
 
@@ -155,5 +157,50 @@ func TestSkillRouterTemplate_NotSeeded(t *testing.T) {
 	}
 	if found["agent-skill-status-check"] {
 		t.Error("skill manifest agent-skill-status-check should NOT be a pipeline template")
+	}
+}
+
+// TestLoadSkillPluginRegistry_CustomManifestsReloaded P1-C：自定义 skill
+// （data/agent-skills/）必须在重启后重新载入注册表；内置 + 自定义皆空时回退 nil。
+func TestLoadSkillPluginRegistry_CustomManifestsReloaded(t *testing.T) {
+	dataDir := t.TempDir()
+
+	// 空目录（且无 initdata）：返回 nil，保持 minimal 回退语义。
+	if reg := loadSkillPluginRegistry(dataDir); reg != nil {
+		t.Fatalf("empty stores must yield nil registry, got %d plugins", len(reg.ListAll()))
+	}
+
+	// 写入一个自定义 manifest → 重启载入后应出现在注册表且标记 custom。
+	customStore := skills.NewFileManifestStore(filepath.Join(dataDir, "agent-skills"))
+	manifest := `api_version: centag.agent-skill/v1alpha1
+implementation: custom.agent-skill-custom-restart-check
+name: 重启自检
+kind: agent.skill
+version: 1.0.0
+description: custom skill persisted across restarts
+permissions:
+  - agent.tool.read_config
+skill:
+  name: custom-restart-check
+  category: system
+  enabled: true
+  internal: false
+  tools:
+    - read_config
+  system_prompt: 你是自定义 skill
+`
+	if err := customStore.Save("custom-restart-check", []byte(manifest)); err != nil {
+		t.Fatalf("save custom manifest: %v", err)
+	}
+	reg := loadSkillPluginRegistry(dataDir)
+	if reg == nil {
+		t.Fatal("registry must load custom manifests from data dir")
+	}
+	p, ok := reg.Get("custom-restart-check")
+	if !ok {
+		t.Fatalf("custom skill missing after reload; have %v", reg.ListAll())
+	}
+	if p.Internal() {
+		t.Error("reloaded skill must be custom (not internal)")
 	}
 }
