@@ -78,6 +78,13 @@ func (m *Migrator) Migrate() error {
 
 	migratorInfof("[MIGRATE] 共 %d 个迁移版本，已执行 %d 个", len(migrations), len(executed))
 
+	// 版本冲突检测：两个迁移文件解析出相同版本号（如不同来源的 034_x 与
+	// 034_y）时，contains() 会把后者静默跳过、或触发 schema_migrations 的
+	// UNIQUE 冲突——必须在启动时直接报错暴露问题，而不是静默吞掉。
+	if err := checkDuplicateVersions(migrations); err != nil {
+		return err
+	}
+
 	// 版本倒挂检测：已执行版本的最大值若大于某个待执行版本，说明存在
 	// 后提交的低版本迁移（如 037 先于 035/036 发布）。这类迁移重跑时依赖
 	// ADD COLUMN 幂等跳过，这里仅给出提示，不阻断（防止部署回归）。
@@ -303,6 +310,18 @@ func (m *Migrator) loadMigrations() ([]Migration, error) {
 	})
 
 	return migrations, nil
+}
+
+// checkDuplicateVersions 报告迁移列表中解析出相同版本号的文件。
+func checkDuplicateVersions(migrations []Migration) error {
+	seen := make(map[string]string, len(migrations))
+	for _, migration := range migrations {
+		if prev, dup := seen[migration.Version]; dup {
+			return fmt.Errorf("duplicate migration version %s: %s and %s — renumber one of them", migration.Version, prev, migration.Name)
+		}
+		seen[migration.Version] = migration.Name
+	}
+	return nil
 }
 
 // parseMigrationFile 解析迁移文件
