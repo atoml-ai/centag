@@ -3548,17 +3548,24 @@ func (n *CacheNode) buildCacheKey(input *NodeInput) string {
 	return key
 }
 
-// simpleHash 生成简单哈希
+// simpleHash 生成内容哈希。
+// 旧实现取「前8+后8字符」拼接，任意两条首尾相同、中间不同的输入（如仅改
+// 问题中的数字）会哈希碰撞导致缓存误命中、返回错误答案——改为 FNV-1a 64
+// 位全内容散列；旧键随 TTL 自然过期，无兼容负担。
 func (n *CacheNode) simpleHash(content string) string {
 	if content == "" {
 		return "empty"
 	}
-	// 使用 []rune 按字符切片，避免切断多字节 UTF-8 字符
-	runes := []rune(content)
-	if len(runes) <= 16 {
-		return content
+	const (
+		fnvOffset64 uint64 = 14695981039346656037
+		fnvPrime64  uint64 = 1099511628211
+	)
+	h := fnvOffset64
+	for i := 0; i < len(content); i++ {
+		h ^= uint64(content[i])
+		h *= fnvPrime64
 	}
-	return string(runes[:8]) + string(runes[len(runes)-8:])
+	return strconv.FormatUint(h, 16)
 }
 
 // executeRead 执行读操作

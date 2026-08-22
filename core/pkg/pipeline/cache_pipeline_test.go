@@ -84,8 +84,8 @@ func (m *mockCacheManager) EvaluateCacheEntry(ctx context.Context, question, ans
 // TestCachePipelineWithHit 测试缓存命中时的流水线行为
 func TestCachePipelineWithHit(t *testing.T) {
 	// 创建模拟缓存管理器并预置缓存数据
-	// 注意：simpleHash 对于短内容（<=16字符）会返回整个内容
-	cacheKey := "GLM-4-flash:python的用途"
+	hasher := &CacheNode{}
+	cacheKey := "GLM-4-flash:" + hasher.simpleHash("python的用途")
 	cacheMgr := newMockCacheManager()
 	cacheMgr.data[cacheKey] = &cache.CacheEntry{
 		Key:      cacheKey,
@@ -259,7 +259,8 @@ func TestCacheWriteNode(t *testing.T) {
 	}
 
 	// 验证缓存中确实有数据（使用正确的缓存键）
-	cacheKey := "GLM-4-flash:python的用途"
+	hasher := &CacheNode{}
+	cacheKey := "GLM-4-flash:" + hasher.simpleHash("python的用途")
 	if _, exists := cacheMgr.data[cacheKey]; !exists {
 		t.Errorf("Expected cache entry '%s' to exist, but it doesn't. Keys: %v", cacheKey, getMapKeys(cacheMgr.data))
 	}
@@ -455,8 +456,8 @@ func TestCacheKeyTemplateResolution(t *testing.T) {
 		t.Errorf("Cache key template not resolved, got: %s", cacheKey)
 	}
 
-	// 验证包含模型名称（注意：simpleHash 对于短内容返回整个内容）
-	expectedKey := "GLM-4-flash:python的用途"
+	// 验证包含模型名称（hash 为全内容 FNV-1a 十六进制）
+	expectedKey := "GLM-4-flash:" + cn.simpleHash("python的用途")
 	if cacheKey != expectedKey {
 		t.Errorf("Expected cache key '%s', got: %s", expectedKey, cacheKey)
 	}
@@ -494,7 +495,7 @@ func TestCacheKeyTemplateWithMissingModel(t *testing.T) {
 	}
 
 	// 验证使用 default 作为模型名称
-	expectedKey := "default:python的用途"
+	expectedKey := "default:" + cn.simpleHash("python的用途")
 	if cacheKey != expectedKey {
 		t.Errorf("Expected cache key '%s', got: %s", expectedKey, cacheKey)
 	}
@@ -681,7 +682,8 @@ func TestCacheWriteMergesGeneratorMetadata(t *testing.T) {
 	// 键中的 model 只取调用方元数据（读侧无法得知 generator 模型，
 	// 写键若回退 generator 模型会导致读写键不一致、永不命中）；
 	// generator 的真实模型/用量进条目元数据供命中时计量。
-	entry, exists := cacheMgr.data["default:python的用途"]
+	hasher := &CacheNode{}
+	entry, exists := cacheMgr.data["default:"+hasher.simpleHash("python的用途")]
 	if !exists {
 		t.Fatalf("Expected cache entry to exist, keys: %v", getMapKeys(cacheMgr.data))
 	}
@@ -883,5 +885,31 @@ func TestCacheKeyConsistencyWithoutCallerModel(t *testing.T) {
 	}
 	if tt := tokenRecordInt(out.Metadata["total_tokens"]); tt != 100 {
 		t.Errorf("hit output total_tokens = %d, want 100", tt)
+	}
+}
+
+// TestSimpleHashNoPrefixSuffixCollision 回归测试：simpleHash 旧实现取
+// 「前8+后8字符」，首尾相同、中间不同的输入会碰撞导致缓存误命中
+// （部署边界测试 P-04 实测：仅改问题中的状态码即返回错误答案）。
+func TestSimpleHashNoPrefixSuffixCollision(t *testing.T) {
+	n := &CacheNode{}
+	pairs := [][2]string{
+		{"v034计量验证1787376415:HTTP 403状态码什么含义?",
+			"v034计量验证1787376415:HTTP 401状态码什么含义?"},
+		{"请解释一下什么是TCP协议以及它的应用场景",
+			"请解释一下什么是UDP协议以及它的应用场景"},
+	}
+	for _, p := range pairs {
+		h1, h2 := n.simpleHash(p[0]), n.simpleHash(p[1])
+		if h1 == h2 {
+			t.Errorf("hash collision:\n  %q\n  %q\n  both=%q", p[0], p[1], h1)
+		}
+	}
+	// 稳定性：同输入同哈希；空输入固定值
+	if n.simpleHash("abc") != n.simpleHash("abc") {
+		t.Error("same input should produce same hash")
+	}
+	if n.simpleHash("") != "empty" {
+		t.Error("empty content hash should be 'empty'")
 	}
 }
