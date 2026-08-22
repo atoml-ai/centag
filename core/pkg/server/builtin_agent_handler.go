@@ -13,6 +13,7 @@ import (
 	"centag/core/internal/agent"
 	"centag/core/internal/agent/skills"
 	"centag/core/internal/agent/tools"
+	"centag/core/internal/auth"
 	"centag/core/pkg/bootstrap"
 	"centag/core/pkg/logger"
 	"centag/core/pkg/pipeline"
@@ -28,6 +29,7 @@ type BuiltinAgentHandler struct {
 	config              *agent.AgentConfig
 	dataDir             string
 	db                  *sql.DB
+	store               *agentSessionStore
 	skillRegistry       *skills.SkillRegistry
 	skillPluginRegistry *skills.SkillPluginRegistry
 	manifestStore       *skills.FileManifestStore
@@ -38,10 +40,8 @@ type BuiltinAgentHandler struct {
 	provider            AgentDataProvider
 	engine              *agent.RuntimeEngine
 	baseURL             string
-	sessions            map[string]*AgentSession
-	sessionsMu          sync.RWMutex
-	messages            map[string][]*AgentMessage // sessionID -> messages
-	messagesMu          sync.RWMutex
+	cores               map[string]*agentcore.Agent // 运行时 Agent 句柄（不可序列化，按会话缓存）
+	coresMu             sync.Mutex
 }
 
 // AgentSession Agent会话
@@ -56,7 +56,6 @@ type AgentSession struct {
 	Status    string    `json:"status"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
-	agentCore *agentcore.Agent
 }
 
 // AgentMessage Agent消息
@@ -71,7 +70,7 @@ type AgentMessage struct {
 }
 
 // NewBuiltinAgentHandler 创建内置Agent处理器
-func NewBuiltinAgentHandler(config *agent.AgentConfig, dataDir string, db *sql.DB, provider AgentDataProvider, baseURL, dbPath string, skillPluginRegistry *skills.SkillPluginRegistry, pipelineRegistry *pipeline.PipelineRegistry, defaultBackend, defaultModel string) *BuiltinAgentHandler {
+func NewBuiltinAgentHandler(config *agent.AgentConfig, dataDir string, db *sql.DB, driver string, provider AgentDataProvider, baseURL, dbPath string, skillPluginRegistry *skills.SkillPluginRegistry, pipelineRegistry *pipeline.PipelineRegistry, defaultBackend, defaultModel string) *BuiltinAgentHandler {
 	// 创建Skill注册表
 	skillRegistry := skills.NewSkillRegistry()
 
@@ -97,6 +96,7 @@ func NewBuiltinAgentHandler(config *agent.AgentConfig, dataDir string, db *sql.D
 		config:              config,
 		dataDir:             dataDir,
 		db:                  db,
+		store:               newAgentSessionStore(db, driver),
 		skillRegistry:       skillRegistry,
 		skillPluginRegistry: skillPluginRegistry,
 		manifestStore:       skills.NewFileManifestStore(filepath.Join(dataDir, "agent-skills")),
@@ -107,8 +107,7 @@ func NewBuiltinAgentHandler(config *agent.AgentConfig, dataDir string, db *sql.D
 		provider:            provider,
 		engine:              engine,
 		baseURL:             baseURL,
-		sessions:            make(map[string]*AgentSession),
-		messages:            make(map[string][]*AgentMessage),
+		cores:               make(map[string]*agentcore.Agent),
 	}
 }
 
@@ -159,30 +158,50 @@ func builtinSkillManifestSources() []skills.ManifestSource {
 	return sources
 }
 
-// CreateSession 创建会话
+// agentSessionVisible 会话归属校验：管理员可见全部；普通用户仅本人与共享
+// （user_id=0，system 预留）会话；无认证上下文一律拒绝。与 conversation_handler
+// 的归属规则保持一致。不可见时按 404 处理，避免会话存在性泄露。
+func agentSessionVisible(c *gin.Context, sess *AgentSession) bool {
+	if sess == nil {
+		return false
+	}
+	if auth.IsAdmin(c) {
+		return true
+	}
+	viewer, err := auth.GetUserID(c)
+	if err != nil || viewer <= 0 {
+		return false
+	}
+	return sess.UserID == viewer || sess.UserID == 0
+}
+
+// CreateSession 创建会话（归属取自认证上下文）
 func (h *BuiltinAgentHandler) CreateSession(c *gin.Context) {
 	var req struct {
 		Skill     string `json:"skill"`
 		BackendID string `json:"backend_id"`
 		Model     string `json:"model"`
 	}
-	
+
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	
+
 	// 检查skill是否允许
 	if req.Skill != "" && !h.skillRegistry.IsSkillAllowed(req.Skill, h.config.Skills.InternalOnly) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "skill not allowed"})
 		return
 	}
-	
+
+	userID, _ := auth.GetUserID(c)
+	tenantID := auth.GetTenantID(c)
+
 	// 创建会话
 	session := &AgentSession{
 		ID:        uuid.New().String(),
-		UserID:    0,
-		TenantID:  "",
+		UserID:    userID,
+		TenantID:  tenantID,
 		Title:     "New Session",
 		Skill:     req.Skill,
 		BackendID: req.BackendID,
@@ -191,107 +210,132 @@ func (h *BuiltinAgentHandler) CreateSession(c *gin.Context) {
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
 	}
-	
-	h.sessionsMu.Lock()
-	h.sessions[session.ID] = session
-	h.sessionsMu.Unlock()
-	
+
+	if h.store == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "agent session storage unavailable"})
+		return
+	}
+	if err := h.store.Create(c.Request.Context(), session); err != nil {
+		logger.Warnf("[builtin-agent] create session failed: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "create session failed"})
+		return
+	}
+
 	c.JSON(http.StatusOK, session)
 }
 
-// ListSessions 获取会话列表
+// ListSessions 获取当前用户可见的会话列表
 func (h *BuiltinAgentHandler) ListSessions(c *gin.Context) {
-	h.sessionsMu.RLock()
-	defer h.sessionsMu.RUnlock()
-	
-	var sessions []*AgentSession
-	for _, session := range h.sessions {
-		sessions = append(sessions, session)
+	viewer, _ := auth.GetUserID(c)
+
+	sessions, err := h.store.List(c.Request.Context(), viewer, auth.IsAdmin(c))
+	if err != nil {
+		logger.Warnf("[builtin-agent] list sessions failed: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "list sessions failed"})
+		return
 	}
-	
+
 	c.JSON(http.StatusOK, gin.H{"sessions": sessions})
 }
 
-// GetSession 获取会话详情
+// GetSession 获取会话详情（仅归属者/管理员可见）
 func (h *BuiltinAgentHandler) GetSession(c *gin.Context) {
 	sessionID := c.Param("id")
-	
-	h.sessionsMu.RLock()
-	session, ok := h.sessions[sessionID]
-	h.sessionsMu.RUnlock()
-	
-	if !ok {
+
+	sess, err := h.store.Get(c.Request.Context(), sessionID)
+	if err != nil {
+		logger.Warnf("[builtin-agent] get session failed: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "get session failed"})
+		return
+	}
+	if !agentSessionVisible(c, sess) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "session not found"})
 		return
 	}
-	
-	c.JSON(http.StatusOK, session)
+
+	c.JSON(http.StatusOK, sess)
 }
 
-// DeleteSession 删除会话
+// DeleteSession 删除会话（仅归属者/管理员可操作）
 func (h *BuiltinAgentHandler) DeleteSession(c *gin.Context) {
 	sessionID := c.Param("id")
-	
-	h.sessionsMu.Lock()
-	defer h.sessionsMu.Unlock()
-	
-	if _, ok := h.sessions[sessionID]; !ok {
+
+	sess, err := h.store.Get(c.Request.Context(), sessionID)
+	if err != nil {
+		logger.Warnf("[builtin-agent] get session failed: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "get session failed"})
+		return
+	}
+	if !agentSessionVisible(c, sess) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "session not found"})
 		return
 	}
-	
-	delete(h.sessions, sessionID)
+
+	if err := h.store.Delete(c.Request.Context(), sessionID); err != nil {
+		logger.Warnf("[builtin-agent] delete session failed: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "delete session failed"})
+		return
+	}
+	h.dropCore(sessionID)
 	c.JSON(http.StatusOK, gin.H{"message": "session deleted"})
 }
 
-// SendMessage 发送消息
+// dropCore 释放会话的运行时 Agent 句柄。
+func (h *BuiltinAgentHandler) dropCore(sessionID string) {
+	h.coresMu.Lock()
+	delete(h.cores, sessionID)
+	h.coresMu.Unlock()
+}
+
+// SendMessage 发送消息（仅归属者/管理员可操作）
 func (h *BuiltinAgentHandler) SendMessage(c *gin.Context) {
 	sessionID := c.Param("id")
-	
+
+	sess, err := h.store.Get(c.Request.Context(), sessionID)
+	if err != nil {
+		logger.Warnf("[builtin-agent] get session failed: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "get session failed"})
+		return
+	}
+	if !agentSessionVisible(c, sess) {
+		c.JSON(http.StatusNotFound, gin.H{"error": "session not found"})
+		return
+	}
+
 	var req struct {
 		Content   string `json:"content"`
 		Skill     string `json:"skill"`
 		BackendID string `json:"backend_id"`
 		Model     string `json:"model"`
 	}
-	
+
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	
-	h.sessionsMu.RLock()
-	session, ok := h.sessions[sessionID]
-	h.sessionsMu.RUnlock()
-	
-	if !ok {
-		c.JSON(http.StatusNotFound, gin.H{"error": "session not found"})
-		return
-	}
-	
+
 	// 允许请求更新会话的后端/模型
 	if req.BackendID != "" {
-		h.sessionsMu.Lock()
-		session.BackendID = req.BackendID
-		h.sessionsMu.Unlock()
+		sess.BackendID = req.BackendID
 	}
 	if req.Model != "" {
-		h.sessionsMu.Lock()
-		session.Model = req.Model
-		h.sessionsMu.Unlock()
+		sess.Model = req.Model
 	}
-	
+	if err := h.store.UpdateRuntimeFields(c.Request.Context(), sessionID, sess.BackendID, sess.Model); err != nil {
+		logger.Warnf("[builtin-agent] update session failed: %v", err)
+	}
+
 	// 检查skill是否允许
 	skillName := req.Skill
 	if skillName == "" {
-		skillName = session.Skill
+		skillName = sess.Skill
 	}
-	
+
 	if skillName != "" && !h.skillRegistry.IsSkillAllowed(skillName, h.config.Skills.InternalOnly) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "skill not allowed"})
 		return
 	}
-	
+
 	// 创建用户消息
 	userMessage := &AgentMessage{
 		ID:        uuid.New().String(),
@@ -302,13 +346,12 @@ func (h *BuiltinAgentHandler) SendMessage(c *gin.Context) {
 		CreatedAt: time.Now(),
 	}
 
-	// 保存消息到内存（重启即失效；后续接入 DB）
-	h.messagesMu.Lock()
-	h.messages[sessionID] = append(h.messages[sessionID], userMessage)
-	h.messagesMu.Unlock()
+	if err := h.store.AppendMessage(c.Request.Context(), userMessage); err != nil {
+		logger.Warnf("[builtin-agent] save message failed: %v", err)
+	}
 
 	// 执行真实 agent（多轮推理 + 工具调用）
-	reply, err := h.runAgent(c, session, skillName, req.Content)
+	reply, err := h.runAgent(c, sess, skillName, req.Content)
 	if err != nil {
 		logger.Warnf("[builtin-agent] run failed: %v", err)
 		reply = fmt.Sprintf("Agent 执行失败: %v\n\n用户问题: %s", err, req.Content)
@@ -324,17 +367,9 @@ func (h *BuiltinAgentHandler) SendMessage(c *gin.Context) {
 		CreatedAt: time.Now(),
 	}
 
-	// 保存 assistant 消息
-	h.messagesMu.Lock()
-	h.messages[sessionID] = append(h.messages[sessionID], agentMessage)
-	h.messagesMu.Unlock()
-
-	// 更新会话时间
-	h.sessionsMu.Lock()
-	if sess, ok := h.sessions[sessionID]; ok {
-		sess.UpdatedAt = time.Now()
+	if err := h.store.AppendMessage(c.Request.Context(), agentMessage); err != nil {
+		logger.Warnf("[builtin-agent] save message failed: %v", err)
 	}
-	h.sessionsMu.Unlock()
 
 	c.JSON(http.StatusOK, agentMessage)
 }
@@ -364,24 +399,27 @@ func (h *BuiltinAgentHandler) runAgent(c *gin.Context, session *AgentSession, sk
 	// 每次刷新 token（refresh 后 JWT 会轮换）
 	h.engine.RefreshToken(token)
 
-	// 首次会话：创建 agentcore.Agent 并注入 skill 上下文
-	if session.agentCore == nil {
+	// 首次会话：创建 agentcore.Agent 并注入 skill 上下文（运行时句柄按会话缓存）
+	h.coresMu.Lock()
+	ag := h.cores[session.ID]
+	if ag == nil {
 		systemPrompt := h.buildSystemPrompt(skillName)
-		ag, err := h.engine.NewSession(systemPrompt, h.skillTools(skillName))
+		var err error
+		ag, err = h.engine.NewSession(systemPrompt, h.skillTools(skillName))
 		if err != nil {
+			h.coresMu.Unlock()
 			return "", err
 		}
-		h.sessionsMu.Lock()
-		session.agentCore = ag
-		h.sessionsMu.Unlock()
+		h.cores[session.ID] = ag
 	}
+	h.coresMu.Unlock()
 
 	// 设置模型（若会话指定）
 	if session.Model != "" {
-		session.agentCore.SetModel(session.Model)
+		ag.SetModel(session.Model)
 	}
 
-	return h.engine.RunPrompt(c.Request.Context(), session.agentCore, userInput, func(format string, args ...any) {
+	return h.engine.RunPrompt(c.Request.Context(), ag, userInput, func(format string, args ...any) {
 		logger.Infof("[builtin-agent] "+format, args...)
 	})
 }
@@ -464,26 +502,32 @@ func defaultAgentSystemPrompt() string {
 5. 如果工具返回错误，报告错误信息并给出建议。`
 }
 
-// ListMessages 获取会话消息历史
+// ListMessages 获取会话消息历史（仅归属者/管理员可见）
 func (h *BuiltinAgentHandler) ListMessages(c *gin.Context) {
 	sessionID := c.Param("id")
 
-	h.sessionsMu.RLock()
-	_, ok := h.sessions[sessionID]
-	h.sessionsMu.RUnlock()
+	sess, err := h.store.Get(c.Request.Context(), sessionID)
+	if err != nil {
+		logger.Warnf("[builtin-agent] get session failed: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "get session failed"})
+		return
+	}
+	if !agentSessionVisible(c, sess) {
+		c.JSON(http.StatusNotFound, gin.H{"error": "session not found"})
+		return
+	}
 
+	messages, ok, err := h.store.ListMessages(c.Request.Context(), sessionID)
+	if err != nil {
+		logger.Warnf("[builtin-agent] list messages failed: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "list messages failed"})
+		return
+	}
 	if !ok {
 		c.JSON(http.StatusNotFound, gin.H{"error": "session not found"})
 		return
 	}
 
-	h.messagesMu.RLock()
-	messages := h.messages[sessionID]
-	h.messagesMu.RUnlock()
-
-	if messages == nil {
-		messages = []*AgentMessage{}
-	}
 	c.JSON(http.StatusOK, gin.H{"messages": messages})
 }
 
@@ -539,46 +583,52 @@ func (h *BuiltinAgentHandler) ListSkills(c *gin.Context) {
 // ConfirmTool 确认工具执行
 func (h *BuiltinAgentHandler) ConfirmTool(c *gin.Context) {
 	sessionID := c.Param("id")
-	
+
 	var req struct {
 		Confirm bool   `json:"confirm"`
 		ToolID  string `json:"tool_id"`
 	}
-	
+
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	
-	h.sessionsMu.RLock()
-	_, ok := h.sessions[sessionID]
-	h.sessionsMu.RUnlock()
-	
-	if !ok {
+
+	sess, err := h.store.Get(c.Request.Context(), sessionID)
+	if err != nil {
+		logger.Warnf("[builtin-agent] get session failed: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "get session failed"})
+		return
+	}
+	if !agentSessionVisible(c, sess) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "session not found"})
 		return
 	}
-	
+
 	// TODO: 处理工具确认逻辑
-	
+
 	c.JSON(http.StatusOK, gin.H{"message": "tool confirmed"})
 }
 
 // CancelExecution 取消执行
 func (h *BuiltinAgentHandler) CancelExecution(c *gin.Context) {
 	sessionID := c.Param("id")
-	
-	h.sessionsMu.RLock()
-	session, ok := h.sessions[sessionID]
-	h.sessionsMu.RUnlock()
-	
-	if !ok {
+
+	sess, err := h.store.Get(c.Request.Context(), sessionID)
+	if err != nil {
+		logger.Warnf("[builtin-agent] get session failed: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "get session failed"})
+		return
+	}
+	if !agentSessionVisible(c, sess) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "session not found"})
 		return
 	}
-	
-	session.Status = "cancelled"
-	session.UpdatedAt = time.Now()
-	
+
+	if err := h.store.SetStatus(c.Request.Context(), sessionID, "cancelled"); err != nil {
+		logger.Warnf("[builtin-agent] cancel session failed: %v", err)
+	}
+	h.dropCore(sessionID)
+
 	c.JSON(http.StatusOK, gin.H{"message": "execution cancelled"})
 }

@@ -646,7 +646,7 @@ func New(cfg *config.Config) *Server {
 		}
 	}
 
-	builtinAgentHandler := NewBuiltinAgentHandler(builtinAgentConfig, dataDir, database.Get().GetDB(), builtinAgentProvider, baseURL, dbPath, skillPluginRegistry, pipelineRegistry, cfg.Proxy.DefaultBackendID, cfg.Proxy.DefaultModel)
+	builtinAgentHandler := NewBuiltinAgentHandler(builtinAgentConfig, dataDir, database.Get().GetDB(), database.Get().DriverName(), builtinAgentProvider, baseURL, dbPath, skillPluginRegistry, pipelineRegistry, cfg.Proxy.DefaultBackendID, cfg.Proxy.DefaultModel)
 
 	// 创建 MCP 代理处理器
 	mcpProxyHandler := NewMCPProxyHandler()
@@ -1816,24 +1816,25 @@ func (s *Server) setupRoutes() {
 		}
 	}
 
-	// 内置 Agent（需要 JWT 认证）
+	// 内置 Agent（需要 JWT 认证；team 发行版整体收紧为管理员，/health 保留给已认证用户）
 	if s.builtinAgentHandler != nil {
 		builtinAgent := v1Protected.Group("/builtin-agent")
+		agentAdmin := s.teamAdminWriteOnly()
 		{
 			builtinAgent.GET("/health", s.builtinAgentHandler.Health)
-			builtinAgent.POST("/sessions", s.builtinAgentHandler.CreateSession)
-			builtinAgent.GET("/sessions", s.builtinAgentHandler.ListSessions)
-			builtinAgent.GET("/sessions/:id", s.builtinAgentHandler.GetSession)
-			builtinAgent.DELETE("/sessions/:id", s.builtinAgentHandler.DeleteSession)
-			builtinAgent.POST("/sessions/:id/messages", s.builtinAgentHandler.SendMessage)
-			builtinAgent.GET("/sessions/:id/messages", s.builtinAgentHandler.ListMessages)
-			builtinAgent.GET("/skills", s.builtinAgentHandler.ListSkills)
-			builtinAgent.POST("/skills", s.builtinAgentHandler.CreateSkill)
-			builtinAgent.PUT("/skills/:name", s.builtinAgentHandler.UpdateSkill)
-			builtinAgent.DELETE("/skills/:name", s.builtinAgentHandler.DeleteSkill)
-			builtinAgent.POST("/skills/:name/clone", s.builtinAgentHandler.CloneSkill)
-			builtinAgent.POST("/sessions/:id/confirm", s.builtinAgentHandler.ConfirmTool)
-			builtinAgent.POST("/sessions/:id/cancel", s.builtinAgentHandler.CancelExecution)
+			builtinAgent.POST("/sessions", agentAdmin, s.builtinAgentHandler.CreateSession)
+			builtinAgent.GET("/sessions", agentAdmin, s.builtinAgentHandler.ListSessions)
+			builtinAgent.GET("/sessions/:id", agentAdmin, s.builtinAgentHandler.GetSession)
+			builtinAgent.DELETE("/sessions/:id", agentAdmin, s.builtinAgentHandler.DeleteSession)
+			builtinAgent.POST("/sessions/:id/messages", agentAdmin, s.builtinAgentHandler.SendMessage)
+			builtinAgent.GET("/sessions/:id/messages", agentAdmin, s.builtinAgentHandler.ListMessages)
+			builtinAgent.GET("/skills", agentAdmin, s.builtinAgentHandler.ListSkills)
+			builtinAgent.POST("/skills", agentAdmin, s.builtinAgentHandler.CreateSkill)
+			builtinAgent.PUT("/skills/:name", agentAdmin, s.builtinAgentHandler.UpdateSkill)
+			builtinAgent.DELETE("/skills/:name", agentAdmin, s.builtinAgentHandler.DeleteSkill)
+			builtinAgent.POST("/skills/:name/clone", agentAdmin, s.builtinAgentHandler.CloneSkill)
+			builtinAgent.POST("/sessions/:id/confirm", agentAdmin, s.builtinAgentHandler.ConfirmTool)
+			builtinAgent.POST("/sessions/:id/cancel", agentAdmin, s.builtinAgentHandler.CancelExecution)
 		}
 	}
 
