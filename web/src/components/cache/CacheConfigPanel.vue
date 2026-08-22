@@ -104,6 +104,18 @@ import { getConfig, saveConfig, getBackends } from '@/api'
 const emit = defineEmits<{ saved: [backend: string] }>()
 const { t } = useI18n()
 
+interface EmbeddingModel {
+  id: string
+  name: string
+  type: string
+}
+
+interface EmbeddingBackend {
+  id: string
+  name: string
+  models: EmbeddingModel[]
+}
+
 const loading = ref(false)
 const saving = ref(false)
 const fullConfig = ref<any>({})
@@ -127,8 +139,8 @@ const form = reactive({
   }
 })
 
-const embeddingBackends = ref<Array<{ id: string; name: string; models: Array<{ id: string; name: string; type: string }> }>>([])
-const embeddingModels = ref<Array<{ id: string; name: string }>>([])
+const embeddingBackends = ref<EmbeddingBackend[]>([])
+const embeddingModels = ref<EmbeddingModel[]>([])
 
 async function loadEmbeddingBackends() {
   try {
