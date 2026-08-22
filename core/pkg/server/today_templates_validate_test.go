@@ -12,7 +12,9 @@ func TestTodayTemplatesValidateWithProjectRoot(t *testing.T) {
 	t.Setenv("PROJECT_ROOT", mustFindProjectRoot(t))
 
 	// Builtin initdata only; business templates (e.g. security-mode) live outside this repo.
-	targets := []string{"transparent", "router-pipeline", "cache-pipeline", "centag-ops-router"}
+	// centag-ops-router is intentionally absent: it is generated from skill manifests
+	// (single source of truth), not seeded from an initdata template.
+	targets := []string{"transparent", "router-pipeline", "cache-pipeline"}
 	found := make(map[string]bool)
 
 	for _, tmpl := range resolvePipelineTemplates() {

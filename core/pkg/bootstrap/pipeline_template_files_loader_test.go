@@ -14,7 +14,8 @@ func writeFile(t *testing.T, dir, name, content string) {
 }
 
 // T15：skill manifest（kind: agent.skill）不应被当作流水线模板加载；
-// agent-skill-router.yaml（schema centag.pipeline）照常加载。
+// 普通模板照常加载；centag-ops-router（路由真源已收口为 skill manifest 生成）
+// 即使残留同名模板也被跳过。
 func TestLoadYAMLFilesFromDir_SkipsSkillManifests(t *testing.T) {
 	dir := t.TempDir()
 
@@ -26,7 +27,7 @@ name: status-check
 	writeFile(t, dir, "agent-skill-router.yaml", `
 version: '1.0'
 schema_version: centag.pipeline/v1alpha1
-id: agent-skill-router
+id: centag-ops-router
 name: Agent Skill Router
 nodes:
 - id: skill-classifier
@@ -54,9 +55,9 @@ nodes: []
 		t.Error("skill manifest should not be loaded as pipeline template")
 	}
 
-	// router 模板与普通模板应加载
-	if _, exists := tmplMap["agent-skill-router"]; !exists {
-		t.Error("agent-skill-router pipeline template should be loaded")
+	// 路由真源单一化：centag-ops-router 一律跳过；普通模板应加载
+	if _, exists := tmplMap["centag-ops-router"]; exists {
+		t.Error("centag-ops-router template must be skipped (router is generated from skill manifests)")
 	}
 	if _, exists := tmplMap["transparent-proxy"]; !exists {
 		t.Error("transparent-proxy pipeline template should be loaded")

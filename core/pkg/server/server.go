@@ -635,15 +635,13 @@ func New(cfg *config.Config) *Server {
 	baseURL := fmt.Sprintf("http://127.0.0.1:%d", cfg.Server.Port)
 	dbPath := resolveAgentDBPath(dataDir)
 
-	// skill 插件注册表：加载内置 manifest；centag-ops-router 由 initdata 模板
-	// agent-skill-router.yaml 在首次启动时导入注册（见上方模板 seed）。
-	// 仅当模板未注册（升级场景/模板缺失）时，用代码从 manifest 兜底生成。
+	// skill 插件注册表：加载内置 manifest。centag-ops-router 仅由 manifest 生成
+	//（单一数据源，见 skill_pipeline.go），启动时幂等重建，与 skill CRUD 重建结果一致；
+	// 静态 initdata 模板 agent-skill-router.yaml 已移除，不再作为路由真源。
 	skillPluginRegistry := loadBuiltinSkillPlugins()
-	if pipelineRegistry.Get(centagOpsRouterPipelineID) == nil {
-		registeredSkillRouter := registerSkillRouterWithAdmission(skillPluginRegistry, pipelineRegistry, cfg.Proxy.DefaultBackendID, cfg.Proxy.DefaultModel, admissionChecker)
-		if registeredSkillRouter != "" {
-			logger.Infof("Skill router pipeline fallback-registered: %s", registeredSkillRouter)
-		}
+	registeredSkillRouter := registerSkillRouterWithAdmission(skillPluginRegistry, pipelineRegistry, cfg.Proxy.DefaultBackendID, cfg.Proxy.DefaultModel, admissionChecker)
+	if registeredSkillRouter != "" {
+		logger.Infof("Skill router pipeline generated from manifests: %s", registeredSkillRouter)
 	}
 
 	builtinAgentHandler := NewBuiltinAgentHandler(builtinAgentConfig, dataDir, database.Get().GetDB(), database.Get().DriverName(), builtinAgentProvider, baseURL, dbPath, skillPluginRegistry, pipelineRegistry, cfg.Proxy.DefaultBackendID, cfg.Proxy.DefaultModel)

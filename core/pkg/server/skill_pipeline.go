@@ -33,7 +33,8 @@ func skillBranchNodeID(skillName string) string {
 
 // BuildSkillRouterPipeline 由全部启用 skill 插件生成单一路由管线（centag-ops-router）。
 //
-// 结构（技术方案「单一路由 + skill 分支」模型，对齐 config/initdata agent-skill-router.yaml）：
+// 结构（技术方案「单一路由 + skill 分支」模型；路由真源 = skill manifest，
+// 启动与 skill CRUD 均由此函数重建，静态模板已移除）：
 //   - skill-classifier：router 节点，routing_strategy=llm_classify，
 //     routes = {skill 注册名 → <skill>-gen}，default_route=chat-gen；
 //     请求 metadata 带 forced_route（显式指定 skill，X-Pipeline-ID 后缀）时跳过 LLM 分类强制路由。

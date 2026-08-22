@@ -139,59 +139,21 @@ func TestRegisterSkillRouter_Nil(t *testing.T) {
 	}
 }
 
-// TestSkillRouterTemplate_Loaded 验证 initdata 初始化模板 agent-skill-router.yaml：
-// 1) 作为 pipeline 模板被加载（首次启动导入即用）；2) 可解析为有效 pipeline；
-// 3) skill manifest 不被当作 pipeline 模板；4) 结构与代码生成的 router 一致（同源）。
-func TestSkillRouterTemplate_Loaded(t *testing.T) {
+// TestSkillRouterTemplate_NotSeeded 验证路由真源单一化：
+// 1) initdata 不再提供 centag-ops-router 流水线模板（已删除 agent-skill-router.yaml）；
+// 2) skill manifest 仍不被当作 pipeline 模板；
+// 3) 路由管线仅由代码从 manifest 生成（TestBuildSkillRouterPipeline 覆盖结构）。
+func TestSkillRouterTemplate_NotSeeded(t *testing.T) {
 	t.Setenv("PROJECT_ROOT", mustFindProjectRoot(t))
 
-	var tmpl *pipeline.PatternTemplate
 	found := map[string]bool{}
 	for _, tpl := range resolvePipelineTemplatesWithEdition("team") {
 		found[tpl.ID] = true
-		if tpl.ID == centagOpsRouterPipelineID {
-			c := tpl
-			tmpl = &c
-		}
 	}
-	if tmpl == nil {
-		t.Fatalf("initdata template %q not loaded", centagOpsRouterPipelineID)
+	if found[centagOpsRouterPipelineID] {
+		t.Errorf("initdata must NOT provide a %s template — router is generated from skill manifests only", centagOpsRouterPipelineID)
 	}
 	if found["agent-skill-status-check"] {
 		t.Error("skill manifest agent-skill-status-check should NOT be a pipeline template")
-	}
-
-	pp := pipeline.CreatePipelineFromTemplate(*tmpl, nil)
-	if pp == nil {
-		t.Fatalf("CreatePipelineFromTemplate(%q) = nil", centagOpsRouterPipelineID)
-	}
-	if err := pp.Validate(); err != nil {
-		t.Fatalf("template pipeline Validate: %v", err)
-	}
-	// classifier + 5 内置分支 + chat-gen
-	if len(pp.Nodes) != 7 {
-		t.Errorf("template nodes = %d, want 7", len(pp.Nodes))
-	}
-	var classifier *pipeline.PipelineNodeConfig
-	for i := range pp.Nodes {
-		if pp.Nodes[i].ID == agentSkillRouterClassifierID {
-			classifier = &pp.Nodes[i]
-		}
-	}
-	if classifier == nil {
-		t.Fatal("classifier node missing in template")
-	}
-	if s, _ := classifier.Config.CustomConfig["routing_strategy"].(string); s != "llm_classify" {
-		t.Errorf("template classifier routing_strategy = %q, want llm_classify", s)
-	}
-
-	// 与代码生成版本结构一致（classifier routes 与分支集合相同）
-	reg := loadBuiltinSkillPlugins()
-	codePP, err := BuildSkillRouterPipeline(reg.ListAll(), "b", "m")
-	if err != nil {
-		t.Fatalf("BuildSkillRouterPipeline: %v", err)
-	}
-	if len(pp.Nodes) != len(codePP.Nodes) {
-		t.Errorf("template nodes %d != code-gen nodes %d", len(pp.Nodes), len(codePP.Nodes))
 	}
 }

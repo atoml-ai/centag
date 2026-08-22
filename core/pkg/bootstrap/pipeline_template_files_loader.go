@@ -143,7 +143,6 @@ func loadYAMLFilesFromDir(dirPath string, tmplMap map[string]InitialPipelineTemp
 			continue
 		}
 		// skill manifest（kind: agent.skill）由 SkillPluginRegistry 加载，不视为流水线模板。
-		// agent-skill-router.yaml 是 pipeline 模板（schema centag.pipeline），照常加载。
 		if bytes.Contains(data, []byte("kind: agent.skill")) {
 			continue
 		}
@@ -155,6 +154,11 @@ func loadYAMLFilesFromDir(dirPath string, tmplMap map[string]InitialPipelineTemp
 		}
 		if strings.TrimSpace(tmpl.ID) == "" {
 			logger.Warnf("bootstrap: 流水线模板缺少 id，跳过文件 %s", fullPath)
+			continue
+		}
+		// centag-ops-router 仅由 skill manifest 生成（单一数据源），即使 initdata/
+		// profile 目录残留同名模板也一律跳过，防止旧路由真源回流。
+		if strings.TrimSpace(tmpl.ID) == "centag-ops-router" {
 			continue
 		}
 		tmplMap[tmpl.ID] = tmpl
