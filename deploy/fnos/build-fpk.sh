@@ -37,6 +37,13 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
+# secrets 文件路径：默认本仓 config/secrets/.env；
+# 上游打包脚本（如 centag-pro team 打包）可通过 CENTAG_SECRETS_FILE 覆盖，
+# 使商业密钥留在私有仓而不落入开源仓目录。
+secrets_file() {
+    printf '%s' "${CENTAG_SECRETS_FILE:-${REPO_ROOT}/config/secrets/.env}"
+}
+
 # shellcheck source=scripts/lib/centag-layout.sh
 source "${REPO_ROOT}/scripts/lib/centag-layout.sh"
 centag_layout_init
@@ -133,7 +140,7 @@ edition_build_tags() {
 }
 
 resolve_admin_credentials() {
-  local secrets="${REPO_ROOT}/config/secrets/.env"
+  local secrets; secrets="$(secrets_file)"
   if [ -n "${ADMIN_PASSWORD_CLI}" ]; then
     ADMIN_PASSWORD="${ADMIN_PASSWORD_CLI}"
   elif [ -n "${PACKAGE_ADMIN_PASSWORD:-}" ]; then
@@ -198,7 +205,7 @@ resolve_admin_credentials() {
 
 # 商业许可证（team 等 SKU 运行时校验 CENTAG_LICENSE_KEY）
 resolve_license_key() {
-  local secrets="${REPO_ROOT}/config/secrets/.env"
+  local secrets; secrets="$(secrets_file)"
   LICENSE_KEY=""
   if [ -n "${LICENSE_KEY_CLI}" ]; then
     LICENSE_KEY="${LICENSE_KEY_CLI}"
@@ -208,13 +215,14 @@ resolve_license_key() {
     LICENSE_KEY="$(read_env_key "$secrets" "CENTAG_LICENSE_KEY" 2>/dev/null || true)"
   fi
   if [ -n "${LICENSE_KEY}" ]; then
-    echo "[OK] 许可证已解析（--license-key / PACKAGE_LICENSE_KEY / secrets CENTAG_LICENSE_KEY）"
+    echo "[OK] 许可证已解析（PACKAGE_LICENSE_KEY / secrets CENTAG_LICENSE_KEY）"
   else
     echo "[WARN] 未解析到 CENTAG_LICENSE_KEY；team 运行时商业门禁将不启用"
     if [ "$EDITION" = "team" ] && [ "${CENTAG_ALLOW_NO_LICENSE:-0}" != "1" ]; then
       echo "[ERROR] team 发行版必须提供 CENTAG_LICENSE_KEY。"
       echo "        缺少许可证时 team 商业门禁不启用，/api/v1/admin/* 等路由不会注册（表现为 404）。"
-      echo "        请通过 --license-key / PACKAGE_LICENSE_KEY / config/secrets/.env 提供；"
+      echo "        请通过 PACKAGE_LICENSE_KEY 环境变量、或 secrets 文件（默认 ${REPO_ROOT}/config/secrets/.env，"
+      echo "        可用 CENTAG_SECRETS_FILE 覆盖路径）提供；"
       echo "        仅测试用的无许可证构建可设置 CENTAG_ALLOW_NO_LICENSE=1。"
       exit 1
     fi
