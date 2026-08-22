@@ -201,45 +201,6 @@ func BenchmarkConfigCompatLayer_ConvertPipelineConfig(b *testing.B) {
 	}
 }
 
-func BenchmarkKeywordStrategy_Classify(b *testing.B) {
-	strategy := NewKeywordStrategy(map[string]string{
-		"代码":   "code-generator",
-		"翻译":   "translate-gen",
-		"摘要":   "summary-gen",
-		"python": "code-generator",
-		"java":   "code-generator",
-		"go":     "code-generator",
-	}, "contains")
-
-	content := "请帮我写一段python代码"
-
-	// 基准测试关键词匹配性能
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		strategy.Classify(nil, content)
-	}
-}
-
-func BenchmarkRoutingStrategyRegistry_Get(b *testing.B) {
-	registry := GetRoutingStrategyRegistry()
-
-	strategyNames := []string{
-		"keyword_contains",
-		"keyword_prefix",
-		"regex_only",
-		"llm_classify",
-		"keyword_then_intent",
-	}
-
-	// 基准测试策略获取性能
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		for _, name := range strategyNames {
-			registry.Get(name)
-		}
-	}
-}
-
 // PipelineContext 流水线上下文
 type PipelineContext struct {
 	TraceID   string
