@@ -8,6 +8,11 @@ on:
 jobs:
   go:
     runs-on: ubuntu-latest
+    env:
+      # Pinned edgeag revision — bump deliberately (update the same constant in
+      # centag-pro release.yml). Never track a moving branch: builds must be
+      # reproducible against a fixed commit.
+      EDGEAG_REF: "7f1e4e9385362cfa58500778a83bc95f8fa23f8a"
     steps:
       - uses: actions/checkout@v6
 
@@ -16,7 +21,7 @@ jobs:
         with:
           repository: atoml-ai/edgeag
           path: edgeag
-          ref: main
+          ref: ${{ env.EDGEAG_REF }}
 
       - name: Link edgeag as sibling for go.work
         run: |
