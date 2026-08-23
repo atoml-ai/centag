@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"centag/core/internal/agent/tools"
@@ -13,11 +14,16 @@ import (
 )
 
 // RuntimeEngine centag 内置 Agent 运行时引擎：负责构建 backend、注册工具并运行多轮推理。
+//
+// 一个 RuntimeEngine 绑定一个会话（单租户语义）：backend/token/pipeline/session
+// 状态由 mu 保护，且跨会话禁止共享同一实例（P0-2：历史版本全局共享导致并发串号）。
 type RuntimeEngine struct {
 	config  *AgentConfig
 	dataDir string
 	db      *sql.DB
 	dbPath  string // 数据库文件路径（用于 centag_info 工具）
+
+	mu sync.Mutex // 保护以下全部可变字段
 	// BackendConfig 由 server 层注入（指向 centag 自身代理）
 	backendHTTP *agentcore.HTTPBackend
 	backendID   string // 当前 backend 的 ID（用于检测切换后重建）
@@ -25,6 +31,8 @@ type RuntimeEngine struct {
 	currentPipelineID string
 	// currentSessionID 当前透传的 session ID（用于检测变化后更新 X-Session-ID）
 	currentSessionID string
+	// lastOpts 最近一次 EnsureBackend 应用后的选项快照（诊断/测试用）
+	lastOpts AgentEngineOptions
 }
 
 // AgentEngineOptions 构造 Agent 运行时所需的 backend 信息
@@ -55,6 +63,8 @@ func NewRuntimeEngine(config *AgentConfig, dataDir string, db *sql.DB) *RuntimeE
 
 // SetDBPath 设置数据库文件路径（供 centag_info 工具展示）
 func (e *RuntimeEngine) SetDBPath(p string) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
 	e.dbPath = p
 }
 
@@ -63,6 +73,8 @@ func (e *RuntimeEngine) SetDBPath(p string) {
 // PipelineID 非空时透传 X-Pipeline-ID（skill pipeline 路由）。
 // SessionID 非空时透传 X-Session-ID（agent 会话 → 代理侧对话记录）。
 func (e *RuntimeEngine) EnsureBackend(opts AgentEngineOptions) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
 	if e.backendHTTP == nil || e.backendID != opts.BackendID {
 		e.backendHTTP = agentcore.NewHTTPBackend(agentcore.HTTPBackendConfig{
 			BaseURL:   opts.BaseURL,
@@ -78,6 +90,7 @@ func (e *RuntimeEngine) EnsureBackend(opts AgentEngineOptions) {
 		e.currentPipelineID = opts.PipelineID
 		e.currentSessionID = opts.SessionID
 		e.backendHTTP.SetStrategy("", opts.PipelineID)
+		e.lastOpts = opts
 		return
 	}
 	if opts.Token != "" {
@@ -91,6 +104,16 @@ func (e *RuntimeEngine) EnsureBackend(opts AgentEngineOptions) {
 		e.backendHTTP.SetSessionID(opts.SessionID)
 		e.currentSessionID = opts.SessionID
 	}
+	if opts.Token != "" || opts.BaseURL != "" {
+		e.lastOpts = opts
+	}
+}
+
+// BackendSnapshot 返回最近一次生效的引擎选项快照（诊断与测试用）。
+func (e *RuntimeEngine) BackendSnapshot() AgentEngineOptions {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.lastOpts
 }
 
 // effectiveTimeout 返回有效的会话超时（0 或过小值回退到默认）
@@ -120,13 +143,18 @@ func (e *RuntimeEngine) effectiveMaxTokens() int {
 
 // SetBackend 设置 backend（server 层可复用已构造的 HTTPBackend）
 func (e *RuntimeEngine) SetBackend(b *agentcore.HTTPBackend) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
 	e.backendHTTP = b
 }
 
 // RefreshToken 更新 backend 的 JWT token（refresh 后 JWT 轮换需要）
 func (e *RuntimeEngine) RefreshToken(token string) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
 	if e.backendHTTP != nil && token != "" {
 		e.backendHTTP.SetToken(token)
+		e.lastOpts.Token = token
 	}
 }
 
@@ -172,6 +200,8 @@ func (e *RuntimeEngine) registerTools(registry agentcore.ToolRegistry, skillTool
 // systemPrompt 非空时作为 system 消息注入。
 // skillTools 非空时按 skill 工具集 ∩ 全局白名单注册工具（T8）。
 func (e *RuntimeEngine) NewSession(systemPrompt string, skillTools ...[]string) (*agentcore.Agent, error) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
 	if e.backendHTTP == nil {
 		return nil, fmt.Errorf("agent backend not initialized")
 	}

@@ -38,9 +38,11 @@ type BuiltinAgentHandler struct {
 	defaultModel        string
 	toolRegistry        *tools.ToolRegistry
 	provider            AgentDataProvider
-	engine              *agent.RuntimeEngine
+	engine              *agent.RuntimeEngine // 基线引擎（保留兼容；请求路径改用 per-session 引擎）
 	baseURL             string
-	cores               map[string]*agentcore.Agent // 运行时 Agent 句柄（不可序列化，按会话缓存）
+	dbPath              string                          // 数据库文件路径（透传给会话引擎的 centag_info 工具）
+	cores               map[string]*agentcore.Agent     // 运行时 Agent 句柄（不可序列化，按会话缓存）
+	engines             map[string]*agent.RuntimeEngine // per-session 引擎：隔离各会话的 backend/token/pipeline（P0-2）
 	coresMu             sync.Mutex
 }
 
@@ -107,8 +109,27 @@ func NewBuiltinAgentHandler(config *agent.AgentConfig, dataDir string, db *sql.D
 		provider:            provider,
 		engine:              engine,
 		baseURL:             baseURL,
+		dbPath:              dbPath,
 		cores:               make(map[string]*agentcore.Agent),
+		engines:             make(map[string]*agent.RuntimeEngine),
 	}
+}
+
+// engineFor 返回会话专属的 RuntimeEngine（不存在则基于基线配置克隆创建）。
+//
+// P0-2：各会话的 BackendID/Model/PipelineID/SessionID 与用户 JWT 各不相同，
+// 历史版本共享单一引擎导致并发请求互串凭据；现在每个会话持有独立引擎，
+// EnsureBackend/RefreshToken 只影响本会话。
+func (h *BuiltinAgentHandler) engineFor(session *AgentSession) *agent.RuntimeEngine {
+	h.coresMu.Lock()
+	defer h.coresMu.Unlock()
+	if e := h.engines[session.ID]; e != nil {
+		return e
+	}
+	e := agent.NewRuntimeEngine(h.config, h.dataDir, h.db)
+	e.SetDBPath(h.dbPath)
+	h.engines[session.ID] = e
+	return e
 }
 
 // Health 健康检查
@@ -298,10 +319,11 @@ func (h *BuiltinAgentHandler) DeleteSession(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "session deleted"})
 }
 
-// dropCore 释放会话的运行时 Agent 句柄。
+// dropCore 释放会话的运行时 Agent 句柄与会话引擎。
 func (h *BuiltinAgentHandler) dropCore(sessionID string) {
 	h.coresMu.Lock()
 	delete(h.cores, sessionID)
+	delete(h.engines, sessionID)
 	h.coresMu.Unlock()
 }
 
@@ -401,12 +423,15 @@ func (h *BuiltinAgentHandler) runAgent(c *gin.Context, session *AgentSession, sk
 	// skill → pipeline id（空 skill 不注入 X-Pipeline-ID）
 	pipelineID := h.resolveSkillPipelineID(skillName)
 
+	// 会话专属引擎（P0-2：隔离各会话 backend/token，杜绝跨用户串号）
+	e := h.engineFor(session)
+
 	// 构造 backend（指向 centag 自身代理）
 	token := ""
 	if auth := c.GetHeader("Authorization"); auth != "" {
 		token = strings.TrimPrefix(auth, "Bearer ")
 	}
-	h.engine.EnsureBackend(agent.AgentEngineOptions{
+	e.EnsureBackend(agent.AgentEngineOptions{
 		BaseURL:    h.baseURL,
 		Token:      token,
 		BackendID:  session.BackendID,
@@ -415,7 +440,7 @@ func (h *BuiltinAgentHandler) runAgent(c *gin.Context, session *AgentSession, sk
 		SessionID:  session.ID,
 	})
 	// 每次刷新 token（refresh 后 JWT 会轮换）
-	h.engine.RefreshToken(token)
+	e.RefreshToken(token)
 
 	// 首次会话：创建 agentcore.Agent 并注入 skill 上下文（运行时句柄按会话缓存）
 	h.coresMu.Lock()
@@ -423,7 +448,7 @@ func (h *BuiltinAgentHandler) runAgent(c *gin.Context, session *AgentSession, sk
 	if ag == nil {
 		systemPrompt := h.buildSystemPrompt(skillName)
 		var err error
-		ag, err = h.engine.NewSession(systemPrompt, h.skillTools(skillName))
+		ag, err = e.NewSession(systemPrompt, h.skillTools(skillName))
 		if err != nil {
 			h.coresMu.Unlock()
 			return "", err
@@ -437,7 +462,7 @@ func (h *BuiltinAgentHandler) runAgent(c *gin.Context, session *AgentSession, sk
 		ag.SetModel(session.Model)
 	}
 
-	return h.engine.RunPrompt(c.Request.Context(), ag, userInput, func(format string, args ...any) {
+	return e.RunPrompt(c.Request.Context(), ag, userInput, func(format string, args ...any) {
 		logger.Infof("[builtin-agent] "+format, args...)
 	})
 }
