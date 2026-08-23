@@ -18,6 +18,12 @@ on:
 permissions:
   contents: write
 
+# Pinned edgeag revision — keep in sync with ci.yml; bump deliberately.
+# core/go.mod replaces edgeag => ../../edgeag and go.work uses ../edgeag, so
+# EVERY job that runs `go build` needs the sibling checkout (P1-7).
+env:
+  EDGEAG_REF: "7f1e4e9385362cfa58500778a83bc95f8fa23f8a"
+
 jobs:
   # Version-branch gate: workflow_dispatch / tags must match vX | feature/vX | release/vX.
   guard-branch:
@@ -54,6 +60,17 @@ jobs:
       CENTAG_INSTALL_ROOT: ${{ github.workspace }}/.centag
     steps:
       - uses: actions/checkout@v6
+
+      - name: Checkout edgeag (go.work sibling module)
+        uses: actions/checkout@v6
+        with:
+          repository: atoml-ai/edgeag
+          path: edgeag
+          ref: ${{ env.EDGEAG_REF }}
+
+      - name: Link edgeag as sibling for go.work
+        run: |
+          ln -sfn "${{ github.workspace }}/edgeag" "${{ github.workspace }}/../edgeag"
 
       - uses: actions/setup-go@v6
         with:
@@ -96,6 +113,17 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
+      - name: Checkout edgeag (go.work sibling module)
+        uses: actions/checkout@v6
+        with:
+          repository: atoml-ai/edgeag
+          path: edgeag
+          ref: ${{ env.EDGEAG_REF }}
+
+      - name: Link edgeag as sibling for go.work
+        run: |
+          ln -sfn "${{ github.workspace }}/edgeag" "${{ github.workspace }}/../edgeag"
+
       - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
@@ -132,6 +160,19 @@ jobs:
       GOARCH: ${{ matrix.arch }}
     steps:
       - uses: actions/checkout@v6
+
+      - name: Checkout edgeag (go.work sibling module)
+        uses: actions/checkout@v6
+        with:
+          repository: atoml-ai/edgeag
+          path: edgeag
+          ref: ${{ env.EDGEAG_REF }}
+
+      # Windows runner: git-bash `ln -s` copies the tree (no symlink support) —
+      # functionally equivalent for the go.work sibling resolution.
+      - name: Link edgeag as sibling for go.work
+        run: |
+          ln -sfn "${{ github.workspace }}/edgeag" "${{ github.workspace }}/../edgeag"
 
       - uses: actions/setup-go@v6
         with:
@@ -173,6 +214,17 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
+      - name: Checkout edgeag (go.work sibling module)
+        uses: actions/checkout@v6
+        with:
+          repository: atoml-ai/edgeag
+          path: edgeag
+          ref: ${{ env.EDGEAG_REF }}
+
+      - name: Link edgeag as sibling for go.work
+        run: |
+          ln -sfn "${{ github.workspace }}/edgeag" "${{ github.workspace }}/../edgeag"
+
       - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
@@ -206,6 +258,17 @@ jobs:
       CENTAG_INSTALL_ROOT: ${{ github.workspace }}/.centag
     steps:
       - uses: actions/checkout@v6
+
+      - name: Checkout edgeag (go.work sibling module)
+        uses: actions/checkout@v6
+        with:
+          repository: atoml-ai/edgeag
+          path: edgeag
+          ref: ${{ env.EDGEAG_REF }}
+
+      - name: Link edgeag as sibling for go.work
+        run: |
+          ln -sfn "${{ github.workspace }}/edgeag" "${{ github.workspace }}/../edgeag"
 
       - uses: actions/setup-go@v6
         with:
@@ -353,6 +416,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+
+      - name: Checkout edgeag (go.work sibling module)
+        uses: actions/checkout@v6
+        with:
+          repository: atoml-ai/edgeag
+          path: edgeag
+          ref: ${{ env.EDGEAG_REF }}
+
+      - name: Link edgeag as sibling for go.work
+        run: |
+          ln -sfn "${{ github.workspace }}/edgeag" "${{ github.workspace }}/../edgeag"
 
       - uses: actions/setup-go@v6
         with:
