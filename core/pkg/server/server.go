@@ -1885,6 +1885,8 @@ func (s *Server) setupRoutes() {
 	s.router.GET("/v1/models", llmChain(agentDetectMw, proxyModeMw, s.proxyHandler.ListModels)...)
 	s.router.GET("/v1/backends", llmChain(agentDetectMw, proxyModeMw, s.proxyHandler.ListBackends)...)
 	s.router.POST("/v1/messages", llmChain(resourceGuard, agentDetectMw, proxyModeMw, s.proxyHandler.HandleChatCompletions)...)
+	// Anthropic 兼容前缀（DeepSeek/Kimi 等通行做法：base_url 带 /anthropic 后缀，SDK 自动拼接 /v1/messages）
+	s.router.POST("/anthropic/v1/messages", llmChain(resourceGuard, agentDetectMw, proxyModeMw, s.proxyHandler.HandleChatCompletions)...)
 	s.router.POST("/v1/responses", llmChain(resourceGuard, agentDetectMw, proxyModeMw, s.proxyHandler.HandleChatCompletions)...)
 	s.router.POST("/v1beta/models/*action", llmChain(resourceGuard, agentDetectMw, proxyModeMw, s.proxyHandler.HandleChatCompletions)...)
 	s.router.POST("/v1/completions", llmChain(resourceGuard, agentDetectMw, proxyModeMw, llmProxyHandler.HandleOpenAIRequest)...)

@@ -1,5 +1,11 @@
 export interface ApiEndpoint {
+  /** 协议稳定标识（选择器 value / 列表 key，同一 Base 可对应多个协议） */
+  id: string
   label: string
+  /**
+   * 客户端 Base URL 路径后缀（通行做法：拷贝到 Agent 工具的是 Base，
+   * SDK 自动拼接完整端点，如 /chat/completions、/v1/messages）。
+   */
   path: string
   tagType: '' | 'success' | 'warning' | 'info' | 'danger'
   hint?: string
@@ -7,28 +13,32 @@ export interface ApiEndpoint {
 
 export const API_ENDPOINTS: ApiEndpoint[] = [
   {
+    id: 'openai-chat',
     label: 'OpenAI Chat',
-    path: '/v1/chat/completions',
+    path: '/v1',
     tagType: 'success',
-    hint: 'OpenAI SDK、Cursor、Continue 等'
+    hint: 'OpenAI SDK、Cursor、Continue 等（自动拼接 /chat/completions）'
   },
   {
-    label: 'OpenAI Models',
-    path: '/v1/models',
+    id: 'openai-responses',
+    label: 'OpenAI Responses',
+    path: '/v1',
     tagType: 'success',
-    hint: '模型列表'
+    hint: 'Codex 等 Responses 客户端（自动拼接 /responses）'
   },
   {
+    id: 'anthropic',
     label: 'Anthropic',
-    path: '/v1/messages',
+    path: '/anthropic',
     tagType: 'warning',
-    hint: 'Claude / Anthropic SDK'
+    hint: 'DeepSeek / Kimi 等通行做法（自动拼接 /v1/messages）'
   },
   {
-    label: 'Completions',
-    path: '/v1/completions',
-    tagType: '',
-    hint: '旧版 Completions API'
+    id: 'gemini',
+    label: 'Gemini',
+    path: '',
+    tagType: 'info',
+    hint: 'Gemini SDK / CLI（自动拼接 /v1beta）'
   }
 ]
 

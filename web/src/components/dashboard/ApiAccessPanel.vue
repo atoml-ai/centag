@@ -9,9 +9,9 @@
       >
         <el-option
           v-for="ep in endpoints"
-          :key="ep.path"
+          :key="ep.id"
           :label="ep.label"
-          :value="ep.path"
+          :value="ep.id"
         >
           <div class="option-row">
             <span>{{ ep.label }}</span>
@@ -37,7 +37,7 @@ import { API_ENDPOINTS, buildEndpointUrl, type ApiEndpoint } from '@/utils/apiBa
 
 const { t } = useI18n()
 
-const OPENAI_CHAT_PATH = '/v1/chat/completions'
+const DEFAULT_ENDPOINT_ID = 'openai-chat'
 
 const props = withDefaults(
   defineProps<{
@@ -53,24 +53,24 @@ const props = withDefaults(
   }
 )
 
-const selectedPath = ref(OPENAI_CHAT_PATH)
+const selectedPath = ref(DEFAULT_ENDPOINT_ID)
 
 watch(
   () => props.endpoints,
   (list) => {
-    if (!list.some((ep) => ep.path === selectedPath.value)) {
-      selectedPath.value = list[0]?.path || OPENAI_CHAT_PATH
+    if (!list.some((ep) => ep.id === selectedPath.value)) {
+      selectedPath.value = list[0]?.id || DEFAULT_ENDPOINT_ID
     }
   },
   { immediate: true }
 )
 
 const selectedEndpoint = computed(
-  () => props.endpoints.find((ep) => ep.path === selectedPath.value) || props.endpoints[0]
+  () => props.endpoints.find((ep) => ep.id === selectedPath.value) || props.endpoints[0]
 )
 
 const selectedUrl = computed(() =>
-  buildEndpointUrl(props.baseUrl, selectedEndpoint.value?.path || OPENAI_CHAT_PATH)
+  buildEndpointUrl(props.baseUrl, selectedEndpoint.value?.path || '')
 )
 
 async function copySelected() {

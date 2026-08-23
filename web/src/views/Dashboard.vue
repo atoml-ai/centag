@@ -74,7 +74,7 @@
             </div>
             <el-divider style="margin: 8px 0" />
             <div class="section-label" style="margin-bottom: 6px;">{{ $t('dashboard.clientAccess') }}</div>
-            <div v-for="ep in apiEndpoints" :key="ep.path" class="endpoint-row">
+            <div v-for="ep in apiEndpoints" :key="ep.id" class="endpoint-row">
               <el-tag size="small" :type="ep.tagType || undefined" class="endpoint-tag">{{ ep.label }}</el-tag>
               <span class="endpoint-url mono">{{ baseUrl }}{{ ep.path }}</span>
               <el-tooltip :content="$t('dashboard.copyAddress') + ' ' + ep.label" placement="top">
