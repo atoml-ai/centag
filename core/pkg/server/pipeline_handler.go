@@ -123,19 +123,30 @@ func (h *PipelineHandler) getTenantID(c *gin.Context) string {
 // requirePipelineAccess validates pipeline access for the given scope.
 // On success returns (pipeline, nil); on failure writes HTTP error and returns (nil, err).
 func (h *PipelineHandler) requirePipelineAccess(c *gin.Context, pipelineID string) (*pipeline.AgentPatternPipeline, error) {
-	// 旧 ID 归一（P1-T5）：与执行层 NormalizePipelineID 同源，管理端读详情/验证
-	// 接受历史别名（如 direct-backend → transparent），避免“执行可用、详情 403”。
-	pipelineID = pipeline.NormalizePipelineID(pipelineID)
 	scope := auth.GetScopedAccess(c)
 
-	var p *pipeline.AgentPatternPipeline
-	if user := h.accessUser(c); user != nil {
-		p = h.pipelineRegistry.GetByTenant(ownTenantID(user), pipelineID)
-	} else if scope == auth.AccessGlobal {
-		// Admin: 仅系统级流水线
-		p = h.pipelineRegistry.Get(pipelineID)
-	} else {
-		p = h.pipelineRegistry.GetByTenant("", pipelineID)
+	lookup := func(id string) *pipeline.AgentPatternPipeline {
+		if user := h.accessUser(c); user != nil {
+			return h.pipelineRegistry.GetByTenant(ownTenantID(user), id)
+		}
+		if scope == auth.AccessGlobal {
+			// Admin: 仅系统级流水线
+			return h.pipelineRegistry.Get(id)
+		}
+		return h.pipelineRegistry.GetByTenant("", id)
+	}
+
+	// 先按请求原值精确查找（兼容以旧 ID 注册的存量流水线），
+	// 未命中再走执行层同源的别名归一（P1-T5：direct-backend → transparent），
+	// 消除「执行可用、详情 403」裂缝。
+	p := lookup(pipelineID)
+	if p == nil {
+		if norm := pipeline.NormalizePipelineID(pipelineID); norm != pipelineID {
+			p = lookup(norm)
+			if p != nil {
+				pipelineID = norm
+			}
+		}
 	}
 
 	if p == nil {
