@@ -67,8 +67,13 @@ func (h *BackendHandler) ListBackends(c *gin.Context) {
 
 	// 转换为响应格式（包含 has_api_key 标记，但不暴露实际 api_key）
 	responses := make([]*backend.BackendConfigResponse, 0, len(backends))
+	breakerStates := circuitbreaker.GetAllStates() // P0-T2：列表暴露熔断状态
 	for _, b := range backends {
-		responses = append(responses, b.ToResponse())
+		resp := b.ToResponse()
+		if st, ok := breakerStates[b.ID]; ok {
+			resp.CircuitState = string(st)
+		}
+		responses = append(responses, resp)
 	}
 	RespondSuccess(c, responses)
 }

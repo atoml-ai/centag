@@ -106,6 +106,9 @@ type BackendConfigResponse struct {
 
 	// 健康状态
 	HealthStatus *BackendHealthStatus `json:"health_status,omitempty"`
+	// CircuitState 熔断器状态快照（closed/open/half-open，空=未知）。
+	// P0-T2：健康探测仅走 /models，无法反映 chat 链路熔断；列表必须可见。
+	CircuitState string `json:"circuit_state,omitempty"`
 
 	// 元数据（只读）
 	CreatedAt string `json:"created_at,omitempty"`

@@ -4,12 +4,14 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"sort"
 	"time"
 
 	"centag/core/internal"
 	"centag/core/internal/cache"
 	"centag/core/internal/monitor"
 	"centag/core/internal/stats"
+	"centag/core/pkg/circuitbreaker"
 	"centag/core/pkg/database"
 	"centag/core/pkg/editionmodule"
 
@@ -58,14 +60,44 @@ func (s *Server) healthReady(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"status":  "ready",
+	// P0-T2：健康就绪聚合熔断状态——探测 /models 通过但 chat 链路熔断打开时，
+	// 服务仍可用（其余后端可服务），标记 degraded 让管理员可感知。
+	openBreakers := openCircuitBreakers()
+	statusCode := http.StatusOK
+	overall := "ready"
+	if len(openBreakers) > 0 {
+		overall = "degraded"
+	}
+
+	c.JSON(statusCode, gin.H{
+		"status":  overall,
 		"service": "centag",
 		"edition": s.edition.String(),
 		"checks": gin.H{
-			"database": gin.H{"status": "ok", "driver": driver},
+			"database":        gin.H{"status": "ok", "driver": driver},
+			"circuit_breaker": gin.H{"status": boolToStr(len(openBreakers) == 0, "ok", "degraded"), "open_backends": openBreakers},
 		},
 	})
+}
+
+// openCircuitBreakers 返回当前处于 open 状态的后端 ID 列表。
+func openCircuitBreakers() []string {
+	states := circuitbreaker.GetAllStates()
+	var open []string
+	for id, st := range states {
+		if st == "open" {
+			open = append(open, id)
+		}
+	}
+	sort.Strings(open)
+	return open
+}
+
+func boolToStr(cond bool, t, f string) string {
+	if cond {
+		return t
+	}
+	return f
 }
 
 // ping Ping 测试

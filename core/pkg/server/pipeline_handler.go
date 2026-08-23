@@ -123,6 +123,9 @@ func (h *PipelineHandler) getTenantID(c *gin.Context) string {
 // requirePipelineAccess validates pipeline access for the given scope.
 // On success returns (pipeline, nil); on failure writes HTTP error and returns (nil, err).
 func (h *PipelineHandler) requirePipelineAccess(c *gin.Context, pipelineID string) (*pipeline.AgentPatternPipeline, error) {
+	// 旧 ID 归一（P1-T5）：与执行层 NormalizePipelineID 同源，管理端读详情/验证
+	// 接受历史别名（如 direct-backend → transparent），避免“执行可用、详情 403”。
+	pipelineID = pipeline.NormalizePipelineID(pipelineID)
 	scope := auth.GetScopedAccess(c)
 
 	var p *pipeline.AgentPatternPipeline
