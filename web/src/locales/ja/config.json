@@ -47,5 +47,18 @@
   "unknownError": "不明なエラー",
   "configSaved": "設定を保存しました",
   "saveFailed": "保存に失敗しました",
-  "navModelConfig": "モデル変数"
+  "navModelConfig": "モデル変数",
+  "configImportTitle": "設定のインポートと復元",
+  "configImportDesc": "「設定エクスポート」で生成した ZIP をアップロードし、バックエンドとパイプラインをワンクリックで復元",
+  "configImportDetail": "設定エクスポートが生成した centag-initdata.zip に対応します。上書き復元方式：同一 ID のバックエンド／パイプラインはパッケージの内容で更新され、他の既存設定は影響を受けません。",
+  "configImportChoose": "ZIP を選択",
+  "configImportBtn": "インポートして復元",
+  "configImporting": "インポート中…",
+  "configImportSelected": "選択済み",
+  "configImportConfirm": "同一 ID のバックエンドとパイプラインが上書きされます。続行しますか？",
+  "configImportBackends": "バックエンド {n} 件",
+  "configImportPipelines": "パイプライン {n} 件",
+  "configImportPartial": "一部の項目のインポートに失敗しました",
+  "configImportSuccess": "設定の復元が完了しました",
+  "configImportFailed": "インポート失敗："
 }

@@ -120,5 +120,18 @@
   "configExporting": "导出中…",
   "configExportNoData": "暂无后端配置可导出",
   "configExportSuccess": "配置包导出成功",
-  "configExportFailed": "导出失败："
+  "configExportFailed": "导出失败：",
+  "configImportTitle": "配置导入还原",
+  "configImportDesc": "上传「配置导出」生成的 ZIP 包，一键还原后端配置与流水线",
+  "configImportDetail": "支持配置导出功能生成的 centag-initdata.zip。导入为覆盖式还原：包内同 ID 的后端/流水线会更新为包内版本，其余现有配置不受影响。",
+  "configImportChoose": "选择 ZIP 包",
+  "configImportBtn": "导入并还原",
+  "configImporting": "导入中…",
+  "configImportSelected": "已选择",
+  "configImportConfirm": "将按包内内容覆盖同 ID 的后端与流水线，确定继续？",
+  "configImportBackends": "后端 {n} 个",
+  "configImportPipelines": "流水线 {n} 条",
+  "configImportPartial": "部分内容导入失败",
+  "configImportSuccess": "配置还原完成",
+  "configImportFailed": "导入失败：" 
 }

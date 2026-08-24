@@ -47,5 +47,18 @@
   "unknownError": "Неизвестная ошибка",
   "configSaved": "Конфигурация сохранена",
   "saveFailed": "Ошибка сохранения",
-  "navModelConfig": "Переменные модели"
+  "navModelConfig": "Переменные модели",
+  "configImportTitle": "Импорт и восстановление конфигурации",
+  "configImportDesc": "Загрузите ZIP, созданный при экспорте конфигурации, чтобы восстановить бэкенды и пайплайны одним кликом",
+  "configImportDetail": "Поддерживается centag-initdata.zip, созданный экспортом конфигурации. Восстановление в режиме upsert: бэкенды/пайплайны с тем же ID перезаписываются версией из пакета; остальные настройки не затрагиваются.",
+  "configImportChoose": "Выбрать ZIP-архив",
+  "configImportBtn": "Импортировать и восстановить",
+  "configImporting": "Импорт…",
+  "configImportSelected": "Выбрано",
+  "configImportConfirm": "Бэкенды и пайплайны с совпадающими ID будут перезаписаны. Продолжить?",
+  "configImportBackends": "{n} бэкенд(ов)",
+  "configImportPipelines": "{n} пайплайн(ов)",
+  "configImportPartial": "Некоторые элементы не удалось импортировать",
+  "configImportSuccess": "Конфигурация успешно восстановлена",
+  "configImportFailed": "Ошибка импорта: "
 }

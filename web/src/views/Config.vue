@@ -278,7 +278,7 @@
           </div>
         </section>
 
-        <!-- 配置导出 -->
+        <!-- 配置导出 / 导入还原 -->
         <section v-if="canSystemUpdate" v-show="activeSection === 'system-update'" class="section-panel">
           <el-card shadow="never" class="su-card" style="margin-bottom:24px">
             <template #header>
@@ -303,6 +303,51 @@
                 <el-icon><Download /></el-icon>
                 {{ configExporting ? t('config.configExporting') : t('config.configExportBtn') }}
               </el-button>
+            </div>
+          </el-card>
+
+          <el-card shadow="never" class="su-card" style="margin-bottom:24px">
+            <template #header>
+              <div class="su-card-hd">
+                <span class="su-section-icon" style="background:rgba(245,158,11,.12);color:#f59e0b"><el-icon><UploadFilled /></el-icon></span>
+                <div>
+                  <div class="su-section-title">{{ t('config.configImportTitle') }}</div>
+                  <div class="su-section-sub">{{ t('config.configImportDesc') }}</div>
+                </div>
+              </div>
+            </template>
+            <div class="config-export-body">
+              <p class="config-export-desc">
+                {{ t('config.configImportDetail') }}
+              </p>
+              <div class="config-import-actions">
+                <el-upload
+                  ref="configImportUploadRef"
+                  :auto-upload="false"
+                  :limit="1"
+                  accept=".zip"
+                  :on-change="handleImportFileChange"
+                  :on-exceed="handleImportExceed"
+                >
+                  <el-button size="large">
+                    <el-icon><FolderOpened /></el-icon>
+                    {{ t('config.configImportChoose') }}
+                  </el-button>
+                </el-upload>
+                <el-button
+                  type="warning"
+                  size="large"
+                  :loading="configImporting"
+                  :disabled="!configImportFile"
+                  @click="handleConfigImport"
+                >
+                  <el-icon><Upload /></el-icon>
+                  {{ configImporting ? t('config.configImporting') : t('config.configImportBtn') }}
+                </el-button>
+              </div>
+              <p v-if="configImportFile" class="config-import-file">
+                {{ t('config.configImportSelected') }}: <strong>{{ configImportFile.name }}</strong>
+              </p>
             </div>
           </el-card>
         </section>
@@ -480,7 +525,7 @@ import { ref, computed, onMounted, watch, type Component } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Refresh, Check, Monitor, Connection, Switch, ArrowRight, Upload, UploadFilled, Clock, Document, RefreshLeft, Delete, MoreFilled, Search, Download, Box } from '@element-plus/icons-vue'
+import { Refresh, Check, Monitor, Connection, Switch, ArrowRight, Upload, UploadFilled, Clock, Document, RefreshLeft, Delete, MoreFilled, Search, Download, Box, FolderOpened } from '@element-plus/icons-vue'
 import { getConfig, saveConfig } from '@/api'
 import { useEdition } from '@/composables/useEdition'
 import { useAuthStore } from '@/stores/auth'
@@ -743,6 +788,57 @@ async function handleConfigExport() {
     ElMessage.error(t('config.configExportFailed') + (e.message || ''))
   } finally {
     configExporting.value = false
+  }
+}
+
+// ── 配置导入还原 ────────────────────────────────────────────────────────────────
+
+const configImportUploadRef = ref<UploadInstance>()
+const configImportFile = ref<File | null>(null)
+const configImporting = ref(false)
+
+function handleImportFileChange(file: UploadFile) {
+  configImportFile.value = file.raw ?? null
+}
+
+function handleImportExceed() {
+  ElMessage.warning(t('config.systemUpdateOnlyOne'))
+}
+
+async function handleConfigImport() {
+  const file = configImportFile.value
+  if (!file) return
+  try {
+    await ElMessageBox.confirm(
+      t('config.configImportConfirm'),
+      t('config.configImportTitle'),
+      { confirmButtonText: t('config.configImportBtn'), cancelButtonText: t('config.cancel'), type: 'warning' },
+    )
+  } catch {
+    return
+  }
+  configImporting.value = true
+  try {
+    const form = new FormData()
+    form.append('file', file)
+    const resp: any = await api.post('/api/v1/config/import', form, { timeout: 120000 })
+    const result = resp?.result || resp || {}
+    const parts: string[] = []
+    if (typeof result.backends_upserted === 'number') parts.push(t('config.configImportBackends', { n: result.backends_upserted }))
+    if (typeof result.pipelines_applied === 'number') parts.push(t('config.configImportPipelines', { n: result.pipelines_applied }))
+    if (Array.isArray(result.pipeline_errors) && result.pipeline_errors.length) {
+      ElMessage.warning(`${t('config.configImportPartial')}: ${result.pipeline_errors.join('; ')}`)
+    } else {
+      ElMessage.success(`${t('config.configImportSuccess')} (${parts.join(', ')})`)
+    }
+    configImportUploadRef.value?.clearFiles()
+    configImportFile.value = null
+    void load()
+  } catch (e: any) {
+    const msg = e?.response?.data?.error || e?.message || ''
+    ElMessage.error(t('config.configImportFailed') + msg)
+  } finally {
+    configImporting.value = false
   }
 }
 
@@ -1257,6 +1353,19 @@ function formatSuTime(raw: string): string {
   font-size: .875rem;
   color: var(--el-text-color-secondary);
   line-height: 1.6;
+}
+
+.config-import-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.config-import-file {
+  margin: 0;
+  font-size: .8125rem;
+  color: var(--el-text-color-secondary);
 }
 
 .su-log {

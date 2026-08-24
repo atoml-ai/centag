@@ -47,5 +47,18 @@
   "unknownError": "Error desconocido",
   "configSaved": "Configuración guardada",
   "saveFailed": "Error al guardar",
-  "navModelConfig": "Variables de modelo"
+  "navModelConfig": "Variables de modelo",
+  "configImportTitle": "Importar y restaurar configuración",
+  "configImportDesc": "Sube un ZIP generado por Exportación de configuración para restaurar backends y pipelines en un clic",
+  "configImportDetail": "Acepta centag-initdata.zip generado por la exportación de configuración. La restauración es tipo upsert: los backends/pipelines con el mismo ID se sobrescriben con la versión del paquete; el resto de la configuración no se ve afectada.",
+  "configImportChoose": "Elegir paquete ZIP",
+  "configImportBtn": "Importar y restaurar",
+  "configImporting": "Importando…",
+  "configImportSelected": "Seleccionado",
+  "configImportConfirm": "Los backends y pipelines con IDs coincidentes serán sobrescritos. ¿Continuar?",
+  "configImportBackends": "{n} backends",
+  "configImportPipelines": "{n} pipelines",
+  "configImportPartial": "Algunos elementos no se pudieron importar",
+  "configImportSuccess": "Configuración restaurada correctamente",
+  "configImportFailed": "Error al importar: "
 }
