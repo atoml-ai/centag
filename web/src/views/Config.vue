@@ -321,19 +321,10 @@
                 {{ t('config.configImportDetail') }}
               </p>
               <div class="config-import-actions">
-                <el-upload
-                  ref="configImportUploadRef"
-                  :auto-upload="false"
-                  :limit="1"
-                  accept=".zip"
-                  :on-change="handleImportFileChange"
-                  :on-exceed="handleImportExceed"
-                >
-                  <el-button size="large">
-                    <el-icon><FolderOpened /></el-icon>
-                    {{ t('config.configImportChoose') }}
-                  </el-button>
-                </el-upload>
+                <el-button size="large" @click="configImportInputRef?.click()">
+                  <el-icon><FolderOpened /></el-icon>
+                  {{ t('config.configImportChoose') }}
+                </el-button>
                 <el-button
                   type="warning"
                   size="large"
@@ -344,6 +335,13 @@
                   <el-icon><Upload /></el-icon>
                   {{ configImporting ? t('config.configImporting') : t('config.configImportBtn') }}
                 </el-button>
+                <input
+                  ref="configImportInputRef"
+                  type="file"
+                  accept=".zip"
+                  class="config-import-input"
+                  @change="handleImportFileChange"
+                />
               </div>
               <p v-if="configImportFile" class="config-import-file">
                 {{ t('config.configImportSelected') }}: <strong>{{ configImportFile.name }}</strong>
@@ -801,16 +799,13 @@ async function handleConfigExport() {
 
 // ── 配置导入还原 ────────────────────────────────────────────────────────────────
 
-const configImportUploadRef = ref<UploadInstance>()
+const configImportInputRef = ref<HTMLInputElement>()
 const configImportFile = ref<File | null>(null)
 const configImporting = ref(false)
 
-function handleImportFileChange(file: UploadFile) {
-  configImportFile.value = file.raw ?? null
-}
-
-function handleImportExceed() {
-  ElMessage.warning(t('config.systemUpdateOnlyOne'))
+function handleImportFileChange(e: Event) {
+  const input = e.target as HTMLInputElement
+  configImportFile.value = input.files?.[0] ?? null
 }
 
 async function handleConfigImport() {
@@ -841,8 +836,8 @@ async function handleConfigImport() {
     } else {
       ElMessage.success(`${t('config.configImportSuccess')} (${parts.join(', ')})`)
     }
-    configImportUploadRef.value?.clearFiles()
     configImportFile.value = null
+    if (configImportInputRef.value) configImportInputRef.value.value = ''
     void load()
   } catch (e: any) {
     const msg = e?.response?.data?.error || e?.message || ''
@@ -1368,8 +1363,17 @@ function formatSuTime(raw: string): string {
 .config-import-actions {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 12px;
   flex-wrap: wrap;
+}
+
+/* 同层 el-button 自带 + 相邻 margin，与 gap 叠加会导致间距不均 */
+.config-import-actions .el-button + .el-button {
+  margin-left: 0;
+}
+
+.config-import-input {
+  display: none;
 }
 
 .config-import-file {
