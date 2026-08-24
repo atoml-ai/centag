@@ -247,9 +247,10 @@ metadata:
    * 构建所有导出文件（flat map of path → content）
    * @param {Array} backends - 后端配置数组
    * @param {string[]} selectedTemplateIds - 选中的模板 ID 列表
+   * @param {Object} [systemConfig] - 系统默认（default_backend_id/default_model/fallback_*）
    * @returns {Object<string, string>}
    */
-  static buildAllYamlFiles(backends, selectedTemplateIds) {
+  static buildAllYamlFiles(backends, selectedTemplateIds, systemConfig) {
     const { backendId, model } = this.getDefaultBackendInfo(backends)
     const files = {}
     files['initial-backends.yaml'] = this.buildBackendsYaml(backends)
@@ -259,6 +260,9 @@ metadata:
         files[`pipeline-templates/${id}.yaml`] = yaml
       }
     })
+    if (systemConfig) {
+      files['system-config.yaml'] = YamlWriter.stringify(systemConfig)
+    }
     return files
   }
 
@@ -267,10 +271,11 @@ metadata:
    * WebUI：动态 import('jszip')；classic script：globalThis.JSZip
    * @param {Array} backends
    * @param {string[]} selectedTemplateIds
+   * @param {Object} [systemConfig] - 系统默认后端/模型，写入 system-config.yaml
    * @returns {Promise<Blob>}
    */
-  static async exportAsArchive(backends, selectedTemplateIds) {
-    const files = this.buildAllYamlFiles(backends, selectedTemplateIds)
+  static async exportAsArchive(backends, selectedTemplateIds, systemConfig) {
+    const files = this.buildAllYamlFiles(backends, selectedTemplateIds, systemConfig)
     let JSZipCtor = typeof globalThis !== 'undefined' ? globalThis.JSZip : null
     if (!JSZipCtor) {
       const mod = await import('jszip')

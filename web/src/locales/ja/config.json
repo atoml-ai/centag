@@ -50,7 +50,7 @@
   "navModelConfig": "モデル変数",
   "configImportTitle": "設定のインポートと復元",
   "configImportDesc": "「設定エクスポート」で生成した ZIP をアップロードし、バックエンドとパイプラインをワンクリックで復元",
-  "configImportDetail": "設定エクスポートが生成した centag-initdata.zip に対応します。上書き復元方式：同一 ID のバックエンド／パイプラインはパッケージの内容で更新され、他の既存設定は影響を受けません。",
+  "configImportDetail": "設定エクスポートが生成した centag-initdata.zip に対応します。上書き復元方式：同一 ID のバックエンド／パイプラインはパッケージの内容で更新され、システム既定バックエンド／モデルも復元されます。他の既存設定は影響を受けません。",
   "configImportChoose": "ZIP を選択",
   "configImportBtn": "インポートして復元",
   "configImporting": "インポート中…",
@@ -60,5 +60,7 @@
   "configImportPipelines": "パイプライン {n} 件",
   "configImportPartial": "一部の項目のインポートに失敗しました",
   "configImportSuccess": "設定の復元が完了しました",
-  "configImportFailed": "インポート失敗："
+  "configImportFailed": "インポート失敗：",
+  "configExportDetail": "エクスポートした ZIP には次が含まれます：バックエンド設定（initial-backends.yaml、各バックエンドの既定モデル含む）、パイプラインテンプレート、システム既定バックエンド／モデル（system-config.yaml）。インポート側でワンクリック復元できます。",
+  "configImportDefaultsSkipped": "既定バックエンド／モデルは未復元"
 }

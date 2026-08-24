@@ -115,7 +115,7 @@
   "deploymentCleanDataDesc": "默认保留数据，重装后配置与密钥可恢复。开启后卸载应用时会连同数据目录一并清除。",
   "configExportTitle": "配置导出",
   "configExportDesc": "导出当前后端配置与流水线模板，用于快速恢复或迁移到空环境",
-  "configExportDetail": "导出的 ZIP 包包含：后端配置（initial-backends.yaml）、流水线模板、环境变量模板（.env）及使用说明。下载后在新环境解压并填写 API Key 即可使用。",
+  "configExportDetail": "导出的 ZIP 包包含：后端配置（initial-backends.yaml，含各后端默认模型）、流水线模板、系统默认后端/模型（system-config.yaml）。导入端可一键还原全部状态。",
   "configExportBtn": "导出配置包（initdata.zip）",
   "configExporting": "导出中…",
   "configExportNoData": "暂无后端配置可导出",
@@ -123,7 +123,7 @@
   "configExportFailed": "导出失败：",
   "configImportTitle": "配置导入还原",
   "configImportDesc": "上传「配置导出」生成的 ZIP 包，一键还原后端配置与流水线",
-  "configImportDetail": "支持配置导出功能生成的 centag-initdata.zip。导入为覆盖式还原：包内同 ID 的后端/流水线会更新为包内版本，其余现有配置不受影响。",
+  "configImportDetail": "支持配置导出功能生成的 centag-initdata.zip。导入为覆盖式还原：包内同 ID 的后端/流水线会更新为包内版本，并恢复系统默认后端/模型；其余现有配置不受影响。",
   "configImportChoose": "选择 ZIP 包",
   "configImportBtn": "导入并还原",
   "configImporting": "导入中…",
@@ -133,5 +133,6 @@
   "configImportPipelines": "流水线 {n} 条",
   "configImportPartial": "部分内容导入失败",
   "configImportSuccess": "配置还原完成",
-  "configImportFailed": "导入失败：" 
+  "configImportFailed": "导入失败：",
+  "configImportDefaultsSkipped": "默认后端/模型未还原"
 }

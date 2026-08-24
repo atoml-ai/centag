@@ -50,7 +50,7 @@
   "navModelConfig": "Variables de modelo",
   "configImportTitle": "Importar y restaurar configuración",
   "configImportDesc": "Sube un ZIP generado por Exportación de configuración para restaurar backends y pipelines en un clic",
-  "configImportDetail": "Acepta centag-initdata.zip generado por la exportación de configuración. La restauración es tipo upsert: los backends/pipelines con el mismo ID se sobrescriben con la versión del paquete; el resto de la configuración no se ve afectada.",
+  "configImportDetail": "Acepta centag-initdata.zip generado por la exportación de configuración. La restauración es tipo upsert: los backends/pipelines con el mismo ID se sobrescriben con la versión del paquete y se restaura el backend/modelo por defecto del sistema; el resto de la configuración no se ve afectada.",
   "configImportChoose": "Elegir paquete ZIP",
   "configImportBtn": "Importar y restaurar",
   "configImporting": "Importando…",
@@ -60,5 +60,7 @@
   "configImportPipelines": "{n} pipelines",
   "configImportPartial": "Algunos elementos no se pudieron importar",
   "configImportSuccess": "Configuración restaurada correctamente",
-  "configImportFailed": "Error al importar: "
+  "configImportFailed": "Error al importar: ",
+  "configExportDetail": "El ZIP exportado incluye: configuraciones de backends (initial-backends.yaml, con modelos por defecto de cada backend), plantillas de pipeline y backend/modelo por defecto del sistema (system-config.yaml). La importación lo restaura todo en un clic.",
+  "configImportDefaultsSkipped": "Backend/modelo por defecto no restaurado"
 }

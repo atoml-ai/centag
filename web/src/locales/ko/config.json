@@ -50,7 +50,7 @@
   "navModelConfig": "모델 변수",
   "configImportTitle": "설정 가져오기 및 복원",
   "configImportDesc": "설정 내보내기로 생성한 ZIP을 업로드하여 백엔드와 파이프라인을 원클릭으로 복원",
-  "configImportDetail": "설정 내보내기가 생성한 centag-initdata.zip를 지원합니다. 덮어쓰기 복원 방식: 동일 ID의 백엔드/파이프라인은 패키지 내용으로 갱신되며, 다른 기존 설정은 영향을 받지 않습니다.",
+  "configImportDetail": "설정 내보내기가 생성한 centag-initdata.zip를 지원합니다. 덮어쓰기 복원 방식: 동일 ID의 백엔드/파이프라인은 패키지 내용으로 갱신되고 시스템 기본 백엔드/모델도 복원됩니다. 다른 기존 설정은 영향을 받지 않습니다.",
   "configImportChoose": "ZIP 선택",
   "configImportBtn": "가져오기 및 복원",
   "configImporting": "가져오는 중…",
@@ -60,5 +60,7 @@
   "configImportPipelines": "파이프라인 {n}개",
   "configImportPartial": "일부 항목 가져오기 실패",
   "configImportSuccess": "설정이 성공적으로 복원되었습니다",
-  "configImportFailed": "가져오기 실패: "
+  "configImportFailed": "가져오기 실패: ",
+  "configExportDetail": "내보낸 ZIP에는 다음이 포함됩니다: 백엔드 설정(initial-backends.yaml, 백엔드별 기본 모델 포함), 파이프라인 템플릿, 시스템 기본 백엔드/모델(system-config.yaml). 가져오기 측에서 원클릭 복원됩니다.",
+  "configImportDefaultsSkipped": "기본 백엔드/모델이 복원되지 않았습니다"
 }

@@ -1,11 +1,12 @@
 package server
 
 // 配置归档导入（一键还原）：接收「配置导出」生成的 centag-initdata.zip，
-// 应用其中的 initial-backends.yaml 与 pipeline-templates/*.yaml。
+// 应用其中的 initial-backends.yaml、pipeline-templates/*.yaml 与 system-config.yaml。
 //
 // 语义与首轮 seeding 完全一致：
 //   - 后端走 bootstrap.ParseInitialBackendsFile（占位符解析 / bearer 剥离 / 模型映射）
 //   - 流水线走 InitialPipelineTemplate → CreatePipelineFromTemplate → Register（upsert）
+//   - 默认后端/模型走 PersistProxyConfig（与首页设置同一持久化路径）
 //
 // 还原为 upsert：已存在的同 ID 资源被覆盖，其余资源不受影响。
 
@@ -27,6 +28,7 @@ import (
 	"centag/core/pkg/pipeline"
 
 	"github.com/gin-gonic/gin"
+	"gopkg.in/yaml.v3"
 )
 
 // configImportMaxBytes 归档大小上限（20MB）：导出产物为纯 YAML 文本，实际远小于此。
@@ -37,6 +39,8 @@ type configImportResult struct {
 	BackendsFailed   int      `json:"backends_failed"`
 	PipelinesApplied int      `json:"pipelines_applied"`
 	PipelinesFailed  int      `json:"pipelines_failed"`
+	DefaultsApplied  bool     `json:"defaults_applied"`
+	DefaultsSkipped  string   `json:"defaults_skipped,omitempty"`
 	PipelineErrors   []string `json:"pipeline_errors,omitempty"`
 }
 
@@ -72,13 +76,13 @@ func (s *Server) importConfigArchive(c *gin.Context) {
 		return
 	}
 
-	backendsData, templatesData, err := parseConfigArchive(data)
+	backendsData, templatesData, systemConfigData, err := parseConfigArchive(data)
 	if err != nil {
 		RespondBadRequest(c, err.Error())
 		return
 	}
-	if backendsData == nil && len(templatesData) == 0 {
-		RespondBadRequest(c, "archive contains neither initial-backends.yaml nor pipeline-templates/*.yaml")
+	if backendsData == nil && len(templatesData) == 0 && systemConfigData == nil {
+		RespondBadRequest(c, "archive contains neither initial-backends.yaml nor pipeline-templates/*.yaml nor system-config.yaml")
 		return
 	}
 
@@ -91,12 +95,65 @@ func (s *Server) importConfigArchive(c *gin.Context) {
 	for _, td := range templatesData {
 		result.applyTemplate(s, td)
 	}
-	logger.Infof("config import: backends upserted=%d failed=%d pipelines applied=%d failed=%d",
-		result.BackendsUpserted, result.BackendsFailed, result.PipelinesApplied, result.PipelinesFailed)
+	if systemConfigData != nil {
+		result.applySystemConfig(s, c, systemConfigData)
+	}
+	logger.Infof("config import: backends upserted=%d failed=%d pipelines applied=%d failed=%d defaults_applied=%v",
+		result.BackendsUpserted, result.BackendsFailed, result.PipelinesApplied, result.PipelinesFailed, result.DefaultsApplied)
 	RespondSuccess(c, gin.H{
 		"success": true,
 		"result":  result,
 	})
+}
+
+// applySystemConfig restores default backend/model (proxy defaults). It runs after
+// backends are applied so the referenced backend usually already exists; a missing
+// backend skips the restore with an explanatory result instead of dangling state.
+func (r *configImportResult) applySystemConfig(s *Server, c *gin.Context, data []byte) {
+	var sys struct {
+		DefaultBackendID  string `json:"default_backend_id" yaml:"default_backend_id"`
+		DefaultModel      string `json:"default_model" yaml:"default_model"`
+		FallbackBackendID string `json:"fallback_backend_id" yaml:"fallback_backend_id"`
+		FallbackModel     string `json:"fallback_model" yaml:"fallback_model"`
+	}
+	if err := yaml.Unmarshal(data, &sys); err != nil {
+		r.DefaultsSkipped = "unparsable system-config.yaml: " + err.Error()
+		return
+	}
+	cfg := config.Get()
+	if cfg == nil {
+		r.DefaultsSkipped = "system config not initialized"
+		return
+	}
+	defBackend := strings.TrimSpace(sys.DefaultBackendID)
+	if defBackend != "" {
+		if _, err := s.backendManager.Get(defBackend); err != nil {
+			r.DefaultsSkipped = fmt.Sprintf("default backend %q not present in archive or instance", defBackend)
+			return
+		}
+	}
+	fbBackend := strings.TrimSpace(sys.FallbackBackendID)
+	if fbBackend != "" {
+		if _, err := s.backendManager.Get(fbBackend); err != nil {
+			r.DefaultsSkipped = fmt.Sprintf("fallback backend %q not present in archive or instance", fbBackend)
+			return
+		}
+	}
+	cfg.Proxy.DefaultBackendID = defBackend
+	cfg.Proxy.DefaultModel = strings.TrimSpace(sys.DefaultModel)
+	cfg.Proxy.FallbackBackendID = fbBackend
+	cfg.Proxy.FallbackModel = strings.TrimSpace(sys.FallbackModel)
+	// 与 handleSaveProxyConfig 一致：默认模型缺省时从后端首选模型回填
+	if cfg.Proxy.DefaultModel == "" && cfg.Proxy.DefaultBackendID != "" {
+		if filled := s.preferredModelForBackend(cfg.Proxy.DefaultBackendID); filled != "" {
+			cfg.Proxy.DefaultModel = filled
+		}
+	}
+	if err := config.PersistProxyConfig(c.Request.Context(), cfg.Proxy); err != nil {
+		r.DefaultsSkipped = "persist proxy config: " + err.Error()
+		return
+	}
+	r.DefaultsApplied = true
 }
 
 // applyBackends parses initial-backends content and upserts into backendManager.
@@ -192,6 +249,7 @@ func backendConfigFromInitial(c *config.BackendConfig, now string) *backend.Back
 		Timeout:         c.Timeout,
 		MaxRetries:      c.MaxRetries,
 		Description:     c.Description,
+		ProbeModel:      c.ProbeModel,
 		Metadata:        c.Metadata,
 		SupportedModels: sms,
 		Capabilities: backend.ModelCapabilities{
@@ -209,14 +267,28 @@ func backendConfigFromInitial(c *config.BackendConfig, now string) *backend.Back
 }
 
 // parseConfigArchive extracts initdata members from a zip archive.
-// Returns initial-backends content (or nil) and pipeline template contents.
-func parseConfigArchive(data []byte) ([]byte, [][]byte, error) {
+// Returns initial-backends content (or nil), pipeline template contents and
+// system-config content (or nil).
+func parseConfigArchive(data []byte) ([]byte, [][]byte, []byte, error) {
 	zr, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
 	if err != nil {
-		return nil, nil, fmt.Errorf("invalid zip archive: %w", err)
+		return nil, nil, nil, fmt.Errorf("invalid zip archive: %w", err)
 	}
 	var backends []byte
+	var systemConfig []byte
 	var templates [][]byte
+	readMember := func(zf *zip.File) ([]byte, error) {
+		rc, err := zf.Open()
+		if err != nil {
+			return nil, err
+		}
+		content, err := io.ReadAll(io.LimitReader(rc, configImportMaxBytes))
+		_ = rc.Close()
+		if err != nil {
+			return nil, fmt.Errorf("read %s: %w", zf.Name, err)
+		}
+		return content, nil
+	}
 	for _, zf := range zr.File {
 		if zf.FileInfo().IsDir() {
 			continue
@@ -224,29 +296,25 @@ func parseConfigArchive(data []byte) ([]byte, [][]byte, error) {
 		name := path.Clean(strings.TrimPrefix(filepath.ToSlash(zf.Name), "./"))
 		switch {
 		case name == "initial-backends.yaml" || name == "initial-backends.yml" || name == "initial-backends.json":
-			rc, err := zf.Open()
+			content, err := readMember(zf)
 			if err != nil {
-				return nil, nil, fmt.Errorf("read %s: %w", zf.Name, err)
-			}
-			content, err := io.ReadAll(io.LimitReader(rc, configImportMaxBytes))
-			_ = rc.Close()
-			if err != nil {
-				return nil, nil, fmt.Errorf("read %s: %w", zf.Name, err)
+				return nil, nil, nil, err
 			}
 			backends = content
+		case name == "system-config.yaml" || name == "system-config.yml":
+			content, err := readMember(zf)
+			if err != nil {
+				return nil, nil, nil, err
+			}
+			systemConfig = content
 		case strings.HasPrefix(name, "pipeline-templates/") &&
 			(strings.HasSuffix(name, ".yaml") || strings.HasSuffix(name, ".yml")):
-			rc, err := zf.Open()
+			content, err := readMember(zf)
 			if err != nil {
-				return nil, nil, fmt.Errorf("read %s: %w", zf.Name, err)
-			}
-			content, err := io.ReadAll(io.LimitReader(rc, configImportMaxBytes))
-			_ = rc.Close()
-			if err != nil {
-				return nil, nil, fmt.Errorf("read %s: %w", zf.Name, err)
+				return nil, nil, nil, err
 			}
 			templates = append(templates, content)
 		}
 	}
-	return backends, templates, nil
+	return backends, templates, systemConfig, nil
 }

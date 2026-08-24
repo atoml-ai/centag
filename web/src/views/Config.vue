@@ -778,7 +778,15 @@ async function handleConfigExport() {
       return
     }
     const templateIds = Object.keys(ConfigBuilder.PIPELINE_TEMPLATES_DATA || {})
-    const blob = await ConfigBuilder.exportAsArchive(entries, templateIds)
+    // 系统默认（默认后端/模型/降级）一并写入 system-config.yaml，导入端一键还原
+    const px = config.value?.proxy || {}
+    const systemConfig = {
+      default_backend_id: px.default_backend_id || '',
+      default_model: px.default_model || '',
+      fallback_backend_id: px.fallback_backend_id || '',
+      fallback_model: px.fallback_model || '',
+    }
+    const blob = await ConfigBuilder.exportAsArchive(entries, templateIds, systemConfig)
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url; a.download = 'centag-initdata.zip'; a.click()
@@ -828,6 +836,8 @@ async function handleConfigImport() {
     if (typeof result.pipelines_applied === 'number') parts.push(t('config.configImportPipelines', { n: result.pipelines_applied }))
     if (Array.isArray(result.pipeline_errors) && result.pipeline_errors.length) {
       ElMessage.warning(`${t('config.configImportPartial')}: ${result.pipeline_errors.join('; ')}`)
+    } else if (result.defaults_skipped) {
+      ElMessage.warning(`${t('config.configImportDefaultsSkipped')}: ${result.defaults_skipped}`)
     } else {
       ElMessage.success(`${t('config.configImportSuccess')} (${parts.join(', ')})`)
     }

@@ -74,8 +74,8 @@ declare module '@shared/config-builder.js' {
     static buildEnvContent(backends: BackendEntry[]): string
     static buildReadme(): string
     static buildPipelineTemplateYaml(templateId: string, backendId: string, model: string): string
-    static buildAllYamlFiles(backends: BackendEntry[], selectedTemplateIds: string[]): Record<string, string>
-    static exportAsArchive(backends: BackendEntry[], selectedTemplateIds: string[]): Promise<Blob>
+    static buildAllYamlFiles(backends: BackendEntry[], selectedTemplateIds: string[], systemConfig?: Record<string, unknown>): Record<string, string>
+    static exportAsArchive(backends: BackendEntry[], selectedTemplateIds: string[], systemConfig?: Record<string, unknown>): Promise<Blob>
   }
 }
 
