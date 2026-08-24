@@ -3,30 +3,30 @@
     <div class="cb-panel-head">
       <div class="cb-title">
         <el-icon><WarningFilled v-if="summary.open > 0" class="cb-alert" /><Cpu v-else /></el-icon>
-        <span>{{ t('circuitBreakerPanel.title') }}</span>
+        <span>{{ t('backends.circuitBreakerPanel.title') }}</span>
         <el-tag v-if="summary.open > 0" type="danger" size="small" effect="dark">
-          {{ t('circuitBreakerPanel.openCount', { n: summary.open }) }}
+          {{ t('backends.circuitBreakerPanel.openCount', { n: summary.open }) }}
         </el-tag>
         <el-tag v-else type="success" size="small" effect="light">
-          {{ t('circuitBreakerPanel.allHealthy') }}
+          {{ t('backends.circuitBreakerPanel.allHealthy') }}
         </el-tag>
       </div>
       <div class="cb-actions">
-        <span class="cb-updated">{{ t('circuitBreakerPanel.updatedAt', { t: updatedAt }) }}</span>
+        <span class="cb-updated">{{ t('backends.circuitBreakerPanel.updatedAt', { t: updatedAt }) }}</span>
         <el-switch
           v-model="autoRefresh"
-          :active-text="t('circuitBreakerPanel.autoRefresh')"
+          :active-text="t('backends.circuitBreakerPanel.autoRefresh')"
           size="small"
           @change="onAutoRefreshChange"
         />
         <el-button size="small" :icon="Refresh" :loading="loading" @click="fetchStatus">
-          {{ t('circuitBreakerPanel.refresh') }}
+          {{ t('backends.circuitBreakerPanel.refresh') }}
         </el-button>
       </div>
     </div>
 
     <div v-if="statusList.length === 0" class="cb-empty">
-      {{ t('circuitBreakerPanel.noData') }}
+      {{ t('backends.circuitBreakerPanel.noData') }}
     </div>
 
     <div v-else class="cb-list">
@@ -45,12 +45,12 @@
             </el-tag>
           </div>
           <div class="cb-meta">
-            <span>{{ t('circuitBreakerPanel.failures') }}: {{ item.consecutive_failures }}/{{ item.failure_threshold }}</span>
+            <span>{{ t('backends.circuitBreakerPanel.failures') }}: {{ item.consecutive_failures }}/{{ item.failure_threshold }}</span>
             <span v-if="item.state === 'open' && item.open_since">
-              {{ t('circuitBreakerPanel.openSince') }}: {{ fmtTime(item.open_since) }}
+              {{ t('backends.circuitBreakerPanel.openSince') }}: {{ fmtTime(item.open_since) }}
             </span>
             <span v-if="item.last_failure_at">
-              {{ t('circuitBreakerPanel.lastFailure') }}: {{ fmtTime(item.last_failure_at) }}
+              {{ t('backends.circuitBreakerPanel.lastFailure') }}: {{ fmtTime(item.last_failure_at) }}
             </span>
           </div>
         </div>
@@ -62,7 +62,7 @@
           :loading="resetting[item.backend_id]"
           @click="handleReset(item.backend_id)"
         >
-          {{ t('circuitBreakerPanel.reset') }}
+          {{ t('backends.circuitBreakerPanel.reset') }}
         </el-button>
       </div>
     </div>
@@ -87,9 +87,9 @@ const resetting = reactive<Record<string, boolean>>({})
 let timer: ReturnType<typeof setInterval> | null = null
 
 function stateLabel(state: string): string {
-  if (state === 'open') return t('circuitBreakerPanel.stateOpen')
-  if (state === 'half-open') return t('circuitBreakerPanel.stateHalfOpen')
-  return t('circuitBreakerPanel.stateClosed')
+  if (state === 'open') return t('backends.circuitBreakerPanel.stateOpen')
+  if (state === 'half-open') return t('backends.circuitBreakerPanel.stateHalfOpen')
+  return t('backends.circuitBreakerPanel.stateClosed')
 }
 
 function stateTagType(state: string): 'danger' | 'warning' | 'success' {
@@ -119,7 +119,7 @@ async function fetchStatus() {
   } catch (err: any) {
     // 静默失败，避免轮询刷屏；仅首次给出提示
     if (statusList.value.length === 0) {
-      ElMessage.error(err?.response?.data?.message || t('circuitBreakerPanel.loadFailed'))
+      ElMessage.error(err?.response?.data?.message || t('backends.circuitBreakerPanel.loadFailed'))
     }
   } finally {
     loading.value = false
@@ -149,10 +149,10 @@ async function handleReset(id: string) {
   resetting[id] = true
   try {
     await resetCircuitBreaker(id)
-    ElMessage.success(t('circuitBreakerPanel.resetSuccess', { id }))
+    ElMessage.success(t('backends.circuitBreakerPanel.resetSuccess', { id }))
     await fetchStatus()
   } catch (err: any) {
-    ElMessage.error(err?.response?.data?.message || t('circuitBreakerPanel.resetFailed'))
+    ElMessage.error(err?.response?.data?.message || t('backends.circuitBreakerPanel.resetFailed'))
   } finally {
     resetting[id] = false
   }

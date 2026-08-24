@@ -144,7 +144,7 @@
               effect="dark"
               class="circuit-tag"
             >
-              {{ b.circuit_state === 'open' ? t('circuitBreakerPanel.stateOpen') : t('circuitBreakerPanel.stateHalfOpen') }}
+              {{ b.circuit_state === 'open' ? t('backends.circuitBreakerPanel.stateOpen') : t('backends.circuitBreakerPanel.stateHalfOpen') }}
             </el-tag>
           </div>
           <div class="default-model-row">
