@@ -646,6 +646,7 @@ func New(cfg *config.Config) *Server {
 	}
 
 	builtinAgentHandler := NewBuiltinAgentHandler(builtinAgentConfig, dataDir, database.Get().GetDB(), database.Get().DriverName(), builtinAgentProvider, baseURL, dbPath, skillPluginRegistry, pipelineRegistry, cfg.Proxy.DefaultBackendID, cfg.Proxy.DefaultModel)
+	builtinAgentHandler.SetAdmissionChecker(admissionChecker) // P1-9：CRUD 与启动共用准入
 
 	// 创建 MCP 代理处理器
 	mcpProxyHandler := NewMCPProxyHandler()

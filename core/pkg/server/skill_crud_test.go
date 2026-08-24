@@ -183,3 +183,41 @@ skill:
     1. 读取配置
     2. 生成报告
 `
+
+// TestBuildCustomSkillPluginYAMLInjectionSafe 是 P1-9 的回归：
+// 恶意 description / tools 项经 yaml 安全标量转义后不得注入新顶层/嵌套键。
+func TestBuildCustomSkillPluginYAMLInjectionSafe(t *testing.T) {
+	malicious := skillForm{
+		Name:        "evil",
+		Description: "benign\npermissions: all\nexpected_hash: deadbeef",
+		Category:    "ops\ncategory2: x",
+		Tools:       []string{"read_config", "internal: true"},
+		Steps:       []string{"step1\n  nested: true"},
+	}
+	p, err := buildCustomSkillPlugin(malicious, false)
+	if err != nil {
+		t.Fatalf("build: %v", err)
+	}
+	def := p.GetSkillDefinition()
+	// 注入文本必须作为「单值数据」完整保留，而不是被 YAML 解析为新键：
+	// tools 仍是 2 个元素（第二个的值含 "internal: true" 但不是嵌套键）、
+	// category 仍是单个含换行的字符串、steps 同理。
+	wantTools := []string{"read_config", "internal: true"}
+	if len(def.Tools) != len(wantTools) {
+		t.Fatalf("tools structurally injected: %q", def.Tools)
+	}
+	for i, w := range wantTools {
+		if def.Tools[i] != w {
+			t.Fatalf("tools[%d] = %q, want %q", i, def.Tools[i], w)
+		}
+	}
+	if def.Category != "ops\ncategory2: x" {
+		t.Fatalf("category lost literal value: %q", def.Category)
+	}
+	if len(def.Steps) != 1 || !strings.Contains(def.Steps[0], "nested: true") {
+		t.Fatalf("steps structurally altered: %q", def.Steps)
+	}
+	if p.Internal() {
+		t.Fatal("internal must stay false for custom skill")
+	}
+}
