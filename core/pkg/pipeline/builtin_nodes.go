@@ -3355,7 +3355,7 @@ func (n *CacheNode) Execute(ctx context.Context, input *NodeInput) (*NodeOutput,
 		// 注意：键中的 {{model}} 只能取调用方传入的 input.Metadata["model"]，
 		// 不能回退 generator 的模型——读侧在生成前无法得知 model，
 		// 写侧若用 generator 模型会导致读写键不一致、缓存永不命中。
-		cacheKey = n.buildCacheKey(&NodeInput{
+		cacheKey = n.buildCacheKey(ctx, &NodeInput{
 			Content:  userInput,
 			Metadata: input.Metadata,
 		})
@@ -3366,7 +3366,7 @@ func (n *CacheNode) Execute(ctx context.Context, input *NodeInput) (*NodeOutput,
 		}
 	} else {
 		// read/delete 操作使用当前 input
-		cacheKey = n.buildCacheKey(input)
+		cacheKey = n.buildCacheKey(ctx, input)
 	}
 
 	// 根据操作类型执行
@@ -3434,7 +3434,7 @@ func (n *CacheNode) executeWithStrategyPlugin(ctx context.Context, input *NodeIn
 	}
 
 	// 构建缓存键
-	cacheKey := n.buildCacheKey(input)
+	cacheKey := n.buildCacheKey(ctx, input)
 
 	switch n.Operation {
 	case "read":
@@ -3501,7 +3501,8 @@ func (n *CacheNode) executeWithStrategyPlugin(ctx context.Context, input *NodeIn
 }
 
 // buildCacheKey 构建缓存键
-func (n *CacheNode) buildCacheKey(input *NodeInput) string {
+// ctx 必须为请求级 context（携带 executionContextKey），否则无法从执行上下文解析 {{model}}。
+func (n *CacheNode) buildCacheKey(ctx context.Context, input *NodeInput) string {
 	// 使用简单的模板替换
 	key := n.KeyTemplate
 
@@ -3515,9 +3516,9 @@ func (n *CacheNode) buildCacheKey(input *NodeInput) string {
 		}
 	}
 
-	// 2. 回退：从执行上下文获取
+	// 2. 回退：从执行上下文获取（必须用请求 ctx，context.Background() 拿不到值）
 	if modelName == "" {
-		if execCtx, ok := context.Background().Value(executionContextKey{}).(*ExecutionContext); ok && execCtx != nil {
+		if execCtx, ok := ctx.Value(executionContextKey{}).(*ExecutionContext); ok && execCtx != nil {
 			if metadata, ok := execCtx.GetVariable("metadata"); ok {
 				if m, ok := metadata.(map[string]interface{}); ok {
 					if model, ok := m["model"].(string); ok && model != "" {

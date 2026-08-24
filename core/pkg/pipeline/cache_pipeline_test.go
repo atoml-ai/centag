@@ -449,7 +449,7 @@ func TestCacheKeyTemplateResolution(t *testing.T) {
 		},
 	}
 
-	cacheKey := cn.buildCacheKey(input)
+	cacheKey := cn.buildCacheKey(context.Background(), input)
 
 	// 验证 {{model}} 被正确替换
 	if cacheKey == "{{model}}:python的用途" {
@@ -487,7 +487,7 @@ func TestCacheKeyTemplateWithMissingModel(t *testing.T) {
 		Content: "python的用途",
 	}
 
-	cacheKey := cn.buildCacheKey(input)
+	cacheKey := cn.buildCacheKey(context.Background(), input)
 
 	// 验证 {{model}} 被替换为 default
 	if cacheKey == "{{model}}:python的用途" {
@@ -501,6 +501,40 @@ func TestCacheKeyTemplateWithMissingModel(t *testing.T) {
 	}
 
 	t.Logf("Cache key template with missing model test passed: key=%s", cacheKey)
+}
+
+// TestCacheKeyModelFromExecCtx 回归：{{model}} 必须能从「请求级 context 注入的
+// execCtx」解析。旧实现在回退分支用 context.Background()，永远拿不到 execCtx，
+// 导致未带 metadata.model 的请求把键解析成 "default"，与写侧串缓存（P-08 类问题）。
+func TestCacheKeyModelFromExecCtx(t *testing.T) {
+	cacheNode, err := NewCacheNode(NodeConfig{
+		CustomConfig: map[string]interface{}{
+			"operation":    "read",
+			"strategy":     "exact",
+			"storage_type": "memory",
+			"key_template": "{{model}}:{{hash}}",
+		},
+	})
+	if err != nil {
+		t.Fatalf("Failed to create cache node: %v", err)
+	}
+	cn := cacheNode.(*CacheNode)
+
+	// 仅把 model 放在 execCtx 的 metadata 中，input.Metadata 不传
+	execCtx := NewExecutionContext(nil)
+	execCtx.SetVariable("metadata", map[string]interface{}{"model": "key-model-B"})
+	ctx := context.WithValue(context.Background(), executionContextKey{}, execCtx)
+
+	input := &NodeInput{Content: "什么是DNS?"}
+
+	cacheKey := cn.buildCacheKey(ctx, input)
+
+	expectedKey := "key-model-B:" + cn.simpleHash("什么是DNS?")
+	if cacheKey != expectedKey {
+		t.Errorf("Expected cache key '%s' (model resolved from execCtx), got: %s", expectedKey, cacheKey)
+	}
+
+	t.Logf("Cache key model-from-execCtx test passed: key=%s", cacheKey)
 }
 
 // TestCacheNodeSemanticStrategyConfig 测试缓存节点语义策略配置读取
