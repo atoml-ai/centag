@@ -119,6 +119,7 @@ func (h *MetricsHandler) GetDashboardStats(c *gin.Context) {
 	}
 
 	if stats.GlobalUnifiedStats != nil {
+		dashboard.RecentRequests = stats.GlobalUnifiedStats.RecentRequests()
 		uniStats := stats.GlobalUnifiedStats.GetStats()
 		dashboard.Cache = CacheStatsSummary{
 			Hits:         uniStats.HitExact + uniStats.HitSemantic,
@@ -261,6 +262,8 @@ type DashboardStats struct {
 	PluginRunning int               `json:"plugin_running"`
 	ModelStats  map[string]*metrics.ModelStatsSnapshot `json:"model_stats"`
 	Database    DatabaseInfo        `json:"database"`
+	// RecentRequests 窗口内最近请求（P1-11：Team Overview「实时请求」卡片数据源）
+	RecentRequests []stats.RequestRecord `json:"recent_requests,omitempty"`
 }
 
 // RequestStats 请求统计摘要

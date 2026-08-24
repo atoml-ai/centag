@@ -178,6 +178,15 @@ type StatsSnapshot struct {
 	Uptime        int64   `json:"uptime_ms"`
 }
 
+// RecentRequests 返回窗口内的最近请求记录（P1-11：供 Dashboard recent_requests 消费）。
+func (s *UnifiedStats) RecentRequests() []RequestRecord {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]RequestRecord, len(s.recentRequests))
+	copy(out, s.recentRequests)
+	return out
+}
+
 // Reset 重置统计
 func (s *UnifiedStats) Reset() {
 	atomic.StoreInt64(&s.totalRequests, 0)
