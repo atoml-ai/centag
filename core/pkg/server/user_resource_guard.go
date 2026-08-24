@@ -52,9 +52,17 @@ func (s *Server) enforcePolicyAllowLists(c *gin.Context, pol *groupmodel.Effecti
 	// X-Pipeline-ID 请求头显式指定流水线（内置 agent 等客户端通过该头
 	// 选中流水线，body model 仅为占位符）。按 core 的解析优先级
 	// （X-Pipeline-ID 请求头 > 模式字符串）优先按 pipeline 白名单检查。
+	// P1-1：header 命中 pipeline 白名单后仍需校验 body model——
+	// 否则计划内用户可借 header 绕开 IsAllowedModel 填任意模型。
 	if headerPID := peekPipelineIDHeader(c); headerPID != "" {
 		if !pol.IsAllowedPipeline(headerPID) {
 			RespondError(c, http.StatusForbidden, "pipeline not allowed for this user")
+			c.Abort()
+			return
+		}
+		norm := strings.TrimSpace(model)
+		if norm != "" && norm != "auto" && !pol.IsAllowedModel(norm) {
+			RespondError(c, http.StatusForbidden, "model not allowed for this user")
 			c.Abort()
 			return
 		}
