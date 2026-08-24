@@ -593,7 +593,7 @@ function exportRowsToEntries(rows: any[]) {
 }
 
 async function fetchExportRows() {
-  const res: any = await api.get('/api/v1/backends/export')
+  const res: any = await api.get('/api/v1/backends/export?mode=plain')
   if (Array.isArray(res)) return res
   if (Array.isArray(res?.backends)) return res.backends
   if (typeof res === 'string') {

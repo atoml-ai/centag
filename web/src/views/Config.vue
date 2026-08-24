@@ -721,7 +721,7 @@ async function handleConfigExport() {
   configExporting.value = true
   try {
     const { ConfigBuilder, fromApiBackend, toBackendEntry } = await import('@/utils/shared-modules')
-    const res: any = await api.get('/api/v1/backends/export')
+    const res: any = await api.get('/api/v1/backends/export?mode=plain')
     const rows = Array.isArray(res) ? res : Array.isArray(res?.backends) ? res.backends : []
     const entries = rows.map((row: any) => {
       const form = fromApiBackend(row)

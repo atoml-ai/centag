@@ -89,9 +89,10 @@ func filterSystemBackends(list []*backend.BackendConfig) []*backend.BackendConfi
 }
 
 // ExportBackends 导出所有后端配置
-// 支持 ?desensitize=true 参数，导出时脱敏 api_key（仅返回 has_api_key 标记）
+// P1-12：默认脱敏（仅返回 has_api_key 标记）；明文需显式 ?mode=plain
+// （管理员接口 + 审计日志），防止一键导出整包泄露密钥。
 func (h *BackendHandler) ExportBackends(c *gin.Context) {
-	desensitize := c.Query("desensitize") == "true"
+	desensitize := c.Query("mode") != "plain"
 
 	backends := h.backendManager.List()
 	if user := h.accessUser(c); user != nil {
@@ -118,7 +119,9 @@ func (h *BackendHandler) ExportBackends(c *gin.Context) {
 		return
 	}
 
-	// 返回完整配置，包含 api_key
+	// 返回完整配置，包含 api_key（明文导出走审计日志）
+	logger.Infof("[audit] backends PLAINTEXT export by user=%s ip=%s count=%d",
+		c.GetString(auth.CtxKeyUsername), c.ClientIP(), len(backends))
 	RespondSuccess(c, backends)
 }
 
