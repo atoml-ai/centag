@@ -9,6 +9,7 @@ import (
 	"centag/core/pkg/logger"
 
 	"github.com/gin-gonic/gin"
+	"gopkg.in/yaml.v3"
 )
 
 // skillForm 自定义 skill 表单（方案 §5.2）。
@@ -40,6 +41,9 @@ func normalizeSkillName(name string) string {
 // buildCustomSkillPlugin 由表单构建 SkillPlugin。
 // implementation = custom.agent-skill-<name>，pipeline id 由去前缀推导（agent-skill-<name>）。
 // internal 参数保留原 skill 的内置属性（内置 skill 直接更新时保持 internal=true，仍受删除保护）。
+//
+// P1-9：所有用户输入经 yaml.Marshal 生成安全标量/序列，杜绝
+// description/system_prompt 换行注入顶层键、tools/steps 注入嵌套键的结构注入面。
 func buildCustomSkillPlugin(f skillForm, internal bool) (skills.SkillPlugin, error) {
 	name := normalizeSkillName(f.Name)
 	if name == "" {
@@ -62,23 +66,37 @@ skill:
 %s
   system_prompt: |-
 %s
-`, name, f.Name, f.Description, name, f.Category, internal, yamlList(f.Tools), yamlList(f.Steps), yamlBlock(f.SystemPrompt))
+`, name, yamlScalar(f.Name), yamlScalar(f.Description), name, yamlScalar(f.Category), internal, yamlList(f.Tools), yamlList(f.Steps), yamlBlock(f.SystemPrompt))
 	return skills.ParseSkillPluginManifest([]byte(manifest))
 }
 
-// yamlList 生成 yaml 列表块。
+// yamlScalar 输出 YAML 安全标量（自动引号/转义，多行折叠为带引号流式标量）。
+func yamlScalar(s string) string {
+	if s == "" {
+		return `""`
+	}
+	b, err := yaml.Marshal(s)
+	if err != nil {
+		return `""`
+	}
+	return strings.TrimRight(string(b), "\n")
+}
+
+// yamlList 生成 yaml 列表块（每项经安全标量转义，防嵌套键注入）。
 func yamlList(items []string) string {
 	if len(items) == 0 {
 		return "    []"
 	}
 	var b strings.Builder
 	for _, it := range items {
-		b.WriteString("    - " + it + "\n")
+		b.WriteString("    - " + strings.ReplaceAll(yamlScalar(it), "\n", "\n      ") + "\n")
 	}
 	return strings.TrimSuffix(b.String(), "\n")
 }
 
 // yamlBlock 生成缩进的块标量内容（每行前置 4 空格）。
+// system_prompt 位于 literal block（|-）内：块内所有行都保持 ≥4 空格缩进，
+// YAML 解析器不会把行首 "key:" 视为新顶层键，故无结构注入面。
 func yamlBlock(content string) string {
 	if content == "" {
 		return ""
@@ -249,7 +267,7 @@ func (h *BuiltinAgentHandler) registerCustomSkill(p skills.SkillPlugin) error {
 	h.skillRegistry.RegisterSkill(skills.SkillFromPlugin(p))
 	// 单一路由管线：skill 变更后重建 agent-skill-router（幂等覆盖，纳入新增/更新后的分支）
 	if h.pipelineRegistry != nil {
-		registerSkillRouter(h.skillPluginRegistry, h.pipelineRegistry, h.defaultBackend, h.defaultModel)
+		registerSkillRouterWithAdmission(h.skillPluginRegistry, h.pipelineRegistry, h.defaultBackend, h.defaultModel, h.admission)
 	}
 	return nil
 }
@@ -264,7 +282,7 @@ func (h *BuiltinAgentHandler) deleteCustomSkill(name string) error {
 	}
 	// 删除后重建 agent-skill-router（移除对应分支；无剩余 skill 时注册表为空，router 不再注册）
 	if h.pipelineRegistry != nil {
-		registerSkillRouter(h.skillPluginRegistry, h.pipelineRegistry, h.defaultBackend, h.defaultModel)
+		registerSkillRouterWithAdmission(h.skillPluginRegistry, h.pipelineRegistry, h.defaultBackend, h.defaultModel, h.admission)
 	}
 	return nil
 }

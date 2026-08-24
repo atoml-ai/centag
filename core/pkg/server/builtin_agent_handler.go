@@ -41,6 +41,7 @@ type BuiltinAgentHandler struct {
 	engine              *agent.RuntimeEngine // 基线引擎（保留兼容；请求路径改用 per-session 引擎）
 	baseURL             string
 	dbPath              string                          // 数据库文件路径（透传给会话引擎的 centag_info 工具）
+	admission           *pipeline.AdmissionChecker      // P1-9：skill CRUD 重建与启动共用同一准入
 	cores               map[string]*agentcore.Agent     // 运行时 Agent 句柄（不可序列化，按会话缓存）
 	engines             map[string]*agent.RuntimeEngine // per-session 引擎：隔离各会话的 backend/token/pipeline（P0-2）
 	coresMu             sync.Mutex
@@ -130,6 +131,15 @@ func (h *BuiltinAgentHandler) engineFor(session *AgentSession) *agent.RuntimeEng
 	e.SetDBPath(h.dbPath)
 	h.engines[session.ID] = e
 	return e
+}
+
+// SetAdmissionChecker 注入与启动期相同的 skill 准入检查器（P1-9）。
+// CRUD 路径重建 agent-skill-router 时复用，堵住「启动被拦截的 skill
+// 经一次编辑回流路由」的绕过。
+func (h *BuiltinAgentHandler) SetAdmissionChecker(ac *pipeline.AdmissionChecker) {
+	if h != nil {
+		h.admission = ac
+	}
 }
 
 // Health 健康检查
