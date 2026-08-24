@@ -282,7 +282,9 @@ func (h *BackendHandler) UpdateBackend(c *gin.Context) {
 	// 若该后端是系统默认，同步 proxy 默认模型（minimal: proxy-config.yaml）
 	syncProxyDefaultModelFromBackend(id)
 
-	RespondSuccess(c, cfg)
+	// 响应与 GET 列表/详情同形状（ToResponse）：default_model 为 probe_model 的派生值，
+	// 避免前端 patch 合并时因缺字段而展示陈旧默认模型
+	RespondSuccess(c, cfg.ToResponse())
 }
 
 // DeleteBackend 删除后端配置（角色感知：普通用户仅可删自有后端）

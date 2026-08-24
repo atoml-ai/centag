@@ -331,7 +331,16 @@ async function handleBackendDefaultModelChange(b: any, model: string) {
   const prevDefaultModel = defaultModel.value
   try {
     const updated = await updateBackend(b.id, { ...b, default_model: model, probe_model: model })
-    emit('backend-updated', updated)
+    // 本地派生 default_model（与服务端 PreferredDefaultModel 同规则），
+    // 不依赖 PUT 响应形状，确保卡片立即指向新默认模型
+    const first = b?.supported_models?.[0]
+    const fallback = (first && (first.actual_model || first.requested_model || first)) || ''
+    emit('backend-updated', {
+      ...(updated && typeof updated === 'object' ? updated : b),
+      id: b.id,
+      probe_model: model,
+      default_model: model || fallback,
+    })
     if (defaultBackendId.value === b.id && model !== defaultModel.value) {
       defaultModel.value = model
       try {
