@@ -215,7 +215,24 @@ resolve_license_key() {
     LICENSE_KEY="$(read_env_key "$secrets" "CENTAG_LICENSE_KEY" 2>/dev/null || true)"
   fi
   if [ -n "${LICENSE_KEY}" ]; then
-    echo "[OK] 许可证已解析（PACKAGE_LICENSE_KEY / secrets CENTAG_LICENSE_KEY）"
+    # 格式预校验：有效令牌为 <base64url(payload)>.<base64url(ed25519 sig)>
+    # 占位符（如 123456）进包后运行时静默失效（/api/v1/admin/* 404），必须在打包期拦截。
+    case "${LICENSE_KEY}" in
+      *.*)
+        _lk_p="${LICENSE_KEY%%.*}"; _lk_s="${LICENSE_KEY#*.}"
+        if [ -z "${_lk_p}" ] || [ -z "${_lk_s}" ] || [ -n "$(printf '%s' "${_lk_p}${_lk_s}" | tr -d 'A-Za-z0-9_-')" ]; then
+          echo "[ERROR] CENTAG_LICENSE_KEY 不是有效令牌格式（应为 <payload>.<signature>）。"
+          echo "        当前值: $(printf '%.24s' "${LICENSE_KEY}")… 请签发真实许可证后重试。"
+          exit 1
+        fi
+        ;;
+      *)
+        echo "[ERROR] CENTAG_LICENSE_KEY 不是有效令牌格式（缺少 payload.signature 两段）。"
+        echo "        当前值: $(printf '%.24s' "${LICENSE_KEY}")… 请签发真实许可证后重试。"
+        exit 1
+        ;;
+    esac
+    echo "[OK] 许可证已解析且格式合法（PACKAGE_LICENSE_KEY / secrets CENTAG_LICENSE_KEY）"
   else
     echo "[WARN] 未解析到 CENTAG_LICENSE_KEY；team 运行时商业门禁将不启用"
     if [ "$EDITION" = "team" ] && [ "${CENTAG_ALLOW_NO_LICENSE:-0}" != "1" ]; then
@@ -226,6 +243,17 @@ resolve_license_key() {
       echo "        仅测试用的无许可证构建可设置 CENTAG_ALLOW_NO_LICENSE=1。"
       exit 1
     fi
+  fi
+
+  # 许可证信任公钥（release 二进制不内置任何公钥，必须经此注入设备端）
+  LICENSE_PUBKEYS="${PACKAGE_LICENSE_PUBKEYS:-}"
+  if [ -z "${LICENSE_PUBKEYS}" ]; then
+    LICENSE_PUBKEYS="$(read_env_key "$secrets" "CENTAG_LICENSE_PUBKEYS" 2>/dev/null || true)"
+  fi
+  if [ -n "${LICENSE_PUBKEYS}" ]; then
+    echo "[OK] 许可证公钥已解析（将写入 runtime.env 的 CENTAG_LICENSE_PUBKEYS）"
+  elif [ -n "${LICENSE_KEY}" ]; then
+    echo "[WARN] 未解析到 CENTAG_LICENSE_PUBKEYS；若二进制未内置该公钥，许可证在设备端将验证失败"
   fi
 }
 
@@ -266,6 +294,9 @@ write_runtime_env() {
     fi
     if [ -n "${LICENSE_KEY:-}" ]; then
       echo "CENTAG_LICENSE_KEY=$(shell_single_quote "${LICENSE_KEY}")"
+    fi
+    if [ -n "${LICENSE_PUBKEYS:-}" ]; then
+      echo "CENTAG_LICENSE_PUBKEYS=$(shell_single_quote "${LICENSE_PUBKEYS}")"
     fi
   } > "${dest_dir}/runtime.env"
   chmod 600 "${dest_dir}/runtime.env"
