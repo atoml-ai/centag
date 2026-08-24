@@ -656,6 +656,21 @@ func (h *PipelineHandler) ExecutePipeline(c *gin.Context) {
 		return
 	}
 
+	// P1-T3：上游 2xx+错误体已被标记为 upstream_error，按映射状态返回规范错误体。
+	if output != nil && output.Metadata != nil {
+		if ue, ok := output.Metadata["upstream_error"].(bool); ok && ue {
+			status := http.StatusBadGateway
+			if sc, ok := output.Metadata["status_code"].(int); ok && sc >= 400 {
+				status = sc
+			} else if scf, ok := output.Metadata["status_code"].(float64); ok && scf >= 400 {
+				status = int(scf)
+			}
+			h.recordExecution(id, input, output, nil)
+			c.JSON(status, gin.H{"success": false, "error": "upstream returned an error payload", "data": output})
+			return
+		}
+	}
+
 	h.recordExecution(id, input, output, nil)
 
 	c.JSON(http.StatusOK, gin.H{
