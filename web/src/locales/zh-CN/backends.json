@@ -21,5 +21,24 @@
   "testConnection": "测试连接",
   "connectionSuccess": "连接成功",
   "connectionFailed": "连接失败",
-  "fetchFailed": "获取后端列表失败"
+  "fetchFailed": "获取后端列表失败",
+  "circuitBreakerPanel": {
+    "title": "熔断器实时状态",
+    "allHealthy": "全部正常",
+    "openCount": "{n} 个熔断中",
+    "autoRefresh": "自动刷新",
+    "refresh": "刷新",
+    "updatedAt": "更新于 {t}",
+    "noData": "暂无熔断器数据（尚未有请求经过后端）",
+    "loadFailed": "加载熔断状态失败",
+    "openSince": "熔断于",
+    "lastFailure": "最近失败",
+    "failures": "连续失败",
+    "stateOpen": "已熔断",
+    "stateHalfOpen": "半开探测",
+    "stateClosed": "正常",
+    "reset": "立即恢复",
+    "resetSuccess": "已重置 {id} 的熔断器",
+    "resetFailed": "重置熔断器失败"
+  }
 }

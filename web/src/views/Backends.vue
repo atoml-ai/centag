@@ -8,6 +8,7 @@
     </div>
 
     <div class="backends-body" v-loading="loading">
+      <CircuitBreakerPanel />
       <ProviderManagerPanel
         :backends="providers"
         @refresh="fetchProviders"
@@ -22,6 +23,7 @@ import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
 import ProviderManagerPanel from '@/components/backends/ProviderManagerPanel.vue'
+import CircuitBreakerPanel from '@/components/backends/CircuitBreakerPanel.vue'
 import api from '@/api'
 
 const { t } = useI18n()

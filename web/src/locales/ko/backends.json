@@ -21,5 +21,24 @@
   "testConnection": "연결 테스트",
   "connectionSuccess": "연결 성공",
   "connectionFailed": "연결 실패",
-  "fetchFailed": "백엔드 목록을 가져오지 못했습니다"
+  "fetchFailed": "백엔드 목록을 가져오지 못했습니다",
+  "circuitBreakerPanel": {
+    "title": "서킷 브레이커 실시간 상태",
+    "allHealthy": "전체 정상",
+    "openCount": "{n}개 차단됨",
+    "autoRefresh": "자동 새로고침",
+    "refresh": "새로고침",
+    "updatedAt": "업데이트 {t}",
+    "noData": "서킷 브레이커 데이터 없음 (트래픽 미경과)",
+    "loadFailed": "상태 로드 실패",
+    "openSince": "차단 시작",
+    "lastFailure": "최근 실패",
+    "failures": "연속 실패",
+    "stateOpen": "차단됨",
+    "stateHalfOpen": "반개방",
+    "stateClosed": "정상",
+    "reset": "즉시 복구",
+    "resetSuccess": "{id} 서킷 브레이커 초기화됨",
+    "resetFailed": "초기화 실패"
+  }
 }

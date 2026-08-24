@@ -21,5 +21,24 @@
   "testConnection": "Test Connection",
   "connectionSuccess": "Connection successful",
   "connectionFailed": "Connection failed",
-  "fetchFailed": "Failed to fetch backends"
+  "fetchFailed": "Failed to fetch backends",
+  "circuitBreakerPanel": {
+    "title": "Circuit Breaker Live Status",
+    "allHealthy": "All healthy",
+    "openCount": "{n} open",
+    "autoRefresh": "Auto refresh",
+    "refresh": "Refresh",
+    "updatedAt": "Updated at {t}",
+    "noData": "No circuit breaker data yet (no traffic through backends)",
+    "loadFailed": "Failed to load circuit breaker status",
+    "openSince": "Open since",
+    "lastFailure": "Last failure",
+    "failures": "Consecutive failures",
+    "stateOpen": "Open",
+    "stateHalfOpen": "Half-open",
+    "stateClosed": "Closed",
+    "reset": "Recover now",
+    "resetSuccess": "Reset circuit breaker for {id}",
+    "resetFailed": "Failed to reset circuit breaker"
+  }
 }

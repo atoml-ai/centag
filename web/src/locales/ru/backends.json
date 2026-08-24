@@ -21,5 +21,24 @@
   "testConnection": "Тест соединения",
   "connectionSuccess": "Соединение успешно",
   "connectionFailed": "Ошибка соединения",
-  "fetchFailed": "Не удалось получить список бэкендов"
+  "fetchFailed": "Не удалось получить список бэкендов",
+  "circuitBreakerPanel": {
+    "title": "Статус автоматического выключателя",
+    "allHealthy": "Все исправны",
+    "openCount": "Открыто: {n}",
+    "autoRefresh": "Автообновление",
+    "refresh": "Обновить",
+    "updatedAt": "Обновлено в {t}",
+    "noData": "Нет данных выключателя (трафик ещё не проходил)",
+    "loadFailed": "Не удалось загрузить статус",
+    "openSince": "Открыт с",
+    "lastFailure": "Последний сбой",
+    "failures": "Последовательных сбоев",
+    "stateOpen": "Открыт",
+    "stateHalfOpen": "Полуоткрыт",
+    "stateClosed": "Закрыт",
+    "reset": "Восстановить",
+    "resetSuccess": "Выключатель {id} сброшен",
+    "resetFailed": "Не удалось сбросить выключатель"
+  }
 }

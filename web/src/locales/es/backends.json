@@ -21,5 +21,24 @@
   "testConnection": "Probar Conexión",
   "connectionSuccess": "Conexión exitosa",
   "connectionFailed": "Conexión fallida",
-  "fetchFailed": "Error al obtener la lista de backends"
+  "fetchFailed": "Error al obtener la lista de backends",
+  "circuitBreakerPanel": {
+    "title": "Estado del Cortacircuitos",
+    "allHealthy": "Todo saludable",
+    "openCount": "{n} abiertos",
+    "autoRefresh": "Autoactualizar",
+    "refresh": "Actualizar",
+    "updatedAt": "Actualizado a las {t}",
+    "noData": "Sin datos del cortacircuitos (aún sin tráfico)",
+    "loadFailed": "Error al cargar el estado",
+    "openSince": "Abierto desde",
+    "lastFailure": "Último fallo",
+    "failures": "Fallos consecutivos",
+    "stateOpen": "Abierto",
+    "stateHalfOpen": "Semiabierto",
+    "stateClosed": "Cerrado",
+    "reset": "Recuperar ahora",
+    "resetSuccess": "Cortacircuitos de {id} reiniciado",
+    "resetFailed": "Error al reiniciar el cortacircuitos"
+  }
 }

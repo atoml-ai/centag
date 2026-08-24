@@ -21,5 +21,24 @@
   "testConnection": "接続テスト",
   "connectionSuccess": "接続成功",
   "connectionFailed": "接続失敗",
-  "fetchFailed": "バックエンド一覧の取得に失敗しました"
+  "fetchFailed": "バックエンド一覧の取得に失敗しました",
+  "circuitBreakerPanel": {
+    "title": "サーキットブレーカー状態",
+    "allHealthy": "全正常",
+    "openCount": "{n} 件遮断中",
+    "autoRefresh": "自動更新",
+    "refresh": "更新",
+    "updatedAt": "更新時刻 {t}",
+    "noData": "サーキットブレーカーデータなし（トラフィック未到達）",
+    "loadFailed": "状態の取得に失敗",
+    "openSince": "遮断開始",
+    "lastFailure": "最終失敗",
+    "failures": "連続失敗",
+    "stateOpen": "遮断中",
+    "stateHalfOpen": "半開試験",
+    "stateClosed": "正常",
+    "reset": "即時復旧",
+    "resetSuccess": "{id} をリセットしました",
+    "resetFailed": "リセット失敗"
+  }
 }
