@@ -249,6 +249,18 @@ func (n *GeneratorNode) Execute(ctx context.Context, input *NodeInput) (*NodeOut
 		logger.Info("[generator] 收到响应", recvFields...)
 	}
 
+	// P1-T4：backend_id 可能是未渲染的模板串（如 {{system.fallback_backend}}），
+	// 泄漏到客户端元数据会暴露调度内部细节；与 token 记录路径（:4615 先例）同策略过滤。
+	return n.buildGeneratorOutput(input, resp, messages), nil
+}
+
+// buildGeneratorOutput 将 LLM 响应组装为节点输出（backend_id 模板串过滤）。
+// messages 为实际发送给 LLM 的消息序列（含注入的 system prompt），用于回填 assistant 轨迹。
+func (n *GeneratorNode) buildGeneratorOutput(input *NodeInput, resp *LLMResponse, messages []Message) *NodeOutput {
+	metaBackendID := n.config.Backend
+	if strings.Contains(metaBackendID, "{{") {
+		metaBackendID = ""
+	}
 	return &NodeOutput{
 		Content:          resp.Content,
 		ToolCalls:        resp.ToolCalls,
@@ -262,14 +274,14 @@ func (n *GeneratorNode) Execute(ctx context.Context, input *NodeInput) (*NodeOut
 		}),
 		Metadata: map[string]interface{}{
 			"model":         resp.Model,
-			"backend_id":    n.config.Backend,
+			"backend_id":    metaBackendID,
 			"tokens":        resp.TokenUsage,
 			"prompt_tokens": len(input.Content) / 4,
 			"temperature":   n.Temperature,
 			"max_tokens":    n.MaxTokens,
 			"finish_reason": resp.FinishReason,
 		},
-	}, nil
+	}
 }
 
 // ExecuteStream 流式执行生成节点。返回 chunk channel，调用方负责消费直到关闭。
