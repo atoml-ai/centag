@@ -172,7 +172,39 @@
           </div>
         </div>
 
-        <div v-if="canWrite" class="backend-actions">
+        <div class="backend-card-footer">
+          <el-tooltip :content="circuitTooltip(b)" placement="top" :show-after="300">
+            <div
+              class="circuit-badge"
+              :class="'cbi-' + circuitStateOf(b.id)"
+              data-testid="circuit-breaker-badge"
+            >
+              <el-icon class="cbi-icon">
+                <WarningFilled v-if="circuitStateOf(b.id) === 'open'" />
+                <Clock v-else-if="circuitStateOf(b.id) === 'half-open'" />
+                <CircleCheckFilled v-else />
+              </el-icon>
+              <span class="cbi-text">{{ circuitLabel(circuitStateOf(b.id)) }}</span>
+              <span
+                v-if="circuitStateOf(b.id) !== 'closed' && circuitFailures(b.id)"
+                class="cbi-fails"
+              >
+                {{ circuitFailures(b.id) }}
+              </span>
+              <el-button
+                v-if="canWrite && circuitStateOf(b.id) !== 'closed'"
+                class="cbi-reset"
+                size="small"
+                text
+                type="warning"
+                :loading="circuitResetting[b.id]"
+                @click.stop="handleCircuitReset(b.id)"
+              >
+                {{ t('backends.circuitBreakerPanel.resetShort') }}
+              </el-button>
+            </div>
+          </el-tooltip>
+          <div v-if="canWrite" class="backend-actions">
           <el-tooltip :content="defaultBackendId === b.id ? t('providerManager.currentDefault') : t('providerManager.setDefault')" placement="top">
             <el-icon
               class="action-star"
@@ -206,6 +238,7 @@
               </el-dropdown-menu>
             </template>
           </el-dropdown>
+          </div>
         </div>
       </div>
       <div v-if="!backends.length" class="empty-tip">
@@ -230,10 +263,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, watch } from 'vue'
+import { ref, reactive, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { Plus, Upload, Download, Connection, Setting, Star, StarFilled, MoreFilled } from '@element-plus/icons-vue'
+import { Plus, Upload, Download, Connection, Setting, Star, StarFilled, MoreFilled, WarningFilled, Clock, CircleCheckFilled } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import * as yaml from 'js-yaml'
 import BackendEditorDialog from '@/components/backends/BackendEditorDialog.vue'
@@ -246,6 +279,7 @@ import {
 } from '@/utils/shared-modules'
 import api from '@/api'
 import { useUserResourceAccess } from '@/composables/useUserResourceAccess'
+import { getCircuitBreakerStatus, resetCircuitBreaker, type CircuitBreakerSnapshot } from '@/api/backend'
 
 const props = defineProps<{
   backends: any[]
@@ -297,6 +331,12 @@ watch(
 
 onMounted(() => {
   loadDefaultBackend()
+  fetchCircuitStatus()
+  startCircuitTimer()
+})
+
+onBeforeUnmount(() => {
+  stopCircuitTimer()
 })
 
 async function loadDefaultBackend() {
@@ -393,6 +433,86 @@ function healthStatusText(id: string) {
   if (healthStatuses[id] === true) return t('providerManager.statusHealthy')
   if (healthStatuses[id] === false) return healthErrors[id] || t('providerManager.statusUnhealthy')
   return t('providerManager.statusUnknown')
+}
+
+// ── 熔断器状态（卡片左下角徽标，替代原独立实时状态栏）──────────────────
+const circuitMap = reactive<Record<string, CircuitBreakerSnapshot | undefined>>({})
+const circuitResetting = reactive<Record<string, boolean>>({})
+const circuitUpdatedAt = ref('')
+let circuitTimer: ReturnType<typeof setInterval> | null = null
+
+async function fetchCircuitStatus() {
+  try {
+    const res: any = await getCircuitBreakerStatus()
+    const data = res?.data ?? res
+    const list: CircuitBreakerSnapshot[] = data?.circuit_breakers ?? []
+    const next: Record<string, CircuitBreakerSnapshot> = {}
+    for (const item of list) next[item.backend_id] = item
+    // 先清后写：被删除的后端不留陈旧状态
+    for (const key of Object.keys(circuitMap)) {
+      if (!next[key]) circuitMap[key] = undefined
+    }
+    Object.assign(circuitMap, next)
+    circuitUpdatedAt.value = new Date().toLocaleTimeString()
+  } catch {
+    /* 静默失败，避免轮询刷屏 */
+  }
+}
+
+function startCircuitTimer() {
+  stopCircuitTimer()
+  circuitTimer = setInterval(fetchCircuitStatus, 5000)
+}
+
+function stopCircuitTimer() {
+  if (circuitTimer) {
+    clearInterval(circuitTimer)
+    circuitTimer = null
+  }
+}
+
+// 无快照视为 closed（尚未有请求经过 = 未熔断），tooltip 中说明
+function circuitStateOf(id: string): string {
+  return circuitMap[id]?.state || 'closed'
+}
+
+function circuitFailures(id: string): string {
+  const snap = circuitMap[id]
+  if (!snap) return ''
+  return `${snap.consecutive_failures}/${snap.failure_threshold}`
+}
+
+function circuitLabel(state: string): string {
+  if (state === 'open') return t('backends.circuitBreakerPanel.stateOpen')
+  if (state === 'half-open') return t('backends.circuitBreakerPanel.stateHalfOpen')
+  return t('backends.circuitBreakerPanel.cardClosed')
+}
+
+function circuitTooltip(b: any): string {
+  const snap = circuitMap[b.id]
+  if (!snap) {
+    return t('backends.circuitBreakerPanel.tooltipTitle') + ' · ' + t('backends.circuitBreakerPanel.noData')
+  }
+  const parts = [
+    t('backends.circuitBreakerPanel.tooltipTitle') + ': ' + circuitLabel(snap.state),
+    `${t('backends.circuitBreakerPanel.failures')} ${snap.consecutive_failures}/${snap.failure_threshold}`
+  ]
+  if (snap.last_failure_at) parts.push(`${t('backends.circuitBreakerPanel.lastFailure')} ${new Date(snap.last_failure_at).toLocaleTimeString()}`)
+  if (circuitUpdatedAt.value) parts.push(t('backends.circuitBreakerPanel.updatedAt', { t: circuitUpdatedAt.value }))
+  return parts.join(' · ')
+}
+
+async function handleCircuitReset(id: string) {
+  circuitResetting[id] = true
+  try {
+    await resetCircuitBreaker(id)
+    ElMessage.success(t('backends.circuitBreakerPanel.resetSuccess', { id }))
+    await fetchCircuitStatus()
+  } catch (err: any) {
+    ElMessage.error(err?.response?.data?.message || t('backends.circuitBreakerPanel.resetFailed'))
+  } finally {
+    circuitResetting[id] = false
+  }
 }
 
 async function probeOne(id: string) {
@@ -935,14 +1055,83 @@ defineExpose({ openCreate, reloadDefault })
   color: #991b1b;
 }
 
+.backend-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(15, 23, 42, 0.06);
+  min-height: 32px;
+}
+
+/* ── 熔断器徽标（卡片左下角）────────────────────────────────── */
+.circuit-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.6;
+  cursor: default;
+  user-select: none;
+}
+
+.cbi-icon {
+  font-size: 13px;
+}
+
+.cbi-fails {
+  font-weight: 500;
+  opacity: 0.85;
+}
+
+.circuit-badge.cbi-closed {
+  color: #059669;
+  background: rgba(16, 185, 129, 0.08);
+}
+
+.circuit-badge.cbi-half-open {
+  color: #b45309;
+  background: rgba(245, 158, 11, 0.12);
+}
+
+.circuit-badge.cbi-half-open .cbi-icon {
+  animation: cbi-spin 1.6s linear infinite;
+}
+
+.circuit-badge.cbi-open {
+  color: #dc2626;
+  background: rgba(239, 68, 68, 0.12);
+  box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.35) inset;
+  animation: cbi-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes cbi-pulse {
+  50% {
+    box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.28) inset;
+    transform: scale(1.03);
+  }
+}
+
+@keyframes cbi-spin {
+  to { transform: rotate(360deg); }
+}
+
+.cbi-reset {
+  height: auto;
+  padding: 0 4px;
+  font-size: 11px;
+}
+
 .backend-actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: flex-end;
   gap: 8px;
-  padding-top: 8px;
-  border-top: 1px solid rgba(15, 23, 42, 0.06);
 }
 
 .action-star {

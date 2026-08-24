@@ -39,6 +39,9 @@
     "stateClosed": "Closed",
     "reset": "Recover now",
     "resetSuccess": "Reset circuit breaker for {id}",
-    "resetFailed": "Failed to reset circuit breaker"
+    "resetFailed": "Failed to reset circuit breaker",
+    "cardClosed": "Breaker OK",
+    "resetShort": "Recover",
+    "tooltipTitle": "Circuit breaker"
   }
 }

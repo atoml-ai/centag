@@ -39,6 +39,9 @@
     "stateClosed": "正常",
     "reset": "立即恢复",
     "resetSuccess": "已重置 {id} 的熔断器",
-    "resetFailed": "重置熔断器失败"
+    "resetFailed": "重置熔断器失败",
+    "cardClosed": "熔断正常",
+    "resetShort": "恢复",
+    "tooltipTitle": "熔断器状态"
   }
 }
