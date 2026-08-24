@@ -158,6 +158,55 @@ func (cb *CircuitBreaker) GetState() CircuitState {
 	return cb.state
 }
 
+// CircuitBreakerSnapshot 熔断器的实时快照，供 WebUI 展示。
+type CircuitBreakerSnapshot struct {
+	BackendID           string     `json:"backend_id"`
+	State               string     `json:"state"`                 // closed / open / half-open
+	IsOpen              bool       `json:"is_open"`               // 是否拒绝请求
+	ConsecutiveFailures int        `json:"consecutive_failures"` // 窗口内连续失败次数
+	FailureCount        int        `json:"failure_count"`        // 窗口内失败总数
+	SuccessCount        int        `json:"success_count"`        // 窗口内成功总数
+	RequestCount        int        `json:"request_count"`        // 窗口内请求总数
+	LastFailureAt       *time.Time `json:"last_failure_at,omitempty"`
+	OpenSince           *time.Time `json:"open_since,omitempty"` // 进入 open 的时间
+	LastStateChange     time.Time  `json:"last_state_change"`
+	FailureThreshold    int        `json:"failure_threshold"`
+	SuccessThreshold    int        `json:"success_threshold"`
+	TimeoutSec          int        `json:"timeout_sec"` // 熔断后到半开探测的等待秒数
+}
+
+// Snapshot 生成实时快照（清理过期记录后计算，调用方需持有写锁语义）。
+func (cb *CircuitBreaker) Snapshot() CircuitBreakerSnapshot {
+	cb.mu.Lock()
+	defer cb.mu.Unlock()
+
+	now := time.Now()
+	cb.cleanupOldRecords(now)
+
+	snap := CircuitBreakerSnapshot{
+		BackendID:           cb.backendID,
+		State:               string(cb.state),
+		IsOpen:              cb.state == StateOpen,
+		ConsecutiveFailures: len(cb.failures),
+		FailureCount:        len(cb.failures),
+		SuccessCount:        len(cb.successes),
+		RequestCount:        len(cb.requests),
+		LastStateChange:     cb.lastStateChange,
+		FailureThreshold:    cb.config.FailureThreshold,
+		SuccessThreshold:    cb.config.SuccessThreshold,
+		TimeoutSec:          int(cb.config.Timeout.Seconds()),
+	}
+	if !cb.lastFailureTime.IsZero() {
+		t := cb.lastFailureTime
+		snap.LastFailureAt = &t
+	}
+	if cb.state == StateOpen {
+		t := cb.lastStateChange
+		snap.OpenSince = &t
+	}
+	return snap
+}
+
 // GetFailureCount 获取失败次数
 func (cb *CircuitBreaker) GetFailureCount() int {
 	cb.mu.RLock()
@@ -439,4 +488,16 @@ func (m *CircuitBreakerManager) GetAllStates() map[string]CircuitState {
 		states[id] = cb.GetState()
 	}
 	return states
+}
+
+// GetAllDetailedStates 获取所有熔断器的实时快照（供 WebUI 展示）。
+func (m *CircuitBreakerManager) GetAllDetailedStates() []CircuitBreakerSnapshot {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	out := make([]CircuitBreakerSnapshot, 0, len(m.breakers))
+	for _, cb := range m.breakers {
+		out = append(out, cb.Snapshot())
+	}
+	return out
 }

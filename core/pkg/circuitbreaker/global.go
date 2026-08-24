@@ -72,6 +72,14 @@ func GetAllStates() map[string]scheduler.CircuitState {
 	return global.GetAllStates()
 }
 
+// GetAllDetailedStates 获取所有后端熔断器的实时快照（供 WebUI 展示）。
+func GetAllDetailedStates() []scheduler.CircuitBreakerSnapshot {
+	if global == nil {
+		return nil
+	}
+	return global.GetAllDetailedStates()
+}
+
 // Reset 重置指定后端的熔断器
 func Reset(backendID string) {
 	if global == nil {

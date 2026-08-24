@@ -15,6 +15,7 @@ import (
 	"centag/core/pkg/circuitbreaker"
 	"centag/core/pkg/database"
 	"centag/core/pkg/logger"
+	"centag/core/pkg/scheduler"
 	"centag/core/pkg/useraccess"
 
 	"github.com/gin-gonic/gin"
@@ -984,26 +985,36 @@ func ensureUniqueBackendID(mgr *backend.Manager, id string) string {
 	return fmt.Sprintf("%s-%d", id, time.Now().UnixNano()%100000)
 }
 
-// GetCircuitBreakerStatus 获取所有后端的熔断器状态
+// GetCircuitBreakerStatus 获取所有后端的熔断器实时状态（供 WebUI 展示）。
 func (h *BackendHandler) GetCircuitBreakerStatus(c *gin.Context) {
-	states := circuitbreaker.GetAllStates()
-
-	type breakerInfo struct {
-		State  string `json:"state"`
-		IsOpen bool   `json:"is_open"`
+	snapshots := circuitbreaker.GetAllDetailedStates()
+	if snapshots == nil {
+		snapshots = []scheduler.CircuitBreakerSnapshot{}
 	}
 
-	result := make(map[string]breakerInfo, len(states))
-	for id, state := range states {
-		result[id] = breakerInfo{
-			State:  string(state),
-			IsOpen: state == "open",
+	summary := gin.H{
+		"total":     len(snapshots),
+		"open":      0,
+		"half_open": 0,
+		"closed":    0,
+	}
+	openList := make([]string, 0)
+	for _, s := range snapshots {
+		switch s.State {
+		case "open":
+			summary["open"] = summary["open"].(int) + 1
+			openList = append(openList, s.BackendID)
+		case "half-open":
+			summary["half_open"] = summary["half_open"].(int) + 1
+		default:
+			summary["closed"] = summary["closed"].(int) + 1
 		}
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"circuit_breakers": result,
-		"count":            len(result),
+		"circuit_breakers": snapshots,
+		"open_backends":    openList,
+		"summary":          summary,
 	})
 }
 
