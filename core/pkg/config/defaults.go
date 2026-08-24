@@ -78,7 +78,7 @@ func DefaultRetryableErrorCodes() []string {
 // DefaultCircuitBreakerSettings 返回默认熔断器参数。
 func DefaultCircuitBreakerSettings() *CircuitBreakerSettings {
 	return &CircuitBreakerSettings{
-		FailureThreshold: 3,
+		FailureThreshold: 5,
 		SuccessThreshold: 2,
 		TimeoutSec:       60,
 		WindowSec:        60,
