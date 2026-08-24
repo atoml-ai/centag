@@ -247,6 +247,7 @@ func backendConfigFromConfig(c *config.BackendConfig) *backend.BackendConfig {
 		Timeout:         c.Timeout,
 		MaxRetries:      c.MaxRetries,
 		Description:     c.Description,
+		ProbeModel:      c.ProbeModel,
 		Metadata:        c.Metadata,
 		SupportedModels: sms,
 		Capabilities: backend.ModelCapabilities{

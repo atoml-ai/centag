@@ -30,6 +30,7 @@ type InitialBackendConfig struct {
 	Timeout         int                      `json:"timeout" yaml:"timeout"`
 	MaxRetries      int                      `json:"max_retries" yaml:"max_retries"`
 	Description     string                   `json:"description" yaml:"description"`
+	ProbeModel      string                   `json:"probe_model,omitempty" yaml:"probe_model,omitempty"`
 	SupportedModels []InitialModelMapping    `json:"supported_models" yaml:"supported_models"`
 	Capabilities    InitialModelCapabilities `json:"capabilities" yaml:"capabilities"`
 	Priority        int                      `json:"priority" yaml:"priority"`
@@ -306,6 +307,7 @@ func convertToBackendConfig(initial InitialBackendConfig) config.BackendConfig {
 		Timeout:         initial.Timeout,
 		MaxRetries:      initial.MaxRetries,
 		Description:     initial.Description,
+		ProbeModel:      strings.TrimSpace(initial.ProbeModel),
 		SupportedModels: supportedModels,
 		Capabilities: config.ModelCapabilities{
 			MaxContextTokens: initial.Capabilities.MaxContextTokens,
