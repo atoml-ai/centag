@@ -165,6 +165,12 @@ type DefaultCapabilityBroker struct {
 	embeddingProvider      EmbeddingProvider
 	// LLM 提供者（用于通过后端管理器调用 LLM）
 	llmProvider LLMProvider
+	// 默认 LLM 目标：当节点权限仅声明纯 "llm.call"（未携带 backend/model，
+	// 见 BaseNode.resolveLLMPermissions 第三档）时回退使用；随系统默认后端
+	// 配置联动更新（SetDefaultLLMTarget），避免注册期快照为空导致拒绝服务。
+	llmTargetMu       sync.RWMutex
+	defaultLLMBackend string
+	defaultLLMModel   string
 }
 
 // CacheStrategyProvider 缓存策略提供者接口
@@ -263,6 +269,40 @@ func (b *DefaultCapabilityBroker) SetLLMProvider(provider LLMProvider) {
 	b.llmProvider = provider
 }
 
+// SetDefaultLLMTarget 设置权限未携带 backend/model 时的默认 LLM 目标。
+// 与系统默认后端配置保持联动（proxy config 更新时由 server 侧刷新），
+// 使 resolveLLMPermissions 的第三档纯 "llm.call" 语义成立。
+func (b *DefaultCapabilityBroker) SetDefaultLLMTarget(backendID, model string) {
+	b.llmTargetMu.Lock()
+	defer b.llmTargetMu.Unlock()
+	b.defaultLLMBackend = strings.TrimSpace(backendID)
+	b.defaultLLMModel = strings.TrimSpace(model)
+}
+
+// defaultLLMTarget 返回当前默认 LLM 目标（并发安全）。
+func (b *DefaultCapabilityBroker) defaultLLMTarget() (backendID, model string) {
+	b.llmTargetMu.RLock()
+	defer b.llmTargetMu.RUnlock()
+	return b.defaultLLMBackend, b.defaultLLMModel
+}
+
+// resolveEffectiveLLMTarget 从权限中提取 backend/model；缺失的段回退到
+// 系统默认目标。返回是否解析成功（两段均非空）。
+func (b *DefaultCapabilityBroker) resolveEffectiveLLMTarget(permissions []string) (backendID, model string, ok bool) {
+	backendID = extractBackendFromPermissions(permissions)
+	model = extractModelFromLLMPermissions(permissions)
+	if backendID == "" || model == "" {
+		defBackend, defModel := b.defaultLLMTarget()
+		if backendID == "" {
+			backendID = defBackend
+		}
+		if model == "" {
+			model = defModel
+		}
+	}
+	return backendID, model, backendID != "" && model != ""
+}
+
 // GetLLMClient 根据权限返回受控的 LLM 客户端
 func (b *DefaultCapabilityBroker) GetLLMClient(ctx context.Context, permissions []string) (LLMClient, error) {
 	if !b.permissionChecker.HasPermission(permissions, "llm.call") {
@@ -271,14 +311,12 @@ func (b *DefaultCapabilityBroker) GetLLMClient(ctx context.Context, permissions 
 
 	// 如果配置了 LLM 提供者，使用它创建客户端
 	if b.llmProvider != nil {
-		// 从权限中提取 backend ID 和 model
-		backendID := extractBackendFromPermissions(permissions)
-		model := extractModelFromLLMPermissions(permissions)
-		
-		if backendID == "" || model == "" {
+		// 从权限中提取 backend ID 和 model；缺失段回退系统默认目标
+		backendID, model, ok := b.resolveEffectiveLLMTarget(permissions)
+		if !ok {
 			return nil, fmt.Errorf("llm.call requires backend ID and model in permissions (e.g., llm.call:backend-id:model-name)")
 		}
-		
+
 		return b.llmProvider.CreateClient(ctx, backendID, model)
 	}
 
@@ -292,13 +330,11 @@ func (b *DefaultCapabilityBroker) GetLLMStreamClient(ctx context.Context, permis
 	}
 
 	if b.llmProvider != nil {
-		backendID := extractBackendFromPermissions(permissions)
-		model := extractModelFromLLMPermissions(permissions)
-		
-		if backendID == "" || model == "" {
+		backendID, model, ok := b.resolveEffectiveLLMTarget(permissions)
+		if !ok {
 			return nil, fmt.Errorf("llm.call requires backend ID and model in permissions (e.g., llm.call:backend-id:model-name)")
 		}
-		
+
 		client, err := b.llmProvider.CreateClient(ctx, backendID, model)
 		if err != nil {
 			return nil, err

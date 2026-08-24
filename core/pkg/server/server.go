@@ -120,6 +120,11 @@ type Server struct {
 
 	startTime time.Time
 	mitmWg    sync.WaitGroup
+
+	// onProxyConfigChanged 系统默认后端配置保存成功后的联动钩子：
+	// 刷新 CapabilityBroker 默认 LLM 目标并幂等重建 centag-ops-router，
+	// 使动态生成的 skill 路由管线始终跟随最新 default_backend/model。
+	onProxyConfigChanged func(defaultBackendID, defaultModel string)
 }
 
 // New 创建服务器
@@ -812,6 +817,9 @@ func New(cfg *config.Config) *Server {
 		capabilityBroker.SetLLMProvider(llmProvider)
 		logger.Info("LLM provider injected into CapabilityBroker")
 	}
+	// 注入默认 LLM 目标：节点权限仅声明纯 "llm.call" 时回退系统默认后端，
+	// 避免注册期快照为空（如首次部署先启动后配默认后端）导致 generator 500。
+	capabilityBroker.SetDefaultLLMTarget(cfg.Proxy.DefaultBackendID, cfg.Proxy.DefaultModel)
 
 	// ── Phase 4A: 注册缓存策略并注入 CapabilityBroker ─────────────────────────────
 	// 注册内置缓存策略（exact/semantic/hybrid）到全局注册表
@@ -1074,6 +1082,16 @@ func New(cfg *config.Config) *Server {
 	}
 	backendHandler.SetEdition(srv.edition)
 	pipelineHandler.SetEdition(srv.edition)
+
+	// 系统默认后端配置变更联动：刷新 broker 默认 LLM 目标 + 幂等重建 skill 路由管线。
+	// 修复：centag-ops-router 注册时快照 default_backend/model，此后修改默认后端
+	// 不生效（节点仍指向旧值），首启未配置时更是空快照导致 generator 500。
+	srv.onProxyConfigChanged = func(defaultBackendID, defaultModel string) {
+		capabilityBroker.SetDefaultLLMTarget(defaultBackendID, defaultModel)
+		if id := registerSkillRouterWithAdmission(skillPluginRegistry, pipelineRegistry, defaultBackendID, defaultModel, admissionChecker); id != "" {
+			logger.Infof("Skill router pipeline rebuilt after proxy config change: %s (default=%s/%s)", id, defaultBackendID, defaultModel)
+		}
+	}
 
 	switch {
 	case srv.edition.IsPersonal():

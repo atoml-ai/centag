@@ -352,6 +352,12 @@ func (s *Server) handleSaveProxyConfig(c *gin.Context) {
 		return
 	}
 
+	// 联动依赖系统默认后端的运行时组件：刷新 broker 默认 LLM 目标并
+	// 幂等重建 centag-ops-router（节点 backend/model 为注册期快照）。
+	if s.onProxyConfigChanged != nil {
+		s.onProxyConfigChanged(cfg.Proxy.DefaultBackendID, cfg.Proxy.DefaultModel)
+	}
+
 	logger.Infof("[ProxyConfig] Updated default_backend_id=%q default_model=%q fallback_backend_id=%q fallback_model=%q response_trace_banner=%v",
 		cfg.Proxy.DefaultBackendID, cfg.Proxy.DefaultModel, cfg.Proxy.FallbackBackendID, cfg.Proxy.FallbackModel, cfg.Proxy.ResponseTraceBanner)
 
