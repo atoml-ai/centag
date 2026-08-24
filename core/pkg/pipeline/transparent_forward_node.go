@@ -777,6 +777,17 @@ func (n *TransparentForwardNode) buildTransparentOutput(
 	}
 
 	content := string(respBody)
+	// P1-T3：上游以 2xx 返回错误对象时，映射为规范 HTTP 状态写回 metadata，
+	// chat 路径（transparentPassthroughStatusAndType）与 /execute 均据此返回真实状态。
+	// 真实 4xx/5xx 保持原有透传语义（见 Plain401AuthStillPassthrough 回归）。
+	effectiveStatus := statusCode
+	if statusCode >= 200 && statusCode < 400 {
+		if mapped, bad := DetectUpstreamErrorPayload(contentType, respBody); bad {
+			effectiveStatus = mapped
+			outMeta["upstream_error"] = true
+			outMeta["status_code"] = effectiveStatus
+		}
+	}
 	var toolCalls []ToolCall
 	finishReason := ""
 	reasoning := ""
