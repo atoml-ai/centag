@@ -2,6 +2,7 @@ package bootstrap
 
 import (
 	"bytes"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
@@ -166,7 +167,24 @@ func loadYAMLFilesFromDir(dirPath string, tmplMap map[string]InitialPipelineTemp
 	return true
 }
 
+// ParseInitialPipelineTemplate parses in-memory pipeline-templates/*.yaml content
+// into an InitialPipelineTemplate (same shape as initdata seeding). Returns an
+// error for unparsable content or missing id; agent.skill manifests are rejected
+// with the same rule as directory loading.
+func ParseInitialPipelineTemplate(data []byte) (*InitialPipelineTemplate, error) {
+	if bytes.Contains(data, []byte("kind: agent.skill")) {
+		return nil, fmt.Errorf("agent.skill manifests are not pipeline templates")
+	}
+	var tmpl InitialPipelineTemplate
+	if err := yaml.Unmarshal(data, &tmpl); err != nil {
+		return nil, fmt.Errorf("parse pipeline template: %w", err)
+	}
+	if strings.TrimSpace(tmpl.ID) == "" {
+		return nil, fmt.Errorf("pipeline template id is required")
+	}
+	return &tmpl, nil
+}
+
 // loadPipelineTemplatesFromDir loads YAML templates from a directory (backward compat).
-func loadPipelineTemplatesFromDir(dirPath string, tmplMap map[string]InitialPipelineTemplate) bool {
-	return loadYAMLFilesFromDir(dirPath, tmplMap)
+func loadPipelineTemplatesFromDir(dirPath string, tmplMap map[string]InitialPipelineTemplate) bool {	return loadYAMLFilesFromDir(dirPath, tmplMap)
 }

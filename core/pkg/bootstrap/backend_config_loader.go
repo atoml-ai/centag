@@ -2,6 +2,7 @@ package bootstrap
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -256,6 +257,22 @@ func LoadInitialBackendsFromJSON() []config.BackendConfig {
 		logger.Infof("bootstrap: 成功加载 %d 个后端配置", len(backends))
 	})
 	return backends
+}
+
+// ParseInitialBackendsFile parses in-memory initial-backends.yaml|json content and
+// converts entries to runtime backend configs. It reuses the exact conversion path
+// of first-run seeding (placeholder resolution / bearer prefix strip / model mapping),
+// so config archive import (一键还原) behaves identically to a fresh seed.
+func ParseInitialBackendsFile(data []byte) ([]config.BackendConfig, error) {
+	var file InitialBackendFile
+	if err := yaml.Unmarshal(data, &file); err != nil {
+		return nil, fmt.Errorf("parse initial backends content: %w", err)
+	}
+	out := make([]config.BackendConfig, 0, len(file.Backends))
+	for _, initial := range file.Backends {
+		out = append(out, convertToBackendConfig(initial))
+	}
+	return out, nil
 }
 
 // convertToBackendConfig converts InitialBackendConfig to config.BackendConfig

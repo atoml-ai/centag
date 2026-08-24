@@ -1597,6 +1597,9 @@ func (s *Server) setupRoutes() {
 			backends.POST("/:id/accounts/:accountId/reset-breaker", s.backendHandler.ResetAccountBreaker)
 		}
 
+		// 配置归档导入（一键还原：应用「配置导出」生成的 centag-initdata.zip）
+		v1Protected.POST("/config/import", s.teamAdminWriteOnly(), s.importConfigArchive)
+
 		// 全局降级策略管理
 		fallbackPolicies := v1Protected.Group("/fallback-policies")
 		{
