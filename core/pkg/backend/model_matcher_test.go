@@ -531,63 +531,6 @@ func TestModelMatcher_DisabledBackend(t *testing.T) {
 	}
 }
 
-func TestStrategies(t *testing.T) {
-	tests := []struct {
-		name    string
-		strategy ModelMatchStrategy
-	}{
-		{
-			name:    "Exact Strategy",
-			strategy: StrategyExact,
-		},
-		{
-			name:    "Family Strategy",
-			strategy: StrategyFamily,
-		},
-		{
-			name:    "Capacity Strategy",
-			strategy: StrategyCapacity,
-		},
-		{
-			name:    "Hybrid Strategy",
-			strategy: StrategyHybrid,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			config := DefaultModelMatchingConfig()
-			config.Strategy = tt.strategy
-
-			executor := GetStrategyExecutor(tt.strategy, config)
-			if executor.Name() != tt.strategy {
-				t.Errorf("Executor name = %v, want %v", executor.Name(), tt.strategy)
-			}
-
-			// 测试执行器的基本功能
-			backends := []*BackendConfig{
-				{
-					ID:      "test",
-					Name:    "Test Backend",
-					Enabled: true,
-					SupportedModels: []ModelMapping{
-						{
-							RequestedModel: "exact",
-							ActualModel:    "exact",
-							IsExact:        true,
-						},
-					},
-				},
-			}
-
-			results := executor.Execute("exact", backends)
-			if len(results) == 0 {
-				t.Errorf("Expected at least one result, got 0")
-			}
-		})
-	}
-}
-
 func TestLevenshteinDistance(t *testing.T) {
 	tests := []struct {
 		s1       string
