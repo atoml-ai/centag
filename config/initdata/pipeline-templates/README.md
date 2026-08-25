@@ -20,7 +20,6 @@
 | `transparent.yaml` | transparent | `#t` | 统一透传流水线（合并 transparent-proxy / direct-backend / fixed-egress） |
 | `router-pipeline.yaml` | router-pipeline | `#r` | 通用路由流水线（合并 router-mode，支持 keyword/llm_classify/hybrid 策略） |
 | `cache-pipeline.yaml` | cache-pipeline | `#cache` | 统一缓存流水线（合并 cache-hit / cache-mode / 18-rag-mode） |
-| `agent-skill-router.yaml` | centag-ops-router | `#ops` | Centag 运维技能路由（LLM 意图分类） |
 | `agent-skill-status-check.yaml` | — | — | skill manifest：状态检查 |
 | `agent-skill-config-analysis.yaml` | — | — | skill manifest：配置分析 |
 | `agent-skill-error-diagnosis.yaml` | — | — | skill manifest：错误诊断 |
