@@ -143,6 +143,24 @@ test-race:
 	@bash scripts/ci-go-packages.sh | xargs go test -race -count=1
 	@echo "Race detection passed"
 
+# Vet every nested plugin module in place. These are separate Go modules:
+# the root ./... sweep never crosses module boundaries, and plain `make test`
+# runs without feature tags so backend_*/protocol_* gated code is skipped.
+# go vet type-checks _test.go too, which catches broken test-only imports
+# across module boundaries (see C-1 regression: plugins/protocol/shared).
+test-plugins:
+	@echo "Vetting nested plugin modules (tags: $(BUILD_TAGS))..."
+	@fail=0; \
+	for d in $$(go list -m -f '{{.Dir}}' | grep '/plugins/'); do \
+		if [ -z "$$(cd "$$d" && go list -tags '$(BUILD_TAGS)' ./... 2>/dev/null)" ]; then \
+			continue; \
+		fi; \
+		echo "  vet $$d"; \
+		(cd "$$d" && go vet -tags '$(BUILD_TAGS)' ./...) || fail=1; \
+	done; \
+	if [ $$fail -ne 0 ]; then echo "plugin module vet FAILED"; exit 1; fi; \
+	echo "All plugin modules vet OK"
+
 # Install dependencies
 install:
 	@echo "Installing dependencies..."
