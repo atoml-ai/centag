@@ -249,6 +249,7 @@ import { ElMessage } from 'element-plus'
 import { getPipelines, getPipelineDefaults, type AgentPatternPipeline } from '@/api/pipeline'
 import { agentApi, type Session as AgentSession } from '@/api/agent'
 import { useAuthStore } from '@/stores/auth'
+import { sanitizeHtml } from '@/utils/sanitize'
 import api from '@/api'
 
 const { t } = useI18n()
@@ -649,12 +650,12 @@ async function applyPreferredPipeline() {
 
 function renderMarkdown(content: string): string {
   if (!content) return ''
-  return content
+  return sanitizeHtml(content
     .replace(/\n/g, '<br>')
     .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
     .replace(/\*(.*?)\*/g, '<em>$1</em>')
     .replace(/`(.*?)`/g, '<code>$1</code>')
-    .replace(/```([\s\S]*?)```/g, '<pre class="code-block">$1</pre>')
+    .replace(/```([\s\S]*?)```/g, '<pre class="code-block">$1</pre>'))
 }
 
 async function scrollToBottom() {

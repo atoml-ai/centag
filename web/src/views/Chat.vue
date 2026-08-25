@@ -573,6 +573,7 @@ import { useI18n } from 'vue-i18n'
 
 import { useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { sanitizeHtml } from '@/utils/sanitize'
 import { useChatPipelines } from '@/composables/useChatPipelines'
 import {
   extractResponseMeta,
@@ -1094,13 +1095,13 @@ function clearMessages() {
 }
 
 function formatMessage(content: string) {
-  // 简单的Markdown格式化
-  return content
+  // 简单的Markdown格式化（输出经 DOMPurify 白名单净化，防 LLM 内容 XSS）
+  return sanitizeHtml(content
     .replace(/\n/g, '<br>')
     .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
     .replace(/\*(.*?)\*/g, '<em>$1</em>')
     .replace(/`(.*?)`/g, '<code>$1</code>')
-    .replace(/```([\s\S]*?)```/g, '<pre class="code-block">$1</pre>')
+    .replace(/```([\s\S]*?)```/g, '<pre class="code-block">$1</pre>'))
 }
 
 </script>
