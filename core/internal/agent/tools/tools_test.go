@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"edgeag/pkg/agentcore"
+	"github.com/atoml-ai/edgeag/pkg/agentcore"
 )
 
 func TestReadConfigTool_Execute(t *testing.T) {

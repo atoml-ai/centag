@@ -3,7 +3,7 @@ module centag/core
 go 1.25.0
 
 require (
-	edgeag v0.0.0
+	github.com/atoml-ai/edgeag v0.0.0
 	github.com/gin-gonic/gin v1.9.1
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/google/uuid v1.6.0
@@ -64,4 +64,4 @@ require (
 	modernc.org/memory v1.11.0 // indirect
 )
 
-replace edgeag => ../../edgeag
+replace github.com/atoml-ai/edgeag => ../../edgeag

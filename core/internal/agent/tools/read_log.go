@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"edgeag/pkg/agentcore"
+	"github.com/atoml-ai/edgeag/pkg/agentcore"
 )
 
 // ReadLogTool 读取日志文件工具

@@ -7,7 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"edgeag/pkg/agentcore"
+	"github.com/atoml-ai/edgeag/pkg/agentcore"
 )
 
 // WriteConfigTool 写入配置文件工具

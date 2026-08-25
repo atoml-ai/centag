@@ -3,7 +3,7 @@ package tools
 import (
 	"database/sql"
 
-	"edgeag/pkg/agentcore"
+	"github.com/atoml-ai/edgeag/pkg/agentcore"
 )
 
 // ToolRegistry 工具注册表

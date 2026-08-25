@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"edgeag/pkg/agentcore"
+	"github.com/atoml-ai/edgeag/pkg/agentcore"
 )
 
 func TestRuntimeEngine_effectiveTimeout(t *testing.T) {

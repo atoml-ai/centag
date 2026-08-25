@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"edgeag/pkg/agentcore"
+	"github.com/atoml-ai/edgeag/pkg/agentcore"
 )
 
 // CentagInfoTool 返回 centag 运行时信息（数据目录结构、日志/数据库路径、配置说明）

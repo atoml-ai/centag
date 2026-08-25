@@ -18,7 +18,7 @@ import (
 	"centag/core/pkg/logger"
 	"centag/core/pkg/pipeline"
 
-	"edgeag/pkg/agentcore"
+	"github.com/atoml-ai/edgeag/pkg/agentcore"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"

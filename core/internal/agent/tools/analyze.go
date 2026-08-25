@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"edgeag/pkg/agentcore"
+	"github.com/atoml-ai/edgeag/pkg/agentcore"
 )
 
 // AnalyzeTool 分析工具

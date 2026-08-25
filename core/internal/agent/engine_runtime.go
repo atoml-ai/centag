@@ -10,7 +10,7 @@ import (
 
 	"centag/core/internal/agent/tools"
 
-	"edgeag/pkg/agentcore"
+	"github.com/atoml-ai/edgeag/pkg/agentcore"
 )
 
 // RuntimeEngine centag 内置 Agent 运行时引擎：负责构建 backend、注册工具并运行多轮推理。

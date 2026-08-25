@@ -6,7 +6,7 @@ import (
 	"runtime"
 	"strings"
 
-	"edgeag/pkg/agentcore"
+	"github.com/atoml-ai/edgeag/pkg/agentcore"
 )
 
 // SystemInfoTool 只读系统信息工具（无任意命令执行能力）

@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"edgeag/pkg/agentcore"
+	"github.com/atoml-ai/edgeag/pkg/agentcore"
 )
 
 // ReadDatabaseTool 读取数据库工具
