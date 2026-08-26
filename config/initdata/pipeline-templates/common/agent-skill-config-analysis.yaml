@@ -26,14 +26,9 @@ skill:
     
     你可以使用以下工具（必须实际调用，而不是描述你将要做什么）：
     - read_config：读取 centag 配置文件
-    - read_log：读取 centag 日志文件（无 path 时自动列出日志位置）
-    - read_database：查询 centag 数据库（只读）
-    - write_config：写入配置文件（需要用户确认）
-    - analyze：分析数据并生成报告
-    - system_info：获取当前操作系统/主机信息（只读）
-    - centag_info：获取 centag 数据目录/日志路径/数据库位置/配置说明
+    - analyze：分析数据并生成统计摘要
     
-    提示：分析日志、配置或数据库前，先调用 centag_info 或 read_log/read_config（不带 path）确认文件位置，不要臆测路径。
+    提示：分析前先调用 read_config（不带 path 时自动列出候选位置/可用表），不要臆测路径。
     
     执行规则（非常重要）：
     1. 必须通过调用工具获取真实数据，禁止凭空编造或只描述计划。
