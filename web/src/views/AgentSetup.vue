@@ -377,46 +377,117 @@
           {{ $t('agentSetup.apiKeyDetected') }}
         </el-alert>
 
-        <!-- 代理模式：选择流水线（走 Centag 代理，含计量/配额/failover/语义缓存） -->
+        <!-- 代理模式：走 Centag 代理（含计量/配额/failover/语义缓存）。
+             子模式二选一：选流水线（模型=centag/<流水线>）；或指定后端+模型（写入时同步为系统默认出站，
+             替换透明流水线的 {{system.default_backend}} / {{system.default_model}}）。 -->
         <div v-if="connectMode === 'proxy'">
-          <div v-if="pipelines.length === 0 && !loadingPipelines" class="empty-pipelines">
-            <el-empty :description="$t('agentSetup.noPipeline')">
-              <el-button type="primary" @click="goPipelines">{{ $t('agentSetup.goToPolicy') }}</el-button>
-            </el-empty>
+          <div class="mode-switch">
+            <el-radio-group v-model="proxyTargetMode">
+              <el-radio-button label="pipeline">{{ $t('agentSetup.proxyTargetPipeline') }}</el-radio-button>
+              <el-radio-button label="backend">{{ $t('agentSetup.proxyTargetBackend') }}</el-radio-button>
+            </el-radio-group>
+            <span class="mode-hint">{{ proxyTargetMode === 'backend' ? $t('agentSetup.proxyTargetBackendHint') : $t('agentSetup.proxyTargetPipelineHint') }}</span>
           </div>
-          <div v-else>
-            <h4 class="select-label">{{ $t('agentSetup.selectPipelineLabel') }}</h4>
+
+          <template v-if="proxyTargetMode === 'pipeline'">
+            <div v-if="pipelines.length === 0 && !loadingPipelines" class="empty-pipelines">
+              <el-empty :description="$t('agentSetup.noPipeline')">
+                <el-button type="primary" @click="goPipelines">{{ $t('agentSetup.goToPolicy') }}</el-button>
+              </el-empty>
+            </div>
+            <div v-else>
+              <h4 class="select-label">{{ $t('agentSetup.selectPipelineLabel') }}</h4>
+              <el-select
+                v-model="selectedPipeline"
+                :placeholder="$t('agentSetup.selectPipelinePlaceholder')"
+                filterable
+                fit-input-width
+                style="width: 100%"
+                @change="onPipelineChange"
+              >
+                <el-option
+                  v-for="pipe in pipelines"
+                  :key="pipe.id"
+                  :label="pipe.name || pipe.id"
+                  :value="pipe.id"
+                >
+                  <div class="pipeline-option">
+                    <span>{{ pipe.name || pipe.id }}</span>
+                    <span v-if="pipe.description" class="pipeline-desc">{{ pipe.description }}</span>
+                  </div>
+                </el-option>
+              </el-select>
+
+              <div v-if="selectedPipeline && !isUIGuideOnlyWizard" class="pipeline-summary">
+                <el-tag type="success" size="default">{{ $t('agentSetup.pipeline') }} {{ selectedPipelineName }}</el-tag>
+                <el-tag type="info" size="default">
+                  <el-icon><Cpu /></el-icon>
+                  {{ $t('agentSetup.modelRoute') }} centag/{{ selectedPipeline }}
+                </el-tag>
+                <span v-if="pipelineModel" class="model-hint">{{ $t('agentSetup.pipelineModelHint') }} {{ pipelineModel }}</span>
+              </div>
+            </div>
+          </template>
+
+          <template v-else>
+            <h4 class="select-label">{{ $t('agentSetup.selectBackendLabel') }}</h4>
             <el-select
-              v-model="selectedPipeline"
-              :placeholder="$t('agentSetup.selectPipelinePlaceholder')"
+              v-model="selectedBackend"
+              :placeholder="$t('agentSetup.selectBackendPlaceholder')"
               filterable
+              fit-input-width
               style="width: 100%"
-              @change="onPipelineChange"
+              @change="onBackendChange"
             >
               <el-option
-                v-for="pipe in pipelines"
-                :key="pipe.id"
-                :label="pipe.name || pipe.id"
-                :value="pipe.id"
+                v-for="b in usableBackends"
+                :key="b.id"
+                :label="b.name || b.id"
+                :value="b.id"
               >
                 <div class="pipeline-option">
-                  <span>{{ pipe.name || pipe.id }}</span>
-                  <span v-if="pipe.description" class="pipeline-desc">{{ pipe.description }}</span>
+                  <span>{{ b.name || b.id }}</span>
+                  <span v-if="b.base_url" class="pipeline-desc">{{ b.base_url }}</span>
                 </div>
               </el-option>
             </el-select>
 
-            <div v-if="selectedPipeline && !isUIGuideOnlyWizard" class="pipeline-summary">
-              <el-tag type="success" size="default">{{ $t('agentSetup.pipeline') }} {{ selectedPipelineName }}</el-tag>
-              <el-tag type="info" size="default">
-                <el-icon><Cpu /></el-icon>
-                {{ $t('agentSetup.modelRoute') }} centag/{{ selectedPipeline }}
-              </el-tag>
-              <span v-if="pipelineModel" class="model-hint">{{ $t('agentSetup.pipelineModelHint') }} {{ pipelineModel }}</span>
+            <template v-if="selectedBackend">
+              <h4 class="select-label">{{ $t('agentSetup.selectModelLabel') }}</h4>
+              <el-select
+                v-model="selectedModel"
+                :placeholder="$t('agentSetup.selectModelPlaceholder')"
+                filterable
+                allow-create
+                default-first-option
+                fit-input-width
+                style="width: 100%"
+              >
+                <el-option
+                  v-for="m in backendModelOptions"
+                  :key="m"
+                  :label="m"
+                  :value="m"
+                />
+              </el-select>
+            </template>
+
+            <div v-if="backends.length && !usableBackends.length" class="empty-pipelines">
+              <el-empty :description="$t('agentSetup.noUsableBackend')" />
             </div>
 
-            <!-- UI 指引：可复制填表参数（模型 ID 随流水线变化） -->
-            <div v-if="isUIGuideOnlyWizard && selectedPipeline" class="ui-params-panel">
+            <div v-if="selectedBackend && !isUIGuideOnlyWizard" class="pipeline-summary">
+              <el-tag type="success" size="default">{{ $t('agentSetup.backendTag') }} {{ selectedBackendName }}</el-tag>
+              <el-tag type="info" size="default">
+                <el-icon><Cpu /></el-icon>
+                {{ $t('agentSetup.modelRoute') }} {{ selectedModel || $t('agentSetup.backendDefaultModel') }}
+              </el-tag>
+              <span class="model-hint">{{ $t('agentSetup.pinnedProxySummaryHint') }}</span>
+            </div>
+          </template>
+
+          <!-- UI 指引：可复制填表参数（两种子模式共用；模型 ID 随子模式变化） -->
+          <div v-if="isUIGuideOnlyWizard && uiGuideModelID" class="ui-params-panel">
               <div class="ui-params-header">
                 <h4 class="ui-params-title">{{ $t('agentSetup.uiGuideParamsTitle') }}</h4>
                 <p class="ui-params-summary">
@@ -461,7 +532,6 @@
                 {{ selectedAgentMeta.ui_guide.restart_hint }}
               </p>
             </div>
-          </div>
         </div>
 
         <!-- 直连模式：直接将已配置后端的真实地址与密钥写入 Agent（绕过 Centag 代理） -->
@@ -474,6 +544,7 @@
             v-model="selectedBackend"
             :placeholder="$t('agentSetup.selectBackendPlaceholder')"
             filterable
+            fit-input-width
             style="width: 100%"
             @change="onBackendChange"
           >
@@ -498,6 +569,7 @@
               filterable
               allow-create
               default-first-option
+              fit-input-width
               style="width: 100%"
             >
               <el-option
@@ -665,6 +737,7 @@
             <li v-else>{{ $t('agentSetup.verifyChecklistStep1', { agent: currentAgentName }) }}</li>
             <li>{{ $t('agentSetup.verifyChecklistStep2') }}</li>
             <li v-if="connectMode === 'direct'">{{ $t('agentSetup.verifyChecklistStep3Direct', { backend: selectedBackendName }) }}</li>
+            <li v-else-if="connectMode === 'proxy' && proxyTargetMode === 'backend'">{{ $t('agentSetup.verifyChecklistStep3Pinned', { backend: selectedBackendName, model: selectedModel || t('agentSetup.backendDefaultModel') }) }}</li>
             <li v-else>{{ $t('agentSetup.verifyChecklistStep3', { pipeline: selectedPipeline }) }}</li>
             <li>{{ $t('agentSetup.verifyChecklistStep4') }}</li>
           </ol>
@@ -736,6 +809,8 @@ const loadingPipelines = ref(false)
 const loadingBackends = ref(false)
 /** 接入模式：proxy=走 Centag 代理；direct=直连已配置后端（绕过代理） */
 const connectMode = ref<'proxy' | 'direct'>('proxy')
+/** 代理子模式（互斥）：pipeline=选流水线；backend=指定后端+模型（写入时同步为系统默认出站） */
+const proxyTargetMode = ref<'pipeline' | 'backend'>('pipeline')
 const selectedBackend = ref('')
 const selectedModel = ref('')
 const backends = ref<Array<{
@@ -966,9 +1041,14 @@ const uiGuideRequestURL = computed(() => {
   return `${origin}/v1`
 })
 
-const uiGuideModelID = computed(() =>
-  selectedPipeline.value ? `centag/${selectedPipeline.value}` : ''
-)
+/** UI 指引模型 ID：流水线方式=centag/<流水线>；指定后端和模型=真实模型名 */
+const uiGuideModelID = computed(() => {
+  if (connectMode.value === 'proxy' && proxyTargetMode.value === 'backend') {
+    const model = selectedModel.value || backendModelOptions.value[0] || ''
+    return selectedBackend.value ? `${selectedBackend.value}/${model}` : model
+  }
+  return selectedPipeline.value ? `centag/${selectedPipeline.value}` : ''
+})
 
 interface UIGuideParamRow {
   label: string
@@ -979,7 +1059,8 @@ interface UIGuideParamRow {
 }
 
 const uiGuideParamRows = computed((): UIGuideParamRow[] => {
-  if (!selectedPipeline.value) return []
+  const pinnedBackendSelected = connectMode.value === 'proxy' && proxyTargetMode.value === 'backend' && !!selectedBackend.value
+  if (!selectedPipeline.value && !pinnedBackendSelected) return []
   const guide = selectedAgentMeta.value?.ui_guide
   const rows: UIGuideParamRow[] = [
     { label: t('agentSetup.uiParamApiFormat'), value: 'OpenAI', copyable: true },
@@ -1025,6 +1106,11 @@ const canGoNext = computed(() => {
     if (connectMode.value === 'direct') {
       if (!selectedBackend.value || usableBackends.value.length === 0) return false
       return true
+    }
+    if (proxyTargetMode.value === 'backend') {
+      if (!selectedBackend.value || usableBackends.value.length === 0) return false
+      if (isUIGuideOnlyWizard.value) return true
+      return hasEnabledAPIKey.value !== false
     }
     if (!selectedPipeline.value || pipelines.value.length === 0) return false
     // UI 指引：Key 在客户端填写，不强制本机已有可解密 Key
@@ -1193,6 +1279,7 @@ function openWizard(agent: { type: string; display_name: string }) {
   selectedAgentDisplay.value = agent.display_name
   wizardStep.value = 0
   connectMode.value = 'proxy'
+  proxyTargetMode.value = 'pipeline'
   selectedPipeline.value = ''
   pipelineModel.value = ''
   selectedBackend.value = ''
@@ -1211,6 +1298,7 @@ function resetWizard() {
   selectedAgent.value = ''
   selectedAgentDisplay.value = ''
   connectMode.value = 'proxy'
+  proxyTargetMode.value = 'pipeline'
   selectedPipeline.value = ''
   pipelineModel.value = ''
   selectedBackend.value = ''
@@ -1227,9 +1315,7 @@ function goPipelines() {
 
 async function nextStep() {
   if (wizardStep.value === 0) {
-    if (connectMode.value === 'direct') {
-      if (!selectedBackend.value) return
-    } else if (!selectedPipeline.value) return
+    if (!connectSelectionReady()) return
     if (isUIGuideOnlyWizard.value) {
       wizardStep.value = 1
       return
@@ -1286,23 +1372,46 @@ async function maybeHandleMissingProxyAPIKeyError(message: string): Promise<bool
   return true
 }
 
-async function generateConfig(): Promise<boolean> {
+/** 当前接入选择是否完整（direct=后端；proxy+backend=后端；proxy+pipeline=流水线） */
+function connectSelectionReady(): boolean {
   if (!selectedAgent.value) return false
+  if (connectMode.value === 'direct') return !!selectedBackend.value
+  if (proxyTargetMode.value === 'backend') return !!selectedBackend.value
+  return !!selectedPipeline.value
+}
+
+/**
+ * 组装 generate/write 请求：
+ * - direct：backend_id(+model)，写真实地址与密钥；
+ * - proxy+pipeline：pipeline_id，模型 centag/<流水线>；
+ * - proxy+backend（经代理钉死默认出站）：backend_id(+model)+via_proxy，
+ *   Agent 配置写 Centag 地址、代理 Key 与真实模型名；服务端把所选后端/模型
+ *   落盘为系统默认（透明流水线兜底出站），备用配置不变。
+ */
+function buildConnectPayload(): Record<string, any> {
+  const payload: Record<string, any> = { agent_type: selectedAgent.value }
   if (connectMode.value === 'direct') {
-    if (!selectedBackend.value) return false
-  } else if (!selectedPipeline.value) return false
+    payload.backend_id = selectedBackend.value
+    if (selectedModel.value) payload.model = selectedModel.value
+    return payload
+  }
+  if (proxyTargetMode.value === 'backend' && selectedBackend.value) {
+    payload.backend_id = selectedBackend.value
+    payload.via_proxy = true
+    if (selectedModel.value) payload.model = selectedModel.value
+    return payload
+  }
+  payload.pipeline_id = selectedPipeline.value || DEFAULT_PIPELINE_ID
+  return payload
+}
+
+async function generateConfig(): Promise<boolean> {
+  if (!connectSelectionReady()) return false
   loadingConfig.value = true
   configResult.value = null
   writeResult.value = null
   try {
-    const payload: any = { agent_type: selectedAgent.value }
-    if (connectMode.value === 'direct') {
-      payload.backend_id = selectedBackend.value
-      if (selectedModel.value) payload.model = selectedModel.value
-    } else {
-      payload.pipeline_id = selectedPipeline.value
-    }
-    const res: any = await api.post('/api/v1/agent/configs/generate', payload)
+    const res: any = await api.post('/api/v1/agent/configs/generate', buildConnectPayload())
     configResult.value = res
     return true
   } catch (e: any) {
@@ -1315,21 +1424,11 @@ async function generateConfig(): Promise<boolean> {
 }
 
 async function writeToConfig() {
-  if (!selectedAgent.value) return
-  if (connectMode.value === 'direct') {
-    if (!selectedBackend.value) return
-  } else if (!selectedPipeline.value) return
+  if (!connectSelectionReady()) return
   writingConfig.value = true
   writeResult.value = null
   try {
-    const payload: any = { agent_type: selectedAgent.value }
-    if (connectMode.value === 'direct') {
-      payload.backend_id = selectedBackend.value
-      if (selectedModel.value) payload.model = selectedModel.value
-    } else {
-      payload.pipeline_id = selectedPipeline.value
-    }
-    const res: any = await api.post('/api/v1/agent/configs/write', payload)
+    const res: any = await api.post('/api/v1/agent/configs/write', buildConnectPayload())
     writeResult.value = res
     if (res.success) {
       ElMessage.success(res.message || t('agentSetup.configWriteSuccess'))
@@ -2070,6 +2169,20 @@ onMounted(() => {
   margin-top: 8px;
 }
 
+.mode-switch {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.mode-hint {
+  font-size: 0.85rem;
+  color: #909399;
+  line-height: 1.5;
+}
+
 .section-subhint {
   margin: 0 0 8px;
   font-size: 0.8rem;
@@ -2086,6 +2199,15 @@ onMounted(() => {
 .pipeline-option {
   display: flex;
   flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.pipeline-option > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .pipeline-desc {
@@ -2110,6 +2232,10 @@ onMounted(() => {
 .model-hint {
   font-size: 0.8rem;
   color: #909399;
+}
+
+.pipeline-summary .model-hint {
+  flex-basis: 100%;
 }
 
 .empty-pipelines {
