@@ -381,26 +381,28 @@ func (d *ModeDispatcher) buildMetadata(
 		"virtual_model": virtualModel, // 虚拟模型名，用于日志和追踪
 	}
 
-	// 从请求头提取配置
-	if backendID := headers["X-Backend-ID"]; backendID != "" {
+	// 从请求头提取配置。
+	// 注意必须用 requestHeaderValue 大小写不敏感读取：Go MIME 规范化会把
+	// X-Backend-ID 存为 X-Backend-Id，直接 headers["X-Backend-ID"] 索引永远落空。
+	if backendID := requestHeaderValue(c, headers, "X-Backend-ID"); backendID != "" {
 		metadata["backend_id"] = backendID
 	}
-	if executorBackend := headers["X-Executor-Backend-ID"]; executorBackend != "" {
+	if executorBackend := requestHeaderValue(c, headers, "X-Executor-Backend-ID"); executorBackend != "" {
 		metadata["executor_backend"] = executorBackend
 	}
-	if executorModel := headers["X-Executor-Model"]; executorModel != "" {
+	if executorModel := requestHeaderValue(c, headers, "X-Executor-Model"); executorModel != "" {
 		metadata["executor_model"] = executorModel
 	}
-	if auditorBackend := headers["X-Auditor-Backend-ID"]; auditorBackend != "" {
+	if auditorBackend := requestHeaderValue(c, headers, "X-Auditor-Backend-ID"); auditorBackend != "" {
 		metadata["auditor_backend"] = auditorBackend
 	}
-	if auditorModel := headers["X-Auditor-Model"]; auditorModel != "" {
+	if auditorModel := requestHeaderValue(c, headers, "X-Auditor-Model"); auditorModel != "" {
 		metadata["auditor_model"] = auditorModel
 	}
-	if optimizerBackend := headers["X-Optimizer-Backend-ID"]; optimizerBackend != "" {
+	if optimizerBackend := requestHeaderValue(c, headers, "X-Optimizer-Backend-ID"); optimizerBackend != "" {
 		metadata["optimizer_backend"] = optimizerBackend
 	}
-	if optimizerModel := headers["X-Optimizer-Model"]; optimizerModel != "" {
+	if optimizerModel := requestHeaderValue(c, headers, "X-Optimizer-Model"); optimizerModel != "" {
 		metadata["optimizer_model"] = optimizerModel
 	}
 	if targetURL := requestHeaderValue(c, headers, "X-Target-URL"); targetURL != "" {
