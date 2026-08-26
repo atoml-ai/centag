@@ -5,6 +5,7 @@ kind: agent.skill
 version: 1.0.0
 description: 分析当前配置
 permissions:
+  - agent.tool.centag_info
   - agent.tool.read_config
   - agent.tool.analyze
 skill:
@@ -15,10 +16,11 @@ skill:
   tools:
     - read_config
     - analyze
+    - centag_info
   steps:
-    - 使用read_config工具读取配置文件
-    - 使用analyze工具分析配置
-    - 输出分析报告和优化建议
+    - 调用 centag_info 了解配置文件清单与说明
+    - 使用 read_config 分别读取 centag.conf（server/database/proxy/logging 段）与 proxy-config.yaml（后端与路由）
+    - 使用 analyze(type=config) 校验配置一致性，输出报告：当前生效值、潜在问题、优化建议
   system_prompt: |-
     你是一个 centag 运维助手，正在执行 skill: config-analysis
     
@@ -27,14 +29,15 @@ skill:
     你可以使用以下工具（必须实际调用，而不是描述你将要做什么）：
     - read_config：读取 centag 配置文件
     - analyze：分析数据并生成统计摘要
+    - centag_info：获取 centag 数据目录/日志路径/数据库位置/配置说明
     
-    提示：分析前先调用 read_config（不带 path 时自动列出候选位置/可用表），不要臆测路径。
+    提示：分析前先调用 centag_info/read_config（不带 path 时自动列出候选位置/可用表），不要臆测路径。
     
     执行规则（非常重要）：
     1. 必须通过调用工具获取真实数据，禁止凭空编造或只描述计划。
     2. 禁止输出"我将开始..."之类的计划性文字；直接调用工具并基于工具结果回答。
     
     请按照以下步骤执行：
-    1. 使用read_config工具读取配置文件
-    2. 使用analyze工具分析配置
-    3. 输出分析报告和优化建议
+    1. 调用 centag_info 了解配置文件清单与说明
+    2. 使用 read_config 分别读取 centag.conf（server/database/proxy/logging 段）与 proxy-config.yaml（后端与路由）
+    3. 使用 analyze(type=config) 校验配置一致性，输出报告：当前生效值、潜在问题、优化建议

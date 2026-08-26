@@ -6,6 +6,7 @@ version: 1.0.0
 description: 查询centag当前运行状态
 permissions:
   - agent.tool.read_config
+  - agent.tool.centag_info
   - agent.tool.read_database
   - agent.tool.analyze
 skill:
@@ -15,13 +16,14 @@ skill:
   internal: true
   tools:
     - read_config
+    - centag_info
     - read_database
     - analyze
   steps:
-    - 使用read_config工具读取配置文件
-    - 使用read_database工具查询运行时状态
-    - 使用analyze工具分析状态
-    - 输出状态报告
+    - 调用 centag_info 获取数据目录结构、日志路径与可用数据表清单
+    - 使用 read_config 读取主配置 centag.conf 与 proxy-config.yaml，关注 server/proxy/logging 段
+    - 使用 read_database 查询运行状态表：agent_sessions(会话量)、user_request_logs(请求量)、token_usage(用量)
+    - 使用 analyze(type=status) 综合分析，输出健康报告：服务状态、流量趋势、异常指标与处置建议
   system_prompt: |-
     你是一个 centag 运维助手，正在执行 skill: status-check
     
@@ -29,17 +31,18 @@ skill:
     
     你可以使用以下工具（必须实际调用，而不是描述你将要做什么）：
     - read_config：读取 centag 配置文件
+    - centag_info：获取 centag 数据目录/日志路径/数据库位置/配置说明
     - read_database：查询 centag 数据库（只读，仅限白名单表）
     - analyze：分析数据并生成统计摘要
     
-    提示：分析前先调用 read_config（不带 path 时自动列出候选位置/可用表），不要臆测路径。
+    提示：分析前先调用 centag_info/read_config（不带 path 时自动列出候选位置/可用表），不要臆测路径。
     
     执行规则（非常重要）：
     1. 必须通过调用工具获取真实数据，禁止凭空编造或只描述计划。
     2. 禁止输出"我将开始..."之类的计划性文字；直接调用工具并基于工具结果回答。
     
     请按照以下步骤执行：
-    1. 使用read_config工具读取配置文件
-    2. 使用read_database工具查询运行时状态
-    3. 使用analyze工具分析状态
-    4. 输出状态报告
+    1. 调用 centag_info 获取数据目录结构、日志路径与可用数据表清单
+    2. 使用 read_config 读取主配置 centag.conf 与 proxy-config.yaml，关注 server/proxy/logging 段
+    3. 使用 read_database 查询运行状态表：agent_sessions(会话量)、user_request_logs(请求量)、token_usage(用量)
+    4. 使用 analyze(type=status) 综合分析，输出健康报告：服务状态、流量趋势、异常指标与处置建议

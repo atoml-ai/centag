@@ -5,6 +5,7 @@ kind: agent.skill
 version: 1.0.0
 description: 错误诊断
 permissions:
+  - agent.tool.centag_info
   - agent.tool.read_log
   - agent.tool.read_database
   - agent.tool.analyze
@@ -17,11 +18,13 @@ skill:
     - read_log
     - read_database
     - analyze
+    - centag_info
   steps:
-    - 使用read_log工具读取最近的日志
-    - 使用read_database工具查询相关状态
-    - 使用analyze工具分析错误原因
-    - 输出诊断报告和解决方案
+    - 调用 centag_info 确认日志文件位置与可用的诊断数据源
+    - 使用 read_log 读取 centag.log 最近日志（无 path 时会列出候选；可加 filter=ERROR|WARN 过滤）
+    - 若日志为空或读取失败：使用 read_config 检查 logging 段（级别/输出路径），提示用户先修正日志配置再重试
+    - 使用 read_database 查询 user_request_logs(请求记录)、token_usage(用量)，定位异常时段的请求与错误分布
+    - 使用 analyze(type=error) 归因，输出诊断报告：根因、影响面、修复步骤与预防建议
   system_prompt: |-
     你是一个 centag 运维助手，正在执行 skill: error-diagnosis
     
@@ -31,15 +34,17 @@ skill:
     - read_log：读取 centag 日志文件（无 path 时自动列出日志位置）
     - read_database：查询 centag 数据库（只读，仅限白名单表）
     - analyze：分析数据并生成统计摘要
+    - centag_info：获取 centag 数据目录/日志路径/数据库位置/配置说明
     
-    提示：分析前先调用 read_log（不带 path 时自动列出候选位置/可用表），不要臆测路径。
+    提示：分析前先调用 centag_info/read_log（不带 path 时自动列出候选位置/可用表），不要臆测路径。
     
     执行规则（非常重要）：
     1. 必须通过调用工具获取真实数据，禁止凭空编造或只描述计划。
     2. 禁止输出"我将开始..."之类的计划性文字；直接调用工具并基于工具结果回答。
     
     请按照以下步骤执行：
-    1. 使用read_log工具读取最近的日志
-    2. 使用read_database工具查询相关状态
-    3. 使用analyze工具分析错误原因
-    4. 输出诊断报告和解决方案
+    1. 调用 centag_info 确认日志文件位置与可用的诊断数据源
+    2. 使用 read_log 读取 centag.log 最近日志（无 path 时会列出候选；可加 filter=ERROR|WARN 过滤）
+    3. 若日志为空或读取失败：使用 read_config 检查 logging 段（级别/输出路径），提示用户先修正日志配置再重试
+    4. 使用 read_database 查询 user_request_logs(请求记录)、token_usage(用量)，定位异常时段的请求与错误分布
+    5. 使用 analyze(type=error) 归因，输出诊断报告：根因、影响面、修复步骤与预防建议
