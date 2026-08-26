@@ -182,7 +182,7 @@ func (e *RuntimeEngine) registerTools(registry agentcore.ToolRegistry, skillTool
 	writeConfig := tools.NewWriteConfigTool(e.dataDir)
 	analyze := tools.NewAnalyzeTool()
 	systemInfo := tools.NewSystemInfoTool()
-	centagInfo := tools.NewCentagInfoTool(e.dataDir, e.dbPath)
+	centagInfo := tools.NewCentagInfoTool(e.dataDir, e.dbPath, e.config.Database.AllowedTables)
 
 	for _, tool := range []agentcore.Tool{readConfig, readLog, readDB, writeConfig, analyze, systemInfo, centagInfo} {
 		if !allowed[tool.Name()] {
