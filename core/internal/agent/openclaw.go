@@ -43,10 +43,10 @@ func (t *OpenClawTemplate) Meta() AgentSetupMeta {
 }
 
 func (t *OpenClawTemplate) ConfigFiles(info *BackendInfo) ([]ConfigFile, error) {
-	url := proxyURL(info.Host, info.Port)
+	url := endpointURL(info)
 	model := defaultModel(info)
 	apiModel := centagAPIModelID(model)
-	modelRef := centagModelRef(model)
+	modelRef := agentModelRef(model)
 	content := fmt.Sprintf(`{
   "agents": {
     "defaults": {
@@ -73,7 +73,7 @@ func (t *OpenClawTemplate) ConfigFiles(info *BackendInfo) ([]ConfigFile, error) 
 }
 
 func (t *OpenClawTemplate) SetupCommand(info *BackendInfo) string {
-	url := proxyURL(info.Host, info.Port)
+	url := endpointURL(info)
 	return fmt.Sprintf(`# OpenClaw: 合并编辑 ~/.openclaw/openclaw.json
 # 在 models.providers 中添加/更新 "centag": { "baseUrl": "%s", "apiKey": "<key>", "api": "openai-completions" }
 `, url)
@@ -93,7 +93,7 @@ func (t *OpenClawTemplate) VerifyCommand(info *BackendInfo) string {
 }
 
 func (t *OpenClawTemplate) Steps(info *BackendInfo) []ConfigStep {
-	url := proxyURL(info.Host, info.Port)
+	url := endpointURL(info)
 	return []ConfigStep{
 		{Title: "合并 OpenClaw provider", Description: fmt.Sprintf("在 openclaw.json 中累加 Centag: %s", url)},
 		{Title: "启动 OpenClaw", Code: "openclaw"},
@@ -101,13 +101,13 @@ func (t *OpenClawTemplate) Steps(info *BackendInfo) []ConfigStep {
 }
 
 func (t *OpenClawTemplate) WriteConfig(info *BackendInfo) error {
-	url := proxyURL(info.Host, info.Port)
+	url := endpointURL(info)
 	model := defaultModel(info)
 	return mergeOpenClawProvider(
 		"~/.openclaw/openclaw.json",
 		url,
 		info.APIKey,
 		centagAPIModelID(model),
-		centagModelRef(model),
+		agentModelRef(model),
 	)
 }

@@ -66,6 +66,42 @@ func centagModelRef(model string) string {
 	return "centag/" + apiModel
 }
 
+// endpointURL 返回 OpenAI 兼容客户端的 base（含 /v1 路径后缀）：
+//   - 直连模式（info.BaseURL 已填真实后端地址）：原样返回真实 BaseURL；
+//   - 代理模式（info.BaseURL 为空）：回退到 Centag 代理地址 host:port/v1（与原 proxyURL 行为一致）。
+//
+// 这样同一个模板既支持走 Centag 代理，也支持把真实后端地址直接写入 Agent。
+func endpointURL(info *BackendInfo) string {
+	if s := strings.TrimSpace(info.BaseURL); s != "" {
+		return strings.TrimRight(s, "/")
+	}
+	return proxyURL(info.Host, info.Port)
+}
+
+// endpointHostRoot 返回仅含 host 根的裸地址（供 Claude Code / Gemini 这类
+// 自行拼接 /v1/messages、/v1beta/models 的客户端使用）：
+//   - 直连模式：去除真实 BaseURL 末尾可能的 /v1、/v1beta 后缀，避免双重路径；
+//   - 代理模式：回退到 host:port（与原 claudeBaseURL/geminiBaseURL 行为一致）。
+func endpointHostRoot(info *BackendInfo) string {
+	if s := strings.TrimSpace(info.BaseURL); s != "" {
+		root := strings.TrimRight(s, "/")
+		root = strings.TrimSuffix(root, "/v1beta")
+		root = strings.TrimSuffix(root, "/v1")
+		return root
+	}
+	return proxyHostURL(info.Host, info.Port)
+}
+
+// agentModelRef 生成写入 Agent 配置的 model 引用：
+//   - 虚拟模型（centag/<pipeline>）：保留 centag/ 前缀（proxy 模式，由 Centag 内部路由）；
+//   - 直连真实模型（如 gpt-4o、gemini-2.0-flash）：原样使用，不再强加 centag/ 前缀。
+func agentModelRef(model string) string {
+	if isVirtualModel(model) {
+		return "centag/" + centagAPIModelID(model)
+	}
+	return model
+}
+
 // expandPath 将 ~ 展开为实际 home 目录。
 // 当 os.UserHomeDir() 为空/无效时（如某些子进程缺少 HOME 环境变量），
 // 依次回退到 $HOME → user.Current().HomeDir；若全部无效则保留原路径（含 ~）。

@@ -11,7 +11,7 @@ func codeBuddyModelID(info *BackendInfo) string {
 
 func codeBuddyModelEntryJSON(info *BackendInfo) string {
 	id := codeBuddyModelID(info)
-	url := chatCompletionsURL(info.Host, info.Port)
+	url := endpointURL(info) + "/chat/completions"
 	return fmt.Sprintf(`{
   "models": [
     {
@@ -71,7 +71,7 @@ func (t *CodeBuddyTemplate) ConfigFiles(info *BackendInfo) ([]ConfigFile, error)
 
 func (t *CodeBuddyTemplate) SetupCommand(info *BackendInfo) string {
 	id := codeBuddyModelID(info)
-	url := chatCompletionsURL(info.Host, info.Port)
+	url := endpointURL(info) + "/chat/completions"
 	return fmt.Sprintf(`# CodeBuddy：合并 ~/.codebuddy/models.json
 # 添加模型 id="%s"
 # url="%s"（须含 /chat/completions）
@@ -93,7 +93,7 @@ func (t *CodeBuddyTemplate) VerifyCommand(info *BackendInfo) string {
 }
 
 func (t *CodeBuddyTemplate) Steps(info *BackendInfo) []ConfigStep {
-	url := chatCompletionsURL(info.Host, info.Port)
+	url := endpointURL(info) + "/chat/completions"
 	return []ConfigStep{
 		{Title: "合并 models.json", Description: fmt.Sprintf("在 ~/.codebuddy/models.json 累加 Centag，url=%s", url)},
 		{Title: "在 CodeBuddy 中选用", Description: "设置 → 模型 → 选择 Centag 自定义模型"},
@@ -106,7 +106,7 @@ func (t *CodeBuddyTemplate) WriteConfig(info *BackendInfo) error {
 		codeBuddyModelID(info),
 		"Centag",
 		info.APIKey,
-		chatCompletionsURL(info.Host, info.Port),
+		endpointURL(info) + "/chat/completions",
 	)
 }
 
@@ -150,7 +150,7 @@ func (t *WorkBuddyTemplate) Meta() AgentSetupMeta {
 
 func (t *WorkBuddyTemplate) ConfigFiles(info *BackendInfo) ([]ConfigFile, error) {
 	id := codeBuddyModelID(info)
-	url := proxyURL(info.Host, info.Port)
+	url := endpointURL(info)
 	content := fmt.Sprintf(`# Centag × WorkBuddy 接入参数
 
 在 WorkBuddy：设置 → 模型 → 自定义 API，填写：
@@ -171,7 +171,7 @@ func (t *WorkBuddyTemplate) ConfigFiles(info *BackendInfo) ([]ConfigFile, error)
 
 func (t *WorkBuddyTemplate) SetupCommand(info *BackendInfo) string {
 	id := codeBuddyModelID(info)
-	url := proxyURL(info.Host, info.Port)
+	url := endpointURL(info)
 	return fmt.Sprintf(`# WorkBuddy：在 UI 填写自定义模型
 # 设置 → 模型 → 自定义 API
 # 请求地址: %s  （也可 %s/chat/completions）
@@ -195,7 +195,7 @@ func (t *WorkBuddyTemplate) VerifyCommand(info *BackendInfo) string {
 
 func (t *WorkBuddyTemplate) Steps(info *BackendInfo) []ConfigStep {
 	id := codeBuddyModelID(info)
-	url := proxyURL(info.Host, info.Port)
+	url := endpointURL(info)
 	return []ConfigStep{
 		{Title: "UI 填写自定义模型", Description: fmt.Sprintf("请求地址=%s（也可 …/chat/completions）；模型 ID=%s", url, id)},
 		{Title: "选用模型", Description: "在对话中选择 Centag 自定义模型"},

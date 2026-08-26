@@ -43,7 +43,7 @@ func (t *GrokBuildTemplate) grokModel(info *BackendInfo) string {
 }
 
 func (t *GrokBuildTemplate) ConfigFiles(info *BackendInfo) ([]ConfigFile, error) {
-	url := proxyURL(info.Host, info.Port)
+	url := endpointURL(info)
 	model := t.grokModel(info)
 	configTOML := fmt.Sprintf(`[models]
 default = "centag"
@@ -63,7 +63,7 @@ context_window = 500000
 }
 
 func (t *GrokBuildTemplate) SetupCommand(info *BackendInfo) string {
-	url := proxyURL(info.Host, info.Port)
+	url := endpointURL(info)
 	model := t.grokModel(info)
 	return fmt.Sprintf(`# Grok Build 一键配置（~/.grok/config.toml）
 mkdir -p ~/.grok
@@ -96,7 +96,7 @@ func (t *GrokBuildTemplate) VerifyCommand(info *BackendInfo) string {
 }
 
 func (t *GrokBuildTemplate) Steps(info *BackendInfo) []ConfigStep {
-	url := proxyURL(info.Host, info.Port)
+	url := endpointURL(info)
 	return []ConfigStep{
 		{Title: "配置 ~/.grok/config.toml", Description: fmt.Sprintf("设置 [model.\"centag\"].base_url=%s", url)},
 		{Title: "启动 Grok", Code: "grok"},

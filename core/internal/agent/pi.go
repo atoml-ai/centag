@@ -40,7 +40,7 @@ func (t *PiTemplate) Meta() AgentSetupMeta {
 }
 
 func (t *PiTemplate) ConfigFiles(info *BackendInfo) ([]ConfigFile, error) {
-	url := proxyURL(info.Host, info.Port)
+	url := endpointURL(info)
 	apiModel := centagAPIModelID(defaultModel(info))
 	modelsJSON := fmt.Sprintf(`{
   "providers": {
@@ -72,7 +72,7 @@ func (t *PiTemplate) ConfigFiles(info *BackendInfo) ([]ConfigFile, error) {
 }
 
 func (t *PiTemplate) SetupCommand(info *BackendInfo) string {
-	url := proxyURL(info.Host, info.Port)
+	url := endpointURL(info)
 	apiModel := centagAPIModelID(defaultModel(info))
 	return fmt.Sprintf(`# Pi: 合并编辑 ~/.pi/agent/models.json
 # 在 providers 中添加/更新 "centag": { "baseUrl": "%s", "apiKey": "<key>", "api": "openai-completions" }
@@ -90,12 +90,12 @@ func (t *PiTemplate) PlatformCommands(info *BackendInfo) PlatformCommands {
 }
 
 func (t *PiTemplate) VerifyCommand(info *BackendInfo) string {
-	modelRef := centagModelRef(defaultModel(info))
+	modelRef := agentModelRef(defaultModel(info))
 	return fmt.Sprintf(`pi -p --model %s "Hello, can you hear me?"`, modelRef)
 }
 
 func (t *PiTemplate) Steps(info *BackendInfo) []ConfigStep {
-	url := proxyURL(info.Host, info.Port)
+	url := endpointURL(info)
 	apiModel := centagAPIModelID(defaultModel(info))
 	return []ConfigStep{
 		{Title: "合并 providers.centag", Description: fmt.Sprintf("在 models.json 中累加 Centag（model=%s，baseUrl=%s）", apiModel, url)},
@@ -105,7 +105,7 @@ func (t *PiTemplate) Steps(info *BackendInfo) []ConfigStep {
 }
 
 func (t *PiTemplate) WriteConfig(info *BackendInfo) error {
-	url := proxyURL(info.Host, info.Port)
+	url := endpointURL(info)
 	apiModel := centagAPIModelID(defaultModel(info))
 	if err := mergePiProvider("~/.pi/agent/models.json", url, info.APIKey, apiModel); err != nil {
 		return err

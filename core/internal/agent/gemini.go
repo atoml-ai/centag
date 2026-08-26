@@ -14,16 +14,9 @@ func (t *GeminiTemplate) Description() string  { return "Google 官方的 AI 编
 
 // geminiBaseURL 返回 Gemini CLI 专用 base URL（不带 /v1）。
 // Gemini CLI 内部会拼 /v1beta/models/...，所以 GOOGLE_GEMINI_BASE_URL 不能带 /v1。
+// 直连模式下使用真实后端地址（去掉末尾 /v1、/v1beta 等路径后缀，避免双重路径）。
 func geminiBaseURL(info *BackendInfo) string {
-	host := info.Host
-	if host == "" {
-		host = "localhost"
-	}
-	port := info.Port
-	if port == 0 {
-		port = 20060
-	}
-	return fmt.Sprintf("http://%s:%d", host, port)
+	return endpointHostRoot(info)
 }
 
 // geminiModel 返回 Gemini CLI 可用的真实模型名。

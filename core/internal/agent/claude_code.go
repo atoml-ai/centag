@@ -36,16 +36,9 @@ func (t *ClaudeCodeTemplate) Meta() AgentSetupMeta {
 
 // claudeBaseURL 返回 Claude Code 专用 base URL（不带 /v1）。
 // Claude Code 自己拼 /v1/messages，所以 ANTHROPIC_BASE_URL 不能带 /v1。
+// 直连模式下使用真实后端地址（去掉末尾 /v1 等路径后缀，避免双重路径）。
 func claudeBaseURL(info *BackendInfo) string {
-	host := info.Host
-	if host == "" {
-		host = "localhost"
-	}
-	port := info.Port
-	if port == 0 {
-		port = 20060
-	}
-	return fmt.Sprintf("http://%s:%d", host, port)
+	return endpointHostRoot(info)
 }
 
 func (t *ClaudeCodeTemplate) ConfigFiles(info *BackendInfo) ([]ConfigFile, error) {

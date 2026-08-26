@@ -35,10 +35,10 @@ func (t *OpenCodeTemplate) Meta() AgentSetupMeta {
 }
 
 func (t *OpenCodeTemplate) ConfigFiles(info *BackendInfo) ([]ConfigFile, error) {
-	url := proxyURL(info.Host, info.Port)
+	url := endpointURL(info)
 	model := defaultModel(info)
 	apiModel := centagAPIModelID(model)
-	modelRef := centagModelRef(model)
+	modelRef := agentModelRef(model)
 	content := fmt.Sprintf(`{
   "$schema": "https://opencode.ai/config.json",
   "provider": {
@@ -65,8 +65,8 @@ func (t *OpenCodeTemplate) ConfigFiles(info *BackendInfo) ([]ConfigFile, error) 
 }
 
 func (t *OpenCodeTemplate) SetupCommand(info *BackendInfo) string {
-	url := proxyURL(info.Host, info.Port)
-	modelRef := centagModelRef(defaultModel(info))
+	url := endpointURL(info)
+	modelRef := agentModelRef(defaultModel(info))
 	return fmt.Sprintf(`# OpenCode: 合并编辑 ~/.config/opencode/opencode.json
 # 在 provider 中添加/更新 "centag"（npm=@ai-sdk/openai-compatible）
 # options.baseURL 设置为 "%s"
@@ -84,13 +84,13 @@ func (t *OpenCodeTemplate) PlatformCommands(info *BackendInfo) PlatformCommands 
 }
 
 func (t *OpenCodeTemplate) VerifyCommand(info *BackendInfo) string {
-	modelRef := centagModelRef(defaultModel(info))
+	modelRef := agentModelRef(defaultModel(info))
 	return fmt.Sprintf(`opencode run -m %s "Hello, can you hear me?"`, modelRef)
 }
 
 func (t *OpenCodeTemplate) Steps(info *BackendInfo) []ConfigStep {
-	url := proxyURL(info.Host, info.Port)
-	modelRef := centagModelRef(defaultModel(info))
+	url := endpointURL(info)
+	modelRef := agentModelRef(defaultModel(info))
 	return []ConfigStep{
 		{Title: "合并 provider.centag", Description: fmt.Sprintf("在 opencode.json 中累加 Centag（model=%s，baseURL=%s）", modelRef, url)},
 		{Title: "启动 OpenCode", Code: "opencode"},
@@ -98,13 +98,13 @@ func (t *OpenCodeTemplate) Steps(info *BackendInfo) []ConfigStep {
 }
 
 func (t *OpenCodeTemplate) WriteConfig(info *BackendInfo) error {
-	url := proxyURL(info.Host, info.Port)
+	url := endpointURL(info)
 	model := defaultModel(info)
 	return mergeOpenCodeProvider(
 		"~/.config/opencode/opencode.json",
 		url,
 		info.APIKey,
 		centagAPIModelID(model),
-		centagModelRef(model),
+		agentModelRef(model),
 	)
 }

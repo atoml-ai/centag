@@ -36,7 +36,7 @@ func (t *HermesTemplate) Meta() AgentSetupMeta {
 }
 
 func (t *HermesTemplate) ConfigFiles(info *BackendInfo) ([]ConfigFile, error) {
-	url := proxyURL(info.Host, info.Port)
+	url := endpointURL(info)
 	model := defaultModel(info)
 	content := fmt.Sprintf(`model:
   default: "%s"
@@ -56,7 +56,7 @@ custom_providers:
 }
 
 func (t *HermesTemplate) SetupCommand(info *BackendInfo) string {
-	url := proxyURL(info.Host, info.Port)
+	url := endpointURL(info)
 	model := defaultModel(info)
 	return fmt.Sprintf(`# Hermes Agent：合并编辑 ~/.hermes/config.yaml
 # model.default="%s" / model.provider="centag" / model.base_url="%s"
@@ -78,7 +78,7 @@ func (t *HermesTemplate) VerifyCommand(info *BackendInfo) string {
 }
 
 func (t *HermesTemplate) Steps(info *BackendInfo) []ConfigStep {
-	url := proxyURL(info.Host, info.Port)
+	url := endpointURL(info)
 	return []ConfigStep{
 		{Title: "合并 config.yaml", Description: fmt.Sprintf("在 ~/.hermes/config.yaml 中累加 Centag: %s", url)},
 		{Title: "启动 Hermes", Code: "hermes"},
@@ -86,7 +86,7 @@ func (t *HermesTemplate) Steps(info *BackendInfo) []ConfigStep {
 }
 
 func (t *HermesTemplate) WriteConfig(info *BackendInfo) error {
-	url := proxyURL(info.Host, info.Port)
+	url := endpointURL(info)
 	model := defaultModel(info)
 	return mergeHermesProvider("~/.hermes/config.yaml", url, info.APIKey, model)
 }

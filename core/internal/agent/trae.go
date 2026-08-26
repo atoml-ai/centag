@@ -106,7 +106,7 @@ func traeModelID(info *BackendInfo) string {
 
 func traeSetupGuideContent(info *BackendInfo) string {
 	id := traeModelID(info)
-	base := proxyURL(info.Host, info.Port)
+	base := endpointURL(info)
 	return fmt.Sprintf(`# Centag × TRAE 接入说明
 
 > TRAE 3.x 的自定义模型由 IDE「设置 → 模型」管理（云端同步），
@@ -150,7 +150,7 @@ func (t *TraeTemplate) ConfigFiles(info *BackendInfo) ([]ConfigFile, error) {
 
 func (t *TraeTemplate) SetupCommand(info *BackendInfo) string {
 	id := traeModelID(info)
-	base := proxyURL(info.Host, info.Port)
+	base := endpointURL(info)
 	return fmt.Sprintf(`# TRAE：必须在 IDE UI 添加自定义模型（settings.json 无效）
 # 设置 → 模型 → 添加模型 → 自定义配置
 # API 格式: OpenAI
@@ -178,7 +178,7 @@ func (t *TraeTemplate) VerifyCommand(info *BackendInfo) string {
 
 func (t *TraeTemplate) Steps(info *BackendInfo) []ConfigStep {
 	id := traeModelID(info)
-	base := proxyURL(info.Host, info.Port)
+	base := endpointURL(info)
 	return []ConfigStep{
 		{Title: "UI 添加自定义模型", Description: fmt.Sprintf("OpenAI；关闭完整 URL；请求地址=%s；模型 ID=%s", base, id)},
 		{Title: "重启 TRAE", Description: "完全退出 IDE 后重新打开，在模型列表中选择 Centag"},

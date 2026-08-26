@@ -147,28 +147,14 @@ func (h *AgentHandler) GenerateConfig(c *gin.Context) {
 		return
 	}
 
-	be, routeName, err := h.resolveBackendForAgent(req.BackendID, req.PipelineID)
+	info, routeName, err := h.buildAgentBackendInfo(c, req.BackendID, req.PipelineID, req.Model, req.Host, req.Port)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		if errors.Is(err, errNoUsableProxyAPIKey) {
+			h.respondProxyAPIKeyError(c, err)
+		} else {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		}
 		return
-	}
-
-	modelName := resolveModelName(req.Model, req.PipelineID, be.SupportedModels)
-	proxyAPIKey, err := h.resolveProxyAPIKey(c)
-	if err != nil {
-		h.respondProxyAPIKeyError(c, err)
-		return
-	}
-
-	info := &agent.BackendInfo{
-		ID:      be.ID,
-		Name:    be.Name,
-		BaseURL: be.BaseURL,
-		APIKey:  proxyAPIKey,
-		Type:    be.Type,
-		Model:   modelName,
-		Host:    req.Host,
-		Port:    req.Port,
 	}
 
 	files, err := tmpl.ConfigFiles(info)
@@ -205,28 +191,14 @@ func (h *AgentHandler) WriteConfig(c *gin.Context) {
 		return
 	}
 
-	be, _, err := h.resolveBackendForAgent(req.BackendID, req.PipelineID)
+	info, _, err := h.buildAgentBackendInfo(c, req.BackendID, req.PipelineID, req.Model, req.Host, req.Port)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		if errors.Is(err, errNoUsableProxyAPIKey) {
+			h.respondProxyAPIKeyError(c, err)
+		} else {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		}
 		return
-	}
-
-	modelName := resolveModelName(req.Model, req.PipelineID, be.SupportedModels)
-	proxyAPIKey, err := h.resolveProxyAPIKey(c)
-	if err != nil {
-		h.respondProxyAPIKeyError(c, err)
-		return
-	}
-
-	info := &agent.BackendInfo{
-		ID:      be.ID,
-		Name:    be.Name,
-		BaseURL: be.BaseURL,
-		APIKey:  proxyAPIKey,
-		Type:    be.Type,
-		Model:   modelName,
-		Host:    req.Host,
-		Port:    req.Port,
 	}
 
 	files, err := tmpl.ConfigFiles(info)
@@ -399,28 +371,14 @@ func (h *AgentHandler) GenerateScript(c *gin.Context) {
 		return
 	}
 
-	be, routeName, err := h.resolveBackendForAgent(req.BackendID, req.PipelineID)
+	info, routeName, err := h.buildAgentBackendInfo(c, req.BackendID, req.PipelineID, req.Model, req.Host, req.Port)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		if errors.Is(err, errNoUsableProxyAPIKey) {
+			h.respondProxyAPIKeyError(c, err)
+		} else {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		}
 		return
-	}
-
-	modelName := resolveModelName(req.Model, req.PipelineID, be.SupportedModels)
-	proxyAPIKey, err := h.resolveProxyAPIKey(c)
-	if err != nil {
-		h.respondProxyAPIKeyError(c, err)
-		return
-	}
-
-	info := &agent.BackendInfo{
-		ID:      be.ID,
-		Name:    be.Name,
-		BaseURL: be.BaseURL,
-		APIKey:  proxyAPIKey,
-		Type:    be.Type,
-		Model:   modelName,
-		Host:    req.Host,
-		Port:    req.Port,
 	}
 
 	commands := tmpl.PlatformCommands(info)
@@ -630,4 +588,70 @@ func (h *AgentHandler) resolveBackendForAgent(backendID, pipelineID string) (*ba
 	}
 
 	return nil, "", fmt.Errorf("pipeline_id is required for agent quick setup")
+}
+
+// effectiveDirectAPIKey 解析直连接入用的真实密钥：优先主密钥，其次账户池中首个启用的账户密钥。
+func effectiveDirectAPIKey(be *backend.BackendConfig) string {
+	if k := strings.TrimSpace(be.APIKey); k != "" {
+		return k
+	}
+	if be.AccountPool != nil {
+		for _, acc := range be.AccountPool.Accounts {
+			if acc.Enabled && strings.TrimSpace(acc.APIKey) != "" {
+				return strings.TrimSpace(acc.APIKey)
+			}
+		}
+	}
+	return ""
+}
+
+// buildAgentBackendInfo 构建接入用的 BackendInfo，并按模式选择密钥来源：
+//   - 流水线模式（pipeline_id 非空）：使用 Centag 代理密钥（llmproxy_*），BaseURL 留空由模板回退到代理地址。
+//   - 直连模式（backend_id 非空）：使用后端真实密钥与真实 BaseURL，跳过代理密钥解析（绕过 Centag 代理）。
+//
+// 直连模式要求后端已启用且具备可用 API Key（主密钥或账户池中任一启用账户），否则返回错误引导用户改用代理模式。
+func (h *AgentHandler) buildAgentBackendInfo(c *gin.Context, backendID, pipelineID, model, host string, port int) (*agent.BackendInfo, string, error) {
+	be, routeName, err := h.resolveBackendForAgent(backendID, pipelineID)
+	if err != nil {
+		return nil, "", err
+	}
+
+	modelName := resolveModelName(model, pipelineID, be.SupportedModels)
+
+	// 直连模式：使用后端真实密钥与真实 BaseURL（绕过 Centag 代理，不走计量/配额/failover/语义缓存）
+	if strings.TrimSpace(backendID) != "" {
+		apiKey := effectiveDirectAPIKey(be)
+		if !be.Enabled {
+			return nil, "", fmt.Errorf("后端 %q 已禁用，无法用于直连接入；请改用 Centag 代理模式，或在后端管理中启用它", be.Name)
+		}
+		if apiKey == "" {
+			return nil, "", fmt.Errorf("后端 %q 未配置可用 API Key，无法直连接入；请改用 Centag 代理模式，或在后端管理中填写密钥", be.Name)
+		}
+		return &agent.BackendInfo{
+			ID:      be.ID,
+			Name:    be.Name,
+			BaseURL: be.BaseURL,
+			APIKey:  apiKey,
+			Type:    be.Type,
+			Model:   modelName,
+			Host:    host,
+			Port:    port,
+		}, routeName, nil
+	}
+
+	// 代理模式：解析 Centag 代理密钥
+	proxyAPIKey, err := h.resolveProxyAPIKey(c)
+	if err != nil {
+		return nil, "", err
+	}
+	return &agent.BackendInfo{
+		ID:      be.ID,
+		Name:    be.Name,
+		BaseURL: be.BaseURL,
+		APIKey:  proxyAPIKey,
+		Type:    be.Type,
+		Model:   modelName,
+		Host:    host,
+		Port:    port,
+	}, routeName, nil
 }

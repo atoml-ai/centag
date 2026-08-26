@@ -37,7 +37,7 @@ func (t *CodexTemplate) Meta() AgentSetupMeta {
 }
 
 func (t *CodexTemplate) ConfigFiles(info *BackendInfo) ([]ConfigFile, error) {
-	url := proxyURL(info.Host, info.Port)
+	url := endpointURL(info)
 	model := defaultModel(info)
 
 	authJSON := fmt.Sprintf(`{"OPENAI_API_KEY": "%s"}`, info.APIKey)
@@ -60,7 +60,7 @@ requires_openai_auth = true
 }
 
 func (t *CodexTemplate) SetupCommand(info *BackendInfo) string {
-	url := proxyURL(info.Host, info.Port)
+	url := endpointURL(info)
 	model := defaultModel(info)
 	return fmt.Sprintf(`# Codex CLI 一键配置
 mkdir -p ~/.codex
@@ -91,7 +91,7 @@ func (t *CodexTemplate) VerifyCommand(info *BackendInfo) string {
 }
 
 func (t *CodexTemplate) Steps(info *BackendInfo) []ConfigStep {
-	url := proxyURL(info.Host, info.Port)
+	url := endpointURL(info)
 	return []ConfigStep{
 		{Title: "配置 auth.json", Code: fmt.Sprintf(`echo '{"OPENAI_API_KEY": "%s"}' > ~/.codex/auth.json`, info.APIKey)},
 		{Title: "配置 config.toml", Description: fmt.Sprintf("设置 base_url 指向 Centag: %s", url)},

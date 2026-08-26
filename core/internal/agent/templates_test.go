@@ -9,11 +9,26 @@ import (
 )
 
 func testInfo() *BackendInfo {
+	// 代理模式夹具：BaseURL 留空，模板应回退到 Centag 代理地址 host:port（localhost:20060）。
 	return &BackendInfo{
 		ID:      "test-be-1",
 		Name:    "MyProxy",
-		BaseURL: "https://api.example.com/v1",
+		BaseURL: "",
 		APIKey:  "sk-test-key",
+		Type:    "openai",
+		Model:   "gpt-4o",
+		Host:    "localhost",
+		Port:    20060,
+	}
+}
+
+// testInfoDirect 直连模式夹具：BaseURL 为真实后端地址，模板应直接写入该地址。
+func testInfoDirect() *BackendInfo {
+	return &BackendInfo{
+		ID:      "test-be-2",
+		Name:    "MyBackend",
+		BaseURL: "https://api.direct.example.com/v1",
+		APIKey:  "sk-direct-key",
 		Type:    "openai",
 		Model:   "gpt-4o",
 		Host:    "localhost",
@@ -762,6 +777,97 @@ func TestChatCompletionsURL(t *testing.T) {
 	want := "http://localhost:20060/v1/chat/completions"
 	if got != want {
 		t.Fatalf("got %s want %s", got, want)
+	}
+}
+
+// TestEndpointHelpers 验证直连/代理两种模式下 URL 与 model 引用助手的行为。
+func TestEndpointHelpers(t *testing.T) {
+	// 代理模式：BaseURL 为空 → 回退 Centag 代理地址（含 /v1）
+	proxy := testInfo()
+	if got := endpointURL(proxy); got != "http://localhost:20060/v1" {
+		t.Fatalf("endpointURL(proxy) = %s", got)
+	}
+	if got := endpointHostRoot(proxy); got != "http://localhost:20060" {
+		t.Fatalf("endpointHostRoot(proxy) = %s", got)
+	}
+
+	// 直连模式：BaseURL 已填 → 原样使用真实地址
+	direct := testInfoDirect()
+	if got := endpointURL(direct); got != "https://api.direct.example.com/v1" {
+		t.Fatalf("endpointURL(direct) = %s", got)
+	}
+	// host 根需去掉 /v1、/v1beta 后缀，避免 Claude/Gemini 自行拼接路径时双重前缀
+	if got := endpointHostRoot(direct); got != "https://api.direct.example.com" {
+		t.Fatalf("endpointHostRoot(direct) = %s", got)
+	}
+	if got := endpointHostRoot(&BackendInfo{BaseURL: "https://generativelanguage.googleapis.com/v1beta"}); got != "https://generativelanguage.googleapis.com" {
+		t.Fatalf("endpointHostRoot(v1beta) = %s", got)
+	}
+
+	// model 引用：虚拟模型保留 centag/ 前缀，真实模型原样使用（不再强加前缀）
+	if got := agentModelRef("centag/p1"); got != "centag/centag/p1" {
+		t.Fatalf("agentModelRef(virtual) = %s", got)
+	}
+	if got := agentModelRef("gpt-4o"); got != "gpt-4o" {
+		t.Fatalf("agentModelRef(real) = %s", got)
+	}
+	if got := agentModelRef("gemini-2.0-flash"); got != "gemini-2.0-flash" {
+		t.Fatalf("agentModelRef(gemini) = %s", got)
+	}
+}
+
+// TestOpenCodeTemplate_DirectMode 验证直连模式把真实 BaseURL 与真实模型名写入配置。
+func TestOpenCodeTemplate_DirectMode(t *testing.T) {
+	info := testInfoDirect()
+	files, err := (&OpenCodeTemplate{}).ConfigFiles(info)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := files[0].Content
+	if !strings.Contains(c, `"baseURL": "https://api.direct.example.com/v1"`) {
+		t.Fatalf("direct mode should write real baseURL: %s", c)
+	}
+	if !strings.Contains(c, `"apiKey": "sk-direct-key"`) {
+		t.Fatalf("direct mode should write real apiKey: %s", c)
+	}
+	// 真实模型名不应被强加 centag/ 前缀
+	if strings.Contains(c, `"gpt-4o"`) == false {
+		t.Fatalf("direct mode should keep real model name gpt-4o: %s", c)
+	}
+	if strings.Contains(c, `centag/gpt-4o`) {
+		t.Fatalf("direct mode must not prefix centag/ on real model: %s", c)
+	}
+}
+
+// TestClaudeCodeDirectMode 验证直连模式 Claude Code 写入真实后端 host 根（无 /v1）。
+func TestClaudeCodeDirectMode(t *testing.T) {
+	info := testInfoDirect()
+	files, err := (&ClaudeCodeTemplate{}).ConfigFiles(info)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := files[0].Content
+	if !strings.Contains(c, `"ANTHROPIC_BASE_URL": "https://api.direct.example.com"`) {
+		t.Fatalf("claude direct mode should use host root without /v1: %s", c)
+	}
+	if !strings.Contains(c, `"ANTHROPIC_AUTH_TOKEN": "sk-direct-key"`) {
+		t.Fatalf("claude direct mode should write real apiKey: %s", c)
+	}
+}
+
+// TestCodeBuddyDirectMode 验证直连模式 CodeBuddy 写入完整 chat/completions 真实地址。
+func TestCodeBuddyDirectMode(t *testing.T) {
+	info := testInfoDirect()
+	files, err := (&CodeBuddyTemplate{}).ConfigFiles(info)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := files[0].Content
+	if !strings.Contains(c, `"url": "https://api.direct.example.com/v1/chat/completions"`) {
+		t.Fatalf("codebuddy direct mode should write full chat url: %s", c)
+	}
+	if !strings.Contains(c, `"apiKey": "sk-direct-key"`) {
+		t.Fatalf("codebuddy direct mode should write real apiKey: %s", c)
 	}
 }
 

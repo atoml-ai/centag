@@ -335,13 +335,21 @@
       </el-steps>
 
       <!-- Step 1: 选择流水线（UI 指引时同页展示可复制参数） -->
-      <div v-show="wizardStep === 0" class="wizard-step" v-loading="loadingPipelines">
+      <div v-show="wizardStep === 0" class="wizard-step" v-loading="connectMode === 'proxy' ? loadingPipelines : loadingBackends">
         <el-alert type="info" :closable="false" show-icon class="step-alert">
-          {{ isUIGuideOnlyWizard ? $t('agentSetup.uiGuidePipelineHint') : $t('agentSetup.selectPipelineHint') }}
+          {{ connectMode === 'direct' ? $t('agentSetup.selectBackendHint') : (isUIGuideOnlyWizard ? $t('agentSetup.uiGuidePipelineHint') : $t('agentSetup.selectPipelineHint')) }}
         </el-alert>
 
+        <div class="mode-switch">
+          <el-radio-group v-model="connectMode">
+            <el-radio-button label="proxy">{{ $t('agentSetup.modeProxy') }}</el-radio-button>
+            <el-radio-button label="direct">{{ $t('agentSetup.modeDirect') }}</el-radio-button>
+          </el-radio-group>
+          <span class="mode-hint">{{ connectMode === 'direct' ? $t('agentSetup.modeDirectHint') : $t('agentSetup.modeProxyHint') }}</span>
+        </div>
+
         <el-alert
-          v-if="hasEnabledAPIKey === false"
+          v-if="connectMode === 'proxy' && hasEnabledAPIKey === false"
           type="warning"
           :closable="false"
           show-icon
@@ -360,7 +368,7 @@
           </div>
         </el-alert>
         <el-alert
-          v-else-if="hasEnabledAPIKey === true && !isUIGuideOnlyWizard"
+          v-else-if="connectMode === 'proxy' && hasEnabledAPIKey === true && !isUIGuideOnlyWizard"
           type="success"
           :closable="false"
           show-icon
@@ -369,87 +377,140 @@
           {{ $t('agentSetup.apiKeyDetected') }}
         </el-alert>
 
-        <div v-if="pipelines.length === 0 && !loadingPipelines" class="empty-pipelines">
-          <el-empty :description="$t('agentSetup.noPipeline')">
-            <el-button type="primary" @click="goPipelines">{{ $t('agentSetup.goToPolicy') }}</el-button>
-          </el-empty>
+        <!-- 代理模式：选择流水线（走 Centag 代理，含计量/配额/failover/语义缓存） -->
+        <div v-if="connectMode === 'proxy'">
+          <div v-if="pipelines.length === 0 && !loadingPipelines" class="empty-pipelines">
+            <el-empty :description="$t('agentSetup.noPipeline')">
+              <el-button type="primary" @click="goPipelines">{{ $t('agentSetup.goToPolicy') }}</el-button>
+            </el-empty>
+          </div>
+          <div v-else>
+            <h4 class="select-label">{{ $t('agentSetup.selectPipelineLabel') }}</h4>
+            <el-select
+              v-model="selectedPipeline"
+              :placeholder="$t('agentSetup.selectPipelinePlaceholder')"
+              filterable
+              style="width: 100%"
+              @change="onPipelineChange"
+            >
+              <el-option
+                v-for="pipe in pipelines"
+                :key="pipe.id"
+                :label="pipe.name || pipe.id"
+                :value="pipe.id"
+              >
+                <div class="pipeline-option">
+                  <span>{{ pipe.name || pipe.id }}</span>
+                  <span v-if="pipe.description" class="pipeline-desc">{{ pipe.description }}</span>
+                </div>
+              </el-option>
+            </el-select>
+
+            <div v-if="selectedPipeline && !isUIGuideOnlyWizard" class="pipeline-summary">
+              <el-tag type="success" size="default">{{ $t('agentSetup.pipeline') }} {{ selectedPipelineName }}</el-tag>
+              <el-tag type="info" size="default">
+                <el-icon><Cpu /></el-icon>
+                {{ $t('agentSetup.modelRoute') }} centag/{{ selectedPipeline }}
+              </el-tag>
+              <span v-if="pipelineModel" class="model-hint">{{ $t('agentSetup.pipelineModelHint') }} {{ pipelineModel }}</span>
+            </div>
+
+            <!-- UI 指引：可复制填表参数（模型 ID 随流水线变化） -->
+            <div v-if="isUIGuideOnlyWizard && selectedPipeline" class="ui-params-panel">
+              <div class="ui-params-header">
+                <h4 class="ui-params-title">{{ $t('agentSetup.uiGuideParamsTitle') }}</h4>
+                <p class="ui-params-summary">
+                  {{ selectedAgentMeta?.ui_guide?.summary || $t('agentSetup.uiGuideParamsHint') }}
+                </p>
+              </div>
+              <div class="ui-params-list">
+                <div
+                  v-for="row in uiGuideParamRows"
+                  :key="row.label"
+                  class="ui-param-item"
+                >
+                  <div class="ui-param-item-main">
+                    <div class="ui-param-label">{{ row.label }}</div>
+                    <div class="ui-param-body">
+                      <code class="ui-param-value">{{ row.value }}</code>
+                      <div class="ui-param-actions">
+                        <el-button
+                          v-if="row.copyable"
+                          size="small"
+                          :icon="DocumentCopy"
+                          @click="copyText(row.value)"
+                        >
+                          {{ $t('agentSetup.copyValue') }}
+                        </el-button>
+                        <el-button
+                          v-if="row.action === 'goto_api_key'"
+                          size="small"
+                          type="primary"
+                          plain
+                          @click="goProfileForAPIKey"
+                        >
+                          {{ $t('agentSetup.goCopyApiKey') }}
+                        </el-button>
+                      </div>
+                    </div>
+                  </div>
+                  <p v-if="row.hint" class="ui-param-hint">{{ row.hint }}</p>
+                </div>
+              </div>
+              <p v-if="selectedAgentMeta?.ui_guide?.restart_hint" class="ui-params-footer">
+                {{ selectedAgentMeta.ui_guide.restart_hint }}
+              </p>
+            </div>
+          </div>
         </div>
-        <div v-else>
-          <h4 class="select-label">{{ $t('agentSetup.selectPipelineLabel') }}</h4>
+
+        <!-- 直连模式：直接将已配置后端的真实地址与密钥写入 Agent（绕过 Centag 代理） -->
+        <div v-else v-loading="loadingBackends">
+          <el-alert type="warning" :closable="false" show-icon class="step-alert">
+            {{ $t('agentSetup.directModeWarning') }}
+          </el-alert>
+          <h4 class="select-label">{{ $t('agentSetup.selectBackendLabel') }}</h4>
           <el-select
-            v-model="selectedPipeline"
-            :placeholder="$t('agentSetup.selectPipelinePlaceholder')"
+            v-model="selectedBackend"
+            :placeholder="$t('agentSetup.selectBackendPlaceholder')"
             filterable
             style="width: 100%"
-            @change="onPipelineChange"
+            @change="onBackendChange"
           >
             <el-option
-              v-for="pipe in pipelines"
-              :key="pipe.id"
-              :label="pipe.name || pipe.id"
-              :value="pipe.id"
+              v-for="b in usableBackends"
+              :key="b.id"
+              :label="b.name || b.id"
+              :value="b.id"
             >
               <div class="pipeline-option">
-                <span>{{ pipe.name || pipe.id }}</span>
-                <span v-if="pipe.description" class="pipeline-desc">{{ pipe.description }}</span>
+                <span>{{ b.name || b.id }}</span>
+                <span v-if="b.base_url" class="pipeline-desc">{{ b.base_url }}</span>
               </div>
             </el-option>
           </el-select>
 
-          <div v-if="selectedPipeline && !isUIGuideOnlyWizard" class="pipeline-summary">
-            <el-tag type="success" size="default">{{ $t('agentSetup.pipeline') }} {{ selectedPipelineName }}</el-tag>
-            <el-tag type="info" size="default">
-              <el-icon><Cpu /></el-icon>
-              {{ $t('agentSetup.modelRoute') }} centag/{{ selectedPipeline }}
-            </el-tag>
-            <span v-if="pipelineModel" class="model-hint">{{ $t('agentSetup.pipelineModelHint') }} {{ pipelineModel }}</span>
-          </div>
+          <template v-if="selectedBackend">
+            <h4 class="select-label">{{ $t('agentSetup.selectModelLabel') }}</h4>
+            <el-select
+              v-model="selectedModel"
+              :placeholder="$t('agentSetup.selectModelPlaceholder')"
+              filterable
+              allow-create
+              default-first-option
+              style="width: 100%"
+            >
+              <el-option
+                v-for="m in backendModelOptions"
+                :key="m"
+                :label="m"
+                :value="m"
+              />
+            </el-select>
+          </template>
 
-          <!-- UI 指引：可复制填表参数（模型 ID 随流水线变化） -->
-          <div v-if="isUIGuideOnlyWizard && selectedPipeline" class="ui-params-panel">
-            <div class="ui-params-header">
-              <h4 class="ui-params-title">{{ $t('agentSetup.uiGuideParamsTitle') }}</h4>
-              <p class="ui-params-summary">
-                {{ selectedAgentMeta?.ui_guide?.summary || $t('agentSetup.uiGuideParamsHint') }}
-              </p>
-            </div>
-            <div class="ui-params-list">
-              <div
-                v-for="row in uiGuideParamRows"
-                :key="row.label"
-                class="ui-param-item"
-              >
-                <div class="ui-param-item-main">
-                  <div class="ui-param-label">{{ row.label }}</div>
-                  <div class="ui-param-body">
-                    <code class="ui-param-value">{{ row.value }}</code>
-                    <div class="ui-param-actions">
-                      <el-button
-                        v-if="row.copyable"
-                        size="small"
-                        :icon="DocumentCopy"
-                        @click="copyText(row.value)"
-                      >
-                        {{ $t('agentSetup.copyValue') }}
-                      </el-button>
-                      <el-button
-                        v-if="row.action === 'goto_api_key'"
-                        size="small"
-                        type="primary"
-                        plain
-                        @click="goProfileForAPIKey"
-                      >
-                        {{ $t('agentSetup.goCopyApiKey') }}
-                      </el-button>
-                    </div>
-                  </div>
-                </div>
-                <p v-if="row.hint" class="ui-param-hint">{{ row.hint }}</p>
-              </div>
-            </div>
-            <p v-if="selectedAgentMeta?.ui_guide?.restart_hint" class="ui-params-footer">
-              {{ selectedAgentMeta.ui_guide.restart_hint }}
-            </p>
+          <div v-if="backends.length && !usableBackends.length" class="empty-pipelines">
+            <el-empty :description="$t('agentSetup.noUsableBackend')" />
           </div>
         </div>
       </div>
@@ -603,7 +664,8 @@
             <li v-if="isUIGuideOnlyWizard">{{ $t('agentSetup.uiGuideVerifyStep1') }}</li>
             <li v-else>{{ $t('agentSetup.verifyChecklistStep1', { agent: currentAgentName }) }}</li>
             <li>{{ $t('agentSetup.verifyChecklistStep2') }}</li>
-            <li>{{ $t('agentSetup.verifyChecklistStep3', { pipeline: selectedPipeline }) }}</li>
+            <li v-if="connectMode === 'direct'">{{ $t('agentSetup.verifyChecklistStep3Direct', { backend: selectedBackendName }) }}</li>
+            <li v-else>{{ $t('agentSetup.verifyChecklistStep3', { pipeline: selectedPipeline }) }}</li>
             <li>{{ $t('agentSetup.verifyChecklistStep4') }}</li>
           </ol>
         </div>
@@ -671,6 +733,19 @@ const selectedAgentDisplay = ref('')
 const selectedPipeline = ref('')
 const pipelineModel = ref('')
 const loadingPipelines = ref(false)
+const loadingBackends = ref(false)
+/** 接入模式：proxy=走 Centag 代理；direct=直连已配置后端（绕过代理） */
+const connectMode = ref<'proxy' | 'direct'>('proxy')
+const selectedBackend = ref('')
+const selectedModel = ref('')
+const backends = ref<Array<{
+  id: string
+  name: string
+  base_url: string
+  enabled: boolean
+  has_api_key: boolean
+  supported_models?: Array<{ requested_model?: string; actual_model?: string }>
+}>>([])
 const loadingConfig = ref(false)
 const writingConfig = ref(false)
 const restoringAgent = ref('')
@@ -749,6 +824,22 @@ const wrapUnavailableReason = computed(() => {
   if (!mitm) return t('agentSetup.wrapNeedMitm')
   if (!egress) return t('agentSetup.wrapNeedEgress')
   return t('agentSetup.wrapUnavailable')
+})
+
+/** 直连模式：仅可选启用且已配置密钥的后端 */
+const usableBackends = computed(() =>
+  backends.value.filter(b => b.enabled && b.has_api_key)
+)
+/** 直连模式：当前后端支持的模型列表（用于模型下拉；留空则用后端默认模型） */
+const backendModelOptions = computed(() => {
+  const b = backends.value.find(x => x.id === selectedBackend.value)
+  if (!b?.supported_models?.length) return []
+  const set = new Set<string>()
+  for (const m of b.supported_models) {
+    const name = m.actual_model || m.requested_model
+    if (name) set.add(name)
+  }
+  return Array.from(set)
 })
 
 interface AgentGroup {
@@ -922,10 +1013,19 @@ const selectedPipelineName = computed(() => {
   return pipe?.name || selectedPipeline.value
 })
 
+const selectedBackendName = computed(() => {
+  const b = backends.value.find(x => x.id === selectedBackend.value)
+  return b?.name || selectedBackend.value || ''
+})
+
 const writeSucceeded = computed(() => !!writeResult.value?.success)
 
 const canGoNext = computed(() => {
   if (wizardStep.value === 0) {
+    if (connectMode.value === 'direct') {
+      if (!selectedBackend.value || usableBackends.value.length === 0) return false
+      return true
+    }
     if (!selectedPipeline.value || pipelines.value.length === 0) return false
     // UI 指引：Key 在客户端填写，不强制本机已有可解密 Key
     if (isUIGuideOnlyWizard.value) return true
@@ -992,6 +1092,33 @@ async function loadPipelines() {
   } finally {
     loadingPipelines.value = false
   }
+}
+
+async function loadBackends() {
+  loadingBackends.value = true
+  try {
+    const res: any = await api.get('/api/v1/backends')
+    const data = res?.data || res
+    const list = Array.isArray(data?.backends)
+      ? data.backends
+      : (Array.isArray(data) ? data : [])
+    backends.value = list
+    if (!selectedBackend.value && usableBackends.value.length) {
+      selectedBackend.value = usableBackends.value[0].id
+      onBackendChange(selectedBackend.value)
+    }
+  } catch (e: any) {
+    backends.value = []
+    console.warn(t('agentSetup.loadBackendFailed'), e.message)
+  } finally {
+    loadingBackends.value = false
+  }
+}
+
+function onBackendChange(id: string) {
+  selectedModel.value = ''
+  configResult.value = null
+  writeResult.value = null
 }
 
 async function checkAPIKeys() {
@@ -1065,13 +1192,17 @@ function openWizard(agent: { type: string; display_name: string }) {
   selectedAgent.value = agent.type
   selectedAgentDisplay.value = agent.display_name
   wizardStep.value = 0
+  connectMode.value = 'proxy'
   selectedPipeline.value = ''
   pipelineModel.value = ''
+  selectedBackend.value = ''
+  selectedModel.value = ''
   configResult.value = null
   writeResult.value = null
   hasEnabledAPIKey.value = null
   wizardVisible.value = true
   loadPipelines()
+  loadBackends()
   checkAPIKeys()
 }
 
@@ -1079,8 +1210,11 @@ function resetWizard() {
   wizardStep.value = 0
   selectedAgent.value = ''
   selectedAgentDisplay.value = ''
+  connectMode.value = 'proxy'
   selectedPipeline.value = ''
   pipelineModel.value = ''
+  selectedBackend.value = ''
+  selectedModel.value = ''
   configResult.value = null
   writeResult.value = null
   hasEnabledAPIKey.value = null
@@ -1093,7 +1227,9 @@ function goPipelines() {
 
 async function nextStep() {
   if (wizardStep.value === 0) {
-    if (!selectedPipeline.value) return
+    if (connectMode.value === 'direct') {
+      if (!selectedBackend.value) return
+    } else if (!selectedPipeline.value) return
     if (isUIGuideOnlyWizard.value) {
       wizardStep.value = 1
       return
@@ -1151,15 +1287,22 @@ async function maybeHandleMissingProxyAPIKeyError(message: string): Promise<bool
 }
 
 async function generateConfig(): Promise<boolean> {
-  if (!selectedAgent.value || !selectedPipeline.value) return false
+  if (!selectedAgent.value) return false
+  if (connectMode.value === 'direct') {
+    if (!selectedBackend.value) return false
+  } else if (!selectedPipeline.value) return false
   loadingConfig.value = true
   configResult.value = null
   writeResult.value = null
   try {
-    const res: any = await api.post('/api/v1/agent/configs/generate', {
-      agent_type: selectedAgent.value,
-      pipeline_id: selectedPipeline.value,
-    })
+    const payload: any = { agent_type: selectedAgent.value }
+    if (connectMode.value === 'direct') {
+      payload.backend_id = selectedBackend.value
+      if (selectedModel.value) payload.model = selectedModel.value
+    } else {
+      payload.pipeline_id = selectedPipeline.value
+    }
+    const res: any = await api.post('/api/v1/agent/configs/generate', payload)
     configResult.value = res
     return true
   } catch (e: any) {
@@ -1172,14 +1315,21 @@ async function generateConfig(): Promise<boolean> {
 }
 
 async function writeToConfig() {
-  if (!selectedAgent.value || !selectedPipeline.value) return
+  if (!selectedAgent.value) return
+  if (connectMode.value === 'direct') {
+    if (!selectedBackend.value) return
+  } else if (!selectedPipeline.value) return
   writingConfig.value = true
   writeResult.value = null
   try {
-    const res: any = await api.post('/api/v1/agent/configs/write', {
-      agent_type: selectedAgent.value,
-      pipeline_id: selectedPipeline.value,
-    })
+    const payload: any = { agent_type: selectedAgent.value }
+    if (connectMode.value === 'direct') {
+      payload.backend_id = selectedBackend.value
+      if (selectedModel.value) payload.model = selectedModel.value
+    } else {
+      payload.pipeline_id = selectedPipeline.value
+    }
+    const res: any = await api.post('/api/v1/agent/configs/write', payload)
     writeResult.value = res
     if (res.success) {
       ElMessage.success(res.message || t('agentSetup.configWriteSuccess'))
