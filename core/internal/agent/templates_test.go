@@ -309,8 +309,8 @@ func TestOpenCodeTemplate_UsesOfficialProviderSchema(t *testing.T) {
 	if !strings.Contains(content, `"npm": "@ai-sdk/openai-compatible"`) {
 		t.Fatalf("opencode config should set npm adapter, got: %s", content)
 	}
-	if !strings.Contains(content, `"model": "centag/centag/direct-backend"`) {
-		t.Fatalf("opencode config should set default model with provider prefix, got: %s", content)
+	if !strings.Contains(content, `"model": "centag/direct-backend"`) {
+		t.Fatalf("opencode config should set default model matching provider model id, got: %s", content)
 	}
 	if tmpl.Meta().WriteMode != WriteModeMerge {
 		t.Fatalf("opencode should be merge mode")
@@ -360,7 +360,7 @@ func TestOpenCodeTemplate_VerifyCommand(t *testing.T) {
 	info := testInfo()
 	info.Model = "centag/direct-backend"
 	got := tmpl.VerifyCommand(info)
-	want := `opencode run -m centag/centag/direct-backend "Hello, can you hear me?"`
+	want := `opencode run -m centag/direct-backend "Hello, can you hear me?"`
 	if got != want {
 		t.Fatalf("VerifyCommand = %q, want %q", got, want)
 	}
@@ -401,7 +401,7 @@ func TestPiTemplate_UsesOpenAICompletionsAPI(t *testing.T) {
 	if tmpl.Meta().WriteMode != WriteModeMerge {
 		t.Fatal("pi should be merge")
 	}
-	wantVerify := `pi -p --model centag/centag/direct-backend "Hello, can you hear me?"`
+	wantVerify := `pi -p --model centag/direct-backend "Hello, can you hear me?"`
 	if got := tmpl.VerifyCommand(info); got != wantVerify {
 		t.Fatalf("VerifyCommand = %q, want %q", got, wantVerify)
 	}
@@ -475,7 +475,7 @@ func TestOpenClawTemplate_UsesOpenAICompletionsAPI(t *testing.T) {
 	if !strings.Contains(content, `"api": "openai-completions"`) {
 		t.Fatalf("openclaw config should use openai-completions api, got: %s", content)
 	}
-	if !strings.Contains(content, `"primary": "centag/centag/direct-backend"`) {
+	if !strings.Contains(content, `"primary": "centag/direct-backend"`) {
 		t.Fatalf("openclaw config should set primary default model, got: %s", content)
 	}
 	if tmpl.Meta().WriteMode != WriteModeMerge {
@@ -804,8 +804,8 @@ func TestEndpointHelpers(t *testing.T) {
 		t.Fatalf("endpointHostRoot(v1beta) = %s", got)
 	}
 
-	// model 引用：虚拟模型保留 centag/ 前缀，真实模型原样使用（不再强加前缀）
-	if got := agentModelRef("centag/p1"); got != "centag/centag/p1" {
+	// model 引用：必须等于 provider 内模型 id（归一律），不再重复加 centag/ 前缀
+	if got := agentModelRef("centag/p1"); got != "centag/p1" {
 		t.Fatalf("agentModelRef(virtual) = %s", got)
 	}
 	if got := agentModelRef("gpt-4o"); got != "gpt-4o" {

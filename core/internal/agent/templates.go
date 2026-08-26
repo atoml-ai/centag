@@ -59,13 +59,6 @@ func centagAPIModelID(model string) string {
 	return model
 }
 
-// centagModelRef 生成 OpenCode/OpenClaw 的 provider/model 引用。
-// API model 若已是 centag/<id>，则写成 centag/centag/<id>（provider=centag，发给 API 的为 centag/<id>）。
-func centagModelRef(model string) string {
-	apiModel := centagAPIModelID(model)
-	return "centag/" + apiModel
-}
-
 // endpointURL 返回 OpenAI 兼容客户端的 base（含 /v1 路径后缀）：
 //   - 直连模式（info.BaseURL 已填真实后端地址）：原样返回真实 BaseURL；
 //   - 代理模式（info.BaseURL 为空）：回退到 Centag 代理地址 host:port/v1（与原 proxyURL 行为一致）。
@@ -92,14 +85,12 @@ func endpointHostRoot(info *BackendInfo) string {
 	return proxyHostURL(info.Host, info.Port)
 }
 
-// agentModelRef 生成写入 Agent 配置的 model 引用：
-//   - 虚拟模型（centag/<pipeline>）：保留 centag/ 前缀（proxy 模式，由 Centag 内部路由）；
-//   - 直连真实模型（如 gpt-4o、gemini-2.0-flash）：原样使用，不再强加 centag/ 前缀。
+// agentModelRef 生成写入 Agent 配置的 model 引用（默认模型 / 验证命令等）。
+// 它必须等于 provider 内的模型 id（即 centagAPIModelID 的归一律模型），否则客户端按 id
+// 找不到该模型。centagAPIModelID 已负责归一：流水线 pipeline.<id> → centag/<id>，
+// 虚拟模型 centag/<id> 与真实模型（gpt-4o、<backend>/<model>）原样保留，不再重复加 centag/ 前缀。
 func agentModelRef(model string) string {
-	if isVirtualModel(model) {
-		return "centag/" + centagAPIModelID(model)
-	}
-	return model
+	return centagAPIModelID(model)
 }
 
 // expandPath 将 ~ 展开为实际 home 目录。
