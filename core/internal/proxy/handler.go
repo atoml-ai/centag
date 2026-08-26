@@ -1,11 +1,13 @@
 package proxy
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -195,9 +197,35 @@ func (h *Handler) HandleChatCompletions(c *gin.Context) {
 		userID := extractUserIDFromContext(c)
 		tenantID := extractTenantIDFromContext(c)
 
+		// 后端钉死写法：<backendID>/<modelID>（非 centag/、非 pipeline. 前缀）。
+		// 解析出后端与真实模型名，把请求体 model 改写为真实模型名并钉死 X-Backend-ID，
+		// 强制透明流水线走该后端，避免落入默认增强流水线后被改写/回落到非用户所选后端。
+		if backendID, actualModel, ok := parseBackendModel(model); ok {
+			if mgr := backend.GetManager(); mgr != nil {
+				if be, berr := mgr.Get(backendID); berr == nil && be != nil && be.Enabled {
+					if _, ok2 := rewriteRequestBodyModel(c, actualModel); ok2 {
+						proxyMode = ProxyMode(config.DefaultSystemPipelineID)
+						source = "backend-pinned"
+						c.Request.Header.Set("X-Backend-ID", backendID)
+						logRequestInfo(requestID, "[Config] backend-pinned model",
+							zap.String("requested_model", model),
+							zap.String("backend_id", backendID),
+							zap.String("actual_model", actualModel),
+							zap.String("pipeline", config.DefaultSystemPipelineID),
+						)
+					}
+				} else {
+					c.JSON(http.StatusBadRequest, gin.H{
+						"error": fmt.Sprintf("模型 %q 指定的后端 %q 不存在或未启用", model, backendID),
+					})
+					return
+				}
+			}
+		}
+
 		// 裸模型名直连：model 精确命中某启用后端时，强制透明流水线并钉死该后端，
 		// 避免落入默认增强流水线后被改写/回落到非用户所选模型。
-		if cfg := config.Get(); cfg != nil && cfg.Proxy.PlainModelDirectEnabled() {
+		if cfg := config.Get(); cfg != nil && cfg.Proxy.PlainModelDirectEnabled() && proxyMode == ModeDefault {
 			if backendID, ok := matchPlainModelBackend(model); ok {
 				proxyMode = ProxyMode(config.DefaultSystemPipelineID)
 				source = "model-direct"
@@ -1144,6 +1172,31 @@ func extractModelFromRequest(r *http.Request) string {
 	// 提取 model 字段
 	model, _ := reqBody["model"].(string)
 	return model
+}
+
+// rewriteRequestBodyModel 将请求体 JSON 中的 model 字段改写为 newModel，并重置 Body/Content-Length，
+// 使后续协议解析与透明流水线拿到的是真实模型名（后端钉死写法会把 <backendID>/<modelID> 拆开）。
+func rewriteRequestBodyModel(c *gin.Context, newModel string) ([]byte, bool) {
+	bodyBytes, err := io.ReadAll(c.Request.Body)
+	if err != nil {
+		return nil, false
+	}
+	var reqBody map[string]interface{}
+	if err := json.Unmarshal(bodyBytes, &reqBody); err != nil {
+		// 非 JSON 体无法改写，原样恢复
+		c.Request.Body = io.NopCloser(bytes.NewReader(bodyBytes))
+		return nil, false
+	}
+	reqBody["model"] = newModel
+	nb, err := json.Marshal(reqBody)
+	if err != nil {
+		c.Request.Body = io.NopCloser(bytes.NewReader(bodyBytes))
+		return nil, false
+	}
+	c.Request.Body = io.NopCloser(bytes.NewReader(nb))
+	c.Request.ContentLength = int64(len(nb))
+	c.Request.Header.Set("Content-Length", strconv.Itoa(len(nb)))
+	return nb, true
 }
 
 // extractUserIDFromContext 从上下文提取用户 ID

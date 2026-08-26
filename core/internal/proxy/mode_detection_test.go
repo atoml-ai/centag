@@ -139,6 +139,39 @@ func TestParseModelPipelinePrefix(t *testing.T) {
 	}
 }
 
+func TestParseBackendModel(t *testing.T) {
+	tests := []struct {
+		model        string
+		wantBackend  string
+		wantActual   string
+		wantOK       bool
+	}{
+		{"opencode-zen/hy3-free", "opencode-zen", "hy3-free", true},
+		{" e2e-mock / centag-e2e-model ", "e2e-mock", "centag-e2e-model", true},
+		{"gpt-4", "", "", false},                                  // 裸模型名，非后端钉死
+		{"centag/direct-backend", "", "", false},                  // 流水线前缀，不算后端钉死
+		{"pipeline.smart-scheduling", "", "", false},              // 流水线前缀
+		{"opencode-zen/", "", "", false},                         // 缺模型
+		{"/hy3-free", "", "", false},                              // 缺后端
+		{"", "", "", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.model, func(t *testing.T) {
+			backendID, actualModel, ok := parseBackendModel(tt.model)
+			if ok != tt.wantOK {
+				t.Fatalf("ok=%v, want %v", ok, tt.wantOK)
+			}
+			if backendID != tt.wantBackend {
+				t.Fatalf("backendID=%q, want %q", backendID, tt.wantBackend)
+			}
+			if actualModel != tt.wantActual {
+				t.Fatalf("actualModel=%q, want %q", actualModel, tt.wantActual)
+			}
+		})
+	}
+}
+
 func TestFindShortcutTokenInContentRejectsMarkdownHeading(t *testing.T) {
 	content := "## 当前 USER.md 内容\n```markdown\n# 用户信息\n```\n\n## 本轮对话\n### 用户\n#ch 请分析本地系统硬件信息"
 	if got := findShortcutTokenInContent(content); got != "" {

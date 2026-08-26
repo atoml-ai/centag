@@ -206,6 +206,36 @@ func normalizeModelAsPipelineID(model string) string {
 	}
 }
 
+// parseBackendModel 解析「后端钉死」模型写法：<backendID>/<modelID>。
+// 适用规则（与流水线前缀区分）：
+//   - 以 centag/、pipeline.、pipeline_ 打头的按流水线处理，这里返回 false；
+//   - 其余包含 "/" 的模型名视为 <后端ID>/<模型ID>；两端均非空才视为合法。
+//
+// 例：opencode-zen/hy3-free → (opencode-zen, hy3-free, true)。
+// 命中后调用方应把 model 改写为实际模型名（hy3-free）并将 X-Backend-ID 设为后端 ID，
+// 由透明流水线钉死该后端执行。
+func parseBackendModel(model string) (backendID, actualModel string, ok bool) {
+	model = strings.TrimSpace(model)
+	if model == "" {
+		return "", "", false
+	}
+	if strings.HasPrefix(model, "centag/") ||
+		strings.HasPrefix(model, "pipeline.") ||
+		strings.HasPrefix(model, "pipeline_") {
+		return "", "", false
+	}
+	if !strings.Contains(model, "/") {
+		return "", "", false
+	}
+	parts := strings.SplitN(model, "/", 2)
+	backendID = strings.TrimSpace(parts[0])
+	actualModel = strings.TrimSpace(parts[1])
+	if backendID == "" || actualModel == "" {
+		return "", "", false
+	}
+	return backendID, actualModel, true
+}
+
 func parseModelPipelinePrefixBytes(bodyBytes []byte) (pipelineID, actualModel string, ok bool) {
 	if len(bodyBytes) == 0 {
 		return "", "", false
