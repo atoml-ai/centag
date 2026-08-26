@@ -229,3 +229,56 @@ func DecryptAPIKeyPlaintext(encoded string, key []byte) (string, error) {
 	}
 	return string(plain), nil
 }
+
+// keyAuditResult 最近一次启动审计的结果（供状态端点只读展示）。
+var keyAuditResult struct {
+	mu            sync.RWMutex
+	checked       int
+	undecryptable int
+}
+
+// LastKeyAudit returns the result of the most recent AuditUndecryptableKeys run.
+func LastKeyAudit() (checked, undecryptable int) {
+	keyAuditResult.mu.RLock()
+	defer keyAuditResult.mu.RUnlock()
+	return keyAuditResult.checked, keyAuditResult.undecryptable
+}
+
+// AuditUndecryptableKeys 扫描全部含密文（key_secret_enc）的 API Key，
+// 统计当前存储密钥下无法解密的数量（典型原因：部署时轮换了 STORAGE_SECRET）。
+// 结果缓存于进程内，可通过 LastKeyAudit 读取；不影响任何运行时行为。
+func AuditUndecryptableKeys(ctx context.Context) (checked, undecryptable int) {
+	store := database.Get().APIKeyStore()
+	if store == nil {
+		return 0, 0
+	}
+	sk := APIKeyStorageKey()
+	const pageSize = 200
+	for offset := 0; ; offset += pageSize {
+		keys, total, err := store.ListAll(ctx, offset, pageSize)
+		if err != nil {
+			break
+		}
+		for _, k := range keys {
+			if k == nil || k.KeySecretEnc == "" {
+				continue
+			}
+			checked++
+			if sk == nil {
+				undecryptable++
+				continue
+			}
+			if _, err := DecryptAPIKeyPlaintext(k.KeySecretEnc, sk); err != nil {
+				undecryptable++
+			}
+		}
+		if int64(offset+pageSize) >= total || len(keys) == 0 {
+			break
+		}
+	}
+	keyAuditResult.mu.Lock()
+	keyAuditResult.checked = checked
+	keyAuditResult.undecryptable = undecryptable
+	keyAuditResult.mu.Unlock()
+	return checked, undecryptable
+}

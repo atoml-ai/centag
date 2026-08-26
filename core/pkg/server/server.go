@@ -866,6 +866,11 @@ func New(cfg *config.Config) *Server {
 	if err := auth.EnsureAPIKeyStorage(context.Background()); err != nil {
 		logger.Warnf("Failed to ensure API key storage secret: %v – secondary reveal may not work", err)
 	}
+	// 密钥解密健康自检：统计当前 STORAGE_SECRET 下无法解密的历史密钥（多为部署轮换密钥所致）
+	if checked, bad := auth.AuditUndecryptableKeys(context.Background()); bad > 0 {
+		logger.Warnf("API key storage audit: %d/%d encrypted key(s) cannot be decrypted with the current %s – secondary reveal and Agent proxy auto-resolve are unavailable for these keys. Restore the original secret or recreate the affected keys.",
+			bad, checked, "LLM_PROXY_API_KEY_STORAGE_SECRET")
+	}
 
 	// 创建系统更新处理器
 	updateConfigPath := "./update_config.yml"

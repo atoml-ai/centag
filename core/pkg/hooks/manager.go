@@ -4,9 +4,24 @@ import (
 	"context"
 	"log"
 	"sync"
+	"sync/atomic"
 
 	"centag/core/pkg/types"
 )
+
+// hookFailureStats 进程内累计的钩子失败计数（fail-open 不中断请求，仅用于可观测性）。
+var hookFailureStats struct {
+	tokenUsedFailures    atomic.Int64
+	billingUsageFailures atomic.Int64
+	quotaExceedFailures  atomic.Int64
+}
+
+// HookFailureCounts 返回各钩子的累计失败次数：OnTokenUsed / OnUsage / OnQuotaExceeded。
+func HookFailureCounts() (tokenUsed, billingUsage, quotaExceeded int64) {
+	return hookFailureStats.tokenUsedFailures.Load(),
+		hookFailureStats.billingUsageFailures.Load(),
+		hookFailureStats.quotaExceedFailures.Load()
+}
 
 // DefaultHookManager is the fail-open HookManager implementation.
 // Hook errors are logged and do not fail the trigger call (proxy path stays open).
@@ -123,11 +138,13 @@ func (m *DefaultHookManager) TriggerTokenUsedHooks(ctx context.Context, usage *T
 	m.mu.RUnlock()
 	for i, h := range tokenHooks {
 		if err := h.OnTokenUsed(ctx, usage); err != nil {
+			hookFailureStats.tokenUsedFailures.Add(1)
 			log.Printf("[hooks] OnTokenUsed hook[%d] failed (fail-open): %v", i, err)
 		}
 	}
 	for i, h := range billingHooks {
 		if err := h.OnUsage(ctx, usage); err != nil {
+			hookFailureStats.billingUsageFailures.Add(1)
 			log.Printf("[hooks] OnUsage billing hook[%d] failed (fail-open): %v", i, err)
 		}
 	}
@@ -144,6 +161,7 @@ func (m *DefaultHookManager) TriggerQuotaExceededHooks(ctx context.Context, user
 	m.mu.RUnlock()
 	for i, h := range billingHooks {
 		if err := h.OnQuotaExceeded(ctx, userID); err != nil {
+			hookFailureStats.quotaExceedFailures.Add(1)
 			log.Printf("[hooks] OnQuotaExceeded hook[%d] failed (fail-open): %v", i, err)
 		}
 	}

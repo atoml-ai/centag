@@ -8,13 +8,14 @@ import (
 	"time"
 
 	"centag/core/internal"
+	"centag/core/internal/auth"
 	"centag/core/internal/cache"
 	"centag/core/internal/monitor"
 	"centag/core/internal/stats"
 	"centag/core/pkg/circuitbreaker"
 	"centag/core/pkg/database"
 	"centag/core/pkg/editionmodule"
-
+	"centag/core/pkg/hooks"
 	"github.com/gin-gonic/gin"
 )
 
@@ -225,6 +226,23 @@ func (s *Server) handleStatus(c *gin.Context) {
 
 	if caps := editionmodule.EnrichCapabilities(nil); len(caps) > 0 {
 		resp["capabilities"] = caps
+	}
+
+	// 钩子失败计数（fail-open 累计；非零说明存在计量/计费落库异常，应排查日志）
+	if tokenUsed, billingUsage, quotaExceeded := hooks.HookFailureCounts(); tokenUsed+billingUsage+quotaExceeded > 0 {
+		resp["hook_failures"] = gin.H{
+			"token_used":     tokenUsed,
+			"billing_usage":  billingUsage,
+			"quota_exceeded": quotaExceeded,
+		}
+	}
+
+	// API Key 存储健康自检结果（启动时扫描；undecryptable>0 说明历史密钥无法用当前 STORAGE_SECRET 解密）
+	if checked, bad := auth.LastKeyAudit(); checked > 0 {
+		resp["api_key_storage"] = gin.H{
+			"encrypted_keys": checked,
+			"undecryptable":  bad,
+		}
 	}
 
 	c.JSON(200, resp)

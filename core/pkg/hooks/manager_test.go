@@ -60,6 +60,9 @@ func (h *countingBillingHook) OnUsage(ctx context.Context, usage *TokenUsage) er
 
 func (h *countingBillingHook) OnQuotaExceeded(ctx context.Context, userID int64) error {
 	h.quotaN.Add(1)
+	if h.fail {
+		return errors.New("quota hook failed")
+	}
 	return nil
 }
 
@@ -172,5 +175,27 @@ func TestDefaultHookManager_ResponseCacheAndLogging(t *testing.T) {
 	_, _, _, l := m.Counts()
 	if l != 1 {
 		t.Fatalf("logging count=%d", l)
+	}
+}
+
+// 钩子失败计数（可观测性）：fail-open 的同时必须累计失败次数。
+func TestDefaultHookManager_FailureCounts(t *testing.T) {
+	beforeToken, beforeBilling, beforeQuota := HookFailureCounts()
+
+	m := NewManager()
+	var n atomic.Int32
+	m.RegisterTokenHook(&countingTokenHook{n: &n, fail: true})
+	m.RegisterBillingHook(&countingBillingHook{usageN: &n, quotaN: &n, fail: true})
+	if err := m.TriggerTokenUsedHooks(context.Background(), &TokenUsage{UserID: 1}); err != nil {
+		t.Fatalf("fail-open violated: %v", err)
+	}
+	if err := m.TriggerQuotaExceededHooks(context.Background(), 1); err != nil {
+		t.Fatalf("fail-open violated: %v", err)
+	}
+
+	tokenUsed, billingUsage, quotaExceeded := HookFailureCounts()
+	if tokenUsed-beforeToken != 1 || billingUsage-beforeBilling != 1 || quotaExceeded-beforeQuota != 1 {
+		t.Fatalf("failure counts delta = (%d,%d,%d), want (1,1,1)",
+			tokenUsed-beforeToken, billingUsage-beforeBilling, quotaExceeded-beforeQuota)
 	}
 }
