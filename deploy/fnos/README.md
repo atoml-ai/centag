@@ -132,7 +132,7 @@ Native 模式的 `cmd/main` 脚本参考 fnOS 官方 [Notepad 示例](https://de
 | `SERVER_PORT` | `20060` |
 | `LLM_PROXY_ADMIN_PASSWORD` | 来自包内 `config/runtime.env`（打包时注入） |
 | `LLM_PROXY_ADMIN_API_KEY` / `DEFAULT` | 同上；首轮 seed 预置管理员 API Key |
-| `LLM_PROXY_API_KEY_STORAGE_SECRET` | 可选；留空则运行时自动生成。设 `LLM_PROXY_API_KEY_REVEAL_ONCE=true` 可关闭二次查看 |
+| `LLM_PROXY_API_KEY_STORAGE_SECRET` | 可选；留空则运行时自动生成。设 `LLM_PROXY_API_KEY_REVEAL_ONCE=true` 可关闭二次查看。**勿在升级时轮换**：更换后历史 API Key 将无法解密（二次复制与 Agent 代理模式解析失效），如需恢复请回填原值或重建密钥 |
 | `STATIC_DIR` / `STATIC_PATH` | `${TRIM_APPDEST}/static`（包内 `webui` → `static` 兼容链接） |
 
 ---

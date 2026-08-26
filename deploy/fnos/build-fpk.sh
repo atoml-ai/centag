@@ -186,6 +186,15 @@ resolve_admin_credentials() {
       API_KEY_STORAGE_SECRET="$(head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n')"
       echo "[OK] 未在 .env 找到 LLM_PROXY_API_KEY_STORAGE_SECRET，已用 /dev/urandom 生成并写入 runtime.env"
     fi
+    cat >&2 <<'WARN'
+
+[WARN] 重要：本次生成的存储密钥仅写入本包 runtime.env。
+       若重新打包时未通过 PACKAGE_API_KEY_STORAGE_SECRET 或 config/secrets/.env 固定同一密钥，
+       密钥将被再次随机生成（轮换），导致历史 API Key 无法解密：
+         - Web 界面「复制完整 API Key」失效
+         - Agent 代理模式无法自动解析 Centag 密钥（需用户重建密钥）
+       建议将首次生成的值固定保存到 config/secrets/.env 的 LLM_PROXY_API_KEY_STORAGE_SECRET。
+WARN
   else
     echo "[OK] API Key 存储密钥已解析（界面可反复复制完整 Key）"
   fi
@@ -200,6 +209,7 @@ resolve_admin_credentials() {
     echo "[OK] 默认管理员 API Key 已解析（将写入 runtime.env 供首轮 seed）"
   else
     echo "[WARN] 未解析到 LLM_PROXY_ADMIN_API_KEY / DEFAULT；首轮不会预置 API Key"
+    echo "       （影响：管理员侧 Agent 代理模式无法自动解析 Centag 密钥兜底；可在 Web 界面为 admin 新建 llmproxy_ 密钥）"
   fi
 }
 
