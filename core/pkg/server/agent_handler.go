@@ -3,9 +3,11 @@ package server
 import (
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -611,6 +613,17 @@ func effectiveDirectAPIKey(be *backend.BackendConfig) string {
 //
 // 直连模式要求后端已启用且具备可用 API Key（主密钥或账户池中任一启用账户），否则返回错误引导用户改用代理模式。
 func (h *AgentHandler) buildAgentBackendInfo(c *gin.Context, backendID, pipelineID, model, host string, port int) (*agent.BackendInfo, string, error) {
+	// 未显式传 host 时，从请求 Host 头推导（API 直调场景生成可用的 baseURL，而非 localhost 默认值）
+	if strings.TrimSpace(host) == "" && c != nil && c.Request != nil && c.Request.Host != "" {
+		reqHost := c.Request.Host
+		if h, p, err := net.SplitHostPort(reqHost); err == nil && h != "" {
+			host = h
+			port = p2i(p)
+		} else {
+			host = reqHost
+		}
+	}
+
 	be, routeName, err := h.resolveBackendForAgent(backendID, pipelineID)
 	if err != nil {
 		return nil, "", err
@@ -654,4 +667,16 @@ func (h *AgentHandler) buildAgentBackendInfo(c *gin.Context, backendID, pipeline
 		Host:    host,
 		Port:    port,
 	}, routeName, nil
+}
+
+// p2i 将端口字符串转为 int；非法/空时返回 0。
+func p2i(s string) int {
+	if s == "" {
+		return 0
+	}
+	n, err := strconv.Atoi(s)
+	if err != nil {
+		return 0
+	}
+	return n
 }
