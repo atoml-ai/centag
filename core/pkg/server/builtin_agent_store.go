@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"regexp"
 	"time"
@@ -105,13 +106,28 @@ func (s *agentSessionStore) SetStatus(ctx context.Context, id, status string) er
 	return err
 }
 
+// jsonbArg 返回可写入 JSONB 列的值：合法 JSON 原样写入，空串写 NULL，其余按 JSON 字符串编码。
+func (s *agentSessionStore) jsonbArg(v string) any {
+	if v == "" {
+		return nil
+	}
+	if json.Valid([]byte(v)) {
+		return v
+	}
+	if raw, err := json.Marshal(v); err == nil {
+		return string(raw)
+	}
+	return nil
+}
+
 // AppendMessage 写入消息并累加会话 message_count / updated_at。
 func (s *agentSessionStore) AppendMessage(ctx context.Context, m *AgentMessage) error {
 	now := time.Now()
 	if _, err := s.db.ExecContext(ctx, s.q(`
-		INSERT INTO agent_messages (id, session_id, role, content, skill, tool_name, created_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)`),
-		m.ID, m.SessionID, m.Role, m.Content, m.Skill, m.ToolName, m.CreatedAt); err != nil {
+		INSERT INTO agent_messages (id, session_id, role, content, skill, tool_name, tool_params, tool_result, created_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`),
+		m.ID, m.SessionID, m.Role, m.Content, m.Skill, m.ToolName,
+		s.jsonbArg(m.ToolParams), s.jsonbArg(m.ToolResult), m.CreatedAt); err != nil {
 		return err
 	}
 	_, err := s.db.ExecContext(ctx, s.q(`UPDATE agent_sessions SET message_count = message_count + 1, updated_at = $1 WHERE id = $2`), now, m.SessionID)
@@ -129,7 +145,7 @@ func (s *agentSessionStore) ListMessages(ctx context.Context, sessionID string) 
 	}
 
 	rows, err := s.db.QueryContext(ctx, s.q(`
-		SELECT id, session_id, role, content, skill, tool_name, created_at
+		SELECT id, session_id, role, content, skill, tool_name, tool_params, tool_result, created_at
 		FROM agent_messages WHERE session_id = $1 ORDER BY created_at ASC, id ASC`), sessionID)
 	if err != nil {
 		return nil, false, err
@@ -140,10 +156,12 @@ func (s *agentSessionStore) ListMessages(ctx context.Context, sessionID string) 
 	for rows.Next() {
 		m := &AgentMessage{}
 		var createdAt any
-		if err := rows.Scan(&m.ID, &m.SessionID, &m.Role, &m.Content, &m.Skill, &m.ToolName, &createdAt); err != nil {
+		var toolParams, toolResult sql.NullString
+		if err := rows.Scan(&m.ID, &m.SessionID, &m.Role, &m.Content, &m.Skill, &m.ToolName, &toolParams, &toolResult, &createdAt); err != nil {
 			return nil, false, err
 		}
 		m.CreatedAt = parseAgentTime(s.dialect, createdAt)
+		m.ToolParams, m.ToolResult = toolParams.String, toolResult.String
 		out = append(out, m)
 	}
 	if err := rows.Err(); err != nil {

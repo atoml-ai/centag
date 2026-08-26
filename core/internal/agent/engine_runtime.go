@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"sync"
@@ -235,10 +236,24 @@ func (e *RuntimeEngine) NewSession(systemPrompt string, skillTools ...[]string) 
 	return ag, nil
 }
 
+// ToolCallRecord 单次工具执行的结构化记录（审计回放用）。
+type ToolCallRecord struct {
+	Name    string `json:"name"`
+	Params  string `json:"params"`           // 原始输入 JSON
+	Result  string `json:"result,omitempty"` // 结果 JSON：{"content":...,"is_error":bool}
+	IsError bool   `json:"is_error,omitempty"`
+}
+
 // RunPrompt 运行一次完整 prompt（多轮推理 + 工具调用），返回最终文本。
 func (e *RuntimeEngine) RunPrompt(ctx context.Context, ag *agentcore.Agent, input string, logf func(format string, args ...any)) (string, error) {
+	reply, _, err := e.RunPromptDetailed(ctx, ag, input, logf)
+	return reply, err
+}
+
+// RunPromptDetailed 同 RunPrompt，额外返回本次执行的逐次工具调用明细。
+func (e *RuntimeEngine) RunPromptDetailed(ctx context.Context, ag *agentcore.Agent, input string, logf func(format string, args ...any)) (string, []ToolCallRecord, error) {
 	if ag == nil {
-		return "", fmt.Errorf("agent is nil")
+		return "", nil, fmt.Errorf("agent is nil")
 	}
 
 	events := ag.Subscribe()
@@ -248,7 +263,6 @@ func (e *RuntimeEngine) RunPrompt(ctx context.Context, ag *agentcore.Agent, inpu
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	var sb strings.Builder
 	done := make(chan struct{})
 	var promptErr error
 
@@ -256,6 +270,41 @@ func (e *RuntimeEngine) RunPrompt(ctx context.Context, ag *agentcore.Agent, inpu
 		defer close(done)
 		promptErr = ag.Prompt(ctx, input)
 	}()
+
+	// 最终答复 = 最后一条 assistant 消息的完整内容。
+	// 不用 message_update 增量拼接：其一，中间轮（工具调用前）文本会混入最终回复；
+	// 其二 message_update 非必达（订阅通道满即丢），delta 拼接可能缺尾。
+	// message_end 必达且携带该消息完整 Content，以其为准。
+	var lastContent string
+	var toolCalls []ToolCallRecord
+	pendingTools := make(map[string]int) // call_id -> toolCalls 下标
+	onEvent := func(evt agentcore.AgentEvent) {
+		e.collectEvent(evt, logf)
+		switch evt.Type {
+		case agentcore.EventMessageEnd:
+			if evt.Message != nil && evt.Message.Role == agentcore.RoleAssistant && evt.Message.Content != "" {
+				lastContent = evt.Message.Content
+			}
+		case agentcore.EventToolExecutionStart:
+			if evt.ToolCall == nil {
+				break
+			}
+			pendingTools[evt.ToolCall.ID] = len(toolCalls)
+			toolCalls = append(toolCalls, ToolCallRecord{Name: evt.ToolCall.ToolName, Params: evt.ToolCall.Input})
+		case agentcore.EventToolExecutionEnd:
+			if evt.ToolResult == nil {
+				break
+			}
+			if idx, ok := pendingTools[evt.ToolResult.ID]; ok && idx < len(toolCalls) {
+				content := truncate(evt.ToolResult.Content, 8000)
+				if raw, err := json.Marshal(map[string]interface{}{"content": content}); err == nil {
+					toolCalls[idx].Result = string(raw)
+				}
+				toolCalls[idx].IsError = evt.ToolResult.IsError
+			}
+			delete(pendingTools, evt.ToolResult.ID)
+		}
+	}
 
 	for {
 		select {
@@ -267,38 +316,33 @@ func (e *RuntimeEngine) RunPrompt(ctx context.Context, ag *agentcore.Agent, inpu
 					if !ok {
 						goto collected
 					}
-					e.collectEvent(evt, &sb, logf)
+					onEvent(evt)
 				default:
 					goto collected
 				}
 			}
 		collected:
-			if promptErr != nil {
-				return strings.TrimSpace(sb.String()), promptErr
+			if promptErr != nil && lastContent == "" {
+				return "", toolCalls, promptErr
 			}
-			if sb.Len() == 0 {
-				return "Agent 未生成有效回复", nil
+			if lastContent == "" {
+				return "Agent 未生成有效回复", toolCalls, nil
 			}
-			return strings.TrimSpace(sb.String()), nil
+			return strings.TrimSpace(lastContent), toolCalls, promptErr
 		case evt, ok := <-events:
 			if !ok {
 				continue
 			}
-			e.collectEvent(evt, &sb, logf)
+			onEvent(evt)
 		}
 	}
 }
 
-// collectEvent 收集事件文本到输出。
-// 仅收集正式回答 Content；ReasoningContent 为模型思考过程，不出现在最终回复中（记日志即可）。
-func (e *RuntimeEngine) collectEvent(evt agentcore.AgentEvent, sb *strings.Builder, logf func(format string, args ...any)) {
+// collectEvent 处理事件（日志侧效）。
+// 最终回复文本由 RunPrompt 依据 message_end 事件取最后一条 assistant 消息完整内容，
+// 此处仅保留工具/错误日志；ReasoningContent 为模型思考过程，不进入最终回复。
+func (e *RuntimeEngine) collectEvent(evt agentcore.AgentEvent, logf func(format string, args ...any)) {
 	switch evt.Type {
-	case agentcore.EventMessageUpdate:
-		if evt.Message != nil {
-			if evt.Message.Content != "" {
-				sb.WriteString(evt.Message.Content)
-			}
-		}
 	case agentcore.EventToolExecutionStart:
 		if evt.ToolCall != nil && logf != nil {
 			logf("[agent] tool start: %s input=%s", evt.ToolCall.ToolName, truncate(evt.ToolCall.Input, 200))

@@ -63,13 +63,15 @@ type AgentSession struct {
 
 // AgentMessage Agent消息
 type AgentMessage struct {
-	ID        string    `json:"id"`
-	SessionID string    `json:"session_id"`
-	Role      string    `json:"role"`
-	Content   string    `json:"content"`
-	Skill     string    `json:"skill"`
-	ToolName  string    `json:"tool_name,omitempty"`
-	CreatedAt time.Time `json:"created_at"`
+	ID         string    `json:"id"`
+	SessionID  string    `json:"session_id"`
+	Role       string    `json:"role"`
+	Content    string    `json:"content"`
+	Skill      string    `json:"skill"`
+	ToolName   string    `json:"tool_name,omitempty"`
+	ToolParams string    `json:"tool_params,omitempty"` // 工具输入原始 JSON（仅 role=tool 行）
+	ToolResult string    `json:"tool_result,omitempty"` // 工具结果 JSON {"content":...,"is_error":bool}（仅 role=tool 行）
+	CreatedAt  time.Time `json:"created_at"`
 }
 
 // NewBuiltinAgentHandler 创建内置Agent处理器
@@ -401,10 +403,29 @@ func (h *BuiltinAgentHandler) SendMessage(c *gin.Context) {
 	}
 
 	// 执行真实 agent（多轮推理 + 工具调用）
-	reply, err := h.runAgent(c, sess, skillName, req.Content)
+	reply, toolCalls, err := h.runAgent(c, sess, skillName, req.Content)
 	if err != nil {
 		logger.Warnf("[builtin-agent] run failed: %v", err)
 		reply = fmt.Sprintf("Agent 执行失败: %v\n\n用户问题: %s", err, req.Content)
+	}
+
+	// 工具执行明细落库（role=tool，一行一次调用；时间倒拨保证排在最终回复前）
+	now := time.Now()
+	for i := len(toolCalls) - 1; i >= 0; i-- {
+		tc := toolCalls[i]
+		row := &AgentMessage{
+			ID:         uuid.New().String(),
+			SessionID:  sessionID,
+			Role:       "tool",
+			Skill:      skillName,
+			ToolName:   tc.Name,
+			ToolParams: tc.Params,
+			ToolResult: tc.Result,
+			CreatedAt:  now.Add(time.Duration(i-len(toolCalls)) * time.Millisecond),
+		}
+		if err := h.store.AppendMessage(c.Request.Context(), row); err != nil {
+			logger.Warnf("[builtin-agent] save tool message failed: %v", err)
+		}
 	}
 
 	// agent 响应
@@ -414,7 +435,7 @@ func (h *BuiltinAgentHandler) SendMessage(c *gin.Context) {
 		Role:      "assistant",
 		Content:   reply,
 		Skill:     skillName,
-		CreatedAt: time.Now(),
+		CreatedAt: now,
 	}
 
 	if err := h.store.AppendMessage(c.Request.Context(), agentMessage); err != nil {
@@ -424,10 +445,10 @@ func (h *BuiltinAgentHandler) SendMessage(c *gin.Context) {
 	c.JSON(http.StatusOK, agentMessage)
 }
 
-// runAgent 运行内置 agent，返回最终文本回复。
-func (h *BuiltinAgentHandler) runAgent(c *gin.Context, session *AgentSession, skillName, userInput string) (string, error) {
+// runAgent 运行内置 agent，返回最终文本回复与逐次工具调用明细。
+func (h *BuiltinAgentHandler) runAgent(c *gin.Context, session *AgentSession, skillName, userInput string) (string, []agent.ToolCallRecord, error) {
 	if h.engine == nil {
-		return "", fmt.Errorf("agent engine not initialized")
+		return "", nil, fmt.Errorf("agent engine not initialized")
 	}
 
 	// skill → pipeline id（空 skill 不注入 X-Pipeline-ID）
@@ -461,7 +482,7 @@ func (h *BuiltinAgentHandler) runAgent(c *gin.Context, session *AgentSession, sk
 		ag, err = e.NewSession(systemPrompt, h.skillTools(skillName))
 		if err != nil {
 			h.coresMu.Unlock()
-			return "", err
+			return "", nil, err
 		}
 		h.cores[session.ID] = ag
 	}
@@ -472,7 +493,7 @@ func (h *BuiltinAgentHandler) runAgent(c *gin.Context, session *AgentSession, sk
 		ag.SetModel(session.Model)
 	}
 
-	return e.RunPrompt(c.Request.Context(), ag, userInput, func(format string, args ...any) {
+	return e.RunPromptDetailed(c.Request.Context(), ag, userInput, func(format string, args ...any) {
 		logger.Infof("[builtin-agent] "+format, args...)
 	})
 }

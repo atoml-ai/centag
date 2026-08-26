@@ -93,9 +93,22 @@ func TestAgentSessionStoreRoundtrip(t *testing.T) {
 	if err := store.AppendMessage(ctx, &AgentMessage{ID: uuid.New().String(), SessionID: sess.ID, Role: "user", Content: "hi", CreatedAt: time.Now()}); err != nil {
 		t.Fatalf("append message: %v", err)
 	}
+	if err := store.AppendMessage(ctx, &AgentMessage{
+		ID: uuid.New().String(), SessionID: sess.ID, Role: "tool", Skill: "status-check",
+		ToolName: "read_database", ToolParams: `{"table":"agent_sessions"}`,
+		ToolResult: `{"content":"2 rows","is_error":false}`, CreatedAt: time.Now(),
+	}); err != nil {
+		t.Fatalf("append tool message: %v", err)
+	}
+	if err := store.AppendMessage(ctx, &AgentMessage{ID: uuid.New().String(), SessionID: sess.ID, Role: "assistant", Content: "ok", Skill: "status-check", CreatedAt: time.Now()}); err != nil {
+		t.Fatalf("append assistant: %v", err)
+	}
 	msgs, ok, err := store.ListMessages(ctx, sess.ID)
-	if err != nil || !ok || len(msgs) != 1 {
+	if err != nil || !ok || len(msgs) != 3 {
 		t.Fatalf("list messages: ok=%v n=%d err=%v", ok, len(msgs), err)
+	}
+	if msgs[1].ToolName != "read_database" || msgs[1].ToolParams != `{"table":"agent_sessions"}` || msgs[1].ToolResult != `{"content":"2 rows","is_error":false}` {
+		t.Fatalf("tool message details lost: %+v", msgs[1])
 	}
 
 	if err := store.Delete(ctx, sess.ID); err != nil {
