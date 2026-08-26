@@ -21,6 +21,7 @@ type TokenUsagePersistRequest struct {
 	RequestID        string
 	AgentType        string
 	SessionID        string // 039: 会话 ID
+	Source           string // 计量来源："cache_replay"=缓存命中恢复的计量（非真实后端消耗）；"" = 默认/真实调用
 }
 
 // PersistTokenUsage optionally records token usage to persistent storage.
@@ -49,6 +50,9 @@ func persistTokenUsageFromRecord(ctx context.Context, input *NodeInput, record m
 		req.AgentType = tokenRecordString(input.Metadata["agent_type"])
 		req.SessionID = tokenRecordString(input.Metadata["session_id"]) // 039: 会话 ID
 		req.APIKeyID = int64(tokenRecordInt(input.Metadata["api_key_id"]))
+		if replay, _ := input.Metadata["cache_replay"].(bool); replay {
+			req.Source = "cache_replay"
+		}
 		if uid := tokenRecordString(input.Metadata["user_id"]); uid != "" {
 			if id, err := parseUserIDInt(uid); err == nil {
 				req.UserID = id

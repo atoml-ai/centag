@@ -44,6 +44,7 @@ func (a *tokenUsageHookAdapter) OnTokenUsed(ctx context.Context, usage *hooks.To
 		RequestID:        usage.RequestID,
 		AgentType:        usage.AgentType,
 		SessionID:        usage.SessionID, // 039: 会话 ID
+		Source:           usage.Source,
 	}
 	if rec.TotalTokens == 0 && !rec.Success {
 		// allow explicit failure rows with zero tokens

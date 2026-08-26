@@ -4734,6 +4734,17 @@ func mergeTokenUsageFromUpstream(record map[string]interface{}, input *NodeInput
 
 	if bestMeta != nil {
 		mergeTokenUsageFromNodeMetadata(record, bestMeta)
+		// 命中来源标记：若胜出的计量元数据来自缓存命中恢复（cache_read.cache_hit），
+		// 则本次计量为"缓存回放"，非真实后端消耗（供持久层 Source=cache_replay）。
+		if hit, _ := bestMeta["cache_hit"].(bool); hit {
+			record["cache_replay"] = true
+			if input != nil {
+				if input.Metadata == nil {
+					input.Metadata = map[string]interface{}{}
+				}
+				input.Metadata["cache_replay"] = true
+			}
+		}
 	}
 }
 
