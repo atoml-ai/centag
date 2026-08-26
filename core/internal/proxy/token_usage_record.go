@@ -95,6 +95,7 @@ func maybeRecordTokenUsage(c *gin.Context, output *pipeline.PipelineOutput, fall
 			// Fallback when HookManager not wired (tests / minimal harness).
 			_ = svc.RecordUsage(ctx, &tokenusage.UsageRecord{
 				UserID:           usage.UserID,
+				APIKeyID:         usage.APIKeyID,
 				BackendID:        usage.Backend,
 				Model:            usage.Model,
 				PromptTokens:     usage.InputTokens,
