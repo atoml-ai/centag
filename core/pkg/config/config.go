@@ -346,6 +346,18 @@ type ProxyConfig struct {
 	// DeepSeek thinking + tools 要求历史 assistant(tool_calls) 回传该字段；OpenAI 兼容客户端常会丢掉。
 	// nil/缺省 = true；显式 false 关闭。
 	ReasoningContentRoundtrip *bool `json:"reasoning_content_roundtrip,omitempty"`
+	// PlainModelDirectPipeline 裸模型名直连：请求未指定流水线/快捷码、且 model 精确命中
+	// 某启用后端声明的模型时，强制走透明流水线并钉死该后端，不再落入默认增强流水线
+	// （缓存/路由/优化等），最贴近用户「我就要用这个模型」的本意。nil/缺省 = true。
+	PlainModelDirectPipeline *bool `json:"plain_model_direct_pipeline,omitempty"`
+}
+
+// PlainModelDirectEnabled 返回是否启用裸模型名直连透明流水线（默认 true）。
+func (p ProxyConfig) PlainModelDirectEnabled() bool {
+	if p.PlainModelDirectPipeline == nil {
+		return true
+	}
+	return *p.PlainModelDirectPipeline
 }
 
 // ReasoningContentRoundtripEnabled 返回是否启用 reasoning_content 会话补回（默认 true）。

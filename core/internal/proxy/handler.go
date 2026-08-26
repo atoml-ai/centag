@@ -195,19 +195,36 @@ func (h *Handler) HandleChatCompletions(c *gin.Context) {
 		userID := extractUserIDFromContext(c)
 		tenantID := extractTenantIDFromContext(c)
 
-		resolvedMode, pipelineSource, err := h.defaultPipelineResolver.ResolveProxyMode(
-			c.Request.Context(), model, userID, tenantID,
-		)
-		if err == nil {
-			proxyMode = resolvedMode
-			source = pipelineSource
-			logRequestInfo(requestID, fmt.Sprintf("[Config] Resolved pipeline: %s (source: %s)", proxyMode, source),
-				zap.String("resolved_mode", string(proxyMode)),
-				zap.String("resolved_source", source),
+		// 裸模型名直连：model 精确命中某启用后端时，强制透明流水线并钉死该后端，
+		// 避免落入默认增强流水线后被改写/回落到非用户所选模型。
+		if cfg := config.Get(); cfg != nil && cfg.Proxy.PlainModelDirectEnabled() {
+			if backendID, ok := matchPlainModelBackend(model); ok {
+				proxyMode = ProxyMode(config.DefaultSystemPipelineID)
+				source = "model-direct"
+				c.Request.Header.Set("X-Backend-ID", backendID)
+				logRequestInfo(requestID, "[Config] plain model direct hit",
+					zap.String("model", model),
+					zap.String("backend_id", backendID),
+					zap.String("pipeline", config.DefaultSystemPipelineID),
+				)
+			}
+		}
+
+		if proxyMode == ModeDefault {
+			resolvedMode, pipelineSource, err := h.defaultPipelineResolver.ResolveProxyMode(
+				c.Request.Context(), model, userID, tenantID,
 			)
-		} else {
-			logRequestWarn(requestID, fmt.Sprintf("[Config] Failed to resolve default pipeline: %v, using configured default", err))
-			proxyMode, _ = h.defaultPipelineResolver.FallbackMode()
+			if err == nil {
+				proxyMode = resolvedMode
+				source = pipelineSource
+				logRequestInfo(requestID, fmt.Sprintf("[Config] Resolved pipeline: %s (source: %s)", proxyMode, source),
+					zap.String("resolved_mode", string(proxyMode)),
+					zap.String("resolved_source", source),
+				)
+			} else {
+				logRequestWarn(requestID, fmt.Sprintf("[Config] Failed to resolve default pipeline: %v, using configured default", err))
+				proxyMode, _ = h.defaultPipelineResolver.FallbackMode()
+			}
 		}
 	}
 
@@ -1072,6 +1089,36 @@ func extractQuestionFromMessages(messages []plugin.Message) string {
 // Legacy audit/optimize/fallback mode handlers have been removed.
 // All modes now use pipeline-based implementation (handle*ModePipeline functions).
 // See: config/initdata/pipeline-templates/{01-audit-mode,07-optimize-mode,04-fallback-mode}.json
+
+// matchPlainModelBackend 判定 model 是否为「裸模型名」且精确命中某启用后端。
+// 命中返回 (backendID, true)。以下情形一律不命中，交回原有默认流水线解析：
+//   - 空 model / 流水线写法（centag/x、pipeline.x、内置流水线名）
+//   - auto（语义是"任意健康后端"，不属于显式指定）
+//
+// 匹配策略与 transparent forward 节点的 matchClientModelAcrossBackends 保持一致：
+// StrategyExact + ConversionWeight=0，仅按 SupportedModels 的 RequestedModel/ActualModel 等值匹配。
+func matchPlainModelBackend(model string) (string, bool) {
+	model = strings.TrimSpace(model)
+	if model == "" || strings.EqualFold(model, "auto") {
+		return "", false
+	}
+	if _, _, isPipelineRef := parseModelPipelinePrefix(model); isPipelineRef {
+		return "", false
+	}
+	mgr := backend.GetManager()
+	if mgr == nil {
+		return "", false
+	}
+	matchCfg := backend.DefaultModelMatchingConfig()
+	matchCfg.Strategy = backend.StrategyExact
+	matchCfg.ConversionWeight = 0
+	selector := backend.NewBackendSelector(matchCfg)
+	selected, _, err := selector.SelectBackendByModel(model, mgr.List())
+	if err != nil || selected == nil || !selected.Enabled {
+		return "", false
+	}
+	return selected.ID, true
+}
 
 // extractModelFromRequest 从请求中提取模型名
 func extractModelFromRequest(r *http.Request) string {
