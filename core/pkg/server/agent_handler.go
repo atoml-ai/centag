@@ -48,6 +48,12 @@ func resolveModelName(model string, pipelineID string, supportedModels []backend
 	return model
 }
 
+// buildPinnedProxyModelName 钉死代理模式下的模型写法：<后端ID>/<模型ID>。
+// 运行期代理侧按「后端+模型」格式解析该写法，钉死到指定后端并走透明流水线。
+func buildPinnedProxyModelName(backendID, model string) string {
+	return strings.TrimSpace(backendID) + "/" + strings.TrimSpace(model)
+}
+
 // ListAgentTypes 列出所有支持的 Agent 工具类型（含配置方法与安装指引）
 func (h *AgentHandler) ListAgentTypes(c *gin.Context) {
 	type agentInfo struct {
@@ -149,7 +155,7 @@ func (h *AgentHandler) GenerateConfig(c *gin.Context) {
 		return
 	}
 
-	info, routeName, err := h.buildAgentBackendInfo(c, req.BackendID, req.PipelineID, req.Model, req.Host, req.Port)
+	info, routeName, err := h.buildAgentBackendInfo(c, req.BackendID, req.PipelineID, req.Model, req.ViaProxy, req.Host, req.Port)
 	if err != nil {
 		if errors.Is(err, errNoUsableProxyAPIKey) {
 			h.respondProxyAPIKeyError(c, err)
@@ -193,7 +199,7 @@ func (h *AgentHandler) WriteConfig(c *gin.Context) {
 		return
 	}
 
-	info, _, err := h.buildAgentBackendInfo(c, req.BackendID, req.PipelineID, req.Model, req.Host, req.Port)
+	info, _, err := h.buildAgentBackendInfo(c, req.BackendID, req.PipelineID, req.Model, req.ViaProxy, req.Host, req.Port)
 	if err != nil {
 		if errors.Is(err, errNoUsableProxyAPIKey) {
 			h.respondProxyAPIKeyError(c, err)
@@ -218,6 +224,23 @@ func (h *AgentHandler) WriteConfig(c *gin.Context) {
 		return
 	}
 
+	// 代理+钉死默认出站：把所选后端/模型写入系统默认配置，
+	// 替换透明流水线使用的 {{system.default_backend}} / {{system.default_model}}；
+	// 备用后端/模型（fallback_backend/fallback_model）保持不变。
+	pinnedProxyDefaults := false
+	if req.ViaProxy && strings.TrimSpace(req.BackendID) != "" {
+		if err := applyPinnedProxyDefaults(req.BackendID, req.Model); err != nil {
+			c.JSON(http.StatusInternalServerError, agent.WriteConfigResponse{
+				AgentType: req.AgentType,
+				Success:   false,
+				Written:   files,
+				Message:   "Agent 配置文件已写入，但同步系统默认后端/模型失败：" + err.Error(),
+			})
+			return
+		}
+		pinnedProxyDefaults = true
+	}
+
 	meta := tmpl.Meta().Normalize()
 	msg := "配置已写入本地文件"
 	restart := meta.Category == agent.AgentCategoryDesktop && meta.HasAccess(agent.AccessWriteConfig)
@@ -233,6 +256,9 @@ func (h *AgentHandler) WriteConfig(c *gin.Context) {
 		restart = true
 	} else if restart {
 		msg = "配置已写入本地文件。请完全退出并重启客户端后生效。"
+	}
+	if pinnedProxyDefaults && !guideExported {
+		msg += "系统默认后端/模型已更新为所选项，透明流水线将使用该后端与模型出站。"
 	}
 
 	c.JSON(http.StatusOK, agent.WriteConfigResponse{
@@ -356,6 +382,7 @@ type GenerateScriptRequest struct {
 	PipelineID string `json:"pipeline_id,omitempty"`
 	Host       string `json:"host,omitempty"`
 	Port       int    `json:"port,omitempty"`
+	ViaProxy   bool   `json:"via_proxy,omitempty"`
 }
 
 // GenerateScript 生成一键配置脚本（Shell / PowerShell）
@@ -373,7 +400,7 @@ func (h *AgentHandler) GenerateScript(c *gin.Context) {
 		return
 	}
 
-	info, routeName, err := h.buildAgentBackendInfo(c, req.BackendID, req.PipelineID, req.Model, req.Host, req.Port)
+	info, routeName, err := h.buildAgentBackendInfo(c, req.BackendID, req.PipelineID, req.Model, req.ViaProxy, req.Host, req.Port)
 	if err != nil {
 		if errors.Is(err, errNoUsableProxyAPIKey) {
 			h.respondProxyAPIKeyError(c, err)
@@ -608,11 +635,18 @@ func effectiveDirectAPIKey(be *backend.BackendConfig) string {
 }
 
 // buildAgentBackendInfo 构建接入用的 BackendInfo，并按模式选择密钥来源：
-//   - 流水线模式（pipeline_id 非空）：使用 Centag 代理密钥（llmproxy_*），BaseURL 留空由模板回退到代理地址。
-//   - 直连模式（backend_id 非空）：使用后端真实密钥与真实 BaseURL，跳过代理密钥解析（绕过 Centag 代理）。
+//   - 流水线模式（pipeline_id 非空）：使用 Centag 代理密钥（llmproxy_*），模型固定 centag/<pipeline>，
+//     BaseURL 留空由模板回退到代理地址。
+//   - 直连模式（仅 backend_id 非空，未声明 via_proxy）：使用后端真实密钥与真实 BaseURL，
+//     跳过代理密钥解析（绕过 Centag 代理）。
+//   - 代理+钉死默认出站（backend_id+via_proxy）：Agent 配置仍写 Centag 地址与代理密钥，
+//     模型写为 <后端ID>/<模型ID> 形式——运行期代理按后端+模型格式解析并走透明流水线钉死该后端，
+//     确定性强；所选后端/模型同时由 WriteConfig 落盘为系统默认（system.default_backend/default_model）
+//     作为兜底，备用后端/模型保持不变。
 //
-// 直连模式要求后端已启用且具备可用 API Key（主密钥或账户池中任一启用账户），否则返回错误引导用户改用代理模式。
-func (h *AgentHandler) buildAgentBackendInfo(c *gin.Context, backendID, pipelineID, model, host string, port int) (*agent.BackendInfo, string, error) {
+// 直连/钉死模式均要求后端已启用且具备可用 API Key（主密钥或账户池中任一启用账户），
+// 否则返回错误引导用户改用流水线代理模式。
+func (h *AgentHandler) buildAgentBackendInfo(c *gin.Context, backendID, pipelineID, model string, viaProxy bool, host string, port int) (*agent.BackendInfo, string, error) {
 	// 未显式传 host 时，从请求 Host 头推导（API 直调场景生成可用的 baseURL，而非 localhost 默认值）
 	if strings.TrimSpace(host) == "" && c != nil && c.Request != nil && c.Request.Host != "" {
 		reqHost := c.Request.Host
@@ -631,8 +665,17 @@ func (h *AgentHandler) buildAgentBackendInfo(c *gin.Context, backendID, pipeline
 
 	modelName := resolveModelName(model, pipelineID, be.SupportedModels)
 
-	// 直连模式：使用后端真实密钥与真实 BaseURL（绕过 Centag 代理，不走计量/配额/failover/语义缓存）
-	if strings.TrimSpace(backendID) != "" {
+	// backend_id+via_proxy：代理+钉死默认出站（区别于直连）。
+	pinnedProxyEgress := strings.TrimSpace(backendID) != "" && viaProxy
+
+	// 钉死模式：运行期以 <后端ID>/<模型ID> 写法钉死该后端（非 centag/ 前缀，
+	// 代理侧按后端+模型格式解析并走透明流水线），模型名携带后端信息、确定性强。
+	if pinnedProxyEgress {
+		modelName = buildPinnedProxyModelName(be.ID, modelName)
+	}
+
+	// 直连模式：使用后端真实密钥与真实 BaseURL（绕过 Centag 代理，不走计量/配额/failover/语义缓存）。
+	if strings.TrimSpace(backendID) != "" && !pinnedProxyEgress {
 		apiKey := effectiveDirectAPIKey(be)
 		if !be.Enabled {
 			return nil, "", fmt.Errorf("后端 %q 已禁用，无法用于直连接入；请改用 Centag 代理模式，或在后端管理中启用它", be.Name)
@@ -652,15 +695,37 @@ func (h *AgentHandler) buildAgentBackendInfo(c *gin.Context, backendID, pipeline
 		}, routeName, nil
 	}
 
+	// 代理+钉死默认出站：校验所选后端可用，确保运行期透明转发能取到该后端的上游密钥；
+	// 模型校验交给上游自然报错。
+	if pinnedProxyEgress {
+		pinned, err := h.backendMgr.Get(strings.TrimSpace(backendID))
+		if err != nil || pinned == nil {
+			return nil, "", fmt.Errorf("backend not found: %s", backendID)
+		}
+		if !pinned.Enabled {
+			return nil, "", fmt.Errorf("后端 %q 已禁用，无法作为默认出站；请改选其它后端或先启用它", pinned.Name)
+		}
+		if effectiveDirectAPIKey(pinned) == "" {
+			return nil, "", fmt.Errorf("后端 %q 未配置可用 API Key，无法作为默认出站；请先在后端管理中填写密钥", pinned.Name)
+		}
+	}
+
 	// 代理模式：解析 Centag 代理密钥
 	proxyAPIKey, err := h.resolveProxyAPIKey(c)
 	if err != nil {
 		return nil, "", err
 	}
+
+	// 钉死模式 BaseURL 必须置空，模板才会回退到 Centag 代理地址（而非真实上游地址）。
+	infoBaseURL := be.BaseURL
+	if pinnedProxyEgress {
+		infoBaseURL = ""
+	}
+
 	return &agent.BackendInfo{
 		ID:      be.ID,
 		Name:    be.Name,
-		BaseURL: be.BaseURL,
+		BaseURL: infoBaseURL,
 		APIKey:  proxyAPIKey,
 		Type:    be.Type,
 		Model:   modelName,

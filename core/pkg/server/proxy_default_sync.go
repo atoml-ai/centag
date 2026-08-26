@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	"centag/core/pkg/backend"
@@ -49,6 +50,50 @@ func syncProxyDefaultModelFromBackend(backendID string) {
 		return
 	}
 	logger.Infof("[ProxyConfig] Synced default_model=%q from backend %q", nextModel, backendID)
+}
+
+// applyPinnedProxyDefaults 将 Agent 接入向导所选的后端/模型写入系统默认配置
+// （proxy.default_backend_id / proxy.default_model，即 system.default_backend / system.default_model 变量），
+// 使透明流水线的默认出站被替换为用户所选组合。模型为空时回落该后端的推荐默认模型。
+func applyPinnedProxyDefaults(backendID, model string) error {
+	backendID = strings.TrimSpace(backendID)
+	if backendID == "" {
+		return fmt.Errorf("backend id is empty")
+	}
+	mgr := backend.GetManager()
+	if mgr == nil {
+		return fmt.Errorf("backend manager unavailable")
+	}
+	b, err := mgr.Get(backendID)
+	if err != nil || b == nil {
+		return fmt.Errorf("backend %q not found", backendID)
+	}
+	nextModel := strings.TrimSpace(model)
+	if nextModel == "" {
+		nextModel = strings.TrimSpace(backend.PreferredDefaultModel(b))
+	}
+
+	cfg := config.Get()
+	if cfg == nil {
+		return fmt.Errorf("config unavailable")
+	}
+	changed := false
+	if strings.TrimSpace(cfg.Proxy.DefaultBackendID) != backendID {
+		cfg.Proxy.DefaultBackendID = backendID
+		changed = true
+	}
+	if nextModel != "" && strings.TrimSpace(cfg.Proxy.DefaultModel) != nextModel {
+		cfg.Proxy.DefaultModel = nextModel
+		changed = true
+	}
+	if !changed {
+		return nil
+	}
+	if err := config.PersistProxyConfig(context.Background(), cfg.Proxy); err != nil {
+		return err
+	}
+	logger.Infof("[ProxyConfig] Agent setup pinned default backend=%q model=%q", backendID, nextModel)
+	return nil
 }
 
 // isCurrentDefaultBackend reports whether backendID is the current system default backend.

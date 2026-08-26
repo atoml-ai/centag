@@ -84,6 +84,10 @@ type GenerateConfigRequest struct {
 	PipelineID string `json:"pipeline_id,omitempty"`
 	Host       string `json:"host,omitempty"`
 	Port       int    `json:"port,omitempty"`
+	// ViaProxy 指定后端经代理接入（backend_id+via_proxy）：
+	// Agent 配置仍写 Centag 地址与代理密钥，模型用真实名；
+	// 运行期裸模型名命中透明流水线钉死该后端，写入时同步系统默认出站。
+	ViaProxy bool `json:"via_proxy,omitempty"`
 }
 
 // PlatformCommands 按操作系统分类的写入命令
@@ -101,6 +105,8 @@ type WriteConfigRequest struct {
 	PipelineID string `json:"pipeline_id,omitempty"`
 	Host       string `json:"host,omitempty"`
 	Port       int    `json:"port,omitempty"`
+	// ViaProxy 同 GenerateConfigRequest；写入成功后同步系统默认后端/模型。
+	ViaProxy bool `json:"via_proxy,omitempty"`
 }
 
 // WriteConfigResponse 写入结果
