@@ -15,6 +15,8 @@ metadata:
   storage: redis
 
 nodes:
+# 注意：cache 节点实际读写走全局「存储管理」的默认 KV 存储（storage.default_kv）
+# 与 cache.backend=exact；下方 config.host/port 仅供展示，不参与连接。
 - id: cache_read
   type: cache
   kind: cache.access
@@ -49,6 +51,8 @@ nodes:
     system_prompt: Redis 缓存后端示例
   timeout: 120
   condition: '{{cache_read.metadata.cache_hit}} != true'
+  depends_on:
+  - cache_read
 - id: cache_write
   type: cache
   kind: cache.access
@@ -73,11 +77,12 @@ nodes:
   type: token_usage
   kind: metrics.token_usage
   implementation: builtin.token_usage
-  name: Token Metering (SQLite)
+  name: Token Metering
+  # 计量持久化走全局计费钩子（team 版落 Postgres token_usage 表）；
+  # 节点级 storage_type/database_path 为无效配置（executeRecord 不读取），故不配置。
   config:
     custom_config:
       operation: record
-      storage_type: sqlite
       record_fields:
       - prompt_tokens
       - completion_tokens
@@ -85,9 +90,6 @@ nodes:
       - model
       - backend_id
       - user_id
-      config:
-        table_name: token_usage
-        database_path: ./storage/token_usage.db
   timeout: 5
   depends_on:
   - generator
