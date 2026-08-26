@@ -174,6 +174,63 @@ func TestRecordUsage_NormalizeEmptyAgentType(t *testing.T) {
 	}
 }
 
+// ── api_key_id NULL normalization tests ─────────────────────────────────────
+
+// TestRecordUsage_APIKeyIDZeroStoredAsNULL verifies that APIKeyID=0 (JWT auth or
+// pipeline path without propagation) is stored as NULL instead of 0. PostgreSQL
+// enforces token_usage_api_key_id_fkey, so inserting 0 fails the whole usage row;
+// NULL is the correct "no API key" representation.
+func TestRecordUsage_APIKeyIDZeroStoredAsNULL(t *testing.T) {
+	db := setupSQLiteTokenUsageDBWithAPIKeys(t)
+	defer db.Close()
+
+	svc := NewService(db, "sqlite")
+
+	// JWT-authenticated request: no API key → NULL
+	err := svc.RecordUsage(context.Background(), &UsageRecord{
+		UserID:       1,
+		APIKeyID:     0,
+		BackendID:    "deepseek",
+		Model:        "deepseek-v4-flash",
+		PromptTokens: 10,
+		TotalTokens:  10,
+		CostUSD:      0.01,
+		RequestID:    "req-jwt",
+	})
+	if err != nil {
+		t.Fatalf("RecordUsage with APIKeyID=0: %v", err)
+	}
+
+	var apiKeyID sql.NullInt64
+	if err := db.QueryRow(`SELECT api_key_id FROM token_usage WHERE request_id = 'req-jwt'`).Scan(&apiKeyID); err != nil {
+		t.Fatalf("query token_usage: %v", err)
+	}
+	if apiKeyID.Valid {
+		t.Errorf("api_key_id should be NULL for JWT requests, got %d", apiKeyID.Int64)
+	}
+
+	// API-key authenticated request: real id preserved
+	err = svc.RecordUsage(context.Background(), &UsageRecord{
+		UserID:       1,
+		APIKeyID:     1,
+		BackendID:    "deepseek",
+		Model:        "deepseek-v4-flash",
+		PromptTokens: 20,
+		TotalTokens:  20,
+		CostUSD:      0.02,
+		RequestID:    "req-key",
+	})
+	if err != nil {
+		t.Fatalf("RecordUsage with APIKeyID>0: %v", err)
+	}
+	if err := db.QueryRow(`SELECT api_key_id FROM token_usage WHERE request_id = 'req-key'`).Scan(&apiKeyID); err != nil {
+		t.Fatalf("query token_usage: %v", err)
+	}
+	if !apiKeyID.Valid || apiKeyID.Int64 != 1 {
+		t.Errorf("api_key_id should be 1 for API-key requests, got valid=%v value=%d", apiKeyID.Valid, apiKeyID.Int64)
+	}
+}
+
 // ── used_usd writeback tests ─────────────────────────────────────────────────
 
 func setupSQLiteTokenUsageDBWithAPIKeys(t *testing.T) *sql.DB {

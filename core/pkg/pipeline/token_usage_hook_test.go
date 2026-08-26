@@ -20,6 +20,7 @@ func TestPersistTokenUsageFromRecord_UserIDFromExecCtx(t *testing.T) {
 	input := &NodeInput{
 		Metadata: map[string]interface{}{
 			"request_id": "req-1",
+			"api_key_id": 28,
 		},
 	}
 	record := map[string]interface{}{
@@ -41,6 +42,9 @@ func TestPersistTokenUsageFromRecord_UserIDFromExecCtx(t *testing.T) {
 
 	if captured.UserID != 42 {
 		t.Fatalf("UserID = %d, want 42", captured.UserID)
+	}
+	if captured.APIKeyID != 28 {
+		t.Fatalf("APIKeyID = %d, want 28", captured.APIKeyID)
 	}
 	if captured.Model != "deepseek-v4-flash" {
 		t.Fatalf("Model = %q", captured.Model)

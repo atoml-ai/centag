@@ -10,6 +10,7 @@ import (
 // TokenUsagePersistRequest is passed to the optional usage persistence hook.
 type TokenUsagePersistRequest struct {
 	UserID           int64
+	APIKeyID         int64 // 命中的虚拟 Key 主键；0 = JWT 认证或未传播（落库时转 NULL）
 	BackendID        string
 	Model            string
 	PromptTokens     int
@@ -47,6 +48,7 @@ func persistTokenUsageFromRecord(ctx context.Context, input *NodeInput, record m
 		req.DeptTag = tokenRecordString(input.Metadata["dept_tag"])
 		req.AgentType = tokenRecordString(input.Metadata["agent_type"])
 		req.SessionID = tokenRecordString(input.Metadata["session_id"]) // 039: 会话 ID
+		req.APIKeyID = int64(tokenRecordInt(input.Metadata["api_key_id"]))
 		if uid := tokenRecordString(input.Metadata["user_id"]); uid != "" {
 			if id, err := parseUserIDInt(uid); err == nil {
 				req.UserID = id

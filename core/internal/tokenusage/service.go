@@ -230,6 +230,12 @@ func (s *Service) RecordUsage(ctx context.Context, record *UsageRecord) error {
 	if record.PricingRuleID > 0 {
 		ruleID = record.PricingRuleID
 	}
+	// api_key_id: JWT 认证或 pipeline 节点未传播时为 0，落 NULL 避免 FK 违规
+	// （token_usage_api_key_id_fkey 要求引用真实 api_keys.id）。
+	var apiKeyID interface{}
+	if record.APIKeyID > 0 {
+		apiKeyID = record.APIKeyID
+	}
 	insertQuery := s.q(`
 		INSERT INTO token_usage 
 		(user_id, api_key_id, backend_id, model, prompt_tokens, completion_tokens, total_tokens,
@@ -239,7 +245,7 @@ func (s *Service) RecordUsage(ctx context.Context, record *UsageRecord) error {
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24)
 	`)
 	_, err = tx.ExecContext(ctx, insertQuery,
-		record.UserID, record.APIKeyID, record.BackendID, record.Model,
+		record.UserID, apiKeyID, record.BackendID, record.Model,
 		record.PromptTokens, record.CompletionTokens, record.TotalTokens,
 		record.CostUSD, record.InputCost, record.OutputCost,
 		record.CostInputPrice, record.CostOutputPrice,

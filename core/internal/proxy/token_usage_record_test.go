@@ -44,6 +44,19 @@ func TestPipelineDelegatedTokenUsage(t *testing.T) {
 		t.Fatal("expected proxy fallback when generator produced no tokens")
 	}
 
+	cacheServed := &pipeline.PipelineOutput{
+		ExecutionLog: &pipeline.ExecutionLog{
+			NodeLogs: []pipeline.NodeExecutionLog{
+				{NodeType: pipeline.NodeTypeCache, Success: true},
+				{NodeType: pipeline.NodeTypeGenerator, Success: false}, // 缓存命中时 generator 被条件跳过
+				{NodeType: pipeline.NodeTypeTokenUsage, Success: true},
+			},
+		},
+	}
+	if !pipelineDelegatedTokenUsage(cacheServed) {
+		t.Fatal("expected delegation on cache hit (node records cached usage; proxy must not double-record)")
+	}
+
 	without := &pipeline.PipelineOutput{
 		ExecutionLog: &pipeline.ExecutionLog{
 			NodeLogs: []pipeline.NodeExecutionLog{

@@ -122,6 +122,7 @@ func pipelineDelegatedTokenUsage(output *pipeline.PipelineOutput) bool {
 	}
 	hasTokenUsage := false
 	hasLLMTokens := false
+	hasCacheServed := false
 	for _, nl := range output.ExecutionLog.NodeLogs {
 		if !nl.Success {
 			continue
@@ -133,9 +134,13 @@ func pipelineDelegatedTokenUsage(output *pipeline.PipelineOutput) bool {
 			if nl.InputTokens > 0 || nl.OutputTokens > 0 {
 				hasLLMTokens = true
 			}
+		case pipeline.NodeTypeCache:
+			// 缓存命中：内容来自缓存，token_usage 节点会用恢复的计量元数据记账，
+			// 代理层不应再兜底重复记录（否则每次命中双重计费）。
+			hasCacheServed = true
 		}
 	}
-	return hasTokenUsage && hasLLMTokens
+	return hasTokenUsage && (hasLLMTokens || hasCacheServed)
 }
 
 func tokenCountsFromOutput(output *pipeline.PipelineOutput) (prompt, completion, total int) {

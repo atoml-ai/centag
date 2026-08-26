@@ -437,6 +437,9 @@ func (d *ModeDispatcher) buildMetadata(
 	if uid := extractUserID(c); uid != "" {
 		metadata["user_id"] = uid
 	}
+	if keyID := auth.GetAPIKeyID(c); keyID > 0 {
+		metadata["api_key_id"] = keyID
+	}
 	if dept := strings.TrimSpace(headers["X-Dept-Tag"]); dept != "" {
 		metadata["dept_tag"] = dept
 	}

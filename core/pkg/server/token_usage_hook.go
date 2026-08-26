@@ -17,6 +17,7 @@ func wireTokenUsagePersistence(svc *tokenusage.Service, hm hooks.HookManager) {
 	pipeline.PersistTokenUsage = func(ctx context.Context, req pipeline.TokenUsagePersistRequest) {
 		usage := &hooks.TokenUsage{
 			UserID:       req.UserID,
+			APIKeyID:     req.APIKeyID,
 			TenantID:     req.TenantID,
 			RequestID:    req.RequestID,
 			Model:        req.Model,
