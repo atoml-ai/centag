@@ -2,6 +2,7 @@ package server
 
 import (
 	"fmt"
+	"strings"
 
 	"centag/core/internal/agent/skills"
 	"centag/core/pkg/logger"
@@ -29,6 +30,32 @@ const agentSkillRouterChatID = "chat-gen"
 // status-check → status-check-gen
 func skillBranchNodeID(skillName string) string {
 	return skillName + "-gen"
+}
+
+// buildClassifyPrompt 由启用 skill 的名称与描述生成 llm_classify 自定义分类 Prompt。
+// 相比内置默认裸类别名列表，这里为每个类别附上判断标准（manifest description），
+// 显著提升中文问题到英文 skill 名的分类准确率；chat 作为兜底类别显式说明。
+func buildClassifyPrompt(plugins []skills.SkillPlugin) string {
+	var b strings.Builder
+	b.WriteString("你是意图分类助手。请判断用户输入的意图类别，只返回类别名（英文小写），不要输出任何解释。\n\n")
+	b.WriteString("可选类别及判断标准（用户输入意图越接近某类别，就返回该类别名）：\n")
+	for _, p := range plugins {
+		if !p.Enabled() {
+			continue
+		}
+		def := p.GetSkillDefinition()
+		if def.Name == "" {
+			continue
+		}
+		desc := strings.TrimSpace(p.Descriptor().Description)
+		if desc == "" {
+			desc = def.Name
+		}
+		fmt.Fprintf(&b, "- %s：%s\n", def.Name, desc)
+	}
+	b.WriteString("- chat：问候、闲聊或与 centag 运维无关的问题；无法判断时也返回 chat\n\n")
+	b.WriteString("用户输入：{{.input}}\n\n类别：")
+	return b.String()
 }
 
 // BuildSkillRouterPipeline 由全部启用 skill 插件生成单一路由管线（centag-ops-router）。
@@ -79,6 +106,7 @@ func BuildSkillRouterPipeline(plugins []skills.SkillPlugin, defaultBackend, defa
 				"routing_strategy": "llm_classify",
 				"default_route":    agentSkillRouterChatID,
 				"routes":           routes,
+				"classify_prompt":  buildClassifyPrompt(plugins),
 			},
 			TemplateVars: map[string]string{
 				"backend": "system.default_backend",

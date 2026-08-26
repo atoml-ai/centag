@@ -23,8 +23,8 @@ func TestBuildSkillRouterPipeline(t *testing.T) {
 	if pp.ID != centagOpsRouterPipelineID {
 		t.Errorf("pipeline id = %q, want %q", pp.ID, centagOpsRouterPipelineID)
 	}
-	// classifier + 5 skill 分支 + chat-gen
-	wantNodes := 7
+	// classifier + 7 skill 分支 + chat-gen
+	wantNodes := 9
 	if len(pp.Nodes) != wantNodes {
 		t.Fatalf("nodes = %d, want %d", len(pp.Nodes), wantNodes)
 	}
@@ -40,11 +40,32 @@ func TestBuildSkillRouterPipeline(t *testing.T) {
 		t.Errorf("classifier default_route = %q, want %q", d, agentSkillRouterChatID)
 	}
 	routes, _ := classifier.Config.CustomConfig["routes"].(map[string]interface{})
-	if len(routes) != 5 {
-		t.Errorf("classifier routes = %d, want 5", len(routes))
+	if len(routes) != 7 {
+		t.Errorf("classifier routes = %d, want 7", len(routes))
 	}
 	if routes["status-check"] != "status-check-gen" {
 		t.Errorf("routes[status-check] = %v, want status-check-gen", routes["status-check"])
+	}
+
+	// classify_prompt：每个 skill 的名称+描述注入判断标准，chat 兜底显式说明
+	cp, _ := classifier.Config.CustomConfig["classify_prompt"].(string)
+	if cp == "" {
+		t.Fatal("classifier classify_prompt should be injected")
+	}
+	for _, key := range []string{
+		"- status-check：查询centag当前运行状态",
+		"- config-analysis：分析当前配置",
+		"- error-diagnosis：错误诊断",
+		"- log-analysis：日志分析",
+		"- strategy-recommend：策略调整建议",
+		"- billing-audit：计费审计",
+		"- cost-analysis：成本分析",
+		"- chat：问候、闲聊或与 centag 运维无关的问题；无法判断时也返回 chat",
+		"{{.input}}",
+	} {
+		if !strings.Contains(cp, key) {
+			t.Errorf("classify_prompt missing %q", key)
+		}
 	}
 
 	// status-check 分支

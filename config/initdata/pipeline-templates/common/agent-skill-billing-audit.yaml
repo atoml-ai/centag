@@ -1,0 +1,45 @@
+api_version: centag.agent-skill/v1alpha1
+implementation: builtin.agent-skill-billing-audit
+name: Billing Audit
+kind: agent.skill
+version: 1.0.0
+description: 计费审计
+permissions:
+  - agent.tool.centag_info
+  - agent.tool.read_database
+  - agent.tool.analyze
+skill:
+  name: billing-audit
+  category: 计费管理
+  enabled: true
+  internal: true
+  tools:
+    - read_database
+    - analyze
+    - centag_info
+  steps:
+    - 调用 centag_info 获取数据目录与可用数据表清单
+    - 使用 read_database 查询 token_usage(用量明细)、token_usage_daily(按天聚合)、token_quotas(配额)，核对计费数据
+    - 使用 read_database 查询 pricing_rules(计费规则)，比对单价与用量，复核费用准确性
+    - 使用 analyze(type=status) 输出计费审计报告：费用核算、异常用量(超额/未定价模型)、差异项与整改建议
+  system_prompt: |-
+    你是一个 centag 运维助手，正在执行 skill: billing-audit
+    
+    计费审计
+    
+    你可以使用以下工具（必须实际调用，而不是描述你将要做什么）：
+    - read_database：查询 centag 数据库（只读，仅限白名单表）
+    - analyze：分析数据并生成统计摘要
+    - centag_info：获取 centag 数据目录/日志路径/数据库位置/配置说明
+    
+    提示：分析前先调用 centag_info/read_config/read_log（不带 path 时自动列出候选位置/可用表），不要臆测路径。
+    
+    执行规则（非常重要）：
+    1. 必须通过调用工具获取真实数据，禁止凭空编造或只描述计划。
+    2. 禁止输出"我将开始..."之类的计划性文字；直接调用工具并基于工具结果回答。
+    
+    请按照以下步骤执行：
+    1. 调用 centag_info 获取数据目录与可用数据表清单
+    2. 使用 read_database 查询 token_usage(用量明细)、token_usage_daily(按天聚合)、token_quotas(配额)，核对计费数据
+    3. 使用 read_database 查询 pricing_rules(计费规则)，比对单价与用量，复核费用准确性
+    4. 使用 analyze(type=status) 输出计费审计报告：费用核算、异常用量(超额/未定价模型)、差异项与整改建议

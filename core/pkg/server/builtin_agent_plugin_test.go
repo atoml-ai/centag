@@ -14,10 +14,10 @@ func TestLoadBuiltinSkillPlugins(t *testing.T) {
 		t.Fatal("loadBuiltinSkillPlugins() = nil, want non-nil registry")
 	}
 	plugins := reg.ListAll()
-	if len(plugins) != 5 {
-		t.Fatalf("builtin skill count = %d, want 5 (status-check/config-analysis/error-diagnosis/log-analysis/strategy-recommend)", len(plugins))
+	if len(plugins) != 7 {
+		t.Fatalf("builtin skill count = %d, want 7 (status-check/config-analysis/error-diagnosis/log-analysis/strategy-recommend/billing-audit/cost-analysis)", len(plugins))
 	}
-	wantNames := []string{"status-check", "config-analysis", "error-diagnosis", "log-analysis", "strategy-recommend"}
+	wantNames := []string{"status-check", "config-analysis", "error-diagnosis", "log-analysis", "strategy-recommend", "billing-audit", "cost-analysis"}
 	got := make(map[string]bool)
 	for _, p := range plugins {
 		if !p.Internal() {

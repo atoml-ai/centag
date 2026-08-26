@@ -56,4 +56,6 @@ func LoadBuiltinSkills(registry *SkillRegistry) {
 	registry.RegisterSkill(NewErrorDiagnosisSkill())
 	registry.RegisterSkill(NewLogAnalysisSkill())
 	registry.RegisterSkill(NewStrategyRecommendSkill())
+	registry.RegisterSkill(NewBillingAuditSkill())
+	registry.RegisterSkill(NewCostAnalysisSkill())
 }
