@@ -16,8 +16,9 @@
 //
 // 其他可覆盖的环境变量:
 //	LLM_PROXY_ADMIN_USERNAME      (default: admin)
-//	LLM_PROXY_ADMIN_PASSWORD      首次启动前显式设置可预置口令；未设置时
-//	                              personal/minimal/team 一律强制首启设置密码
+//	LLM_PROXY_ADMIN_PASSWORD      已废弃：不再用于预置管理员口令。
+//	                              任何发行版首次启动都必须在 WebUI 首启向导由用户设置管理密码，
+//	                              密码仅保存在数据库（sqlite/postgres），绝不从初始化文件读取。
 //	LLM_PROXY_DEFAULT_MODE             (default: transparent)
 //	LLM_PROXY_DEFAULT_BACKEND_ID       (default: ollama-local)
 //	LLM_PROXY_DEFAULT_MODEL            (default: qwen2.5:1.5b)
@@ -62,20 +63,13 @@ func AdminUsername() string {
 	return "admin"
 }
 
-// AdminPassword returns the initial admin password from environment variable.
-// Returns empty string when unset — for all editions (personal/minimal/team)
-// the user must set it via the first-run setup dialog.
+// AdminPassword 返回首启管理员口令。
+// 出于安全与一致性考虑，任何发行版（personal/minimal/team）都不再从
+// LLM_PROXY_ADMIN_PASSWORD 等初始化文件预置口令；管理员密码必须由用户在
+// 首次启动时通过 WebUI 首启向导设置，并保存到数据库（sqlite/postgres）。
+// 因此此函数始终返回空字符串，seeder 会以空 password_hash 创建管理员，
+// 从而触发前端的首次设置密码流程。
 func AdminPassword() string {
-	edition := strings.ToLower(strings.TrimSpace(os.Getenv("CENTAG_EDITION")))
-	if edition == "personal" || edition == "minimal" {
-		// Personal/minimal: no default password; user sets it on first launch.
-		return ""
-	}
-	if v := strings.TrimSpace(os.Getenv("LLM_PROXY_ADMIN_PASSWORD")); v != "" {
-		return v
-	}
-	// 其它商业版（team 等）：同样不内置默认口令，走首启设置密码流程。
-	// 需要部署时自动预置口令请显式设置 LLM_PROXY_ADMIN_PASSWORD。
 	return ""
 }
 
@@ -127,7 +121,7 @@ func Seed(ctx context.Context) error {
 	logger.Info("bootstrap: 管理员 user_configs 已写入")
 
 	logger.Info("bootstrap: 首轮初始化完成")
-	logger.Infof("bootstrap: Web 登录请使用用户名 %q 及环境变量 LLM_PROXY_ADMIN_PASSWORD（与 config/secrets/.env 一致；未设置时使用文档中的内置默认口令）", adminUser.Username)
+	logger.Infof("bootstrap: 管理员 %q 已创建（password_hash 为空），首次启动请通过 WebUI 首启向导设置管理密码", adminUser.Username)
 	if auth.APIKeyRevealOnce() {
 		logger.Info("bootstrap: API Key 可在「个人设置」中管理；当前为仅创建时展示一次（LLM_PROXY_API_KEY_REVEAL_ONCE）")
 	} else {

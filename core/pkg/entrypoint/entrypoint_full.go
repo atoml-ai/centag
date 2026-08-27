@@ -124,8 +124,8 @@ func Run(version, buildTime string) {
 		os.Exit(1)
 	}
 
-	// 禁止在日志中打印密码或完整 API Key（凭据仅通过环境变量 / Web 管理）
-	logger.Infof("Admin account ready — username: %q (password not logged; set via LLM_PROXY_ADMIN_PASSWORD or change in Web)", bootstrap.AdminUsername())
+	// 管理密码不再从环境变量预置；首次启动请在 WebUI 首启向导中设置（仅落库，不打印）
+	logger.Infof("Admin account ready — username: %q (set password via WebUI first-run setup; not preseeded from env)", bootstrap.AdminUsername())
 	if bootstrap.DefaultAdminAPIKeyString() != "" {
 		logger.Info("Default admin API Key is configured (value not logged; manage via Web / env)")
 	}
