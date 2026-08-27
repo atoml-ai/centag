@@ -625,10 +625,42 @@ func (h *PipelineHandler) ExecutePipeline(c *gin.Context) {
 		return
 	}
 
+	// P1-T9：结构化入口补齐 transparent_forward 所需的原始请求体。
+	// 节点只消费 metadata["raw_request_body"]；chat 入口由 attachTransparentRequestMetadata
+	// 注入，而本入口此前缺失，导致 messages-only 请求被节点回退为空 content 单条消息，
+	// 上游报 "Input must have at least 1 token."。这里把 messages/content 规范化为
+	// chat-completions 形态注入；metadata.model 作为客户端模型提示一并写入。
+	// 同时对齐键名：backend → backend_id（transparent_forward 的 pinning 只读 backend_id）。
+	meta := req.Metadata
+	if meta == nil {
+		meta = map[string]interface{}{}
+	}
+	if _, ok := meta["raw_request_body"]; !ok {
+		msgs := req.Messages
+		if len(msgs) == 0 && strings.TrimSpace(req.Content) != "" {
+			msgs = []pipeline.Message{{Role: "user", Content: req.Content}}
+		}
+		if len(msgs) == 0 {
+			msgs = []pipeline.Message{{Role: "user", Content: ""}}
+		}
+		synth := map[string]interface{}{"stream": false, "messages": msgs}
+		if m, ok := meta["model"].(string); ok && strings.TrimSpace(m) != "" {
+			synth["model"] = strings.TrimSpace(m)
+		}
+		if raw, err := json.Marshal(synth); err == nil {
+			meta["raw_request_body"] = string(raw)
+		}
+	}
+	if b, ok := meta["backend"].(string); ok && b != "" {
+		if _, exists := meta["backend_id"]; !exists {
+			meta["backend_id"] = b
+		}
+	}
+
 	input := &pipeline.PipelineInput{
 		Content:   req.Content,
 		Messages:  req.Messages,
-		Metadata:  req.Metadata,
+		Metadata:  meta,
 		UserID:    "",
 		SessionID: c.GetHeader("X-Request-ID"),
 	}
@@ -686,7 +718,7 @@ func (h *PipelineHandler) ExecutePipelineDirect(c *gin.Context) {
 	var req struct {
 		Pipeline pipeline.AgentPatternPipeline `json:"pipeline"`
 		Content  string                        `json:"content"`
-		Metadata map[string]interface{}         `json:"metadata,omitempty"`
+		Metadata map[string]interface{}        `json:"metadata,omitempty"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": fmt.Sprintf("invalid request body: %v", err)})
@@ -850,8 +882,8 @@ func (h *PipelineHandler) TestNodePlugin(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"data": gin.H{
-			"output":  resp.Output,
-			"events":  resp.Events,
+			"output": resp.Output,
+			"events": resp.Events,
 		},
 	})
 }
@@ -940,12 +972,12 @@ func (h *PipelineHandler) DiscoverRemoteNodePlugin(c *gin.Context) {
 				sigStatus = "present"
 			}
 			reg := &pipeline.PluginRegistration{
-				Implementation: descriptor.Implementation,
-				Kind:           descriptor.Kind,
-				Version:        descriptor.Version,
-				DescriptorJSON: string(descriptorJSON),
-				Source:         "remote",
-				Enabled:        true,
+				Implementation:  descriptor.Implementation,
+				Kind:            descriptor.Kind,
+				Version:         descriptor.Version,
+				DescriptorJSON:  string(descriptorJSON),
+				Source:          "remote",
+				Enabled:         true,
 				SignatureStatus: sigStatus,
 			}
 			if err := h.pluginRegistryStore.Register(reg); err != nil {
@@ -1258,7 +1290,7 @@ func (h *PipelineHandler) DeletePluginRegistry(c *gin.Context) {
 func (h *PipelineHandler) UpdateNodeConfig(c *gin.Context) {
 	pipelineId := c.Param("id")
 	nodeId := c.Param("nodeId")
-	
+
 	if pipelineId == "" || nodeId == "" {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
@@ -1304,13 +1336,13 @@ func (h *PipelineHandler) UpdateNodeConfig(c *gin.Context) {
 
 	// 更新节点配置
 	node := &existingPipeline.Nodes[nodeIndex]
-	
+
 	// 处理 custom_config 更新
 	if customConfig, ok := req["custom_config"].(map[string]interface{}); ok {
 		if node.Config.CustomConfig == nil {
 			node.Config.CustomConfig = make(map[string]interface{})
 		}
-		
+
 		// 更新 custom_config 字段
 		for k, v := range customConfig {
 			node.Config.CustomConfig[k] = v

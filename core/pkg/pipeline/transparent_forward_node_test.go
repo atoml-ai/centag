@@ -1769,3 +1769,120 @@ func TestTransparentForwardNode_LegacyInjectSystemPrompt(t *testing.T) {
 		t.Fatalf("tool_calls not preserved on #d/replace path: %#v", asst)
 	}
 }
+
+// P1-T9 回归：/execute 结构化入口此前丢 body——节点必须优先消费 input.Messages
+// 组装完整 chat 体（而非空 content 单条消息），否则上游报 Input must have at least 1 token.
+func TestTransparentForwardNode_BuildsBodyFromInputMessages(t *testing.T) {
+	cap := &capturingHTTPClient{inner: &mockHTTPClient{status: 200, body: `{"id":"ok"}`}}
+	broker := &mockCapabilityBroker{}
+	broker.httpClient = cap
+
+	node, err := NewTransparentForwardNode(NodeConfig{})
+	if err != nil {
+		t.Fatalf("NewTransparentForwardNode: %v", err)
+	}
+	tf := node.(*TransparentForwardNode)
+	tf.BaseNode.id = "transparent_forward"
+	tf.SetCapabilityBroker(broker)
+
+	output, err := tf.Execute(context.Background(), &NodeInput{
+		Messages: []Message{
+			{Role: "user", Content: "我叫小明"},
+			{Role: "assistant", Content: "你好小明！"},
+			{Role: "user", Content: "我叫什么？"},
+		},
+		Metadata: map[string]interface{}{
+			"target_url":   "https://api.example.com",
+			"request_path": "/v1/chat/completions",
+		},
+	})
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if output.Content != `{"id":"ok"}` {
+		t.Fatalf("content = %q", output.Content)
+	}
+	var got struct {
+		Model    string `json:"model"`
+		Messages []struct {
+			Role    string `json:"role"`
+			Content string `json:"content"`
+		} `json:"messages"`
+	}
+	if err := json.Unmarshal([]byte(cap.body), &got); err != nil {
+		t.Fatalf("outgoing body not valid json: %v\nbody=%s", err, cap.body)
+	}
+	if len(got.Messages) != 3 || got.Messages[2].Content != "我叫什么？" {
+		t.Fatalf("messages lost or truncated: %s", cap.body)
+	}
+	if strings.Contains(cap.body, `"content":""`) {
+		t.Fatalf("empty-content message present (regression): %s", cap.body)
+	}
+}
+
+// P1-T9 回归：仅有 Content 时维持最小体构造（WebUI 快速测试场景不回归）
+func TestTransparentForwardNode_ContentFallbackStillWorks(t *testing.T) {
+	cap := &capturingHTTPClient{inner: &mockHTTPClient{status: 200, body: `{"id":"ok"}`}}
+	broker := &mockCapabilityBroker{}
+	broker.httpClient = cap
+
+	node, _ := NewTransparentForwardNode(NodeConfig{})
+	tf := node.(*TransparentForwardNode)
+	tf.BaseNode.id = "transparent_forward"
+	tf.SetCapabilityBroker(broker)
+
+	if _, err := tf.Execute(context.Background(), &NodeInput{
+		Content: "你好",
+		Metadata: map[string]interface{}{
+			"target_url":   "https://api.example.com",
+			"request_path": "/v1/chat/completions",
+		},
+	}); err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	var got struct {
+		Messages []struct {
+			Content string `json:"content"`
+		} `json:"messages"`
+	}
+	if err := json.Unmarshal([]byte(cap.body), &got); err != nil {
+		t.Fatalf("body invalid: %v", err)
+	}
+	if len(got.Messages) != 1 || got.Messages[0].Content != "你好" {
+		t.Fatalf("content fallback broken: %s", cap.body)
+	}
+}
+
+// P1-T9 回归：metadata.backend 作为 backend_id 的别名参与 pinning
+func TestTransparentForwardNode_BackendKeyAliasPinning(t *testing.T) {
+	cap := &capturingHTTPClient{inner: &mockHTTPClient{status: 200, body: `{"id":"ok"}`}}
+	broker := &mockCapabilityBroker{}
+	broker.httpClient = cap
+
+	node, _ := NewTransparentForwardNode(NodeConfig{})
+	tf := node.(*TransparentForwardNode)
+	tf.BaseNode.id = "transparent_forward"
+	tf.SetCapabilityBroker(broker)
+
+	called := ""
+	orig := ResolveBackendEndpoint
+	ResolveBackendEndpoint = func(id string) (*BackendEndpoint, error) {
+		called = id
+		return &BackendEndpoint{BaseURL: "https://pinned.example.com"}, nil
+	}
+	defer func() { ResolveBackendEndpoint = orig }()
+
+	if _, err := tf.Execute(context.Background(), &NodeInput{
+		Metadata: map[string]interface{}{
+			"route_policy":     "fixed",
+			"backend":          "pinned-be",
+			"request_path":     "/v1/chat/completions",
+			"raw_request_body": `{"model":"gpt-4","messages":[{"role":"user","content":"hi"}]}`,
+		},
+	}); err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if called != "pinned-be" {
+		t.Fatalf("metadata.backend alias ignored; resolved=%q url=%v", called, cap.inner.lastReq.URL)
+	}
+}

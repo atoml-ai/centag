@@ -153,14 +153,20 @@ func (n *TransparentForwardNode) Execute(ctx context.Context, input *NodeInput) 
 	}
 
 	body := []byte(strings.TrimSpace(stringMeta(meta, "raw_request_body")))
-	// 真实代理场景：raw_request_body 由 attachTransparentRequestMetadata 填充（完整 JSON）
-	// WebUI 测试场景：无 raw_request_body，用 input.Content 构造最小合法 JSON
+	// 真实代理场景：raw_request_body 由 attachTransparentRequestMetadata 填充（完整 JSON）。
+	// /execute 等结构化入口：无 raw_request_body 时优先用 input.Messages 组装完整 chat 体
+	//（此前仅用 input.Content 构造单条消息，messages-only 请求在上游变成空输入，
+	// 报 "Input must have at least 1 token."）；再退化为单条 Content（WebUI 快速测试）。
 	if len(body) == 0 && input != nil {
 		model := strings.TrimSpace(n.config.Model)
 		if model == "" && meta != nil {
 			model = strings.TrimSpace(stringMeta(meta, "model"))
 		}
-		body = buildMinimalChatBody(strings.TrimSpace(input.Content), model)
+		if len(input.Messages) > 0 {
+			body = buildChatBodyFromMessages(input.Messages, model)
+		} else {
+			body = buildMinimalChatBody(strings.TrimSpace(input.Content), model)
+		}
 	}
 	if len(body) == 0 {
 		return nil, fmt.Errorf("transparent_forward node %q: empty request body", n.id)
@@ -829,6 +835,10 @@ func (n *TransparentForwardNode) resolveTargetURL(meta map[string]interface{}, b
 		bid := strings.TrimSpace(backendID)
 		if bid == "" && meta != nil {
 			bid = strings.TrimSpace(stringMeta(meta, "backend_id"))
+			if bid == "" {
+				// 兼容键名：/execute 与 OpenAI 客户端习惯用 backend
+				bid = strings.TrimSpace(stringMeta(meta, "backend"))
+			}
 		}
 		if bid != "" && ResolveBackendEndpoint != nil {
 			ep, err := ResolveBackendEndpoint(bid)
@@ -866,6 +876,10 @@ func (n *TransparentForwardNode) resolveTransparentRoute(
 	outBody = body
 
 	pinnedBackend := strings.TrimSpace(stringMeta(meta, "backend_id"))
+	if pinnedBackend == "" {
+		// 兼容键名：/execute 与 OpenAI 客户端习惯用 backend
+		pinnedBackend = strings.TrimSpace(stringMeta(meta, "backend"))
+	}
 	preferredBackend, preferredModel := "", ""
 	if ov, ok := config.ProxyDefaultsFromContext(ctx); ok {
 		preferredBackend = strings.TrimSpace(ov.DefaultBackendID)
@@ -1257,6 +1271,24 @@ func buildMinimalChatBody(content, model string) []byte {
 			{Role: "user", Content: content},
 		},
 	}
+	b, err := json.Marshal(body)
+	if err != nil {
+		return nil
+	}
+	return b
+}
+
+// buildChatBodyFromMessages 用结构化 Messages 组装完整 chat-completions 请求体。
+// 保留 role/content/tool_calls/tool_call_id/reasoning_content 全量字段，
+// 供 /execute 等仅传 Messages 的入口回退使用（对齐 chat 入口的原始 body 形态）。
+func buildChatBodyFromMessages(messages []Message, model string) []byte {
+	if model == "" {
+		model = "default"
+	}
+	body := struct {
+		Model    string    `json:"model"`
+		Messages []Message `json:"messages"`
+	}{Model: model, Messages: messages}
 	b, err := json.Marshal(body)
 	if err != nil {
 		return nil
