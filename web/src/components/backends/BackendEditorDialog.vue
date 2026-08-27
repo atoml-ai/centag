@@ -623,6 +623,13 @@ async function saveAccountPool(backendId: string): Promise<void> {
   const keysToSync = apiKeys.value.filter((k) => isUsableApiKey(k))
   const newIds = new Set(keysToSync.map((k) => k.id))
 
+  // 占位 Key：编辑态「已配置但明文未加载 / 历史单 Key」，不在服务端账户池中，
+  // 代表既有 Key 应保留。它既不是已有账户（避免 PUT 改密钥），也不是新增空账户
+  // （避免报「新增的 API Key 不能为空」），更不应触发误删真实账户。
+  const hasPlaceholder = keysToSync.some(
+    (k) => k.has_key && !(k.api_key || '').trim() && !existingIds.has(k.id)
+  )
+
   for (const key of keysToSync) {
     const plain = (key.api_key || '').trim()
     const payload: any = { id: key.id, enabled: true, weight: 1 }
@@ -631,16 +638,19 @@ async function saveAccountPool(backendId: string): Promise<void> {
       // 无明文时只更新元数据；后端 UpdateAccount 会保留原密钥
       await api.put(`/api/v1/backends/${backendId}/accounts/${key.id}`, payload)
     } else {
-      if (!plain) {
-        throw new Error(t('backendEditor.newKeyRequiresValue'))
-      }
+      // 新建：明文为空（占位或空草稿）直接跳过，不报「新增 Key 不能为空」
+      if (!plain) continue
       await api.post(`/api/v1/backends/${backendId}/accounts`, { ...payload, api_key: plain })
     }
   }
 
-  for (const existingAcc of existingAccounts) {
-    if (!newIds.has(existingAcc.id)) {
-      await api.delete(`/api/v1/backends/${backendId}/accounts/${existingAcc.id}`)
+  // 仅在本地列表完整反映账户池时删除：存在占位说明既有 Key 不在可编辑列表中，
+  // 此时保留服务端全部账户，避免「仅刷新模型/改默认模型」的保存误删真实密钥。
+  if (!hasPlaceholder) {
+    for (const existingAcc of existingAccounts) {
+      if (!newIds.has(existingAcc.id)) {
+        await api.delete(`/api/v1/backends/${backendId}/accounts/${existingAcc.id}`)
+      }
     }
   }
 
