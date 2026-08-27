@@ -1,5 +1,7 @@
 package pipeline
 
+import "context"
+
 // ScheduleRequest is passed to the optional scheduler hook.
 type ScheduleRequest struct {
 	Question       string
@@ -9,6 +11,8 @@ type ScheduleRequest struct {
 	ClassifyBackend string // 分类后端 ID
 	ClassifyModel   string // 分类模型
 	ClassifyPrompt  string // 自定义分类提示词
+	// Ctx 携带请求上下文（含用户域信息），供 FilterAllowedBackend 回调使用。
+	Ctx context.Context
 }
 
 // ScheduleResult carries the scheduler decision back to the pipeline node.

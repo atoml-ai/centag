@@ -1891,6 +1891,7 @@ func (n *SchedulerNode) Execute(ctx context.Context, input *NodeInput) (*NodeOut
 		ClassifyBackend: classifyBackend,
 		ClassifyModel:   classifyModel,
 		ClassifyPrompt:  classifyPrompt,
+		Ctx:             ctx,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("scheduler node %q: schedule failed: %w", n.id, err)

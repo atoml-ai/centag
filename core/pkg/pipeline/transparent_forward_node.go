@@ -786,12 +786,10 @@ func (n *TransparentForwardNode) buildTransparentOutput(
 	// P1-T3：上游以 2xx 返回错误对象时，映射为规范 HTTP 状态写回 metadata，
 	// chat 路径（transparentPassthroughStatusAndType）与 /execute 均据此返回真实状态。
 	// 真实 4xx/5xx 保持原有透传语义（见 Plain401AuthStillPassthrough 回归）。
-	effectiveStatus := statusCode
 	if statusCode >= 200 && statusCode < 400 {
 		if mapped, bad := DetectUpstreamErrorPayload(contentType, respBody); bad {
-			effectiveStatus = mapped
 			outMeta["upstream_error"] = true
-			outMeta["status_code"] = effectiveStatus
+			outMeta["status_code"] = mapped
 		}
 	}
 	var toolCalls []ToolCall
@@ -940,13 +938,16 @@ func (n *TransparentForwardNode) resolveTransparentRoute(
 		}
 
 		if matchedBackend, mapping := matchClientModelAcrossBackends(clientModel); matchedBackend != nil && mapping != nil {
-			backendID = matchedBackend.ID
-			resolvedModel, outBody = applyClientModelRewrite(outBody, clientModel, mapping)
-			return backendID, resolvedModel, outBody
+			if isBackendAllowed(ctx, matchedBackend.ID) {
+				backendID = matchedBackend.ID
+				resolvedModel, outBody = applyClientModelRewrite(outBody, clientModel, mapping)
+				return backendID, resolvedModel, outBody
+			}
+			// Backend not in allowlist: fall through to find an allowed backend
 		}
 
 		// 客户端模型无处可匹配：回落到我的默认后端 + 默认模型
-		if preferredBackend != "" {
+		if preferredBackend != "" && isBackendAllowed(ctx, preferredBackend) {
 			backendID = preferredBackend
 			modelHint := preferredModel
 			if modelHint == "" {
@@ -959,6 +960,10 @@ func (n *TransparentForwardNode) resolveTransparentRoute(
 
 	// Fallback: 用户默认 → 节点/系统默认 → first usable enabled backend
 	backendID = resolveFallbackBackendID(ctx, n.config.Backend, firstNonEmpty(pinnedBackend, preferredBackend))
+	if backendID != "" && !isBackendAllowed(ctx, backendID) {
+		// Fallback backend not in allowlist: clear to signal no valid route
+		backendID = ""
+	}
 	if backendID != "" {
 		modelHint := n.config.Model
 		if preferredModel != "" && (modelHint == "" || strings.Contains(modelHint, "{{")) {
@@ -1413,4 +1418,10 @@ func truncateRespBody(body string, maxLen int) string {
 		return body
 	}
 	return body[:maxLen] + "..."
+}
+
+// isBackendAllowed 检查后端是否在用户计费组白名单内。
+// FilterAllowedBackend 为 nil 时放行所有后端（无白名单约束）。
+func isBackendAllowed(ctx context.Context, backendID string) bool {
+	return IsBackendAllowed(ctx, backendID)
 }

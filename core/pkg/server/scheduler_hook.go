@@ -86,6 +86,10 @@ func wireSchedulerBackend(sched *scheduler.Scheduler) {
 			if decision == nil {
 				return &pipeline.ScheduleResult{}, nil
 			}
+			// 白名单收口：调度器推荐的后端必须在用户计费组白名单内
+			if !pipeline.IsBackendAllowed(req.Ctx, decision.RecommendedBackendID) {
+				return &pipeline.ScheduleResult{}, nil
+			}
 			result := &pipeline.ScheduleResult{
 				BackendID:          decision.RecommendedBackendID,
 				Model:              decision.RecommendedModel,
@@ -105,6 +109,10 @@ func wireSchedulerBackend(sched *scheduler.Scheduler) {
 			return nil, err
 		}
 		if decision == nil {
+			return &pipeline.ScheduleResult{}, nil
+		}
+		// 白名单收口：调度器推荐的后端必须在用户计费组白名单内
+		if !pipeline.IsBackendAllowed(req.Ctx, decision.RecommendedBackendID) {
 			return &pipeline.ScheduleResult{}, nil
 		}
 		result := &pipeline.ScheduleResult{
