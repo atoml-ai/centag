@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"testing"
 
 	"centag/core/pkg/backend"
@@ -41,6 +42,7 @@ func TestWireSchedulerBackend_SelectsBackend(t *testing.T) {
 	result, err := pipeline.ScheduleBackend(pipeline.ScheduleRequest{
 		Question: "你好",
 		Strategy: "balance",
+		Ctx:      context.Background(),
 	})
 	if err != nil {
 		t.Fatalf("ScheduleBackend: %v", err)

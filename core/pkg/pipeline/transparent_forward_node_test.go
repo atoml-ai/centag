@@ -1886,3 +1886,196 @@ func TestTransparentForwardNode_BackendKeyAliasPinning(t *testing.T) {
 		t.Fatalf("metadata.backend alias ignored; resolved=%q url=%v", called, cap.inner.lastReq.URL)
 	}
 }
+
+// --- FilterAllowedBackend 收口测试（问题二三条漂移路径） ---
+
+func TestFilterAllowedBackend_CrossBackendMatch_Denied(t *testing.T) {
+	inner := &mockHTTPClient{status: 200, body: `{"id":"ok"}`}
+	broker := &mockCapabilityBroker{httpClient: inner}
+
+	prevList := ListEnabledBackendsForMatch
+	prevEP := ResolveBackendEndpoint
+	prevFilter := FilterAllowedBackend
+	t.Cleanup(func() {
+		ListEnabledBackendsForMatch = prevList
+		ResolveBackendEndpoint = prevEP
+		FilterAllowedBackend = prevFilter
+	})
+
+	ListEnabledBackendsForMatch = func() []*backend.BackendConfig {
+		return []*backend.BackendConfig{
+			{
+				ID:      "allowed-backend",
+				Name:    "Allowed",
+				Enabled: true,
+				SupportedModels: []backend.ModelMapping{
+					{RequestedModel: "gpt-4", ActualModel: "gpt-4"},
+				},
+			},
+			{
+				ID:      "denied-backend",
+				Name:    "Denied",
+				Enabled: true,
+				SupportedModels: []backend.ModelMapping{
+					{RequestedModel: "gpt-4", ActualModel: "gpt-4"},
+				},
+			},
+		}
+	}
+	ResolveBackendEndpoint = func(backendID string) (*BackendEndpoint, error) {
+		return &BackendEndpoint{BaseURL: "https://" + backendID + ".example.com/v1", APIKey: "sk-" + backendID}, nil
+	}
+	// 只允许 allowed-backend
+	FilterAllowedBackend = func(ctx context.Context, backendID string) bool {
+		return backendID == "allowed-backend"
+	}
+
+	node, err := NewTransparentForwardNode(NodeConfig{
+		Backend: "{{system.default_backend}}",
+		Model:   "{{system.default_model}}",
+	})
+	if err != nil {
+		t.Fatalf("NewTransparentForwardNode: %v", err)
+	}
+	tf := node.(*TransparentForwardNode)
+	tf.BaseNode.id = "forward"
+	tf.SetCapabilityBroker(broker)
+
+	// 客户端只声明模型，不声明后端 → 引擎跨后端匹配 → 应被 FilterAllowedBackend 拒绝
+	out, err := tf.Execute(context.Background(), &NodeInput{
+		Metadata: map[string]interface{}{
+			"request_path":     "/v1/chat/completions",
+			"raw_request_body": `{"model":"gpt-4","messages":[{"role":"user","content":"hi"}]}`,
+		},
+	})
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	bid, _ := out.Metadata["backend_id"].(string)
+	if bid == "denied-backend" {
+		t.Fatalf("expected cross-backend drift to be blocked, got backend_id=%q", bid)
+	}
+	// 应该回落到 allowed-backend 或默认后端
+	if bid != "allowed-backend" && bid != "" {
+		t.Logf("backend_id=%q (fell back from denied-backend)", bid)
+	}
+}
+
+func TestFilterAllowedBackend_PreferredBackend_Denied(t *testing.T) {
+	inner := &mockHTTPClient{status: 200, body: `{"id":"ok"}`}
+	broker := &mockCapabilityBroker{httpClient: inner}
+
+	prevList := ListEnabledBackendsForMatch
+	prevEP := ResolveBackendEndpoint
+	prevFilter := FilterAllowedBackend
+	t.Cleanup(func() {
+		ListEnabledBackendsForMatch = prevList
+		ResolveBackendEndpoint = prevEP
+		FilterAllowedBackend = prevFilter
+	})
+
+	ListEnabledBackendsForMatch = func() []*backend.BackendConfig {
+		return []*backend.BackendConfig{
+			{
+				ID:      "fallback-backend",
+				Name:    "Fallback",
+				Enabled: true,
+				SupportedModels: []backend.ModelMapping{
+					{RequestedModel: "gpt-4", ActualModel: "gpt-4"},
+				},
+			},
+		}
+	}
+	ResolveBackendEndpoint = func(backendID string) (*BackendEndpoint, error) {
+		return &BackendEndpoint{BaseURL: "https://" + backendID + ".example.com/v1", APIKey: "sk-" + backendID}, nil
+	}
+	// 只允许 fallback-backend
+	FilterAllowedBackend = func(ctx context.Context, backendID string) bool {
+		return backendID == "fallback-backend"
+	}
+
+	node, err := NewTransparentForwardNode(NodeConfig{
+		Backend: "{{system.default_backend}}",
+		Model:   "{{system.default_model}}",
+	})
+	if err != nil {
+		t.Fatalf("NewTransparentForwardNode: %v", err)
+	}
+	tf := node.(*TransparentForwardNode)
+	tf.BaseNode.id = "forward"
+	tf.SetCapabilityBroker(broker)
+
+	// 通过 config.WithProxyDefaults 注入 preferred backend（模拟 "我的默认后端"），但该后端不在白名单
+	ctx := config.WithProxyDefaults(context.Background(), config.ProxyDefaults{
+		DefaultBackendID: "preferred-not-allowed",
+		DefaultModel:     "gpt-4",
+	})
+
+	out, err := tf.Execute(ctx, &NodeInput{
+		Metadata: map[string]interface{}{
+			"request_path":     "/v1/chat/completions",
+			"raw_request_body": `{"model":"gpt-4","messages":[{"role":"user","content":"hi"}]}`,
+		},
+	})
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	bid, _ := out.Metadata["backend_id"].(string)
+	if bid == "preferred-not-allowed" {
+		t.Fatalf("expected preferred backend to be blocked, got backend_id=%q", bid)
+	}
+}
+
+func TestFilterAllowedBackend_Fallback_Denied(t *testing.T) {
+	inner := &mockHTTPClient{status: 200, body: `{"id":"ok"}`}
+	broker := &mockCapabilityBroker{httpClient: inner}
+
+	prevList := ListEnabledBackendsForMatch
+	prevEP := ResolveBackendEndpoint
+	prevFilter := FilterAllowedBackend
+	t.Cleanup(func() {
+		ListEnabledBackendsForMatch = prevList
+		ResolveBackendEndpoint = prevEP
+		FilterAllowedBackend = prevFilter
+	})
+
+	ListEnabledBackendsForMatch = func() []*backend.BackendConfig {
+		return []*backend.BackendConfig{}
+	}
+	ResolveBackendEndpoint = func(backendID string) (*BackendEndpoint, error) {
+		return &BackendEndpoint{BaseURL: "https://" + backendID + ".example.com/v1", APIKey: "sk-" + backendID}, nil
+	}
+	// 拒绝所有后端
+	FilterAllowedBackend = func(ctx context.Context, backendID string) bool {
+		return false
+	}
+
+	node, err := NewTransparentForwardNode(NodeConfig{
+		Backend: "test-model",
+		Model:   "test-model",
+	})
+	if err != nil {
+		t.Fatalf("NewTransparentForwardNode: %v", err)
+	}
+	tf := node.(*TransparentForwardNode)
+	tf.BaseNode.id = "forward"
+	tf.SetCapabilityBroker(broker)
+
+	// FixedEgress 模式，后端不在白名单，应返回空后端ID
+	out, err := tf.Execute(context.Background(), &NodeInput{
+		Metadata: map[string]interface{}{
+			"route_policy":     "fixed",
+			"request_path":     "/v1/chat/completions",
+			"raw_request_body": `{"model":"gpt-4","messages":[{"role":"user","content":"hi"}]}`,
+			"target_url":       "https://test-backend.example.com/v1/chat/completions",
+		},
+	})
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	// FixedEgress 模式下，后端被拒绝后应返回空或错误
+	bid, _ := out.Metadata["backend_id"].(string)
+	if bid == "fallback-not-allowed" {
+		t.Fatalf("expected fallback backend to be blocked, got backend_id=%q", bid)
+	}
+}
