@@ -79,8 +79,10 @@ centag-native-amd64.fpk
 
 | 能力 | 实现方式 |
 |---|---|
-| 卸载向导选保留/删除 | `wizard/uninstall` → `$wizard_data_action`；`cmd/uninstall_callback` 据此清理或保留（显式选择优先于配置文件） |
-| 卸载保留（配置页） | `cmd/uninstall_callback` 默认**保留**数据；`centag.conf` 中 `clean_data_on_uninstall=true` 时清理 |
+| 卸载向导选保留/删除 | `wizard/uninstall` → `$wizard_data_action`；**`cmd/uninstall_init`（卸载前、文件尚在）** 据此执行 DROP DATABASE + 删数据卷，`cmd/uninstall_callback` 仅作幂等兜底 |
+| 卸载保留（配置页） | 默认**保留**数据；`centag.conf` 中 `clean_data_on_uninstall=true` 时清理 |
+
+> ⚠️ 数据清理（尤其 PostgreSQL `DROP DATABASE`）必须在「文件尚在」时完成。appcenter 各版本对卸载顺序不确定：`uninstall_init`/`uninstall_callback` 谁先拿到向导答案 `$wizard_data_action`、数据卷（含 `centag.conf`）何时被移除都不保证。因此清理逻辑**内联**进两个脚本（不依赖外部文件），且 `install_callback` 会把 PG 连接信息持久化到「程序目录」`.pgclean`——数据卷被移除后仍可据此 DROP DATABASE。若未真正清理，重装后因 `users` 表非空、`bootstrap.Seed` 跳过，WebUI 不再提示设置初始化密码。 |
 | 安装时选数据库 | `wizard/install` → `$wizard_db_driver`/`$wizard_pg_*`；`cmd/install_callback` 写入 `centAG.conf` |
 | 切换 PostgreSQL | 保存 `db_driver=postgresql` + `pg_*` 连接参数 → `cmd/main` 启动时读取注入环境变量 |
 | 配置持久化 | `cmd/config_callback` 将 JSON 写入 `${DATA_DIR}/centAG.conf`（兼容 `$1` 旧调用/`wizard_*` 新调用） |

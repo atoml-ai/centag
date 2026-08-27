@@ -2,20 +2,17 @@
 
 ### This script is called after uninstalling the application.
 ### 默认【保留】应用数据，重装后可恢复配置与密钥。
-### 满足以下任一条件才清理数据：
+### 满足以下任一条件才清理数据（与 uninstall_init 共用内联逻辑，幂等兜底）：
 ###   1) 卸载向导（wizard/uninstall）选择「删除全部数据」→ $wizard_data_action=delete
 ###   2) 配置页 centag.conf: clean_data_on_uninstall=true
 ###
-### 数据清理（见 core/pkg/config/cleanup.go）：
-###   - postgresql（fnOS 权威路径）：本脚本用 psql 连接维护库 postgres，
-###     DROP DATABASE 整个目标库（默认 centag）。
-###     不能把 `centag cleanup` 成功当作完成——旧二进制只 DROP TABLE 也会 exit 0，
-###     若此处提前 return，空库会残留。
-###   - sqlite：优先 `centag cleanup` 删库文件；否则由 clear_data 删数据目录覆盖。
+### 说明：数据清理（尤其 PostgreSQL DROP DATABASE）必须在「文件尚在」时完成。
+### 若 appcenter 在 callback 阶段已移除数据卷（含 centag.conf），则回退到安装时
+### 持久化到「程序目录」的 .pgclean 读取 PG 连接信息；程序目录在生命周期脚本
+### 运行期间始终存在，故 callback 仍可执行 DROP DATABASE。
 
 set +e
 
-# Safety net: uninstall_init should have stopped processes; sweep again after files removed.
 PORT="${LLM_PROXY_SERVER_PORT:-${SERVER_PORT:-20060}}"
 if command -v pgrep >/dev/null 2>&1; then
   for pid in $(pgrep -f 'daemon\.sh .*/centag' 2>/dev/null; pgrep -f '/@appcenter/centag/bin/centag' 2>/dev/null; pgrep -x centag 2>/dev/null); do
@@ -30,149 +27,68 @@ if command -v fuser >/dev/null 2>&1; then
   fuser -k "${PORT}/tcp" 2>/dev/null || true
 fi
 
-DATA_DIR="${TRIM_DATA_SHARE_PATHS%%:*}"
-CONF_FILE="${DATA_DIR}/centag.conf"
-BINARY="${TRIM_APPDEST:-/vol1/@appcenter/centag}/bin/centag"
+# ── 内联数据清理逻辑（与 uninstall_init 保持一致）──────────────────────────
+_centag_data_dir()  { printf '%s' "${TRIM_DATA_SHARE_PATHS%%:*}"; }
+_centag_pgclean()   { printf '%s' "$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)/.pgclean"; }
 
-clear_data() {
-  if [ -n "${DATA_DIR}" ] && [ -d "${DATA_DIR}" ]; then
-    echo "用户选择清除所有数据: ${DATA_DIR}"
-    rm -rf "${DATA_DIR}"
-  fi
-  if [ -n "${TRIM_PKGVAR:-}" ] && [ -d "${TRIM_PKGVAR}" ]; then
-    echo "清理持久化数据卷: ${TRIM_PKGVAR}"
-    find "${TRIM_PKGVAR}" -mindepth 1 -delete 2>/dev/null
-  fi
+_centag_json_get() {
+  local key="$1" f="$2"
+  [ -f "$f" ] || return 1
+  grep -oE "\"${key}\"[[:space:]]*:[[:space:]]*\"[^\"]*\"" "$f" 2>/dev/null | head -1 \
+    | sed -E "s/^\"${key}\"[[:space:]]*:[[:space:]]*\"([^\"]*)\"/\1/" | tr -d ' \t\r'
 }
 
-# 从 centag.conf 读取指定 JSON 字符串字段（回退路径用；单行/多行均兼容）
-json_get() {
-  grep -oE "\"${1}\"[[:space:]]*:[[:space:]]*\"[^\"]*\"" "${CONF_FILE}" 2>/dev/null | head -1 \
-    | sed -E 's/^"[^"]*"[[:space:]]*:[[:space:]]*"([^"]*)"/\1/' \
-    | tr -d ' \t\r'
-}
-
-# postgresql 权威清理：psql DROP DATABASE 整个目标库（连维护库 postgres）。
-clean_postgres_database() {
-  [ -f "${CONF_FILE}" ] || {
-    echo "[WARN] 无 ${CONF_FILE}，跳过 PostgreSQL DROP DATABASE"
-    return 1
-  }
-
-  if ! command -v psql >/dev/null 2>&1; then
-    echo "[WARN] 系统无 psql，无法在脚本内 DROP DATABASE"
-    return 1
-  fi
-
+_centag_drop_pg() {
+  local conf="$1"
+  [ -f "$conf" ] || return 1
+  command -v psql >/dev/null 2>&1 || { echo "[WARN] 无 psql，跳过 DROP DATABASE"; return 1; }
   local pg_host pg_port pg_user pg_password pg_db
-  pg_host="$(json_get pg_host)"
-  pg_port="$(json_get pg_port)"
-  pg_user="$(json_get pg_user)"
-  pg_password="$(json_get pg_password)"
-  pg_db="$(json_get pg_db)"
-  [ -n "${pg_host}" ] || pg_host="localhost"
-  [ -n "${pg_port}" ] || pg_port="5432"
-  [ -n "${pg_user}" ] || pg_user="postgres"
-  [ -n "${pg_db}" ] || pg_db="centag"
-
-  case "${pg_db}" in
-    postgres|template0|template1)
-      echo "[WARN] 拒绝删除 PostgreSQL 系统库: ${pg_db}"
-      return 1
-      ;;
-  esac
-  # 仅允许安全标识符，避免注入
-  case "${pg_db}" in
-    *[!A-Za-z0-9_]*|[0-9]*)
-      echo "[WARN] 非法 PostgreSQL 库名，跳过: ${pg_db}"
-      return 1
-      ;;
-  esac
-
-  echo "用 psql DROP DATABASE: ${pg_host}:${pg_port}/${pg_db}"
-  # 必须连维护库，不能连待删目标库；postgres 不可达时再试 template1
-  local admin_db rc=1
+  pg_host=$(_centag_json_get pg_host "$conf"); pg_port=$(_centag_json_get pg_port "$conf")
+  pg_user=$(_centag_json_get pg_user "$conf"); pg_password=$(_centag_json_get pg_password "$conf")
+  pg_db=$(_centag_json_get pg_db "$conf")
+  [ -n "$pg_host" ] || pg_host=localhost
+  [ -n "$pg_port" ] || pg_port=5432
+  [ -n "$pg_user" ] || pg_user=postgres
+  [ -n "$pg_db" ]   || pg_db=centag
+  case "$pg_db" in postgres|template0|template1) echo "[WARN] 拒绝删除系统库 $pg_db"; return 1;; esac
+  case "$pg_db" in *[!A-Za-z0-9_]*|[0-9]*) echo "[WARN] 非法库名 $pg_db"; return 1;; esac
+  echo "psql DROP DATABASE ${pg_host}:${pg_port}/${pg_db}"
+  local rc=1 admin_db
   for admin_db in postgres template1; do
-    echo "  尝试维护库: ${admin_db}"
-    PGPASSWORD="${pg_password}" psql -h "${pg_host}" -p "${pg_port}" -U "${pg_user}" -d "${admin_db}" -v ON_ERROR_STOP=1 \
+    PGPASSWORD="$pg_password" psql -h "$pg_host" -p "$pg_port" -U "$pg_user" -d "$admin_db" -v ON_ERROR_STOP=1 \
       -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname='${pg_db}' AND pid <> pg_backend_pid();" \
-      -c "DROP DATABASE IF EXISTS \"${pg_db}\";"
-    rc=$?
-    if [ "${rc}" -eq 0 ]; then
-      echo "PostgreSQL 数据库已删除: ${pg_db}（经由 ${admin_db}）"
-      return 0
-    fi
+      -c "DROP DATABASE IF EXISTS \"${pg_db}\";" && rc=0 && break
   done
-  echo "[WARN] psql DROP DATABASE 失败，请手动确认"
+  [ "$rc" -eq 0 ] && echo "PostgreSQL 数据库已删除: $pg_db" || echo "[WARN] psql DROP DATABASE 失败（请手动确认）"
+  return $rc
+}
+
+_centag_clear_data() {
+  local dd; dd=$(_centag_data_dir)
+  [ -n "$dd" ] && [ -d "$dd" ] && { echo "清除数据目录: $dd"; rm -rf "$dd"; }
+  [ -n "${TRIM_PKGVAR:-}" ] && [ -d "${TRIM_PKGVAR}" ] && { echo "清理数据卷: ${TRIM_PKGVAR}"; find "${TRIM_PKGVAR}" -mindepth 1 -delete 2>/dev/null; }
+}
+
+_centag_should_clean() {
+  if [ -n "${wizard_data_action:-}" ]; then
+    [ "${wizard_data_action}" = "delete" ] && return 0
+    return 1
+  fi
+  local c; c=$(_centag_data_dir)/centag.conf
+  [ -f "$c" ] && grep -q '"clean_data_on_uninstall"[[:space:]]*:[[:space:]]*true' "$c" && return 0
   return 1
 }
 
-# 部署数据清理。postgresql 必须以 DROP DATABASE 为准，不能因旧版 cleanup 只删表成功而提前返回。
-clean_deployment_data() {
-  local db_driver=""
-  if [ -f "${CONF_FILE}" ]; then
-    db_driver="$(json_get db_driver)"
-  fi
-  [ -n "${db_driver}" ] || db_driver="sqlite"
-
-  if [ "${db_driver}" = "postgresql" ]; then
-    local rc=1
-    # 1) 权威：psql DROP DATABASE（不信任二进制“成功”）
-    if clean_postgres_database; then
-      rc=0
-    fi
-    # 2) psql 不可用/失败时，再试 centag cleanup（新二进制会 DROP DATABASE）
-    if [ "${rc}" -ne 0 ]; then
-      if [ -x "${BINARY}" ]; then
-        echo "调用 centag cleanup 尝试 DROP DATABASE..."
-        if CENTAG_DATA_DIR="${DATA_DIR}" "${BINARY}" cleanup; then
-          echo "centag cleanup 完成"
-          rc=0
-        else
-          echo "[WARN] centag cleanup 失败（重装前可能残留旧库）"
-        fi
-      else
-        echo "[WARN] 无 psql 成功清理且未找到 ${BINARY}"
-      fi
-    fi
-    return "${rc}"
-  fi
-
-  # sqlite：删整个库文件
-  if [ -x "${BINARY}" ]; then
-    echo "调用 centag cleanup 删除 SQLite 库文件..."
-    if CENTAG_DATA_DIR="${DATA_DIR}" "${BINARY}" cleanup; then
-      echo "部署数据清理完成"
-      return 0
-    fi
-    echo "[WARN] centag cleanup 失败；将依赖 clear_data 删除数据目录"
-    return 1
-  fi
-  echo "未找到 ${BINARY}；SQLite 库文件将由 clear_data 删除"
-  return 0
+_centag_run_cleanup() {
+  if ! _centag_should_clean; then echo "未选择清除数据，保留应用数据"; return 0; fi
+  echo "执行数据清理（删除全部数据）..."
+  local conf; conf=$(_centag_data_dir)/centag.conf
+  if [ -f "$conf" ] && _centag_drop_pg "$conf"; then :; else _centag_drop_pg "$(_centag_pgclean)"; fi
+  _centag_clear_data
+  echo "应用数据清理完成"
 }
 
-should_clean="false"
-
-# 条件1：卸载向导明确选择（keep/delete）——用户卸载时的最终决定，优先于配置文件
-if [ -n "${wizard_data_action:-}" ]; then
-  if [ "${wizard_data_action}" = "delete" ]; then
-    should_clean="true"
-  else
-    should_clean="false"
-  fi
-elif [ -f "${CONF_FILE}" ]; then
-  # 条件2：无卸载向导（静默卸载），回退到配置文件显式开启（配置页设置）
-  conf_clean="$(grep -E '"clean_data_on_uninstall"[[:space:]]*:' "${CONF_FILE}" 2>/dev/null | head -1 | sed -E 's/.*:[[:space:]]*(true|false).*/\1/')"
-  [ "${conf_clean}" = "true" ] && should_clean="true"
-fi
-
-if [ "${should_clean}" = "true" ]; then
-  # 先清数据库（依赖 centag.conf 里的连接信息），再删本地数据卷
-  clean_deployment_data
-  clear_data
-else
-  echo "未选择清除数据，保留应用数据"
-fi
+echo "running data cleanup (delete-all-data policy, fallback)..."
+_centag_run_cleanup
 
 exit 0

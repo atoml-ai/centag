@@ -14,6 +14,74 @@ log() {
   echo "[centag uninstall_init] $*"
 }
 
+# ── embedded data-cleanup (no external deps / no source reliance) ────────────
+# fnOS/appcenter 的卸载顺序不确定：uninstall_init 与 uninstall_callback 谁先拿到
+# 向导答案（$wizard_data_action）、数据卷（含 centag.conf）又在何时被移除，各版本不同。
+# 因此：
+#   1) 逻辑内联，不依赖外部 cleanup_data.sh（避免被单独抽取执行时找不到）。
+#   2) PG 连接信息优先读数据卷 centag.conf；若数据卷已被移除，则回退到安装时
+#      持久化到「程序目录」的 .pgclean（程序目录在生命周期脚本运行期间始终存在）。
+_centag_data_dir()  { printf '%s' "${TRIM_DATA_SHARE_PATHS%%:*}"; }
+_centag_pgclean()   { printf '%s' "$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)/.pgclean"; }
+
+_centag_json_get() {
+  local key="$1" f="$2"
+  [ -f "$f" ] || return 1
+  grep -oE "\"${key}\"[[:space:]]*:[[:space:]]*\"[^\"]*\"" "$f" 2>/dev/null | head -1 \
+    | sed -E "s/^\"${key}\"[[:space:]]*:[[:space:]]*\"([^\"]*)\"/\1/" | tr -d ' \t\r'
+}
+
+_centag_drop_pg() {
+  local conf="$1"
+  [ -f "$conf" ] || return 1
+  command -v psql >/dev/null 2>&1 || { echo "[WARN] 无 psql，跳过 DROP DATABASE"; return 1; }
+  local pg_host pg_port pg_user pg_password pg_db
+  pg_host=$(_centag_json_get pg_host "$conf"); pg_port=$(_centag_json_get pg_port "$conf")
+  pg_user=$(_centag_json_get pg_user "$conf"); pg_password=$(_centag_json_get pg_password "$conf")
+  pg_db=$(_centag_json_get pg_db "$conf")
+  [ -n "$pg_host" ] || pg_host=localhost
+  [ -n "$pg_port" ] || pg_port=5432
+  [ -n "$pg_user" ] || pg_user=postgres
+  [ -n "$pg_db" ]   || pg_db=centag
+  case "$pg_db" in postgres|template0|template1) echo "[WARN] 拒绝删除系统库 $pg_db"; return 1;; esac
+  case "$pg_db" in *[!A-Za-z0-9_]*|[0-9]*) echo "[WARN] 非法库名 $pg_db"; return 1;; esac
+  echo "psql DROP DATABASE ${pg_host}:${pg_port}/${pg_db}"
+  local rc=1 admin_db
+  for admin_db in postgres template1; do
+    PGPASSWORD="$pg_password" psql -h "$pg_host" -p "$pg_port" -U "$pg_user" -d "$admin_db" -v ON_ERROR_STOP=1 \
+      -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname='${pg_db}' AND pid <> pg_backend_pid();" \
+      -c "DROP DATABASE IF EXISTS \"${pg_db}\";" && rc=0 && break
+  done
+  [ "$rc" -eq 0 ] && echo "PostgreSQL 数据库已删除: $pg_db" || echo "[WARN] psql DROP DATABASE 失败（请手动确认）"
+  return $rc
+}
+
+_centag_clear_data() {
+  local dd; dd=$(_centag_data_dir)
+  [ -n "$dd" ] && [ -d "$dd" ] && { echo "清除数据目录: $dd"; rm -rf "$dd"; }
+  [ -n "${TRIM_PKGVAR:-}" ] && [ -d "${TRIM_PKGVAR}" ] && { echo "清理数据卷: ${TRIM_PKGVAR}"; find "${TRIM_PKGVAR}" -mindepth 1 -delete 2>/dev/null; }
+}
+
+_centag_should_clean() {
+  if [ -n "${wizard_data_action:-}" ]; then
+    [ "${wizard_data_action}" = "delete" ] && return 0
+    return 1
+  fi
+  local c; c=$(_centag_data_dir)/centag.conf
+  [ -f "$c" ] && grep -q '"clean_data_on_uninstall"[[:space:]]*:[[:space:]]*true' "$c" && return 0
+  return 1
+}
+
+_centag_run_cleanup() {
+  if ! _centag_should_clean; then echo "未选择清除数据，保留应用数据"; return 0; fi
+  echo "执行数据清理（删除全部数据）..."
+  # 数据卷 centag.conf 可能在 uninstall_callback 阶段已被移除，故回退到程序目录 .pgclean
+  local conf; conf=$(_centag_data_dir)/centag.conf
+  if [ -f "$conf" ] && _centag_drop_pg "$conf"; then :; else _centag_drop_pg "$(_centag_pgclean)"; fi
+  _centag_clear_data
+  echo "应用数据清理完成"
+}
+
 kill_pid() {
   local pid="$1"
   [ -n "$pid" ] || return 0
@@ -131,4 +199,10 @@ stop_all() {
 }
 
 stop_all
+
+# ── Data wipe（卸载前执行；此时程序目录与数据卷均尚在）─────────────────────
+# 诊断 + 清理：先把环境落盘便于排查，再执行 DROP DATABASE + 删数据卷。
+log "running data cleanup (delete-all-data policy)..."
+_centag_run_cleanup
+
 exit 0
