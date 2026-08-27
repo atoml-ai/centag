@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -675,6 +676,12 @@ func (h *PipelineHandler) ExecutePipeline(c *gin.Context) {
 	if user := h.accessUser(c); user != nil {
 		lookupCtx = pipeline.WithOwnerScope(lookupCtx, ownTenantID(user))
 	}
+	// 将用户 ID 注入 context，供 FilterAllowedBackend 等 hook 回调使用。
+	if uid, exists := c.Get(auth.CtxKeyUserID); exists {
+		if uidInt64, ok := uid.(int64); ok {
+			lookupCtx = pipeline.WithUserID(lookupCtx, uidInt64)
+		}
+	}
 	if p := h.engine.LookupPipeline(lookupCtx, id); p != nil && p.GlobalConfig.Timeout > 0 {
 		execTimeout = time.Duration(p.GlobalConfig.Timeout) * time.Second
 	}
@@ -689,18 +696,9 @@ func (h *PipelineHandler) ExecutePipeline(c *gin.Context) {
 	}
 
 	// P1-T3：上游 2xx+错误体已被标记为 upstream_error，按映射状态返回规范错误体。
-	if output != nil && output.Metadata != nil {
-		if ue, ok := output.Metadata["upstream_error"].(bool); ok && ue {
-			status := http.StatusBadGateway
-			if sc, ok := output.Metadata["status_code"].(int); ok && sc >= 400 {
-				status = sc
-			} else if scf, ok := output.Metadata["status_code"].(float64); ok && scf >= 400 {
-				status = int(scf)
-			}
-			h.recordExecution(id, input, output, nil)
-			c.JSON(status, gin.H{"success": false, "error": "upstream returned an error payload", "data": output})
-			return
-		}
+	// P1-T10：透明转发状态码透传。
+	if !handleTransparentStatusError(c, output, id, input, h) {
+		return
 	}
 
 	h.recordExecution(id, input, output, nil)
@@ -750,13 +748,25 @@ func (h *PipelineHandler) ExecutePipelineDirect(c *gin.Context) {
 	if req.Pipeline.GlobalConfig.Timeout > 0 {
 		execTimeout = time.Duration(req.Pipeline.GlobalConfig.Timeout) * time.Second
 	}
-	execCtx, cancel := context.WithTimeout(context.Background(), execTimeout)
+	// 将用户 ID 注入 context，供 FilterAllowedBackend 等 hook 回调使用。
+	execCtx := context.Background()
+	if uid, exists := c.Get(auth.CtxKeyUserID); exists {
+		if uidInt64, ok := uid.(int64); ok {
+			execCtx = pipeline.WithUserID(execCtx, uidInt64)
+		}
+	}
+	execCtx, cancel := context.WithTimeout(execCtx, execTimeout)
 	defer cancel()
 
 	output, err := h.engine.ExecutePipelineDefinition(execCtx, &req.Pipeline, input)
 	if err != nil {
 		h.recordExecution(req.Pipeline.ID, input, nil, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": fmt.Sprintf("pipeline execution failed: %v", err)})
+		return
+	}
+
+	// P1-T10：透明转发状态码透传（与 ExecutePipeline 同逻辑）。
+	if !handleTransparentStatusError(c, output, req.Pipeline.ID, input, h) {
 		return
 	}
 
@@ -1501,4 +1511,52 @@ func (h *PipelineHandler) GetAvailableVariables(c *gin.Context) {
 			"node_variables":   nodeVars,
 		},
 	})
+}
+
+// transparentPreserveUpstreamStatus 读取 LLM_PROXY_TRANSPARENT_EXECUTE_PRESERVE_STATUS
+// 环境变量，控制 execute 入口是否按上游真实状态码返回（默认 false 保持"永远 200"兼容行为）。
+func transparentPreserveUpstreamStatus() bool {
+	if v := os.Getenv("LLM_PROXY_TRANSPARENT_EXECUTE_PRESERVE_STATUS"); v != "" {
+		if b, err := strconv.ParseBool(v); err == nil {
+			return b
+		}
+	}
+	return false
+}
+
+// handleTransparentStatusError 处理透明转发状态码透传逻辑。
+// 当开关开启时，按上游真实状态码返回错误响应；否则返回 true 表示应继续正常流程。
+func handleTransparentStatusError(c *gin.Context, output *pipeline.PipelineOutput, execID string, input *pipeline.PipelineInput, h *PipelineHandler) bool {
+	if output == nil || output.Metadata == nil {
+		return true
+	}
+
+	// P1-T3：上游 2xx+错误体已被标记为 upstream_error，按映射状态返回规范错误体。
+	if ue, ok := output.Metadata["upstream_error"].(bool); ok && ue {
+		status := http.StatusBadGateway
+		if sc, ok := output.Metadata["status_code"].(int); ok && sc >= 400 {
+			status = sc
+		} else if scf, ok := output.Metadata["status_code"].(float64); ok && scf >= 400 {
+			status = int(scf)
+		}
+		h.recordExecution(execID, input, nil, nil)
+		c.JSON(status, gin.H{"success": false, "error": "upstream returned an error payload", "data": output})
+		return false
+	}
+
+	// P1-T10：透明转发状态码透传。
+	if transparentPreserveUpstreamStatus() {
+		if sc, ok := output.Metadata["status_code"].(int); ok && sc >= 400 {
+			h.recordExecution(execID, input, nil, nil)
+			c.JSON(sc, gin.H{"success": false, "error": "upstream error", "data": output})
+			return false
+		} else if scf, ok := output.Metadata["status_code"].(float64); ok && scf >= 400 {
+			status := int(scf)
+			h.recordExecution(execID, input, nil, nil)
+			c.JSON(status, gin.H{"success": false, "error": "upstream error", "data": output})
+			return false
+		}
+	}
+
+	return true
 }
