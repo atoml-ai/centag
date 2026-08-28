@@ -1,0 +1,171 @@
+name: release-github
+
+# Standalone GitHub Release publisher.
+# Consumes artifacts produced by `release-build.yml` and creates/updates the
+# v<version> release on GitHub. Manual trigger only — no tag automation.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version without v prefix (e.g. 0.2.7). Empty = package.json'
+        required: false
+        default: ''
+      mode:
+        description: 'draft = create/keep draft; publish = create or finalize'
+        type: choice
+        required: true
+        default: 'draft'
+        options:
+          - draft
+          - publish
+
+permissions:
+  contents: write
+
+env:
+  EDGEAG_REF: "7f1e4e9385362cfa58500778a83bc95f8fa23f8a"
+
+jobs:
+  guard-branch:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.ver.outputs.version }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Resolve version
+        id: ver
+        run: |
+          if [[ -n "${{ inputs.version }}" ]]; then
+            V="${{ inputs.version }}"
+          else
+            V="$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' apps/wrap-npm/package.json | head -1)"
+          fi
+          V="${V#v}"
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+          echo "Release version v$V"
+
+      - name: Require version branch
+        run: bash scripts/release/require-release-branch.sh --ci --version "${{ steps.ver.outputs.version }}"
+
+  publish:
+    needs: [guard-branch]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v8
+        with:
+          path: release-staging
+          pattern: github-*
+
+      - name: Flatten assets
+        id: assets
+        env:
+          V: ${{ needs.guard-branch.outputs.version }}
+        run: |
+          V="${V}"
+          OUT="release-assets/${V}"
+          mkdir -p "$OUT"
+          find release-staging -type f \( \
+            -name 'centag-cli-*.tar.gz' -o \
+            -name 'centag-desktop-*.dmg' -o \
+            -name 'centag-desktop-*.zip' -o \
+            -name 'centag-personal-*.tar.gz' -o \
+            -name 'centag-*-native-*.fpk' -o \
+            -name 'update-package-*.tar.gz' -o \
+            -name 'Centag-*.dmg' -o \
+            -name 'Centag-*.zip' \
+          \) -exec cp -f {} "$OUT/" \;
+          : > "$OUT/checksums.txt"
+          (
+            cd "$OUT"
+            for f in centag-cli-*.tar.gz centag-desktop-*.dmg centag-desktop-*.zip \
+                     centag-personal-*.tar.gz centag-*-native-*.fpk update-package-*.tar.gz \
+                     Centag-*.dmg Centag-*.zip; do
+              [[ -f "$f" ]] || continue
+              printf '%s  %s\n' "$(sha256sum "$f" | awk '{print $1}')" "$f" >> checksums.txt
+            done
+          )
+          ls -lh "$OUT"
+          echo "dir=$OUT" >> "$GITHUB_OUTPUT"
+
+      - name: Create / update GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          V="${{ needs.guard-branch.outputs.version }}"
+          TAG="v${V}"
+          OUT="${{ steps.assets.outputs.dir }}"
+          if [[ "${{ inputs.mode }}" == "draft" ]]; then
+            DRAFT_FLAG="--draft"
+          else
+            DRAFT_FLAG=""
+          fi
+
+          NOTES_FILE="$(mktemp)"
+          {
+            echo "## Centag ${TAG}"
+            echo ""
+            echo "### Install"
+            echo ""
+            echo '```bash'
+            echo "# Linux — CLI (default)"
+            echo "curl -fsSL https://raw.githubusercontent.com/${REPO}/${TAG}/scripts/install.sh | bash -s ${V} && . \"\$HOME/.centag/env\""
+            echo ""
+            echo "# macOS / Windows — desktop (default on these OS; no CLI on GitHub channel)"
+            echo "curl -fsSL https://raw.githubusercontent.com/${REPO}/${TAG}/scripts/install.sh | bash -s ${V} && . \"\$HOME/.centag/env\""
+            echo ""
+            echo "# npm — CLI on all platforms"
+            echo "npm install -g centag"
+            echo '```'
+            echo ""
+            echo "### Artifacts"
+            echo ""
+            echo "- \`centag-cli-personal-linux-<arch>.tar.gz\` — Linux CLI (install.sh default)"
+            echo "- \`centag-desktop-personal-macos-<arch>.dmg\` / \`.zip\` — macOS desktop"
+            echo "- \`centag-desktop-personal-windows-<arch>.zip\` — Windows desktop"
+            echo "- \`centag-personal-native-<arch>.fpk\` — fnOS install package"
+            echo "- \`update-package-centag-personal-<ver>-linux-<arch>.tar.gz\` — OTA update"
+            echo "- \`checksums.txt\` — SHA-256 sums"
+          } > "$NOTES_FILE"
+
+          UPLOAD=( )
+          while IFS= read -r f; do
+            UPLOAD+=("$f")
+          done < <(find "$OUT" -maxdepth 1 -type f \( \
+            -name 'centag-cli-*.tar.gz' -o \
+            -name 'centag-desktop-*.dmg' -o \
+            -name 'centag-desktop-*.zip' -o \
+            -name 'centag-*-native-*.fpk' -o \
+            -name 'update-package-*.tar.gz' -o \
+            -name 'checksums.txt' \
+          \) | sort)
+
+          if [[ ${#UPLOAD[@]} -eq 0 ]]; then
+            echo "error: no release assets found under $OUT" >&2
+            exit 1
+          fi
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "${UPLOAD[@]}" --clobber
+            if [[ -z "$DRAFT_FLAG" ]]; then
+              # A previously-created draft would stay invisible; publish it when mode=publish.
+              gh release edit "$TAG" --draft=false
+            fi
+          else
+            # shellcheck disable=SC2086
+            gh release create "$TAG" $DRAFT_FLAG \
+              --title "Centag ${V}" \
+              --notes-file "$NOTES_FILE" \
+              "${UPLOAD[@]}"
+          fi
+
+          # Drop obsolete proxyctl assets left from older uploads (--clobber only replaces same names).
+          bash "${GITHUB_WORKSPACE}/scripts/release/delete-legacy-release-assets.sh" --tag "$TAG" --repo "$REPO"

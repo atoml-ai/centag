@@ -1,4 +1,4 @@
-name: release
+name: release-build
 
 on:
   push:
@@ -10,15 +10,11 @@ on:
         description: 'Version without v prefix (e.g. 0.2.7). Empty = tag or package.json'
         required: false
         default: ''
-      draft:
-        description: 'Create draft release'
-        type: boolean
-        default: false
 
 permissions:
-  contents: write
+  contents: read
 
-# Pinned edgeag revision — keep in sync with ci.yml; bump deliberately.
+# Pinned edgeag revision — keep in sync with ci.yml and other release-*.yml.
 # core/go.mod replaces edgeag => ../../edgeag and go.work uses ../edgeag, so
 # EVERY job that runs `go build` needs the sibling checkout (P1-7).
 env:
@@ -292,164 +288,3 @@ jobs:
           name: github-ota-${{ needs.guard-branch.outputs.version }}
           path: .centag/var/packages/
           if-no-files-found: error
-
-  publish:
-    needs: [guard-branch, github-cli, github-macos-desktop, github-windows-desktop, github-fnos, github-ota]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-
-      - name: Resolve version
-        id: ver
-        run: |
-          echo "version=${{ needs.guard-branch.outputs.version }}" >> "$GITHUB_OUTPUT"
-
-      - name: Download artifacts
-        uses: actions/download-artifact@v8
-        with:
-          path: release-staging
-
-      - name: Flatten assets
-        id: assets
-        run: |
-          V="${{ steps.ver.outputs.version }}"
-          OUT="release-assets/${V}"
-          mkdir -p "$OUT"
-          find release-staging -type f \( \
-            -name 'centag-cli-*.tar.gz' -o \
-            -name 'centag-desktop-*.dmg' -o \
-            -name 'centag-desktop-*.zip' -o \
-            -name 'centag-personal-*.tar.gz' -o \
-            -name 'centag-*-native-*.fpk' -o \
-            -name 'update-package-*.tar.gz' -o \
-            -name 'Centag-*.dmg' -o \
-            -name 'Centag-*.zip' \
-          \) -exec cp -f {} "$OUT/" \;
-          : > "$OUT/checksums.txt"
-          (
-            cd "$OUT"
-            for f in centag-cli-*.tar.gz centag-desktop-*.dmg centag-desktop-*.zip \
-                     centag-personal-*.tar.gz centag-*-native-*.fpk update-package-*.tar.gz \
-                     Centag-*.dmg Centag-*.zip; do
-              [[ -f "$f" ]] || continue
-              printf '%s  %s\n' "$(sha256sum "$f" | awk '{print $1}')" "$f" >> checksums.txt
-            done
-          )
-          ls -lh "$OUT"
-          echo "dir=$OUT" >> "$GITHUB_OUTPUT"
-
-      - name: Create / update GitHub Release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          REPO: ${{ github.repository }}
-        run: |
-          set -euo pipefail
-          V="${{ steps.ver.outputs.version }}"
-          TAG="v${V}"
-          OUT="${{ steps.assets.outputs.dir }}"
-          DRAFT_FLAG="--draft"
-          if [[ "${{ github.event_name }}" == "push" ]]; then
-            DRAFT_FLAG="--draft"
-          elif [[ "${{ inputs.draft }}" == "false" ]]; then
-            DRAFT_FLAG=""
-          fi
-
-          NOTES_FILE="$(mktemp)"
-          {
-            echo "## Centag ${TAG}"
-            echo ""
-            echo "### Install"
-            echo ""
-            echo '```bash'
-            echo "# Linux — CLI (default)"
-            echo "curl -fsSL https://raw.githubusercontent.com/${REPO}/${TAG}/scripts/install.sh | bash -s ${V} && . \"\$HOME/.centag/env\""
-            echo ""
-            echo "# macOS / Windows — desktop (default on these OS; no CLI on GitHub channel)"
-            echo "curl -fsSL https://raw.githubusercontent.com/${REPO}/${TAG}/scripts/install.sh | bash -s ${V} && . \"\$HOME/.centag/env\""
-            echo ""
-            echo "# npm — CLI on all platforms"
-            echo "npm install -g centag"
-            echo '```'
-            echo ""
-            echo "### Artifacts"
-            echo ""
-            echo "- \`centag-cli-personal-linux-<arch>.tar.gz\` — Linux CLI (install.sh default)"
-            echo "- \`centag-desktop-personal-macos-<arch>.dmg\` / \`.zip\` — macOS desktop"
-            echo "- \`centag-desktop-personal-windows-<arch>.zip\` — Windows desktop"
-            echo "- \`centag-personal-native-<arch>.fpk\` — fnOS install package"
-            echo "- \`update-package-centag-personal-<ver>-linux-<arch>.tar.gz\` — OTA update"
-            echo "- \`checksums.txt\` — SHA-256 sums"
-          } > "$NOTES_FILE"
-
-          UPLOAD=( )
-          while IFS= read -r f; do
-            UPLOAD+=("$f")
-          done < <(find "$OUT" -maxdepth 1 -type f \( \
-            -name 'centag-cli-*.tar.gz' -o \
-            -name 'centag-desktop-*.dmg' -o \
-            -name 'centag-desktop-*.zip' -o \
-            -name 'centag-*-native-*.fpk' -o \
-            -name 'update-package-*.tar.gz' -o \
-            -name 'checksums.txt' \
-          \) | sort)
-
-          if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" "${UPLOAD[@]}" --clobber
-            if [[ -z "$DRAFT_FLAG" ]]; then
-              # A previously-created draft would stay invisible; publish it when draft=false.
-              gh release edit "$TAG" --draft=false
-            fi
-          else
-            # shellcheck disable=SC2086
-            gh release create "$TAG" $DRAFT_FLAG \
-              --title "Centag ${V}" \
-              --notes-file "$NOTES_FILE" \
-              "${UPLOAD[@]}"
-          fi
-
-          # Drop obsolete proxyctl assets left from older uploads (--clobber only replaces same names).
-          bash "${GITHUB_WORKSPACE}/scripts/release/delete-legacy-release-assets.sh" --tag "$TAG" --repo "$REPO"
-
-  # npm channel: unchanged — CLI for all platforms (separate from GitHub desktop).
-  npm-publish:
-    needs: [guard-branch, publish]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-
-      - name: Checkout edgeag (go.work sibling module)
-        uses: actions/checkout@v6
-        with:
-          repository: atoml-ai/edgeag
-          path: edgeag
-          ref: ${{ env.EDGEAG_REF }}
-
-      - name: Link edgeag as sibling for go.work
-        run: |
-          ln -sfn "${{ github.workspace }}/edgeag" "${{ github.workspace }}/../edgeag"
-
-      - uses: actions/setup-go@v6
-        with:
-          go-version-file: go.mod
-
-      - uses: actions/setup-node@v6
-        with:
-          node-version: '22'
-          cache: npm
-          cache-dependency-path: web/package-lock.json
-          registry-url: 'https://registry.npmjs.org'
-
-      - name: Sync npm package versions
-        run: bash scripts/release/sync-npm-version.sh --version "${{ needs.guard-branch.outputs.version }}"
-
-      - name: Build & publish npm packages
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.CENTAG_NPM_TOKEN }}
-          CENTAG_NPM_TOKEN: ${{ secrets.CENTAG_NPM_TOKEN }}
-        run: |
-          # draft=true → pack only; otherwise publish (tag push has no draft input → publish)
-          if [[ "${{ github.event.inputs.draft }}" == "true" ]]; then
-            DRY_RUN=1 bash scripts/publish-centag-npm.sh
-          else
-            bash scripts/publish-centag-npm.sh
-          fi

@@ -1,0 +1,95 @@
+name: release-npm
+
+# Standalone npm publisher.
+# Rebuilds the npm distribution from source (does not consume `release-build`
+# artifacts) and publishes `centag` + `centag-offline`. Manual trigger only.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version without v prefix (e.g. 0.2.7). Empty = apps/centag-npm/package.json'
+        required: false
+        default: ''
+      mode:
+        description: 'pack = build only (no publish); publish = push to npm registry'
+        type: choice
+        required: true
+        default: 'pack'
+        options:
+          - pack
+          - publish
+
+permissions:
+  contents: read
+
+# Pinned edgeag revision — keep in sync with ci.yml and other release-*.yml.
+env:
+  EDGEAG_REF: "7f1e4e9385362cfa58500778a83bc95f8fa23f8a"
+
+jobs:
+  guard-branch:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.ver.outputs.version }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Resolve version
+        id: ver
+        run: |
+          if [[ -n "${{ inputs.version }}" ]]; then
+            V="${{ inputs.version }}"
+          else
+            V="$(node -p "require('apps/centag-npm/package.json').version")"
+          fi
+          V="${V#v}"
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+          echo "npm version v$V"
+
+      - name: Require version branch
+        run: bash scripts/release/require-release-branch.sh --ci --version "${{ steps.ver.outputs.version }}"
+
+  publish:
+    needs: [guard-branch]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Checkout edgeag (go.work sibling module)
+        uses: actions/checkout@v6
+        with:
+          repository: atoml-ai/edgeag
+          path: edgeag
+          ref: ${{ env.EDGEAG_REF }}
+
+      - name: Link edgeag as sibling for go.work
+        run: |
+          ln -sfn "${{ github.workspace }}/edgeag" "${{ github.workspace }}/../edgeag"
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Sync npm package versions
+        run: bash scripts/release/sync-npm-version.sh --version "${{ needs.guard-branch.outputs.version }}"
+
+      - name: Build & publish npm packages
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.CENTAG_NPM_TOKEN }}
+          CENTAG_NPM_TOKEN: ${{ secrets.CENTAG_NPM_TOKEN }}
+        run: |
+          if [[ "${{ inputs.mode }}" == "pack" ]]; then
+            DRY_RUN=1 bash scripts/publish-centag-npm.sh
+          else
+            bash scripts/publish-centag-npm.sh
+          fi
