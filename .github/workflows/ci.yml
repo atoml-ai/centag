@@ -10,9 +10,10 @@ jobs:
     runs-on: ubuntu-latest
     env:
       # Pinned edgeag revision — bump deliberately (update the same constant in
-      # centag-pro release.yml). Never track a moving branch: builds must be
-      # reproducible against a fixed commit.
-      EDGEAG_REF: "7f1e4e9385362cfa58500778a83bc95f8fa23f8a"
+      # centag-pro release.yml and all release-*.yml here). Must match a commit
+      # whose go.mod declares `module github.com/atoml-ai/edgeag`; older
+      # commits keep the bare `edgeag` module name and break go.sum resolution.
+      EDGEAG_REF: "v0.1.0"
     steps:
       - uses: actions/checkout@v6
 

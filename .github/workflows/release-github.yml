@@ -24,7 +24,7 @@ permissions:
   contents: write
 
 env:
-  EDGEAG_REF: "7f1e4e9385362cfa58500778a83bc95f8fa23f8a"
+  EDGEAG_REF: "v0.1.0"
 
 jobs:
   guard-branch:

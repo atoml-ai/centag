@@ -15,10 +15,12 @@ permissions:
   contents: read
 
 # Pinned edgeag revision — keep in sync with ci.yml and other release-*.yml.
-# core/go.mod replaces edgeag => ../../edgeag and go.work uses ../edgeag, so
-# EVERY job that runs `go build` needs the sibling checkout (P1-7).
+# Must be a commit whose go.mod declares `module github.com/atoml-ai/edgeag`
+# AND whose content matches core/go.sum. v0.1.0 is the first tag with the
+# renamed module path; older commits (e.g. 7f1e4e9) keep the bare `edgeag`
+# module name and break `go build` with "missing go.sum entry".
 env:
-  EDGEAG_REF: "7f1e4e9385362cfa58500778a83bc95f8fa23f8a"
+  EDGEAG_REF: "v0.1.0"
 
 jobs:
   # Version-branch gate: workflow_dispatch / tags must match vX | feature/vX | release/vX.
