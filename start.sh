@@ -1623,11 +1623,15 @@ run_edition() {
     local edition="$1"
     shift || true
     local with_desktop=false
+    local with_background=false
     local extra_args=()
     for arg in "$@"; do
         case "$arg" in
             --desktop)
                 with_desktop=true
+                ;;
+            --background|-b)
+                with_background=true
                 ;;
             --) ;;
             *)
@@ -1666,11 +1670,23 @@ run_edition() {
     export CENTAG_PRICING_FILE="${PROJECT_ROOT}/config/pricing/default.yaml"
 
     if ! $with_desktop; then
-        print_info "启动 ${run_edition} CLI（daemon）: ${sidecar}"
-        print_info "前台调试请用: ./start.sh debug ${run_edition}"
+        if $with_background; then
+            print_info "启动 ${run_edition} CLI（daemon/守护进程）: ${sidecar}"
+            print_info "前台调试请用: ./start.sh debug ${run_edition}"
+            export CENTAG_EDITION="${run_edition}"
+            "${PROJECT_ROOT}/scripts/tools/daemon.sh" "$BIN_DIR"
+            return $?
+        fi
+        # 默认前台：直接 exec sidecar，日志打终端，Ctrl+C 退出
+        if [ -z "${LLM_PROXY_ADMIN_PASSWORD:-}" ]; then
+            print_warn "未检测到 LLM_PROXY_ADMIN_PASSWORD；首轮启动将通过初始化向导设置管理员密码"
+        fi
+        print_info "启动 ${run_edition} CLI（前台）: ${sidecar}"
+        print_info "守护进程模式: ./start.sh run ${run_edition} --background   # 终端可继续用"
+        print_info "按 Ctrl+C 停止"
         export CENTAG_EDITION="${run_edition}"
-        "${PROJECT_ROOT}/scripts/tools/daemon.sh" "$BIN_DIR"
-        return $?
+        cd "$BIN_DIR"
+        exec "./${sidecar_name}"
     fi
 
     if [ ! -d "${BIN_DIR}/static" ] || [ ! -f "${BIN_DIR}/static/index.html" ]; then
@@ -2022,13 +2038,13 @@ clean() {
             return 0
             ;;
         build)
-            _clean_build
+            _clean_build "$assume_yes"
             ;;
         install|deploy)
             _clean_install "$assume_yes"
             ;;
         all)
-            _clean_build
+            _clean_build "$assume_yes"
             _clean_install "$assume_yes"
             _clean_local_runtime "$assume_yes"
             ;;
@@ -2069,7 +2085,24 @@ _clean_local_runtime() {
 }
 
 _clean_build() {
+    local assume_yes="${1:-0}"
     print_info "清理当前发行版构建产物: $BIN_DIR"
+    if [ ! -d "$BIN_DIR" ]; then
+        print_warn "目录不存在，跳过: $BIN_DIR"
+        return 0
+    fi
+    if [ "$assume_yes" != "1" ]; then
+        if [ ! -t 0 ]; then
+            print_error "非交互环境请加 -y/--yes 确认删除"
+            return 1
+        fi
+        local ans=""
+        read -r -p "确认删除构建产物目录 $BIN_DIR ? 输入 yes 继续: " ans || true
+        if [ "$ans" != "yes" ]; then
+            print_warn "已取消"
+            return 1
+        fi
+    fi
     if [ -d "$BIN_DIR" ]; then
         rm -rf "$BIN_DIR"
         print_success "已删除 $BIN_DIR"
@@ -3437,57 +3470,80 @@ show_short_help() {
     echo ""
     echo -e "${GREEN}用法: ./start.sh <命令> [参数...]${NC}"
     echo ""
-    echo -e "${YELLOW}命令列表:${NC}"
+    echo -e "  ${YELLOW}★ 快速开始（新手先看这里）${NC}"
+    echo ""
+    # 快速开始: 命令列 12 字符 + 描述
+    _h_row "wizard"     "交互式初始化向导（依赖检查 / 构建 / 启动 一键搞定）"
+    _h_row "debug"      "开发模式（前台运行 + 实时日志 + 前端热重载）"
+    _h_row "docker up"  "Docker 一键部署（默认 personal 版）"
+    _h_row "status"     "查看服务运行状态"
+    _h_row "logs"       "查看服务日志（可 tail -f 实时跟踪）"
+    _h_row "stop"       "停止服务"
     echo ""
 
-    # ── 快速开始 ──
-    echo -e "  ${GREEN}wizard${NC} | ${GREEN}w${NC} | ${GREEN}-w${NC}              交互式初始化向导（推荐新手）"
+    # ── 进阶命令 ──
+    # 布局: 缩进2 + 命令(10) + 签名(32) + 描述
+    # 签名 / 描述均可省略（多行签名场景）
+    echo -e "  ${CYAN}── 进阶命令（运行 ./start.sh <命令> --help 查看详情）──${NC}"
+    echo ""
+    _h_cmd "build"     "[all|be|fe|personal|minimal]"        "构建项目 / 发行版"
+    _h_cmd "build"     "[--desktop|--docker|--wrap]"         "桌面 / Docker / 系统代理"
+    echo ""
+    _h_cmd "run"       "[be|fe|all|personal|minimal]"        "启动服务（默认前台；别名 up）"
+    _h_cmd "run"       "[wrap] [--background|--desktop|--docker]" "(签名续行)"
+    echo ""
+    _h_cmd "daemon"    "[backend|stop|debug|status]"         "后台守护进程管理"
+    echo ""
+    _h_cmd "clean"     "[build|install|all] [-y]"            "清理构建产物 / 已部署文件"
+    echo ""
+    _h_cmd "stack"     "<start|stop|status|...>"             "中间件编排 (PG/Redis/ES/Qdrant/Mem0/...)"
+    echo ""
+    _h_cmd "docker"    "<build|run|up|down|logs|"            "容器生命周期 / 镜像构建 / 部署包"
+    _h_cmd "docker"    "status|debug|restart|clean|pack>"     "(签名续行)"
+    echo ""
+    _h_cmd "package"   "<ota|cli|desktop> [...]"             "打包 OTA / CLI / 桌面 / fnOS 部署包"
+    _h_cmd "pack"      "[选项...]"                            "package ota 的旧别名"
+    echo ""
+    _h_cmd "webui"     "<dev|build|lint|clean>"              "Vue 前端开发"
+    echo ""
+    _h_cmd "init"      ""                                    "初始化开发环境"
+    _h_cmd "env"       "gen"                                 "生成密钥 / 配置文件"
+    echo ""
+    _h_cmd "test"      ""                                    "运行单元测试"
     echo ""
 
-    # ── 服务管理 ──
-    echo -e "  ${CYAN}── 服务管理 ──────────────────────────────────────────${NC}"
-    echo -e "  ${GREEN}run${NC}      <be|fe|all> [--desktop] [--docker]  运行服务"
-    echo -e "  ${GREEN}run${NC}      <personal|minimal> [--desktop] [--docker]  运行发行版"
-    echo -e "  ${GREEN}run${NC}      wrap [子命令...]     系统代理出口 CLI（PAC/CA）"
-    echo -e "  ${GREEN}daemon${NC}   [backend|stop|debug|status]  后台守护进程模式"
-    echo -e "  ${GREEN}debug${NC} [personal|minimal] [--desktop]  开发模式（先构建+debug 启动）"
-    echo -e "  ${GREEN}stop${NC}     [be|fe|daemon|all]   停止服务"
-    echo -e "  ${GREEN}status${NC}                           查看服务状态"
-    echo -e "  ${GREEN}logs${NC}                             查看服务日志"
+    # ── 别名速查 ──
+    echo -e "  ${CYAN}── 别名速查 ──${NC}"
+    printf "    ${GREEN}%-4s${NC} ≡ ${GREEN}%-5s${NC}    ${GREEN}%-4s${NC} ≡ ${GREEN}%-6s${NC}    ${GREEN}%-3s${NC} | ${GREEN}%-3s${NC} | ${GREEN}%-9s${NC} ≡ ${GREEN}%-6s${NC}\n" \
+        "up" "run" "dev" "debug" "w" "-w" "--wizard" "wizard"
     echo ""
 
-    # ── 构建 ──
-    echo -e "  ${CYAN}── 构建 ──────────────────────────────────────────────${NC}"
-    echo -e "  ${GREEN}build${NC}    <all|be|fe>             开发构建（默认 all）"
-    echo -e "  ${GREEN}build${NC}    <personal|minimal> [--desktop] [--docker] [--wrap]"
-    echo -e "  ${GREEN}build${NC}    wrap                仅构建 centag-wrap"
-    echo -e "  ${GREEN}clean${NC}    [build|install|all] [-y] 清理构建产物 / 已部署文件"
-    echo -e "  ${GREEN}pack${NC}     [--upload]              打包服务端更新包（旧别名）"
-    echo -e "  ${GREEN}package${NC}  ota [--platforms <目标平台> --edition <ed>] [--upload]   服务端 OTA 更新包（原 pack）"
-    echo -e "  ${GREEN}package${NC}  <cli|desktop> <os> [arch]   部署包，平台参数统一用 --platforms"
-    echo -e "  ${GREEN}test${NC}                             运行单元测试"
+    # ── team 说明（开源仓限制）──
+    echo -e "  ${CYAN}── 关于 team 发行版 ──${NC}"
+    echo -e "    ${YELLOW}team${NC} 商业版仅在私有仓 ${GREEN}centag-pro${NC} 构建；本仓 (centag) 仅支持 personal / minimal。"
     echo ""
 
-    # ── 环境 ──
-    echo -e "  ${CYAN}── 环境配置 ──────────────────────────────────────────${NC}"
-    echo -e "  ${GREEN}init${NC}                             初始化开发环境"
-    echo -e "  ${GREEN}env${NC}      gen [--force]           生成密钥配置文件"
+    echo -e "  ${YELLOW}提示:${NC} ${GREEN}./start.sh <命令> --help${NC}  查看命令详细用法"
+    echo -e "        ${GREEN}./start.sh --version${NC}     查看版本信息"
     echo ""
+}
 
-    # ── Stack & Docker ──
-    echo -e "  ${CYAN}── Stack 中间件 & Docker ────────────────────────────${NC}"
-    echo -e "  ${GREEN}stack${NC}    <start|stop|status|...>   中间件编排 (PG/Redis/ES/...)"
-    echo -e "  ${GREEN}docker${NC}   <up|down|logs|status|...>  容器生命周期管理"
-    echo ""
+# 快速开始行: "  cmd(12) desc"
+_h_row() {
+    printf "  ${GREEN}%-12s${NC} %s\n" "$1" "$2"
+}
 
-    # ── 其他 ──
-    echo -e "  ${CYAN}── 其他 ──────────────────────────────────────────────${NC}"
-    echo -e "  ${GREEN}webui${NC}    <dev|build|lint|clean>    Vue 前端开发"
-    echo ""
-
-    echo -e "  ${YELLOW}提示:${NC} 运行 ${GREEN}./start.sh <命令> --help${NC} 查看命令的详细用法"
-    echo -e "        运行 ${GREEN}./start.sh --version${NC} 查看版本信息"
-    echo ""
+# 进阶命令行: "  cmd(10) sig(32) desc"
+# 签名或描述可省略（多行签名场景；空 desc 会用 32 字符占位对齐到描述列）
+_h_cmd() {
+    local sig="${2-}"
+    local desc="${3-}"
+    if [ -z "$sig" ]; then
+        # 无签名: 命令列 + 描述（描述对齐到命令行 10+1+1=12 后）
+        printf "  ${GREEN}%-10s${NC} %s\n" "$1" "$desc"
+    else
+        printf "  ${GREEN}%-10s${NC} %-32s %s\n" "$1" "$sig" "$desc"
+    fi
 }
 
 # 命令详细帮助分发
@@ -3499,8 +3555,10 @@ show_command_help() {
         init)          _help_init ;;
         build)         _help_build ;;
         run)           _help_run ;;
+        up)            _help_run ;;
         daemon)        _help_daemon ;;
         debug)         _help_debug ;;
+        dev)           _help_debug ;;
         stop)          _help_stop ;;
         status)        _help_status ;;
         logs)          _help_logs ;;
@@ -3572,7 +3630,7 @@ _help_build() {
     echo -e "${CYAN}发行版构建:${NC}"
     echo -e "  ${GREEN}personal${NC}  个人全功能（默认 SQLite）"
     echo -e "  ${GREEN}minimal${NC}   轻量单机（文件配置，无 DB）"
-    echo -e "  ${GREEN}team${NC}      团队版（中间件外置：PG/向量等）"
+    echo -e "  ${YELLOW}team${NC}      团队版 — ${YELLOW}本仓不支持；请在 centag-pro 构建${NC}"
     echo -e "  ${GREEN}wrap${NC}  仅构建本机/员工系统代理工具 centag-wrap"
     echo ""
     echo -e "${CYAN}产品形态:${NC}"
@@ -3594,15 +3652,21 @@ _help_build() {
 }
 
 _help_run() {
-    echo -e "${GREEN}命令: run${NC}"
-    echo -e "       ${YELLOW}启动服务（前台运行）${NC}"
+    echo -e "${GREEN}命令: run | up${NC}"
+    echo -e "       ${YELLOW}启动服务（默认前台运行，--background 守护进程）${NC}"
+    echo ""
+    echo -e "${CYAN}核心区别:${NC}"
+    echo -e "  ${GREEN}run${NC} (默认)  = 前台运行，日志打终端，Ctrl+C 退出（推荐日常开发）"
+    echo -e "  ${GREEN}run --background${NC} (或 ${GREEN}daemon${NC}) = 守护进程，自动重启，终端可继续用"
+    echo -e "  ${GREEN}debug${NC} / ${GREEN}dev${NC} = 前台调试（实时日志 + 前端热重载，需要先构建）"
     echo ""
     echo -e "${CYAN}用法:${NC}"
-    echo -e "  ./start.sh run <服务> [--desktop] [--docker]"
+    echo -e "  ./start.sh run <服务> [--background] [--desktop] [--docker]"
+    echo -e "  ./start.sh up  <服务> [--background]                 # up 是 run 的别名"
     echo -e "  ./start.sh run wrap [子命令...] [选项...]"
     echo ""
     echo -e "${CYAN}服务:${NC}"
-    echo -e "  ${GREEN}be${NC} | backend        启动后端服务 (端口 20060)"
+    echo -e "  ${GREEN}be${NC} | backend        前台启动后端服务 (端口 20060)"
     echo -e "  ${GREEN}fe${NC} | frontend      启动 Vue 开发服务器 (端口 5173)"
     echo -e "  ${GREEN}all${NC}                后端(后台) + 前端(前台)"
     echo -e "  ${GREEN}personal${NC}           个人版发行包"
@@ -3610,20 +3674,20 @@ _help_run() {
     echo -e "  ${GREEN}wrap${NC}            系统代理出口 CLI"
     echo ""
     echo -e "${CYAN}选项:${NC}"
+    echo -e "  ${GREEN}--background${NC} | ${GREEN}-b${NC}  守护进程模式（崩溃自动拉起；后台运行）"
     echo -e "  ${GREEN}--desktop${NC}        以桌面外壳启动（菜单栏/托盘；仅 personal/minimal）"
     echo -e "  ${GREEN}--docker${NC}         以 Docker 容器启动（替代 docker run）"
     echo ""
     echo -e "${CYAN}示例:${NC}"
-    echo -e "  ./start.sh run be                      # 后端守护（非 debug 默认；前台用 debug）"
-    echo -e "  ./start.sh run fe                      # 前端开发服务器"
-    echo -e "  ./start.sh run all                     # 后端+前端"
-    echo -e "  ./start.sh run personal                # CLI"
+    echo -e "  ./start.sh run be                      # 前台后端（看实时日志，Ctrl+C 退出）"
+    echo -e "  ./start.sh run be --background         # 守护进程（终端可继续用）"
+    echo -e "  ./start.sh run personal                # 前台 personal CLI"
+    echo -e "  ./start.sh run personal --background   # personal 守护进程"
     echo -e "  ./start.sh run personal --desktop      # desktop（托盘）"
     echo -e "  ./start.sh run personal --docker       # Docker 容器"
     echo -e "  ./start.sh run minimal --desktop"
     echo -e "  ./start.sh run wrap run --server http://192.168.1.10:20060 -- opencode"
     echo ""
-    echo -e "${YELLOW}注意:${NC} 开发模式: ./start.sh run all（自动后台后端+前台前端）"
 }
 
 _help_daemon() {
@@ -3646,8 +3710,12 @@ _help_daemon() {
 }
 
 _help_debug() {
-    echo -e "${GREEN}命令: debug${NC}"
-    echo -e "       ${YELLOW}开发调试模式（先构建再以 debug 启动）${NC}"
+    echo -e "${GREEN}命令: debug | dev${NC}"
+    echo -e "       ${YELLOW}开发调试模式（前台 + 实时日志 + 前端热重载）${NC}"
+    echo ""
+    echo -e "${CYAN}核心区别:${NC}"
+    echo -e "  ${GREEN}debug${NC} / ${GREEN}dev${NC} = 前台运行，日志直接打终端，前端改完刷新即生效（Ctrl+C 退出）"
+    echo -e "  ${GREEN}run${NC} / ${GREEN}up${NC}    = 后台守护进程（开发看日志请用 debug）"
     echo ""
     echo -e "${CYAN}用法:${NC}"
     echo -e "  ./start.sh debug [personal|minimal] [--desktop|--docker]"
@@ -3820,7 +3888,7 @@ _help_pack() {
     echo -e "${CYAN}选项:${NC}"
     echo -e "  ${GREEN}--upload${NC}        打包并上传热更新（需设置认证 Token；仅支持单平台）"
     echo -e "  ${GREEN}--platforms${NC}    目标平台 goos-goarch，逗号分隔可多个（默认本机）；跨平台自动交叉编译"
-    echo -e "  ${GREEN}--edition${NC}      版本 personal|minimal|team（默认布局 edition）"
+    echo -e "  ${GREEN}--edition${NC}      版本 personal|minimal（${YELLOW}team 仅 centag-pro 支持${NC}）"
     echo ""
     echo -e "${CYAN}说明:${NC}"
     echo -e "  --platforms 目标 ≠ 本机时自动交叉编译（team 委托 centag-pro，personal/minimal 用本仓 dist）。"
@@ -4626,12 +4694,14 @@ main() {
             # 解析选项
             local with_desktop=false
             local with_docker=false
+            local with_background=false
             local extra_args=()
             for arg in "$@"; do
                 case "$arg" in
-                    --desktop) with_desktop=true ;;
-                    --docker)  with_docker=true ;;
-                    *)         extra_args+=("$arg") ;;
+                    --desktop)    with_desktop=true ;;
+                    --docker)     with_docker=true ;;
+                    --background|-b) with_background=true ;;
+                    *)            extra_args+=("$arg") ;;
                 esac
             done
 
@@ -4642,8 +4712,12 @@ main() {
                         print_error "--desktop/--docker 不适用于 run be"
                         exit 1
                     fi
-                    # 非 debug 默认守护进程（崩溃拉起 + OTA update_stop）；前台请用 debug
-                    start_backend_background
+                    # 默认前台；--background 走守护进程
+                    if $with_background; then
+                        start_backend_background
+                    else
+                        start_backend_foreground
+                    fi
                     ;;
                 frontend|fe|vue)
                     if $with_desktop || $with_docker; then
@@ -4669,6 +4743,8 @@ main() {
                         _dist_docker_run "$svc" "" "" "false"
                     elif $with_desktop; then
                         run_edition "$svc" --desktop "${extra_args[@]}"
+                    elif $with_background; then
+                        run_edition "$svc" --background
                     else
                         run_edition "$svc" "${extra_args[@]}"
                     fi
@@ -4678,8 +4754,8 @@ main() {
                     run_wrap "${extra_args[@]}"
                     ;;
                 team)
-                    print_error "team 请用 Docker/Profile 运行；托盘不支持 team"
-                    echo "示例: ./start.sh run personal --docker  或  ./start.sh profile team up"
+                    print_error "team 仅在私有仓 centag-pro 支持；本仓请用 personal 或 minimal"
+                    echo "示例: ./start.sh run personal  或  cd ../centag-pro && ./start.sh run team"
                     exit 1
                     ;;
                 *)
@@ -4728,6 +4804,16 @@ main() {
                 esac
             done
             debug "$edition" "$with_desktop" "$with_docker"
+            ;;
+
+        # ── 别名: up ≡ run（语义更顺，「启动起来」）────────────────────
+        up)
+            main run "$@"
+            ;;
+
+        # ── 别名: dev ≡ debug（开发模式）───────────────────────────────
+        dev)
+            main debug "$@"
             ;;
 
         # ── 停止 ───────────────────────────────────────────────────────
@@ -4827,13 +4913,21 @@ main() {
             ;;
 
         logs)
-            # 查看服务日志（需要实现 view_logs 函数或使用 docker logs）
+            # 查看服务日志（守护进程日志在 $BIN_DIR/logs，部分部署在 storage/logs）
             if command -v lsof >/dev/null 2>&1; then
                 local backend_pid=$(lsof -ti ":$BACKEND_PORT" 2>/dev/null || true)
                 if [ -n "$backend_pid" ]; then
                     print_info "Backend PID: $backend_pid"
-                    print_info "日志文件位置: $BIN_DIR/storage/logs/"
-                    ls -la "$BIN_DIR/storage/logs/" 2>/dev/null || echo "日志目录不存在"
+                    local log_dir="$BIN_DIR/logs"
+                    [ -d "$log_dir" ] || log_dir="$BIN_DIR/storage/logs"
+                    print_info "日志目录: $log_dir"
+                    if [ -d "$log_dir" ]; then
+                        ls -la "$log_dir" 2>/dev/null
+                        local main_log="$log_dir/centag.log"
+                        [ -f "$main_log" ] && print_info "实时查看: tail -f $main_log"
+                    else
+                        print_warn "日志目录不存在（服务可能尚未产生日志）"
+                    fi
                 else
                     print_warn "后端服务未运行"
                 fi
@@ -4853,15 +4947,15 @@ main() {
 
         # ── Docker ─────────────────────────────────────────────────────
          docker)
-            local docker_cmd="${1:-}"
+            local docker_cmd="${1:-status}"
             shift || true
             case "$docker_cmd" in
                 # ── 发行版 Docker 操作（新）──
                 build)
                     local edition="${1:-}"
                     if [ -z "$edition" ]; then
-                        print_error "请指定发行版: minimal, personal, 或 team"
-                        echo "用法: $0 docker build <minimal|personal|team>"
+                        print_error "请指定发行版: minimal 或 personal（team 仅 centag-pro 支持）"
+                        echo "用法: $0 docker build <minimal|personal>"
                         echo "兼容别名: all → personal；backend|be → minimal"
                         exit 1
                     fi
@@ -4874,8 +4968,8 @@ main() {
                             docker_build "$edition"
                             ;;
                         *)
-                            print_error "无效的发行版名称: $edition (支持: minimal, personal, team)"
-                            echo "用法: $0 docker build <minimal|personal|team>"
+                            print_error "无效的发行版名称: $edition (本仓支持: minimal, personal；team 仅 centag-pro)"
+                            echo "用法: $0 docker build <minimal|personal>"
                             exit 1
                             ;;
                     esac
@@ -4883,8 +4977,8 @@ main() {
                 run)
                     local edition="${1:-}"
                     if [ -z "$edition" ]; then
-                        print_error "请指定发行版: minimal, personal, 或 team"
-                        echo "用法: $0 docker run <minimal|personal|team> [port] [--reset] [--initdata <path>]"
+                        print_error "请指定发行版: minimal 或 personal（team 仅 centag-pro 支持）"
+                        echo "用法: $0 docker run <minimal|personal> [port] [--reset] [--initdata <path>]"
                         exit 1
                     fi
                     shift
@@ -4942,9 +5036,9 @@ main() {
                     print_error "未知 docker 子命令: '$docker_cmd'"
                     echo "用法: $0 docker <子命令> [参数]"
                     echo ""
-                    echo "发行版操作:"
-                    echo "  $0 docker build <minimal|personal|team>                   构建 Docker 镜像"
-                    echo "  $0 docker run   <minimal|personal|team> [port] [--reset]  运行 Docker 容器"
+                    echo "发行版操作 (本仓支持 personal|minimal；team 仅 centag-pro):"
+                    echo "  $0 docker build <minimal|personal>                       构建 Docker 镜像"
+                    echo "  $0 docker run   <minimal|personal> [port] [--reset]      运行 Docker 容器"
                     echo ""
                     echo "Compose 操作:"
                     echo "  $0 docker up|down|logs|status|clean|pack|debug|restart"
