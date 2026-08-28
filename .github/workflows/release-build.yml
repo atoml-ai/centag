@@ -22,8 +22,11 @@ env:
 
 jobs:
   # Version-branch gate: workflow_dispatch / tags must match vX | feature/vX | release/vX.
+  # Bypassed for build: build is non-publishing, the gate re-runs in release-github / release-npm.
   guard-branch:
     runs-on: ubuntu-latest
+    env:
+      CENTAG_RELEASE_ALLOW_ANY_BRANCH: '1'
     outputs:
       version: ${{ steps.ver.outputs.version }}
     steps:
