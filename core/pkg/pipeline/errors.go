@@ -48,6 +48,25 @@ func newTransparentUpstreamError(nodeID, backendID, model, targetURL string, sta
 	}
 }
 
+// UpstreamStatusCodeOf 导出版，供跨包（如 server handler）从错误链提取上游状态码。
+func UpstreamStatusCodeOf(err error) int { return upstreamStatusCodeOf(err) }
+
+// statusCodeFromMsg 从错误文案兜底提取状态码，覆盖两类上游格式：
+//   - transparent_forward 的 "upstream returned %d"
+//   - capability broker / OpenAI 插件的 "API error (status %d)"
+func statusCodeFromMsg(msg string) int {
+	if code, ok := extractUpstreamStatusCode(msg); ok {
+		return code
+	}
+	var code int
+	if strings.Contains(msg, "API error (status ") {
+		if _, scanErr := fmt.Sscanf(msg, "API error (status %d)", &code); scanErr == nil && code > 0 {
+			return code
+		}
+	}
+	return 0
+}
+
 // upstreamStatusCodeOf 从错误链中提取上游 HTTP 状态码；提取不到返回 0。
 func upstreamStatusCodeOf(err error) int {
 	if err == nil {
@@ -56,6 +75,11 @@ func upstreamStatusCodeOf(err error) int {
 	var ue *UpstreamError
 	if errors.As(err, &ue) && ue != nil {
 		return ue.StatusCode
+	}
+	// 兜底：generator 经 capability broker 返回的错误多为插件层文案
+	// （"API error (status 429)"），非结构化 *UpstreamError，需解析文案。
+	if code := statusCodeFromMsg(err.Error()); code > 0 {
+		return code
 	}
 	return 0
 }

@@ -621,6 +621,13 @@ func (h *PipelineHandler) ExecutePipeline(c *gin.Context) {
 		return
 	}
 
+	// A-修复（P1-4 回归）：空输入不应透传给上游（上游会 400 并被包成 500），
+	// 直接以 400 返回清晰的客户端错误。
+	if !hasUsableInput(req.Content, req.Messages) {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": "messages must not be empty"})
+		return
+	}
+
 	if h.engine == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": "pipeline engine not initialized"})
 		return
@@ -691,7 +698,7 @@ func (h *PipelineHandler) ExecutePipeline(c *gin.Context) {
 	output, err := h.engine.Execute(execCtx, id, input)
 	if err != nil {
 		h.recordExecution(id, input, nil, err)
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": fmt.Sprintf("pipeline execution failed: %v", err)})
+		c.JSON(pipelineErrorStatus(err), gin.H{"success": false, "error": fmt.Sprintf("pipeline execution failed: %v", err)})
 		return
 	}
 
@@ -761,7 +768,7 @@ func (h *PipelineHandler) ExecutePipelineDirect(c *gin.Context) {
 	output, err := h.engine.ExecutePipelineDefinition(execCtx, &req.Pipeline, input)
 	if err != nil {
 		h.recordExecution(req.Pipeline.ID, input, nil, err)
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": fmt.Sprintf("pipeline execution failed: %v", err)})
+		c.JSON(pipelineErrorStatus(err), gin.H{"success": false, "error": fmt.Sprintf("pipeline execution failed: %v", err)})
 		return
 	}
 
@@ -776,6 +783,34 @@ func (h *PipelineHandler) ExecutePipelineDirect(c *gin.Context) {
 		"success": true,
 		"data":    output,
 	})
+}
+
+// hasUsableInput 判定是否存在非空用户输入（content 或任一 message 的 content）。
+// 全空时不应透传给上游（上游会 400 并被包成 500），应直接以 400 拒绝。
+func hasUsableInput(content string, msgs []pipeline.Message) bool {
+	if strings.TrimSpace(content) != "" {
+		return true
+	}
+	for _, m := range msgs {
+		if strings.TrimSpace(m.Content) != "" {
+			return true
+		}
+	}
+	return false
+}
+
+// pipelineErrorStatus 将流水线执行错误映射为合适的 HTTP 状态码：
+// 上游 429（限流/配额）与 4xx 透传，便于客户端/观测区分"配额不足"与"服务端错误"；
+// 其余（含真正的上游 5xx 与不可归类的错误）回退 500。
+func pipelineErrorStatus(err error) int {
+	switch code := pipeline.UpstreamStatusCodeOf(err); {
+	case code == http.StatusTooManyRequests: // 429 限流/配额
+		return http.StatusTooManyRequests
+	case code >= 400 && code < 500: // 上游客户端错误透传
+		return code
+	default:
+		return http.StatusInternalServerError
+	}
 }
 
 // GetTemplates 获取内置模板列表
