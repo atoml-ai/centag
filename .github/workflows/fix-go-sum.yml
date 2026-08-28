@@ -1,0 +1,65 @@
+name: fix-go-sum
+
+# Reconcile go.sum files against proxy.golang.org and post the diff as
+# an artifact. Manual trigger only — does not commit, so a human reviews
+# the diff and commits via PR.
+
+on:
+  workflow_dispatch:
+    inputs:
+      check_only:
+        description: 'Only check for drift, do not regenerate'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - name: Run fix-go-sum.sh
+        run: |
+          set -euo pipefail
+          mkdir -p go-sum-diff
+          if [[ "${{ inputs.check_only }}" == "true" ]]; then
+            if bash scripts/fix-go-sum.sh --check; then
+              echo "ok: all go.sum files in sync with proxy"
+            else
+              echo "drift detected — see diff in artifact"
+              exit 1
+            fi
+          else
+            bash scripts/fix-go-sum.sh
+          fi
+
+      - name: Collect diff
+        if: always()
+        run: |
+          mkdir -p go-sum-diff
+          for f in $(git ls-files '**/go.sum' '**/go.mod'); do
+            if ! git diff --quiet -- "$f"; then
+              mkdir -p "go-sum-diff/$(dirname "$f")"
+              git diff -- "$f" > "go-sum-diff/${f}.diff" || true
+            fi
+          done
+          # also write the full git diff for review
+          git diff -- '**/go.sum' '**/go.mod' > go-sum-diff/full.diff || true
+          ls -la go-sum-diff/
+
+      - name: Upload diff
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: go-sum-drift
+          path: go-sum-diff/
+          if-no-files-found: ignore
