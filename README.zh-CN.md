@@ -1,23 +1,44 @@
 # Centag
 
-<p align="center">
-  <strong>你的 LLM 代理中枢 — 流水线即策略</strong><br/>
-  一个通用的大模型代理网关。统一管理所有后端大模型服务商、支持 API Key 池及自定义的代理策略，以可定制的流水线及开放的插件架构定义客户端 Agent 的行为。<br/>
-  <em>它可以作为中转站，但不仅仅是中转站。</em>
-</p>
+> 🚀 **Visual‑DAG LLM Proxy Hub**
+Centag 是自托管 LLM 网关/代理枢纽，区别于普通转发代理：支持**可视化拖拽DAG流水线编排**，搭配 `centag wrap` 零代码进程代理，不用修改业务一行代码，即可实现路由、鉴权、缓存、校验、故障转移、业务策略编排，内置完整 WebUI。
 
-<p align="center">
-  <a href="https://github.com/atoml-ai/centag/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="License" /></a>
-  <img src="https://img.shields.io/badge/go-1.25+-00ADD8?logo=go" alt="Go Version" />
-  <a href="https://github.com/atoml-ai/centag/releases"><img src="https://img.shields.io/github/v/release/atoml-ai/centag" alt="Release" /></a>
-  <a href="https://github.com/atoml-ai/centag/releases"><img src="https://img.shields.io/github/downloads/atoml-ai/centag/total" alt="Downloads" /></a>
-</p>
+普通 LLM 网关只做请求转发；Centag 把业务策略变成可编辑的可视化流水线。
 
-<p align="center">
-  <a href="README.md">English</a> | 简体中文 | <a href="README.ja.md">日本語</a> | <a href="README.ko.md">한국어</a> | <a href="README.ru.md">Русский</a> | <a href="README.es.md">Español</a>
-</p>
+✅ 开箱即用 OpenAI‑兼容接口
+✅ 可视化流水线编辑器（DAG）
+✅ centag‑wrap：进程级无侵入代理，无需改代码
+✅ 多 Key 轮询、故障降级、限流、请求校验、缓存
+✅ 完整 WebUI，可观测全链路请求
+✅ Docker / npm 快速部署
 
 ---
+
+## Why Centag vs LiteLLM / 其他 LLM Gateway
+
+| Feature | Centag | LiteLLM‑Proxy |
+|---|---|---|
+| OpenAI兼容代理 | ✅ | ✅ |
+| 多key负载均衡/故障转移 | ✅ | ✅ |
+| WebUI管理面板 | ✅ | 基础 |
+| **可视化DAG流水线编排** | ✅ | ❌ |
+| 进程级零侵入 wrap 代理 | ✅ | ❌ |
+| 请求中间件链式编排 | ✅ | 需代码开发 |
+| 缓存、守卫、改写节点可视化配置 | ✅ | 代码/配置文件 |
+
+> 如果你只需要简单多key转发，Centag 也可以直接用；如果你需要给LLM请求叠加复杂业务策略，Centag 是专门为此设计。
+
+---
+
+## ⚡ Quick Start（5分钟跑通）
+```bash
+# npm
+npm install -g centag
+centag serve
+
+# or docker
+docker run -p 8000:8000 atomlai/centag
+
 
 ## 我们解决什么问题
 

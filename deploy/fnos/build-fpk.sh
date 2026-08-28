@@ -308,6 +308,20 @@ write_runtime_env() {
     if [ -n "${LICENSE_PUBKEYS:-}" ]; then
       echo "CENTAG_LICENSE_PUBKEYS=$(shell_single_quote "${LICENSE_PUBKEYS}")"
     fi
+    # ── 安装遥测（centag-pro 注入）：仅透传已设置的 CENTAG_TELEMETRY* 变量 ──
+    #    密钥由打包脚本保证完整（缺失则打包已失败），此处只负责落到包内
+    #    runtime.env；personal/minimal 等未设置这些变量的构建不会写入，避免污染。
+    for _tk in CENTAG_TELEMETRY CENTAG_TELEMETRY_PROVIDER CENTAG_TELEMETRY_STATE_DIR \
+               CENTAG_TELEMETRY_FEISHU_APP_ID CENTAG_TELEMETRY_FEISHU_APP_SECRET \
+               CENTAG_TELEMETRY_FEISHU_APP_TOKEN CENTAG_TELEMETRY_FEISHU_TABLE_ID \
+               CENTAG_TELEMETRY_GITEE_TOKEN CENTAG_TELEMETRY_GITEE_OWNER \
+               CENTAG_TELEMETRY_GITEE_REPO CENTAG_TELEMETRY_GITEE_DEFAULT_BRANCH \
+               CENTAG_TELEMETRY_POSTHOG_TOKEN CENTAG_TELEMETRY_GA4_TOKEN; do
+      _tv="$(printenv "$_tk" 2>/dev/null || true)"
+      if [ -n "${_tv}" ]; then
+        echo "${_tk}=$(shell_single_quote "${_tv}")"
+      fi
+    done
   } > "${dest_dir}/runtime.env"
   chmod 600 "${dest_dir}/runtime.env"
   echo "  运行时配置: config/runtime.env (edition=${runtime_edition})"
