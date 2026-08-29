@@ -18,6 +18,13 @@ export interface ProxySetupStatus {
   egress_api_key_configured?: boolean
   /** LAN 开启时 MITM 对非本机客户端强制 Proxy-Authorization */
   proxy_auth_required?: boolean
+  /**
+   * 是否允许「一键写入配置」。仅当 centag 与浏览器同机（local 模式 + 经由 loopback 访问）时为真；
+   * 远程/LAN 部署下写入的是服务端文件系统，对用户本机 Agent 无效，应改用生成配置复制或 wrap run。
+   */
+  write_config_supported?: boolean
+  /** 浏览器是否经由非 loopback 地址访问（即相对 centag 服务而言是远程访问） */
+  accessed_remotely?: boolean
 }
 
 export interface EgressKeyEnsureResult {

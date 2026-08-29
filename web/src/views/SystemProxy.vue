@@ -1370,7 +1370,7 @@ const copyCertCommand = async () => {
 
 const showPACPreview = async () => {
   try {
-    const response = await fetch(apiPACURL.value)
+    const response = await fetch('/api/v1/proxy/pac')
     pacContent.value = await response.text()
     showPACDialog.value = true
   } catch (error: any) {
@@ -1380,7 +1380,7 @@ const showPACPreview = async () => {
 
 const downloadPAC = async () => {
   try {
-    const response = await fetch(apiPACURL.value)
+    const response = await fetch('/api/v1/proxy/pac')
     const content = await response.text()
     const blob = new Blob([content], { type: 'application/x-ns-proxy-autoconfig' })
     const url = window.URL.createObjectURL(blob)
@@ -1417,7 +1417,7 @@ const testProxy = async () => {
     })
 
     try {
-      const pacResp = await fetch(apiPACURL.value, { cache: 'no-store' })
+      const pacResp = await fetch('/api/v1/proxy/pac', { cache: 'no-store' })
       const pacText = pacResp.ok ? await pacResp.text() : ''
       const hasProxy = /PROXY\s+\S+:\d+/i.test(pacText)
       lines.push({
