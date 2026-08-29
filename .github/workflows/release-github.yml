@@ -19,6 +19,10 @@ on:
         options:
           - draft
           - publish
+      build-run-id:
+        description: 'Run ID of a successful release-build workflow (e.g. 33235186136). Leave empty to download from this run only.'
+        required: false
+        default: ''
 
 permissions:
   contents: write
@@ -58,10 +62,34 @@ jobs:
       - uses: actions/checkout@v6
 
       - name: Download artifacts
-        uses: actions/download-artifact@v8
-        with:
-          path: release-staging
-          pattern: github-*
+        env:
+          BUILD_RUN_ID: ${{ inputs.build-run-id }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          mkdir -p release-staging
+          if [[ -n "$BUILD_RUN_ID" ]]; then
+            echo "Listing artifacts from release-build run $BUILD_RUN_ID"
+            mapfile -t IDS < <(gh api "repos/${{ github.repository }}/actions/runs/$BUILD_RUN_ID/artifacts" \
+              --jq '.artifacts[].id')
+            echo "Found ${#IDS[@]} artifact(s)"
+            # Download each artifact as a zip; action above does not stream
+            # binary reliably, so use curl with the same redirect.
+            for id in "${IDS[@]}"; do
+              name=$(gh api "repos/${{ github.repository }}/actions/artifacts/$id" --jq '.name')
+              url=$(gh api "repos/${{ github.repository }}/actions/artifacts/$id" --jq '.archive_download_url')
+              echo "  $name  <-  $url"
+              curl -fsSL -H "Authorization: token $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+                -o "/tmp/$$.zip" "$url"
+              unzip -q -o "/tmp/$$.zip" -d release-staging
+              rm -f "/tmp/$$.zip"
+            done
+            echo "After download (truncated to 30):"
+            (find release-staging -type f || true) | head -30
+          else
+            echo "error: build-run-id input required for independent dispatch" >&2
+            exit 1
+          fi
 
       - name: Flatten assets
         id: assets
