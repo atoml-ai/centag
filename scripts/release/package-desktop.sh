@@ -202,8 +202,50 @@ write_info_plist() {
 EOF
 }
 
+# --- macOS code signing / notarization (opt-in) -----------------------------
+# Everything here is a no-op unless CENTAG_MACOS_SIGN_IDENTITY is set, so the
+# default (uncertified) CI build is byte-for-byte unchanged. When an identity is
+# provided, the .app is hardened-runtime signed; with CENTAG_MACOS_NOTARIZE=1 it
+# is notarized and stapled (the DMG too), which lets end users on quarantine'd
+# downloads run it without the "unknown developer" Gatekeeper block.
+MACOS_ENTITLEMENTS="${ROOT}/scripts/release/entitlements.mac.plist"
+
+macos_codesign_app() {
+  local app="$1"
+  local identity="${CENTAG_MACOS_SIGN_IDENTITY:-}"
+  [[ -n "$identity" ]] || return 0
+  [[ -f "$MACOS_ENTITLEMENTS" ]] || fail "entitlements missing: $MACOS_ENTITLEMENTS"
+  log "macOS: signing ${app} (${identity})"
+  codesign --force --options runtime --timestamp \
+    --sign "$identity" --entitlements "$MACOS_ENTITLEMENTS" \
+    --deep "$app" || fail "codesign failed for ${app}"
+}
+
+# Submit a zip or dmg to Apple notary and staple the ticket. No-op unless
+# CENTAG_MACOS_NOTARIZE=1 and credentials are present.
+macos_notarize() {
+  local artifact="$1"
+  [[ "${CENTAG_MACOS_NOTARIZE:-0}" == "1" ]] || return 0
+  command -v xcrun >/dev/null 2>&1 || fail "xcrun required for notarization"
+  local args=(notarytool submit "$artifact" --wait --timeout 1200)
+  if [[ -n "${CENTAG_MACOS_NOTARY_KEYCHAIN_PROFILE:-}" ]]; then
+    args+=(--keychain-profile "${CENTAG_MACOS_NOTARY_KEYCHAIN_PROFILE}")
+  elif [[ -n "${CENTAG_MACOS_APPLE_ID:-}" && -n "${CENTAG_MACOS_APPLE_PASSWORD:-}" ]]; then
+    args+=(--apple-id "${CENTAG_MACOS_APPLE_ID}" \
+      --password "${CENTAG_MACOS_APPLE_PASSWORD}" \
+      --team-id "${CENTAG_MACOS_APPLE_TEAM_ID:-}")
+  else
+    log "warn: notarization enabled but no credentials (keychain profile or apple-id/password); skipping"
+    return 0
+  fi
+  log "macOS: notarizing ${artifact}"
+  xcrun "${args[@]}" || fail "notarization failed for ${artifact}"
+  xcrun stapler staple "$artifact" || log "warn: stapler failed for ${artifact}"
+}
+
 package_macos() {
   local desktop_bin="$1"
+  log "macOS code signing: ${CENTAG_MACOS_SIGN_IDENTITY:+enabled}${CENTAG_MACOS_SIGN_IDENTITY:-disabled}"
   local app="${STAGE}/Centag.app"
   local macos_dir="${app}/Contents/MacOS"
   local res_dir="${app}/Contents/Resources"
@@ -215,7 +257,18 @@ package_macos() {
   chmod 755 "${macos_dir}/Centag"
   write_info_plist "${app}/Contents/Info.plist"
 
-  # Local convenience copy (not a release asset name).
+  # Sign + (optionally) notarize the .app in place. No-op when uncertified.
+  macos_codesign_app "$app"
+  if [[ -n "${CENTAG_MACOS_SIGN_IDENTITY:-}" ]]; then
+    local submit_dir; submit_dir="$(mktemp -d)"
+    local submit_zip="${submit_dir}/Centag.zip"
+    ditto -c -k --keepParent "$app" "$submit_zip"
+    macos_notarize "$submit_zip"
+    xcrun stapler staple "$app" 2>/dev/null || true
+    rm -rf "$submit_dir"
+  fi
+
+  # Local convenience copy (not a release asset name). Carries the signature.
   local app_out="${OUT_DIR}/Centag.app"
   rm -rf "$app_out"
   cp -R "$app" "$app_out"
@@ -253,6 +306,14 @@ package_macos() {
     -ov -format UDZO \
     "$dmg_out" >/dev/null
   log "OK ${dmg_out}"
+
+  # Sign + notarize the DMG when certified. No-op otherwise.
+  if [[ -n "${CENTAG_MACOS_SIGN_IDENTITY:-}" ]]; then
+    log "macOS: signing dmg ${dmg_out}"
+    codesign --force --sign "${CENTAG_MACOS_SIGN_IDENTITY}" "$dmg_out" \
+      || fail "codesign failed for ${dmg_out}"
+    macos_notarize "$dmg_out"
+  fi
   echo "$dmg_out"
 }
 
