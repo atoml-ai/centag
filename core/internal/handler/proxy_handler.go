@@ -5,6 +5,7 @@ import (
 	"crypto/x509"
 	"encoding/hex"
 	"encoding/pem"
+	"net"
 	"os"
 	"strconv"
 
@@ -208,8 +209,31 @@ func (h *ProxyHandler) GetSetupStatus(c *gin.Context) {
 		// RequireClientProxyAuth controls whether LAN clients must send Proxy-Authorization.
 		// Disable for Bun-based agents (e.g. opencode) that don't extract auth from HTTPS_PROXY URL.
 		"proxy_auth_required": sp.RequireClientProxyAuth,
+		// write_config_supported reports whether the one-click "write config" action is
+		// meaningful for this client. It only makes sense when the dashboard is opened on the
+		// same machine that runs centag (the agent reads config from that machine's filesystem),
+		// i.e. local mode + loopback access. Remote/LAN deployments must use generate+copy or wrap.
+		"write_config_supported": !sp.AllowLANClients && requestHostIsLoopback(c),
+		// accessed_remotely is true when the dashboard is reached via a non-loopback host,
+		// which for personal edition means the server is deployed remotely relative to this browser.
+		"accessed_remotely": !requestHostIsLoopback(c),
 	}
 	c.JSON(200, status)
+}
+
+// requestHostIsLoopback reports whether the dashboard was opened via a loopback
+// address (127.0.0.1 / localhost / ::1). This is used to decide if the browser
+// and the centag server are on the same machine, which is required for the
+// one-click "write config" action to be meaningful.
+func requestHostIsLoopback(c *gin.Context) bool {
+	if c == nil || c.Request == nil {
+		return false
+	}
+	host := c.Request.Host
+	if h, _, err := net.SplitHostPort(host); err == nil {
+		host = h
+	}
+	return config.IsLoopbackHost(host)
 }
 
 func (h *ProxyHandler) caFingerprintSHA256() string {

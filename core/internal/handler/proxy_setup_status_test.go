@@ -136,39 +136,110 @@ func TestGetSetupStatus_EgressKeyFromConfig(t *testing.T) {
 }
 
 func TestGetSetupStatus_LANFields(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	cfg := &config.Config{
-		Server: config.ServerConfig{Port: 20060},
-		SystemProxy: config.SystemProxyConfig{
-			ListenPort:      8081,
-			ListenAddr:      "0.0.0.0",
-			AllowLANClients: true,
-			AdvertiseHost:   "10.0.0.2",
-			PACEnabled:      true,
-		},
-	}
-	_ = config.ValidateSystemProxyConfig(&cfg.SystemProxy)
-	h := NewProxyHandler(nil, &pac.Config{ProxyHost: "10.0.0.2", ProxyPort: 8081}, cfg)
+  gin.SetMode(gin.TestMode)
+  cfg := &config.Config{
+    Server: config.ServerConfig{Port: 20060},
+    SystemProxy: config.SystemProxyConfig{
+      ListenPort:      8081,
+      ListenAddr:      "0.0.0.0",
+      AllowLANClients: true,
+      AdvertiseHost:   "10.0.0.2",
+      PACEnabled:      true,
+    },
+  }
+  _ = config.ValidateSystemProxyConfig(&cfg.SystemProxy)
+  h := NewProxyHandler(nil, &pac.Config{ProxyHost: "10.0.0.2", ProxyPort: 8081}, cfg)
 
-	w := httptest.NewRecorder()
-	c, _ := gin.CreateTestContext(w)
-	c.Request = httptest.NewRequest(http.MethodGet, "/api/v1/proxy/setup/status", nil)
-	h.GetSetupStatus(c)
+  w := httptest.NewRecorder()
+  c, _ := gin.CreateTestContext(w)
+  c.Request = httptest.NewRequest(http.MethodGet, "/api/v1/proxy/setup/status", nil)
+  h.GetSetupStatus(c)
 
-	if w.Code != 200 {
-		t.Fatalf("status=%d", w.Code)
-	}
-	var got map[string]any
-	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
-		t.Fatal(err)
-	}
-	if got["mode"] != "lan" {
-		t.Fatalf("mode=%v", got["mode"])
-	}
-	if got["pac_url"] != "http://10.0.0.2:20060/api/v1/proxy/pac" {
-		t.Fatalf("pac_url=%v", got["pac_url"])
-	}
-	if got["listen_is_loopback"] != false {
-		t.Fatalf("listen_is_loopback=%v", got["listen_is_loopback"])
-	}
+  if w.Code != 200 {
+    t.Fatalf("status=%d", w.Code)
+  }
+  var got map[string]any
+  if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+    t.Fatal(err)
+  }
+  if got["mode"] != "lan" {
+    t.Fatalf("mode=%v", got["mode"])
+  }
+  if got["pac_url"] != "http://10.0.0.2:20060/api/v1/proxy/pac" {
+    t.Fatalf("pac_url=%v", got["pac_url"])
+  }
+  if got["listen_is_loopback"] != false {
+    t.Fatalf("listen_is_loopback=%v", got["listen_is_loopback"])
+  }
+  // Remote / LAN access: write_config_supported must be false (it only applies to local loopback).
+  if got["write_config_supported"] != false {
+    t.Fatalf("write_config_supported=%v, want false for LAN", got["write_config_supported"])
+  }
+  if got["accessed_remotely"] != true {
+    t.Fatalf("accessed_remotely=%v, want true for LAN", got["accessed_remotely"])
+  }
+}
+
+func TestGetSetupStatus_WriteConfigSupportedLocalLoopback(t *testing.T) {
+  gin.SetMode(gin.TestMode)
+  cfg := &config.Config{
+    Server: config.ServerConfig{Port: 20060},
+    SystemProxy: config.SystemProxyConfig{
+      ListenPort:      8081,
+      AllowLANClients: false,
+      PACEnabled:      true,
+    },
+  }
+  _ = config.ValidateSystemProxyConfig(&cfg.SystemProxy)
+  h := NewProxyHandler(nil, &pac.Config{ProxyHost: "127.0.0.1", ProxyPort: 8081}, cfg)
+
+  w := httptest.NewRecorder()
+  c, _ := gin.CreateTestContext(w)
+  // Loopback access (same machine) => write_config_supported true.
+  c.Request = httptest.NewRequest(http.MethodGet, "/api/v1/proxy/setup/status", nil)
+  c.Request.Host = "127.0.0.1:20060"
+  h.GetSetupStatus(c)
+
+  var got map[string]any
+  if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+    t.Fatal(err)
+  }
+  if got["write_config_supported"] != true {
+    t.Fatalf("write_config_supported=%v, want true for local loopback", got["write_config_supported"])
+  }
+  if got["accessed_remotely"] != false {
+    t.Fatalf("accessed_remotely=%v, want false for local loopback", got["accessed_remotely"])
+  }
+}
+
+func TestGetSetupStatus_WriteConfigUnsupportedForRemoteHost(t *testing.T) {
+  gin.SetMode(gin.TestMode)
+  cfg := &config.Config{
+    Server: config.ServerConfig{Port: 20060},
+    SystemProxy: config.SystemProxyConfig{
+      ListenPort:      8081,
+      AllowLANClients: false,
+      PACEnabled:      true,
+    },
+  }
+  _ = config.ValidateSystemProxyConfig(&cfg.SystemProxy)
+  h := NewProxyHandler(nil, &pac.Config{ProxyHost: "127.0.0.1", ProxyPort: 8081}, cfg)
+
+  w := httptest.NewRecorder()
+  c, _ := gin.CreateTestContext(w)
+  // Remote access via a non-loopback host => not supported.
+  c.Request = httptest.NewRequest(http.MethodGet, "/api/v1/proxy/setup/status", nil)
+  c.Request.Host = "centag.example.com:20060"
+  h.GetSetupStatus(c)
+
+  var got map[string]any
+  if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+    t.Fatal(err)
+  }
+  if got["write_config_supported"] != false {
+    t.Fatalf("write_config_supported=%v, want false for remote host", got["write_config_supported"])
+  }
+  if got["accessed_remotely"] != true {
+    t.Fatalf("accessed_remotely=%v, want true for remote host", got["accessed_remotely"])
+  }
 }
