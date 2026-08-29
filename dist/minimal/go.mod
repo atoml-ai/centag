@@ -78,5 +78,5 @@ replace (
 	// where the v0.1.0 tag has been repackaged and the recorded go.sum hash
 	// no longer matches the served bytes. Keep in sync with EDGEAG_REF in
 	// .github/workflows/*.yml.
-	github.com/atoml-ai/edgeag => ../../edgeag
+	github.com/atoml-ai/edgeag => ../../../edgeag
 )
