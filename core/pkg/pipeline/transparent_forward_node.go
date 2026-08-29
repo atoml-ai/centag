@@ -379,7 +379,9 @@ func (n *TransparentForwardNode) Execute(ctx context.Context, input *NodeInput) 
 
 	bodyStr := string(respBody)
 
-	// 账户池已耗尽（或未配置）后：同后端换模型 → 备用后端；最后向上返回 error 供 FallbackGroups。
+	// 账户池已耗尽（或未配置）后：billing 失败只试一次 system 兜底，未命中立即上抛；
+	// model-not-found / Router.Unavailable 走完整的 system fallback 候选链（用户显式
+	// 声明的 {{system.fallback_model}} 仍按原语义生效，与 billing 互不污染）。
 	// 纯鉴权 401（池已穷尽）仍透传给客户端。
 	if config.IsBillingOrQuotaFailure(statusCode, bodyStr) {
 		if out, ok := n.retryWithSystemBillingFallback(ctx, client, method, meta, body, backendID, resolvedModel, clientModel, requestPath, bridgeToChat, anthropicToChat, statusCode, bodyStr); ok {
@@ -389,8 +391,9 @@ func (n *TransparentForwardNode) Execute(ctx context.Context, input *NodeInput) 
 	}
 
 	// 模型不存在 / Router.Unavailable：池 Key 已轮换完毕后，再同后端换模型。
+	// 保留完整候选链——{{system.fallback_model}} 是用户显式配置的降级模型，不属 billing 兜底。
 	if statusCode >= 400 && (isUpstreamModelOrPlaceholderError(bodyStr) || isUpstreamRouterUnavailable(bodyStr)) {
-		if out, ok := n.retryWithSystemBillingFallback(ctx, client, method, meta, body, backendID, resolvedModel, clientModel, requestPath, bridgeToChat, anthropicToChat, statusCode, bodyStr); ok {
+		if out, ok := n.retryWithModelFallback(ctx, client, method, meta, body, backendID, resolvedModel, clientModel, requestPath, bridgeToChat, anthropicToChat, statusCode, bodyStr); ok {
 			return out, nil
 		}
 		return nil, newTransparentUpstreamError(n.id, backendID, resolvedModel, targetURL, statusCode, bodyStr, poolExhausted)
@@ -537,7 +540,10 @@ func isUpstreamRouterUnavailable(body string) bool {
 		strings.Contains(strings.ToLower(body), "router.unavailable")
 }
 
-// retryWithSystemBillingFallback 在余额/额度失败时按候选链再打：配置的 fallback_* → 同后端免费档模型。
+// retryWithSystemBillingFallback 在余额/额度失败时按 system fallback 候选再打：
+// 仅取第一个候选（configured fallback_* → 同后端免费档模型），命中即返回，否则 false。
+// 保守设计：billing 失败是上游账户永久性耗尽，多试几次只会把上游免费额度也耗光。
+// 多候选遍历已迁移到 retryWithModelFallback（model-not-found / Router.Unavailable 用）。
 func (n *TransparentForwardNode) retryWithSystemBillingFallback(
 	ctx context.Context,
 	client HTTPClient,
@@ -549,6 +555,38 @@ func (n *TransparentForwardNode) retryWithSystemBillingFallback(
 	primaryStatusCode int, primaryRespBody string,
 ) (*NodeOutput, bool) {
 	// 只把「实际发出去的 model」标为失败。resolvedModel 可能已是免费档，但 body 仍是付费名。
+	failedModels := map[string]bool{}
+	bodyModel := extractJSONModel(body)
+	for _, m := range []string{bodyModel, clientModel} {
+		if t := strings.TrimSpace(m); t != "" {
+			failedModels[strings.ToLower(t)] = true
+		}
+	}
+	if t := strings.TrimSpace(primaryModel); t != "" && strings.EqualFold(t, bodyModel) {
+		failedModels[strings.ToLower(t)] = true
+	}
+	cands := billingFallbackCandidatesContext(ctx, primaryBackend, failedModels)
+	if len(cands) == 0 {
+		return nil, false
+	}
+	// billing 路径只试一次：取第一个候选，未命中立即返回 false 让上层 UpstreamError 上抛。
+	cand := cands[0]
+	return n.doBillingFallbackAttempt(ctx, client, method, meta, body, primaryBackend, primaryModel, clientModel, requestPath, bridgeToChat, anthropicToChat, cand.backendID, cand.model, primaryStatusCode, primaryRespBody)
+}
+
+// retryWithModelFallback 在模型不存在 / Router.Unavailable 时按候选链再打：
+// configured fallback_* → 同后端免费档模型。完整遍历候选链，
+// 因为这只是路由修复（换能用的模型），不会消耗上游账户余额。
+func (n *TransparentForwardNode) retryWithModelFallback(
+	ctx context.Context,
+	client HTTPClient,
+	method string,
+	meta map[string]interface{},
+	body []byte,
+	primaryBackend, primaryModel, clientModel, requestPath string,
+	bridgeToChat, anthropicToChat bool,
+	primaryStatusCode int, primaryRespBody string,
+) (*NodeOutput, bool) {
 	failedModels := map[string]bool{}
 	bodyModel := extractJSONModel(body)
 	for _, m := range []string{bodyModel, clientModel} {

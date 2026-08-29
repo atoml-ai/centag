@@ -26,8 +26,11 @@ func TestIsBillingOrQuotaFailure(t *testing.T) {
 }
 
 func TestIsRetryableError_Billing(t *testing.T) {
-	if !IsRetryableError("billing", 0, "") {
-		t.Fatal("billing should be retryable/degradable")
+	// billing/quota 失败是永久性失败：上游账户余额耗尽不会自愈，engine 层
+	// 不应再重试（避免 N×M 倍请求放大）。降级交由 transparent 节点自身或
+	// pipeline 显式声明的 FallbackGroups 处理。
+	if IsRetryableError("billing", 0, "") {
+		t.Fatal("billing should NOT be retryable at engine layer (avoids N×M amplification)")
 	}
 	if !IsRetryableError("http_status", 401, "CreditsError") {
 		t.Fatal("401+CreditsError should be degradable")

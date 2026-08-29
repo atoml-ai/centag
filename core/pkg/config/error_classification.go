@@ -158,7 +158,12 @@ func IsRetryableError(errorType string, statusCode int, providerErrorCode string
 	case "provider_error":
 		return IsRetryableErrorCode(providerErrorCode) || IsBillingOrQuotaFailure(0, providerErrorCode)
 	case "billing":
-		return true
+		// Billing/quota 失败属于永久性失败：上游账户余额耗尽不会自愈，
+		// engine 层面再 retry 只会触发 transparent 节点内的 N×M 倍请求放大
+		//（账户池 Key 轮换 × system billing fallback × engine retry），
+		// 进一步把上游免费档额度耗光。降级交由 transparent 节点自身或
+		// pipeline 显式声明的 FallbackGroups 处理；engine 不再 retry。
+		return false
 	default:
 		return false // 未知错误不重试（如纯鉴权 401/403）
 	}
