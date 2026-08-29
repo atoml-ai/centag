@@ -1430,8 +1430,10 @@ func TestRetryableAccountFailure_Plain401(t *testing.T) {
 	if !retryableAccountFailure(429, `rate limit`) {
 		t.Fatal("429 should be retryable")
 	}
-	if !retryableAccountFailure(402, `payment required`) {
-		t.Fatal("402 should rotate account before other backends")
+	// 402 PaymentRequired 故意不轮换：同后端多 Key 通常共享上游账户余额，
+	// 账户没钱换 Key 仍 402，徒增 N×M 放大。统一交给 billing fallback / FallbackGroups。
+	if retryableAccountFailure(402, `payment required`) {
+		t.Fatal("402 should NOT rotate account keys (permanent upstream billing failure)")
 	}
 	if !retryableAccountFailure(500, `{"type":"Router.Unavailable","modelID":"x"}`) {
 		t.Fatal("5xx / Router.Unavailable should rotate account before other backends")

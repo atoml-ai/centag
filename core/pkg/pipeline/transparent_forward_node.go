@@ -425,14 +425,20 @@ func transparentOutputIsEmpty(out *NodeOutput) bool {
 }
 
 // retryableAccountFailure 同后端账户池内是否应换下一把 Key（优先于跨后端）：
-// 429 限流、401/402/403、5xx、Router.Unavailable、计费/额度类失败。
+// 429 限流、401/403、5xx、Router.Unavailable、计费/额度类失败（但不含 402）。
 // 明确的客户端坏请求（400）不轮换 Key。
+// 402 PaymentRequired 不轮换：同后端多 Key 通常共享上游账户余额，账户没钱
+// 换 Key 仍 402，徒增 N×M 放大；统一交给 billing fallback / FallbackGroups。
 func retryableAccountFailure(statusCode int, body string) bool {
+	// 402 永久性上游账户耗尽，跳过 IsBillingOrQuotaFailure 里的 402 短路。
+	if statusCode == http.StatusPaymentRequired {
+		return false
+	}
 	if statusCode == http.StatusBadRequest {
 		return config.IsBillingOrQuotaFailure(statusCode, body)
 	}
 	switch statusCode {
-	case http.StatusUnauthorized, http.StatusPaymentRequired, http.StatusForbidden, http.StatusTooManyRequests:
+	case http.StatusUnauthorized, http.StatusForbidden, http.StatusTooManyRequests:
 		return true
 	}
 	if statusCode >= 500 {
