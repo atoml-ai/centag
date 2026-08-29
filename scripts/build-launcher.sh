@@ -69,6 +69,13 @@ if [[ "$DESKTOP" == "1" ]]; then
     if [[ "${GOOS}" == "windows" ]]; then
       LDFLAGS="${LDFLAGS} -H windowsgui"
     fi
+    # CGO links against the host SDK; without an explicit deployment target the
+    # Mach-O `minos` is inherited from the build runner (e.g. 15.0 on macos-15),
+    # which makes the binary refuse to launch on older macOS (Ventura 13.x).
+    # Pin it to the version declared in LSMinimumSystemVersion (Info.plist).
+    if [[ "${GOOS}" == "darwin" ]]; then
+      export MACOSX_DEPLOYMENT_TARGET="${CENTAG_MACOS_MIN_VERSION:-13.0}"
+    fi
     GOWORK=off CGO_ENABLED=1 GOOS="${GOOS}" GOARCH="${GOARCH}" \
       go build -tags tray -trimpath -ldflags="${LDFLAGS}" -o "${OUT_BIN}" .
   )
