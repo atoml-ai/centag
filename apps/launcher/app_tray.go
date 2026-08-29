@@ -60,6 +60,16 @@ func (a *launcherApp) onReady() {
 	runItem := systray.AddMenuItem("运行", "用 wrap 启动 Agent 应用")
 	runItem.Click(func() { _ = openBrowser(a.cfg.baseURL() + "/agent-run") })
 
+	cliItem := systray.AddMenuItem("安装命令行工具", "将 centag 命令安装到 PATH（终端可用 centag wrap）")
+	cliItem.Click(func() {
+		if err := installCentagCLI(a.hub.binary); err != nil {
+			fmt.Fprintf(os.Stderr, "centag-launcher: install cli failed: %v\n", err)
+			notifyUser("Centag", "命令行安装失败: "+err.Error())
+			return
+		}
+		notifyUser("Centag", "centag 命令已安装，终端可直接使用 centag wrap")
+	})
+
 	systray.AddSeparator()
 
 	quitItem := systray.AddMenuItem("退出", "停止 sidecar 并退出")
