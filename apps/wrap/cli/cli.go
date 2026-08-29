@@ -33,8 +33,10 @@ var allowed = map[string]bool{
 
 // commonFlags holds shared wrap flags.
 type commonFlags struct {
-	Server string
-	Token  string
+	Server    string
+	Token     string
+	Install   bool
+	Uninstall bool
 }
 
 // Run executes wrap with a fixed subcommand whitelist.
@@ -76,7 +78,14 @@ func Run(args []string) error {
 		if err != nil {
 			return err
 		}
-		return eng.Env(f.Server, f.Token)
+		switch {
+		case f.Uninstall:
+			return eng.EnvUninstall(f.Server, f.Token)
+		case f.Install:
+			return eng.EnvInstall(f.Server, f.Token)
+		default:
+			return eng.Env(f.Server, f.Token)
+		}
 	case "run":
 		f, argv, err := parseRunArgs(rest)
 		if err != nil {
@@ -109,6 +118,10 @@ func parseCommonFlags(args []string) (commonFlags, error) {
 			f.Token = strings.TrimSpace(args[i])
 		case strings.HasPrefix(a, "--token="):
 			f.Token = strings.TrimSpace(strings.TrimPrefix(a, "--token="))
+		case a == "--install":
+			f.Install = true
+		case a == "--uninstall":
+			f.Uninstall = true
 		case a == "--help" || a == "-h":
 			continue
 		default:
@@ -167,24 +180,30 @@ Usage:
   %s disable
   %s status
   %s doctor  [--server URL] [--token KEY]
-  %s env     [--server URL] [--token KEY]
+  %s env     [--server URL] [--token KEY] [--install | --uninstall]
   %s run     [--server URL] [--token KEY] -- <command> [args...]
 
 Flags:
   -s, --server URL   Centag API base (default: local or CENTAG_API_BASE)
   -t, --token KEY    Centag API key (llmproxy_*); overrides CENTAG_WRAP_TOKEN
                      Required for LAN MITM proxy auth
+      --install      (env) persist proxy env into your shell profile
+      --uninstall    (env) remove the persisted proxy env
 
 Process proxy (recommended for OpenCode / CLI agents):
   Downloads CA, sets HTTPS_PROXY (+ proxy auth when LAN) + NODE_EXTRA_CA_CERTS,
   then execs the command. Does NOT put Centag keys into the Agent Authorization header
   (MITM injects the server egress key).
 
+Persistent env (remote / repeated use):
+  %s env --install --server URL --token KEY   # auto-inject HTTPS_PROXY + CA on new shells
+  %s env --uninstall                           # remove the injected block
+
 Examples:
   %s run -- opencode
   %s run --server http://192.168.1.4:20060 --token llmproxy_xxx -- opencode
   eval "$(%s env --server http://192.168.1.4:20060 --token llmproxy_xxx)"
-`, name, name, name, name, name, name, name, name, name, name)
+`, name, name, name, name, name, name, name, name, name, name, name, name)
 	if name == "centag-wrap" {
 		fmt.Print(`
 Note: prefer "centag wrap …" when using the main Centag binary (same subcommands).

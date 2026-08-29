@@ -5,8 +5,9 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
-	"strings"
-	"testing"
+  "strings"
+  "strconv"
+  "testing"
 )
 
 func TestPrepareProcessEnv_FromPAC(t *testing.T) {
@@ -126,16 +127,83 @@ func TestPrepareProcessEnv_LANRequiresToken(t *testing.T) {
 }
 
 func TestMergeEnv(t *testing.T) {
-	base := []string{"PATH=/bin", "HTTPS_PROXY=old", "FOO=1"}
-	out := mergeEnv(base, map[string]string{"HTTPS_PROXY": "http://x:8081", "NO_PROXY": "localhost"})
-	joined := strings.Join(out, "\n")
-	if strings.Contains(joined, "HTTPS_PROXY=old") {
-		t.Fatal("old HTTPS_PROXY should be dropped")
-	}
-	if !strings.Contains(joined, "HTTPS_PROXY=http://x:8081") {
-		t.Fatal("missing new HTTPS_PROXY")
-	}
-	if !strings.Contains(joined, "PATH=/bin") {
-		t.Fatal("PATH should remain")
-	}
+  base := []string{"PATH=/bin", "HTTPS_PROXY=old", "FOO=1"}
+  out := mergeEnv(base, map[string]string{"HTTPS_PROXY": "http://x:8081", "NO_PROXY": "localhost"})
+  joined := strings.Join(out, "\n")
+  if strings.Contains(joined, "HTTPS_PROXY=old") {
+    t.Fatal("old HTTPS_PROXY should be dropped")
+  }
+  if !strings.Contains(joined, "HTTPS_PROXY=http://x:8081") {
+    t.Fatal("missing new HTTPS_PROXY")
+  }
+  if !strings.Contains(joined, "PATH=/bin") {
+    t.Fatal("PATH should remain")
+  }
+}
+
+func TestEnvInstallUninstall_Idempotent(t *testing.T) {
+  home := t.TempDir()
+  t.Setenv("HOME", home)
+  t.Setenv("SHELL", "/bin/zsh")
+  ca := mustCA(t)
+  srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+    switch r.URL.Path {
+    case "/api/v1/proxy/setup/status":
+      _, _ = w.Write([]byte(`{"mitm_proxy":"192.168.1.50:8081","allow_lan_clients":true,"proxy_auth_required":true}`))
+    case "/api/v1/proxy/ca.crt":
+      _, _ = w.Write(ca)
+    default:
+      w.WriteHeader(404)
+    }
+  }))
+  defer srv.Close()
+
+  e := New()
+  if err := e.EnvInstall(srv.URL, "llmproxy_test_key"); err != nil {
+    t.Fatal(err)
+  }
+  profile := filepath.Join(home, ".zshrc")
+  envFile := filepath.Join(home, ".centag", "wrap", "env.sh")
+
+  data, err := os.ReadFile(profile)
+  if err != nil {
+    t.Fatal(err)
+  }
+  if !strings.Contains(string(data), "# >>> centag-wrap-env >>>") {
+    t.Fatal("profile missing source block")
+  }
+  if !strings.Contains(string(data), "source "+envFile) && !strings.Contains(string(data), "source "+strconv.Quote(envFile)) {
+    t.Fatalf("profile does not source %s", envFile)
+  }
+  ef, err := os.ReadFile(envFile)
+  if err != nil {
+    t.Fatal(err)
+  }
+  if !strings.Contains(string(ef), "192.168.1.50:8081") {
+    t.Fatal("env file missing mitm")
+  }
+  if !strings.Contains(string(ef), "llmproxy_test_key") {
+    t.Fatal("env file missing token")
+  }
+
+  // Idempotent: installing again must not duplicate the block.
+  if err := e.EnvInstall(srv.URL, "llmproxy_test_key"); err != nil {
+    t.Fatal(err)
+  }
+  again, _ := os.ReadFile(profile)
+  if strings.Count(string(again), "# >>> centag-wrap-env >>>") != 1 {
+    t.Fatalf("block duplicated: %s", again)
+  }
+
+  // Uninstall removes both.
+  if err := e.EnvUninstall(srv.URL, "llmproxy_test_key"); err != nil {
+    t.Fatal(err)
+  }
+  after, _ := os.ReadFile(profile)
+  if strings.Contains(string(after), "centag-wrap-env") {
+    t.Fatalf("block not removed: %s", after)
+  }
+  if _, err := os.Stat(envFile); !os.IsNotExist(err) {
+    t.Fatal("env file should be removed")
+  }
 }
