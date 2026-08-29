@@ -126,6 +126,8 @@
   "pipelineModelHint": "Pipeline model hint:",
   "writeConfigHint": "Write Centag proxy address and current account API Key to {agent}.",
   "writeConfigKeySource": "Keys come from decryptable llmproxy_* keys in Profile → API Keys (server-injected; preview is sanitized).",
+  "remoteWriteConfigTitle": "One-click write config is unavailable for remote access",
+  "remoteWriteConfigHint": "This Centag server is accessed remotely, so writing config would land on the server’s filesystem instead of your local machine. Use \"Generate Config\" to copy the text to your local agent, or connect via \"centag wrap run --server … -- <agent>\" (recommended for remote).",
   "route": "Route:",
   "oneClickConfig": "One-click Config",
   "writeConfigFile": "Write Config File",

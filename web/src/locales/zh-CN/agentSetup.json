@@ -126,6 +126,8 @@
   "pipelineModelHint": "流水线内模型示意:",
   "writeConfigHint": "将 Centag 代理地址与当前账号的 API Key 写入 {agent}。",
   "writeConfigKeySource": "密钥来自「个人中心 → API Keys」中可解密的 llmproxy_* 密钥（服务端注入，界面预览已脱敏）。",
+  "remoteWriteConfigTitle": "远程访问下不支持一键写入配置",
+  "remoteWriteConfigHint": "当前 Centag 服务为远程访问，写入配置会落到服务端文件系统而非你本机，对本地 Agent 无效。请改用「生成配置」复制文本到本机 Agent，或用「centag wrap run --server … -- <agent>」接入（远程推荐）。",
   "route": "路由:",
   "oneClickConfig": "一键配置",
   "writeConfigFile": "写入配置文件",

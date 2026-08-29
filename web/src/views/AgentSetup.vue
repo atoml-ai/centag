@@ -87,7 +87,7 @@
                             </div>
                           </div>
                           <div class="access-method-actions">
-                            <el-button type="primary" size="small" @click="openWizard(agent)">
+                            <el-button type="primary" size="small" :disabled="!writeConfigSupported" @click="openWizard(agent)">
                               {{ $t('agentSetup.writeConfigAction') }}
                             </el-button>
                             <el-button
@@ -589,7 +589,17 @@
 
       <!-- Step 2: 写入配置（仅 write_config Agent） -->
       <div v-show="!isUIGuideOnlyWizard && wizardStep === 1" class="wizard-step" v-loading="loadingConfig">
-        <el-alert type="info" :closable="false" show-icon class="step-alert">
+        <el-alert
+          v-if="!writeConfigSupported"
+          type="warning"
+          :closable="false"
+          show-icon
+          class="step-alert"
+        >
+          <template #title>{{ $t('agentSetup.remoteWriteConfigTitle') }}</template>
+          {{ $t('agentSetup.remoteWriteConfigHint') }}
+        </el-alert>
+        <el-alert v-else type="info" :closable="false" show-icon class="step-alert">
           {{ $t('agentSetup.writeConfigHint', { agent: currentAgentName }) }}
           {{ $t('agentSetup.writeConfigKeySource') }}
         </el-alert>
@@ -626,7 +636,7 @@
 
           <div class="config-section">
             <h4>{{ $t('agentSetup.oneClickConfig') }}</h4>
-            <el-button type="primary" :loading="writingConfig" @click="writeToConfig">
+            <el-button type="primary" :loading="writingConfig" :disabled="!writeConfigSupported" @click="writeToConfig">
               <el-icon class="el-icon--left"><Plus /></el-icon>
               {{ $t('agentSetup.writeConfigFile') }}
             </el-button>
@@ -1005,6 +1015,10 @@ const agentGroups = computed<AgentGroup[]>(() => {
   }
   return groups
 })
+
+/** 是否允许「一键写入配置」：仅 centag 与浏览器同机（local + loopback 访问）时有效；
+ *  远程/LAN 部署下写入的是服务端文件系统，对用户本机 Agent 无效，应改用生成配置复制或 wrap run。 */
+const writeConfigSupported = computed(() => !!proxySetup.value?.write_config_supported)
 
 const isDesktopEdition = computed(() => isPersonalEdition())
 
