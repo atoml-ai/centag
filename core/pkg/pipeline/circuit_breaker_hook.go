@@ -65,28 +65,57 @@ func isCircuitBreakerSkipError(err error) bool {
 	return err != nil && strings.Contains(err.Error(), "circuit breaker open")
 }
 
-// isBillingQuotaError 余额/额度失败：应触发降级，但不计入熔断（否则同后端免费模型也被挡住）。
-func isBillingQuotaError(err error) bool {
-	return err != nil && config.IsBillingOrQuotaFailure(0, err.Error())
-}
-
 // isModelNotFoundNodeError 模型不存在：同样触发降级且不计入熔断。
 func isModelNotFoundNodeError(err error) bool {
 	return err != nil && isUpstreamModelOrPlaceholderError(err.Error())
 }
 
-// isFreeTierRateLimit 免费档模型被 429 限流：不将该失败计入熔断，
-// 避免免费档流量高峰把整个后端（含付费模型）打成 open。billing/模型不存在已单独豁免。
-func isFreeTierRateLimit(err error, model string) bool {
-	if err == nil || !backend.ModelHasFreeTier(model) {
+// isTransientRateLimitError 瞬时性限流豁免：不计入熔断。
+//   - 临时限流（429 + "try again later" 等）：等待后重试同 Key 即可恢复，任何档位都豁免；
+//   - 免费档限流高峰（429 / "rate limit" 文案）：避免免费档流量把整个后端打成 open，
+//     误伤同后端付费模型。
+//
+// 永久性额度耗尽（FreeUsageLimitError / CreditsError 等 billing 失败）不属于瞬时限流，
+// 必须如实计数——额度不会自愈，达到阈值熔断、靠半开探测恢复，否则限额后端
+// 在熔断面板上永远显示正常。
+func isTransientRateLimitError(err error, model string) bool {
+	if err == nil {
 		return false
 	}
 	typ, code, _ := classifyNodeError(err)
-	// 临时限流（rate_limit）或 429 http_status 均豁免熔断
-	if typ == "rate_limit" || (typ == "http_status" && code == http.StatusTooManyRequests) {
+	if typ == "rate_limit" {
 		return true
 	}
-	return strings.Contains(strings.ToLower(err.Error()), "rate limit")
+	if config.IsBillingOrQuotaFailure(0, err.Error()) {
+		return false
+	}
+	if backend.ModelHasFreeTier(model) {
+		if typ == "http_status" && code == http.StatusTooManyRequests {
+			return true
+		}
+		return strings.Contains(strings.ToLower(err.Error()), "rate limit")
+	}
+	return false
+}
+
+// circuitFallbackRescue 检测节点内兜底救回（transparent_forward 的 billing/model fallback）。
+// 救回时节点返回 err == nil，若照常记账会把「主后端失败」记成「主后端成功」。
+// 返回值：(主后端ID, 触发类型, 是否救回)。触发类型为 "billing"（计费/额度）或
+// "model_not_found"（模型不存在）；旧元数据无 fallback_trigger 时按 fallback_reason 分类。
+func circuitFallbackRescue(out *NodeOutput) (fromBackend, trigger string, rescued bool) {
+	if out == nil || out.Metadata == nil || out.Metadata["billing_fallback_used"] != true {
+		return "", "", false
+	}
+	fromBackend = firstMetaString(out.Metadata, "billing_fallback_from_backend", "fallback_from_backend")
+	trigger = firstMetaString(out.Metadata, "fallback_trigger")
+	if trigger == "" {
+		if reason := firstMetaString(out.Metadata, "fallback_reason"); reason != "" && !config.IsBillingOrQuotaFailure(0, reason) {
+			trigger = "model_not_found"
+		} else {
+			trigger = "billing"
+		}
+	}
+	return fromBackend, trigger, fromBackend != ""
 }
 
 func isFixedEgressNodeConfig(cfg NodeConfig) bool {
@@ -111,7 +140,7 @@ func recordNodeCircuitOutcome(backendID, model string, success bool, skippedDueT
 	if backendID == "" || RecordCircuitOutcome == nil || skippedDueToCircuit {
 		return
 	}
-	if !success && isFreeTierRateLimit(err, model) {
+	if !success && isTransientRateLimitError(err, model) {
 		return
 	}
 	RecordCircuitOutcome(backendID, success)

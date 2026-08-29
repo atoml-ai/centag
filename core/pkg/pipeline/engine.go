@@ -1424,6 +1424,7 @@ func (e *PipelineEngine) executeLayerNode(ctx context.Context, graph *ExecutionG
 	}
 	nodeInput := e.prepareNodeInput(execNode.Config, execCtx)
 	resolvedBackendID := nodeBackendIDContext(ctx, execNode.Config, execNode.Config.Config)
+	execNodeModel := nodeModelContext(ctx, execNode.Config, execNode.Config.Config)
 
 	// 执行节点
 	output, err := e.executeNode(ctx, execNode.Config, nodeInput)
@@ -1434,11 +1435,31 @@ func (e *PipelineEngine) executeLayerNode(ctx context.Context, graph *ExecutionG
 			"backend_id", resolvedBackendID,
 		)
 	}
-	// 余额/额度失败不记熔断，避免挡住同后端 fallback_model
-	// 模型不存在 / 余额不足：应继续降级，但不计入熔断（否则同后端其它模型也被挡）。
-	// 免费档 429 限流同样豁免，避免免费档流量高峰把整个后端打成 open。
-	skipCircuitRecord := skippedCircuit || isBillingQuotaError(err) || isModelNotFoundNodeError(err)
-	recordNodeCircuitOutcome(resolvedBackendID, nodeModelContext(ctx, execNode.Config, execNode.Config.Config), err == nil, skipCircuitRecord, err)
+	// 熔断与兜底是两码事：节点内兜底救回（billing/model fallback）时 err == nil，
+	// 照常记账会把「主后端失败」记成「主后端成功」。按兜底元数据拆分记账：
+	//   - 计费/额度类救回：主后端如实记一次失败（额度耗尽不会自愈，到阈值应熔断）；
+	//   - 模型不存在类救回：不计失败（配置/路由问题，熔断治不了）；
+	//   - 成功记给实际服务后端（fallback_backend），不再张冠李戴到主后端。
+	if rescueBackend, rescueTrigger, rescued := circuitFallbackRescue(output); rescued {
+		e.logger.Info("node rescued by in-node fallback; recording primary outcome for circuit breaker",
+			"node_id", nodeID,
+			"primary_backend", rescueBackend,
+			"served_backend", firstMetaString(output.Metadata, "backend_id"),
+			"rescue_trigger", rescueTrigger,
+		)
+		if rescueTrigger == "billing" && rescueBackend != "" {
+			recordNodeCircuitOutcome(rescueBackend, execNodeModel, false, false, nil)
+		}
+		if servedBackend := firstMetaString(output.Metadata, "backend_id"); servedBackend != "" {
+			recordNodeCircuitOutcome(servedBackend, execNodeModel, true, false, nil)
+		}
+	} else {
+		// 模型不存在不计入熔断（应继续降级，但不是后端健康问题）。
+		// 临时限流 / 免费档高峰豁免在 recordNodeCircuitOutcome 内判定；
+		// 余额/额度失败如实计数（永久性失败靠熔断 + 半开探测恢复）。
+		skipCircuitRecord := skippedCircuit || isModelNotFoundNodeError(err)
+		recordNodeCircuitOutcome(resolvedBackendID, execNodeModel, err == nil, skipCircuitRecord, err)
+	}
 	if err != nil {
 		// 尝试策略降级：节点级 → 流水线级
 		if policy := e.resolveFallbackPolicy(execNode.Config, pipeline); policy != nil {

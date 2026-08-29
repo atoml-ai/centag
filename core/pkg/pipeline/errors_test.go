@@ -113,21 +113,33 @@ func TestExtractUpstreamStatusCode(t *testing.T) {
 	}
 }
 
-func TestIsFreeTierRateLimit(t *testing.T) {
+func TestIsTransientRateLimitError(t *testing.T) {
 	free429 := newTransparentUpstreamError("forward", "zen", "deepseek-v4-flash-free",
 		"https://x", 429, `Rate limit exceeded.`)
 	paid429 := newTransparentUpstreamError("forward", "zen", "deepseek-v4-flash",
 		"https://x", 429, `Rate limit exceeded.`)
 	free503 := newTransparentUpstreamError("forward", "zen", "deepseek-v4-flash-free",
 		"https://x", 503, `bad gateway`)
+	// 永久性额度耗尽：FreeUsageLimitError 文案虽含 "rate limit"，但必须计入熔断
+	quotaFree := newTransparentUpstreamError("forward", "zen", "hy3-free",
+		"https://x", 429, `{"error":{"code":"FreeUsageLimitError","message":"Rate limit exceeded. You have used all your free usage."}}`)
+	// 临时限流：任何档位都豁免
+	temp429 := newTransparentUpstreamError("forward", "zen", "glm-4.7",
+		"https://x", 429, `Too many requests, please try again later.`)
 
-	if !isFreeTierRateLimit(free429, "deepseek-v4-flash-free") {
-		t.Fatal("free-tier 429 should be exempt from circuit recording")
+	if !isTransientRateLimitError(free429, "deepseek-v4-flash-free") {
+		t.Fatal("free-tier transient 429 should be exempt from circuit recording")
 	}
-	if isFreeTierRateLimit(paid429, "deepseek-v4-flash") {
+	if isTransientRateLimitError(paid429, "deepseek-v4-flash") {
 		t.Fatal("paid-tier 429 should still count toward circuit")
 	}
-	if isFreeTierRateLimit(free503, "deepseek-v4-flash-free") {
+	if isTransientRateLimitError(free503, "deepseek-v4-flash-free") {
 		t.Fatal("free-tier non-429 should not use free-tier rate-limit exemption")
+	}
+	if isTransientRateLimitError(quotaFree, "hy3-free") {
+		t.Fatal("permanent free-tier quota exhaustion (FreeUsageLimitError) must count toward circuit")
+	}
+	if !isTransientRateLimitError(temp429, "glm-4.7") {
+		t.Fatal("temporary rate limit (429 + try again later) should be exempt on any tier")
 	}
 }
