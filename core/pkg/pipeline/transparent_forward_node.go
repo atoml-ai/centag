@@ -571,7 +571,7 @@ func (n *TransparentForwardNode) retryWithSystemBillingFallback(
 	}
 	// billing 路径只试一次：取第一个候选，未命中立即返回 false 让上层 UpstreamError 上抛。
 	cand := cands[0]
-	return n.doBillingFallbackAttempt(ctx, client, method, meta, body, primaryBackend, primaryModel, clientModel, requestPath, bridgeToChat, anthropicToChat, cand.backendID, cand.model, primaryStatusCode, primaryRespBody)
+	return n.doBillingFallbackAttempt(ctx, client, method, meta, body, primaryBackend, primaryModel, clientModel, requestPath, bridgeToChat, anthropicToChat, cand.backendID, cand.model, primaryStatusCode, primaryRespBody, "billing")
 }
 
 // retryWithModelFallback 在模型不存在 / Router.Unavailable 时按候选链再打：
@@ -602,7 +602,7 @@ func (n *TransparentForwardNode) retryWithModelFallback(
 		return nil, false
 	}
 	for _, cand := range cands {
-		out, ok := n.doBillingFallbackAttempt(ctx, client, method, meta, body, primaryBackend, primaryModel, clientModel, requestPath, bridgeToChat, anthropicToChat, cand.backendID, cand.model, primaryStatusCode, primaryRespBody)
+		out, ok := n.doBillingFallbackAttempt(ctx, client, method, meta, body, primaryBackend, primaryModel, clientModel, requestPath, bridgeToChat, anthropicToChat, cand.backendID, cand.model, primaryStatusCode, primaryRespBody, "model_not_found")
 		if ok {
 			return out, true
 		}
@@ -687,6 +687,8 @@ func pickFreeTierModel(backendID string) string {
 	return ""
 }
 
+// trigger 标记兜底触发原因："billing"（余额/额度耗尽）或 "model_not_found"（模型不存在/
+// Router.Unavailable）。引擎据此决定是否给主后端记熔断失败（前者记，后者豁免）。
 func (n *TransparentForwardNode) doBillingFallbackAttempt(
 	ctx context.Context,
 	client HTTPClient,
@@ -697,6 +699,7 @@ func (n *TransparentForwardNode) doBillingFallbackAttempt(
 	bridgeToChat, anthropicToChat bool,
 	fbBackend, fbModel string,
 	primaryStatusCode int, primaryRespBody string,
+	trigger string,
 ) (*NodeOutput, bool) {
 	retryBody := body
 	if rewritten, ok := rewriteTransparentBodyModel(body, fbModel); ok {
@@ -759,6 +762,7 @@ func (n *TransparentForwardNode) doBillingFallbackAttempt(
 		"fallback_from_model":           fromModel,
 		"fallback_to_model":             fbModel,
 		"fallback_used":                 true,
+		"fallback_trigger":              trigger,
 		"fallback_reason":               MaskSensitiveData(fmt.Sprintf("HTTP %d: %s", primaryStatusCode, truncateRespBody(primaryRespBody, 200))),
 	}
 	out := n.buildTransparentOutput(targetURL, resp.StatusCode, resp.Header.Get("Content-Type"), respBody, fbBackend, fbModel, clientModel, requestPath, attemptBridge, attemptAnthropic, extra)
