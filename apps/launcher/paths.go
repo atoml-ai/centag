@@ -7,42 +7,22 @@ import (
 	"runtime"
 )
 
-func userDataDir(edition Edition) (string, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
+// defaultDataDir returns the unified per-edition home ~/.centag/lib/<edition>:
+// installed sidecar + static + config + runtime data (storage/logs/data),
+// matching the install.sh server layout (PROJECT_ROOT=lib/<edition>).
+func defaultDataDir(edition Edition) (string, error) {
+	dir := editionLibDir(edition)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", err
 	}
-	name := "Centag"
-	if edition == EditionMinimal {
-		name = "CentagMinimal"
-	}
-	switch runtime.GOOS {
-	case "darwin":
-		return filepath.Join(home, "Library", "Application Support", name), nil
-	case "windows":
-		base := os.Getenv("LOCALAPPDATA")
-		if base == "" {
-			base = filepath.Join(home, "AppData", "Local")
-		}
-		return filepath.Join(base, name), nil
-	default:
-		base := os.Getenv("XDG_DATA_HOME")
-		if base == "" {
-			base = filepath.Join(home, ".local", "share")
-		}
-		return filepath.Join(base, name), nil
-	}
+	return dir, nil
 }
 
 func resolveDataDir(cfg Config) (string, error) {
 	if cfg.DataDir != "" {
 		return filepath.Abs(cfg.DataDir)
 	}
-	dir, err := userDataDir(cfg.Edition)
-	if err != nil {
-		return "", err
-	}
-	return dir, nil
+	return defaultDataDir(cfg.Edition)
 }
 
 // appBundleResourcesDir returns Contents/Resources when exe lives in Contents/MacOS.
@@ -59,6 +39,12 @@ func appBundleResourcesDir(exe string) string {
 }
 
 // resolveSidecarBinary finds the Centag binary without importing the core module.
+//
+// Priority:
+//  1. explicit --bin / CENTAG_BIN
+//  2. desktop bundle payload → install/upgrade into ~/.centag/lib/<edition>
+//  3. already-installed ~/.centag/lib/<edition> (server layout)
+//  4. cwd-relative candidates (dev)
 func resolveSidecarBinary(cfg Config) (string, error) {
 	if cfg.BinPath != "" {
 		return absExisting(cfg.BinPath)
@@ -67,18 +53,23 @@ func resolveSidecarBinary(cfg Config) (string, error) {
 		return absExisting(v)
 	}
 
-	candidates := sidecarCandidateNames(cfg.Edition)
-	searchRoots := []string{}
-
 	if exe, err := os.Executable(); err == nil {
 		if resolved, err := filepath.EvalSymlinks(exe); err == nil {
 			exe = resolved
 		}
-		if res := appBundleResourcesDir(exe); res != "" {
-			searchRoots = append(searchRoots, res)
+		if payloadDir := findPayloadDir(exe, cfg.Edition); payloadDir != "" {
+			bin, installErr := ensureSidecarInstalled(payloadDir, cfg.Edition)
+			if installErr == nil {
+				return bin, nil
+			}
+			fmt.Fprintf(os.Stderr, "centag-launcher: sidecar install failed: %v (falling back to payload)\n", installErr)
+			if p := payloadBinaryPath(payloadDir, cfg.Edition); p != "" {
+				return absExisting(p)
+			}
 		}
-		searchRoots = append(searchRoots, filepath.Dir(exe))
 	}
+
+	searchRoots := []string{editionLibDir(cfg.Edition)}
 	if wd, err := os.Getwd(); err == nil {
 		searchRoots = append(searchRoots,
 			wd,
@@ -88,14 +79,14 @@ func resolveSidecarBinary(cfg Config) (string, error) {
 	}
 
 	for _, root := range searchRoots {
-		for _, name := range candidates {
+		for _, name := range sidecarCandidateNames(cfg.Edition) {
 			p := filepath.Join(root, name)
 			if st, err := os.Stat(p); err == nil && !st.IsDir() {
 				return filepath.Abs(p)
 			}
 		}
 	}
-	return "", fmt.Errorf("centag sidecar not found (set --bin or CENTAG_BIN); tried %v under %v", candidates, searchRoots)
+	return "", fmt.Errorf("centag sidecar not found (set --bin or CENTAG_BIN); tried %v under %v", sidecarCandidateNames(cfg.Edition), searchRoots)
 }
 
 func sidecarCandidateNames(edition Edition) []string {

@@ -34,7 +34,7 @@ func parseConfig(args []string) (Config, error) {
 	edition := fs.String("edition", envOr("CENTAG_LAUNCHER_EDITION", "personal"), "sidecar edition: minimal | personal")
 	binPath := fs.String("bin", envOr("CENTAG_BIN", ""), "path to centag sidecar binary")
 	port := fs.Int("port", envIntOr("LLM_PROXY_SERVER_PORT", defaultPort), "sidecar listen port")
-	dataDir := fs.String("data-dir", envOr("CENTAG_LAUNCHER_DATA_DIR", ""), "user data directory (default: OS app support dir)")
+	dataDir := fs.String("data-dir", envOr("CENTAG_LAUNCHER_DATA_DIR", ""), "data directory (default: ~/.centag/lib/<edition>)")
 	noOpen := fs.Bool("no-open", false, "do not open the system browser on start")
 	headless := fs.Bool("headless", envOr("CENTAG_LAUNCHER_HEADLESS", "") == "1", "run sidecar only (no system menu; useful for CI)")
 

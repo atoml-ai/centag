@@ -118,6 +118,9 @@ stage_sidecar_tree() {
   mkdir -p "$dest"
   cp -f "$out_bin" "${dest}/centag-${EDITION}${ext}"
   chmod 755 "${dest}/centag-${EDITION}${ext}"
+  # Version marker consumed by the desktop launcher's sidecar installer
+  # (apps/launcher/install_sidecar.go) to decide upgrades.
+  printf '%s\n' "$VERSION" > "${dest}/VERSION"
   cp -R "$STATIC_SRC" "${dest}/static"
 
   if [[ -d "${ROOT}/config/initdata" ]]; then
