@@ -195,6 +195,8 @@ write_info_plist() {
   <string>13.0</string>
   <key>NSHighResolutionCapable</key>
   <true/>
+  <key>CFBundleIconFile</key>
+  <string>Centag</string>
   <key>LSUIElement</key>
   <true/>
 </dict>
@@ -243,6 +245,30 @@ macos_notarize() {
   xcrun stapler staple "$artifact" || log "warn: stapler failed for ${artifact}"
 }
 
+# Build Contents/Resources/Centag.icns from the brand favicon (256×256 source).
+# macOS runners and dev macs ship sips + iconutil; skip silently elsewhere.
+ICON_SRC_PNG="${ROOT}/web/public/favicon.png"
+
+build_macos_icns() {
+  local res_dir="$1"
+  command -v iconutil >/dev/null 2>&1 || { log "warn: iconutil not found; app bundle will have no icon"; return 0; }
+  [[ -f "$ICON_SRC_PNG" ]] || { log "warn: icon source missing: $ICON_SRC_PNG"; return 0; }
+  local iconset
+  iconset="$(mktemp -d)/Centag.iconset"
+  mkdir -p "$iconset"
+  local pair size pt
+  for pair in 16 32 128 256 512; do
+    size="${pair%@*}"
+    sips -z "$size" "$size" "$ICON_SRC_PNG" --out "${iconset}/icon_${pair}x${pair}.png" >/dev/null
+    pt=$((size * 2))
+    sips -z "$pt" "$pt" "$ICON_SRC_PNG" --out "${iconset}/icon_${pair}x${pair}@2x.png" >/dev/null
+  done
+  local icns="${res_dir}/Centag.icns"
+  iconutil -c icns "$iconset" -o "$icns" || { log "warn: iconutil failed; app bundle will have no icon"; return 0; }
+  [[ -f "$icns" ]] || fail "icns missing: $icns"
+  log "OK $icns"
+}
+
 package_macos() {
   local desktop_bin="$1"
   log "macOS code signing: ${CENTAG_MACOS_SIGN_IDENTITY:+enabled}${CENTAG_MACOS_SIGN_IDENTITY:-disabled}"
@@ -255,6 +281,7 @@ package_macos() {
   stage_sidecar_tree "$res_dir"
   cp -f "$desktop_bin" "${macos_dir}/Centag"
   chmod 755 "${macos_dir}/Centag"
+  build_macos_icns "$res_dir"
   write_info_plist "${app}/Contents/Info.plist"
 
   # Sign + (optionally) notarize the .app in place. No-op when uncertified.
