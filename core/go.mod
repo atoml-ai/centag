@@ -57,3 +57,11 @@ require (
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.11.0 // indirect
 )
+
+// Local-replace edgeag to a sibling checkout. Mirrors the top-level go.mod so
+// that GOWORK=off builds (release cross-compile, npm publish) resolve edgeag
+// from the pinned sibling ref rather than via proxy.golang.org, where the
+// v0.1.0 tag has been repackaged and the recorded go.sum hash no longer
+// matches the served bytes (SECURITY ERROR / "checksum mismatch").
+// Keep in sync with the EDGEAG_REF pinned in .github/workflows/*.yml.
+replace github.com/atoml-ai/edgeag => ../../edgeag
