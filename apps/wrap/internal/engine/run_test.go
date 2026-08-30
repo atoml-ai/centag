@@ -126,6 +126,55 @@ func TestPrepareProcessEnv_LANRequiresToken(t *testing.T) {
 	}
 }
 
+func TestRun_ResolvesAppBundle(t *testing.T) {
+	// A selected /Applications/Foo.app is a directory; Run must resolve it to
+	// its Contents/MacOS binary and exec that (not fail with "is a directory").
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	ca := mustCA(t)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/v1/proxy/setup/status":
+			w.WriteHeader(http.StatusUnauthorized)
+		case "/api/v1/proxy/pac":
+			_, _ = w.Write([]byte(`return "PROXY 127.0.0.1:8081";`))
+		case "/api/v1/proxy/ca.crt":
+			_, _ = w.Write(ca)
+		default:
+			w.WriteHeader(404)
+		}
+	}))
+	defer srv.Close()
+
+	// Build a fake .app whose binary writes a marker file when executed.
+	marker := filepath.Join(t.TempDir(), "ran.txt")
+	bundle := filepath.Join(t.TempDir(), "Fake.app")
+	macosDir := filepath.Join(bundle, "Contents", "MacOS")
+	if err := os.MkdirAll(macosDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	binPath := filepath.Join(macosDir, "fake")
+	script := "#!/bin/sh\necho ran > " + marker + "\n"
+	if err := os.WriteFile(binPath, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	plist := `<?xml version="1.0" encoding="UTF-8"?>
+<plist version="1.0"><dict>
+<key>CFBundleExecutable</key><string>fake</string>
+</dict></plist>`
+	if err := os.WriteFile(filepath.Join(bundle, "Contents", "Info.plist"), []byte(plist), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	e := New()
+	if err := e.Run(srv.URL, "", []string{bundle}); err != nil {
+		t.Fatalf("Run should resolve and exec the .app bundle: %v", err)
+	}
+	if _, err := os.Stat(marker); err != nil {
+		t.Fatalf("resolved app binary did not execute: %v", err)
+	}
+}
+
 func TestMergeEnv(t *testing.T) {
   base := []string{"PATH=/bin", "HTTPS_PROXY=old", "FOO=1"}
   out := mergeEnv(base, map[string]string{"HTTPS_PROXY": "http://x:8081", "NO_PROXY": "localhost"})

@@ -2,12 +2,15 @@ package engine
 
 import (
 	"bytes"
+	"encoding/xml"
 	"fmt"
 	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
+	"sort"
 	"strings"
 
 	"centag/apps/wrap/internal/remote"
@@ -260,7 +263,7 @@ func appendSourceBlock(profile, envFile string) error {
 	}
 	if strings.Contains(string(data), "# >>> "+envBlockMarker+" >>>") {
 		// already installed; replace existing block in place
-		re := regexp.MustCompile(`(?s)# >>> `+regexp.QuoteMeta(envBlockMarker)+` >>>.*?# <<< `+regexp.QuoteMeta(envBlockMarker)+` <<<`)
+		re := regexp.MustCompile(`(?s)# >>> ` + regexp.QuoteMeta(envBlockMarker) + ` >>>.*?# <<< ` + regexp.QuoteMeta(envBlockMarker) + ` <<<`)
 		data = re.ReplaceAll(data, []byte(strings.TrimSpace(block)))
 		return os.WriteFile(profile, data, 0o644)
 	}
@@ -283,7 +286,7 @@ func removeSourceBlock(profile string) error {
 		}
 		return fmt.Errorf("read %s: %w", profile, err)
 	}
-	re := regexp.MustCompile(`(?s)\n?# >>> `+regexp.QuoteMeta(envBlockMarker)+` >>>.*?# <<< `+regexp.QuoteMeta(envBlockMarker)+` <<<`)
+	re := regexp.MustCompile(`(?s)\n?# >>> ` + regexp.QuoteMeta(envBlockMarker) + ` >>>.*?# <<< ` + regexp.QuoteMeta(envBlockMarker) + ` <<<`)
 	out := re.ReplaceAll(data, []byte(""))
 	if bytes.Equal(out, data) {
 		return nil
@@ -299,6 +302,14 @@ func (e *Engine) Run(server, token string, argv []string) error {
 	pe, err := e.PrepareProcessEnv(server, token)
 	if err != nil {
 		return err
+	}
+	// A macOS .app bundle is a directory; resolve it to its real binary so
+	// LookPath / exec can run it (desktop picker resolves too, this is the
+	// defense-in-depth path for direct `centag wrap run -- Foo.app` use).
+	if runtime.GOOS == "darwin" {
+		if resolved, ok := resolveMacAppBundle(argv[0]); ok {
+			argv = append([]string{resolved}, argv[1:]...)
+		}
 	}
 	bin, err := exec.LookPath(argv[0])
 	if err != nil {
@@ -318,6 +329,109 @@ func (e *Engine) Run(server, token string, argv []string) error {
 		return err
 	}
 	return nil
+}
+
+// resolveMacAppBundle maps a /Applications/Foo.app directory to its executable.
+// CFBundleExecutable is read with a sequential XML walk (index-based key/string
+// pairing desyncs on real plists that mix <true/>/<integer> values), falling
+// back to the bundle name and then to the first executable in Contents/MacOS
+// (Electron apps ship their binary under a name like "Electron").
+func resolveMacAppBundle(path string) (string, bool) {
+	path = strings.TrimRight(path, "/")
+	if !strings.HasSuffix(path, ".app") {
+		return "", false
+	}
+	macOSDir := filepath.Join(path, "Contents", "MacOS")
+	binName := strings.TrimSuffix(filepath.Base(path), ".app")
+	if data, err := os.ReadFile(filepath.Join(path, "Contents", "Info.plist")); err == nil {
+		if exe, ok := plistTopLevelString(data, "CFBundleExecutable"); ok && exe != "" {
+			binName = exe
+		}
+	}
+	if st, err := os.Stat(filepath.Join(macOSDir, binName)); err == nil && !st.IsDir() {
+		return filepath.Join(macOSDir, binName), true
+	}
+	if first, ok := firstExecutableIn(macOSDir); ok {
+		return first, true
+	}
+	return "", false
+}
+
+// firstExecutableIn returns the first executable regular file in dir.
+func firstExecutableIn(dir string) (string, bool) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return "", false
+	}
+	names := make([]string, 0, len(entries))
+	for _, e := range entries {
+		if !e.IsDir() {
+			names = append(names, e.Name())
+		}
+	}
+	sort.Strings(names)
+	for _, n := range names {
+		p := filepath.Join(dir, n)
+		if st, err := os.Stat(p); err == nil && st.Mode().Perm()&0o111 != 0 {
+			return p, true
+		}
+	}
+	return "", false
+}
+
+// plistTopLevelString returns the string value of key in the top-level <dict>
+// of an XML property list. Keys are paired with the element that follows them,
+// so values of other types (<true/>, <integer>, nested dicts) do not shift the
+// mapping between keys and strings.
+func plistTopLevelString(data []byte, want string) (string, bool) {
+	dec := xml.NewDecoder(bytes.NewReader(data))
+	var key string
+	haveKey := false
+	dictDepth := 0
+	topDict := -1
+	for {
+		tok, err := dec.Token()
+		if err != nil {
+			return "", false
+		}
+		switch t := tok.(type) {
+		case xml.StartElement:
+			switch t.Name.Local {
+			case "dict":
+				dictDepth++
+				if haveKey {
+					haveKey = false // the dict is the value of the pending key
+				}
+				if topDict == -1 {
+					topDict = dictDepth
+				}
+			case "key":
+				if dictDepth == topDict {
+					var s string
+					if dec.DecodeElement(&s, &t) == nil {
+						key, haveKey = strings.TrimSpace(s), true
+					}
+				}
+			case "string":
+				if haveKey && dictDepth == topDict {
+					var s string
+					if err := dec.DecodeElement(&s, &t); err == nil && key == want {
+						return strings.TrimSpace(s), true
+					}
+					haveKey = false
+				}
+			default:
+				haveKey = false // <true/>, <integer>, <date>, <array> …
+			}
+		case xml.EndElement:
+			if t.Name.Local == "dict" && dictDepth > 0 {
+				if dictDepth == topDict {
+					topDict = -2 // top-level dict closed; stop matching
+				}
+				dictDepth--
+			}
+		}
+	}
 }
 
 func mergeEnv(base []string, overlay map[string]string) []string {
