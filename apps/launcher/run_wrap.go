@@ -9,8 +9,8 @@ import (
 )
 
 // runAgentViaWrap opens a native dialog to pick a local executable, then launches
-// it through `centag wrap run` in a system terminal so its LLM traffic is proxied
-// by the sidecar. Replaces the old "open /agent-run page" tray behavior.
+// it through `centag wrap run` so its LLM traffic is proxied by the sidecar.
+// Replaces the old "open /agent-run page" tray behavior.
 func runAgentViaWrap(a *launcherApp) {
 	exe, err := selectExecutable()
 	if err != nil {
@@ -23,13 +23,18 @@ func runAgentViaWrap(a *launcherApp) {
 	}
 
 	cmdLine := buildWrapRunCommand(a, exe)
-	if err := openTerminal(cmdLine); err != nil {
-		msg := fmt.Sprintf("无法启动终端运行 %s: %v", exe, err)
+	extra, err := launchWrapped(cmdLine, filepath.Base(exe))
+	if err != nil {
+		msg := fmt.Sprintf("无法启动 %s: %v", exe, err)
 		fmt.Fprintf(os.Stderr, "centag-launcher: %s\n", msg)
 		notifyUser("Centag", msg)
 		return
 	}
-	notifyUser("Centag", "已通过代理启动: "+filepath.Base(exe))
+	msg := "已通过代理启动: " + filepath.Base(exe)
+	if extra != "" {
+		msg += "（日志: " + extra + "）"
+	}
+	notifyUser("Centag", msg)
 }
 
 // buildWrapRunCommand builds `<centag> wrap run --server URL [--token T] -- <exe>`.
@@ -42,6 +47,24 @@ func buildWrapRunCommand(a *launcherApp, exe string) string {
 	}
 	parts = append(parts, "--", shellQuote(exe))
 	return strings.Join(parts, " ")
+}
+
+// sanitizeLogLabel keeps only filename-safe characters for log file names.
+func sanitizeLogLabel(label string) string {
+	var b strings.Builder
+	for _, r := range label {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9',
+			r == '.', r == '-', r == '_':
+			b.WriteRune(r)
+		default:
+			b.WriteByte('_')
+		}
+	}
+	if b.Len() == 0 {
+		return "app"
+	}
+	return b.String()
 }
 
 // shellQuote wraps s for safe embedding in the OS shell command line.
