@@ -1,0 +1,12 @@
+root = true
+
+# start.bat 已改为纯 ASCII/英文，保存为 UTF-8(无 BOM) + CRLF 即可。
+#
+# 原因：中文批处理在"GBK 控制台"与"UTF-8 IDE"之间无法两全——GBK 在控制台正常但
+# IDE 乱码，UTF-8 在 IDE 正常但控制台（按系统默认代码页解码）乱码甚至损坏首行。
+# 改为纯 ASCII 后，任意代码页都能正确读取，控制台与 IDE 同时正常。
+#
+# 编辑后保存时请保持 UTF-8(无 BOM) + CRLF；不要贴回中文（贴中文需改回 GBK 才兼容控制台）。
+[start.bat]
+charset = utf-8
+end_of_line = crlf

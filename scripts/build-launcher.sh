@@ -76,7 +76,10 @@ if [[ "$DESKTOP" == "1" ]]; then
     if [[ "${GOOS}" == "darwin" ]]; then
       export MACOSX_DEPLOYMENT_TARGET="${CENTAG_MACOS_MIN_VERSION:-13.0}"
     fi
-    GOWORK=off CGO_ENABLED=1 GOOS="${GOOS}" GOARCH="${GOARCH}" \
+    # systray 仅 macOS (systray_darwin.m, Obj-C) 需要 CGO；Windows/Linux 为纯 Go，无需 gcc。
+    _cgo=0
+    [[ "${GOOS}" == "darwin" ]] && _cgo=1
+    GOWORK=off CGO_ENABLED="${_cgo}" GOOS="${GOOS}" GOARCH="${GOARCH}" \
       go build -tags tray -trimpath -ldflags="${LDFLAGS}" -o "${OUT_BIN}" .
   )
 else

@@ -1,0 +1,6 @@
+# Enforce line endings for cross-platform development.
+# Windows batch files MUST be CRLF; shell scripts MUST be LF.
+* text=auto
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.sh  text eol=lf
