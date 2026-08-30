@@ -16,6 +16,7 @@ import (
 	"centag/core/pkg/backend"
 	"centag/core/pkg/bootstrap"
 	"centag/core/pkg/config"
+	"centag/core/pkg/configsync"
 	"centag/core/pkg/database"
 	"centag/core/pkg/logger"
 	"centag/core/pkg/metrics"
@@ -158,6 +159,9 @@ func Run(version, buildTime string) {
 	// Step 7: Start the HTTP server
 	srv := server.New(cfg)
 
+	// Step 7b: Start configsync scheduler (if enabled).
+	startConfigsync(srv)
+
 	go func() {
 		if err := srv.Start(); err != nil {
 			logger.Fatalf("Server error: %v", err)
@@ -262,4 +266,32 @@ func backendConfigFromConfig(c *config.BackendConfig) *backend.BackendConfig {
 		Weight:          c.Weight,
 		Priority:        c.Priority,
 	}
+}
+
+// startConfigsync optionally starts the configsync scheduler.
+// It checks CENTAG_CONFIGSYNC env (default on) and starts a snapshot or
+// feishu provider based on available credentials/URLs.
+func startConfigsync(srv *server.Server) {
+	if os.Getenv("CENTAG_CONFIGSYNC") == "off" {
+		return
+	}
+	// Determine provider: snapshot URL or feishu credentials.
+	snapshotURL := os.Getenv("CENTAG_CONFIGSYNC_SNAPSHOT_URL")
+	if snapshotURL != "" {
+		provider := configsync.NewSnapshotProvider([]string{snapshotURL})
+		stateDir := os.Getenv("CENTAG_CONFIGSYNC_STATE_DIR")
+		if stateDir == "" {
+			if dataDir := os.Getenv("CENTAG_DATA_DIR"); dataDir != "" {
+				stateDir = dataDir
+			}
+		}
+		scheduler := configsync.NewScheduler(configsync.SchedulerConfig{
+			Provider: provider,
+			StateDir: stateDir,
+		})
+		scheduler.Start(context.Background())
+		logger.Infof("Configsync scheduler started (snapshot: %s)", snapshotURL)
+		return
+	}
+	logger.Infof("Configsync not configured (no snapshot URL or feishu credentials)")
 }

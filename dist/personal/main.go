@@ -6,6 +6,9 @@ import (
 	wrapcli "centag/apps/wrap/cli"
 	"centag/core/pkg/entrypoint"
 
+	// Configsync is wired via entrypoint_full.go when CENTAG_CONFIGSYNC_SNAPSHOT_URL
+	// is set (or built-in via ldflags). No explicit import needed here.
+
 	_ "centag/plugins/backend/anthropic"
 	_ "centag/plugins/backend/azure"
 	_ "centag/plugins/backend/gemini"
