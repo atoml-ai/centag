@@ -34,6 +34,10 @@ deploy/docker/data/
 /dist/minimal/centag*
 /dist/gateway/centag*
 /dist/personal/centag*
+# 渠道交叉构建产物（windows/mac 包）属构建输出，不入库
+/dist/windows-amd64/
+# 本地误构建出的 launcher 二进制
+apps/launcher/launcher
 *.tar.gz
 *.fpk
 
