@@ -6,7 +6,6 @@
   "evaluation": "缓存评估管理",
   "chat": "AI 对话",
   "agentSetup": "Agent配置",
-  "agentRun": "运行 Agent",
   "agent": "Agent助手",
   "proxyModes": "代理模式配置",
   "sessionMode": "会话模式测试",

@@ -6,7 +6,6 @@
   "evaluation": "캐시 평가",
   "chat": "AI 채팅",
   "agentSetup": "Agent설정",
-  "agentRun": "Agent 실행",
   "agent": "Agent 어시스턴트",
   "proxyModes": "프록시 모드",
   "sessionMode": "세션 모드 테스트",
