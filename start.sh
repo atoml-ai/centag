@@ -1355,7 +1355,7 @@ run() {
     print_test_examples
     cd "$BIN_DIR"
     print_info "Starting backend service from: $BIN_DIR (port: $BACKEND_PORT)..."
-    ./"$SERVER_BIN"
+    ./"$SERVER_BIN" serve
     cd "$PROJECT_ROOT"
 }
 
@@ -1579,7 +1579,7 @@ debug() {
     else
         # 前台启动后端（日志直接输出到控制台）
         cd "$BIN_DIR"
-        CENTAG_EDITION=personal ./"$SERVER_BIN"
+        CENTAG_EDITION=personal ./"$SERVER_BIN" serve
         cd "$PROJECT_ROOT"
     fi
 }
@@ -2650,7 +2650,7 @@ start_backend_foreground() {
     print_test_examples
     cd "$BIN_DIR"
     print_info "Starting backend from: $BIN_DIR (port: $BACKEND_PORT)..."
-    ./"$SERVER_BIN"
+    ./"$SERVER_BIN" serve
     cd "$PROJECT_ROOT"
 }
 
@@ -2680,7 +2680,7 @@ _run_all_dev() {
 
     print_info "Starting backend in background (port: $BACKEND_PORT)..."
     cd "$BIN_DIR"
-    nohup ./"$SERVER_BIN" > logs/centag.log 2>&1 &
+    nohup ./"$SERVER_BIN" serve > logs/centag.log 2>&1 &
     local be_pid=$!
     cd "$PROJECT_ROOT"
 
@@ -4223,7 +4223,7 @@ wizard_run_mode() {
                         resolve_backend_port || continue
                         [ ! -f "$BIN_DIR/$SERVER_BIN" ] && build backend >/dev/null 2>&1
                         cd "$BIN_DIR"
-                        nohup ./"$SERVER_BIN" > logs/centag.log 2>&1 &
+                        nohup ./"$SERVER_BIN" serve > logs/centag.log 2>&1 &
                         cd "$PROJECT_ROOT"
                         sleep 2
                         if lsof -ti ":$BACKEND_PORT" >/dev/null 2>&1; then
@@ -4244,7 +4244,7 @@ wizard_run_mode() {
                         resolve_backend_port || continue
                         [ ! -f "$BIN_DIR/$SERVER_BIN" ] && build backend >/dev/null 2>&1
                         cd "$BIN_DIR"
-                        nohup ./"$SERVER_BIN" > logs/centag.log 2>&1 &
+                        nohup ./"$SERVER_BIN" serve > logs/centag.log 2>&1 &
                         cd "$PROJECT_ROOT"
                         sleep 2
                         if lsof -ti ":$BACKEND_PORT" >/dev/null 2>&1; then
@@ -4272,7 +4272,7 @@ wizard_run_mode() {
                             [ ! -f "$BIN_DIR/$SERVER_BIN" ] && build backend >/dev/null 2>&1
                             print_test_examples
                             cd "$BIN_DIR"
-                            ./"$SERVER_BIN"
+                            ./"$SERVER_BIN" serve
                             cd "$PROJECT_ROOT"
                         else
                             print_info "您可以在两个终端分别运行以下命令:"
@@ -4317,7 +4317,7 @@ wizard_run_mode() {
                         print_test_examples
                         cd "$BIN_DIR"
                         print_info "按 Ctrl+C 停止服务"
-                        ./"$SERVER_BIN"
+                        ./"$SERVER_BIN" serve
                         cd "$PROJECT_ROOT"
                     fi
                     ;;
@@ -4333,7 +4333,7 @@ wizard_run_mode() {
                         print_test_examples
                         cd "$BIN_DIR"
                         print_info "按 Ctrl+C 停止服务"
-                        ./"$SERVER_BIN"
+                        ./"$SERVER_BIN" serve
                         cd "$PROJECT_ROOT"
                     fi
                     ;;
@@ -4355,7 +4355,7 @@ wizard_run_mode() {
                             print_test_examples
                             cd "$BIN_DIR"
                             print_info "按 Ctrl+C 停止服务"
-                            ./"$SERVER_BIN"
+                            ./"$SERVER_BIN" serve
                             cd "$PROJECT_ROOT"
                         else
                             print_info "您可以在两个终端分别运行以下命令:"

@@ -47,7 +47,8 @@ func startSidecar(ctx context.Context, cfg Config, binary, dataDir string) (*sid
 	}
 
 	workDir := filepath.Dir(binary)
-	cmd := exec.CommandContext(ctx, binary)
+	// Explicit `serve` subcommand: bare `centag` now prints help (CLI convention).
+	cmd := exec.CommandContext(ctx, binary, "serve")
 	// Run with dataDir as CWD so relative ./data paths stay under the user data dir.
 	cmd.Dir = dataDir
 	// Default: logs only to sidecar file. Debug/dev (parent exported LOG_OUTPUT=both|stdout):

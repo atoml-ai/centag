@@ -42,6 +42,10 @@ func init() {
 }
 
 func main() {
+	if entrypoint.HandleNoArguments(os.Args) {
+		entrypoint.PrintUsage()
+		return
+	}
 	if entrypoint.HandleVersionCommand(Version, BuildTime, os.Args) {
 		return
 	}
@@ -51,5 +55,6 @@ func main() {
 	if entrypoint.HandleWrapCommand(os.Args) {
 		return
 	}
+	entrypoint.ExitIfUnknownCommand()
 	entrypoint.Run(Version, BuildTime)
 }
