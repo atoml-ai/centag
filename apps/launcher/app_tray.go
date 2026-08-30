@@ -57,8 +57,8 @@ func (a *launcherApp) onReady() {
 	openItem := systray.AddMenuItem("打开管理界面", "在系统浏览器中打开")
 	openItem.Click(func() { _ = openBrowser(a.cfg.baseURL()) })
 
-	runItem := systray.AddMenuItem("运行", "用 wrap 启动 Agent 应用")
-	runItem.Click(func() { _ = openBrowser(a.cfg.baseURL() + "/agent-run") })
+	runItem := systray.AddMenuItem("运行", "选择本地程序并用 wrap 代理启动（用于大模型）")
+	runItem.Click(func() { runAgentViaWrap(a) })
 
 	cliItem := systray.AddMenuItem("安装命令行工具", "将 centag 命令安装到 PATH（终端可用 centag wrap）")
 	cliItem.Click(func() {
