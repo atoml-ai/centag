@@ -57,7 +57,7 @@ func (a *launcherApp) onReady() {
 	openItem := systray.AddMenuItem("打开管理界面", "在系统浏览器中打开")
 	openItem.Click(func() { _ = openBrowser(a.cfg.baseURL()) })
 
-	runItem := systray.AddMenuItem("运行", "选择本地程序并用 wrap 代理启动（用于大模型）")
+	runItem := systray.AddMenuItem("代理启动应用", "选择本机应用，经 centag wrap 通过 Centag 代理启动（用于大模型）")
 	runItem.Click(func() { runAgentViaWrap(a) })
 
 	cliItem := systray.AddMenuItem("安装命令行工具", "将 centag 命令安装到 PATH（终端可用 centag wrap）")
@@ -68,6 +68,20 @@ func (a *launcherApp) onReady() {
 			return
 		}
 		notifyUser("Centag", "centag 命令已安装，终端可直接使用 centag wrap")
+	})
+
+	trustItem := systray.AddMenuItem("信任 CA 证书", "将 Centag CA 安装到系统钥匙串（被代理应用信任 MITM 证书，一次即可）")
+	trustItem.Click(func() {
+		caPath, err := trustCACert(a.cfg)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "centag-launcher: trust ca failed: %v\n", err)
+			notifyUser("Centag", "CA 信任失败: "+err.Error())
+			return
+		}
+		if caPath == "" {
+			return // user cancelled the authorization dialog
+		}
+		notifyUser("Centag", "Centag CA 已安装到系统钥匙串，被代理应用即可发起 HTTPS 请求")
 	})
 
 	systray.AddSeparator()

@@ -43,6 +43,10 @@ func main() {
 	app := &launcherApp{cfg: cfg, hub: hub}
 	defer app.shutdown()
 
+	// Auto-trust the sidecar CA on first launch so wrapped apps' HTTPS works
+	// out of the box (macOS: one admin dialog; Windows/Linux: silent).
+	go ensureCATrusted(cfg)
+
 	if cfg.Supervise {
 		go hub.watch(ctx)
 	}
