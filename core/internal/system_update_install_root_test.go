@@ -3,6 +3,7 @@ package internal
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -36,18 +37,31 @@ func TestRemapUpdateTarget(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// Server bin/ layout: the process itself is bin/centag → keep bin/ mapping.
+	currentExecutableNameOverride = "centag"
 	if got := remapUpdateTarget(root, "centag"); got != filepath.Join("bin", "centag") {
 		t.Fatalf("with bin/: got %q", got)
 	}
 	if got := remapUpdateTarget(root, "bin/centag"); got != filepath.Join("bin", "centag") {
 		t.Fatalf("already bin/: got %q", got)
 	}
+	currentExecutableNameOverride = ""
+
 	if got := remapUpdateTarget(root, "static/"); got != "static" {
 		t.Fatalf("static: got %q want static", got)
 	}
 
-	flat := t.TempDir()
-	if got := remapUpdateTarget(flat, "centag"); got != "centag" {
-		t.Fatalf("flat layout: got %q want centag", got)
+	// Desktop/edition layout: running binary is centag-personal, so the
+	// generic manifest name must map onto the running process name.
+	currentExecutableNameOverride = "centag-personal"
+	if got := remapUpdateTarget(root, "centag"); got != "centag-personal" {
+		t.Fatalf("edition-named process: got %q want centag-personal", got)
 	}
+	if runtime.GOOS == "windows" {
+		currentExecutableNameOverride = "centag-personal.exe"
+		if got := remapUpdateTarget(root, "centag.exe"); got != "centag-personal.exe" {
+			t.Fatalf("windows edition: got %q", got)
+		}
+	}
+	currentExecutableNameOverride = ""
 }

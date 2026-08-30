@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # Build OTA update packages (personal/minimal) for a GitHub Release with an
-# explicit release version. The GitHub OTA channel is linux only (fnOS installs);
-# each package carries the matching Web static so OTA does not ship a stale UI.
+# explicit release version. Each package carries the matching Web static so
+# OTA does not ship a stale UI. Platforms: linux (fnOS NAS), darwin + windows
+# (desktop sidecar self-update; the GUI shell itself still updates via dmg/zip).
 #
 #   ./scripts/release/build-ota.sh --version 0.2.9
-#   ./scripts/release/build-ota.sh --version 0.2.9 --platforms linux-amd64,linux-arm64
+#   ./scripts/release/build-ota.sh --version 0.2.9 --platforms linux-amd64,linux-arm64,darwin-arm64,windows-amd64
 #   ./scripts/release/build-ota.sh --version 0.2.9 --skip-frontend
 #
 # Output (default ~/.centag/var/packages/):
@@ -24,7 +25,7 @@ fail() { echo "error: $*" >&2; exit 1; }
 
 VERSION=""
 EDITION="${CENTAG_PACKAGE_EDITION:-personal}"
-PLATFORMS="${CENTAG_OTA_PLATFORMS:-linux-amd64,linux-arm64}"
+PLATFORMS="${CENTAG_OTA_PLATFORMS:-linux-amd64,linux-arm64,darwin-amd64,darwin-arm64,windows-amd64}"
 SKIP_FRONTEND=0
 OUT_DIR="${CENTAG_PACKAGES_DIR}"
 
@@ -91,7 +92,7 @@ for plat in "${PLAT_ARR[@]}"; do
   [[ -z "$plat" ]] && continue
   goos="${plat%-*}"
   goarch="${plat##*-}"
-  [[ "$goos" == "linux" ]] || fail "OTA packages are linux-only (got ${plat}); github channel ships linux OTA"
+  [[ "$goos" == "linux" || "$goos" == "darwin" || "$goos" == "windows" ]] || fail "unsupported goos: ${goos} (want linux|darwin|windows)"
   case "$goarch" in amd64|arm64) ;; *) fail "unsupported arch: ${goarch}" ;; esac
 
   local_bin="${CROSS_DIR}/centag-${EDITION}-${goos}-${goarch}"

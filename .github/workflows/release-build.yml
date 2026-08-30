@@ -285,7 +285,7 @@ jobs:
         run: |
           bash scripts/release/build-ota.sh \
             --version "${{ needs.guard-branch.outputs.version }}" \
-            --platforms linux-amd64,linux-arm64
+            --platforms linux-amd64,linux-arm64,darwin-amd64,darwin-arm64,windows-amd64
 
       - name: Upload OTA packages
         uses: actions/upload-artifact@v7

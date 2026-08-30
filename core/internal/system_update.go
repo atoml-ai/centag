@@ -411,7 +411,7 @@ func (h *SystemUpdateHandler) applyPackage(packagePath, packageName string) (*ap
 				}
 			}
 			logger.Infof("[系统更新] 复制文件: %s -> %s", sourcePath, targetPath)
-			if err := copyFile(sourcePath, targetPath); err != nil {
+			if err := replaceBinaryFile(sourcePath, targetPath); err != nil {
 				logger.Errorf("[系统更新] 复制文件失败: %v", err)
 				history.Success = false
 				history.Error = err.Error()
@@ -970,6 +970,12 @@ func remapUpdateTarget(installRoot, target string) string {
 	}
 	base := filepath.Base(clean)
 	if (base == "centag" || base == "centag.exe") && (clean == base) {
+		// OTA 替换的必须是「正在运行的进程本体」。桌面/服务部署的二进制名是
+		// centag-<edition>（如 centag-personal[.exe]），manifest 里的通用名
+		// centag[.exe] 必须映射为当前进程名，否则文件落到错误名字上、更新永不生效。
+		if exeName := currentExecutableName(); exeName != "" && exeName != base {
+			return exeName
+		}
 		binDir := filepath.Join(installRoot, "bin")
 		if st, err := os.Stat(binDir); err == nil && st.IsDir() {
 			return filepath.Join("bin", base)
@@ -978,9 +984,46 @@ func remapUpdateTarget(installRoot, target string) string {
 	return clean
 }
 
+// currentExecutableNameOverride lets tests pin the running process name.
+var currentExecutableNameOverride string
+
+// currentExecutableName returns the base name of the running sidecar binary
+// (symlinks resolved), or "" when it cannot be determined.
+func currentExecutableName() string {
+	if currentExecutableNameOverride != "" {
+		return currentExecutableNameOverride
+	}
+	exe, err := os.Executable()
+	if err != nil {
+		return ""
+	}
+	if resolved, err := filepath.EvalSymlinks(exe); err == nil {
+		exe = resolved
+	}
+	return filepath.Base(exe)
+}
+
 func isMainBinaryTarget(mappedTarget string) bool {
 	base := filepath.Base(filepath.Clean(mappedTarget))
 	return base == "centag" || base == "centag.exe"
+}
+
+// replaceBinaryFile overwrites the main binary. On Windows a running exe is
+// locked by the image loader (rename-over fails with ACCESS_DENIED), so the
+// old file must be renamed out of the way first — Windows permits renaming a
+// running exe. Unix rename-over of a running binary is already atomic via
+// copyFile's temp+rename.
+func replaceBinaryFile(src, dst string) error {
+	if runtime.GOOS == "windows" {
+		if _, err := os.Stat(dst); err == nil {
+			old := dst + ".old"
+			_ = os.Remove(old) // clear stale leftover from a previous update
+			if err := os.Rename(dst, old); err != nil {
+				return fmt.Errorf("move running binary out of the way: %w", err)
+			}
+		}
+	}
+	return copyFile(src, dst)
 }
 
 // validateExecutableForHost rejects update payloads that cannot run on this OS

@@ -208,8 +208,14 @@ package_service() {
   local package_name="update-package-centag-${edition}-${version}-${goos}-${goarch}"
   local package_dir="${temp_dir}/${package_name}"
   mkdir -p "$package_dir"
-  cp "$source_bin" "${package_dir}/centag"
-  chmod +x "${package_dir}/centag"
+  # Main binary carries a per-OS name: remapUpdateTarget maps it onto the
+  # running process name on apply (centag[.exe] → centag-personal[.exe]).
+  local bin_name="centag"
+  if [[ "$goos" == "windows" ]]; then
+    bin_name="centag.exe"
+  fi
+  cp "$source_bin" "${package_dir}/${bin_name}"
+  chmod +x "${package_dir}/${bin_name}"
 
   local has_static=false
   if [[ -d "$source_static" ]]; then
@@ -225,12 +231,12 @@ package_service() {
     echo "description: \"Centag System Update (${edition}) - v${version}\""
     echo ""
     echo "files:"
-    echo "  - source: \"centag\""
-    echo "    target: \"centag\""
+    echo "  - source: \"${bin_name}\""
+    echo "    target: \"${bin_name}\""
     echo "    permission: \"0755\""
     echo "    backup: true"
     echo "    recursive: false"
-    echo "    description: \"Centag 主程序（apply 时若存在 bin/ 则落到 bin/centag）\""
+    echo "    description: \"Centag 主程序（apply 时映射为运行中的进程名，如 centag-personal）\""
     if [[ "$has_static" == "true" ]]; then
       echo "  - source: \"static/\""
       echo "    target: \"static/\""
