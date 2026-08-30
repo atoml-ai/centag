@@ -61,3 +61,23 @@ func TestInstallCLILinuxFallback(t *testing.T) {
 		t.Fatalf("symlink %s -> %s (err=%v), want -> %s", target, resolved, err, bin)
 	}
 }
+
+func TestCliDarwinInstalled(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("darwin only")
+	}
+	// Not installed: random binary path can never match the (absent or
+	// different) /usr/local/bin/centag target.
+	if cliDarwinInstalled(filepath.Join(t.TempDir(), "centag-personal")) {
+		t.Fatal("expected not installed for unrelated binary")
+	}
+	// Symlink-normalization contract: a temp path resolves through
+	// /var → /private/var on macOS; want-side must normalize the same way.
+	bin := filepath.Join(t.TempDir(), "centag-personal")
+	if err := os.WriteFile(bin, []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := filepath.EvalSymlinks(bin); err != nil {
+		t.Fatalf("binary should resolve: %v", err)
+	}
+}

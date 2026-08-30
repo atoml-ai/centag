@@ -99,3 +99,63 @@ func openTerminal(commandLine string) error {
 	}
 	return fmt.Errorf("no terminal emulator found")
 }
+
+// launchWrapped starts the wrapped app in a terminal emulator (Linux keeps a
+// visible terminal; see openTerminal).
+func launchWrapped(commandLine, label string) (string, error) {
+	return "", openTerminal(commandLine)
+}
+
+// trustCACert installs the Centag CA into the user NSS/CA store via
+// update-ca-trust or certutil when available.
+func trustCACert(cfg Config) (string, error) {
+	caPath := locateCentagCA(cfg)
+	if caPath == "" {
+		return "", fmt.Errorf("CA certificate not found (start the sidecar first)")
+	}
+	if p, err := exec.LookPath("update-ca-trust"); err == nil {
+		dst := "/etc/pki/ca-trust/source/anchors/centag-ca.crt"
+		if out, err := exec.Command("pkexec", "cp", caPath, dst).CombinedOutput(); err != nil {
+			return "", fmt.Errorf("pkexec cp: %w (%s)", err, strings.TrimSpace(string(out)))
+		}
+		if out, err := exec.Command(p, "extract").CombinedOutput(); err != nil {
+			return "", fmt.Errorf("update-ca-trust: %w (%s)", err, strings.TrimSpace(string(out)))
+		}
+		return caPath, nil
+	}
+	return "", fmt.Errorf("请手动将 %s 加入系统信任（未找到 update-ca-trust）", caPath)
+}
+
+// locateCentagCA finds the sidecar's root CA on disk.
+func locateCentagCA(cfg Config) string {
+	home, _ := os.UserHomeDir()
+	for _, p := range []string{
+		filepath.Join(cfg.DataDir, "certs", "ca.crt"),
+		filepath.Join(home, ".centag", "wrap", "ca.crt"),
+	} {
+		if st, err := os.Stat(p); err == nil && !st.IsDir() {
+			return p
+		}
+	}
+	return ""
+}
+
+// ensureCATrusted silently adds the CA to the user NSS database read by
+// Chrome/Chromium; system-wide trust needs root and is left to the tray item.
+func ensureCATrusted(cfg Config) {
+	if cfg.Headless {
+		return
+	}
+	caPath := locateCentagCA(cfg)
+	if caPath == "" {
+		return
+	}
+	nss, err := exec.LookPath("certutil")
+	if err != nil {
+		return // NSS tools not installed; nothing silent we can do
+	}
+	home, _ := os.UserHomeDir()
+	db := filepath.Join(home, ".pki", "nssdb")
+	_ = os.MkdirAll(db, 0o700)
+	_ = exec.Command(nss, "-d", "sql:"+db, "-A", "-t", "C,,", "-n", "Centag CA", "-i", caPath).Run()
+}

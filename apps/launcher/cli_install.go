@@ -50,6 +50,14 @@ func installCentagCLI(binaryPath string) error {
 
 	fmt.Fprintf(os.Stderr, "centag-launcher: `centag` installed at %s -> %s\n", entry, binaryPath)
 
+	// On macOS the authoritative reachability marker is the /usr/local/bin
+	// symlink (GUI process PATH is unreliable for this check): once it points
+	// at the current binary, every new terminal can run `centag` and re-running
+	// the menu item stays silent (no extra authorization prompts).
+	if runtime.GOOS == "darwin" && cliDarwinInstalled(binaryPath) {
+		return nil
+	}
+
 	if pathContainsDir(rootBinDir) {
 		return nil
 	}
@@ -73,18 +81,22 @@ func installCentagCLI(binaryPath string) error {
 	return nil
 }
 
-// installCLIDarwinFallback links the binary into /usr/local/bin (default PATH
-// on macOS) via an administrator-privileged osascript call.
+// installCLIDarwinFallback makes `centag` reachable from every NEW terminal
+// with a SINGLE admin authorization:
+//   - symlink /usr/local/bin/centag → sidecar binary (on macOS default PATH)
+//   - register <root>/bin in /etc/paths.d/centag so future centag tools are
+//     also resolvable
+//
+// Re-running is silent when the symlink already points at the current binary
+// (no repeated authorization prompts).
 func installCLIDarwinFallback(binaryPath string) error {
 	const target = "/usr/local/bin/centag"
-	if st, err := os.Lstat(target); err == nil && st.Mode()&os.ModeSymlink != 0 {
-		if resolved, err := filepath.EvalSymlinks(target); err == nil && resolved == binaryPath {
-			return nil
-		}
+	if cliDarwinInstalled(binaryPath) {
+		return nil
 	}
 	script := fmt.Sprintf(
-		`do shell script "mkdir -p /usr/local/bin && ln -sf '%s' '%s'" with administrator privileges`,
-		shellQuoteSingle(binaryPath), target)
+		`do shell script "mkdir -p /usr/local/bin && ln -sf '%s' '%s' && echo '%s' > /etc/paths.d/centag" with administrator privileges`,
+		shellQuoteSingle(binaryPath), target, shellQuoteSingle(centagInstallRoot()+"/bin"))
 	out, err := runCommand(30*time.Second, "osascript", "-e", script)
 	if err != nil {
 		msg := strings.TrimSpace(out)
@@ -94,6 +106,26 @@ func installCLIDarwinFallback(binaryPath string) error {
 		return fmt.Errorf("需要管理员授权: %s", msg)
 	}
 	return nil
+}
+
+// cliDarwinInstalled reports whether /usr/local/bin/centag already resolves to
+// the current sidecar binary. Both sides are symlink-normalized before
+// comparing (macOS resolves /var/... to /private/var/...).
+func cliDarwinInstalled(binaryPath string) bool {
+	const target = "/usr/local/bin/centag"
+	st, err := os.Lstat(target)
+	if err != nil || st.Mode()&os.ModeSymlink == 0 {
+		return false
+	}
+	resolved, err := filepath.EvalSymlinks(target)
+	if err != nil {
+		return false
+	}
+	want, err := filepath.EvalSymlinks(binaryPath)
+	if err != nil {
+		want = binaryPath
+	}
+	return resolved == want
 }
 
 func installCLILinuxFallback(binaryPath string) error {
@@ -149,16 +181,31 @@ func writeEnvFileIfMissing(root string) error {
 	return os.WriteFile(envPath, []byte(content), 0o644)
 }
 
-// notifyUser shows a best-effort system notification (macOS only today).
+// notifyUser shows a best-effort system notification (macOS notification /
+// Windows balloon tip rendered as a toast on Win10+).
 func notifyUser(title, message string) {
-	if runtime.GOOS != "darwin" {
-		return
+	switch runtime.GOOS {
+	case "darwin":
+		esc := func(s string) string {
+			return strings.ReplaceAll(strings.ReplaceAll(s, `\`, `\\`), `"`, `\"`)
+		}
+		script := fmt.Sprintf(`display notification "%s" with title "%s"`, esc(message), esc(title))
+		_, _ = runCommand(5*time.Second, "osascript", "-e", script)
+	case "windows":
+		psq := func(s string) string { return strings.ReplaceAll(s, "'", "''") }
+		script := fmt.Sprintf(`
+Add-Type -AssemblyName System.Windows.Forms | Out-Null
+Add-Type -AssemblyName System.Drawing | Out-Null
+$n = New-Object System.Windows.Forms.NotifyIcon
+$n.Icon = [System.Drawing.SystemIcons]::Information
+$n.Visible = $true
+$n.BalloonTipTitle = '%s'
+$n.BalloonTipText = '%s'
+$n.ShowBalloonTip(5000)
+Start-Sleep -Seconds 6
+$n.Dispose()`, psq(title), psq(message))
+		_, _ = runCommand(15*time.Second, "powershell", "-NoProfile", "-NonInteractive", "-Command", script)
 	}
-	esc := func(s string) string {
-		return strings.ReplaceAll(strings.ReplaceAll(s, `\`, `\\`), `"`, `\"`)
-	}
-	script := fmt.Sprintf(`display notification "%s" with title "%s"`, esc(message), esc(title))
-	_, _ = runCommand(5*time.Second, "osascript", "-e", script)
 }
 
 // shellQuoteSingle escapes a path for embedding inside single quotes in shell.
