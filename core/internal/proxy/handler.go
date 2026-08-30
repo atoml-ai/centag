@@ -198,11 +198,30 @@ func (h *Handler) HandleChatCompletions(c *gin.Context) {
 		tenantID := extractTenantIDFromContext(c)
 
 		// 后端钉死写法：<backendID>/<modelID>（非 centag/、非 pipeline. 前缀）。
-		// 解析出后端与真实模型名，把请求体 model 改写为真实模型名并钉死 X-Backend-ID，
-		// 强制透明流水线走该后端，避免落入默认增强流水线后被改写/回落到非用户所选后端。
+		// 策略（与流水线前缀规则互补）：
+		//   1. backend 存在且启用，且该 backend 提供此模型 → 钉死透明流水线主节点
+		//      （model 改写为真实模型名 + X-Backend-ID；备用节点不变）。
+		//   2. backend 不存在 / 未启用 / 未提供此模型 → 统一走系统默认流水线
+		//      （后端与模型都用默认配置，不保留 pinned 后端）。
+		// 注意：OpenRouter 等厂商的模型 id 天然是 vendor/model 形式（如 stealth/ox-alpha），
+		// 首段不会命中任何 backend，自然落入默认流程。backend 未声明模型列表时视为
+		// 接受任意模型（如 ollama 的动态模型）。
 		if backendID, actualModel, ok := parseBackendModel(model); ok {
 			if mgr := backend.GetManager(); mgr != nil {
-				if be, berr := mgr.Get(backendID); berr == nil && be != nil && be.Enabled {
+				be, berr := mgr.Get(backendID)
+				switch {
+				case berr != nil || be == nil || !be.Enabled:
+					logRequestInfo(requestID, "[Config] backend-model prefix does not match any enabled backend; using system default pipeline",
+						zap.String("requested_model", model),
+						zap.String("guessed_backend_id", backendID),
+					)
+				case !modelAvailableOnBackend(actualModel, be):
+					logRequestInfo(requestID, "[Config] backend exists but model not offered; using system default pipeline",
+						zap.String("requested_model", model),
+						zap.String("backend_id", backendID),
+						zap.String("actual_model", actualModel),
+					)
+				default:
 					if _, ok2 := rewriteRequestBodyModel(c, actualModel); ok2 {
 						proxyMode = ProxyMode(config.DefaultSystemPipelineID)
 						source = "backend-pinned"
@@ -214,11 +233,6 @@ func (h *Handler) HandleChatCompletions(c *gin.Context) {
 							zap.String("pipeline", config.DefaultSystemPipelineID),
 						)
 					}
-				} else {
-					c.JSON(http.StatusBadRequest, gin.H{
-						"error": fmt.Sprintf("模型 %q 指定的后端 %q 不存在或未启用", model, backendID),
-					})
-					return
 				}
 			}
 		}
@@ -1146,6 +1160,20 @@ func matchPlainModelBackend(model string) (string, bool) {
 		return "", false
 	}
 	return selected.ID, true
+}
+
+// modelAvailableOnBackend reports whether the backend offers the model.
+// A backend without a declared model list (e.g. ollama with dynamic models)
+// accepts anything; otherwise the loose mapping must hit (same semantics as
+// the transparent forward node's matchModelOnBackend).
+func modelAvailableOnBackend(model string, be *backend.BackendConfig) bool {
+	if be == nil {
+		return false
+	}
+	if len(be.SupportedModels) == 0 {
+		return true
+	}
+	return backend.FindLooseModelMapping(model, be) != nil
 }
 
 // extractModelFromRequest 从请求中提取模型名
