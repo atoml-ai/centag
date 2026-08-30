@@ -2071,6 +2071,15 @@ func (s *Server) GetRouter() *gin.Engine {
 	return s.router
 }
 
+// SetVersionProvider injects a remote version provider into the system update
+// handler. When set, /update/check queries this provider first, falling back
+// to the GitHub OTA client on error.
+func (s *Server) SetVersionProvider(vp internal.VersionProvider) {
+	if s.systemUpdate != nil {
+		s.systemUpdate.SetVersionProvider(vp)
+	}
+}
+
 // forceRestartMITM 强制重启 MITM 代理服务器，用于端口变更后的热生效。
 // 先停止再启动，toggleMITM(true) 会从 s.cfg 读取最新端口，因此调用前
 // 确保 cfg.SystemProxy.ListenPort 已更新。

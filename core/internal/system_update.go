@@ -27,6 +27,24 @@ type SystemUpdateHandler struct {
 	updateConfigPath string
 	edition          string
 	otaClient        *ota.Client
+	versionProvider  VersionProvider
+}
+
+// VersionProvider can be injected to provide remote version info
+// as an alternative to GitHub OTA. When set, HandleCheckUpdate
+// queries this provider first, falling back to OTA on error.
+type VersionProvider interface {
+	// CheckLatest returns the latest version info, or nil if unavailable.
+	CheckLatest(ctx context.Context, currentVersion string) (*VersionCheckResult, error)
+}
+
+// VersionCheckResult is the response from a VersionProvider.CheckLatest call.
+type VersionCheckResult struct {
+	UpdateAvailable bool   `json:"update_available"`
+	Version         string `json:"version"`
+	DownloadURL     string `json:"download_url,omitempty"`
+	SHA256          string `json:"sha256,omitempty"`
+	Message         string `json:"message,omitempty"`
 }
 
 // UpdateConfig 更新配置结构
@@ -137,6 +155,16 @@ func (h *SystemUpdateHandler) SetOTAClient(c *ota.Client) {
 	h.otaClient = c
 }
 
+// SetVersionProvider injects a remote version provider (e.g. configsync).
+// When set, HandleCheckUpdate queries this provider first, falling back
+// to the OTA client if the provider returns an error or nil.
+func (h *SystemUpdateHandler) SetVersionProvider(vp VersionProvider) {
+	if h == nil {
+		return
+	}
+	h.versionProvider = vp
+}
+
 type applyOutcome struct {
 	history         *UpdateHistory
 	config          *UpdateConfig
@@ -202,6 +230,26 @@ func (h *SystemUpdateHandler) HandleCheckUpdate(w http.ResponseWriter, r *http.R
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+
+	// Try remote version provider first (configsync).
+	if h.versionProvider != nil {
+		result, err := h.versionProvider.CheckLatest(r.Context(), GetVersion())
+		if err == nil && result != nil {
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"success": true,
+				"check":   result,
+				"source":  "configsync",
+			})
+			return
+		}
+		// Fall through to OTA on error.
+		if err != nil {
+			logger.Infof("[系统更新] 远程配置源不可用，回落 GitHub OTA: %v", err)
+		}
+	}
+
+	// Fallback: GitHub OTA client.
 	client := h.ota()
 	result, err := client.CheckLatest(r.Context(), GetVersion())
 	if err != nil {
