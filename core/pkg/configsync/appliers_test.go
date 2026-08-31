@@ -20,7 +20,7 @@ func (s *mockPriceStore) GetRuleByModelAndType(_ context.Context, backendID, mod
 			return r, nil
 		}
 	}
-	return nil, fmt.Errorf("not found")
+	return nil, billing.ErrRuleNotFound
 }
 
 func (s *mockPriceStore) CreateRule(_ context.Context, r *billing.PricingRule) error {

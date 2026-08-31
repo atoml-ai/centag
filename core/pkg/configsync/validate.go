@@ -93,11 +93,11 @@ func ValidatePriceRow(row *ProviderPrice) error {
 		if m.Model == "" {
 			return fmt.Errorf("model name empty in base_url %q", row.BaseURL)
 		}
-		// 下界含 0：免费档/漏填价格一律拒收，防误同步为 0 成本（TC-VAL-002）。
-		if m.InputPricePerM <= 0 || m.InputPricePerM > 10000 {
+		// 价格 < 0 拒收（非法负值）；= 0 允许（免费模型/试用额度）。
+		if m.InputPricePerM < 0 || m.InputPricePerM > 10000 {
 			return fmt.Errorf("input_price_per_m out of range for model %q in base_url %q", m.Model, row.BaseURL)
 		}
-		if m.OutputPricePerM <= 0 || m.OutputPricePerM > 10000 {
+		if m.OutputPricePerM < 0 || m.OutputPricePerM > 10000 {
 			return fmt.Errorf("output_price_per_m out of range for model %q in base_url %q", m.Model, row.BaseURL)
 		}
 	}

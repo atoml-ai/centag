@@ -16,12 +16,12 @@ func TestValidation(t *testing.T) {
 		}
 	})
 
-	t.Run("TC-VAL-002_价格下界拒收", func(t *testing.T) {
-		for _, p := range []float64{0, -1} {
-			row := ProviderPrice{BaseURL: "https://x", ProviderName: "T", Models: []ModelPrice{{Model: "m", InputPricePerM: p}}}
-			if err := ValidatePriceRow(&row); err == nil {
-				t.Fatalf("price %v should be rejected", p)
-			}
+	t.Run("TC-VAL-002_负价格拒收_零价格允许", func(t *testing.T) {
+		if row := (ProviderPrice{BaseURL: "https://x", ProviderName: "T", Models: []ModelPrice{{Model: "m", InputPricePerM: -1}}}); ValidatePriceRow(&row) == nil {
+			t.Fatal("negative price should be rejected")
+		}
+		if row := (ProviderPrice{BaseURL: "https://x", ProviderName: "T", Models: []ModelPrice{{Model: "m", InputPricePerM: 0, OutputPricePerM: 0}}}); ValidatePriceRow(&row) != nil {
+			t.Fatal("zero price (free model) should be allowed")
 		}
 	})
 

@@ -176,8 +176,8 @@ func (s *ConfigScheduler) Snapshot() *Snapshot {
 }
 
 // SyncNow triggers one sync immediately. Concurrent calls are single-flight:
-// while one sync is in flight others return without duplicating work
-// (TC-SCH-008).
+// while one sync is in flight others return "sync already in flight" without
+// duplicating work or counting as a failure (TC-SCH-008).
 func (s *ConfigScheduler) SyncNow(ctx context.Context) error {
 	s.mu.Lock()
 	if s.syncing {
@@ -237,18 +237,30 @@ func (s *ConfigScheduler) recordFailure(err error) {
 // (TC-E2E-003 / TC-VAL-008). An entirely empty batch is a no-op success
 // that does not overwrite the cache (TC-VAL-010).
 func (s *ConfigScheduler) doSync(ctx context.Context) error {
-	rows, err := s.provider.FetchConfig(ctx, Query{})
-	if err != nil {
+	type fetchAller interface {
+		FetchAll(ctx context.Context, q Query) ([]Row, []ProviderPrice, error)
+	}
+
+	var rows []Row
+	var prices []ProviderPrice
+	var err error
+
+	if fa, ok := s.provider.(fetchAller); ok {
+		rows, prices, err = fa.FetchAll(ctx, Query{})
+	} else {
+		rows, err = s.provider.FetchConfig(ctx, Query{})
+		if err != nil {
+			s.recordFailure(err)
+			return err
+		}
+		prices, err = s.provider.FetchModelPrices(ctx)
+	}
+	if err != nil && !errors.Is(err, ErrNotSupported) {
 		s.recordFailure(err)
 		return err
 	}
 	if err := ValidateRows(rows); err != nil {
 		err = fmt.Errorf("invalid batch rejected: %w", err)
-		s.recordFailure(err)
-		return err
-	}
-	prices, err := s.provider.FetchModelPrices(ctx)
-	if err != nil && !errors.Is(err, ErrNotSupported) {
 		s.recordFailure(err)
 		return err
 	}
@@ -272,7 +284,11 @@ func (s *ConfigScheduler) doSync(ctx context.Context) error {
 	}
 	snap := &Snapshot{Schema: snapshotSchema, GeneratedAt: time.Now(), Config: rows, Prices: prices}
 	if s.stateDir != "" {
-		_ = WriteSnapshot(s.stateDir, snap)
+		if err := WriteSnapshot(s.stateDir, snap); err != nil {
+			s.mu.Lock()
+			s.status.LastError = "snapshot write: " + err.Error()
+			s.mu.Unlock()
+		}
 	}
 	s.mu.Lock()
 	s.snap = snap

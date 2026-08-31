@@ -62,6 +62,10 @@ type Provider interface {
 	// FetchModelPrices returns model prices from the storage channel.
 	// Channels that don't support this return ErrNotSupported.
 	FetchModelPrices(ctx context.Context) ([]ProviderPrice, error)
+
+	// FetchAll returns both config rows and model prices in a single fetch.
+	// Default implementation calls FetchConfig + FetchModelPrices separately.
+	FetchAll(ctx context.Context, q Query) ([]Row, []ProviderPrice, error)
 }
 
 // ErrNotSupported is returned by Provider implementations that don't

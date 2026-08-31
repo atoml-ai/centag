@@ -3,6 +3,7 @@ package configsync
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -79,7 +80,7 @@ func ApplyPrices(ctx context.Context, prices []ProviderPrice, mapBackend Backend
 
 func upsertPriceRule(ctx context.Context, store PriceStore, backendID string, m ModelPrice, currency string, skipManual bool) (skipped bool, err error) {
 	existing, err := store.GetRuleByModelAndType(ctx, backendID, m.Model, billing.PriceTypeCost)
-	if err != nil && !strings.Contains(err.Error(), "not found") {
+	if err != nil && !errors.Is(err, billing.ErrRuleNotFound) {
 		return false, err
 	}
 	if existing != nil && existing.Source == "manual" && skipManual {

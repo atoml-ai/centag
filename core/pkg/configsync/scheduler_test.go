@@ -42,6 +42,24 @@ func (m *mockProvider) FetchModelPrices(ctx context.Context) ([]ProviderPrice, e
 	return m.prices, nil
 }
 
+func (m *mockProvider) FetchAll(ctx context.Context, q Query) ([]Row, []ProviderPrice, error) {
+	m.fetches.Add(1)
+	if m.blockTime > 0 {
+		select {
+		case <-ctx.Done():
+			return nil, nil, ctx.Err()
+		case <-time.After(m.blockTime):
+		}
+	}
+	if m.cfgErr != nil {
+		return nil, nil, m.cfgErr
+	}
+	if m.priceErr != nil {
+		return nil, nil, m.priceErr
+	}
+	return m.rows, m.prices, nil
+}
+
 func validRow() Row {
 	return Row{Key: "table.model_price", Edition: "all", Value: []byte(`{"provider":"feishu"}`), Enabled: true}
 }

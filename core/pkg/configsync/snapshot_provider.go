@@ -43,6 +43,14 @@ func (p *SnapshotProvider) FetchModelPrices(ctx context.Context) ([]ProviderPric
 	return snap.Prices, nil
 }
 
+func (p *SnapshotProvider) FetchAll(ctx context.Context, q Query) ([]Row, []ProviderPrice, error) {
+	snap, err := p.fetchSnapshot(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	return snap.Config, snap.Prices, nil
+}
+
 func (p *SnapshotProvider) fetchSnapshot(ctx context.Context) (*Snapshot, error) {
 	var lastErr error
 	for _, u := range p.urls {
