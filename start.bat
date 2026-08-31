@@ -21,6 +21,19 @@ rem ============================================================================
 
 setlocal EnableExtensions EnableDelayedExpansion
 
+rem ============================================================================
+rem  Command overview (aligned with start.sh):
+rem    start.bat debug [personal|minimal] [--desktop]   foreground debug (build + fe hot reload + serve)
+rem    start.bat run   [personal|minimal] [--desktop]   start in release mode
+rem    start.bat build [be|fe|personal|minimal|team]    build only
+rem    start.bat env gen                                 generate config/secrets/.env
+rem    start.bat daemon [personal|minimal]              daemon (background resident)
+rem  NOTE: this file must stay pure ASCII. cmd.exe decodes a batch with the system default
+rem        codepage (GBK on zh-CN systems); non-ASCII bytes (e.g. UTF-8 Chinese) get mispaired
+rem        by DBCS decoding and SWALLOW following characters, which corrupts real commands
+rem        (observed: "start.bat" turned into "tart.bat" -> "not recognized" error).
+rem ============================================================================
+
 rem -- ANSI - ------------------------------------------------------------
 set "_ESC="
 for /f %%a in ('echo prompt $E^| cmd') do set "_ESC=%%a"
@@ -647,6 +660,8 @@ call :log_warn "some dependencies missing, some features may be unavailable"
 exit /b 1
 
 rem -- -- ------------------------------------------------------------
+rem -- -- ----------------------------------------------------------
+rem  Auto-detect DB mode: default SQLite; switch to PostgreSQL if PG_HOST / POSTGRES_HOST is set.
 :detect_database_mode
 if not defined LLM_PROXY_DB_DRIVER set "LLM_PROXY_DB_DRIVER=sqlite"
 if /i "%LLM_PROXY_DB_DRIVER%"=="auto" (
@@ -682,6 +697,7 @@ exit /b 1
 exit /b 0
 )
 if /i "%LLM_PROXY_DB_DRIVER%"=="sqlite" (
+rem  SQLite mode: ensure the data dir exists (first run creates the storage dir here)
 if not defined SQLITE_PATH set "SQLITE_PATH=%BIN_DIR%\storage\centag.db"
 call :log_info "--: SQLite"
 call :log_info " -: %SQLITE_PATH%"
@@ -695,6 +711,14 @@ exit /b 0
 call :log_err "  unsupported DB driver: %LLM_PROXY_DB_DRIVER% (expected postgresql or sqlite)"
 exit /b 1
 
+rem -- debug console env ----------------------------------------
+rem  Override the common LLM_PROXY_LOG_OUTPUT=file from secrets: force debug logs to go
+rem  to both console (stdout) and file so access/request logs are visible in the terminal.
+rem  Uses set (process env vars); all child processes (incl. desktop launcher) inherit them.
+rem  NOTE: centag-desktop.exe on Windows is a GUI subsystem (-H windowsgui); its stdout is
+rem  not attached to this console, so the launcher's "tee to console" is lost -- that is
+rem  why --desktop additionally mirrors the sidecar log via PowerShell
+rem  (see :debug_personal / :debug_minimal).
 :debug_console_env
 set "LLM_PROXY_SERVER_MODE=debug"
 set "LLM_PROXY_LOG_LEVEL=debug"
@@ -845,6 +869,10 @@ copy /y "%PROJECT_ROOT%\scripts\*.sh" "%BIN_DIR%\scripts\" >nul 2>&1
 )
 exit /b 0
 
+rem -- -- --------------------------------------------------------------
+rem  Build the backend binary (centag-<edition>). go build prints no progress on large
+rem  projects and the first build may take minutes; go mod download below splits "module
+rem  download" from "compile" so the quiet compile phase does not look like a hang.
 :build_backend
 call :check_go
 if errorlevel 1 exit /b 1
@@ -853,7 +881,11 @@ call :ensure_dirs
 call :copy_files
 call :log_info "  edition=%CENTAG_EDITION%..."
 pushd "%PROJECT_ROOT%"
+rem  Pre-fetch dependencies (near-instant when cached) so the compile phase is quiet and predictable.
+call :log_info "  downloading go modules (if needed)..."
+go mod download
 set "_LDF=-X 'main.Version=%CENTAG_VERSION%' -X 'main.BuildTime=%BUILD_TIME%'"
+call :log_info "  compiling backend (first build may take minutes with no progress output, please wait)..."
 go build -tags "%_FULL_FEATURE_TAGS%" -ldflags "-s -w %_LDF%" -o "%BIN_DIR%\%SERVER_BIN%" .\cmd\centag\main.go
 set "_RC=%ERRORLEVEL%"
 popd
@@ -1760,6 +1792,9 @@ call :log_err "- daemon -: %_DSUB%"
 call :log_info "-: start.bat daemon backend - stop - debug - status"
 exit /b 1
 
+rem -- debug -- ------------------------------------------------------
+rem  debug <edition> [--desktop] [--docker]
+rem    --desktop  tray+sidecar form (product desktop); --docker starts via containers.
 :cmd_debug
 set "D_EDITION=personal"
 set "D_DESKTOP=0"
@@ -1885,11 +1920,22 @@ exit /b 1
 )
 if not defined _RET ( call :log_err "desktop binary path empty" & exit /b 1 )
 if not exist "!_RET!" ( call :log_err "desktop binary missing: !_RET!" & exit /b 1 )
-rem  NOTE: inside ( ) blocks %VAR% expands at parse time; use !VAR! (delayed) so the
-rem  freshly-resolved desktop path is used. -bin has no quotes: cmd does not strip them,
-rem  and Go's flag parser would otherwise receive a quoted path and fail to locate the sidecar.
-"!_RET!" -edition=personal -bin=%BIN_DIR%\centag-personal%EXE_EXT%
-exit /b !ERRORLEVEL!
+rem  On Windows centag-desktop.exe is a GUI subsystem (-H windowsgui); its stdout cannot
+rem  attach to this console, so the launcher's internal "tee to console" for sidecar logs
+rem  is lost (start.sh on macOS/Linux is a console subsystem; logs show directly).
+rem  For debug: start the launcher in background, then mirror the sidecar log file into
+rem  this window via PowerShell. LLM_PROXY_LOG_OUTPUT=both guarantees the log is written
+rem  to %CENTAG_EDITION_LIB%\logs\centag-sidecar.log.
+set "_SIDECAR_LOG=%CENTAG_EDITION_LIB%\logs\centag-sidecar.log"
+if not exist "%CENTAG_EDITION_LIB%\logs" md "%CENTAG_EDITION_LIB%\logs" >nul 2>&1
+start "centag-desktop" "!_RET!" -edition=personal -bin=%BIN_DIR%\centag-personal%EXE_EXT%
+set "_DESK_PID="
+for /f "tokens=2 delims=," %%p in ('tasklist /FI "IMAGENAME eq centag-desktop.exe" /FO CSV /NH 2^>nul') do if not defined _DESK_PID set "_DESK_PID=%%~p"
+call :log_info "desktop launcher started in background (PID=!_DESK_PID!), mirroring sidecar log below (Ctrl+C also stops the launcher)"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$log='!_SIDECAR_LOG!'; $ok=$false; for($i=0;$i-lt60;$i++){ if(Test-Path $log){ $ok=$true; break } Start-Sleep -Seconds 1 }; if($ok){ Get-Content -Path $log -Wait -Tail 120 } else { Write-Host '[sidecar log file not found: !_SIDECAR_LOG!]' }"
+if defined _DESK_PID taskkill /PID !_DESK_PID! /T /F >nul 2>&1
+call :log_info "desktop launcher stopped"
+exit /b 0
 )
 set "CENTAG_EDITION=personal"
 pushd "%BIN_DIR%"
@@ -1981,8 +2027,19 @@ exit /b 1
 )
 if not defined _RET ( call :log_err "desktop binary path empty" & exit /b 1 )
 if not exist "!_RET!" ( call :log_err "desktop binary missing: !_RET!" & exit /b 1 )
-"!_RET!" -edition=minimal -bin=%BIN_DIR%\centag-minimal%EXE_EXT%
-exit /b !ERRORLEVEL!
+rem  Same as personal --desktop: Windows GUI subsystem keeps stdout off the console,
+rem  so start the launcher in background and mirror the sidecar log file
+rem  (%CENTAG_EDITION_LIB%\logs\centag-sidecar.log).
+set "_SIDECAR_LOG=%CENTAG_EDITION_LIB%\logs\centag-sidecar.log"
+if not exist "%CENTAG_EDITION_LIB%\logs" md "%CENTAG_EDITION_LIB%\logs" >nul 2>&1
+start "centag-desktop" "!_RET!" -edition=minimal -bin=%BIN_DIR%\centag-minimal%EXE_EXT%
+set "_DESK_PID="
+for /f "tokens=2 delims=," %%p in ('tasklist /FI "IMAGENAME eq centag-desktop.exe" /FO CSV /NH 2^>nul') do if not defined _DESK_PID set "_DESK_PID=%%~p"
+call :log_info "desktop launcher started in background (PID=!_DESK_PID!), mirroring sidecar log below (Ctrl+C also stops the launcher)"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$log='!_SIDECAR_LOG!'; $ok=$false; for($i=0;$i-lt60;$i++){ if(Test-Path $log){ $ok=$true; break } Start-Sleep -Seconds 1 }; if($ok){ Get-Content -Path $log -Wait -Tail 120 } else { Write-Host '[sidecar log file not found: !_SIDECAR_LOG!]' }"
+if defined _DESK_PID taskkill /PID !_DESK_PID! /T /F >nul 2>&1
+call :log_info "desktop launcher stopped"
+exit /b 0
 )
 set "CENTAG_EDITION=minimal"
 pushd "%BIN_DIR%"
