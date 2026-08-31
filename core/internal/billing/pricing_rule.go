@@ -18,10 +18,9 @@ const (
 )
 
 const (
-	PriceSourceRule        = billing.PriceSourceRule
-	PriceSourceLegacyTable = billing.PriceSourceLegacyTable
-	PriceSourceDefault     = billing.PriceSourceDefault
-	PriceSourceConfig      = billing.PriceSourceConfig
+	PriceSourceRule    = billing.PriceSourceRule
+	PriceSourceDefault = billing.PriceSourceDefault
+	PriceSourceConfig  = billing.PriceSourceConfig
 )
 
 const DefaultPricingCurrency = billing.DefaultPricingCurrency

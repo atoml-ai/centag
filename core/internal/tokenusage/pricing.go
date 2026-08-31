@@ -5,11 +5,7 @@ import (
 
 	billinginternal "centag/core/internal/billing"
 	billingpkg "centag/core/pkg/billing"
-	"centag/core/pkg/scheduler"
 )
-
-// priceTable is the deprecated hardcoded fallback (often CNY despite cost_usd column name).
-var priceTable = scheduler.NewModelPriceTable()
 
 var pricingSvc billinginternal.PricingService
 
@@ -32,9 +28,7 @@ type PricingBreakdown struct {
 	OutputPricePerM float64 // USD per 1M tokens
 }
 
-// EstimateCost computes prompt + completion cost.
-// Prefer PricingService when injected; otherwise fall back to the legacy price table.
-// Failures in PricingService fall back silently (do not block the proxy path).
+// EstimateCost computes prompt + completion cost via PricingService.
 func EstimateCost(backendID, model string, promptTokens, completionTokens int) float64 {
 	bd := EstimateCostDetailed(backendID, model, promptTokens, completionTokens)
 	return bd.TotalCost
@@ -61,22 +55,10 @@ func EstimateCostDetailed(backendID, model string, promptTokens, completionToken
 			}
 		}
 	}
-	total := priceTable.EstimateCost(backendID, model, promptTokens, completionTokens)
-	price := priceTable.GetPrice(backendID, model)
-	in := float64(promptTokens) / 1_000_000 * price.InputPrice
-	out := float64(completionTokens) / 1_000_000 * price.OutputPrice
-	currency := price.Currency
-	if currency == "" {
-		currency = billinginternal.DefaultPricingCurrency
-	}
+	// No pricing service configured — return zero cost.
 	return PricingBreakdown{
-		TotalCost:       total,
-		InputCost:       in,
-		OutputCost:      out,
-		Currency:        currency,
-		Source:          billinginternal.PriceSourceLegacyTable,
-		InputPricePerM:  price.InputPrice,
-		OutputPricePerM: price.OutputPrice,
+		Currency: billinginternal.DefaultPricingCurrency,
+		Source:   "no_pricing_service",
 	}
 }
 

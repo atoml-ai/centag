@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"centag/core/pkg/billing"
-	"centag/core/pkg/scheduler"
 )
 
 // PricingService resolves prices and estimates costs. Distinct from Event Service.
@@ -26,10 +25,9 @@ type cachedPrice struct {
 	expiresAt time.Time
 }
 
-// DefaultPricingService implements PricingService with TTL cache + legacy fallback.
+// DefaultPricingService implements PricingService with TTL cache.
 type DefaultPricingService struct {
 	store      RuleStore
-	legacy     *scheduler.ModelPriceTable
 	ttl        time.Duration
 	mu         sync.RWMutex
 	cache      map[string]*cachedPrice
@@ -48,22 +46,12 @@ func WithCacheTTL(d time.Duration) PricingServiceOption {
 	}
 }
 
-// WithLegacyPriceTable overrides the deprecated hardcoded fallback table.
-func WithLegacyPriceTable(pt *scheduler.ModelPriceTable) PricingServiceOption {
-	return func(s *DefaultPricingService) {
-		if pt != nil {
-			s.legacy = pt
-		}
-	}
-}
-
 // NewPricingService creates a PricingService backed by RuleStore.
 func NewPricingService(store RuleStore, opts ...PricingServiceOption) *DefaultPricingService {
 	s := &DefaultPricingService{
-		store:  store,
-		legacy: scheduler.NewModelPriceTable(),
-		ttl:    5 * time.Minute,
-		cache:  make(map[string]*cachedPrice),
+		store: store,
+		ttl:   5 * time.Minute,
+		cache: make(map[string]*cachedPrice),
 	}
 	for _, opt := range opts {
 		opt(s)
@@ -130,34 +118,12 @@ func (s *DefaultPricingService) resolveUncached(ctx context.Context, backendID, 
 		}
 	}
 
-	if s.legacy != nil {
-		return resolveFromLegacyTable(s.legacy, backendID, model), nil
-	}
-
 	return &PriceInfo{
 		InputPricePerM:  0.7,
 		OutputPricePerM: 0.7,
 		Currency:        DefaultPricingCurrency,
 		Source:          PriceSourceDefault,
 	}, nil
-}
-
-func resolveFromLegacyTable(pt *scheduler.ModelPriceTable, backendID, model string) *PriceInfo {
-	lp := pt.GetPrice(backendID, model)
-	source := PriceSourceDefault
-	if backendPrices, ok := pt.GetAllPrices()[backendID]; ok {
-		if _, ok := backendPrices[model]; ok {
-			source = PriceSourceLegacyTable
-		} else if _, ok := backendPrices["*"]; ok {
-			source = PriceSourceLegacyTable
-		}
-	}
-	return &PriceInfo{
-		InputPricePerM:  lp.InputPrice,
-		OutputPricePerM: lp.OutputPrice,
-		Currency:        coalesceCurrency(lp.Currency),
-		Source:          source,
-	}
 }
 
 func (s *DefaultPricingService) EstimateCost(ctx context.Context, backendID, model string, inputTokens, outputTokens int) (*CostBreakdown, error) {
@@ -281,11 +247,6 @@ func (s *DefaultPricingService) resolveUncachedByType(ctx context.Context, backe
 	// 没有找到指定类型的规则，降级到 cost 类型
 	if priceType != billing.PriceTypeCost {
 		return s.resolveUncachedByType(ctx, backendID, model, billing.PriceTypeCost)
-	}
-
-	// cost 类型也没有找到，使用 legacy 或默认值
-	if s.legacy != nil {
-		return resolveFromLegacyTable(s.legacy, backendID, model), nil
 	}
 
 	return &PriceInfo{

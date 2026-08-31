@@ -132,12 +132,13 @@ func TestPriceResolutionFallback(t *testing.T) {
 	if info.Source != PriceSourceDefault || info.InputPricePerM != 0.7 {
 		t.Fatalf("want default 0.7 USD, got %+v", info)
 	}
+	// Unknown backend also returns default (no legacy table anymore)
 	info2, err := svc.ResolvePrice(ctx, "ollama-local", "any")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if info2.Source != PriceSourceLegacyTable || info2.InputPricePerM != 0 {
-		t.Fatalf("want legacy ollama 0, got %+v", info2)
+	if info2.Source != PriceSourceDefault || info2.InputPricePerM != 0.7 {
+		t.Fatalf("want default 0.7 USD, got %+v", info2)
 	}
 }
 

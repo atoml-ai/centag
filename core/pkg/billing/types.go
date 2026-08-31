@@ -74,10 +74,9 @@ type CostBreakdown struct {
 
 // Price source constants for ResolvePrice / EstimateCost.
 const (
-	PriceSourceRule        = "rule"
-	PriceSourceLegacyTable = "legacy_table"
-	PriceSourceDefault     = "default"
-	PriceSourceConfig      = "config" // 从配置文件加载
+	PriceSourceRule    = "rule"
+	PriceSourceDefault = "default"
+	PriceSourceConfig  = "config" // 从配置文件加载
 )
 
 // DefaultPricingCurrency is the storage / calculation currency (cost_usd column stores USD).
