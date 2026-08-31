@@ -75,11 +75,9 @@ func LoadBootstrap() *BootstrapConfig {
 	// 构建 DSN
 	dsn := buildDSN(driver)
 
-	// SQLite 路径（供数据库插件使用，与 DSN 保持一致）
-	var dbPath string
-	if driver == "sqlite" || driver == "auto" {
-		dbPath = resolvePathRelativeToExecutable(envFirst("SQLITE_PATH", "./storage/centag.db"))
-	}
+	// SQLite 路径（供数据库插件使用）——即使显式指定 postgresql，
+	// database.Init 也会在 PG 失败时降级到 sqlite，所以必须始终预设路径。
+	dbPath := resolvePathRelativeToExecutable(envFirst("SQLITE_PATH", "./storage/centag.db"))
 
 	return &BootstrapConfig{
 		Server: ServerConfig{
