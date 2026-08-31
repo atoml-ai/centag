@@ -245,6 +245,20 @@ func (s *Server) handleStatus(c *gin.Context) {
 		}
 	}
 
+	// Configsync 状态（如果调度器已注册）
+	if s.configsyncScheduler != nil {
+		csStatus := s.configsyncScheduler.Status()
+		resp["configsync"] = gin.H{
+			"last_sync_time": csStatus.LastSyncTime.Format(time.RFC3339),
+			"last_sync_ok":   csStatus.LastSyncOK,
+			"sync_count":     csStatus.SyncCount,
+			"error_count":    csStatus.ErrorCount,
+			"price_applied":  csStatus.PriceApplied,
+			"price_skipped":  csStatus.PriceSkipped,
+			"last_error":     csStatus.LastError,
+		}
+	}
+
 	c.JSON(200, resp)
 }
 

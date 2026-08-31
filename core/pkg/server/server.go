@@ -51,6 +51,7 @@ import (
 	pluginregistry "centag/core/pkg/plugin/registry"
 	"centag/core/pkg/processor"
 	"centag/core/pkg/proxymode"
+	"centag/core/pkg/configsync"
 	"centag/core/pkg/storage"
 	"centag/core/pkg/systemupdateapi"
 	"centag/core/pkg/tokenusageapi"
@@ -112,6 +113,7 @@ type Server struct {
 	conversationHandler    *ConversationHandler
 	conversationStore      conversation.Store
 	extensionHost          *extension.RuntimeHost
+	configsyncScheduler    *configsync.ConfigScheduler
 
 	// 流水线默认模式相关 handler
 	pipelineDefaultsHandler *handler.PipelineDefaultsHandler
@@ -2077,6 +2079,20 @@ func (s *Server) GetRouter() *gin.Engine {
 func (s *Server) SetVersionProvider(vp internal.VersionProvider) {
 	if s.systemUpdate != nil {
 		s.systemUpdate.SetVersionProvider(vp)
+	}
+}
+
+// SetConfigSyncScheduler stores the configsync scheduler reference so that
+// its status can be exposed via the status endpoint.
+func (s *Server) SetConfigSyncScheduler(sch *configsync.ConfigScheduler) {
+	s.configsyncScheduler = sch
+}
+
+// InvalidatePricingCache clears the pricing service cache after configsync
+// updates pricing rules, ensuring the next request uses fresh data.
+func (s *Server) InvalidatePricingCache() {
+	if s.pricingService != nil {
+		_ = s.pricingService.InvalidateCache(context.Background())
 	}
 }
 

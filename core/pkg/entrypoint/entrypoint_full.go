@@ -13,6 +13,7 @@ import (
 
 	"centag/core/internal"
 	"centag/core/internal/auth"
+	"centag/core/internal/billing"
 	"centag/core/pkg/backend"
 	"centag/core/pkg/bootstrap"
 	"centag/core/pkg/config"
@@ -285,13 +286,57 @@ func startConfigsync(srv *server.Server) {
 				stateDir = dataDir
 			}
 		}
+
+		mapper := buildBackendMapper()
+		priceStore := buildPriceStore()
+
 		scheduler := configsync.NewScheduler(configsync.SchedulerConfig{
 			Provider: provider,
 			StateDir: stateDir,
+			OnUpdate: func(snap *configsync.Snapshot) {
+				if len(snap.Prices) > 0 && mapper != nil && priceStore != nil {
+					result, err := configsync.ApplyPrices(
+						context.Background(), snap.Prices, mapper, priceStore, true,
+					)
+					if err != nil {
+						logger.Warnf("configsync: apply prices failed: %v", err)
+					} else {
+						logger.Infof("configsync: prices applied=%d skipped=%d", result.Applied, result.Skipped)
+					}
+				}
+				srv.InvalidatePricingCache()
+			},
 		})
+		srv.SetConfigSyncScheduler(scheduler)
 		scheduler.Start(context.Background())
 		logger.Infof("Configsync scheduler started (snapshot: %s)", snapshotURL)
 		return
 	}
 	logger.Infof("Configsync not configured (no snapshot URL or feishu credentials)")
+}
+
+// buildBackendMapper returns a BackendMapper that resolves base_url → []backend_id
+// by matching against the global backend manager's loaded configs.
+func buildBackendMapper() configsync.BackendMapper {
+	return func(baseURL string) []string {
+		manager := backend.GetManager()
+		normalized := configsync.NormalizeBaseURL(baseURL)
+		var ids []string
+		for _, cfg := range manager.List() {
+			if configsync.NormalizeBaseURL(cfg.BaseURL) == normalized {
+				ids = append(ids, cfg.ID)
+			}
+		}
+		return ids
+	}
+}
+
+// buildPriceStore returns a PriceStore backed by the SQL database.
+// Returns nil if the database is not available.
+func buildPriceStore() configsync.PriceStore {
+	db := database.Get().GetDB()
+	if db == nil {
+		return nil
+	}
+	return billing.NewSQLRuleStore(db, database.Get().DriverName())
 }
