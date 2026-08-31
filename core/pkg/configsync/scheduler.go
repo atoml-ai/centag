@@ -78,6 +78,7 @@ type ConfigScheduler struct {
 	stateDir string
 	interval time.Duration
 	onUpdate func(*Snapshot)
+	runOnce  bool
 
 	mu           sync.Mutex
 	snap         *Snapshot
@@ -94,14 +95,17 @@ type ConfigScheduler struct {
 type SchedulerConfig struct {
 	Provider Provider
 	StateDir string
-	Interval time.Duration // default 30m
+	Interval time.Duration // default 30m; ignored when RunOnce=true
 	OnUpdate func(*Snapshot)
+	// RunOnce makes the scheduler sync exactly once on startup (no polling).
+	// Subsequent syncs are triggered manually via SyncNow().
+	RunOnce bool
 }
 
 // NewScheduler creates a scheduler and immediately loads the last-good
 // snapshot from stateDir if present (fail-open on startup).
 func NewScheduler(cfg SchedulerConfig) *ConfigScheduler {
-	if cfg.Interval == 0 {
+	if cfg.Interval == 0 && !cfg.RunOnce {
 		cfg.Interval = 30 * time.Minute
 	}
 	s := &ConfigScheduler{
@@ -109,6 +113,7 @@ func NewScheduler(cfg SchedulerConfig) *ConfigScheduler {
 		stateDir: cfg.StateDir,
 		interval: cfg.Interval,
 		onUpdate: cfg.OnUpdate,
+		runOnce:  cfg.RunOnce,
 		stopCh:   make(chan struct{}),
 	}
 	if cfg.StateDir != "" {
@@ -195,6 +200,12 @@ func (s *ConfigScheduler) SyncNow(ctx context.Context) error {
 }
 
 func (s *ConfigScheduler) run(ctx context.Context) {
+	// RunOnce mode: sync immediately and return (no polling).
+	if s.runOnce {
+		_ = s.SyncNow(ctx)
+		return
+	}
+	// Normal polling mode.
 	timer := time.NewTimer(initialJitter())
 	defer timer.Stop()
 	select {

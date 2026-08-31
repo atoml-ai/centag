@@ -59,7 +59,12 @@ func ApplyPrices(ctx context.Context, prices []ProviderPrice, mapBackend Backend
 		}
 		backendIDs := mapBackend(NormalizeBaseURL(p.BaseURL))
 		if len(backendIDs) == 0 {
-			continue // no matching local backend
+			// No matching local backend — derive backend_id from provider name
+			// so prices still appear in billing rules even without backend config.
+			fallbackID := DeriveBackendID(p)
+			if fallbackID != "" {
+				backendIDs = []string{fallbackID}
+			}
 		}
 		for _, backendID := range backendIDs {
 			for _, m := range p.Models {
@@ -76,6 +81,27 @@ func ApplyPrices(ctx context.Context, prices []ProviderPrice, mapBackend Backend
 		}
 	}
 	return result, nil
+}
+
+// DeriveBackendID returns a stable backend identifier from a provider's
+// base_url or provider_name, suitable for billing rules when no local
+// backend is configured.
+func DeriveBackendID(p ProviderPrice) string {
+	// Prefer provider name if set.
+	if name := strings.TrimSpace(p.ProviderName); name != "" {
+		return strings.ToLower(name)
+	}
+	// Extract host from base_url as last resort.
+	host := NormalizeBaseURL(p.BaseURL)
+	if i := strings.Index(host, "://"); i >= 0 {
+		host = host[i+3:]
+	}
+	if i := strings.Index(host, "/"); i >= 0 {
+		host = host[:i]
+	}
+	// Strip common prefixes.
+	host = strings.TrimPrefix(host, "api.")
+	return host
 }
 
 func upsertPriceRule(ctx context.Context, store PriceStore, backendID string, m ModelPrice, currency string, skipManual bool) (skipped bool, err error) {
