@@ -1350,6 +1350,10 @@ stack_cmd() {
 # Run
 run() {
     load_env
+    # personal 版始终使用 SQLite（config/secrets/.env 可能为 team 版设了 PostgreSQL）
+    if [ "${CENTAG_EDITION:-personal}" = "personal" ]; then
+        export LLM_PROXY_DB_DRIVER=sqlite
+    fi
     resolve_backend_port || return 1
     [ ! -f "$BIN_DIR/$SERVER_BIN" ] && build
     print_test_examples
@@ -1479,6 +1483,9 @@ debug() {
     # ── personal：开源全功能二进制 + webui 前端 ───────────────────
 
     load_env
+
+    # personal 版始终使用 SQLite（config/secrets/.env 可能为 team 版设了 PostgreSQL）
+    export LLM_PROXY_DB_DRIVER=sqlite
 
     # 自动检测数据库模式
     detect_database_mode
@@ -1728,6 +1735,10 @@ _debug_minimal() {
     local with_desktop="${1:-false}"
 
     load_env
+    # personal/minimal 版始终使用 SQLite（config/secrets/.env 可能为 team 版设了 PostgreSQL）
+    if [ "${CENTAG_EDITION:-personal}" != "team" ]; then
+        export LLM_PROXY_DB_DRIVER=sqlite
+    fi
     detect_database_mode
     centag_export_debug_console_env
     centag_set_edition minimal
@@ -1878,6 +1889,10 @@ _debug_docker() {
 # Daemon
 daemon() {
     load_env
+    # personal 版始终使用 SQLite（config/secrets/.env 可能为 team 版设了 PostgreSQL）
+    if [ "${CENTAG_EDITION:-personal}" = "personal" ]; then
+        export LLM_PROXY_DB_DRIVER=sqlite
+    fi
     detect_database_mode
     start_backend_background
 }
@@ -1885,6 +1900,10 @@ daemon() {
 # Daemon Debug
 daemon-debug() {
     load_env
+    # personal 版始终使用 SQLite（config/secrets/.env 可能为 team 版设了 PostgreSQL）
+    if [ "${CENTAG_EDITION:-personal}" = "personal" ]; then
+        export LLM_PROXY_DB_DRIVER=sqlite
+    fi
     detect_database_mode
     centag_export_debug_console_env
     resolve_backend_port || return 1
@@ -2672,6 +2691,10 @@ start_frontend_dev() {
 # 启动全部开发服务（后台后端 + 前台前端）
 _run_all_dev() {
     load_env
+    # personal 版始终使用 SQLite（config/secrets/.env 可能为 team 版设了 PostgreSQL）
+    if [ "${CENTAG_EDITION:-personal}" = "personal" ]; then
+        export LLM_PROXY_DB_DRIVER=sqlite
+    fi
     detect_database_mode
     centag_export_debug_console_env
 
