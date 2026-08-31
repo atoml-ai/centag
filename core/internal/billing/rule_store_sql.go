@@ -301,7 +301,7 @@ func (s *SQLRuleStore) GetRuleByModelAndType(ctx context.Context, backendID, mod
 	}
 
 	if best == nil {
-		return nil, fmt.Errorf("no pricing rule found for %s/%s type=%s", backendID, model, priceType)
+		return nil, billing.ErrRuleNotFound
 	}
 
 	cp := *best

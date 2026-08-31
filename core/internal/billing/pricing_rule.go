@@ -25,3 +25,5 @@ const (
 )
 
 const DefaultPricingCurrency = billing.DefaultPricingCurrency
+
+var ErrRuleNotFound = billing.ErrRuleNotFound

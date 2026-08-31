@@ -1,6 +1,12 @@
 package billing
 
-import "time"
+import (
+	"fmt"
+	"time"
+)
+
+// ErrRuleNotFound is returned when a pricing rule is not found.
+var ErrRuleNotFound = fmt.Errorf("pricing rule not found")
 
 // PriceType 定价类型
 type PriceType string

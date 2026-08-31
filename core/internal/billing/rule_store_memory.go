@@ -217,7 +217,7 @@ func (s *MemoryRuleStore) GetRuleByModelAndType(ctx context.Context, backendID, 
 	}
 
 	if best == nil {
-		return nil, fmt.Errorf("no pricing rule found for %s/%s type=%s", backendID, model, priceType)
+		return nil, ErrRuleNotFound
 	}
 
 	cp := *best
