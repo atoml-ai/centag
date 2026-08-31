@@ -432,3 +432,26 @@ export function deletePricingSyncBatch(id: number) {
     method: 'delete'
   })
 }
+
+// Configsync — Feishu Bitable price sync
+export interface ConfigSyncStatus {
+  enabled: boolean
+  provider?: string
+  last_sync?: string
+  ok?: boolean
+  error?: string
+}
+
+export function getConfigSyncStatus() {
+  return api({
+    url: '/api/v1/admin/configsync/status',
+    method: 'get'
+  }) as Promise<ConfigSyncStatus>
+}
+
+export function triggerConfigSyncNow() {
+  return api({
+    url: '/api/v1/admin/configsync/sync-now',
+    method: 'post'
+  }) as Promise<{ status: string; synced_at: string }>
+}

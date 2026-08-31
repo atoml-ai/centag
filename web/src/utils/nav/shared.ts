@@ -326,6 +326,22 @@ export function buildWorkerNav(caps: Capabilities): NavItem[] {
     items.push(accessNavGroup())
   }
 
+  // 系统设置：配置 + 模型配置 + 计费规则（personal / team_user 共用）
+  if (caps.systemConfig) {
+    const sysChildren: NavItem[] = [
+      configNav({ requiresAdmin: caps.role !== 'personal' }),
+      modelConfigNav({ requiresAdmin: caps.role !== 'personal' }),
+      {
+        id: 'billing-rules',
+        labelKey: 'nav.billingRules',
+        icon: 'Coin',
+        path: '/billing',
+        requiresAdmin: caps.role !== 'personal'
+      }
+    ]
+    items.push(navGroup('system-admin', 'nav.systemAdmin', 'Setting', sysChildren, '/config'))
+  }
+
   if (caps.navMoreMenu) {
     const moreChildren = buildMoreNavChildren(caps)
     if (moreChildren.length) {

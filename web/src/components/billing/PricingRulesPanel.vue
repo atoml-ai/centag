@@ -24,7 +24,8 @@
         <el-option :label="t('billingRules.filters.tierPaid')" value="paid" />
       </el-select>
       <el-button size="small" :loading="loading" @click="load">{{ t('billingRulesDialog.refresh') }}</el-button>
-      <el-button size="small" @click="openImport">{{ t('billingRulesDialog.importYaml') }}</el-button>
+      <el-button size="small" :loading="syncing" @click="syncFromFeishu">{{ t('billingRules.syncOnline') }}</el-button>
+      <el-button size="small" @click="openImport">{{ t('billingRulesDialog.importLocal') }}</el-button>
       <el-button size="small" @click="doExport">{{ t('billingRulesDialog.export') }}</el-button>
       <el-button size="small" type="primary" @click="openCreate">{{ t('billingRulesDialog.addRule') }}</el-button>
       <el-radio-group v-model="displayCurrency" size="small" @change="onDisplayCurrencyChange">
@@ -184,6 +185,7 @@ const { t } = useI18n()
 
 const loading = ref(false)
 const saving = ref(false)
+const syncing = ref(false)
 const rules = ref<PricingRule[]>([])
 const configuredBackendIds = ref<Set<string>>(new Set())
 const modelsByBackend = ref<Map<string, Set<string>>>(new Map())
@@ -459,6 +461,28 @@ async function doImport() {
     ElMessage.error(e instanceof Error ? e.message : t('billingRulesDialog.message.importFailed'))
   } finally {
     saving.value = false
+  }
+}
+
+async function syncFromFeishu() {
+  try {
+    await ElMessageBox.confirm(
+      t('billingRules.confirmSyncFeishu'),
+      t('billingRules.confirmSyncFeishuTitle')
+    )
+  } catch {
+    return
+  }
+  syncing.value = true
+  try {
+    await billingApi.triggerConfigSyncNow()
+    ElMessage.success(t('billingRules.syncFeishuSuccess'))
+    await load()
+    emit('saved')
+  } catch (e: unknown) {
+    ElMessage.error(e instanceof Error ? e.message : t('billingRules.syncFeishuFailed'))
+  } finally {
+    syncing.value = false
   }
 }
 

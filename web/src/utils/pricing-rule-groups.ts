@@ -156,6 +156,11 @@ export function filterRulesToConfigured(
   configuredBackendIds: Set<string>,
   modelsByBackend: Map<string, Set<string>>
 ): PricingRule[] {
+  // When no backends are configured (e.g. personal edition before first setup),
+  // show all rules so admin can see and manage synced prices.
+  if (configuredBackendIds.size === 0) {
+    return rules
+  }
   return rules.filter(
     (r) => isRuleForConfiguredBackend(r, configuredBackendIds) && isRuleForConfiguredModel(r, modelsByBackend)
   )
