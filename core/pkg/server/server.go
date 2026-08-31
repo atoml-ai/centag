@@ -1130,6 +1130,7 @@ func New(cfg *config.Config) *Server {
 		SystemUpdate:      systemupdateapi.Wrap(systemUpdate),
 		ABEvalHandler:     abEvalAdmin,
 		ModeManager:       modeMgr,
+		ConfigSyncService: srv,
 	})
 	if err := extension.InitAll(srv.extensionHost); err != nil {
 		logger.Warnf("extension plugin init failed: %v", err)
@@ -1477,16 +1478,26 @@ func (s *Server) setupRoutes() {
 	teamAdmin := adminAPI.Group("", s.teamEditionOnly())
 	{
 		// Admin /users* and /api-keys* are registered by centag-pro via extension.Host (E2.1/E2.2).
-
-		// Token 使用统计（管理员查看所有用户）
 		// Admin token-usage/all|ranking and /quotas* registered by centag-pro (E2.4).
-		// cost/summary / billing/rules 挂在 adminAPI（非 team-only）：
-		// personal 也要看成本与定价规则；BillingHook 扣费仅 team+pro。
+		// /admin/ab-eval* and /admin/tenants* registered by centag-pro (E2.3/E2.5).
+		if s.extensionHost != nil {
+			s.extensionHost.ApplyTeamAdmin(teamAdmin)
+		}
+	}
+
+	// ── 认证路由（JWT-only，无 admin 要求）──────────────────────────────────
+	// personal/minimal 版用户角色为 RoleNormal，无法通过 AdminOnlyMiddleware。
+	// billing/rules 和 configsync 路由放在此组，任何已登录用户均可访问。
+	{
+		authAPI := s.router.Group("/api/v1", auth.JWTMiddleware())
+
+		// cost/summary / billing/rules：personal 也要看成本与定价规则；
+		// BillingHook 扣费仅 team+pro。
 		if s.costHandler != nil {
-			adminAPI.GET("/cost/summary", s.costHandler.GetSummary)
+			authAPI.GET("/admin/cost/summary", s.costHandler.GetSummary)
 		}
 		if s.billingRulesHandler != nil {
-			billingRules := adminAPI.Group("/billing/rules")
+			billingRules := authAPI.Group("/admin/billing/rules")
 			{
 				billingRules.GET("", s.billingRulesHandler.ListRules)
 				billingRules.POST("", s.billingRulesHandler.CreateRule)
@@ -1496,10 +1507,12 @@ func (s *Server) setupRoutes() {
 				billingRules.GET("/export", s.billingRulesHandler.ExportRules)
 			}
 		}
-		// /admin/ab-eval* and /admin/tenants* registered by centag-pro (E2.3/E2.5).
-		// Paths stay under /api/v1/admin (not /admin/pro).
-		if s.extensionHost != nil {
-			s.extensionHost.ApplyTeamAdmin(teamAdmin)
+		// Configsync endpoints (status + manual sync + price apply).
+		// Handlers check scheduler at request time because it is set after setupRoutes().
+		{
+			csGroup := authAPI.Group("/admin/configsync")
+			csGroup.GET("/status", s.handleConfigSyncStatus)
+			csGroup.POST("/sync-now", s.handleConfigSyncNow)
 		}
 	}
 
@@ -2088,12 +2101,137 @@ func (s *Server) SetConfigSyncScheduler(sch *configsync.ConfigScheduler) {
 	s.configsyncScheduler = sch
 }
 
+// ConfigSyncScheduler returns the configsync scheduler (may be nil).
+// Returns any to satisfy extension.ConfigSyncService interface.
+func (s *Server) ConfigSyncScheduler() any {
+	return s.configsyncScheduler
+}
+
 // InvalidatePricingCache clears the pricing service cache after configsync
 // updates pricing rules, ensuring the next request uses fresh data.
 func (s *Server) InvalidatePricingCache() {
 	if s.pricingService != nil {
 		_ = s.pricingService.InvalidateCache(context.Background())
 	}
+}
+
+// ApplyConfigSyncPrices applies prices from the current configsync snapshot
+// to the billing rule store. Called by admin handler after manual sync.
+func (s *Server) ApplyConfigSyncPrices() error {
+	sch := s.configsyncScheduler
+	if sch == nil {
+		logger.Warnf("configsync: ApplyConfigSyncPrices: scheduler is nil")
+		return nil
+	}
+	snap := sch.Snapshot()
+	if snap == nil {
+		logger.Warnf("configsync: ApplyConfigSyncPrices: snapshot is nil")
+		return nil
+	}
+	if len(snap.Prices) == 0 {
+		logger.Warnf("configsync: ApplyConfigSyncPrices: snapshot has 0 prices")
+		return nil
+	}
+	db := database.Get()
+	if db == nil {
+		logger.Warnf("configsync: ApplyConfigSyncPrices: database is nil")
+		return nil
+	}
+	sqlDB := db.GetDB()
+	if sqlDB == nil {
+		logger.Warnf("configsync: ApplyConfigSyncPrices: sqlDB is nil")
+		return nil
+	}
+	store := billing.NewSQLRuleStore(sqlDB, db.DriverName())
+	manager := backend.GetManager()
+	localBackends := manager.List()
+	logger.Infof("configsync: mapper: %d local backend(s)", len(localBackends))
+	for _, cfg := range localBackends {
+		logger.Infof("configsync: mapper:   backend=%s base_url=%s", cfg.ID, configsync.NormalizeBaseURL(cfg.BaseURL))
+	}
+	mapper := func(baseURL string) []string {
+		normalized := configsync.NormalizeBaseURL(baseURL)
+		var ids []string
+		for _, cfg := range localBackends {
+			if configsync.NormalizeBaseURL(cfg.BaseURL) == normalized {
+				ids = append(ids, cfg.ID)
+			}
+		}
+		if len(ids) == 0 {
+			logger.Warnf("configsync: mapper: no match for remote base_url=%s (normalized=%s)", baseURL, normalized)
+		}
+		return ids
+	}
+	logger.Infof("configsync: applying %d price provider(s)", len(snap.Prices))
+	for i, p := range snap.Prices {
+		logger.Infof("configsync: provider[%d] base_url=%s models=%d enabled=%v", i, p.BaseURL, len(p.Models), p.Enabled)
+	}
+	result, err := configsync.ApplyPrices(context.Background(), snap.Prices, mapper, store, false)
+	if err != nil {
+		return err
+	}
+	s.InvalidatePricingCache()
+	logger.Infof("configsync: manual apply prices applied=%d skipped=%d", result.Applied, result.Skipped)
+	return nil
+}
+
+// ConfigSyncStatus returns the current configsync status as a map.
+func (s *Server) ConfigSyncStatus() map[string]any {
+	sch := s.configsyncScheduler
+	if sch == nil {
+		return map[string]any{"enabled": false}
+	}
+	status := sch.Status()
+	snap := sch.Snapshot()
+	resp := map[string]any{
+		"enabled":        true,
+		"provider":       "feishu",
+		"last_sync_time": status.LastSyncTime,
+		"last_sync_ok":   status.LastSyncOK,
+		"last_error":     status.LastError,
+		"sync_count":     status.SyncCount,
+		"error_count":    status.ErrorCount,
+	}
+	if snap != nil {
+		resp["snapshot_time"] = snap.GeneratedAt
+		resp["config_rows"] = len(snap.Config)
+		resp["price_providers"] = len(snap.Prices)
+	}
+	return resp
+}
+
+func (s *Server) handleConfigSyncStatus(c *gin.Context) {
+	c.JSON(200, s.ConfigSyncStatus())
+}
+
+func (s *Server) handleConfigSyncNow(c *gin.Context) {
+	sch := s.configsyncScheduler
+	if sch == nil {
+		c.JSON(503, gin.H{"error": "configsync scheduler not available"})
+		return
+	}
+	if err := sch.SyncNow(c.Request.Context()); err != nil {
+		logger.Errorf("configsync manual sync failed: %v", err)
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+	snap := sch.Snapshot()
+	logger.Infof("configsync: SyncNow done, snapshot prices=%d", func() int {
+		if snap != nil {
+			return len(snap.Prices)
+		}
+		return 0
+	}())
+	// Apply prices from the fresh snapshot to billing rules.
+	if err := s.ApplyConfigSyncPrices(); err != nil {
+		logger.Warnf("configsync: apply prices after sync failed: %v", err)
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(200, gin.H{
+		"status":   "ok",
+		"synced_at": time.Now().UTC().Format(time.RFC3339),
+	})
 }
 
 // forceRestartMITM 强制重启 MITM 代理服务器，用于端口变更后的热生效。
