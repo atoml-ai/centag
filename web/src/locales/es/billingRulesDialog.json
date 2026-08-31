@@ -2,7 +2,7 @@
   "dialogTitle": "Reglas de facturación",
   "description": "Configure precios unitarios por backend + modelo (USD / 1M tokens). La importación/exportación YAML usa USD por defecto; la visualización puede cambiar a CNY (solo conversión, no modifica el original).",
   "refresh": "Actualizar",
-  "importYaml": "Importar YAML",
+  "importLocal": "Importar local",
   "export": "Exportar",
   "addRule": "Agregar regla",
   "usdLabel": "USD",

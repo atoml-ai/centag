@@ -2,7 +2,7 @@
   "dialogTitle": "计费规则",
   "description": "仅展示已配置后端及其模型的单价（美元 / 1M tokens）。打开页面时会自动清理未配置后端的残留规则。导入导出 YAML 默认 USD；显示可选人民币（仅换算）。",
   "refresh": "刷新",
-  "importYaml": "导入 YAML",
+  "importLocal": "本地导入",
   "export": "导出",
   "addRule": "新增规则",
   "usdLabel": "美元",

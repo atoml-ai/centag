@@ -2,7 +2,7 @@
   "dialogTitle": "과금 규칙",
   "description": "백엔드 + 모델별 단가를 설정합니다 (USD / 1M tokens). 가져오기/내보내기 YAML은 기본 USD; 표시는 CNY로 전환 가능 (변환만, 원본 변경 없음).",
   "refresh": "새로고침",
-  "importYaml": "YAML 가져오기",
+  "importLocal": "로컬 가져오기",
   "export": "내보내기",
   "addRule": "규칙 추가",
   "usdLabel": "USD",

@@ -2,7 +2,7 @@
   "dialogTitle": "請求ルール",
   "description": "バックエンド + モデルごとの単価を設定（USD / 1M tokens）。インポート/エクスポートの YAML はデフォルト USD。表示は CNY 切替可（換算のみ、元データは変更しません）。",
   "refresh": "更新",
-  "importYaml": "YAML インポート",
+  "importLocal": "ローカルインポート",
   "export": "エクスポート",
   "addRule": "ルールを追加",
   "usdLabel": "USD",
