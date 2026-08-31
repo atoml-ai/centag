@@ -38,6 +38,19 @@ type Deps struct {
 	// ABEvalHandler should be abevalapi.AdminService (admin query only).
 	ABEvalHandler any
 	ModeManager   any
+	// ConfigSyncService provides configsync status and price application.
+	// Should implement ConfigSyncService interface.
+	ConfigSyncService any
+}
+
+// ConfigSyncService is the interface plugins use to interact with configsync.
+type ConfigSyncService interface {
+	// ConfigSyncStatus returns the current sync status as a map.
+	ConfigSyncStatus() map[string]any
+	// ApplyConfigSyncPrices applies prices from the current snapshot to billing rules.
+	ApplyConfigSyncPrices() error
+	// ConfigSyncScheduler returns the scheduler for triggering manual sync.
+	ConfigSyncScheduler() any
 }
 
 // Host is the whitelist of capabilities the open core exposes to plugins.

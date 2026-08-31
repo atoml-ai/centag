@@ -270,49 +270,51 @@ func backendConfigFromConfig(c *config.BackendConfig) *backend.BackendConfig {
 }
 
 // startConfigsync optionally starts the configsync scheduler.
-// It checks CENTAG_CONFIGSYNC env (default on) and starts a snapshot or
-// feishu provider based on available credentials/URLs.
+// It checks CENTAG_CONFIGSYNC env (default on) and starts a feishu provider
+// based on available credentials. Both personal and team editions use feishu.
 func startConfigsync(srv *server.Server) {
 	if os.Getenv("CENTAG_CONFIGSYNC") == "off" {
 		return
 	}
-	// Determine provider: snapshot URL or feishu credentials.
-	snapshotURL := os.Getenv("CENTAG_CONFIGSYNC_SNAPSHOT_URL")
-	if snapshotURL != "" {
-		provider := configsync.NewSnapshotProvider([]string{snapshotURL})
-		stateDir := os.Getenv("CENTAG_CONFIGSYNC_STATE_DIR")
-		if stateDir == "" {
-			if dataDir := os.Getenv("CENTAG_DATA_DIR"); dataDir != "" {
-				stateDir = dataDir
-			}
-		}
 
-		mapper := buildBackendMapper()
-		priceStore := buildPriceStore()
-
-		scheduler := configsync.NewScheduler(configsync.SchedulerConfig{
-			Provider: provider,
-			StateDir: stateDir,
-			OnUpdate: func(snap *configsync.Snapshot) {
-				if len(snap.Prices) > 0 && mapper != nil && priceStore != nil {
-					result, err := configsync.ApplyPrices(
-						context.Background(), snap.Prices, mapper, priceStore, true,
-					)
-					if err != nil {
-						logger.Warnf("configsync: apply prices failed: %v", err)
-					} else {
-						logger.Infof("configsync: prices applied=%d skipped=%d", result.Applied, result.Skipped)
-					}
-				}
-				srv.InvalidatePricingCache()
-			},
-		})
-		srv.SetConfigSyncScheduler(scheduler)
-		scheduler.Start(context.Background())
-		logger.Infof("Configsync scheduler started (snapshot: %s)", snapshotURL)
+	provider := configsync.MustNewFeishuProvider()
+	if provider == nil {
+		logger.Infof("Configsync not configured (no feishu credentials)")
 		return
 	}
-	logger.Infof("Configsync not configured (no snapshot URL or feishu credentials)")
+
+	stateDir := os.Getenv("CENTAG_CONFIGSYNC_STATE_DIR")
+	if stateDir == "" {
+		if dataDir := os.Getenv("CENTAG_DATA_DIR"); dataDir != "" {
+			stateDir = dataDir
+		}
+	}
+
+	mapper := buildBackendMapper()
+	priceStore := buildPriceStore()
+
+	scheduler := configsync.NewScheduler(configsync.SchedulerConfig{
+		Provider: provider,
+		StateDir: stateDir,
+		RunOnce:  true, // only sync once on startup; manual sync via API button
+		OnUpdate: func(snap *configsync.Snapshot) {
+			if len(snap.Prices) > 0 && mapper != nil && priceStore != nil {
+				result, err := configsync.ApplyPrices(
+					context.Background(), snap.Prices, mapper, priceStore, true,
+				)
+				if err != nil {
+					logger.Warnf("configsync: apply prices failed: %v", err)
+				} else {
+					logger.Infof("configsync: prices applied=%d skipped=%d", result.Applied, result.Skipped)
+				}
+			}
+			srv.InvalidatePricingCache()
+		},
+	})
+	srv.SetConfigSyncScheduler(scheduler)
+	scheduler.Start(context.Background())
+	logger.Infof("Configsync scheduler started (feishu, config_table=%s, price_table=%s)",
+		provider.ConfigTableID(), provider.PriceTableID())
 }
 
 // buildBackendMapper returns a BackendMapper that resolves base_url → []backend_id
