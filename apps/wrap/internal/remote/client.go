@@ -37,6 +37,9 @@ func New(apiBase string) (*Client, error) {
 	if base == "" {
 		return nil, fmt.Errorf("empty api base")
 	}
+	if !strings.Contains(base, "://") {
+		base = "http://" + base
+	}
 	if _, err := url.Parse(base); err != nil {
 		return nil, err
 	}

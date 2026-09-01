@@ -31,6 +31,9 @@ type ProcessEnv struct {
 func ResolveAPIBase(server string) string {
 	api := strings.TrimSpace(server)
 	if api != "" {
+		if !strings.Contains(api, "://") {
+			api = "http://" + api
+		}
 		return strings.TrimRight(api, "/")
 	}
 	if snapshot.Exists() {
