@@ -3,6 +3,7 @@
   "subtitle": "配置和管理流水线策略，定义请求路由与模型调用链路",
   "searchPlaceholder": "搜索名称、ID、描述...",
   "searchCount": "{count} 条",
+  "selectAll": "全选",
   "batchExport": "批量导出（{count}）",
   "batchDelete": "批量删除（{count}）",
   "batchDeleteTooltip": "批量删除",

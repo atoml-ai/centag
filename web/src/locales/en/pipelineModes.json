@@ -2,6 +2,7 @@
   "title": "Pipeline Management",
   "searchPlaceholder": "Search name, ID, description...",
   "searchCount": "{count} items",
+  "selectAll": "Select All",
   "batchExport": "Batch Export ({count})",
   "batchDelete": "Batch Delete ({count})",
   "batchDeleteTooltip": "Batch Delete",

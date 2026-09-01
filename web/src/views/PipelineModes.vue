@@ -56,6 +56,16 @@
           {{ t('pipelineModes.searchCount', { count: filteredPipelines.length }) }}
         </span>
       </div>
+      <div class="toolbar-right">
+        <el-checkbox
+          v-if="filteredPipelines.length > 0"
+          v-model="allSelected"
+          :indeterminate="partialSelected"
+          @change="toggleSelectAll"
+        >
+          {{ t('pipelineModes.selectAll') }}
+        </el-checkbox>
+      </div>
     </div>
 
     <!-- 流水线卡片视图 -->
@@ -382,6 +392,23 @@ const canBatchDeleteSelected = computed(() => {
     getPipelineFeatureSupport('pipelineBatchDelete', row).enabled
   )
 })
+
+const allSelected = computed({
+  get: () => filteredPipelines.value.length > 0 && selectedPipelines.value.length === filteredPipelines.value.length,
+  set: () => {}
+})
+
+const partialSelected = computed(() =>
+  selectedPipelines.value.length > 0 && selectedPipelines.value.length < filteredPipelines.value.length
+)
+
+function toggleSelectAll(checked: boolean | string | number) {
+  if (checked) {
+    selectedPipelines.value = [...filteredPipelines.value]
+  } else {
+    selectedPipelines.value = []
+  }
+}
 
 const batchDeleteTooltip = computed(() => {
   if (canBatchDeleteSelected.value) return t('pipelineModes.batchDeleteTooltip')
@@ -899,6 +926,12 @@ onMounted(() => {
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
+}
+
+.toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .toolbar-actions .el-button {

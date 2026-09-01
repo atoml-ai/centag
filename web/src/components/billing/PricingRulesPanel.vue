@@ -3,35 +3,40 @@
     <p v-if="showDescription" class="sub">{{ t('billingRulesDialog.description') }}</p>
 
     <div class="toolbar">
-      <el-input
-        v-model="search"
-        clearable
-        size="small"
-        class="search-input"
-        :placeholder="t('billingRules.filters.searchPlaceholder')"
-      />
-      <el-select v-model="backendFilter" clearable size="small" class="filter-select" :placeholder="t('billingRules.filters.backend')">
-        <el-option v-for="id in backendOptions" :key="id" :label="id" :value="id" />
-      </el-select>
-      <el-select v-model="priceTypeFilter" size="small" class="filter-select-sm">
-        <el-option :label="t('billingRulesDialog.tabAll')" value="all" />
-        <el-option :label="t('billingRulesDialog.tabCost')" value="cost" />
-        <el-option :label="t('billingRulesDialog.tabRevenue')" value="revenue" />
-      </el-select>
-      <el-select v-model="freePaidFilter" size="small" class="filter-select-sm">
-        <el-option :label="t('billingRules.filters.tierAll')" value="all" />
-        <el-option :label="t('billingRules.filters.tierFree')" value="free" />
-        <el-option :label="t('billingRules.filters.tierPaid')" value="paid" />
-      </el-select>
-      <el-button size="small" :loading="loading" @click="load">{{ t('billingRulesDialog.refresh') }}</el-button>
-      <el-button size="small" :loading="syncing" @click="syncFromFeishu">{{ t('billingRules.syncOnline') }}</el-button>
-      <el-button size="small" @click="openImport">{{ t('billingRulesDialog.importLocal') }}</el-button>
-      <el-button size="small" @click="doExport">{{ t('billingRulesDialog.export') }}</el-button>
-      <el-button size="small" type="primary" @click="openCreate">{{ t('billingRulesDialog.addRule') }}</el-button>
-      <el-radio-group v-model="displayCurrency" size="small" @change="onDisplayCurrencyChange">
-        <el-radio-button value="USD">{{ t('billingRulesDialog.usdLabel') }}</el-radio-button>
-        <el-radio-button value="CNY">{{ t('billingRulesDialog.cnyLabel') }}</el-radio-button>
-      </el-radio-group>
+      <div class="toolbar-group">
+        <el-input
+          v-model="search"
+          clearable
+          size="small"
+          class="search-input"
+          :placeholder="t('billingRules.filters.searchPlaceholder')"
+        />
+        <el-select v-model="backendFilter" clearable size="small" class="filter-select" :placeholder="t('billingRules.filters.backend')">
+          <el-option v-for="id in backendOptions" :key="id" :label="id" :value="id" />
+        </el-select>
+        <el-select v-model="priceTypeFilter" size="small" class="filter-select-sm">
+          <el-option :label="t('billingRulesDialog.tabAll')" value="all" />
+          <el-option :label="t('billingRulesDialog.tabCost')" value="cost" />
+          <el-option :label="t('billingRulesDialog.tabRevenue')" value="revenue" />
+        </el-select>
+        <el-select v-model="freePaidFilter" size="small" class="filter-select-sm">
+          <el-option :label="t('billingRules.filters.tierAll')" value="all" />
+          <el-option :label="t('billingRules.filters.tierFree')" value="free" />
+          <el-option :label="t('billingRules.filters.tierPaid')" value="paid" />
+        </el-select>
+        <el-button size="small" :loading="loading" @click="load">{{ t('billingRulesDialog.refresh') }}</el-button>
+        <el-button size="small" :loading="syncing" @click="syncFromFeishu">{{ t('billingRules.syncOnline') }}</el-button>
+        <el-button size="small" @click="openImport">{{ t('billingRulesDialog.importLocal') }}</el-button>
+        <el-button size="small" @click="doExport">{{ t('billingRulesDialog.export') }}</el-button>
+        <el-button size="small" type="primary" @click="openCreate">{{ t('billingRulesDialog.addRule') }}</el-button>
+      </div>
+      <div class="toolbar-divider" />
+      <div class="toolbar-group">
+        <el-radio-group v-model="displayCurrency" size="small" @change="onDisplayCurrencyChange">
+          <el-radio-button value="USD">{{ t('billingRulesDialog.usdLabel') }}</el-radio-button>
+          <el-radio-button value="CNY">{{ t('billingRulesDialog.cnyLabel') }}</el-radio-button>
+        </el-radio-group>
+      </div>
     </div>
 
     <div v-loading="loading" class="groups-wrap">
@@ -525,8 +530,19 @@ defineExpose({ load, reload: load })
 .toolbar {
   display: flex;
   flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+}
+.toolbar-group {
+  display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   align-items: center;
+}
+.toolbar-divider {
+  width: 1px;
+  height: 24px;
+  background-color: var(--el-border-color);
 }
 .search-input {
   width: 220px;

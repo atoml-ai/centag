@@ -5,16 +5,16 @@
     </div>
     <div v-if="canWrite" class="mgr-toolbar">
       <div class="mgr-toolbar-left">
-        <el-button type="primary" size="small" @click="openCreate">
+        <el-button type="primary" @click="openCreate">
           <el-icon><Plus /></el-icon>
           {{ t('providerManager.addProvider') }}
         </el-button>
-        <el-button size="small" :disabled="busy" @click="handleImport">
+        <el-button :disabled="busy" @click="handleImport">
           <el-icon><Upload /></el-icon>
           {{ t('providerManager.import') }}
         </el-button>
         <el-dropdown trigger="click" :disabled="busy" @command="handleExportCommand">
-          <el-button size="small" :disabled="busy">
+          <el-button :disabled="busy">
             <el-icon><Download /></el-icon>
             {{ t('providerManager.export') }}
           </el-button>
@@ -25,19 +25,35 @@
             </el-dropdown-menu>
           </template>
         </el-dropdown>
+        <el-button :disabled="busy" @click="emit('refresh')">
+          <el-icon><Refresh /></el-icon>
+          {{ t('providerManager.refresh') }}
+        </el-button>
         <el-button
           v-if="backends.length > 0"
-          size="small"
           :loading="probingAll"
           @click="handleProbeAll"
         >
           <el-icon><Connection /></el-icon>
           {{ t('providerManager.allProbe') }}
         </el-button>
-        <el-button size="small" @click="router.push('/model-config')">
+        <el-button @click="router.push('/model-config')">
           <el-icon><Setting /></el-icon>
           {{ t('providerManager.modelVariables') }}
         </el-button>
+        <el-input
+          v-model="searchText"
+          :placeholder="t('providerManager.searchPlaceholder')"
+          clearable
+          style="width: 200px"
+        >
+          <template #prefix>
+            <el-icon><Search /></el-icon>
+          </template>
+        </el-input>
+        <span v-if="searchText" class="search-count">
+          {{ t('providerManager.searchCount', { count: filteredBackends.length }) }}
+        </span>
       </div>
       <div class="mgr-toolbar-right">
         <el-checkbox
@@ -50,20 +66,20 @@
         </el-checkbox>
         <template v-if="selectedIds.length > 0">
           <span class="toolbar-count">{{ t('providerManager.selectedCount', { count: selectedIds.length }) }}</span>
-          <el-button size="small" :loading="batchProbing" @click="handleBatchProbe">
+          <el-button :loading="batchProbing" @click="handleBatchProbe">
             {{ t('providerManager.batchProbe') }}
           </el-button>
-          <el-button size="small" type="danger" :loading="batchDeleting" @click="handleBatchDelete">
+          <el-button type="danger" :loading="batchDeleting" @click="handleBatchDelete">
             {{ t('providerManager.batchDelete') }}
           </el-button>
-          <el-button size="small" text @click="clearSelection">{{ t('providerManager.cancelSelection') }}</el-button>
+          <el-button text @click="clearSelection">{{ t('providerManager.cancelSelection') }}</el-button>
         </template>
       </div>
     </div>
 
     <div class="backend-grid">
       <div
-        v-for="b in backends"
+        v-for="b in filteredBackends"
         :key="b.id"
         class="backend-card"
         :class="{ 'is-default': defaultBackendId === b.id, selected: selectedIds.includes(b.id) }"
@@ -266,7 +282,7 @@
 import { ref, reactive, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { Plus, Upload, Download, Connection, Setting, Star, StarFilled, MoreFilled, WarningFilled, Clock, CircleCheckFilled } from '@element-plus/icons-vue'
+import { Plus, Upload, Download, Connection, Setting, Star, StarFilled, MoreFilled, WarningFilled, Clock, CircleCheckFilled, Search, Refresh } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import * as yaml from 'js-yaml'
 import BackendEditorDialog from '@/components/backends/BackendEditorDialog.vue'
@@ -312,13 +328,25 @@ const healthErrors = reactive<Record<string, string>>({})
 const defaultBackendId = ref('')
 const defaultModel = ref('')
 const selectedIds = ref<string[]>([])
+const searchText = ref('')
 
 const allSelected = computed(
-  () => props.backends.length > 0 && selectedIds.value.length === props.backends.length
+  () => filteredBackends.value.length > 0 && selectedIds.value.length === filteredBackends.value.length
 )
 const partialSelected = computed(
-  () => selectedIds.value.length > 0 && selectedIds.value.length < props.backends.length
+  () => selectedIds.value.length > 0 && selectedIds.value.length < filteredBackends.value.length
 )
+
+const filteredBackends = computed(() => {
+  if (!searchText.value) return props.backends
+  const q = searchText.value.toLowerCase()
+  return props.backends.filter((b: any) => {
+    const id = (b.id || '').toLowerCase()
+    const name = (b.name || '').toLowerCase()
+    const type = (b.type || '').toLowerCase()
+    return id.includes(q) || name.includes(q) || type.includes(q)
+  })
+})
 
 watch(
   () => props.backends,
@@ -414,7 +442,7 @@ function toggleSelect(id: string, checked: boolean) {
 }
 
 function toggleSelectAll(checked: boolean | string | number) {
-  selectedIds.value = checked ? props.backends.map((b: any) => b.id) : []
+  selectedIds.value = checked ? filteredBackends.value.map((b: any) => b.id) : []
 }
 
 function clearSelection() {
@@ -890,6 +918,11 @@ defineExpose({ openCreate, reloadDefault })
 }
 
 .toolbar-count {
+  font-size: 0.75rem;
+  color: #6b7280;
+}
+
+.search-count {
   font-size: 0.75rem;
   color: #6b7280;
 }
