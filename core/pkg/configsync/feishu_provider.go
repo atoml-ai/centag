@@ -13,18 +13,19 @@ import (
 )
 
 // FeishuProvider implements Provider backed by Feishu Bitable.
-// It reads the centag_config and centag_model_price tables.
+// It reads the centag_config, centag_model_price, and centag_pipeline_templates tables.
 type FeishuProvider struct {
-	client        *feishu.Client
-	appToken      string
-	configTableID string
-	priceTableID  string
+	client           *feishu.Client
+	appToken         string
+	configTableID    string
+	priceTableID     string
+	pipelineTableID  string
 }
 
 // NewFeishuProvider creates a Feishu provider from environment variables.
 // Credential fallback: CENTAG_CONFIGSYNC_FEISHU_* → CENTAG_TELEMETRY_FEISHU_*.
 // Only APP_ID/SECRET fall back (same Feishu app); Bitable identifiers (APP_TOKEN,
-// TABLE_ID, PRICE_TABLE_ID) are specific to the configsync base and must be set
+// TABLE_ID, PRICE_TABLE_ID, PIPELINE_TABLE_ID) are specific to the configsync base and must be set
 // explicitly via CENTAG_CONFIGSYNC_FEISHU_*.
 func NewFeishuProvider() (*FeishuProvider, error) {
 	appID := envOrFeishu("CENTAG_CONFIGSYNC_FEISHU_APP_ID", os.Getenv("CENTAG_TELEMETRY_FEISHU_APP_ID"))
@@ -32,6 +33,7 @@ func NewFeishuProvider() (*FeishuProvider, error) {
 	appToken := os.Getenv("CENTAG_CONFIGSYNC_FEISHU_APP_TOKEN")
 	configTableID := os.Getenv("CENTAG_CONFIGSYNC_FEISHU_TABLE_ID")
 	priceTableID := os.Getenv("CENTAG_CONFIGSYNC_FEISHU_PRICE_TABLE_ID")
+	pipelineTableID := os.Getenv("CENTAG_CONFIGSYNC_FEISHU_PIPELINE_TABLE_ID")
 
 	if appID == "" || appSecret == "" {
 		return nil, fmt.Errorf("configsync feishu: missing APP_ID/APP_SECRET")
@@ -48,10 +50,11 @@ func NewFeishuProvider() (*FeishuProvider, error) {
 		AppSecret: appSecret,
 	})
 	return &FeishuProvider{
-		client:        client,
-		appToken:      appToken,
-		configTableID: configTableID,
-		priceTableID:  priceTableID,
+		client:          client,
+		appToken:        appToken,
+		configTableID:   configTableID,
+		priceTableID:    priceTableID,
+		pipelineTableID: pipelineTableID,
 	}, nil
 }
 
@@ -82,9 +85,14 @@ func (p *FeishuProvider) FetchConfig(ctx context.Context, q Query) ([]Row, error
 	var rows []Row
 	for _, rec := range records {
 		row := feishuRecordToConfigRow(rec)
-		if row != nil {
-			rows = append(rows, *row)
+		if row == nil {
+			continue
 		}
+		// Apply version/edition filtering
+		if !MatchVersion(row, q) {
+			continue
+		}
+		rows = append(rows, *row)
 	}
 	return rows, nil
 }
@@ -105,6 +113,24 @@ func (p *FeishuProvider) FetchModelPrices(ctx context.Context) ([]ProviderPrice,
 		}
 	}
 	return prices, nil
+}
+
+func (p *FeishuProvider) FetchPipelineTemplates(ctx context.Context) ([]PipelineTemplate, error) {
+	if p.pipelineTableID == "" {
+		return nil, ErrNotSupported
+	}
+	records, err := p.client.SearchRecords(ctx, p.appToken, p.pipelineTableID, feishu.NewFilter("enabled", "is", "true"))
+	if err != nil {
+		return nil, fmt.Errorf("configsync feishu: fetch pipeline templates: %w", err)
+	}
+	var templates []PipelineTemplate
+	for _, rec := range records {
+		tmpl := feishuRecordToPipelineTemplate(rec)
+		if tmpl != nil {
+			templates = append(templates, *tmpl)
+		}
+	}
+	return templates, nil
 }
 
 func (p *FeishuProvider) FetchAll(ctx context.Context, q Query) ([]Row, []ProviderPrice, error) {
@@ -180,6 +206,29 @@ func feishuRecordToProviderPrice(rec feishu.Record) *ProviderPrice {
 	}
 }
 
+func feishuRecordToPipelineTemplate(rec feishu.Record) *PipelineTemplate {
+	f := rec.Fields
+	pipelineID := feishu.TextField(f["pipeline_id"])
+	if pipelineID == "" {
+		return nil
+	}
+	enabled, _ := f["enabled"].(bool)
+	if !enabled {
+		return nil
+	}
+	// 从 content_json 字段解析模板内容
+	var tmpl PipelineTemplate
+	if contentJSON := feishu.TextField(f["content_json"]); contentJSON != "" {
+		if err := json.Unmarshal([]byte(contentJSON), &tmpl); err != nil {
+			logger.Warnf("configsync: parse pipeline template %s: %v", pipelineID, err)
+			return nil
+		}
+	}
+	// 确保 ID 一致
+	tmpl.ID = pipelineID
+	return &tmpl
+}
+
 // Client returns the underlying feishu.Client for management endpoints.
 func (p *FeishuProvider) Client() *feishu.Client { return p.client }
 
@@ -191,6 +240,9 @@ func (p *FeishuProvider) ConfigTableID() string { return p.configTableID }
 
 // PriceTableID returns the price table ID (may be empty).
 func (p *FeishuProvider) PriceTableID() string { return p.priceTableID }
+
+// PipelineTableID returns the pipeline template table ID (may be empty).
+func (p *FeishuProvider) PipelineTableID() string { return p.pipelineTableID }
 
 func envOrFeishu(key, fallback string) string {
 	if v := os.Getenv(key); v != "" {

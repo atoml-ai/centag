@@ -6,12 +6,9 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"os"
-	"path/filepath"
 	"strconv"
 
 	"centag/core/internal/auth"
-	"centag/core/pkg/bootstrap"
 	"centag/core/pkg/database"
 	"centag/core/pkg/logger"
 
@@ -19,26 +16,24 @@ import (
 )
 
 // ClashHandler 处理 Clash 订阅规则的 CRUD 接口
-type ClashHandler struct{}
-
-func NewClashHandler() *ClashHandler { return &ClashHandler{} }
-
-func readDefaultRule() (string, error) {
-	p := ruleFilePath()
-	data, err := os.ReadFile(p)
-	if err == nil {
-		return string(data), nil
-	}
-	return "", fmt.Errorf("default rule file not found at %s", p)
+type ClashHandler struct {
+	server *Server // reference to server for remote config access
 }
 
-// ruleFilePath 返回系统默认规则文件的确定性路径。
-// 规则文件位于 config/initdata/rule/rule.yaml，通过 InitdataRoot() 定位。
-func ruleFilePath() string {
-	if root := bootstrap.InitdataRoot(); root != "" {
-		return filepath.Join(root, "rule", "rule.yaml")
+func NewClashHandler(server *Server) *ClashHandler {
+	return &ClashHandler{server: server}
+}
+
+// readDefaultRule reads clash rules from remote configsync.
+func (h *ClashHandler) readDefaultRule() (string, error) {
+	// Remote configsync (clash.rules config_key)
+	if h.server != nil {
+		if rules := h.server.GetClashRules(); rules != "" {
+			logger.Infof("clash: using remote rules from configsync")
+			return rules, nil
+		}
 	}
-	return "config/initdata/rule/rule.yaml"
+	return "", fmt.Errorf("no clash rules configured (remote configsync not available)")
 }
 
 // generateToken 生成 32 字节随机十六进制令牌
@@ -371,7 +366,7 @@ func (h *ClashHandler) RegenerateToken(c *gin.Context) {
 //
 // GET /api/v1/user/clash/default-rule
 func (h *ClashHandler) GetDefaultRule(c *gin.Context) {
-	content, err := readDefaultRule()
+	content, err := h.readDefaultRule()
 	if err != nil {
 		logger.Errorf("GetDefaultRule: %v", err)
 		RespondInternalError(c, "default rule file not available")
@@ -405,7 +400,7 @@ func (h *ClashHandler) ServeSubscription(c *gin.Context) {
 
 	content := rule.RuleContent
 	if content == "" {
-		content, err = readDefaultRule()
+		content, err = h.readDefaultRule()
 		if err != nil {
 			logger.Errorf("ServeSubscription: read default rule: %v", err)
 			c.String(http.StatusInternalServerError, "default rule file not available")

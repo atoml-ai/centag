@@ -10,14 +10,37 @@ import (
 	"path/filepath"
 	"sync"
 	"time"
+
+	"centag/core/pkg/logger"
 )
+
+// globalScheduler holds the global scheduler instance for access from other packages.
+var (
+	globalScheduler     *ConfigScheduler
+	globalSchedulerMu   sync.RWMutex
+)
+
+// SetGlobalScheduler sets the global scheduler instance.
+func SetGlobalScheduler(s *ConfigScheduler) {
+	globalSchedulerMu.Lock()
+	defer globalSchedulerMu.Unlock()
+	globalScheduler = s
+}
+
+// GetScheduler returns the global scheduler instance (may be nil).
+func GetScheduler() *ConfigScheduler {
+	globalSchedulerMu.RLock()
+	defer globalSchedulerMu.RUnlock()
+	return globalScheduler
+}
 
 // Snapshot is the persisted sync state written to stateDir.
 type Snapshot struct {
-	Schema      int             `json:"schema"`
-	GeneratedAt time.Time       `json:"generated_at"`
-	Config      []Row           `json:"config"`
-	Prices      []ProviderPrice `json:"prices,omitempty"`
+	Schema            int                `json:"schema"`
+	GeneratedAt       time.Time          `json:"generated_at"`
+	Config            []Row              `json:"config"`
+	Prices            []ProviderPrice    `json:"prices,omitempty"`
+	PipelineTemplates []PipelineTemplate `json:"pipeline_templates,omitempty"`
 }
 
 const snapshotSchema = 1
@@ -252,14 +275,26 @@ func (s *ConfigScheduler) doSync(ctx context.Context) error {
 		FetchAll(ctx context.Context, q Query) ([]Row, []ProviderPrice, error)
 	}
 
+	type fetchPipelineTemplates interface {
+		FetchPipelineTemplates(ctx context.Context) ([]PipelineTemplate, error)
+	}
+
 	var rows []Row
 	var prices []ProviderPrice
+	var pipelineTemplates []PipelineTemplate
 	var err error
 
+	// Build query with edition and version from environment
+	q := Query{
+		Edition: os.Getenv("CENTAG_EDITION"),
+		Version: os.Getenv("CENTAG_VERSION"),
+		Channel: os.Getenv("CENTAG_CHANNEL"),
+	}
+
 	if fa, ok := s.provider.(fetchAller); ok {
-		rows, prices, err = fa.FetchAll(ctx, Query{})
+		rows, prices, err = fa.FetchAll(ctx, q)
 	} else {
-		rows, err = s.provider.FetchConfig(ctx, Query{})
+		rows, err = s.provider.FetchConfig(ctx, q)
 		if err != nil {
 			s.recordFailure(err)
 			return err
@@ -269,6 +304,14 @@ func (s *ConfigScheduler) doSync(ctx context.Context) error {
 	if err != nil && !errors.Is(err, ErrNotSupported) {
 		s.recordFailure(err)
 		return err
+	}
+	// Fetch pipeline templates if provider supports it
+	if fpt, ok := s.provider.(fetchPipelineTemplates); ok {
+		pipelineTemplates, err = fpt.FetchPipelineTemplates(ctx)
+		if err != nil && !errors.Is(err, ErrNotSupported) {
+			logger.Warnf("configsync: fetch pipeline templates failed: %v", err)
+			// Continue with other data, don't fail the sync
+		}
 	}
 	if err := ValidateRows(rows); err != nil {
 		err = fmt.Errorf("invalid batch rejected: %w", err)
@@ -283,7 +326,7 @@ func (s *ConfigScheduler) doSync(ctx context.Context) error {
 		}
 	}
 	// Empty batch: keep cache, count as success (nothing to do).
-	if len(rows) == 0 && len(prices) == 0 {
+	if len(rows) == 0 && len(prices) == 0 && len(pipelineTemplates) == 0 {
 		s.mu.Lock()
 		s.status.LastSyncTime = time.Now()
 		s.status.LastSyncOK = true
@@ -293,7 +336,13 @@ func (s *ConfigScheduler) doSync(ctx context.Context) error {
 		s.mu.Unlock()
 		return nil
 	}
-	snap := &Snapshot{Schema: snapshotSchema, GeneratedAt: time.Now(), Config: rows, Prices: prices}
+	snap := &Snapshot{
+		Schema:            snapshotSchema,
+		GeneratedAt:       time.Now(),
+		Config:            rows,
+		Prices:            prices,
+		PipelineTemplates: pipelineTemplates,
+	}
 	if s.stateDir != "" {
 		if err := WriteSnapshot(s.stateDir, snap); err != nil {
 			s.mu.Lock()

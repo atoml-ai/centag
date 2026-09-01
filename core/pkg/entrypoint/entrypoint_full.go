@@ -21,6 +21,7 @@ import (
 	"centag/core/pkg/database"
 	"centag/core/pkg/logger"
 	"centag/core/pkg/metrics"
+	"centag/core/pkg/pipeline"
 	"centag/core/pkg/proxymode"
 	"centag/core/pkg/server"
 )
@@ -292,6 +293,35 @@ func startConfigsync(srv *server.Server) {
 
 	mapper := buildBackendMapper()
 	priceStore := buildPriceStore()
+	clashRulesApplier := configsync.NewClashRulesApplier()
+	srv.SetClashRulesApplier(clashRulesApplier)
+
+	// 创建流水线模板 applier
+	pipelineTemplateStore := buildPipelineTemplateStore()
+	pipelineTemplateApplier := configsync.NewPipelineTemplateApplier(pipelineTemplateStore)
+
+	// Create database config store for persisting config data
+	dbConfigStore, err := configsync.NewDBConfigStore()
+	if err != nil {
+		logger.Warnf("failed to create database config store: %v", err)
+	}
+	dbConfigApplier := configsync.NewDBConfigApplier(dbConfigStore)
+
+	// Create generic applier for config data
+	genericApplier := configsync.NewGenericApplier()
+
+	// Create backend applier for backend configs
+	backendStore := &backendManagerStore{manager: backend.GetManager()}
+	backendApplier := configsync.NewBackendApplier(backendStore)
+
+	// Load config from database if available (skip Feishu sync on subsequent startups)
+	if dbConfigStore != nil {
+		count, _ := dbConfigStore.Count()
+		if count > 0 {
+			logger.Infof("configsync: loading %d config entries from database", count)
+			dbConfigApplier.LoadFromDB(genericApplier)
+		}
+	}
 
 	scheduler := configsync.NewScheduler(configsync.SchedulerConfig{
 		Provider: provider,
@@ -308,13 +338,43 @@ func startConfigsync(srv *server.Server) {
 					logger.Infof("configsync: prices applied=%d skipped=%d", result.Applied, result.Skipped)
 				}
 			}
+			// Apply clash rules from config and persist to DB
+			clashRulesApplier.Apply(snap.Config)
+			if rules := clashRulesApplier.GetRules(); rules != "" {
+				logger.Infof("configsync: clash rules applied (remote)")
+				// Persist clash rules to config_store
+				if dbConfigStore != nil {
+					if err := dbConfigStore.Upsert("clash.rules", rules); err != nil {
+						logger.Warnf("configsync: persist clash rules failed: %v", err)
+					}
+				}
+			}
+			// Apply config data to generic applier and save to database
+			genericApplier.Apply(snap.Config)
+			if dbConfigApplier != nil && len(snap.Config) > 0 {
+				dbConfigApplier.ApplyFromRows(snap.Config)
+				logger.Infof("configsync: config data saved to database")
+			}
+			// Apply backend configs
+			if len(snap.Config) > 0 {
+				backendApplier.Apply(snap.Config)
+				logger.Infof("configsync: backend configs applied")
+			}
+			// Apply pipeline templates from remote
+			if len(snap.PipelineTemplates) > 0 {
+				pipelineTemplateApplier.ApplyFromTemplates(snap.PipelineTemplates)
+				logger.Infof("configsync: pipeline templates applied=%d", len(snap.PipelineTemplates))
+				// Reload templates in the server to use the newly synced ones
+				srv.ReloadPipelineTemplates(os.Getenv("CENTAG_EDITION"))
+			}
 			srv.InvalidatePricingCache()
 		},
 	})
 	srv.SetConfigSyncScheduler(scheduler)
+	configsync.SetGlobalScheduler(scheduler)
 	scheduler.Start(context.Background())
-	logger.Infof("Configsync scheduler started (feishu, config_table=%s, price_table=%s)",
-		provider.ConfigTableID(), provider.PriceTableID())
+	logger.Infof("Configsync scheduler started (feishu, config_table=%s, price_table=%s, pipeline_table=%s)",
+		provider.ConfigTableID(), provider.PriceTableID(), provider.PipelineTableID())
 }
 
 // buildBackendMapper returns a BackendMapper that resolves base_url → []backend_id
@@ -341,4 +401,82 @@ func buildPriceStore() configsync.PriceStore {
 		return nil
 	}
 	return billing.NewSQLRuleStore(db, database.Get().DriverName())
+}
+
+// buildPipelineTemplateStore returns a PipelineTemplateStore backed by the database.
+func buildPipelineTemplateStore() configsync.PipelineTemplateStore {
+	store, err := pipeline.NewDBPipelineTemplateStore()
+	if err != nil {
+		logger.Warnf("failed to create database pipeline template store, falling back to in-memory: %v", err)
+		return &inMemoryPipelineTemplateStore{
+			templates: make(map[string]configsync.PipelineTemplate),
+		}
+	}
+	return store
+}
+
+// inMemoryPipelineTemplateStore is a simple in-memory implementation of PipelineTemplateStore.
+type inMemoryPipelineTemplateStore struct {
+	templates map[string]configsync.PipelineTemplate
+}
+
+func (s *inMemoryPipelineTemplateStore) Upsert(tmpl configsync.PipelineTemplate) error {
+	s.templates[tmpl.ID] = tmpl
+	return nil
+}
+
+// backendManagerStore adapts backend.Manager to configsync.BackendStore interface.
+type backendManagerStore struct {
+	manager *backend.Manager
+}
+
+func (s *backendManagerStore) List() []configsync.BackendConfig {
+	if s.manager == nil {
+		return nil
+	}
+	var result []configsync.BackendConfig
+	for _, cfg := range s.manager.List() {
+		result = append(result, configsync.BackendConfig{
+			ID:          cfg.ID,
+			Name:        cfg.Name,
+			Type:        cfg.Type,
+			BaseURL:     cfg.BaseURL,
+			Enabled:     cfg.Enabled,
+			Timeout:     cfg.Timeout,
+			MaxRetries:  cfg.MaxRetries,
+			Description: cfg.Description,
+		})
+	}
+	return result
+}
+
+func (s *backendManagerStore) Upsert(cfg configsync.BackendConfig) error {
+	if s.manager == nil {
+		return nil
+	}
+	// Check if backend exists
+	existing, err := s.manager.Get(cfg.ID)
+	if err != nil || existing == nil {
+		// New backend - create with minimal config (api_key will be empty)
+		newCfg := &backend.BackendConfig{
+			ID:          cfg.ID,
+			Name:        cfg.Name,
+			Type:        cfg.Type,
+			BaseURL:     cfg.BaseURL,
+			Enabled:     cfg.Enabled,
+			Timeout:     cfg.Timeout,
+			MaxRetries:  cfg.MaxRetries,
+			Description: cfg.Description,
+		}
+		return s.manager.Add(newCfg)
+	}
+	// Update existing backend - preserve api_key and other secrets
+	existing.Name = cfg.Name
+	existing.Type = cfg.Type
+	existing.BaseURL = cfg.BaseURL
+	existing.Enabled = cfg.Enabled
+	existing.Timeout = cfg.Timeout
+	existing.MaxRetries = cfg.MaxRetries
+	existing.Description = cfg.Description
+	return s.manager.Update(existing)
 }

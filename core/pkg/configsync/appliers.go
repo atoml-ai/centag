@@ -6,9 +6,11 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"centag/core/pkg/billing"
+	"centag/core/pkg/logger"
 )
 
 // NormalizeBaseURL canonicalizes a base_url for matching: trailing slashes
@@ -256,12 +258,341 @@ func (a *GenericApplier) All() map[string]json.RawMessage {
 	return out
 }
 
+// --- DBConfigApplier ---
+
+// DBConfigApplier stores config data in the database.
+type DBConfigApplier struct {
+	store *DBConfigStore
+}
+
+// NewDBConfigApplier creates a DBConfigApplier.
+func NewDBConfigApplier(store *DBConfigStore) *DBConfigApplier {
+	return &DBConfigApplier{store: store}
+}
+
+// ApplyFromRows stores config rows to the database.
+func (a *DBConfigApplier) ApplyFromRows(rows []Row) error {
+	if a.store == nil {
+		return nil
+	}
+	for _, r := range rows {
+		if r.Enabled {
+			if err := a.store.Upsert(r.Key, string(r.Value)); err != nil {
+				logger.Warnf("configsync: upsert config %s failed: %v", r.Key, err)
+				continue
+			}
+		}
+	}
+	return nil
+}
+
+// LoadFromDB loads all config from database and applies to GenericApplier.
+func (a *DBConfigApplier) LoadFromDB(applier *GenericApplier) error {
+	if a.store == nil {
+		return nil
+	}
+	count, err := a.store.Count()
+	if err != nil {
+		return err
+	}
+	if count == 0 {
+		return nil
+	}
+	data, err := a.store.ListAll()
+	if err != nil {
+		return err
+	}
+	for key, value := range data {
+		applier.values[key] = json.RawMessage(value)
+	}
+	return nil
+}
+
+// --- ClashRulesApplier ---
+
+// ClashRulesApplier stores clash.rules configuration from remote configsync.
+type ClashRulesApplier struct {
+	rulesJSON string // raw JSON/YAML content of clash rules
+	mu        sync.RWMutex
+}
+
+// NewClashRulesApplier creates a ClashRulesApplier.
+func NewClashRulesApplier() *ClashRulesApplier {
+	return &ClashRulesApplier{}
+}
+
+// Apply stores enabled clash.rules row content.
+func (a *ClashRulesApplier) Apply(rows []Row) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	for _, r := range rows {
+		if r.Key == "clash.rules" && r.Enabled {
+			a.rulesJSON = string(r.Value)
+			return
+		}
+	}
+}
+
+// GetRules returns the clash rules content (empty string if not configured).
+func (a *ClashRulesApplier) GetRules() string {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	return a.rulesJSON
+}
+
+// --- BackendConfig ---
+
+// BackendConfig represents a backend configuration for remote sync (without sensitive fields).
+type BackendConfig struct {
+	ID               string            `json:"id"`
+	Name             string            `json:"name"`
+	Type             string            `json:"type"`
+	BaseURL          string            `json:"base_url"`
+	Enabled          bool              `json:"enabled"`
+	Timeout          int               `json:"timeout"`
+	MaxRetries       int               `json:"max_retries"`
+	Description      string            `json:"description"`
+	ProbeModel       string            `json:"probe_model"`
+	AutoFetchModels  bool              `json:"auto_fetch_models"`
+	SupportedModels  []ModelMapping    `json:"supported_models,omitempty"`
+	Capabilities     ModelCapabilities `json:"capabilities,omitempty"`
+	Weight           int               `json:"weight"`
+	Priority         int               `json:"priority"`
+	FallbackBackends []string          `json:"fallback_backends,omitempty"`
+}
+
+// ModelMapping represents a model mapping configuration.
+type ModelMapping struct {
+	RequestedModel     string  `json:"requested_model"`
+	ActualModel        string  `json:"actual_model"`
+	CompatibilityScore float64 `json:"compatibility_score"`
+	IsExact            bool    `json:"is_exact"`
+}
+
+// ModelCapabilities represents backend model capabilities.
+type ModelCapabilities struct {
+	MaxContextTokens int      `json:"max_context_tokens"`
+	Features         []string `json:"features,omitempty"`
+	SupportsImages   bool     `json:"supports_images"`
+	SupportsTools    bool     `json:"supports_tools"`
+}
+
+// BackendStore is the interface for backend persistence.
+type BackendStore interface {
+	List() []BackendConfig
+	Upsert(cfg BackendConfig) error
+}
+
+// BackendApplier syncs backend configurations from remote configsync.
+type BackendApplier struct {
+	store BackendStore
+	mu    sync.RWMutex
+}
+
+// NewBackendApplier creates a BackendApplier.
+func NewBackendApplier(store BackendStore) *BackendApplier {
+	return &BackendApplier{store: store}
+}
+
+// Apply processes backend.* rows and upserts non-sensitive fields.
+func (a *BackendApplier) Apply(rows []Row) {
+	if a.store == nil {
+		return
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	for _, r := range rows {
+		if !strings.HasPrefix(r.Key, "backend.") || !r.Enabled {
+			continue
+		}
+		var cfg BackendConfig
+		if err := json.Unmarshal(r.Value, &cfg); err != nil {
+			continue
+		}
+		// Skip empty IDs
+		if cfg.ID == "" {
+			continue
+		}
+		// Upsert the configuration (api_key is not synced)
+		if err := a.store.Upsert(cfg); err != nil {
+			continue
+		}
+	}
+}
+
+// --- PipelineTemplate ---
+
+// PipelineTemplate represents a pipeline template for remote sync.
+type PipelineTemplate struct {
+	ID            string                       `json:"id"`
+	Name          string                       `json:"name"`
+	Description   string                       `json:"description,omitempty"`
+	ShortcutCode  string                       `json:"shortcut_code,omitempty"`
+	SchemaVersion string                       `json:"schema_version,omitempty"`
+	Version       string                       `json:"version,omitempty"`
+	Edition       string                       `json:"edition,omitempty"` // "all", "personal", "team"
+	Nodes         []PipelineNodeConfig         `json:"nodes"`
+	GlobalConfig  *GlobalPipelineConfig        `json:"global_config,omitempty"`
+	Metadata      map[string]interface{}       `json:"metadata,omitempty"`
+}
+
+// PipelineNodeConfig represents a pipeline node configuration.
+type PipelineNodeConfig struct {
+	ID              string                 `json:"id"`
+	Type            string                 `json:"type,omitempty"`
+	Kind            string                 `json:"kind,omitempty"`
+	Implementation  string                 `json:"implementation,omitempty"`
+	Name            string                 `json:"name"`
+	Backend         string                 `json:"backend,omitempty"`
+	Model           string                 `json:"model,omitempty"`
+	Config          NodeConfig             `json:"config"`
+	Inputs          map[string]string      `json:"inputs,omitempty"`
+	Outputs         map[string]interface{} `json:"outputs,omitempty"`
+	ConfigSchemaRef string                 `json:"config_schema_ref,omitempty"`
+	SecretsRef      map[string]string      `json:"secrets_ref,omitempty"`
+	Permissions     []string               `json:"permissions,omitempty"`
+	Timeout         int                    `json:"timeout,omitempty"`
+	Retry           *RetryConfig           `json:"retry,omitempty"`
+	Condition       string                 `json:"condition,omitempty"`
+	NextNodes       []string               `json:"next_nodes,omitempty"`
+	DependsOn       []string               `json:"depends_on,omitempty"`
+	RouteConfig     *RouteConfig           `json:"route_config,omitempty"`
+}
+
+// NodeConfig represents node-specific configuration.
+type NodeConfig struct {
+	Backend        string                 `json:"backend,omitempty"`
+	Model          string                 `json:"model,omitempty"`
+	PromptTemplate string                 `json:"prompt_template,omitempty"`
+	SystemPrompt   string                 `json:"system_prompt,omitempty"`
+	Temperature    *float64               `json:"temperature,omitempty"`
+	MaxTokens      *int                   `json:"max_tokens,omitempty"`
+	CustomConfig   map[string]interface{} `json:"custom_config,omitempty"`
+	TemplateVars   map[string]string      `json:"template_vars,omitempty"`
+}
+
+// RetryConfig represents retry configuration.
+type RetryConfig struct {
+	MaxAttempts     int    `json:"max_attempts"`
+	BackoffStrategy string `json:"backoff_strategy"`
+	InitialDelay    int    `json:"initial_delay"`
+	MaxDelay        int    `json:"max_delay"`
+}
+
+// RouteConfig represents route configuration.
+type RouteConfig struct {
+	RouterNodeID string `json:"router_node_id"`
+	RouteValue   string `json:"route_value"`
+	IsDefault    bool   `json:"is_default"`
+}
+
+// GlobalPipelineConfig represents global pipeline configuration.
+type GlobalPipelineConfig struct {
+	Timeout         int                    `json:"timeout"`
+	MaxRetries      int                    `json:"max_retries"`
+	BypassOnError   bool                   `json:"bypass_on_error"`
+	ParallelLimit   int                    `json:"parallel_limit"`
+	LogLevel        string                 `json:"log_level,omitempty"`
+	SystemPrompt    string                 `json:"system_prompt,omitempty"`
+	FallbackGroups  []FallbackGroup        `json:"fallback_groups,omitempty"`
+	Storage         *StorageHookConfig     `json:"storage,omitempty"`
+	Hooks           []HookConfig           `json:"hooks,omitempty"`
+}
+
+// FallbackGroup represents fallback group configuration.
+type FallbackGroup struct {
+	PrimaryNodeID  string   `json:"primary_node_id"`
+	FallbackNodes  []string `json:"fallback_nodes"`
+	MaxAttempts    int      `json:"max_attempts"`
+}
+
+// StorageHookConfig represents storage hook configuration.
+type StorageHookConfig struct {
+	Enabled       bool   `json:"enabled"`
+	Namespace     string `json:"namespace"`
+	AutoSave      bool   `json:"auto_save"`
+	SaveInterval  int    `json:"save_interval"`
+	RetentionDays int    `json:"retention_days"`
+}
+
+// HookConfig represents hook configuration.
+type HookConfig struct {
+	Type        string                 `json:"type"`
+	On          []string               `json:"on"`
+	StorageName string                 `json:"storage_name,omitempty"`
+	Config      map[string]interface{} `json:"config,omitempty"`
+}
+
+// PipelineTemplateStore is the interface for pipeline template persistence.
+type PipelineTemplateStore interface {
+	Upsert(tmpl PipelineTemplate) error
+}
+
+// PipelineTemplateApplier syncs pipeline templates from remote configsync.
+type PipelineTemplateApplier struct {
+	store PipelineTemplateStore
+	mu    sync.RWMutex
+}
+
+// NewPipelineTemplateApplier creates a PipelineTemplateApplier.
+func NewPipelineTemplateApplier(store PipelineTemplateStore) *PipelineTemplateApplier {
+	return &PipelineTemplateApplier{store: store}
+}
+
+// Apply processes pipeline_template.* rows and upserts templates.
+func (a *PipelineTemplateApplier) Apply(rows []Row) {
+	if a.store == nil {
+		return
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	for _, r := range rows {
+		if !strings.HasPrefix(r.Key, "pipeline_template.") || !r.Enabled {
+			continue
+		}
+		var tmpl PipelineTemplate
+		if err := json.Unmarshal(r.Value, &tmpl); err != nil {
+			continue
+		}
+		// Skip empty IDs
+		if tmpl.ID == "" {
+			continue
+		}
+		// Upsert the template
+		if err := a.store.Upsert(tmpl); err != nil {
+			continue
+		}
+	}
+}
+
+// ApplyFromTemplates directly applies pipeline templates from remote configsync.
+func (a *PipelineTemplateApplier) ApplyFromTemplates(templates []PipelineTemplate) {
+	if a.store == nil {
+		return
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	for _, tmpl := range templates {
+		// Skip empty IDs
+		if tmpl.ID == "" {
+			continue
+		}
+		// Upsert the template
+		if err := a.store.Upsert(tmpl); err != nil {
+			logger.Warnf("configsync: upsert pipeline template %s failed: %v", tmpl.ID, err)
+			continue
+		}
+	}
+}
+
 // --- SyncResult combines all applier outcomes ---
 
 // SyncResult holds the combined result of applying a snapshot.
 type SyncResult struct {
-	Prices    *PriceApplierSyncResult `json:"prices,omitempty"`
-	Version   *VersionInfo            `json:"version,omitempty"`
-	Features  int                     `json:"features_applied"`
-	SyncTime  time.Time               `json:"sync_time"`
+	Prices      *PriceApplierSyncResult `json:"prices,omitempty"`
+	Version     *VersionInfo            `json:"version,omitempty"`
+	Features    int                     `json:"features_applied"`
+	ClashRules  bool                    `json:"clash_rules_applied"`
+	Backends    int                     `json:"backends_applied"`
+	SyncTime    time.Time               `json:"sync_time"`
 }

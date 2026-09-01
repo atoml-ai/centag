@@ -76,6 +76,58 @@ func (h *PipelineHandler) SetModeManager(mgr *proxymode.ModeManager) {
 	h.modeManager = mgr
 }
 
+// ReloadTemplates reloads pipeline templates from configsync snapshot.
+// Called after configsync completes to update the in-memory template list.
+func (h *PipelineHandler) ReloadTemplates(edition string) {
+	if h == nil {
+		return
+	}
+	newTemplates := resolvePipelineTemplatesWithEdition(edition)
+	h.templates = newTemplates
+	logger.Infof("pipeline handler: templates reloaded from configsync (count=%d)", len(newTemplates))
+}
+
+// SeedIfEmpty creates pipelines from templates if the registry is empty.
+// Called after configsync completes on first startup to ensure pipelines exist.
+func (h *PipelineHandler) SeedIfEmpty() {
+	if h == nil || h.pipelineRegistry == nil {
+		return
+	}
+	if len(h.templates) == 0 {
+		return
+	}
+	registered := 0
+	skipped := 0
+	for _, tmpl := range h.templates {
+		id := strings.TrimSpace(tmpl.ID)
+		if id == "" {
+			continue
+		}
+		// Skip if pipeline already exists
+		if h.pipelineRegistry.Exists(id) {
+			skipped++
+			continue
+		}
+		p := pipeline.CreatePipelineFromTemplate(tmpl, nil)
+		if err := h.pipelineRegistry.Register(p); err != nil {
+			logger.Warnf("pipeline seed: failed to register %s: %v", p.ID, err)
+		} else {
+			registered++
+		}
+	}
+	if registered > 0 || skipped > 0 {
+		logger.Infof("pipeline seed: registered=%d skipped=%d (already exists) total=%d", registered, skipped, len(h.templates))
+	}
+}
+
+// Templates returns the current template list (for other subsystems).
+func (h *PipelineHandler) Templates() []pipeline.PatternTemplate {
+	if h == nil {
+		return nil
+	}
+	return h.templates
+}
+
 // SetEdition configures product edition for Team resource access rules.
 func (h *PipelineHandler) SetEdition(ed edition.Edition) {
 	if h != nil {

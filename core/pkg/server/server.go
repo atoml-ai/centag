@@ -114,6 +114,7 @@ type Server struct {
 	conversationStore      conversation.Store
 	extensionHost          *extension.RuntimeHost
 	configsyncScheduler    *configsync.ConfigScheduler
+	clashRulesApplier      *configsync.ClashRulesApplier
 
 	// 流水线默认模式相关 handler
 	pipelineDefaultsHandler *handler.PipelineDefaultsHandler
@@ -730,13 +731,9 @@ func New(cfg *config.Config) *Server {
 		logger.Infof("[hooks] TokenHook adapter registered; user default pipeline resolver wired")
 
 		ruleStore := billing.NewSQLRuleStore(db, database.Get().DriverName())
-		if path, err := billing.ResolveDefaultPricingPath(); err != nil {
-			logger.Warnf("[billing] default pricing YAML not found: %v", err)
-		} else if err := billing.EnsureSeededFromYAML(context.Background(), ruleStore, path); err != nil {
-			logger.Warnf("[billing] seed pricing rules failed: %v", err)
-		} else {
-			logger.Infof("[billing] pricing rules ready (seeded from %s if empty)", path)
-		}
+		// Pricing rules: local seed disabled; relying on configsync (feishu) for price data.
+		// If configsync is not configured or fails, pricing_rules table stays empty.
+		logger.Infof("[billing] pricing rules: local seed disabled; relying on configsync (feishu)")
 		pricingService = billing.NewPricingService(ruleStore)
 		tokenusage.SetPricingService(pricingService)
 		billingRulesHandler = NewBillingRulesHandler(ruleStore, pricingService)
@@ -915,7 +912,7 @@ func New(cfg *config.Config) *Server {
 	cacheManager.SetEvaluationManager(cache.NewEvaluationManagerWrapper(evaluationManager))
 
 	// 创建 Clash 订阅处理器
-	clashHandler := NewClashHandler()
+	clashHandler := NewClashHandler(nil) // server reference set after srv is created
 
 	// 注册自定义策略解析函数，让 proxy 层能查找自定义策略
 	proxy.SetCustomStrategyResolver(func(id string) *proxy.CustomStrategyWeights {
@@ -1089,6 +1086,8 @@ func New(cfg *config.Config) *Server {
 	}
 	backendHandler.SetEdition(srv.edition)
 	pipelineHandler.SetEdition(srv.edition)
+	// Set server reference for ClashHandler to access remote config
+	clashHandler.server = srv
 
 	// 系统默认后端配置变更联动：刷新 broker 默认 LLM 目标 + 幂等重建 skill 路由管线。
 	// 修复：centag-ops-router 注册时快照 default_backend/model，此后修改默认后端
@@ -2101,6 +2100,19 @@ func (s *Server) SetConfigSyncScheduler(sch *configsync.ConfigScheduler) {
 	s.configsyncScheduler = sch
 }
 
+// SetClashRulesApplier stores the clash rules applier reference for remote rule sync.
+func (s *Server) SetClashRulesApplier(applier *configsync.ClashRulesApplier) {
+	s.clashRulesApplier = applier
+}
+
+// GetClashRules returns clash rules from remote configsync (empty string if not configured).
+func (s *Server) GetClashRules() string {
+	if s.clashRulesApplier == nil {
+		return ""
+	}
+	return s.clashRulesApplier.GetRules()
+}
+
 // ConfigSyncScheduler returns the configsync scheduler (may be nil).
 // Returns any to satisfy extension.ConfigSyncService interface.
 func (s *Server) ConfigSyncScheduler() any {
@@ -2112,6 +2124,16 @@ func (s *Server) ConfigSyncScheduler() any {
 func (s *Server) InvalidatePricingCache() {
 	if s.pricingService != nil {
 		_ = s.pricingService.InvalidateCache(context.Background())
+	}
+}
+
+// ReloadPipelineTemplates reloads pipeline templates from configsync snapshot.
+// Called after configsync completes to update the in-memory template list.
+func (s *Server) ReloadPipelineTemplates(edition string) {
+	if s.pipelineHandler != nil {
+		s.pipelineHandler.ReloadTemplates(edition)
+		// On first startup, if registry was empty, create pipelines from templates
+		s.pipelineHandler.SeedIfEmpty()
 	}
 }
 
