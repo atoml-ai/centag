@@ -1900,7 +1900,7 @@ call :log_info "========================================"
 call :log_info "  dev mode started"
 call :log_info "  product edition: personal"
 if "%_DP_DESK%"=="1" (
-    call :log_info "  form:        desktop (tray + sidecar)"
+    call :log_info "  form:        sidecar (all logs in this console)"
 ) else (
     call :log_info "  form:        cli (foreground sidecar)"
 )
@@ -1914,28 +1914,20 @@ echo.
 
 if "%_DP_DESK%"=="1" (
 call :resolve_desktop_bin
-if errorlevel 1 (
-call :log_err "desktop binary not found"
-exit /b 1
+if not errorlevel 1 if defined _RET (
+    call :log_info "  launching desktop tray (--no-sidecar)..."
+    start "centag-desktop" "!_RET!" -edition=personal -bin=%BIN_DIR%\centag-personal%EXE_EXT% -no-sidecar -no-open
+    call :sleep 1
 )
-if not defined _RET ( call :log_err "desktop binary path empty" & exit /b 1 )
-if not exist "!_RET!" ( call :log_err "desktop binary missing: !_RET!" & exit /b 1 )
-rem  On Windows centag-desktop.exe is a GUI subsystem (-H windowsgui); its stdout cannot
-rem  attach to this console, so the launcher's internal "tee to console" for sidecar logs
-rem  is lost (start.sh on macOS/Linux is a console subsystem; logs show directly).
-rem  For debug: start the launcher in background, then mirror the sidecar log file into
-rem  this window via PowerShell. LLM_PROXY_LOG_OUTPUT=both guarantees the log is written
-rem  to %CENTAG_EDITION_LIB%\logs\centag-sidecar.log.
-set "_SIDECAR_LOG=%CENTAG_EDITION_LIB%\logs\centag-sidecar.log"
-if not exist "%CENTAG_EDITION_LIB%\logs" md "%CENTAG_EDITION_LIB%\logs" >nul 2>&1
-start "centag-desktop" "!_RET!" -edition=personal -bin=%BIN_DIR%\centag-personal%EXE_EXT%
-set "_DESK_PID="
-for /f "tokens=2 delims=," %%p in ('tasklist /FI "IMAGENAME eq centag-desktop.exe" /FO CSV /NH 2^>nul') do if not defined _DESK_PID set "_DESK_PID=%%~p"
-call :log_info "desktop launcher started in background (PID=!_DESK_PID!), mirroring sidecar log below (Ctrl+C also stops the launcher)"
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$log='!_SIDECAR_LOG!'; $ok=$false; for($i=0;$i-lt60;$i++){ if(Test-Path $log){ $ok=$true; break } Start-Sleep -Seconds 1 }; if($ok){ Get-Content -Path $log -Wait -Tail 120 } else { Write-Host '[sidecar log file not found: !_SIDECAR_LOG!]' }"
-if defined _DESK_PID taskkill /PID !_DESK_PID! /T /F >nul 2>&1
-call :log_info "desktop launcher stopped"
-exit /b 0
+call :log_info "  sidecar running in this console (all logs visible below, Ctrl+C to stop)"
+echo.
+set "CENTAG_EDITION=personal"
+pushd "%BIN_DIR%"
+"%SERVER_BIN%" serve
+set "_RC=%ERRORLEVEL%"
+popd
+if defined _DESK_PID taskkill /PID %_DESK_PID% /T /F >nul 2>&1
+exit /b %_RC%
 )
 set "CENTAG_EDITION=personal"
 pushd "%BIN_DIR%"
@@ -2007,7 +1999,7 @@ echo.
 call :log_info "========================================"
 call :log_info "  running in minimal mode"
 if "%_DM_DESK%"=="1" (
-    call :log_info "  form:        desktop (tray + sidecar)"
+    call :log_info "  form:        sidecar (all logs in this console)"
 ) else (
     call :log_info "  form:        cli (foreground sidecar)"
 )
@@ -2021,25 +2013,19 @@ echo.
 
 if "%_DM_DESK%"=="1" (
 call :resolve_desktop_bin
-if errorlevel 1 (
-call :log_err "desktop binary not found"
-exit /b 1
+if not errorlevel 1 if defined _RET (
+    call :log_info "  launching desktop tray (--no-sidecar)..."
+    start "centag-desktop" "!_RET!" -edition=minimal -bin=%BIN_DIR%\centag-minimal%EXE_EXT% -no-sidecar -no-open
+    call :sleep 1
 )
-if not defined _RET ( call :log_err "desktop binary path empty" & exit /b 1 )
-if not exist "!_RET!" ( call :log_err "desktop binary missing: !_RET!" & exit /b 1 )
-rem  Same as personal --desktop: Windows GUI subsystem keeps stdout off the console,
-rem  so start the launcher in background and mirror the sidecar log file
-rem  (%CENTAG_EDITION_LIB%\logs\centag-sidecar.log).
-set "_SIDECAR_LOG=%CENTAG_EDITION_LIB%\logs\centag-sidecar.log"
-if not exist "%CENTAG_EDITION_LIB%\logs" md "%CENTAG_EDITION_LIB%\logs" >nul 2>&1
-start "centag-desktop" "!_RET!" -edition=minimal -bin=%BIN_DIR%\centag-minimal%EXE_EXT%
-set "_DESK_PID="
-for /f "tokens=2 delims=," %%p in ('tasklist /FI "IMAGENAME eq centag-desktop.exe" /FO CSV /NH 2^>nul') do if not defined _DESK_PID set "_DESK_PID=%%~p"
-call :log_info "desktop launcher started in background (PID=!_DESK_PID!), mirroring sidecar log below (Ctrl+C also stops the launcher)"
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$log='!_SIDECAR_LOG!'; $ok=$false; for($i=0;$i-lt60;$i++){ if(Test-Path $log){ $ok=$true; break } Start-Sleep -Seconds 1 }; if($ok){ Get-Content -Path $log -Wait -Tail 120 } else { Write-Host '[sidecar log file not found: !_SIDECAR_LOG!]' }"
-if defined _DESK_PID taskkill /PID !_DESK_PID! /T /F >nul 2>&1
-call :log_info "desktop launcher stopped"
-exit /b 0
+call :log_info "  sidecar running in this console (all logs visible below, Ctrl+C to stop)"
+echo.
+set "CENTAG_EDITION=minimal"
+pushd "%BIN_DIR%"
+"%SERVER_BIN%"
+set "_RC=%ERRORLEVEL%"
+popd
+exit /b %_RC%
 )
 set "CENTAG_EDITION=minimal"
 pushd "%BIN_DIR%"
