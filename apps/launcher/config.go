@@ -25,8 +25,9 @@ type Config struct {
 	Port      int
 	DataDir   string
 	NoOpen    bool
-	Headless  bool // no system menu / systray (CI)
-	Supervise bool // restart sidecar on crash (default on except debug)
+	NoSidecar bool   // connect to an already-running sidecar instead of starting one (debug)
+	Headless  bool   // no system menu / systray (CI)
+	Supervise bool   // restart sidecar on crash (default on except debug)
 }
 
 func parseConfig(args []string) (Config, error) {
@@ -37,6 +38,7 @@ func parseConfig(args []string) (Config, error) {
 	dataDir := fs.String("data-dir", envOr("CENTAG_LAUNCHER_DATA_DIR", ""), "data directory (default: ~/.centag/lib/<edition>)")
 	noOpen := fs.Bool("no-open", false, "do not open the system browser on start")
 	headless := fs.Bool("headless", envOr("CENTAG_LAUNCHER_HEADLESS", "") == "1", "run sidecar only (no system menu; useful for CI)")
+	noSidecar := fs.Bool("no-sidecar", false, "connect to an already-running sidecar instead of starting one (debug)")
 
 	if err := fs.Parse(args); err != nil {
 		return Config{}, err
@@ -58,6 +60,7 @@ func parseConfig(args []string) (Config, error) {
 		Port:      *port,
 		DataDir:   strings.TrimSpace(*dataDir),
 		NoOpen:    *noOpen,
+		NoSidecar: *noSidecar,
 		Headless:  *headless,
 		Supervise: launcherSuperviseEnabled(),
 	}, nil

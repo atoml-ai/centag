@@ -33,10 +33,18 @@ func main() {
 
 	fmt.Fprintf(os.Stderr, "centag-launcher: starting %s (%s) on :%d\ndata dir: %s\nsupervise: %v\n",
 		binary, cfg.Edition, cfg.Port, dataDir, cfg.Supervise)
-	sidecar, err := startSidecar(ctx, cfg, binary, dataDir)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "centag-launcher: bootstrap failed: %v\n", err)
-		os.Exit(1)
+
+	var sidecar *sidecarProcess
+	if cfg.NoSidecar {
+		fmt.Fprintf(os.Stderr, "centag-launcher: --no-sidecar mode, connecting to existing sidecar on :%d\n", cfg.Port)
+		sidecar = &sidecarProcess{port: cfg.Port}
+	} else {
+		var err error
+		sidecar, err = startSidecar(ctx, cfg, binary, dataDir)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "centag-launcher: bootstrap failed: %v\n", err)
+			os.Exit(1)
+		}
 	}
 
 	hub := newSidecarHub(cfg, binary, dataDir, sidecar)
