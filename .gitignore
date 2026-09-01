@@ -204,3 +204,6 @@ test_results.json
 protocol-test-report.html
 test_results.json
 .workbuddy/memory/
+
+# Agent config (private, must not flow to open-core)
+.opencode/

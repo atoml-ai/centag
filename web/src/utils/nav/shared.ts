@@ -326,8 +326,9 @@ export function buildWorkerNav(caps: Capabilities): NavItem[] {
     items.push(accessNavGroup())
   }
 
-  // 系统设置：配置 + 模型配置 + 计费规则（personal / team_user 共用）
-  if (caps.systemConfig) {
+  // 系统设置：配置 + 模型配置 + 计费规则
+  // personal 走右上角用户菜单，不进侧栏（与 buildMoreNavChildren 一致）
+  if (caps.systemConfig && caps.role !== 'personal') {
     const sysChildren: NavItem[] = [
       configNav({ requiresAdmin: caps.role !== 'personal' }),
       modelConfigNav({ requiresAdmin: caps.role !== 'personal' }),
