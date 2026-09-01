@@ -129,14 +129,14 @@ func TestPriceApplier(t *testing.T) {
 		}
 	})
 
-	t.Run("TC-PAP-007_零命中不入库", func(t *testing.T) {
+	t.Run("TC-PAP-007_零命中降级到DeriveBackendID", func(t *testing.T) {
 		store := &mockPriceStore{}
 		res, err := ApplyPrices(context.Background(), []ProviderPrice{ppioPrice(ModelPrice{Model: "m"})}, func(string) []string { return nil }, store, true)
-		if err != nil || res.Applied != 0 || res.Skipped != 0 {
-			t.Fatalf("zero-hit must be a silent no-op: %+v err=%v", res, err)
+		if err != nil || res.Applied != 1 {
+			t.Fatalf("zero-hit should fallback to DeriveBackendID: %+v err=%v", res, err)
 		}
-		if len(store.rules) != 0 {
-			t.Fatal("no rules may be created without a backend match")
+		if len(store.rules) != 1 {
+			t.Fatal("one rule should be created via DeriveBackendID fallback")
 		}
 	})
 
