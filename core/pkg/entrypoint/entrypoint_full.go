@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -271,23 +272,34 @@ func backendConfigFromConfig(c *config.BackendConfig) *backend.BackendConfig {
 }
 
 // startConfigsync optionally starts the configsync scheduler.
-// It checks CENTAG_CONFIGSYNC env (default on) and starts a feishu provider
-// based on available credentials. Both personal and team editions use feishu.
+// It fetches the public signed configuration snapshot from the configured
+// mirror list. No provider credentials are required on the client.
 func startConfigsync(srv *server.Server) {
 	if os.Getenv("CENTAG_CONFIGSYNC") == "off" {
 		return
 	}
 
-	provider := configsync.MustNewFeishuProvider()
-	if provider == nil {
-		logger.Infof("Configsync not configured (no feishu credentials)")
-		return
-	}
+	provider := configsync.NewSnapshotProvider(configsync.ResolveSnapshotURLs(configsync.DefaultSnapshotURLs))
 
 	stateDir := os.Getenv("CENTAG_CONFIGSYNC_STATE_DIR")
 	if stateDir == "" {
 		if dataDir := os.Getenv("CENTAG_DATA_DIR"); dataDir != "" {
 			stateDir = dataDir
+		}
+	}
+	if stateDir == "" {
+		installRoot := os.Getenv("CENTAG_INSTALL_ROOT")
+		if installRoot == "" {
+			if home, err := os.UserHomeDir(); err == nil {
+				installRoot = filepath.Join(home, ".centag")
+			}
+		}
+		edition := os.Getenv("CENTAG_EDITION")
+		if edition == "" {
+			edition = "personal"
+		}
+		if installRoot != "" {
+			stateDir = filepath.Join(installRoot, "lib", edition, "configsync")
 		}
 	}
 
@@ -314,7 +326,7 @@ func startConfigsync(srv *server.Server) {
 	backendStore := &backendManagerStore{manager: backend.GetManager()}
 	backendApplier := configsync.NewBackendApplier(backendStore)
 
-	// Load config from database if available (skip Feishu sync on subsequent startups)
+	// Load config from database if available (keep the last-good snapshot on restart)
 	if dbConfigStore != nil {
 		count, _ := dbConfigStore.Count()
 		if count > 0 {
@@ -373,8 +385,7 @@ func startConfigsync(srv *server.Server) {
 	srv.SetConfigSyncScheduler(scheduler)
 	configsync.SetGlobalScheduler(scheduler)
 	scheduler.Start(context.Background())
-	logger.Infof("Configsync scheduler started (feishu, config_table=%s, price_table=%s, pipeline_table=%s)",
-		provider.ConfigTableID(), provider.PriceTableID(), provider.PipelineTableID())
+	logger.Infof("Configsync scheduler started (public snapshot mirrors)")
 }
 
 // buildBackendMapper returns a BackendMapper that resolves base_url → []backend_id

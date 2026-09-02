@@ -61,7 +61,7 @@ func (m *mockProvider) FetchAll(ctx context.Context, q Query) ([]Row, []Provider
 }
 
 func validRow() Row {
-	return Row{Key: "table.model_price", Edition: "all", Value: []byte(`{"provider":"feishu"}`), Enabled: true}
+	return Row{Key: "table.model_price", Edition: "all", Value: []byte(`{"provider":"public_snapshot"}`), Enabled: true}
 }
 
 // ---------- D. 调度器（TC-SCH-001~008） ----------

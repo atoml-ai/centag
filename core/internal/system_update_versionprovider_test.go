@@ -90,7 +90,9 @@ func TestSystemUpdateVersionProvider(t *testing.T) {
 
 	t.Run("TC-VAP-002_Provider出错回落GitHub_OTA", func(t *testing.T) {
 		failing := &vpShim{inner: configsync.NewVersionProviderAdapter(
-			func(ctx context.Context) ([]configsync.Row, error) { return nil, errors.New("feishu down") }, "stable")}
+			func(ctx context.Context) ([]configsync.Row, error) {
+				return nil, errors.New("public config source down")
+			}, "stable")}
 		h := newHandlerWithOTA(t, "v0.9.9")
 		h.SetVersionProvider(failing)
 

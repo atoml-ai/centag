@@ -10,7 +10,7 @@ import (
 
 func TestValidation(t *testing.T) {
 	t.Run("TC-VAL-001_合法行通过", func(t *testing.T) {
-		row := Row{Key: "table.model_price", Edition: "all", Value: []byte(`{"provider":"feishu"}`), Enabled: true}
+		row := Row{Key: "table.model_price", Edition: "all", Value: []byte(`{"provider":"public_snapshot"}`), Enabled: true}
 		if err := ValidateConfigRow(&row); err != nil {
 			t.Fatalf("valid row rejected: %v", err)
 		}

@@ -16,8 +16,8 @@ import (
 
 // globalScheduler holds the global scheduler instance for access from other packages.
 var (
-	globalScheduler     *ConfigScheduler
-	globalSchedulerMu   sync.RWMutex
+	globalScheduler   *ConfigScheduler
+	globalSchedulerMu sync.RWMutex
 )
 
 // SetGlobalScheduler sets the global scheduler instance.
@@ -103,12 +103,12 @@ type ConfigScheduler struct {
 	onUpdate func(*Snapshot)
 	runOnce  bool
 
-	mu           sync.Mutex
-	snap         *Snapshot
-	status       Status
-	failCount    int
+	mu            sync.Mutex
+	snap          *Snapshot
+	status        Status
+	failCount     int
 	lastRatelimit *RateLimitError
-	syncing      bool
+	syncing       bool
 
 	stopCh  chan struct{}
 	stopOne sync.Once
