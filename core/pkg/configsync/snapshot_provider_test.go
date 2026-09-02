@@ -16,7 +16,7 @@ func snapshotJSON(body string) http.HandlerFunc {
 }
 
 const goodSnapshot = `{"schema":1,"generated_at":"2026-08-30T00:00:00Z",
- "config":[{"edition":"all","config_key":"table.model_price","value":{"provider":"feishu"},"enabled":true}],
+ "config":[{"edition":"all","config_key":"table.model_price","value":{"provider":"public_snapshot"},"enabled":true}],
  "prices":[{"base_url":"https://api.ppinfra.com/v3/openai","provider_name":"PPIO","currency":"USD","enabled":true,
    "models":[{"model":"deepseek-v3.2","name":"DeepSeek V3.2","input_price_per_m":0.1389,"output_price_per_m":0.1389,"cost_multiplier":1}]}]}`
 
@@ -93,6 +93,21 @@ func TestSnapshotProvider(t *testing.T) {
 		}
 		if got := ResolveSnapshotURLs(nil); len(got) != 2 {
 			t.Fatalf("multi-source parse failed: %v", got)
+		}
+	})
+
+	t.Run("TC-SNP-007_按版本和edition过滤", func(t *testing.T) {
+		body := `{"schema":1,"config":[
+{"edition":"team","config_key":"team.key","min_version":"1.0.0","value":{},"enabled":true},
+{"edition":"personal","config_key":"personal.key","value":{},"enabled":true},
+{"edition":"all","config_key":"future.key","min_version":"9.0.0","value":{},"enabled":true}
+]}`
+		ts := httptest.NewServer(snapshotJSON(body))
+		defer ts.Close()
+		p := NewSnapshotProvider([]string{ts.URL})
+		rows, err := p.FetchConfig(ctx, Query{Edition: "team", Version: "1.0.0"})
+		if err != nil || len(rows) != 1 || rows[0].Key != "team.key" {
+			t.Fatalf("unexpected filtered rows=%v err=%v", rows, err)
 		}
 	})
 }

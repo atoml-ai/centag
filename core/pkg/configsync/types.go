@@ -1,6 +1,6 @@
 // Package configsync provides a framework for remote configuration synchronization.
 //
-// It defines a Provider SPI for storage channels (Feishu, snapshot, etc.),
+// It defines a Provider SPI for public snapshot storage channels.
 // config models, validation, version matching, and a polling scheduler.
 // The framework is channel-agnostic — new channels require only a Provider
 // implementation and channel descriptor registration.
@@ -74,12 +74,12 @@ var ErrNotSupported = fmt.Errorf("configsync: not supported by this channel")
 
 // Status holds the current sync state for display on management endpoints.
 type Status struct {
-	LastSyncTime  time.Time         `json:"last_sync_time"`
-	LastSyncOK    bool              `json:"last_sync_ok"`
-	LastError     string            `json:"last_error,omitempty"`
-	SyncCount     int               `json:"sync_count"`
-	ErrorCount    int               `json:"error_count"`
-	ConfigValues  map[string]string `json:"config_values,omitempty"`  // key → current value summary
-	PriceApplied  int               `json:"price_applied"`
-	PriceSkipped  int               `json:"price_skipped_manual"`
+	LastSyncTime time.Time         `json:"last_sync_time"`
+	LastSyncOK   bool              `json:"last_sync_ok"`
+	LastError    string            `json:"last_error,omitempty"`
+	SyncCount    int               `json:"sync_count"`
+	ErrorCount   int               `json:"error_count"`
+	ConfigValues map[string]string `json:"config_values,omitempty"` // key → current value summary
+	PriceApplied int               `json:"price_applied"`
+	PriceSkipped int               `json:"price_skipped_manual"`
 }

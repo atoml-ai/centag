@@ -12,7 +12,7 @@ import (
 )
 
 // SnapshotProvider is a Provider backed by a public HTTP snapshot (no auth).
-// Used by Personal edition where no Feishu credentials are available.
+// It is the default configuration channel for all editions.
 type SnapshotProvider struct {
 	urls  []string
 	httpc *http.Client
@@ -32,7 +32,13 @@ func (p *SnapshotProvider) FetchConfig(ctx context.Context, q Query) ([]Row, err
 	if err != nil {
 		return nil, err
 	}
-	return snap.Config, nil
+	rows := make([]Row, 0, len(snap.Config))
+	for _, row := range snap.Config {
+		if MatchVersion(&row, q) {
+			rows = append(rows, row)
+		}
+	}
+	return rows, nil
 }
 
 func (p *SnapshotProvider) FetchModelPrices(ctx context.Context) ([]ProviderPrice, error) {
@@ -48,7 +54,21 @@ func (p *SnapshotProvider) FetchAll(ctx context.Context, q Query) ([]Row, []Prov
 	if err != nil {
 		return nil, nil, err
 	}
-	return snap.Config, snap.Prices, nil
+	rows := make([]Row, 0, len(snap.Config))
+	for _, row := range snap.Config {
+		if MatchVersion(&row, q) {
+			rows = append(rows, row)
+		}
+	}
+	return rows, snap.Prices, nil
+}
+
+func (p *SnapshotProvider) FetchPipelineTemplates(ctx context.Context) ([]PipelineTemplate, error) {
+	snap, err := p.fetchSnapshot(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return snap.PipelineTemplates, nil
 }
 
 func (p *SnapshotProvider) fetchSnapshot(ctx context.Context) (*Snapshot, error) {
@@ -70,9 +90,13 @@ func (p *SnapshotProvider) fetchSnapshot(ctx context.Context) (*Snapshot, error)
 // maxSnapshotBody caps snapshot response reads. A var so tests can shrink it.
 var maxSnapshotBody int64 = 10 << 20
 
-// DefaultSnapshotURLs are the well-known public snapshot endpoints tried in
-// order when no explicit URL is configured.
-var DefaultSnapshotURLs = []string{}
+// DefaultSnapshotURLs are the public configuration mirrors tried in order
+// when no explicit URL is configured. The mirror repositories publish the
+// same snapshot at these stable paths.
+var DefaultSnapshotURLs = []string{
+	"https://github.com/atoml-ai/centag/releases/latest/download/centag-config-team.json",
+	"https://gitee.com/atoml-ai/centag/raw/main/config/public/team/latest.json",
+}
 
 // ResolveSnapshotURLs returns the snapshot URLs to use: the env override
 // CENTAG_CONFIGSYNC_SNAPSHOT_URL (space-separated for multi-source) wins,

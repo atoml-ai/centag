@@ -13,7 +13,7 @@ import (
 
 // ChannelField describes one credential/config field of a storage channel.
 type ChannelField struct {
-	Name     string // env suffix, e.g. "APP_ID" → CENTAG_CONFIGSYNC_<CHANNEL>_APP_ID
+	Name     string // env suffix, e.g. "URL" → CENTAG_CONFIGSYNC_<CHANNEL>_URL
 	Prompt   string // human prompt (wizard)
 	Secret   bool   // masked in logs; never persisted outside 0600 dotenv
 	Required bool
@@ -24,7 +24,7 @@ type ChannelField struct {
 // means registering a descriptor plus a Provider implementation; the
 // framework needs no changes.
 type ChannelDescriptor struct {
-	ID          string // "feishu", "snapshot", ...
+	ID          string // "snapshot", ...
 	Description string
 	Fields      []ChannelField
 	// Validate performs a live API check with the given values. Returning
@@ -226,17 +226,4 @@ func RunWizardCore(ctx context.Context, desc ChannelDescriptor, current map[stri
 		}
 	}
 	return out, nil
-}
-
-// ResolveTableID resolves a table ID by name when not explicitly configured,
-// using the base's table list (TC-CFG-007 免配项).
-type tableLister interface {
-	FindTable(ctx context.Context, appToken, name string) (string, error)
-}
-
-func ResolveTableID(ctx context.Context, c tableLister, appToken, tableID, tableName string) (string, error) {
-	if strings.TrimSpace(tableID) != "" {
-		return tableID, nil
-	}
-	return c.FindTable(ctx, appToken, tableName)
 }
