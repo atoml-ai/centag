@@ -39,6 +39,7 @@ import (
 	"centag/core/pkg/agentmemory"
 	"centag/core/pkg/backend"
 	"centag/core/pkg/config"
+	"centag/core/pkg/configsync"
 	"centag/core/pkg/database"
 	"centag/core/pkg/editionmodule"
 	"centag/core/pkg/embedding"
@@ -51,7 +52,6 @@ import (
 	pluginregistry "centag/core/pkg/plugin/registry"
 	"centag/core/pkg/processor"
 	"centag/core/pkg/proxymode"
-	"centag/core/pkg/configsync"
 	"centag/core/pkg/storage"
 	"centag/core/pkg/systemupdateapi"
 	"centag/core/pkg/tokenusageapi"
@@ -731,9 +731,9 @@ func New(cfg *config.Config) *Server {
 		logger.Infof("[hooks] TokenHook adapter registered; user default pipeline resolver wired")
 
 		ruleStore := billing.NewSQLRuleStore(db, database.Get().DriverName())
-		// Pricing rules: local seed disabled; relying on configsync (feishu) for price data.
+		// Pricing rules: local seed disabled; relying on public configsync data for price data.
 		// If configsync is not configured or fails, pricing_rules table stays empty.
-		logger.Infof("[billing] pricing rules: local seed disabled; relying on configsync (feishu)")
+		logger.Infof("[billing] pricing rules: local seed disabled; relying on public configsync data")
 		pricingService = billing.NewPricingService(ruleStore)
 		tokenusage.SetPricingService(pricingService)
 		billingRulesHandler = NewBillingRulesHandler(ruleStore, pricingService)
@@ -1081,8 +1081,8 @@ func New(cfg *config.Config) *Server {
 		// 流水线默认模式相关 handler
 		pipelineDefaultsHandler: pipelineDefaultsHandler,
 		// 模型变量配置 handler
-		modelConfigHandler:      modelConfigHandler,
-		startTime:               time.Now(),
+		modelConfigHandler: modelConfigHandler,
+		startTime:          time.Now(),
 	}
 	backendHandler.SetEdition(srv.edition)
 	pipelineHandler.SetEdition(srv.edition)
@@ -2207,7 +2207,7 @@ func (s *Server) ConfigSyncStatus() map[string]any {
 	snap := sch.Snapshot()
 	resp := map[string]any{
 		"enabled":        true,
-		"provider":       "feishu",
+		"provider":       "public_snapshot",
 		"last_sync_time": status.LastSyncTime,
 		"last_sync_ok":   status.LastSyncOK,
 		"last_error":     status.LastError,
@@ -2251,7 +2251,7 @@ func (s *Server) handleConfigSyncNow(c *gin.Context) {
 		return
 	}
 	c.JSON(200, gin.H{
-		"status":   "ok",
+		"status":    "ok",
 		"synced_at": time.Now().UTC().Format(time.RFC3339),
 	})
 }

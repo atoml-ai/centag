@@ -1,4 +1,4 @@
--- Pipeline templates from remote configsync (Feishu)
+-- Pipeline templates from remote public configsync snapshot
 CREATE TABLE IF NOT EXISTS pipeline_templates (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,

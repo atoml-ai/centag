@@ -1,4 +1,4 @@
--- Config data from remote configsync (Feishu)
+-- Config data from remote public configsync snapshot
 CREATE TABLE IF NOT EXISTS config_store (
     config_key TEXT PRIMARY KEY,
     config_value TEXT NOT NULL,

@@ -424,16 +424,16 @@ func (a *BackendApplier) Apply(rows []Row) {
 
 // PipelineTemplate represents a pipeline template for remote sync.
 type PipelineTemplate struct {
-	ID            string                       `json:"id"`
-	Name          string                       `json:"name"`
-	Description   string                       `json:"description,omitempty"`
-	ShortcutCode  string                       `json:"shortcut_code,omitempty"`
-	SchemaVersion string                       `json:"schema_version,omitempty"`
-	Version       string                       `json:"version,omitempty"`
-	Edition       string                       `json:"edition,omitempty"` // "all", "personal", "team"
-	Nodes         []PipelineNodeConfig         `json:"nodes"`
-	GlobalConfig  *GlobalPipelineConfig        `json:"global_config,omitempty"`
-	Metadata      map[string]interface{}       `json:"metadata,omitempty"`
+	ID            string                 `json:"id"`
+	Name          string                 `json:"name"`
+	Description   string                 `json:"description,omitempty"`
+	ShortcutCode  string                 `json:"shortcut_code,omitempty"`
+	SchemaVersion string                 `json:"schema_version,omitempty"`
+	Version       string                 `json:"version,omitempty"`
+	Edition       string                 `json:"edition,omitempty"` // "all", "personal", "team"
+	Nodes         []PipelineNodeConfig   `json:"nodes"`
+	GlobalConfig  *GlobalPipelineConfig  `json:"global_config,omitempty"`
+	Metadata      map[string]interface{} `json:"metadata,omitempty"`
 }
 
 // PipelineNodeConfig represents a pipeline node configuration.
@@ -488,22 +488,22 @@ type RouteConfig struct {
 
 // GlobalPipelineConfig represents global pipeline configuration.
 type GlobalPipelineConfig struct {
-	Timeout         int                    `json:"timeout"`
-	MaxRetries      int                    `json:"max_retries"`
-	BypassOnError   bool                   `json:"bypass_on_error"`
-	ParallelLimit   int                    `json:"parallel_limit"`
-	LogLevel        string                 `json:"log_level,omitempty"`
-	SystemPrompt    string                 `json:"system_prompt,omitempty"`
-	FallbackGroups  []FallbackGroup        `json:"fallback_groups,omitempty"`
-	Storage         *StorageHookConfig     `json:"storage,omitempty"`
-	Hooks           []HookConfig           `json:"hooks,omitempty"`
+	Timeout        int                `json:"timeout"`
+	MaxRetries     int                `json:"max_retries"`
+	BypassOnError  bool               `json:"bypass_on_error"`
+	ParallelLimit  int                `json:"parallel_limit"`
+	LogLevel       string             `json:"log_level,omitempty"`
+	SystemPrompt   string             `json:"system_prompt,omitempty"`
+	FallbackGroups []FallbackGroup    `json:"fallback_groups,omitempty"`
+	Storage        *StorageHookConfig `json:"storage,omitempty"`
+	Hooks          []HookConfig       `json:"hooks,omitempty"`
 }
 
 // FallbackGroup represents fallback group configuration.
 type FallbackGroup struct {
-	PrimaryNodeID  string   `json:"primary_node_id"`
-	FallbackNodes  []string `json:"fallback_nodes"`
-	MaxAttempts    int      `json:"max_attempts"`
+	PrimaryNodeID string   `json:"primary_node_id"`
+	FallbackNodes []string `json:"fallback_nodes"`
+	MaxAttempts   int      `json:"max_attempts"`
 }
 
 // StorageHookConfig represents storage hook configuration.
@@ -589,10 +589,10 @@ func (a *PipelineTemplateApplier) ApplyFromTemplates(templates []PipelineTemplat
 
 // SyncResult holds the combined result of applying a snapshot.
 type SyncResult struct {
-	Prices      *PriceApplierSyncResult `json:"prices,omitempty"`
-	Version     *VersionInfo            `json:"version,omitempty"`
-	Features    int                     `json:"features_applied"`
-	ClashRules  bool                    `json:"clash_rules_applied"`
-	Backends    int                     `json:"backends_applied"`
-	SyncTime    time.Time               `json:"sync_time"`
+	Prices     *PriceApplierSyncResult `json:"prices,omitempty"`
+	Version    *VersionInfo            `json:"version,omitempty"`
+	Features   int                     `json:"features_applied"`
+	ClashRules bool                    `json:"clash_rules_applied"`
+	Backends   int                     `json:"backends_applied"`
+	SyncTime   time.Time               `json:"sync_time"`
 }

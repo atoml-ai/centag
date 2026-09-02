@@ -26,7 +26,7 @@ func resolvePipelineTemplatesWithEdition(edition string) []pipeline.PatternTempl
 	}
 
 	// 数据库为空（首次启动或尚未同步）
-	logger.Warnf("no pipeline templates in database (edition=%q); run configsync or use 'configctl pipeline sync' to populate from Feishu", edition)
+	logger.Warnf("no pipeline templates in database (edition=%q); run configsync or use 'configctl pipeline sync' to populate from the public snapshot", edition)
 	return nil
 }
 
@@ -256,7 +256,7 @@ func convertInitialTemplates(initial []bootstrap.InitialPipelineTemplate) []pipe
 				for _, fg := range tmpl.GlobalConfig.FallbackGroups {
 					converted.GlobalConfig.FallbackGroups = append(converted.GlobalConfig.FallbackGroups, pipeline.FallbackGroup{
 						PrimaryNodeID: fg.PrimaryNodeID,
-						FallbackNodes:  fg.FallbackNodes,
+						FallbackNodes: fg.FallbackNodes,
 						MaxAttempts:   fg.MaxAttempts,
 					})
 				}

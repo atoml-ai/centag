@@ -264,7 +264,7 @@ func TestBootstrapApplier(t *testing.T) {
 				return NewSnapshotProvider([]string{"http://example.com/snap.json"}), nil
 			},
 		})
-		rows := []Row{{Key: "table.model_price", Enabled: true, Value: mustJSON(map[string]string{"provider": "feishu", "table_id": "tbl1"})}}
+		rows := []Row{{Key: "table.model_price", Enabled: true, Value: mustJSON(map[string]string{"provider": "public_snapshot", "source": "pricing"})}}
 		if err := ba.Apply(rows); err != nil {
 			t.Fatal(err)
 		}
