@@ -200,3 +200,4 @@ test_results.json
 protocol-test-report.html
 test_results.json
 .workbuddy/memory/
+.opencode/
