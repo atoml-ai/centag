@@ -331,14 +331,14 @@ start_service() {
         echo -e "${BLUE}   Debug 模式：前台运行，输出到终端${NC}"
         # Debug 模式前台运行
         if command -v stdbuf >/dev/null 2>&1; then
-            exec stdbuf -oL -eL "$service_bin"
+            exec stdbuf -oL -eL "$service_bin" serve
         else
-            exec "$service_bin"
+            exec "$service_bin" serve
         fi
     else
         echo -e "${BLUE}   日志文件: $LOG_FILE${NC}"
         echo -e "${BLUE}   日志同时输出到控制台和文件（由 LLM_PROXY_LOG_OUTPUT 环境变量控制）${NC}"
-        nohup "$service_bin" >> "$LOG_FILE" 2>&1 &
+        nohup "$service_bin" serve >> "$LOG_FILE" 2>&1 &
         local pid=$!
         
         # 保存 PID

@@ -63,5 +63,5 @@ rules: [...]
 
 ## 预置配置
 
-默认种子：`config/pricing/default.yaml`（可用环境变量 `CENTAG_PRICING_FILE` 覆盖）。  
-personal/team：表空时自动导入规则，并始终从该文件加载汇率；minimal：启动加载到内存 RuleStore。
+定价规则存储在数据库 `pricing_rules` 表中。  
+pricing-sync 工具（centag-pro）从官方页面和 LiteLLM 抓取价格并写入数据库。表空时使用内置默认价格（0.7 USD/1M tokens）。
