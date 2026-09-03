@@ -31,6 +31,8 @@
   "addModelPlaceholder": "输入模型名称，回车添加",
   "addModel": "添加",
   "noModels": "暂无模型",
+  "filterModelsPlaceholder": "搜索筛选模型…",
+  "noMatchModels": "无匹配模型",
   "modelBeforeIcon": "点击标签设为默认，带 ",
   "modelAfterIcon": " 为当前默认",
   "advancedConfig": "高级配置",
@@ -71,6 +73,5 @@
   "geminiHintDesc": "直接接入 Gemini 官方 API，支持所有原生特性。",
   "keyFormat": "Key 格式：",
   "defaultEndpoint": "默认端点：",
-  "probeModelCheck": "请完善表单",
-  "modelVariables": "模型变量"
+  "probeModelCheck": "请完善表单"
 }

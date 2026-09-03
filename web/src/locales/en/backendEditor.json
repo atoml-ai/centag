@@ -31,6 +31,8 @@
   "addModelPlaceholder": "Enter model name, press Enter to add",
   "addModel": "Add",
   "noModels": "No models yet",
+  "filterModelsPlaceholder": "Filter models…",
+  "noMatchModels": "No matching models",
   "modelBeforeIcon": "Click tag to set as default, ",
   "modelAfterIcon": " indicates current default",
   "advancedConfig": "Advanced Config",
@@ -71,6 +73,5 @@
   "geminiHintDesc": "Directly connect to the Gemini official API, supporting all native features.",
   "keyFormat": "Key Format: ",
   "defaultEndpoint": "Default Endpoint: ",
-  "probeModelCheck": "Please complete the form",
-  "modelVariables": "Model Variables"
+  "probeModelCheck": "Please complete the form"
 }

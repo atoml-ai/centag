@@ -178,7 +178,9 @@
             <div class="model-list-head">
               <label class="form-label">
                 {{ t('backendEditor.modelList') }}
-                <span v-if="form.models.length" class="model-count">{{ form.models.length }}</span>
+                <span class="model-count" :class="{ filtered: isFilterActive }">
+                  {{ isFilterActive ? `${filteredModels.length}/${form.models.length}` : form.models.length }}
+                </span>
               </label>
               <el-button
                 type="primary"
@@ -191,9 +193,18 @@
                 <el-icon><Refresh /></el-icon> {{ t('backendEditor.refresh') }}
               </el-button>
             </div>
-            <div class="model-add-row">
+            <div class="model-toolbar-row">
+              <el-input
+                v-if="form.models.length"
+                v-model="modelFilter"
+                class="model-filter-input"
+                :placeholder="t('backendEditor.filterModelsPlaceholder')"
+                clearable
+                :prefix-icon="Search"
+              />
               <el-input
                 v-model="newModelName"
+                class="model-add-input"
                 :placeholder="t('backendEditor.addModelPlaceholder')"
                 autocomplete="off"
                 @keyup.enter="onAddModel"
@@ -201,25 +212,26 @@
               <el-button @click="onAddModel" :disabled="!newModelName.trim()" type="primary" plain>
                 {{ t('backendEditor.addModel') }}
               </el-button>
-              <el-button type="default" size="small" @click="openModelConfig">
-                {{ t('backendEditor.modelVariables') }}
-              </el-button>
             </div>
-            <div class="model-preview" :class="{ empty: form.models.length === 0 }">
-              <div v-if="form.models.length > 0" class="model-tags">
+            <div class="model-preview" :class="{ empty: filteredModels.length === 0 }">
+              <div v-if="filteredModels.length > 0" class="model-tags">
                 <span
-                  v-for="(model, mi) in form.models"
-                  :key="model.name + '-' + mi"
+                  v-for="model in filteredModels"
+                  :key="model.name"
                   class="model-tag"
                   :class="{ active: model.name === form.default_model }"
                   @click="setDefaultModel(model.name)"
                 >
                   <el-icon v-if="model.name === form.default_model" :size="12"><StarFilled /></el-icon>
                   {{ model.name }}
-                  <span class="tag-remove" @click.stop="onRemoveModel(mi)">
+                  <span class="tag-remove" @click.stop="removeModelByName(model.name)">
                     <el-icon :size="12"><Close /></el-icon>
                   </span>
                 </span>
+              </div>
+              <div v-else-if="form.models.length > 0" class="model-empty-tip">
+                <el-icon :size="24" color="#dcdfe6"><Search /></el-icon>
+                <span>{{ t('backendEditor.noMatchModels') }}</span>
               </div>
               <div v-else class="model-empty-tip">
                 <el-icon :size="24" color="#dcdfe6"><FolderOpened /></el-icon>
@@ -323,7 +335,6 @@
 <script setup lang="ts">
 import { ref, reactive, computed, watch, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import {
   Delete,
@@ -331,6 +342,7 @@ import {
   CopyDocument,
   Document,
   Refresh,
+  Search,
   StarFilled,
   Close,
   FolderOpened,
@@ -352,7 +364,6 @@ import {
 import type { ProviderFormModel, ProviderDef } from '@/utils/shared-modules'
 
 const { t } = useI18n()
-const router = useRouter()
 
 const props = withDefaults(defineProps<{
   modelValue: boolean
@@ -384,6 +395,7 @@ const isCreate = ref(false)
 const dialogVisible = ref(false)
 const showProviderList = ref(false)
 const newModelName = ref('')
+const modelFilter = ref('')
 const fetchingModels = ref(false)
 const activeTab = ref('basic')
 const backendTypes = ref<BackendTypeMeta[]>([])
@@ -420,6 +432,15 @@ watch(dialogVisible, (visible) => {
 })
 
 const filteredProviders = computed(() => filterProviders(providerList.value, form.name))
+
+/** 模型筛选：名称子串、忽略大小写 */
+const filteredModels = computed(() => {
+  const q = modelFilter.value.trim().toLowerCase()
+  if (!q) return form.models
+  return form.models.filter((m) => (m.name || '').toLowerCase().includes(q))
+})
+
+const isFilterActive = computed(() => modelFilter.value.trim() !== '')
 
 const isKimiForCodingEndpoint = computed(() =>
   (form.base_url || '').toLowerCase().includes('api.kimi.com/coding')
@@ -464,6 +485,7 @@ const canSave = computed(() =>
 function resetForm() {
   Object.assign(form, createEmptyProviderForm())
   newModelName.value = ''
+  modelFilter.value = ''
   showProviderList.value = false
   activeTab.value = 'basic'
   connectivitySnapshot.value = null
@@ -514,13 +536,10 @@ function onAddModel() {
   }
 }
 
-function openModelConfig() {
-  dialogVisible.value = false
-  router.push('/model-config')
-}
-
-function onRemoveModel(index: number) {
-  removeModelFromForm(form, index)
+/** 筛选视图下按名称删除（tag 不再携带 form.models 中的原始下标） */
+function removeModelByName(name: string) {
+  const idx = form.models.findIndex((m) => m.name === name)
+  if (idx >= 0) removeModelFromForm(form, idx)
 }
 
 function setDefaultModel(name: string) {
@@ -1161,13 +1180,23 @@ defineExpose({ openEdit, openCreate, getPendingApiKey })
   font-weight: 600;
 }
 
-.model-add-row {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 10px;
+.model-count.filtered {
+  background: #eff6ff;
+  color: #2563eb;
 }
 
-.model-add-row :deep(.el-input) {
+.model-toolbar-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.model-toolbar-row .model-filter-input {
+  width: 200px;
+  flex: none;
+}
+
+.model-toolbar-row .model-add-input {
   flex: 1;
 }
 

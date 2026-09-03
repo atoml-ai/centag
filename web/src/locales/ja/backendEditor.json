@@ -31,6 +31,8 @@
   "addModelPlaceholder": "モデル名を入力し、Enter で追加",
   "addModel": "追加",
   "noModels": "モデルがありません",
+  "filterModelsPlaceholder": "モデルを絞り込み…",
+  "noMatchModels": "一致するモデルがありません",
   "modelBeforeIcon": "タグをクリックしてデフォルトに設定、",
   "modelAfterIcon": " は現在のデフォルトを示します",
   "advancedConfig": "詳細設定",
@@ -71,6 +73,5 @@
   "geminiHintDesc": "Gemini 公式 API に直接接続し、すべてのネイティブ機能をサポートします。",
   "keyFormat": "キー形式：",
   "defaultEndpoint": "デフォルトエンドポイント：",
-  "probeModelCheck": "フォームを完成させてください",
-  "modelVariables": "モデル変数"
+  "probeModelCheck": "フォームを完成させてください"
 }

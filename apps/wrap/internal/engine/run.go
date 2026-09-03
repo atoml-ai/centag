@@ -9,7 +9,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
-	"runtime"
 	"sort"
 	"strings"
 
@@ -309,10 +308,10 @@ func (e *Engine) Run(server, token string, argv []string) error {
 	// A macOS .app bundle is a directory; resolve it to its real binary so
 	// LookPath / exec can run it (desktop picker resolves too, this is the
 	// defense-in-depth path for direct `centag wrap run -- Foo.app` use).
-	if runtime.GOOS == "darwin" {
-		if resolved, ok := resolveMacAppBundle(argv[0]); ok {
-			argv = append([]string{resolved}, argv[1:]...)
-		}
+	// Not gated on GOOS: resolution is structural (.app suffix + bundle
+	// layout), so the exec path stays covered by tests on Linux CI.
+	if resolved, ok := resolveMacAppBundle(argv[0]); ok {
+		argv = append([]string{resolved}, argv[1:]...)
 	}
 	bin, err := exec.LookPath(argv[0])
 	if err != nil {

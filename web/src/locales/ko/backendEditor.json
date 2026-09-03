@@ -31,6 +31,8 @@
   "addModelPlaceholder": "모델 이름 입력, Enter로 추가",
   "addModel": "추가",
   "noModels": "모델이 없습니다",
+  "filterModelsPlaceholder": "모델 필터링…",
+  "noMatchModels": "일치하는 모델 없음",
   "modelBeforeIcon": "태그를 클릭하여 기본값으로 설정, ",
   "modelAfterIcon": "이 현재 기본값을 나타냅니다",
   "advancedConfig": "고급 설정",
@@ -71,6 +73,5 @@
   "geminiHintDesc": "Gemini 공식 API에 직접 연결하여 모든 네이티브 기능을 지원합니다.",
   "keyFormat": "키 형식: ",
   "defaultEndpoint": "기본 엔드포인트: ",
-  "probeModelCheck": "양식을 작성해주세요",
-  "modelVariables": "모델 변수"
+  "probeModelCheck": "양식을 작성해주세요"
 }

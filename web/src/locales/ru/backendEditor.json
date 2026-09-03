@@ -31,6 +31,8 @@
   "addModelPlaceholder": "Введите название модели, Enter для добавления",
   "addModel": "Добавить",
   "noModels": "Нет моделей",
+  "filterModelsPlaceholder": "Фильтр моделей…",
+  "noMatchModels": "Нет подходящих моделей",
   "modelBeforeIcon": "Нажмите на тег, чтобы установить его по умолчанию. ",
   "modelAfterIcon": " указывает текущую модель по умолчанию",
   "advancedConfig": "Расширенная конфигурация",
@@ -71,6 +73,5 @@
   "geminiHintDesc": "Прямое подключение к официальному API Gemini с поддержкой всех нативных функций.",
   "keyFormat": "Формат ключа: ",
   "defaultEndpoint": "Эндпоинт по умолчанию: ",
-  "probeModelCheck": "Пожалуйста, заполните форму",
-  "modelVariables": "Переменные модели"
+  "probeModelCheck": "Пожалуйста, заполните форму"
 }

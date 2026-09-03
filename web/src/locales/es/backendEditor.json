@@ -31,6 +31,8 @@
   "addModelPlaceholder": "Ingrese el nombre del modelo, presione Enter para agregar",
   "addModel": "Agregar",
   "noModels": "Sin modelos",
+  "filterModelsPlaceholder": "Filtrar modelos…",
+  "noMatchModels": "Ningún modelo coincide",
   "modelBeforeIcon": "Haga clic en la etiqueta para establecer como predeterminado, ",
   "modelAfterIcon": " indica el predeterminado actual",
   "advancedConfig": "Configuración avanzada",
@@ -71,6 +73,5 @@
   "geminiHintDesc": "Conéctese directamente a la API oficial de Gemini, compatible con todas las funciones nativas.",
   "keyFormat": "Formato de clave: ",
   "defaultEndpoint": "Endpoint predeterminado: ",
-  "probeModelCheck": "Por favor complete el formulario",
-  "modelVariables": "Variables de modelo"
+  "probeModelCheck": "Por favor complete el formulario"
 }
