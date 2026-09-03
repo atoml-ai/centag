@@ -404,6 +404,22 @@ func (n *TransparentForwardNode) Execute(ctx context.Context, input *NodeInput) 
 		return nil, newTransparentUpstreamError(n.id, backendID, resolvedModel, targetURL, statusCode, bodyStr, poolExhausted)
 	}
 
+	// 结构判定兜底（技术方案 §3.2）：billing/model 专用分支未认领的错误体，
+	// 只要 body 是显式错误结构（顶层 error 键 / type:"error" / SSE error 事件），
+	// 一律判失败并上抛——交给 FallbackGroups / 策略降级，杜绝「假成功」（节点被标
+	// StatusSuccess、fallback skipped、统计记成功）。真客户端错误（无错误结构，
+	// 如 context 超长 400）保持原样透传，行为零变化。
+	if !rawErrorBodyPassthrough(meta) && isFakeSuccessUpstreamOutput(statusCode, bodyStr) {
+		logger.Warn("transparent_forward upstream body is an explicit error structure",
+			logger.GetField("node_id", n.id),
+			logger.GetField("backend_id", backendID),
+			logger.GetField("model", resolvedModel),
+			logger.GetField("status_code", statusCode),
+			logger.GetField("upstream_error_kind", upstreamErrorKind(bodyStr)),
+		)
+		return nil, newTransparentUpstreamError(n.id, backendID, resolvedModel, targetURL, statusCode, bodyStr, poolExhausted)
+	}
+
 	out := n.buildTransparentOutput(targetURL, statusCode, contentType, respBody, backendID, resolvedModel, clientModel, requestPath, bridgeToChat, anthropicToChat, nil)
 	applyReasoningRoundtripOnResponse(meta, body, respBody, statusCode)
 

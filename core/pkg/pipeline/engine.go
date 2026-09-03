@@ -1435,6 +1435,36 @@ func (e *PipelineEngine) executeLayerNode(ctx context.Context, graph *ExecutionG
 			"backend_id", resolvedBackendID,
 		)
 	}
+
+	// 假成功安全网（技术方案 §3.3.1）：节点未报错，但输出是显式上游错误结构且
+	// status_code >= 400 → 转换为失败，走统一错误处理（策略降级 → bypass → Failed）。
+	// 双条件门槛：generator/processor 等纯文本输出节点无 status_code 元数据，永不触发。
+	if err == nil && !rawErrorBodyPassthrough(nodeInput.Metadata) && outputStatusCode(output) >= 400 && isFakeSuccessUpstreamOutput(outputStatusCode(output), output.Content) {
+		sc := outputStatusCode(output)
+		e.logger.Warn("node returned fake success (explicit upstream error structure), converting to failure",
+			AppendRequestIDFields(ctx,
+				"node_id", nodeID,
+				"status_code", sc,
+				"upstream_error_kind", upstreamErrorKind(output.Content),
+			)...)
+		err = &UpstreamError{
+			StatusCode: sc,
+			BackendID:  firstMetaString(output.Metadata, "backend_id"),
+			Model:      firstMetaString(output.Metadata, "model"),
+			Message:    fmt.Sprintf("node %q: upstream returned %d: %s", nodeID, sc, truncateBody([]byte(output.Content), 512)),
+		}
+		output = nil
+		// 统计归位：retry 包装层已按节点返回值记了成功日志，转换后补记失败，
+		// 保证执行日志/统计中出现真实失败记录（对齐 policy fallback 补记成功的先例）。
+		if execCtx, ok := ctx.Value(executionContextKey{}).(*ExecutionContext); ok && execCtx != nil {
+			execCtx.AddNodeLog(NodeExecutionLog{
+				NodeID:       nodeID,
+				NodeType:     execNode.Config.Type,
+				Success:      false,
+				ErrorMessage: MaskSensitiveData(err.Error()),
+			})
+		}
+	}
 	// 熔断与兜底是两码事：节点内兜底救回（billing/model fallback）时 err == nil，
 	// 照常记账会把「主后端失败」记成「主后端成功」。按兜底元数据拆分记账：
 	//   - 计费/额度类救回：主后端如实记一次失败（额度耗尽不会自愈，到阈值应熔断）；
@@ -1828,6 +1858,10 @@ func outputStatusCode(out *NodeOutput) int {
 }
 
 // isUsableFallbackNodeOutput 拒绝「节点没报错但 body 仍是上游错误」的假成功。
+// 收口规则（技术方案 §3.3.2）：结构判定先行（识别全部显式错误结构，含无
+// "type":"error" 字面量的 OpenAI 错误体）；删除原 `"type":"error"` 子串检查
+// （已被结构判定的顶层 type 规则严格覆盖且更准）；其余文本检查针对非 JSON
+// 错误文本的真实观察案例，作为结构判定覆盖不了的最后防线保留。
 func isUsableFallbackNodeOutput(out *NodeOutput) bool {
 	if out == nil {
 		return false
@@ -1835,14 +1869,15 @@ func isUsableFallbackNodeOutput(out *NodeOutput) bool {
 	if sc := outputStatusCode(out); sc >= 400 {
 		return false
 	}
+	if classifyUpstreamResponse(outputStatusCode(out), out.Content) == VerdictUpstreamError {
+		return false
+	}
 	content := strings.TrimSpace(out.Content)
 	if content == "" {
 		return false
 	}
 	lower := strings.ToLower(content)
-	if strings.Contains(lower, `"type":"error"`) ||
-		strings.Contains(lower, `"type": "error"`) ||
-		strings.Contains(lower, "modelerror") ||
+	if strings.Contains(lower, "modelerror") ||
 		strings.Contains(lower, "creditserror") ||
 		strings.Contains(lower, "is not supported") {
 		return false
