@@ -141,6 +141,16 @@ curl -X POST http://localhost:20060/v1/chat/completions \
 
 **Breaking change (v2.1)**: `#t` is no longer HTTP raw forward. Caching belongs to `cache-mode`. For fixed-egress jump board see **Jump Board** below.
 
+#### Upstream Error Verdict (structural classification)
+
+Since v0.3.4, `transparent_forward` decides "did the upstream really fail" by **response body structure**, not by status code or error-message keyword whitelists:
+
+- **Failure (triggers fallback groups / policy fallback)**: response body is an explicit error structure — top-level `error` key (OpenAI-style `{"error":{...}}`), top-level `"type":"error"` (Anthropic-style), or an SSE `data:` event whose payload has a top-level `error` / `event: error` line. This applies regardless of the HTTP status code (gateways sometimes label upstream outages as `400`).
+- **Passthrough (unchanged behavior)**: 401/403 auth errors (documented contract), true client errors without an error structure (e.g. `{"detail":"context too long"}`), unrecognized bodies, and all success shapes (`choices` / `output` / `content[]` / `candidates` / `data[]`).
+- **Debug entry exemption**: the `/api/v1/pipelines/:id/execute` (and `execute-direct`) entries inject `raw_error_body_passthrough`, keeping the legacy "raw error body as data" debugging contract.
+
+Error-message keyword classifiers (`billing` / `model_not_found` / `Router.Unavailable`) remain in place, but only to **subclass** a failure (choose which fallback chain runs), never to decide whether a response failed.
+
 ### 3b. Jump Board Mode (`#j` / fixed-egress)
 
 **Description**: Centag acts as a fixed-egress jump board via `builtin.transparent_forward` with `route_policy=fixed`. Uses the system default backend/model (or explicit `X-Backend-ID`); no cross-backend model matching; does not inject system prompt. (Formerly `raw-forward` / `#raw` — retired.)
