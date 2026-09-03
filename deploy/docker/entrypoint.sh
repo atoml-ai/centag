@@ -206,13 +206,12 @@ main() {
         wait_for_service "$vector_host" "${vector_port:-8000}" "VectorDB" || true
     fi
     
-    # 首次启动：若尚无 SQLite 库，则从镜像内 initdata 拷贝默认库（与仓库 config/initdata/data/centag.db 同源）
-    local data_dir="./data"
-    local seed_db="./config/initdata/data/centag.db"
-    if false; then  # Disabled: force PostgreSQL
-        mkdir -p "$data_dir"
-        cp "$seed_db" "${data_dir}/centag.db"
-        print_success "已初始化 ${data_dir}/centag.db（默认配置，首次仅执行一次）"
+    # 首次启动：若尚无 SQLite 库，则从镜像内 initdata 拷贝默认库
+    local seed_db="/app/config/initdata/data/centag.db"
+    if [ "${LLM_PROXY_DB_DRIVER:-sqlite}" = "sqlite" ] && [ ! -f "${SQLITE_PATH}" ] && [ -f "$seed_db" ]; then
+        mkdir -p "$(dirname "${SQLITE_PATH}")"
+        cp "$seed_db" "${SQLITE_PATH}"
+        print_success "已初始化 ${SQLITE_PATH}（首次启动种子数据）"
     fi
 
     # 确保持久化目录存在（宿主机 bind-mount 时也需可写）
@@ -262,9 +261,9 @@ main() {
         print_info "======================================"
 
         if [ "$(id -u)" -eq 0 ]; then
-            exec gosu llmproxy /app/bin/centag
+            exec gosu llmproxy /app/bin/centag serve
         else
-            exec /app/bin/centag
+            exec /app/bin/centag serve
         fi
     fi
 }

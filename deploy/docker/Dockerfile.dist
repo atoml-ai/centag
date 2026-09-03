@@ -11,7 +11,7 @@
 # 阶段 1：前端构建（所有版本共用同一套 Vue 前端）
 # 前端通过 CENTAG_EDITION 环境变量自动适配 minimal/personal/team UI
 # ============================================================
-FROM docker.m.daocloud.io/library/node:20-alpine AS frontend-builder
+FROM node:20-alpine AS frontend-builder
 
 ARG INCLUDE_FRONTEND=true
 
@@ -37,7 +37,7 @@ RUN if [ "$INCLUDE_FRONTEND" = "true" ]; then \
 # ============================================================
 # 阶段 2：Go 构建（优化缓存策略）
 # ============================================================
-FROM docker.m.daocloud.io/library/golang:1.25-alpine AS builder
+FROM golang:1.25-alpine AS builder
 
 ARG DIST_NAME=minimal
 ARG VERSION=dev
@@ -56,6 +56,8 @@ COPY core/go.mod core/go.sum* ./core/
 COPY plugins/*/go.mod plugins/*/go.sum* ./plugins/
 COPY apps/wrap/go.mod apps/wrap/go.sum* ./apps/wrap/
 COPY dist/${DIST_NAME}/go.mod dist/${DIST_NAME}/go.sum* ./dist/${DIST_NAME}/
+# edgeag 是本地 sibling repo，replace 指令指向 ../../../edgeag
+COPY edgeag/go.mod edgeag/go.sum* /edgeag/
 
 # 使用 BuildKit cache mount 缓存 go mod download
 # 第一次尝试预热缓存（可能失败，因为源码尚未复制，忽略错误）
@@ -68,6 +70,7 @@ COPY core/ ./core/
 COPY plugins/ ./plugins/
 COPY apps/wrap/ ./apps/wrap/
 COPY dist/${DIST_NAME}/ ./dist/${DIST_NAME}/
+COPY edgeag/ /edgeag/
 
 # 在 dist 目录内下载依赖（使用 cache mount 加速）
 RUN --mount=type=cache,target=/go/pkg/mod \
@@ -112,7 +115,7 @@ COPY deploy/docker/initdata-empty/initdata.zip /initdata.zip
 # ============================================================
 # 阶段 3：运行时
 # ============================================================
-FROM docker.m.daocloud.io/library/debian:bookworm-slim
+FROM debian:bookworm-slim
 
 ARG DIST_NAME=minimal
 ARG INCLUDE_FRONTEND=true
@@ -134,7 +137,12 @@ ENV LANG=C.UTF-8 \
     LC_ALL=C.UTF-8 \
     TZ=Asia/Shanghai \
     LLM_PROXY_LOG_PATH=/app/logs \
-    LLM_PROXY_LOG_OUTPUT=both
+    LLM_PROXY_LOG_OUTPUT=both \
+    LLM_PROXY_LOG_FORMAT=console \
+    SQLITE_PATH=/app/storage/centag.db \
+    CENTAG_DATA_DIR=/app/storage \
+    MEMORY_STORE_ROOT=/app/storage/memory-store \
+    INITDATA_PATH=/app/config/initdata
 
 RUN groupadd -g 1001 llmproxy && \
     useradd -m -u 1001 -g llmproxy -s /bin/bash llmproxy
@@ -154,9 +162,6 @@ COPY deploy/docker/entrypoint.sh ./entrypoint.sh
 COPY scripts/tools/daemon.sh ./daemon.sh
 # 全局 initdata：流水线模板等
 COPY config/initdata/ ./config/initdata/
-# 计费规则种子（启动时 EnsureSeededFromYAML → pricing_rules；缺省则规则为空、成本恒为 0）
-COPY config/pricing/ ./config/pricing/
-
 # 注入用户自定义 initdata archive（由 start.sh --initdata 提供）
 # 当 INITDATA_ARCHIVE=true 时，zip 作为唯一来源替换所有默认初始化数据
 # 使用 BuildKit named build-context 从 temp 目录复制 initdata.zip
