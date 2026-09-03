@@ -1,0 +1,90 @@
+{
+  "schema": 1,
+  "generated_at": "2026-09-02T12:00:00Z",
+  "config": [
+    {
+      "edition": "all",
+      "key": "feature.pricing_sync.enabled",
+      "channel": "",
+      "min_version": "",
+      "max_version": "",
+      "priority": 0,
+      "value": true,
+      "enabled": true,
+      "remark": "启用定价同步功能"
+    },
+    {
+      "edition": "team",
+      "key": "feature.configsync.enabled",
+      "channel": "",
+      "min_version": "",
+      "max_version": "",
+      "priority": 0,
+      "value": true,
+      "enabled": true,
+      "remark": "启用配置同步"
+    }
+  ],
+  "prices": [
+    {
+      "base_url": "https://api.deepseek.com/v1",
+      "provider_name": "DeepSeek",
+      "currency": "USD",
+      "models": [
+        {
+          "model": "deepseek-chat",
+          "name": "DeepSeek V3",
+          "input_price_per_m": 0.27,
+          "output_price_per_m": 1.1,
+          "cost_multiplier": 1.0
+        },
+        {
+          "model": "deepseek-reasoner",
+          "name": "DeepSeek R1",
+          "input_price_per_m": 0.55,
+          "output_price_per_m": 2.19,
+          "cost_multiplier": 1.0
+        }
+      ],
+      "enabled": true
+    },
+    {
+      "base_url": "https://open.bigmodel.cn/api/paas/v4",
+      "provider_name": "智谱 BigModel",
+      "currency": "CNY",
+      "models": [
+        {
+          "model": "glm-4-plus",
+          "name": "GLM-4-Plus",
+          "input_price_per_m": 50.0,
+          "output_price_per_m": 50.0,
+          "cost_multiplier": 1.0
+        },
+        {
+          "model": "glm-4-flash",
+          "name": "GLM-4-Flash",
+          "input_price_per_m": 1.0,
+          "output_price_per_m": 1.0,
+          "cost_multiplier": 1.0
+        }
+      ],
+      "enabled": true
+    },
+    {
+      "base_url": "https://api.ppinfra.com/v3/openai",
+      "provider_name": "PPIO",
+      "currency": "USD",
+      "models": [
+        {
+          "model": "deepseek-v3.2",
+          "name": "PPIO DeepSeek V3.2",
+          "input_price_per_m": 0.14,
+          "output_price_per_m": 0.28,
+          "cost_multiplier": 0.5
+        }
+      ],
+      "enabled": true
+    }
+  ],
+  "pipeline_templates": []
+}
