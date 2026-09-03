@@ -717,6 +717,13 @@ func (h *PipelineHandler) ExecutePipeline(c *gin.Context) {
 		}
 	}
 
+	// /execute 调试入口豁免假成功兜底（R08）：本入口的既有契约是把上游原始错误体
+	// 作为数据返回（PRESERVE_STATUS 开关控制 HTTP 状态映射，见
+	// handleTransparentStatusError），依赖节点级「成功携带 status_code 标记」的语义。
+	// 标记后 transparent_forward 的结构判定兜底与引擎假成功安全网均跳过，
+	// 代理主路径（/v1/chat/completions 等）不受影响，仍正常触发降级。
+	meta["raw_error_body_passthrough"] = true
+
 	input := &pipeline.PipelineInput{
 		Content:   req.Content,
 		Messages:  req.Messages,
@@ -786,6 +793,13 @@ func (h *PipelineHandler) ExecutePipelineDirect(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": "pipeline engine not initialized"})
 		return
 	}
+
+	// /execute 调试入口豁免假成功兜底（R08，同 ExecutePipeline）：保留
+	// 「原始错误体作为数据返回」的调试契约，代理主路径不受影响。
+	if req.Metadata == nil {
+		req.Metadata = map[string]interface{}{}
+	}
+	req.Metadata["raw_error_body_passthrough"] = true
 
 	input := &pipeline.PipelineInput{
 		Content:   req.Content,
