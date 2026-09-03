@@ -4,7 +4,6 @@ import (
 	"strings"
 
 	"centag/core/pkg/bootstrap"
-	"centag/core/pkg/configsync"
 	"centag/core/pkg/logger"
 	"centag/core/pkg/pipeline"
 )
@@ -15,208 +14,20 @@ func resolvePipelineTemplates() []pipeline.PatternTemplate {
 	return resolvePipelineTemplatesWithEdition("")
 }
 
-// resolvePipelineTemplatesWithEdition 按 edition 加载流水线模板。
-// 只从数据库加载（由 configsync 从飞书表同步），不从本地文件加载。
+// resolvePipelineTemplatesWithEdition 按 edition 子目录加载：
+//
+//	minimal / personal → pipeline-templates/common/
+//	team               → common/ + team/
 func resolvePipelineTemplatesWithEdition(edition string) []pipeline.PatternTemplate {
-	// 从数据库加载
-	dbTemplates := loadDBPipelineTemplates(edition)
-	if len(dbTemplates) > 0 {
-		logger.Infof("loaded %d pipeline templates from database (edition=%q)", len(dbTemplates), edition)
-		return dbTemplates
-	}
+	initialTemplates := bootstrap.LoadInitialPipelineTemplatesWithEdition(edition)
+	templates := convertInitialTemplates(initialTemplates)
 
-	// 数据库为空（首次启动或尚未同步）
-	logger.Warnf("no pipeline templates in database (edition=%q); run configsync or use 'configctl pipeline sync' to populate from the public snapshot", edition)
-	return nil
-}
-
-// loadDBPipelineTemplates loads pipeline templates from the database.
-func loadDBPipelineTemplates(edition string) []pipeline.PatternTemplate {
-	store, err := pipeline.NewDBPipelineTemplateStore()
-	if err != nil {
-		logger.Warnf("failed to create pipeline template store: %v", err)
-		return nil
-	}
-
-	count, err := store.Count()
-	if err != nil {
-		logger.Warnf("failed to count pipeline templates: %v", err)
-		return nil
-	}
-
-	if count == 0 {
-		return nil
-	}
-
-	// Use edition-aware query if edition is specified
-	var dbTemplates []configsync.PipelineTemplate
-	if edition != "" {
-		dbTemplates, err = store.ListByEdition(edition)
-	} else {
-		dbTemplates, err = store.ListAll()
-	}
-	if err != nil {
-		logger.Warnf("failed to list pipeline templates: %v", err)
-		return nil
-	}
-
-	return convertRemoteTemplates(dbTemplates)
-}
-
-// loadRemotePipelineTemplates 从 configsync snapshot 加载远程流水线模板。
-func loadRemotePipelineTemplates(edition string) []pipeline.PatternTemplate {
-	// 获取 configsync scheduler 的 snapshot
-	scheduler := configsync.GetScheduler()
-	if scheduler == nil {
-		return nil
-	}
-
-	snap := scheduler.Snapshot()
-	if snap == nil || len(snap.PipelineTemplates) == 0 {
-		return nil
-	}
-
-	// 按 edition 过滤模板
-	var filtered []configsync.PipelineTemplate
-	for _, tmpl := range snap.PipelineTemplates {
-		if tmpl.ID == "" {
-			continue
-		}
-		// edition 过滤逻辑：common 模板对所有版本可用，team/extras 模板只对对应版本可用
-		if edition == "" || edition == "team" || edition == "personal" || edition == "minimal" {
-			filtered = append(filtered, tmpl)
-		}
-	}
-
-	return convertRemoteTemplates(filtered)
-}
-
-// convertRemoteTemplates converts remote configsync templates to pipeline templates.
-func convertRemoteTemplates(templates []configsync.PipelineTemplate) []pipeline.PatternTemplate {
+	// 无 initdata 模板时返回空列表：首页/列表显示空白，不注入 simple-chat/chat-node 兜底。
 	if len(templates) == 0 {
-		return nil
+		logger.Warnf("no pipeline templates loaded for edition=%q; store will stay empty until import/create", edition)
 	}
 
-	result := make([]pipeline.PatternTemplate, 0, len(templates))
-	for _, tmpl := range templates {
-		id := strings.TrimSpace(tmpl.ID)
-		if id == "" {
-			continue
-		}
-
-		converted := pipeline.PatternTemplate{
-			ID:            id,
-			SchemaVersion: tmpl.SchemaVersion,
-			Name:          tmpl.Name,
-			Description:   tmpl.Description,
-			ShortcutCode:  tmpl.ShortcutCode,
-			Metadata:      tmpl.Metadata,
-			Nodes:         make([]pipeline.PipelineNodeConfig, 0, len(tmpl.Nodes)),
-		}
-
-		if tmpl.GlobalConfig != nil {
-			converted.GlobalConfig = &pipeline.GlobalPipelineConfig{
-				Timeout:       tmpl.GlobalConfig.Timeout,
-				MaxRetries:    tmpl.GlobalConfig.MaxRetries,
-				BypassOnError: tmpl.GlobalConfig.BypassOnError,
-				ParallelLimit: tmpl.GlobalConfig.ParallelLimit,
-				LogLevel:      tmpl.GlobalConfig.LogLevel,
-				SystemPrompt:  tmpl.GlobalConfig.SystemPrompt,
-			}
-			// 转换 FallbackGroups
-			if len(tmpl.GlobalConfig.FallbackGroups) > 0 {
-				converted.GlobalConfig.FallbackGroups = make([]pipeline.FallbackGroup, 0, len(tmpl.GlobalConfig.FallbackGroups))
-				for _, fg := range tmpl.GlobalConfig.FallbackGroups {
-					converted.GlobalConfig.FallbackGroups = append(converted.GlobalConfig.FallbackGroups, pipeline.FallbackGroup{
-						PrimaryNodeID: fg.PrimaryNodeID,
-						FallbackNodes: fg.FallbackNodes,
-						MaxAttempts:   fg.MaxAttempts,
-					})
-				}
-			}
-			// 转换 Storage 存储钩子配置
-			if tmpl.GlobalConfig.Storage != nil {
-				converted.GlobalConfig.StorageConfig = &pipeline.StorageHookConfig{
-					Enabled:       tmpl.GlobalConfig.Storage.Enabled,
-					Namespace:     tmpl.GlobalConfig.Storage.Namespace,
-					AutoSave:      tmpl.GlobalConfig.Storage.AutoSave,
-					SaveInterval:  tmpl.GlobalConfig.Storage.SaveInterval,
-					RetentionDays: tmpl.GlobalConfig.Storage.RetentionDays,
-				}
-			}
-			// 转换 Hooks 钩子配置
-			if len(tmpl.GlobalConfig.Hooks) > 0 {
-				converted.GlobalConfig.Hooks = make([]pipeline.HookConfig, 0, len(tmpl.GlobalConfig.Hooks))
-				for _, h := range tmpl.GlobalConfig.Hooks {
-					hook := pipeline.HookConfig{
-						Type:        h.Type,
-						On:          append([]string{}, h.On...),
-						StorageName: h.StorageName,
-					}
-					if len(h.Config) > 0 {
-						hook.Config = make(map[string]interface{}, len(h.Config))
-						for k, v := range h.Config {
-							hook.Config[k] = v
-						}
-					}
-					converted.GlobalConfig.Hooks = append(converted.GlobalConfig.Hooks, hook)
-				}
-			}
-		}
-
-		for _, node := range tmpl.Nodes {
-			pn := pipeline.PipelineNodeConfig{
-				ID:             node.ID,
-				Type:           pipeline.NodeType(node.Type),
-				Kind:           node.Kind,
-				Implementation: node.Implementation,
-				Name:           node.Name,
-				Backend:        node.Backend,
-				Model:          node.Model,
-				Config: pipeline.NodeConfig{
-					Backend:        node.Config.Backend,
-					Model:          node.Config.Model,
-					PromptTemplate: node.Config.PromptTemplate,
-					SystemPrompt:   node.Config.SystemPrompt,
-					Temperature:    node.Config.Temperature,
-					MaxTokens:      node.Config.MaxTokens,
-					CustomConfig:   node.Config.CustomConfig,
-					TemplateVars:   node.Config.TemplateVars,
-				},
-				Inputs:          node.Inputs,
-				Outputs:         node.Outputs,
-				ConfigSchemaRef: node.ConfigSchemaRef,
-				SecretsRef:      node.SecretsRef,
-				Permissions:     node.Permissions,
-				Timeout:         node.Timeout,
-				Condition:       node.Condition,
-				NextNodes:       node.NextNodes,
-				DependsOn:       node.DependsOn,
-			}
-			if node.Retry != nil {
-				pn.Retry = &pipeline.RetryConfig{
-					MaxAttempts:     node.Retry.MaxAttempts,
-					BackoffStrategy: node.Retry.BackoffStrategy,
-					InitialDelay:    node.Retry.InitialDelay,
-					MaxDelay:        node.Retry.MaxDelay,
-				}
-			}
-			if node.RouteConfig != nil {
-				pn.RouteConfig = &pipeline.RouteConfig{
-					RouterNodeID: node.RouteConfig.RouterNodeID,
-					RouteValue:   node.RouteConfig.RouteValue,
-					IsDefault:    node.RouteConfig.IsDefault,
-				}
-			}
-			// 归一化：将顶层 Backend/Model 归入 Config，统一出口
-			pn.Normalize()
-			converted.Nodes = append(converted.Nodes, pn)
-		}
-
-		result = append(result, converted)
-	}
-
-	return result
+	return templates
 }
 
 func convertInitialTemplates(initial []bootstrap.InitialPipelineTemplate) []pipeline.PatternTemplate {
@@ -256,7 +67,7 @@ func convertInitialTemplates(initial []bootstrap.InitialPipelineTemplate) []pipe
 				for _, fg := range tmpl.GlobalConfig.FallbackGroups {
 					converted.GlobalConfig.FallbackGroups = append(converted.GlobalConfig.FallbackGroups, pipeline.FallbackGroup{
 						PrimaryNodeID: fg.PrimaryNodeID,
-						FallbackNodes: fg.FallbackNodes,
+						FallbackNodes:  fg.FallbackNodes,
 						MaxAttempts:   fg.MaxAttempts,
 					})
 				}
