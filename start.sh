@@ -1866,9 +1866,14 @@ _debug_docker() {
     print_info "════════════════════════════════════════"
     echo ""
 
-    exec docker run -it --rm \
+    local env_file_args=()
+    if [ -f "${PROJECT_ROOT}/config/secrets/.env" ]; then
+        env_file_args=(--env-file "${PROJECT_ROOT}/config/secrets/.env")
+    fi
+
+    exec MSYS_NO_PATHCONV=1 docker run -it --rm \
         --name "centag-${dist_name}" \
-        --env-file "${PROJECT_ROOT}/config/secrets/.env" \
+        "${env_file_args[@]}" \
         -e CENTAG_EDITION="${dist_name}" \
         -e CENTAG_IN_DOCKER=1 \
         -e CENTAG_DATA_DIR=/app/storage \
@@ -2837,6 +2842,14 @@ INITDATA_EOF
         print_info "默认 initdata 已生成（backends 种子随 Profile，默认空）"
     fi
 
+    # 准备 edgeag sibling repo（go.mod replace 指令需要）
+    local edgeag_cleanup=false
+    if [ ! -d "$PROJECT_ROOT/edgeag" ] && [ -d "$PROJECT_ROOT/../edgeag" ]; then
+        print_info "复制 edgeag 到构建上下文..."
+        cp -r "$PROJECT_ROOT/../edgeag" "$PROJECT_ROOT/edgeag"
+        edgeag_cleanup=true
+    fi
+
     # 构建
     local build_tags=$(_get_dist_tags "$dist_name")
     print_info "构建 Docker 镜像: ${tag} (dist=${dist_name}, frontend=${include_frontend})..."
@@ -2851,6 +2864,9 @@ INITDATA_EOF
         .
     local rc=$?
     rm -rf "$initdata_temp_dir"
+    if [ "$edgeag_cleanup" = true ]; then
+        rm -rf "$PROJECT_ROOT/edgeag"
+    fi
 
     if [ $rc -eq 0 ]; then
         print_success "镜像构建完成: ${tag}"
@@ -2925,9 +2941,13 @@ _dist_docker_run() {
     print_info "  - centag-${dist_name}-logs"
     print_info "  - centag-${dist_name}-certs (MITM CA)"
     print_info "启动容器 (后台): centag-${dist_name}"
-    docker run -d --rm \
+    local env_file_args=()
+    if [ -f "${PROJECT_ROOT}/config/secrets/.env" ]; then
+        env_file_args=(--env-file "${PROJECT_ROOT}/config/secrets/.env")
+    fi
+    MSYS_NO_PATHCONV=1 docker run -d --rm \
         --name "centag-${dist_name}" \
-        --env-file "${PROJECT_ROOT}/config/secrets/.env" \
+        "${env_file_args[@]}" \
         -e CENTAG_EDITION="${dist_name}" \
         -e CENTAG_IN_DOCKER=1 \
         -e CENTAG_DATA_DIR=/app/storage \
