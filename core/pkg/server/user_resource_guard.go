@@ -9,7 +9,6 @@ import (
 
 	"centag/core/pkg/database"
 	"centag/core/pkg/groupmodel"
-	"centag/core/pkg/useraccess"
 
 	"github.com/gin-gonic/gin"
 )
@@ -184,5 +183,3 @@ func (s *Server) canUsePipelineShortcutWithPolicy(user *database.User, shortcut 
 func (s *Server) canUsePipelineShortcut(user *database.User, shortcut string) bool {
 	return s.canUsePipelineShortcutWithPolicy(user, shortcut, nil)
 }
-
-var _ = useraccess.Applies

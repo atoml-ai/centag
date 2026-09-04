@@ -2,7 +2,6 @@ package proxy
 
 import (
 	"context"
-	"fmt"
 
 	"centag/core/pkg/config"
 )
@@ -177,6 +176,3 @@ func GetPipelineIDByMode(mode ProxyMode) string {
 func (m ProxyMode) String() string {
 	return string(m)
 }
-
-// fmt 使用
-var _ = fmt.Sprintf
