@@ -44,6 +44,7 @@ func TestRecordCacheSaving_SQLite(t *testing.T) {
 		PromptTokens:     40,
 		CompletionTokens: 20,
 		TotalTokens:      60,
+		SavedUSD:         0.1,
 		CacheLayer:       "L1",
 		RequestID:        "req-cache-1",
 		PipelineID:       "cache-hit",
