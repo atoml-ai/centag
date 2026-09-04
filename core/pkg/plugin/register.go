@@ -34,24 +34,16 @@ type BackendFactory func(config map[string]interface{}) (interface{}, error)
 // StorageFactory 存储插件工厂函数类型。
 type StorageFactory func(config map[string]interface{}) (interface{}, error)
 
-// DatabaseFactory 数据库插件工厂函数类型。
-type DatabaseFactory func(config map[string]interface{}) (interface{}, error)
-
-// ProcessorFactory 处理器插件工厂函数类型。
-type ProcessorFactory func(config map[string]interface{}) (interface{}, error)
-
 // BusinessPluginFactory 业务插件工厂函数类型。
 // 业务插件的注册签名与标准插件不同，需要接收 nodeRegistry 和 bizRegistry。
 type BusinessPluginFactory func(nodeRegistry interface{}, bizRegistry interface{}) error
 
 // 全局注册表（并发安全）
 var (
-	protocolRegistry   = &sync.Map{}
-	backendRegistry    = &sync.Map{}
-	storageRegistry    = &sync.Map{}
-	databaseRegistry   = &sync.Map{}
-	processorRegistry  = &sync.Map{}
-	businessRegistry   = &sync.Map{}
+	protocolRegistry  = &sync.Map{}
+	backendRegistry   = &sync.Map{}
+	storageRegistry   = &sync.Map{}
+	businessRegistry  = &sync.Map{}
 )
 
 // RegisterProtocol 注册协议插件工厂函数。
@@ -115,59 +107,6 @@ func GetStorage(name string) (StorageFactory, bool) {
 // ListStorages 列出所有已注册的存储插件名称。
 func ListStorages() []string {
 	return listKeys(storageRegistry)
-}
-
-// RegisterDatabase 注册数据库插件工厂函数。
-func RegisterDatabase(name string, factory DatabaseFactory) {
-	if _, loaded := databaseRegistry.LoadOrStore(name, factory); loaded {
-		panic(fmt.Sprintf("database plugin %q already registered", name))
-	}
-}
-
-// GetDatabase 获取已注册的数据库插件工厂函数。
-func GetDatabase(name string) (DatabaseFactory, bool) {
-	f, ok := databaseRegistry.Load(name)
-	if !ok {
-		return nil, false
-	}
-	return f.(DatabaseFactory), true
-}
-
-// ListDatabases 列出所有已注册的数据库插件名称。
-func ListDatabases() []string {
-	return listKeys(databaseRegistry)
-}
-
-// RegisterProcessor 注册处理器插件工厂函数。
-func RegisterProcessor(name string, factory ProcessorFactory) {
-	if _, loaded := processorRegistry.LoadOrStore(name, factory); loaded {
-		panic(fmt.Sprintf("processor plugin %q already registered", name))
-	}
-}
-
-// GetProcessor 获取已注册的处理器插件工厂函数。
-func GetProcessor(name string) (ProcessorFactory, bool) {
-	f, ok := processorRegistry.Load(name)
-	if !ok {
-		return nil, false
-	}
-	return f.(ProcessorFactory), true
-}
-
-// ListProcessors 列出所有已注册的处理器插件名称。
-func ListProcessors() []string {
-	return listKeys(processorRegistry)
-}
-
-// DiscoverAll 发现所有已注册的插件，返回按类型分组的插件名称列表。
-func DiscoverAll() map[PluginType][]string {
-	return map[PluginType][]string{
-		TypeProtocol:  ListProtocols(),
-		TypeBackend:   ListBackends(),
-		TypeStorage:   ListStorages(),
-		TypeDatabase:  ListDatabases(),
-		TypeProcessor: ListProcessors(),
-	}
 }
 
 // RegisterBusinessPlugin 注册业务插件工厂函数。
