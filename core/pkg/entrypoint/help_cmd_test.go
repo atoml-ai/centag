@@ -29,7 +29,10 @@ func TestHandleUnknownCommand(t *testing.T) {
 		t.Fatal("unknown command should be rejected")
 	}
 	// Known commands and flags fall through (return false).
-	for _, cmd := range []string{"serve", "version", "wrap", "cleanup", "help", "--help", "-h"} {
+	for _, cmd := range []string{
+		"serve", "version", "wrap", "cleanup", "help", "--help", "-h",
+		"install", "uninstall",
+	} {
 		if HandleUnknownCommand([]string{"centag", cmd}) {
 			t.Fatalf("%q should be a known command", cmd)
 		}

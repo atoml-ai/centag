@@ -41,6 +41,10 @@ func init() {
 }
 
 func main() {
+	if entrypoint.HandleNoArguments(os.Args) {
+		entrypoint.PrintUsage()
+		return
+	}
 	// Exit before server bootstrap for version / help / wrap.
 	if entrypoint.HandleVersionCommand(Version, BuildTime, os.Args) {
 		return
@@ -49,6 +53,12 @@ func main() {
 		return
 	}
 	if entrypoint.HandleWrapCommand(os.Args) {
+		return
+	}
+	if entrypoint.HandleInstallCommand(os.Args) {
+		return
+	}
+	if entrypoint.HandleUninstallCommand(os.Args) {
 		return
 	}
 	entrypoint.Run(Version, BuildTime)

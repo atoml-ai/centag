@@ -27,6 +27,8 @@ Usage:
   centag serve              Start the gateway server
   centag version            Print version and exit
   centag wrap <command>     Process proxy / PAC helper (see: centag wrap help)
+  centag install            Set up PATH, shims and env helpers for this binary
+  centag uninstall          Remove PATH entry and shims
   centag help               Show this help
 
 Examples:
@@ -63,6 +65,7 @@ func HandleNoArguments(args []string) bool {
 // knownCommands are the subcommands dispatched below the no-argument guard.
 var knownCommands = map[string]bool{
 	"serve": true, "version": true, "wrap": true, "cleanup": true,
+	"install": true, "uninstall": true,
 	"help": true, "--help": true, "-h": true,
 }
 

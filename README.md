@@ -153,6 +153,23 @@ Done. Traffic flows through Centag: shared backend pools, failover, model routin
 ### Other install methods
 
 <details>
+<summary>Manual download → <code>centag install</code> (self-deployment)</summary>
+
+Grab a release archive, extract it, and let the binary deploy itself
+(places the binary + `static/` + `config/` under `~/.centag/lib/<edition>/`,
+writes the `centag` / `centag.cmd` PATH shim, and configures PATH for your
+shell — rc file on Linux/macOS, user registry on Windows; no admin needed):
+
+```bash
+tar -xzf centag-cli-personal-<platform>.tar.gz
+./centag-personal install     # or: centag-personal.exe install on Windows
+source "$HOME/.centag/env"    # activate the current shell (new terminals work automatically)
+```
+
+`centag uninstall` removes the shim, symlink and PATH entries (data is kept).
+</details>
+
+<details>
 <summary>npm (without changing global paths)</summary>
 
 ```bash

@@ -58,6 +58,12 @@ func main() {
 	if entrypoint.HandleWrapCommand(os.Args) {
 		return
 	}
+	if entrypoint.HandleInstallCommand(os.Args) {
+		return
+	}
+	if entrypoint.HandleUninstallCommand(os.Args) {
+		return
+	}
 	entrypoint.ExitIfUnknownCommand()
 	entrypoint.Run(Version, BuildTime)
 }
