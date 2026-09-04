@@ -15,6 +15,7 @@
 
 ## 使用指南
 
+- [Windows 开发环境搭建（Git Bash）](guide/windows-dev-setup-git-bash.md)
 - [代理模式](guide/proxy-modes.md)
 - [缓存指南](guide/Cache-Guide.md)
 - [语义缓存指南](guide/Semantic-Cache-Guide.md)
