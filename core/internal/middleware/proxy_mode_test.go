@@ -1,15 +1,8 @@
 package middleware
 
 import (
-	"bytes"
-	"encoding/json"
-	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
-
-	"centag/core/pkg/proxymode"
-	"centag/core/internal/proxy"
 )
 
 func TestParseProxyModeFromHeader(t *testing.T) {
