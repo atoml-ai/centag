@@ -191,7 +191,7 @@ func NewMinimal(cfg *config.Config) *Server {
 	pipelineHandler := NewPipelineHandler(pipelineEngine, nodeRegistry, pipelineRegistry, templates, nil)
 	pipelineDefaultsHandler := handler.NewPipelineDefaultsHandler(cfg, pipelineRegistry)
 
-	// Create proxy mode manager + session store（供 ProxyModeMiddleware 解析 pipeline.<id>）
+	// Create proxy mode manager + session store（供 ProxyModeMiddlewareGin 解析 pipeline.<id>）
 	modeMgr := proxymode.NewManager()
 	if synced := modeMgr.SyncFromPipelines(pipelineRegistry.ListAll()); synced > 0 {
 		logger.Infof("Synced %d pipeline shortcuts into ModeManager", synced)

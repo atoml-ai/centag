@@ -15,19 +15,6 @@ import (
 	"centag/core/internal/session"
 )
 
-// ProxyModeMiddleware 代理模式解析中间件（net/http 版本）
-func ProxyModeMiddleware(modeMgr *proxymode.ModeManager, sessionStore *session.ProxyModeStore) func(http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if err := resolveAndRewriteProxyMode(r, modeMgr, sessionStore); err != nil {
-				http.Error(w, `{"success":false,"error":"invalid or disabled proxy mode"}`, http.StatusBadRequest)
-				return
-			}
-			next.ServeHTTP(w, r)
-		})
-	}
-}
-
 // ProxyModeMiddlewareGin Gin 版本的代理模式解析中间件
 func ProxyModeMiddlewareGin(modeMgr *proxymode.ModeManager, sessionStore *session.ProxyModeStore) gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -183,6 +170,19 @@ func extractCentagField(body map[string]interface{}) (mode, backend, model strin
 	return mode, backend, model, true
 }
 
+// canonProxyModeKey 将长名/别名规范为 ModeManager 中注册的短键（如 #p、#d）。
+func canonProxyModeKey(mode string) string {
+	mode = strings.TrimSpace(mode)
+	em, err := proxymode.FromString(mode)
+	if err != nil {
+		return mode
+	}
+	if k := em.GetKey(); k != "" {
+		return k
+	}
+	return mode
+}
+
 // ParseProxyModeFromHeader 从请求头解析代理模式
 func ParseProxyModeFromHeader(r *http.Request) (mode, backend, model string, found bool) {
 	mode = r.Header.Get("X-Proxy-Mode")
@@ -202,44 +202,6 @@ func ParseProxyModeFromHeader(r *http.Request) (mode, backend, model string, fou
 		model = r.Header.Get("X-Centag-Model")
 	}
 	return mode, backend, model, true
-}
-
-// ParseProxyModeFromBody 从请求体解析代理模式（会移除 centag 字段）
-func ParseProxyModeFromBody(r *http.Request) (mode, backend, model string, found bool) {
-	bodyBytes, err := io.ReadAll(r.Body)
-	if err != nil {
-		return "", "", "", false
-	}
-	r.Body.Close()
-
-	r.Body = io.NopCloser(bytes.NewReader(bodyBytes))
-
-	var body map[string]interface{}
-	if err := json.Unmarshal(bodyBytes, &body); err != nil {
-		return "", "", "", false
-	}
-
-	mode, backend, model, found = extractCentagField(body)
-	if !found {
-		return "", "", "", false
-	}
-
-	newBody, _ := json.Marshal(body)
-	r.Body = io.NopCloser(bytes.NewReader(newBody))
-	return mode, backend, model, true
-}
-
-// canonProxyModeKey 将长名/别名规范为 ModeManager 中注册的短键（如 #p、#d）。
-func canonProxyModeKey(mode string) string {
-	mode = strings.TrimSpace(mode)
-	em, err := proxymode.FromString(mode)
-	if err != nil {
-		return mode
-	}
-	if k := em.GetKey(); k != "" {
-		return k
-	}
-	return mode
 }
 
 // ParseProxyModeFromContent 从内容中解析代理模式（#x）及可选令牌 /backend:、/pipeline:、/model:、/cost:。

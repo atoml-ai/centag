@@ -10,7 +10,6 @@ import (
 
 	"centag/core/pkg/proxymode"
 	"centag/core/internal/proxy"
-	"centag/core/internal/session"
 )
 
 func TestParseProxyModeFromHeader(t *testing.T) {
@@ -74,84 +73,6 @@ func TestParseProxyModeFromHeader(t *testing.T) {
 			}
 
 			mode, backend, model, found := ParseProxyModeFromHeader(req)
-
-			if found != tt.wantFound {
-				t.Errorf("Expected found=%v, got %v", tt.wantFound, found)
-			}
-			if tt.wantFound {
-				if mode != tt.wantMode {
-					t.Errorf("Expected mode %s, got %s", tt.wantMode, mode)
-				}
-				if backend != tt.wantBackend {
-					t.Errorf("Expected backend %s, got %s", tt.wantBackend, backend)
-				}
-				if model != tt.wantModel {
-					t.Errorf("Expected model %s, got %s", tt.wantModel, model)
-				}
-			}
-		})
-	}
-}
-
-func TestParseProxyModeFromBody(t *testing.T) {
-	tests := []struct {
-		name        string
-		body        map[string]interface{}
-		wantMode    string
-		wantBackend string
-		wantModel   string
-		wantFound   bool
-	}{
-		{
-			name: "valid centag field",
-			body: map[string]interface{}{
-				"centag": map[string]interface{}{
-					"mode": "#s",
-				},
-			},
-			wantMode:  "#s",
-			wantFound: true,
-		},
-		{
-			name: "with backend and model",
-			body: map[string]interface{}{
-				"centag": map[string]interface{}{
-					"mode":    "#d",
-					"backend": "ollama-local",
-					"model":   "qwen2.5:7b",
-				},
-			},
-			wantMode:    "#d",
-			wantBackend: "ollama-local",
-			wantModel:   "qwen2.5:7b",
-			wantFound:   true,
-		},
-		{
-			name: "no centag field",
-			body: map[string]interface{}{
-				"model": "gpt-4",
-				"messages": []interface{}{
-					map[string]interface{}{"role": "user", "content": "hello"},
-				},
-			},
-			wantFound: false,
-		},
-		{
-			name: "empty centag field",
-			body: map[string]interface{}{
-				"centag": map[string]interface{}{},
-			},
-			wantFound: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			bodyBytes, _ := json.Marshal(tt.body)
-			req := httptest.NewRequest("POST", "/v1/chat/completions", bytes.NewReader(bodyBytes))
-			req.Header.Set("Content-Type", "application/json")
-
-			mode, backend, model, found := ParseProxyModeFromBody(req)
 
 			if found != tt.wantFound {
 				t.Errorf("Expected found=%v, got %v", tt.wantFound, found)
@@ -392,92 +313,6 @@ func TestExtractModeFromChatContent(t *testing.T) {
 			}
 			if tt.wantFound && mode != tt.wantMode {
 				t.Errorf("Expected mode %s, got %s", tt.wantMode, mode)
-			}
-		})
-	}
-}
-
-func TestProxyModeMiddleware(t *testing.T) {
-	modeMgr := proxymode.NewManager()
-	sessionStore := session.NewProxyModeStore()
-
-	tests := []struct {
-		name       string
-		body       string
-		headers    map[string]string
-		wantStatus int
-		wantMode   string
-	}{
-		{
-			name: "content shortcut sets resolved mode",
-			body: `{"model": "gpt-4", "messages": [{"role": "user", "content": "#d hello"}]}`,
-			wantStatus: http.StatusOK,
-			wantMode:   "#d",
-		},
-		{
-			name: "model pipeline prefix sets resolved mode",
-			body: `{"model": "pipeline.direct-backend glm-4", "messages": [{"role": "user", "content": "hello"}]}`,
-			wantStatus: http.StatusOK,
-			wantMode:   "#d",
-		},
-		{
-			name: "model pipeline prefix only id sets resolved mode",
-			body: `{"model": "pipeline.direct-backend", "messages": [{"role": "user", "content": "hello"}]}`,
-			wantStatus: http.StatusOK,
-			wantMode:   "#d",
-		},
-		{
-			name: "header ignored without allow_header_override",
-			body: `{"model": "gpt-4", "messages": [{"role": "user", "content": "hello"}]}`,
-			headers: map[string]string{
-				"X-Centag-Mode": "#d",
-			},
-			wantStatus: http.StatusOK,
-			wantMode:   "",
-		},
-		{
-			name: "invalid content shortcut",
-			body: `{"model": "gpt-4", "messages": [{"role": "user", "content": "#invalid hello"}]}`,
-			wantStatus: http.StatusBadRequest,
-		},
-		{
-			name:       "plain openai request",
-			body:       `{"model": "gpt-4", "messages": [{"role": "user", "content": "hello"}]}`,
-			headers:    map[string]string{},
-			wantStatus: http.StatusOK,
-			wantMode:   "",
-		},
-		{
-			name: "openai array content shortcut",
-			body: `{"model":"test","messages":[{"role":"user","content":[{"type":"text","text":"<memory_context>\nctx\n</memory_context>\n\n#ch 请分析硬件"}]}]}`,
-			wantStatus: http.StatusOK,
-			wantMode:   "#ch",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			req := httptest.NewRequest("POST", "/v1/chat/completions", strings.NewReader(tt.body))
-			req.Header.Set("Content-Type", "application/json")
-
-			for k, v := range tt.headers {
-				req.Header.Set(k, v)
-			}
-
-			var capturedMode string
-			h := ProxyModeMiddleware(modeMgr, sessionStore)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				capturedMode = r.Header.Get(proxy.HeaderCentagResolvedMode)
-				w.WriteHeader(http.StatusOK)
-			}))
-
-			rr := httptest.NewRecorder()
-			h.ServeHTTP(rr, req)
-
-			if rr.Code != tt.wantStatus {
-				t.Errorf("Expected status %d, got %d", tt.wantStatus, rr.Code)
-			}
-			if tt.wantStatus == http.StatusOK && capturedMode != tt.wantMode {
-				t.Errorf("Expected resolved mode %q, got %q", tt.wantMode, capturedMode)
 			}
 		})
 	}
