@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"centag/core/pkg/configsync"
@@ -12,16 +13,30 @@ import (
 
 // DBPipelineTemplateStore stores pipeline templates in the database.
 type DBPipelineTemplateStore struct {
-	db *sql.DB
+	db      *sql.DB
+	dialect database.Dialect
 }
 
 // NewDBPipelineTemplateStore creates a database-backed pipeline template store.
 func NewDBPipelineTemplateStore() (*DBPipelineTemplateStore, error) {
-	db := database.Get().GetDB()
-	if db == nil {
+	mgr := database.Get()
+	if mgr == nil || mgr.GetDB() == nil {
 		return nil, fmt.Errorf("database not initialized")
 	}
-	return &DBPipelineTemplateStore{db: db}, nil
+	var dialect database.Dialect = &database.SQLiteDialect{}
+	if mgr.DriverName() == "postgresql" {
+		dialect = &database.PostgreSQLDialect{}
+	}
+	return &DBPipelineTemplateStore{db: mgr.GetDB(), dialect: dialect}, nil
+}
+
+// getDialect returns the SQL dialect, defaulting to SQLite for zero-value
+// stores constructed directly (e.g. in tests).
+func (s *DBPipelineTemplateStore) getDialect() database.Dialect {
+	if s.dialect != nil {
+		return s.dialect
+	}
+	return &database.SQLiteDialect{}
 }
 
 // Upsert inserts or updates a pipeline template.
@@ -53,8 +68,12 @@ func (s *DBPipelineTemplateStore) Upsert(tmpl configsync.PipelineTemplate) error
 		edition = "all"
 	}
 
-	query := `INSERT INTO pipeline_templates (id, name, description, shortcut_code, schema_version, version, edition, nodes, global_config, metadata, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	ph := make([]string, 12)
+	for i := range ph {
+		ph[i] = s.getDialect().Placeholder(i + 1)
+	}
+	query := fmt.Sprintf(`INSERT INTO pipeline_templates (id, name, description, shortcut_code, schema_version, version, edition, nodes, global_config, metadata, created_at, updated_at)
+		VALUES (%s)
 		ON CONFLICT(id) DO UPDATE SET
 			name = excluded.name,
 			description = excluded.description,
@@ -65,7 +84,7 @@ func (s *DBPipelineTemplateStore) Upsert(tmpl configsync.PipelineTemplate) error
 			nodes = excluded.nodes,
 			global_config = excluded.global_config,
 			metadata = excluded.metadata,
-			updated_at = excluded.updated_at`
+			updated_at = excluded.updated_at`, strings.Join(ph, ", "))
 
 	now := time.Now()
 	_, err = s.db.Exec(query, tmpl.ID, tmpl.Name, tmpl.Description, tmpl.ShortcutCode, tmpl.SchemaVersion, tmpl.Version, edition, nodesJSON, globalConfigJSON, metadataJSON, now, now)
@@ -127,7 +146,8 @@ func (s *DBPipelineTemplateStore) ListAll() ([]configsync.PipelineTemplate, erro
 
 // ListByEdition returns pipeline templates filtered by edition.
 func (s *DBPipelineTemplateStore) ListByEdition(edition string) ([]configsync.PipelineTemplate, error) {
-	rows, err := s.db.Query("SELECT id, name, description, shortcut_code, schema_version, version, edition, nodes, global_config, metadata FROM pipeline_templates WHERE edition = ? OR edition = 'all'", edition)
+	query := fmt.Sprintf("SELECT id, name, description, shortcut_code, schema_version, version, edition, nodes, global_config, metadata FROM pipeline_templates WHERE edition = %s OR edition = 'all'", s.getDialect().Placeholder(1))
+	rows, err := s.db.Query(query, edition)
 	if err != nil {
 		return nil, err
 	}
