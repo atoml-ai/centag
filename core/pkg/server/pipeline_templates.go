@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"centag/core/pkg/bootstrap"
+	"centag/core/pkg/configsync"
 	"centag/core/pkg/logger"
 	"centag/core/pkg/pipeline"
 )
@@ -18,15 +19,64 @@ func resolvePipelineTemplates() []pipeline.PatternTemplate {
 //
 //	minimal / personal → pipeline-templates/common/
 //	team               → common/ + team/
+//
+// 在内置 initdata 模板之上叠加远端同步模板（configsync → pipeline_templates 表）。
+// 同 ID 时远端覆盖本地：飞书线上表格是持续更新的数据源，随包分发的 initdata
+// 只是离线兜底快照。
 func resolvePipelineTemplatesWithEdition(edition string) []pipeline.PatternTemplate {
 	initialTemplates := bootstrap.LoadInitialPipelineTemplatesWithEdition(edition)
 	templates := convertInitialTemplates(initialTemplates)
+
+	templates = mergeRemotePipelineTemplates(templates, edition)
 
 	// 无 initdata 模板时返回空列表：首页/列表显示空白，不注入 simple-chat/chat-node 兜底。
 	if len(templates) == 0 {
 		logger.Warnf("no pipeline templates loaded for edition=%q; store will stay empty until import/create", edition)
 	}
 
+	return templates
+}
+
+// mergeRemotePipelineTemplates overlays remote-synced pipeline templates
+// (configsync → pipeline_templates DB table) on top of the bundled initdata
+// templates. Remote templates win on ID conflicts.
+func mergeRemotePipelineTemplates(templates []pipeline.PatternTemplate, edition string) []pipeline.PatternTemplate {
+	store, err := pipeline.NewDBPipelineTemplateStore()
+	if err != nil {
+		// DB unavailable — fall back to bundled templates only.
+		return templates
+	}
+	var remote []configsync.PipelineTemplate
+	if edition == "" {
+		remote, err = store.ListAll()
+	} else {
+		remote, err = store.ListByEdition(edition)
+	}
+	if err != nil || len(remote) == 0 {
+		return templates
+	}
+
+	byID := make(map[string]int, len(templates))
+	for i := range templates {
+		byID[templates[i].ID] = i
+	}
+	overridden := 0
+	for _, rt := range remote {
+		converted := convertConfigsyncTemplate(rt)
+		if converted == nil {
+			continue
+		}
+		if idx, ok := byID[converted.ID]; ok {
+			templates[idx] = *converted
+			overridden++
+			continue
+		}
+		byID[converted.ID] = len(templates)
+		templates = append(templates, *converted)
+	}
+	if overridden > 0 {
+		logger.Infof("pipeline templates: %d remote template(s) override bundled initdata (edition=%q)", overridden, edition)
+	}
 	return templates
 }
 
@@ -67,7 +117,7 @@ func convertInitialTemplates(initial []bootstrap.InitialPipelineTemplate) []pipe
 				for _, fg := range tmpl.GlobalConfig.FallbackGroups {
 					converted.GlobalConfig.FallbackGroups = append(converted.GlobalConfig.FallbackGroups, pipeline.FallbackGroup{
 						PrimaryNodeID: fg.PrimaryNodeID,
-						FallbackNodes:  fg.FallbackNodes,
+						FallbackNodes: fg.FallbackNodes,
 						MaxAttempts:   fg.MaxAttempts,
 					})
 				}
@@ -155,6 +205,126 @@ func convertInitialTemplates(initial []bootstrap.InitialPipelineTemplate) []pipe
 	}
 
 	return templates
+}
+
+// convertConfigsyncTemplate converts a remote-synced pipeline template
+// (configsync.PipelineTemplate, as persisted in the pipeline_templates table)
+// into a pipeline.PatternTemplate. Field mapping mirrors
+// convertInitialTemplates — the configsync types are structurally identical
+// to the bootstrap.Initial* types.
+func convertConfigsyncTemplate(tmpl configsync.PipelineTemplate) *pipeline.PatternTemplate {
+	id := strings.TrimSpace(tmpl.ID)
+	if id == "" {
+		return nil
+	}
+
+	converted := &pipeline.PatternTemplate{
+		ID:            id,
+		SchemaVersion: tmpl.SchemaVersion,
+		Name:          tmpl.Name,
+		Description:   tmpl.Description,
+		ShortcutCode:  tmpl.ShortcutCode,
+		Metadata:      tmpl.Metadata,
+		Nodes:         make([]pipeline.PipelineNodeConfig, 0, len(tmpl.Nodes)),
+	}
+
+	if tmpl.GlobalConfig != nil {
+		converted.GlobalConfig = &pipeline.GlobalPipelineConfig{
+			Timeout:       tmpl.GlobalConfig.Timeout,
+			MaxRetries:    tmpl.GlobalConfig.MaxRetries,
+			BypassOnError: tmpl.GlobalConfig.BypassOnError,
+			ParallelLimit: tmpl.GlobalConfig.ParallelLimit,
+			LogLevel:      tmpl.GlobalConfig.LogLevel,
+			SystemPrompt:  tmpl.GlobalConfig.SystemPrompt,
+		}
+		if len(tmpl.GlobalConfig.FallbackGroups) > 0 {
+			converted.GlobalConfig.FallbackGroups = make([]pipeline.FallbackGroup, 0, len(tmpl.GlobalConfig.FallbackGroups))
+			for _, fg := range tmpl.GlobalConfig.FallbackGroups {
+				converted.GlobalConfig.FallbackGroups = append(converted.GlobalConfig.FallbackGroups, pipeline.FallbackGroup{
+					PrimaryNodeID: fg.PrimaryNodeID,
+					FallbackNodes: fg.FallbackNodes,
+					MaxAttempts:   fg.MaxAttempts,
+				})
+			}
+		}
+		if tmpl.GlobalConfig.Storage != nil {
+			converted.GlobalConfig.StorageConfig = &pipeline.StorageHookConfig{
+				Enabled:       tmpl.GlobalConfig.Storage.Enabled,
+				Namespace:     tmpl.GlobalConfig.Storage.Namespace,
+				AutoSave:      tmpl.GlobalConfig.Storage.AutoSave,
+				SaveInterval:  tmpl.GlobalConfig.Storage.SaveInterval,
+				RetentionDays: tmpl.GlobalConfig.Storage.RetentionDays,
+			}
+		}
+		if len(tmpl.GlobalConfig.Hooks) > 0 {
+			converted.GlobalConfig.Hooks = make([]pipeline.HookConfig, 0, len(tmpl.GlobalConfig.Hooks))
+			for _, h := range tmpl.GlobalConfig.Hooks {
+				hook := pipeline.HookConfig{
+					Type:        h.Type,
+					On:          append([]string{}, h.On...),
+					StorageName: h.StorageName,
+				}
+				if len(h.Config) > 0 {
+					hook.Config = make(map[string]interface{}, len(h.Config))
+					for k, v := range h.Config {
+						hook.Config[k] = v
+					}
+				}
+				converted.GlobalConfig.Hooks = append(converted.GlobalConfig.Hooks, hook)
+			}
+		}
+	}
+
+	for _, node := range tmpl.Nodes {
+		pn := pipeline.PipelineNodeConfig{
+			ID:             node.ID,
+			Type:           pipeline.NodeType(node.Type),
+			Kind:           node.Kind,
+			Implementation: node.Implementation,
+			Name:           node.Name,
+			Backend:        node.Backend,
+			Model:          node.Model,
+			Config: pipeline.NodeConfig{
+				Backend:        node.Config.Backend,
+				Model:          node.Config.Model,
+				PromptTemplate: node.Config.PromptTemplate,
+				SystemPrompt:   node.Config.SystemPrompt,
+				Temperature:    node.Config.Temperature,
+				MaxTokens:      node.Config.MaxTokens,
+				CustomConfig:   node.Config.CustomConfig,
+				TemplateVars:   node.Config.TemplateVars,
+			},
+			Inputs:          node.Inputs,
+			Outputs:         node.Outputs,
+			ConfigSchemaRef: node.ConfigSchemaRef,
+			SecretsRef:      node.SecretsRef,
+			Permissions:     node.Permissions,
+			Timeout:         node.Timeout,
+			Condition:       node.Condition,
+			NextNodes:       node.NextNodes,
+			DependsOn:       node.DependsOn,
+		}
+		if node.Retry != nil {
+			pn.Retry = &pipeline.RetryConfig{
+				MaxAttempts:     node.Retry.MaxAttempts,
+				BackoffStrategy: node.Retry.BackoffStrategy,
+				InitialDelay:    node.Retry.InitialDelay,
+				MaxDelay:        node.Retry.MaxDelay,
+			}
+		}
+		if node.RouteConfig != nil {
+			pn.RouteConfig = &pipeline.RouteConfig{
+				RouterNodeID: node.RouteConfig.RouterNodeID,
+				RouteValue:   node.RouteConfig.RouteValue,
+				IsDefault:    node.RouteConfig.IsDefault,
+			}
+		}
+		// 归一化：将顶层 Backend/Model 归入 Config，统一出口
+		pn.Normalize()
+		converted.Nodes = append(converted.Nodes, pn)
+	}
+
+	return converted
 }
 
 // backfillRouteConfigForExistingPipelines 为已有流水线回填 RouteConfig。
