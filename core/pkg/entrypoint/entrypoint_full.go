@@ -18,6 +18,7 @@ import (
 	"centag/core/pkg/backend"
 	"centag/core/pkg/bootstrap"
 	"centag/core/pkg/config"
+	configsyncfeishu "centag/core/pkg/configsync/feishu"
 	"centag/core/pkg/configsync"
 	"centag/core/pkg/database"
 	"centag/core/pkg/logger"
@@ -279,7 +280,14 @@ func startConfigsync(srv *server.Server) {
 		return
 	}
 
-	provider := configsync.NewSnapshotProvider(configsync.ResolveSnapshotURLs(configsync.DefaultSnapshotURLs))
+	// Check if Feishu configsync is configured
+	var provider configsync.Provider
+	if configsyncfeishu.IsConfigured() {
+		logger.Info("Feishu configsync detected, using Feishu Bitable as provider")
+		provider = configsyncfeishu.NewProviderFromEnv()
+	} else {
+		provider = configsync.NewSnapshotProvider(configsync.ResolveSnapshotURLs(configsync.DefaultSnapshotURLs))
+	}
 
 	stateDir := os.Getenv("CENTAG_CONFIGSYNC_STATE_DIR")
 	if stateDir == "" {
