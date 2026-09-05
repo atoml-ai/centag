@@ -133,6 +133,10 @@ func loadYAMLFilesFromDir(dirPath string, tmplMap map[string]InitialPipelineTemp
 			continue
 		}
 		name := entry.Name()
+		// Skip macOS resource fork files (._ prefix)
+		if strings.HasPrefix(name, "._") {
+			continue
+		}
 		lower := strings.ToLower(name)
 		if !strings.HasSuffix(lower, ".yaml") && !strings.HasSuffix(lower, ".yml") {
 			continue

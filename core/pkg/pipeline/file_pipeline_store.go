@@ -148,6 +148,10 @@ func (s *FilePipelineStore) List() ([]*AgentPatternPipeline, error) {
 			continue
 		}
 		name := e.Name()
+		// Skip macOS resource fork files (._ prefix)
+		if strings.HasPrefix(name, "._") {
+			continue
+		}
 		if !strings.HasSuffix(name, ".yaml") && !strings.HasSuffix(name, ".yml") {
 			continue
 		}
