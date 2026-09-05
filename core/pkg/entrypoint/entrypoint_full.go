@@ -18,8 +18,8 @@ import (
 	"centag/core/pkg/backend"
 	"centag/core/pkg/bootstrap"
 	"centag/core/pkg/config"
-	configsyncfeishu "centag/core/pkg/configsync/feishu"
 	"centag/core/pkg/configsync"
+	configsyncfeishu "centag/core/pkg/configsync/feishu"
 	"centag/core/pkg/database"
 	"centag/core/pkg/logger"
 	"centag/core/pkg/metrics"
@@ -348,6 +348,12 @@ func startConfigsync(srv *server.Server) {
 		StateDir: stateDir,
 		RunOnce:  true, // only sync once on startup; manual sync via API button
 		OnUpdate: func(snap *configsync.Snapshot) {
+			// Apply backend configs first so the price backend-mapper below
+			// resolves base_url → backend_id against freshly synced backends.
+			if len(snap.Config) > 0 {
+				backendApplier.Apply(snap.Config)
+				logger.Infof("configsync: backend configs applied")
+			}
 			if len(snap.Prices) > 0 && mapper != nil && priceStore != nil {
 				result, err := configsync.ApplyPrices(
 					context.Background(), snap.Prices, mapper, priceStore, true,
@@ -374,11 +380,6 @@ func startConfigsync(srv *server.Server) {
 			if dbConfigApplier != nil && len(snap.Config) > 0 {
 				dbConfigApplier.ApplyFromRows(snap.Config)
 				logger.Infof("configsync: config data saved to database")
-			}
-			// Apply backend configs
-			if len(snap.Config) > 0 {
-				backendApplier.Apply(snap.Config)
-				logger.Infof("configsync: backend configs applied")
 			}
 			// Apply pipeline templates from remote
 			if len(snap.PipelineTemplates) > 0 {
@@ -487,7 +488,12 @@ func (s *backendManagerStore) Upsert(cfg configsync.BackendConfig) error {
 			MaxRetries:  cfg.MaxRetries,
 			Description: cfg.Description,
 		}
-		return s.manager.Add(newCfg)
+		if err := s.manager.Add(newCfg); err != nil {
+			return err
+		}
+		// Manager.Add only mutates memory — persist so the synced backend
+		// survives restarts (configsync base data must reach the database).
+		return s.manager.Save()
 	}
 	// Update existing backend - preserve api_key and other secrets
 	existing.Name = cfg.Name
@@ -497,5 +503,8 @@ func (s *backendManagerStore) Upsert(cfg configsync.BackendConfig) error {
 	existing.Timeout = cfg.Timeout
 	existing.MaxRetries = cfg.MaxRetries
 	existing.Description = cfg.Description
-	return s.manager.Update(existing)
+	if err := s.manager.Update(existing); err != nil {
+		return err
+	}
+	return s.manager.Save()
 }
