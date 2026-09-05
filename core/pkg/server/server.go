@@ -1277,6 +1277,7 @@ func (s *Server) setupRoutes() {
 			staticDir = "./bin/static"
 		} else if home, err2 := os.UserHomeDir(); err2 == nil {
 			for _, candidate := range []string{
+				filepath.Join(home, ".centag", "lib", "team", "static"),
 				filepath.Join(home, ".centag", "lib", "personal", "static"),
 				filepath.Join(home, ".centag", "lib", "minimal", "static"),
 			} {
