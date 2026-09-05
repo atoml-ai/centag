@@ -322,6 +322,18 @@ write_runtime_env() {
         echo "${_tk}=$(shell_single_quote "${_tv}")"
       fi
     done
+    # ── 配置同步（只读 Client App）：透传已设置的 CENTAG_CONFIGSYNC* 变量 ──
+    #    Client App 仅有 bitable:app:readonly 权限，可安全嵌入客户端。
+    for _tk in CENTAG_CONFIGSYNC_ENABLED \
+               CENTAG_CONFIGSYNC_FEISHU_CLIENT_APP_ID CENTAG_CONFIGSYNC_FEISHU_CLIENT_APP_SECRET \
+               CENTAG_CONFIGSYNC_FEISHU_APP_TOKEN \
+               CENTAG_CONFIGSYNC_FEISHU_PRICING_TABLE_ID CENTAG_CONFIGSYNC_FEISHU_PIPELINE_TABLE_ID \
+               CENTAG_CONFIGSYNC_FEISHU_CONFIG_TABLE_ID CENTAG_CONFIGSYNC_FEISHU_BACKEND_TABLE_ID; do
+      _tv="$(printenv "$_tk" 2>/dev/null || true)"
+      if [ -n "${_tv}" ]; then
+        echo "${_tk}=$(shell_single_quote "${_tv}")"
+      fi
+    done
   } > "${dest_dir}/runtime.env"
   chmod 600 "${dest_dir}/runtime.env"
   echo "  运行时配置: config/runtime.env (edition=${runtime_edition})"
