@@ -279,6 +279,12 @@ func (s *ConfigScheduler) doSync(ctx context.Context) error {
 		FetchPipelineTemplates(ctx context.Context) ([]PipelineTemplate, error)
 	}
 
+	// fetchBackendRows is an optional provider extension that surfaces
+	// backend configs as "backend.*" config rows (Feishu backend table).
+	type fetchBackendRows interface {
+		FetchBackendRows(ctx context.Context) ([]Row, error)
+	}
+
 	var rows []Row
 	var prices []ProviderPrice
 	var pipelineTemplates []PipelineTemplate
@@ -311,6 +317,18 @@ func (s *ConfigScheduler) doSync(ctx context.Context) error {
 		if err != nil && !errors.Is(err, ErrNotSupported) {
 			logger.Warnf("configsync: fetch pipeline templates failed: %v", err)
 			// Continue with other data, don't fail the sync
+		}
+	}
+	// Fetch backend config rows if provider supports it; they are merged into
+	// rows so BackendApplier / DBConfigApplier / validation treat them like
+	// any other "backend.*" config row.
+	if fbr, ok := s.provider.(fetchBackendRows); ok {
+		backendRows, berr := fbr.FetchBackendRows(ctx)
+		if berr != nil && !errors.Is(berr, ErrNotSupported) {
+			logger.Warnf("configsync: fetch backend configs failed: %v", berr)
+			// Continue with other data, don't fail the sync
+		} else if len(backendRows) > 0 {
+			rows = append(rows, backendRows...)
 		}
 	}
 	if err := ValidateRows(rows); err != nil {

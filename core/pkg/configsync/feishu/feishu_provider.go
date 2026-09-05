@@ -11,6 +11,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -26,6 +27,7 @@ type Provider struct {
 	configTableID   string
 	pricingTableID  string
 	pipelineTableID string
+	backendTableID  string
 	httpClient      *http.Client
 	mu              sync.Mutex
 	token           string
@@ -37,12 +39,13 @@ type ProviderConfig struct {
 	// Client credentials (read-only App)
 	AppID     string
 	AppSecret string
-	
+
 	// Bitable table IDs
 	AppToken        string // Bitable App Token
 	ConfigTableID   string // Table ID for system config
 	PricingTableID  string // Table ID for model pricing
 	PipelineTableID string // Table ID for pipeline templates
+	BackendTableID  string // Table ID for backend configs
 }
 
 // NewProvider creates a new Feishu Provider.
@@ -54,6 +57,7 @@ func NewProvider(cfg ProviderConfig) *Provider {
 		configTableID:   cfg.ConfigTableID,
 		pricingTableID:  cfg.PricingTableID,
 		pipelineTableID: cfg.PipelineTableID,
+		backendTableID:  cfg.BackendTableID,
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second,
 		},
@@ -65,7 +69,7 @@ func IsConfigured() bool {
 	appID := os.Getenv("CENTAG_CONFIGSYNC_FEISHU_CLIENT_APP_ID")
 	appSecret := os.Getenv("CENTAG_CONFIGSYNC_FEISHU_CLIENT_APP_SECRET")
 	appToken := os.Getenv("CENTAG_CONFIGSYNC_FEISHU_APP_TOKEN")
-	
+
 	return appID != "" && appSecret != "" && appToken != ""
 }
 
@@ -82,6 +86,7 @@ func NewProviderFromEnv() *Provider {
 		ConfigTableID:   os.Getenv("CENTAG_CONFIGSYNC_FEISHU_CONFIG_TABLE_ID"),
 		PricingTableID:  os.Getenv("CENTAG_CONFIGSYNC_FEISHU_PRICING_TABLE_ID"),
 		PipelineTableID: os.Getenv("CENTAG_CONFIGSYNC_FEISHU_PIPELINE_TABLE_ID"),
+		BackendTableID:  os.Getenv("CENTAG_CONFIGSYNC_FEISHU_BACKEND_TABLE_ID"),
 	})
 }
 
@@ -258,6 +263,13 @@ func (p *Provider) FetchAll(ctx context.Context, q configsync.Query) ([]configsy
 }
 
 // FetchPipelineTemplates returns pipeline templates from the Feishu Bitable.
+//
+// Production table schema (written by tools/configctl pipeline sync):
+//
+//	pipeline_id / name / description / edition / version / schema_version /
+//	shortcut_code / content_json / last_updated / enabled
+//
+// where content_json carries the full template (nodes, global_config, ...).
 func (p *Provider) FetchPipelineTemplates(ctx context.Context) ([]configsync.PipelineTemplate, error) {
 	if p.pipelineTableID == "" {
 		return nil, configsync.ErrNotSupported
@@ -280,9 +292,39 @@ func (p *Provider) FetchPipelineTemplates(ctx context.Context) ([]configsync.Pip
 	return templates, nil
 }
 
+// FetchBackendRows returns backend configs from the Bitable backend table as
+// configsync Rows with "backend.<id>" keys, so the generic configsync
+// BackendApplier can consume them without a dedicated SPI extension.
+//
+// Supported table schemas:
+//   - configctl backend add: backend_id / content_json / enabled
+//   - setup-feishu-config-tables.sh: provider_id / provider_name / base_url /
+//     api_type / description / enabled
+func (p *Provider) FetchBackendRows(ctx context.Context) ([]configsync.Row, error) {
+	if p.backendTableID == "" {
+		return nil, configsync.ErrNotSupported
+	}
+
+	records, err := p.SearchRecords(ctx, p.backendTableID,
+		NewFilter("enabled", "is", []string{"true"}))
+	if err != nil {
+		return nil, fmt.Errorf("fetch backend configs: %w", err)
+	}
+
+	var rows []configsync.Row
+	for _, rec := range records {
+		row := parseBackendRow(rec)
+		if row != nil {
+			rows = append(rows, *row)
+		}
+	}
+
+	return rows, nil
+}
+
 // Filter represents a Feishu filter.
 type Filter struct {
-	Conditions []Condition `json:"conditions"`
+	Conditions  []Condition `json:"conditions"`
 	Conjunction string      `json:"conjunction"`
 }
 
@@ -322,7 +364,7 @@ type SearchRecordsRequest struct {
 
 // SearchRecordsResponse represents a search response.
 type SearchRecordsResponse struct {
-	Code int `json:"code"`
+	Code int    `json:"code"`
 	Msg  string `json:"msg"`
 	Data struct {
 		HasMore   bool     `json:"has_more"`
@@ -474,40 +516,200 @@ func parseProviderPrice(rec Record) *configsync.ProviderPrice {
 }
 
 // parsePipelineTemplate parses a Feishu record into a configsync.PipelineTemplate.
+//
+// The record's content_json field carries the authoritative full template
+// (id/name/nodes/global_config/metadata/... — same shape as the initdata YAML
+// files and as configsync.PipelineTemplate). Scalar record fields are applied
+// on top so that edits made directly in the Bitable UI win over a possibly
+// stale content_json copy. Edition is normalized from the directory-style
+// values used by the upload tool (common/team/extras) to the product-edition
+// semantics of the pipeline_templates store (all/personal/team).
 func parsePipelineTemplate(rec Record) *configsync.PipelineTemplate {
 	f := rec.Fields
-	id := TextField(f["id"])
+	id := TextField(f["pipeline_id"])
+	if id == "" {
+		id = TextField(f["id"])
+	}
 	if id == "" {
 		return nil
 	}
 
-	t := &configsync.PipelineTemplate{
-		ID:          id,
-		Name:        TextField(f["name"]),
-		Description: TextField(f["description"]),
-		Version:     TextField(f["version"]),
-		Edition:     TextField(f["type"]), // "type" field in Feishu maps to edition
+	t := &configsync.PipelineTemplate{ID: id}
+
+	contentJSON := TextField(f["content_json"])
+	if contentJSON == "" {
+		// Legacy setup-script schema stored the template in "config".
+		contentJSON = TextField(f["config"])
+	}
+	if contentJSON != "" {
+		var parsed configsync.PipelineTemplate
+		if err := json.Unmarshal([]byte(contentJSON), &parsed); err == nil {
+			t = &parsed
+			t.ID = id // table key is authoritative
+		}
 	}
 
-	// Parse config JSON
-	configJSON := TextField(f["config"])
-	if configJSON != "" {
-		var configData map[string]any
-		if err := json.Unmarshal([]byte(configJSON), &configData); err == nil {
-			// Extract nodes from config if present
-			if nodes, ok := configData["steps"].([]any); ok {
-				for i, node := range nodes {
-					if nodeMap, ok := node.(map[string]any); ok {
-						t.Nodes = append(t.Nodes, configsync.PipelineNodeConfig{
-							ID:   fmt.Sprintf("node-%d", i),
-							Name: fmt.Sprintf("%v", nodeMap["name"]),
-							Type: fmt.Sprintf("%v", nodeMap["tool"]),
-						})
-					}
-				}
+	if v := TextField(f["name"]); v != "" {
+		t.Name = v
+	}
+	if v := TextField(f["description"]); v != "" {
+		t.Description = v
+	}
+	if v := TextField(f["version"]); v != "" {
+		t.Version = v
+	}
+	if v := TextField(f["schema_version"]); v != "" {
+		t.SchemaVersion = v
+	}
+	if v := TextField(f["shortcut_code"]); v != "" {
+		t.ShortcutCode = v
+	}
+	if v := TextField(f["edition"]); v != "" {
+		t.Edition = normalizePipelineEdition(v)
+	} else if v := TextField(f["type"]); v != "" {
+		// Legacy setup-script schema stored the edition in "type".
+		t.Edition = normalizePipelineEdition(v)
+	}
+	if t.Edition == "" {
+		t.Edition = "all"
+	}
+	if t.Nodes == nil {
+		t.Nodes = []configsync.PipelineNodeConfig{}
+	}
+
+	return t
+}
+
+// normalizePipelineEdition maps directory-style edition values (written by
+// tools/configctl pipeline sync from the initdata layout) onto product-edition
+// semantics: common/extras templates are available to every edition, matching
+// the "common loads for all editions" rule of the initdata file loader.
+func normalizePipelineEdition(edition string) string {
+	edition = strings.ToLower(strings.TrimSpace(edition))
+	switch edition {
+	case "", "common", "extras", "all":
+		return "all"
+	default:
+		return edition
+	}
+}
+
+// parseBackendRow converts one backend table record into a config Row keyed
+// "backend.<id>" whose value is the backend config JSON. The payload is
+// normalized so configsync.BackendConfig unmarshals it: the table-level
+// backend_id/provider_id is injected as "id" when content_json lacks one.
+//
+// Supported table schemas:
+//   - configctl backend add: backend_id / content_json / enabled
+//   - scalar layout (production backend table): id / name / type / base_url /
+//     timeout / max_retries / description / probe_model / supported_models /
+//     capabilities / weight / priority / fallback_backends / enabled
+func parseBackendRow(rec Record) *configsync.Row {
+	f := rec.Fields
+	id := TextField(f["backend_id"])
+	if id == "" {
+		id = TextField(f["provider_id"])
+	}
+	if id == "" {
+		id = TextField(f["id"])
+	}
+
+	var obj map[string]any
+	if contentJSON := TextField(f["content_json"]); contentJSON != "" {
+		if err := json.Unmarshal([]byte(contentJSON), &obj); err != nil || obj == nil {
+			return nil
+		}
+	} else {
+		// Scalar schema — map each column onto configsync.BackendConfig JSON.
+		baseURL := URLField(f["base_url"])
+		if baseURL == "" {
+			return nil
+		}
+		obj = map[string]any{
+			"name":        TextField(f["name"]),
+			"type":        TextField(f["type"]),
+			"base_url":    baseURL,
+			"enabled":     true,
+			"description": TextField(f["description"]),
+			"remark":      TextField(f["remark"]),
+		}
+		// Numeric fields (Feishu numbers arrive as float64).
+		for _, key := range []string{"timeout", "max_retries", "weight", "priority"} {
+			if n := NumberField(f[key]); n > 0 {
+				obj[key] = int(n)
+			}
+		}
+		if v := TextField(f["probe_model"]); v != "" {
+			obj["probe_model"] = v
+		}
+		if BoolField(f["auto_fetch_models"]) {
+			obj["auto_fetch_models"] = true
+		}
+		// JSON-encoded text columns.
+		for _, key := range []string{"supported_models", "capabilities", "fallback_backends"} {
+			if v := parseJSONTextField(f[key]); v != nil {
+				obj[key] = v
 			}
 		}
 	}
 
-	return t
+	// Resolve the effective backend ID: JSON "id" wins, then JSON
+	// "backend_id", then the table-level id fields.
+	for _, key := range []string{"id", "backend_id"} {
+		if v, ok := obj[key].(string); ok && strings.TrimSpace(v) != "" {
+			id = strings.TrimSpace(v)
+			break
+		}
+	}
+	if id == "" {
+		return nil
+	}
+	obj["id"] = id
+
+	raw, err := json.Marshal(obj)
+	if err != nil {
+		return nil
+	}
+
+	return &configsync.Row{
+		Key:       "backend." + id,
+		Edition:   "all",
+		Enabled:   true,
+		Value:     raw,
+		Remark:    TextField(f["name"]),
+		UpdatedAt: time.Now(),
+	}
+}
+
+// parseJSONTextField parses a text column that carries JSON content
+// (supported_models / capabilities / fallback_backends). Returns nil when the
+// field is empty or not valid JSON.
+func parseJSONTextField(v any) any {
+	s := strings.TrimSpace(TextField(v))
+	if s == "" {
+		return nil
+	}
+	var parsed any
+	if err := json.Unmarshal([]byte(s), &parsed); err != nil {
+		return nil
+	}
+	return parsed
+}
+
+// URLField extracts a URL from a Feishu Url-type field. Depending on the API
+// response shape the value arrives as a plain string or as {link, text}.
+func URLField(v any) string {
+	if v == nil {
+		return ""
+	}
+	if m, ok := v.(map[string]any); ok {
+		if link, ok := m["link"].(string); ok && link != "" {
+			return link
+		}
+		if text, ok := m["text"].(string); ok {
+			return text
+		}
+		return ""
+	}
+	return TextField(v)
 }

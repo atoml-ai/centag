@@ -202,3 +202,41 @@ func TestScheduler(t *testing.T) {
 		}
 	})
 }
+
+// backendRowsProvider additionally exposes FetchBackendRows (Feishu backend
+// table extension).
+type backendRowsProvider struct {
+	mockProvider
+	backendRows []Row
+}
+
+func (m *backendRowsProvider) FetchBackendRows(ctx context.Context) ([]Row, error) {
+	return m.backendRows, nil
+}
+
+func TestScheduler_MergesBackendRows(t *testing.T) {
+	p := &backendRowsProvider{
+		mockProvider: mockProvider{rows: []Row{validRow()}},
+		backendRows: []Row{
+			{Key: "backend.deepseek-main", Edition: "all", Enabled: true,
+				Value: []byte(`{"id":"deepseek-main","name":"DeepSeek","type":"openai","base_url":"https://api.deepseek.com"}`)},
+		},
+	}
+	s := NewScheduler(SchedulerConfig{Provider: p})
+	if err := s.SyncNow(context.Background()); err != nil {
+		t.Fatalf("SyncNow: %v", err)
+	}
+	snap := s.Snapshot()
+	if snap == nil {
+		t.Fatal("snapshot nil after sync")
+	}
+	found := false
+	for _, r := range snap.Config {
+		if r.Key == "backend.deepseek-main" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("backend row not merged into snapshot config: %+v", snap.Config)
+	}
+}
