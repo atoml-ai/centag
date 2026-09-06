@@ -20,6 +20,26 @@ var (
 	globalSchedulerMu sync.RWMutex
 )
 
+// globalProviderCatalogStore holds the global provider catalog store for API access.
+var (
+	globalProviderCatalogStore   ProviderCatalogStore
+	globalProviderCatalogStoreMu sync.RWMutex
+)
+
+// SetGlobalProviderCatalogStore sets the global provider catalog store.
+func SetGlobalProviderCatalogStore(store ProviderCatalogStore) {
+	globalProviderCatalogStoreMu.Lock()
+	defer globalProviderCatalogStoreMu.Unlock()
+	globalProviderCatalogStore = store
+}
+
+// GetGlobalProviderCatalogStore returns the global provider catalog store (may be nil).
+func GetGlobalProviderCatalogStore() ProviderCatalogStore {
+	globalProviderCatalogStoreMu.RLock()
+	defer globalProviderCatalogStoreMu.RUnlock()
+	return globalProviderCatalogStore
+}
+
 // SetGlobalScheduler sets the global scheduler instance.
 func SetGlobalScheduler(s *ConfigScheduler) {
 	globalSchedulerMu.Lock()

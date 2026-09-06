@@ -73,5 +73,9 @@
   "geminiHintDesc": "Directly connect to the Gemini official API, supporting all native features.",
   "keyFormat": "Key Format: ",
   "defaultEndpoint": "Default Endpoint: ",
-  "probeModelCheck": "Please complete the form"
+  "probeModelCheck": "Please complete the form",
+  "syncProviderCatalog": "Sync Provider",
+  "providerCatalogSyncSuccess": "Provider catalog synced successfully",
+  "providerCatalogSyncFailed": "Failed to sync provider catalog",
+  "lastSyncTime": "Last sync time"
 }

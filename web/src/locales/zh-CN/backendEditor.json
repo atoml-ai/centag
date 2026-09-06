@@ -73,5 +73,9 @@
   "geminiHintDesc": "直接接入 Gemini 官方 API，支持所有原生特性。",
   "keyFormat": "Key 格式：",
   "defaultEndpoint": "默认端点：",
-  "probeModelCheck": "请完善表单"
+  "probeModelCheck": "请完善表单",
+  "syncProviderCatalog": "同步 Provider",
+  "providerCatalogSyncSuccess": "Provider 目录同步成功",
+  "providerCatalogSyncFailed": "Provider 目录同步失败",
+  "lastSyncTime": "最后同步时间"
 }

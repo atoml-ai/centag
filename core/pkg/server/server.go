@@ -1635,6 +1635,15 @@ func (s *Server) setupRoutes() {
 			backends.POST("/:id/accounts/:accountId/reset-breaker", s.backendHandler.ResetAccountBreaker)
 		}
 
+		// Provider catalog (available provider types for user selection)
+		providerCatalog := v1Protected.Group("/provider-catalog")
+		{
+			providerCatalogHandler := NewProviderCatalogHandler()
+			providerCatalog.GET("", providerCatalogHandler.ListProviderCatalog)
+			providerCatalog.POST("/sync", s.teamAdminWriteOnly(), providerCatalogHandler.SyncProviderCatalog)
+			providerCatalog.DELETE("/:id", s.teamAdminWriteOnly(), providerCatalogHandler.DeleteProviderCatalogEntry)
+		}
+
 		// 配置归档导入（一键还原：应用「配置导出」生成的 centag-initdata.zip）
 		v1Protected.POST("/config/import", s.teamAdminWriteOnly(), s.importConfigArchive)
 

@@ -73,5 +73,9 @@
   "geminiHintDesc": "Gemini 公式 API に直接接続し、すべてのネイティブ機能をサポートします。",
   "keyFormat": "キー形式：",
   "defaultEndpoint": "デフォルトエンドポイント：",
-  "probeModelCheck": "フォームを完成させてください"
+  "probeModelCheck": "フォームを完成させてください",
+  "syncProviderCatalog": "プロバイダーを同期",
+  "providerCatalogSyncSuccess": "プロバイダーカタログの同期に成功しました",
+  "providerCatalogSyncFailed": "プロバイダーカタログの同期に失敗しました",
+  "lastSyncTime": "最終同期時間"
 }

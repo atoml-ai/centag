@@ -57,3 +57,45 @@ export const getCircuitBreakerStatus = () => {
 export const resetCircuitBreaker = (backendId: string) => {
   return api.post(`/api/v1/backends/circuit-breaker/${encodeURIComponent(backendId)}/reset`)
 }
+
+// Provider Catalog API
+export interface ProviderCatalogEntry {
+  id: string
+  name: string
+  type: string
+  base_url: string
+  env_key?: string
+  icon?: string
+  description?: string
+  default_models?: Array<{
+    name: string
+    supports_tools: boolean
+    supports_images: boolean
+    supports_thinking: boolean
+    max_context_tokens: number
+  }>
+  enabled: boolean
+  updated_at: string
+  remark?: string
+}
+
+export interface ProviderCatalogResponse {
+  entries: ProviderCatalogEntry[]
+  sync_time: string
+  source: string
+}
+
+// 获取 Provider 目录（可用的 Provider 类型列表）
+export const getProviderCatalog = () => {
+  return api.get('/api/v1/provider-catalog') as Promise<ProviderCatalogResponse>
+}
+
+// 同步 Provider 目录（从飞书获取最新数据）
+export const syncProviderCatalog = () => {
+  return api.post('/api/v1/provider-catalog/sync') as Promise<ProviderCatalogResponse>
+}
+
+// 删除 Provider 目录条目
+export const deleteProviderCatalogEntry = (id: string) => {
+  return api.delete(`/api/v1/provider-catalog/${encodeURIComponent(id)}`)
+}

@@ -330,9 +330,12 @@ func startConfigsync(srv *server.Server) {
 	// Create generic applier for config data
 	genericApplier := configsync.NewGenericApplier()
 
-	// Create backend applier for backend configs
-	backendStore := &backendManagerStore{manager: backend.GetManager()}
-	backendApplier := configsync.NewBackendApplier(backendStore)
+	// Create provider catalog applier for provider types (not actual backends)
+	providerCatalogStore := configsync.NewInMemoryProviderCatalogStore()
+	providerCatalogApplier := configsync.NewProviderCatalogApplier(providerCatalogStore)
+
+	// Store the provider catalog globally for API access
+	configsync.SetGlobalProviderCatalogStore(providerCatalogStore)
 
 	// Load config from database if available (keep the last-good snapshot on restart)
 	if dbConfigStore != nil {
@@ -348,11 +351,11 @@ func startConfigsync(srv *server.Server) {
 		StateDir: stateDir,
 		RunOnce:  true, // only sync once on startup; manual sync via API button
 		OnUpdate: func(snap *configsync.Snapshot) {
-			// Apply backend configs first so the price backend-mapper below
-			// resolves base_url → backend_id against freshly synced backends.
+			// Apply provider catalog (available provider types for user selection)
+			// This does NOT add backends to the user's configured list
 			if len(snap.Config) > 0 {
-				backendApplier.Apply(snap.Config)
-				logger.Infof("configsync: backend configs applied")
+				providerCatalogApplier.Apply(snap.Config)
+				logger.Infof("configsync: provider catalog updated")
 			}
 			if len(snap.Prices) > 0 && mapper != nil && priceStore != nil {
 				result, err := configsync.ApplyPrices(

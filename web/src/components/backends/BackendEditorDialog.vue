@@ -12,7 +12,18 @@
         <el-tab-pane :label="t('backendEditor.connectionConfig')" name="basic">
           <!-- Provider 搜索选择（创建模式） -->
           <div v-if="isCreate" class="form-group">
-            <label class="form-label">{{ t('backendEditor.provider') }}</label>
+            <div class="form-label-row">
+              <label class="form-label">{{ t('backendEditor.provider') }}</label>
+              <el-button
+                type="primary"
+                link
+                size="small"
+                :loading="syncingProviderCatalog"
+                @click="handleSyncProviderCatalog"
+              >
+                <el-icon><Refresh /></el-icon> {{ t('backendEditor.syncProviderCatalog') }}
+              </el-button>
+            </div>
             <div class="provider-dropdown" v-click-outside="() => (showProviderList = false)">
               <el-input
                 v-model="form.name"
@@ -39,6 +50,9 @@
                    {{ t('backendEditor.noMatchProvider') }}
                 </div>
               </div>
+            </div>
+            <div v-if="providerCatalogSyncTime" class="provider-catalog-sync-time">
+              {{ t('backendEditor.lastSyncTime') }}: {{ new Date(providerCatalogSyncTime).toLocaleString() }}
             </div>
           </div>
 
@@ -349,7 +363,7 @@ import {
   WarningFilled,
 } from '@element-plus/icons-vue'
 import api from '@/api'
-import { listBackendTypes, type BackendTypeMeta } from '@/api/backend'
+import { listBackendTypes, type BackendTypeMeta, getProviderCatalog, syncProviderCatalog, type ProviderCatalogEntry } from '@/api/backend'
 import {
   getProviderList,
   applyProviderPreset,
@@ -418,8 +432,36 @@ type ConnectivitySnapshot = {
 }
 const connectivitySnapshot = ref<ConnectivitySnapshot | null>(null)
 
+// Provider catalog state (from Feishu sync)
+const providerCatalog = ref<ProviderCatalogEntry[]>([])
+const providerCatalogSyncTime = ref<string>('')
+const syncingProviderCatalog = ref(false)
+
 const providerList = ref<ProviderDef[]>(getProviderList())
 const form = reactive<ProviderFormModel>(createEmptyProviderForm())
+
+// Merge provider list with catalog entries
+const mergedProviderList = computed(() => {
+  const baseList = [...providerList.value]
+  
+  // Add catalog entries that don't exist in the base list
+  for (const entry of providerCatalog.value) {
+    if (!baseList.some(p => p.id === entry.id)) {
+      baseList.push({
+        id: entry.id,
+        name: entry.name,
+        type: entry.type,
+        base_url: entry.base_url,
+        env_key: entry.env_key || '',
+        icon: entry.icon || '🔧',
+        description: entry.description || '',
+        default_models: entry.default_models || [],
+      })
+    }
+  }
+  
+  return baseList
+})
 
 watch(
   () => props.modelValue,
@@ -431,7 +473,7 @@ watch(dialogVisible, (visible) => {
   if (visible !== props.modelValue) emit('update:modelValue', visible)
 })
 
-const filteredProviders = computed(() => filterProviders(providerList.value, form.name))
+const filteredProviders = computed(() => filterProviders(mergedProviderList.value, form.name))
 
 /** 模型筛选：名称子串、忽略大小写 */
 const filteredModels = computed(() => {
@@ -516,6 +558,32 @@ function loadBackendTypes() {
   listBackendTypes()
     .then((types) => { backendTypes.value = Array.isArray(types) ? types : [] })
     .catch((err) => { console.error('Failed to load backend types', err) })
+}
+
+// Fetch provider catalog from API
+function fetchProviderCatalog() {
+  getProviderCatalog()
+    .then((response) => {
+      providerCatalog.value = response.entries || []
+      providerCatalogSyncTime.value = response.sync_time || ''
+    })
+    .catch((err) => { console.error('Failed to load provider catalog', err) })
+}
+
+// Sync provider catalog from Feishu
+async function handleSyncProviderCatalog() {
+  syncingProviderCatalog.value = true
+  try {
+    const response = await syncProviderCatalog()
+    providerCatalog.value = response.entries || []
+    providerCatalogSyncTime.value = response.sync_time || ''
+    ElMessage.success(t('backendEditor.providerCatalogSyncSuccess'))
+  } catch (err) {
+    console.error('Failed to sync provider catalog', err)
+    ElMessage.error(t('backendEditor.providerCatalogSyncFailed'))
+  } finally {
+    syncingProviderCatalog.value = false
+  }
 }
 
 function onTypeChanged(type: string) {
@@ -700,6 +768,7 @@ function onDialogClose() {
 
 onMounted(() => {
   loadBackendTypes()
+  fetchProviderCatalog()
 })
 
 watch(
@@ -949,6 +1018,23 @@ defineExpose({ openEdit, openCreate, getPendingApiKey })
   font-weight: 500;
   color: #374151;
   margin-bottom: 6px;
+}
+
+.form-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.form-label-row .form-label {
+  margin-bottom: 0;
+}
+
+.provider-catalog-sync-time {
+  font-size: 12px;
+  color: #9ca3af;
+  margin-top: 4px;
 }
 
 .form-tip {
