@@ -108,35 +108,6 @@
             </div>
 
             <el-divider style="margin: 8px 0" />
-            <div class="info-row section-title-row">
-              <span class="section-label">{{ $t('dashboard.storedInDatabase') }}</span>
-              <span class="card-badge">{{ $t('dashboard.items', { count: storages.length + 1 }) }}</span>
-            </div>
-            <div class="info-section">
-              <div class="section-label info-section-head">{{ $t('dashboard.database') }}</div>
-              <div class="info-row info-section-row">
-                <span class="info-label">{{ $t('dashboard.driverType') }}</span>
-                <el-tag :type="getDbDriverType(dashboard.database?.driver)" size="small" effect="light">
-                  {{ formatDbDriver(dashboard.database?.driver) }}
-                </el-tag>
-              </div>
-              <div class="info-row info-section-row">
-                <span class="info-label">{{ $t('dashboard.connectionStatus') }}</span>
-                <el-tag
-                  :type="dashboard.database?.status === 'connected' ? 'success' : 'danger'"
-                  size="small"
-                  effect="light"
-                >
-                  {{ dashboard.database?.status === 'connected' ? $t('dashboard.connected') : $t('dashboard.notConnected') }}
-                </el-tag>
-              </div>
-              <div class="info-row">
-                <span class="info-label">{{ $t('dashboard.connectionAddress') }}</span>
-                <span class="info-val mono">{{ dashboard.database?.address || $t('dashboard.unknown') }}</span>
-              </div>
-            </div>
-
-            <el-divider style="margin: 8px 0" />
             <div class="info-section">
               <div class="section-label info-section-head">{{ $t('dashboard.storageMiddleware') }}</div>
               <div v-for="s in storages" :key="s.name" class="backend-item compact-backend-item">
@@ -159,6 +130,8 @@
               <div v-if="!storages.length" class="empty-tip compact-empty-tip">{{ $t('dashboard.noStorageConfig') }}</div>
             </div>
           </template>
+
+
 
           <template v-if="sections.proxyControls">
             <el-divider style="margin: 8px 0" />
@@ -207,6 +180,37 @@
               <span class="info-val">{{ $t('dashboard.items', { count: Object.keys(hostProxy.domains || {}).length }) }}</span>
             </div>
           </template>
+        </div>
+      </el-card>
+
+      <el-card v-if="sections.databaseInfo" class="info-card dash-card">
+        <template #header>
+          <div class="card-head">
+            <el-icon class="card-icon service-color"><Coin /></el-icon>
+            <span>{{ $t('dashboard.database') }}</span>
+          </div>
+        </template>
+        <div class="info-rows">
+          <div class="info-row">
+            <span class="info-label">{{ $t('dashboard.driverType') }}</span>
+            <el-tag :type="getDbDriverType(dashboard.database?.driver)" size="small" effect="light">
+              {{ formatDbDriver(dashboard.database?.driver) }}
+            </el-tag>
+          </div>
+          <div class="info-row">
+            <span class="info-label">{{ $t('dashboard.connectionStatus') }}</span>
+            <el-tag
+              :type="dashboard.database?.status === 'connected' ? 'success' : 'danger'"
+              size="small"
+              effect="light"
+            >
+              {{ dashboard.database?.status === 'connected' ? $t('dashboard.connected') : $t('dashboard.notConnected') }}
+            </el-tag>
+          </div>
+          <div class="info-row">
+            <span class="info-label">{{ $t('dashboard.connectionAddress') }}</span>
+            <span class="info-val mono">{{ dashboard.database?.address || $t('dashboard.unknown') }}</span>
+          </div>
         </div>
       </el-card>
 
@@ -576,7 +580,8 @@ const dashboard = ref<any>({
   request: { total_requests: 0, success_requests: 0, error_requests: 0, qps: 0, avg_latency_ms: 0, error_rate_percent: 0 },
   cache: { hits: 0, misses: 0, hit_rate_percent: 0, entries: 0 },
   plugin_count: 0,
-  plugin_running: 0
+  plugin_running: 0,
+  database: { driver: '', status: '', address: '' }
 })
 
 const status = ref<any>({})
@@ -843,7 +848,7 @@ async function load() {
     }
 
     const tasks: Promise<any>[] = [
-      sec.opsStats ? getDashboard() : Promise.resolve(null),
+      (sec.opsStats || sec.databaseInfo) ? getDashboard() : Promise.resolve(null),
       getStatus(),
       getBackends(),
       sec.pluginsStorage ? getStorages() : Promise.resolve(null),

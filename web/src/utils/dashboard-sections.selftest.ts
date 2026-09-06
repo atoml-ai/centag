@@ -37,7 +37,8 @@ function run() {
         layout: 'lite',
         liteChatDrawer: true,
         accessQuickLinks: false,
-        usageBilling: true
+        usageBilling: true,
+        databaseInfo: false
       }
     },
     {
@@ -53,7 +54,8 @@ function run() {
         usageBilling: true,
         opsStats: true,
         pipelineCreateButton: false,
-        teamAccessInStatus: true
+        teamAccessInStatus: true,
+        databaseInfo: true
       }
     },
     {

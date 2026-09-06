@@ -21,6 +21,8 @@ export interface DashboardSections {
   teamAccessInStatus: boolean
   /** 团队：插件 / 存储写在状态卡内 */
   pluginsStorage: boolean
+  /** 数据库连接信息（驱动类型、连接状态、地址） */
+  databaseInfo: boolean
   /** 系统代理 / Host 代理开关 */
   proxyControls: boolean
   /** 独立 API 接入卡片（ApiAccessPanel） */
@@ -53,6 +55,7 @@ export function sectionsFromCapabilities(caps: Capabilities): DashboardSections 
       serviceStatusCompact: false,
       teamAccessInStatus: false,
       pluginsStorage: false,
+      databaseInfo: false,
       proxyControls: false,
       accessPanel: caps.role !== 'minimal',
       accessQuickLinks: false,
@@ -75,6 +78,7 @@ export function sectionsFromCapabilities(caps: Capabilities): DashboardSections 
     serviceStatusCompact: false,
     teamAccessInStatus: true,
     pluginsStorage: false,
+    databaseInfo: true,
     proxyControls: false,
     accessPanel: false,
     accessQuickLinks: false,
