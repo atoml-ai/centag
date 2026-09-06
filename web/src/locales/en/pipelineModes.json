@@ -10,6 +10,7 @@
   "refresh": "Refresh",
   "createFromTemplate": "Create from Template",
   "importPipeline": "Import Pipeline",
+  "syncFromRemote": "Sync Templates",
   "createPipeline": "Create Pipeline",
   "empty": "No pipeline configurations, use the button on the right to create",
   "table": {
@@ -56,6 +57,45 @@
     "cancelImport": "Cancel Import",
     "skipDuplicates": "Skip Duplicates ({count})",
     "overwriteAll": "Overwrite All"
+  },
+  "syncDialog": {
+    "title": "Sync Pipeline Templates",
+    "hint": "The following templates are fetched from remote. Select templates to sync locally:",
+    "modifiedWarning": "Some templates have been modified locally. Syncing will overwrite local changes. Please confirm which templates to overwrite:",
+    "id": "ID",
+    "name": "Name",
+    "status": "Status",
+    "description": "Description",
+    "new": "New",
+    "modified": "Modified",
+    "unchanged": "Unchanged",
+    "selectedCount": "{count} template(s) selected",
+    "forceOverwrite": "Force overwrite modified templates",
+    "confirmOverwriteModified": "{count} selected template(s) have been modified locally. Overwriting will lose local changes. Continue?",
+    "confirmTitle": "Confirm Overwrite",
+    "overwrite": "Overwrite",
+    "cancel": "Cancel",
+    "apply": "Apply Sync",
+    "fetchFailed": "Failed to fetch remote templates: {error}",
+    "applySuccess": "Sync completed: {applied} applied, {skipped} skipped, {failed} failed",
+    "applyFailed": "Sync failed: {error}"
+  },
+  "templateSync": {
+    "syncing": "Syncing...",
+    "syncComplete": "Sync complete",
+    "syncFailed": "Sync failed",
+    "willBeUpdated": "Will be updated",
+    "userModified": "User modified",
+    "remoteVersion": "Remote version",
+    "localModified": "Locally modified"
+  },
+  "templateReset": {
+    "title": "Reset Templates to Default",
+    "confirmMessage": "Are you sure you want to reset all templates to default? This will clear all custom modifications and re-sync from remote.",
+    "confirm": "Confirm Reset",
+    "cancel": "Cancel",
+    "resetSuccess": "All templates reset to default",
+    "resetFailed": "Reset failed"
   },
   "message": {
     "loadFailed": "Failed to load pipelines",

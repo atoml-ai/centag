@@ -106,6 +106,7 @@ export interface AgentPatternPipeline {
     hooks?: HookConfig[]
   }
   metadata?: Record<string, any>
+  is_user_modified?: boolean
 }
 
 export interface PluginRegistration {
@@ -206,6 +207,16 @@ export function exportPipeline(id: string) {
 // 获取流水线模板
 export function getPipelineTemplates() {
   return api.get('/api/v1/pipelines/templates')
+}
+
+// 同步流水线模板预览（从飞书获取并检测修改状态）
+export function syncPipelineTemplatesPreview() {
+  return api.get('/api/v1/pipelines/templates/sync/preview')
+}
+
+// 应用同步的流水线模板
+export function applyPipelineTemplates() {
+  return api.post('/api/v1/pipelines/templates/sync/apply')
 }
 
 // 获取插件注册表列表
@@ -332,4 +343,42 @@ export function getPipelineDefaults() {
 // 更新默认流水线配置
 export function updatePipelineDefaults(data: { default_pipeline_id: string }) {
   return api.put('/api/v1/pipeline/defaults', data)
+}
+
+// ==================== 模板管理 API ====================
+
+// 模板同步预览项
+export interface TemplateSyncPreview {
+  id: string
+  name: string
+  description: string
+  version?: string
+  is_user_modified: boolean
+  will_be_updated: boolean
+}
+
+// 恢复所有模板为默认（清除所有修改标记并重新同步）
+export function resetAllTemplates() {
+  return api.post('/api/v1/pipelines/templates/reset')
+}
+
+// 恢复单个模板为默认
+export function resetSingleTemplate(id: string) {
+  return api.post(`/api/v1/pipelines/templates/${id}/reset`)
+}
+
+// 获取所有已修改的模板
+export function getModifiedTemplates() {
+  return api.get('/api/v1/pipelines/templates/modified')
+}
+
+// Admin更新模板（标记为已修改）
+export function adminUpdateTemplate(id: string, data: {
+  name?: string
+  description?: string
+  nodes?: any[]
+  global_config?: any
+  metadata?: Record<string, any>
+}) {
+  return api.put(`/api/v1/pipelines/templates/${id}`, data)
 }

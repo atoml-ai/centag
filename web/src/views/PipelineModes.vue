@@ -18,6 +18,14 @@
           <el-icon><Upload /></el-icon>
           {{ t('pipelineModes.importPipeline') }}
         </el-button>
+        <el-button @click="handleSyncTemplates" :loading="syncingTemplates">
+          <el-icon><Connection /></el-icon>
+          {{ t('pipelineModes.syncFromRemote') }}
+        </el-button>
+        <el-button @click="handleResetTemplates" :loading="resettingTemplates" type="warning">
+          <el-icon><RefreshRight /></el-icon>
+          {{ t('pipelineModes.templateReset.title') }}
+        </el-button>
         <el-button :loading="loading" @click="loadData">
           <el-icon><Refresh /></el-icon>
           {{ t('pipelineModes.refresh') }}
@@ -83,43 +91,58 @@
               :model-value="isCardSelected(row)"
               @change="(v) => toggleCardSelection(row, v)"
             />
-            <div class="pipeline-card__title">
+            <div class="pipeline-card__title-row">
               <span class="pipeline-card__name">{{ row.name }}</span>
-              <el-tag v-if="isSystemPipeline(row)" type="info" size="small" effect="plain">
+              <div class="pipeline-card__icons">
+                <el-tooltip :content="row.id === defaultPipelineId ? t('pipelineModes.table.currentDefault') : t('pipelineModes.table.setDefault')" placement="top">
+                  <el-icon
+                    class="pipeline-card__star"
+                    :class="{ 'is-default': row.id === defaultPipelineId }"
+                    @click="handleSetDefault(row)"
+                  >
+                    <StarFilled v-if="row.id === defaultPipelineId" />
+                    <Star v-else />
+                  </el-icon>
+                </el-tooltip>
+                <el-tooltip :content="t('pipelineModes.table.test')" placement="top">
+                  <el-icon class="pipeline-card__test" @click="openPipelineTest(row)">
+                    <ChatDotRound />
+                  </el-icon>
+                </el-tooltip>
+              <el-tooltip v-if="row.is_user_modified" :content="t('pipelineModes.templateReset.title')" placement="top">
+                <el-icon
+                  class="pipeline-card__reset"
+                  :class="{ 'is-loading': resettingSingleId === row.id }"
+                  @click="handleResetSingleTemplate(row)"
+                >
+                  <Loading v-if="resettingSingleId === row.id" />
+                  <RefreshRight v-else />
+                </el-icon>
+              </el-tooltip>
+              </div>
+              <PipelineRowActions
+                class="pipeline-card__actions"
+                :row="row"
+                :unrestricted="unrestricted"
+                :default-pipeline-id="defaultPipelineId"
+                @command="(cmd) => handleRowCommand(cmd, row)"
+              />
+            </div>
+            <div class="pipeline-card__tags">
+              <el-tag v-if="isSystemPipeline(row)" type="info" size="small" effect="plain" class="pipeline-card__tag">
                 {{ t('pipelineModes.table.scopeSystem') }}
               </el-tag>
-              <el-tag v-else type="warning" size="small" effect="plain">
+              <el-tag v-else type="warning" size="small" effect="plain" class="pipeline-card__tag">
                 {{ t('pipelineModes.table.scopeMine') }}
               </el-tag>
-              <el-tag v-if="row.id === defaultPipelineId" type="success" size="small" effect="light">
+              <el-tag v-if="row.is_user_modified" type="danger" size="small" effect="dark" class="pipeline-card__tag">
+                {{ t('pipelineModes.templateSync.userModified') }}
+              </el-tag>
+              <el-tag v-if="row.id === defaultPipelineId" type="success" size="small" effect="light" class="pipeline-card__tag">
                 <el-icon style="margin-right: 2px; vertical-align: -2px;"><StarFilled /></el-icon>
                 {{ t('pipelineModes.table.defaultPipeline') }}
               </el-tag>
             </div>
-            <div class="pipeline-card__icons">
-              <el-tooltip :content="row.id === defaultPipelineId ? t('pipelineModes.table.currentDefault') : t('pipelineModes.table.setDefault')" placement="top">
-                <el-icon
-                  class="pipeline-card__star"
-                  :class="{ 'is-default': row.id === defaultPipelineId }"
-                  @click="handleSetDefault(row)"
-                >
-                  <StarFilled v-if="row.id === defaultPipelineId" />
-                  <Star v-else />
-                </el-icon>
-              </el-tooltip>
-              <el-tooltip :content="t('pipelineModes.table.test')" placement="top">
-                <el-icon class="pipeline-card__test" @click="openPipelineTest(row)">
-                  <ChatDotRound />
-                </el-icon>
-              </el-tooltip>
-            </div>
-            <PipelineRowActions
-              class="pipeline-card__actions"
-              :row="row"
-              :unrestricted="unrestricted"
-              :default-pipeline-id="defaultPipelineId"
-              @command="(cmd) => handleRowCommand(cmd, row)"
-            />
           </div>
           <div class="pipeline-card__body">
             <div class="pipeline-card__row">
@@ -265,6 +288,60 @@
         </div>
       </template>
     </el-dialog>
+
+    <!-- 同步模板对话框 -->
+    <el-dialog v-model="syncDialogVisible" :title="t('pipelineModes.syncDialog.title')" width="700px" :close-on-click-modal="false">
+      <el-alert v-if="syncHasModified" type="warning" :closable="false" show-icon style="margin-bottom: 16px">
+        {{ t('pipelineModes.syncDialog.modifiedWarning') }}
+      </el-alert>
+      <el-alert v-else type="info" :closable="false" style="margin-bottom: 16px">
+        {{ t('pipelineModes.syncDialog.hint') }}
+      </el-alert>
+      <el-table :data="syncTemplates" size="small" border stripe max-height="400" @selection-change="handleSyncSelectionChange">
+        <el-table-column type="selection" width="45" :selectable="(row: any) => row.will_be_updated" />
+        <el-table-column prop="id" :label="t('pipelineModes.syncDialog.id')" width="140">
+          <template #default="{ row }">
+            <el-tag type="info" effect="plain" size="small">{{ row.id }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="name" :label="t('pipelineModes.syncDialog.name')" min-width="120">
+          <template #default="{ row }">
+            <span style="font-weight: 500">{{ row.name }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column :label="t('pipelineModes.syncDialog.status')" width="160">
+          <template #default="{ row }">
+            <el-tag v-if="row.is_user_modified" type="danger" size="small" effect="dark">
+              {{ t('pipelineModes.syncDialog.modified') }}
+            </el-tag>
+            <el-tag v-else-if="row.will_be_updated" type="success" size="small" effect="light">
+              {{ t('pipelineModes.templateSync.willBeUpdated') }}
+            </el-tag>
+            <el-tag v-else type="info" size="small" effect="light">
+              {{ t('pipelineModes.syncDialog.unchanged') }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="description" :label="t('pipelineModes.syncDialog.description')" min-width="180" show-overflow-tooltip />
+      </el-table>
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 12px;">
+        <div style="color: #909399; font-size: 13px;">
+          {{ t('pipelineModes.syncDialog.selectedCount', { count: syncSelectedIds.length }) }}
+        </div>
+        <el-checkbox v-model="syncForceOverwrite" :disabled="!syncHasModified">
+          {{ t('pipelineModes.syncDialog.forceOverwrite') }}
+        </el-checkbox>
+      </div>
+      <template #footer>
+        <div style="display: flex; justify-content: center; gap: 12px;">
+          <el-button @click="syncDialogVisible = false">{{ t('pipelineModes.syncDialog.cancel') }}</el-button>
+          <el-button type="primary" :loading="applyingSync" :disabled="syncSelectedIds.length === 0" @click="handleApplySync">
+            {{ t('pipelineModes.syncDialog.apply') }}
+          </el-button>
+        </div>
+      </template>
+    </el-dialog>
+
     <input
       ref="importTemplateInputRef"
       type="file"
@@ -281,10 +358,11 @@ import { ref, onMounted, computed, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Search, SetUp, Refresh, Plus, Delete, DocumentCopy, Upload, Check, Download, WarningFilled, CircleClose, Select, Connection, Star, StarFilled, ChatDotRound } from '@element-plus/icons-vue'
+import { Search, SetUp, Refresh, Plus, Delete, DocumentCopy, Upload, Check, Download, WarningFilled, CircleClose, Select, Connection, Star, StarFilled, ChatDotRound, RefreshRight, Loading } from '@element-plus/icons-vue'
 import * as yaml from 'js-yaml'
 import {
   getPipelines,
+  getPipeline,
   createPipeline,
   updatePipeline,
   deletePipeline,
@@ -293,6 +371,10 @@ import {
   getPipelineDefaults,
   updatePipelineDefaults,
   parsePipelinesResponse,
+  syncPipelineTemplatesPreview,
+  applyPipelineTemplates,
+  resetAllTemplates,
+  resetSingleTemplate,
   type Pipeline,
   type AgentPatternPipeline
 } from '@/api/pipeline'
@@ -330,6 +412,17 @@ const routeAssignPipelineId = ref('')
 const importConflictVisible = ref(false)
 const importConflictItems = ref<any[]>([])
 const importConflictResolve = ref<((value: 'overwrite' | 'skip' | 'cancel') => void) | null>(null)
+
+// Sync templates state
+const syncingTemplates = ref(false)
+const resettingTemplates = ref(false)
+const resettingSingleId = ref('')
+const syncDialogVisible = ref(false)
+const syncTemplates = ref<any[]>([])
+const syncSelectedIds = ref<string[]>([])
+const syncForceOverwrite = ref(false)
+const syncHasModified = ref(false)
+const applyingSync = ref(false)
 
 const historyVisible = ref(false)
 const historyPipelineId = ref('')
@@ -721,6 +814,137 @@ const createFromTemplate = (tmpl: any) => {
   ElMessage.success(t('pipelineModes.message.createFromTemplateSuccess', { name: tmpl.name }))
 }
 
+// Sync templates from remote (Feishu)
+const handleSyncTemplates = async () => {
+  syncingTemplates.value = true
+  try {
+    const res = await syncPipelineTemplatesPreview()
+    const data = res.data?.data
+    if (data?.templates) {
+      syncTemplates.value = data.templates
+      syncHasModified.value = data.templates.some((t: any) => t.is_user_modified)
+      // Auto-select templates that will be updated (not user-modified)
+      syncSelectedIds.value = data.templates
+        .filter((t: any) => t.will_be_updated)
+        .map((t: any) => t.id)
+      syncForceOverwrite.value = false
+      syncDialogVisible.value = true
+    }
+  } catch (err: any) {
+    ElMessage.error(t('pipelineModes.syncDialog.fetchFailed', { error: err.message || 'Unknown error' }))
+  } finally {
+    syncingTemplates.value = false
+  }
+}
+
+const handleSyncSelectionChange = (selection: any[]) => {
+  syncSelectedIds.value = selection.map((row: any) => row.id)
+}
+
+const handleApplySync = async () => {
+  if (syncSelectedIds.value.length === 0) return
+
+  // Check if any modified templates are selected
+  const modifiedSelected = syncTemplates.value.filter(
+    (t: any) => syncSelectedIds.value.includes(t.id) && t.is_user_modified
+  )
+
+  if (modifiedSelected.length > 0 && !syncForceOverwrite.value) {
+    // Confirm overwrite of modified templates
+    try {
+      await ElMessageBox.confirm(
+        t('pipelineModes.syncDialog.confirmOverwriteModified', { count: modifiedSelected.length }),
+        t('pipelineModes.syncDialog.confirmTitle'),
+        {
+          confirmButtonText: t('pipelineModes.syncDialog.overwrite'),
+          cancelButtonText: t('pipelineModes.syncDialog.cancel'),
+          type: 'warning',
+        }
+      )
+      syncForceOverwrite.value = true
+    } catch {
+      return
+    }
+  }
+
+  applyingSync.value = true
+  try {
+    const res = await applyPipelineTemplates()
+    const data = res.data?.data
+    if (data) {
+      ElMessage.success(t('pipelineModes.syncDialog.applySuccess', {
+        applied: data.applied,
+        skipped: data.skipped,
+        failed: data.failed
+      }))
+      syncDialogVisible.value = false
+      // Reload pipelines
+      await loadData()
+    }
+  } catch (err: any) {
+    ElMessage.error(t('pipelineModes.syncDialog.applyFailed', { error: err.message || 'Unknown error' }))
+  } finally {
+    applyingSync.value = false
+  }
+}
+
+// Reset all templates to default
+const handleResetTemplates = async () => {
+  try {
+    await ElMessageBox.confirm(
+      t('pipelineModes.templateReset.confirmMessage'),
+      t('pipelineModes.templateReset.title'),
+      {
+        confirmButtonText: t('pipelineModes.templateReset.confirm'),
+        cancelButtonText: t('pipelineModes.templateReset.cancel'),
+        type: 'warning',
+      }
+    )
+  } catch {
+    return
+  }
+
+  resettingTemplates.value = true
+  try {
+    await resetAllTemplates()
+    ElMessage.success(t('pipelineModes.templateReset.resetSuccess'))
+    await loadData()
+  } catch (err: any) {
+    ElMessage.error(t('pipelineModes.templateReset.resetFailed', { error: err.message || 'Unknown error' }))
+  } finally {
+    resettingTemplates.value = false
+  }
+}
+
+// Reset a single template to default
+const handleResetSingleTemplate = async (row: Pipeline) => {
+  if (resettingSingleId.value) return
+  try {
+    await ElMessageBox.confirm(
+      t('pipelineModes.templateReset.confirmMessage'),
+      t('pipelineModes.templateReset.title'),
+      {
+        confirmButtonText: t('pipelineModes.templateReset.confirm'),
+        cancelButtonText: t('pipelineModes.templateReset.cancel'),
+        type: 'warning',
+      }
+    )
+  } catch {
+    return
+  }
+
+  resettingSingleId.value = row.id
+  try {
+    await resetSingleTemplate(row.id)
+    ElMessage.success(t('pipelineModes.templateReset.resetSuccess'))
+    await loadData()
+  } catch (err: any) {
+    ElMessage.error(t('pipelineModes.templateReset.resetFailed', { error: err.message || 'Unknown error' }))
+  } finally {
+    resettingSingleId.value = ''
+  }
+}
+
 const openEdit = (row: Pipeline) => {
   isCreating.value = false
   currentPipeline.value = JSON.parse(JSON.stringify(row))
@@ -805,7 +1029,18 @@ watch(() => route.path, (path) => {
 const handleEditorSaved = async (savedPipeline?: Pipeline) => {
   isCreating.value = false
   if (savedPipeline?.id) {
-    upsertPipelineInList(savedPipeline)
+    // Re-fetch the pipeline to get the updated is_user_modified flag from server
+    // Interceptor already unwraps { success, data } → returns data directly
+    try {
+      const data = await getPipeline(savedPipeline.id)
+      if (data) {
+        upsertPipelineInList(data)
+      } else {
+        upsertPipelineInList(savedPipeline)
+      }
+    } catch {
+      upsertPipelineInList(savedPipeline)
+    }
   } else if (currentPipeline.value?.id) {
     upsertPipelineInList(currentPipeline.value)
   }
@@ -951,7 +1186,7 @@ onMounted(() => {
 
 .pipeline-cards {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
   gap: 16px;
 }
 
@@ -978,17 +1213,14 @@ onMounted(() => {
 
 .pipeline-card__head {
   display: flex;
-  align-items: flex-start;
-  gap: 10px;
+  flex-direction: column;
+  gap: 6px;
 }
 
-.pipeline-card__title {
+.pipeline-card__title-row {
   display: flex;
   align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-  flex: 1;
-  min-width: 0;
+  gap: 8px;
 }
 
 .pipeline-card__name {
@@ -996,24 +1228,40 @@ onMounted(() => {
   font-weight: 600;
   color: #1f2937;
   min-width: 0;
-  max-width: 100%;
+  flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+.pipeline-card__tags {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.pipeline-card__tag {
+  flex-shrink: 0;
+  font-size: 11px !important;
+  padding: 0 6px !important;
+  height: 20px !important;
+  line-height: 18px !important;
+}
+
 .pipeline-card__icons {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   flex-shrink: 0;
 }
 
 .pipeline-card__star,
-.pipeline-card__test {
-  width: 32px;
-  height: 32px;
-  font-size: 14px;
+.pipeline-card__test,
+.pipeline-card__reset {
+  width: 28px;
+  height: 28px;
+  font-size: 13px;
   cursor: pointer;
   color: #9ca3af;
   transition: color 0.2s, background 0.2s;
@@ -1042,8 +1290,34 @@ onMounted(() => {
   background: rgba(59, 130, 246, 0.1);
 }
 
+.pipeline-card__reset {
+  color: #ef4444;
+  border-color: #ef4444;
+}
+
+.pipeline-card__reset:hover {
+  color: #dc2626;
+  border-color: #dc2626;
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.pipeline-card__reset.is-loading {
+  pointer-events: none;
+  opacity: 0.6;
+}
+
+.pipeline-card__reset.is-loading .el-icon {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
 .pipeline-card__actions {
   flex-shrink: 0;
+  margin-left: auto;
 }
 
 .pipeline-card__body {

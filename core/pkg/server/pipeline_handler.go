@@ -15,6 +15,7 @@ import (
 	"centag/core/internal/edition"
 	"centag/core/pkg/backend"
 	"centag/core/pkg/config"
+	"centag/core/pkg/configsync"
 	"centag/core/pkg/database"
 	"centag/core/pkg/logger"
 	"centag/core/pkg/pipeline"
@@ -310,9 +311,35 @@ func (h *PipelineHandler) ListPipelines(c *gin.Context) {
 		}
 	}
 
+	// Build a map of is_user_modified from pipeline_templates
+	modifiedMap := make(map[string]bool)
+	if templateStore, err := pipeline.NewDBPipelineTemplateStore(); err == nil {
+		if allTemplates, err := templateStore.ListAll(); err == nil {
+			for _, tmpl := range allTemplates {
+				if isModified, err := templateStore.GetModifiedStatus(tmpl.ID); err == nil {
+					modifiedMap[tmpl.ID] = isModified
+				}
+			}
+		}
+	}
+
+	// Convert to response with is_user_modified injected
+	type PipelineResponse struct {
+		*pipeline.AgentPatternPipeline
+		IsUserModified bool `json:"is_user_modified"`
+	}
+
+	var resp []PipelineResponse
+	for _, p := range pipelines {
+		resp = append(resp, PipelineResponse{
+			AgentPatternPipeline: p,
+			IsUserModified:       modifiedMap[p.ID],
+		})
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
-		"data":    pipelines,
+		"data":    resp,
 	})
 }
 
@@ -336,9 +363,25 @@ func (h *PipelineHandler) GetPipeline(c *gin.Context) {
 		p = injectRouteConfigFromTemplate(p, h.templates)
 	}
 
+	// Get is_user_modified status
+	isUserModified := false
+	if templateStore, err := pipeline.NewDBPipelineTemplateStore(); err == nil {
+		if modified, err := templateStore.GetModifiedStatus(id); err == nil {
+			isUserModified = modified
+		}
+	}
+
+	type PipelineResponse struct {
+		*pipeline.AgentPatternPipeline
+		IsUserModified bool `json:"is_user_modified"`
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
-		"data":    p,
+		"data": PipelineResponse{
+			AgentPatternPipeline: p,
+			IsUserModified:       isUserModified,
+		},
 	})
 }
 
@@ -500,6 +543,15 @@ func (h *PipelineHandler) UpdatePipeline(c *gin.Context) {
 	// 清除存储钩子缓存，确保下次执行使用最新配置
 	if h.engine != nil {
 		h.engine.InvalidateStorageHookCache(id)
+	}
+
+	// Mark the template as user-modified if it exists in pipeline_templates
+	if templateStore, err := pipeline.NewDBPipelineTemplateStore(); err == nil {
+		// Check if template exists (GetModifiedStatus returns error if not found)
+		if _, checkErr := templateStore.GetModifiedStatus(id); checkErr == nil {
+			// Template exists in pipeline_templates, mark as user-modified
+			_ = templateStore.MarkAsModified(id)
+		}
 	}
 
 	h.syncModesFromRegistry()
@@ -907,6 +959,501 @@ func (h *PipelineHandler) GetTemplates(c *gin.Context) {
 	})
 }
 
+// SyncPipelineTemplatesPreview fetches remote templates from Feishu and compares
+// with existing local templates to detect modifications.
+// GET /api/v1/pipelines/templates/sync/preview
+func (h *PipelineHandler) SyncPipelineTemplatesPreview(c *gin.Context) {
+	scheduler := configsync.GetScheduler()
+	if scheduler == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"success": false,
+			"error":   "configsync scheduler not available",
+		})
+		return
+	}
+
+	// Trigger a sync to fetch latest data from Feishu
+	if err := scheduler.SyncNow(c.Request.Context()); err != nil {
+		logger.Warnf("pipeline template sync preview failed: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   fmt.Sprintf("sync failed: %v", err),
+		})
+		return
+	}
+
+	// Get the updated templates from the handler
+	remoteTemplates := h.templates
+	if len(remoteTemplates) == 0 {
+		remoteTemplates = resolvePipelineTemplates()
+	}
+
+	// Load template store to check is_user_modified status
+	templateStore, err := pipeline.NewDBPipelineTemplateStore()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   fmt.Sprintf("failed to open template store: %v", err),
+		})
+		return
+	}
+
+	// Build the preview result
+	type TemplatePreview struct {
+		ID               string `json:"id"`
+		Name             string `json:"name"`
+		Description      string `json:"description"`
+		Version          string `json:"version,omitempty"`
+		IsUserModified   bool   `json:"is_user_modified"`   // Whether Admin has customized this template
+		WillBeUpdated    bool   `json:"will_be_updated"`    // Whether this template will be updated in sync
+	}
+
+	var previews []TemplatePreview
+	for _, tmpl := range remoteTemplates {
+		preview := TemplatePreview{
+			ID:          tmpl.ID,
+			Name:        tmpl.Name,
+			Description: tmpl.Description,
+		}
+
+		// Get version from metadata
+		if version, ok := tmpl.Metadata["version"].(string); ok {
+			preview.Version = version
+		}
+
+		// Check is_user_modified status from DB
+		isUserModified, err := templateStore.GetModifiedStatus(tmpl.ID)
+		if err == nil {
+			preview.IsUserModified = isUserModified
+			// Will be updated if NOT user-modified
+			preview.WillBeUpdated = !isUserModified
+		} else {
+			// Template doesn't exist in DB yet, will be created
+			preview.WillBeUpdated = true
+		}
+
+		previews = append(previews, preview)
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data": gin.H{
+			"templates": previews,
+		},
+	})
+}
+
+// ApplyPipelineTemplates applies selected remote templates to the local database.
+// It respects is_user_modified: only updates templates where is_user_modified = FALSE.
+// Also reverts the pipeline in the registry for non-modified templates.
+// POST /api/v1/pipelines/templates/sync/apply
+func (h *PipelineHandler) ApplyPipelineTemplates(c *gin.Context) {
+	// Load template store
+	templateStore, err := pipeline.NewDBPipelineTemplateStore()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   fmt.Sprintf("failed to open template store: %v", err),
+		})
+		return
+	}
+
+	// Get the current templates (after sync)
+	templates := h.templates
+	if len(templates) == 0 {
+		templates = resolvePipelineTemplates()
+	}
+
+	// Apply all templates from remote, respecting is_user_modified
+	applied := 0
+	skipped := 0
+	failed := 0
+
+	for _, tmpl := range templates {
+		// Convert PatternTemplate to configsync.PipelineTemplate
+		configsyncTmpl := convertToConfigsyncTemplate(tmpl)
+		if configsyncTmpl == nil {
+			failed++
+			continue
+		}
+
+		// UpsertFromRemote will check is_user_modified and skip if needed
+		updated, err := templateStore.UpsertFromRemote(*configsyncTmpl)
+		if err != nil {
+			logger.Warnf("template sync: failed to apply template %s: %v", tmpl.ID, err)
+			failed++
+			continue
+		}
+
+		if updated {
+			applied++
+			// Also revert the pipeline in the registry from the template
+			revertedPipeline := pipeline.CreatePipelineFromTemplate(tmpl, nil)
+			if h.pipelineRegistry.Exists(tmpl.ID) {
+				existingPipeline := h.pipelineRegistry.Get(tmpl.ID)
+				if existingPipeline != nil && existingPipeline.TenantID != "" {
+					h.pipelineRegistry.RemoveFromTenant(existingPipeline.TenantID, tmpl.ID)
+					_ = h.pipelineRegistry.RegisterForTenant(existingPipeline.TenantID, revertedPipeline)
+				} else {
+					h.pipelineRegistry.Remove(tmpl.ID)
+					_ = h.pipelineRegistry.Register(revertedPipeline)
+				}
+			}
+		} else {
+			skipped++
+		}
+	}
+
+	// Reload templates in the handler
+	edition := os.Getenv("CENTAG_EDITION")
+	h.ReloadTemplates(edition)
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data": gin.H{
+			"applied": applied,
+			"skipped": skipped,
+			"failed":  failed,
+		},
+	})
+}
+
+// AdminUpdateTemplate saves a template as Admin edit, marking is_user_modified = TRUE.
+// PUT /api/v1/pipelines/templates/:id
+func (h *PipelineHandler) AdminUpdateTemplate(c *gin.Context) {
+	templateID := c.Param("id")
+	if templateID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "template id is required",
+		})
+		return
+	}
+
+	var req struct {
+		Name        string                     `json:"name"`
+		Description string                     `json:"description"`
+		Nodes       []configsync.PipelineNodeConfig `json:"nodes"`
+		GlobalConfig *configsync.GlobalPipelineConfig `json:"global_config"`
+		Metadata    map[string]interface{}     `json:"metadata"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   fmt.Sprintf("invalid request body: %v", err),
+		})
+		return
+	}
+
+	// Load template store
+	templateStore, err := pipeline.NewDBPipelineTemplateStore()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   fmt.Sprintf("failed to open template store: %v", err),
+		})
+		return
+	}
+
+	// Build configsync template
+	configsyncTmpl := configsync.PipelineTemplate{
+		ID:          templateID,
+		Name:        req.Name,
+		Description: req.Description,
+		Nodes:       req.Nodes,
+		GlobalConfig: req.GlobalConfig,
+		Metadata:    req.Metadata,
+	}
+
+	// Save as Admin edit (sets is_user_modified = TRUE)
+	if err := templateStore.UpsertAsAdmin(configsyncTmpl); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   fmt.Sprintf("failed to update template: %v", err),
+		})
+		return
+	}
+
+	// Reload templates in the handler
+	edition := os.Getenv("CENTAG_EDITION")
+	h.ReloadTemplates(edition)
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "template updated successfully",
+	})
+}
+
+// AdminResetAllTemplates syncs non-customized pipelines from remote and leaves customized ones untouched.
+// POST /api/v1/pipelines/templates/reset
+func (h *PipelineHandler) AdminResetAllTemplates(c *gin.Context) {
+	// Load template store
+	templateStore, err := pipeline.NewDBPipelineTemplateStore()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   fmt.Sprintf("failed to open template store: %v", err),
+		})
+		return
+	}
+
+	// Get the current templates (after sync from Feishu)
+	templates := h.templates
+	if len(templates) == 0 {
+		templates = resolvePipelineTemplates()
+	}
+
+	synced := 0
+	skipped := 0
+
+	for _, tmpl := range templates {
+		// Check is_user_modified - skip customized templates
+		isUserModified, err := templateStore.GetModifiedStatus(tmpl.ID)
+		if err == nil && isUserModified {
+			skipped++
+			continue
+		}
+
+		// Non-customized: revert pipeline in registry to template default
+		revertedPipeline := pipeline.CreatePipelineFromTemplate(tmpl, nil)
+
+		if h.pipelineRegistry.Exists(tmpl.ID) {
+			existingPipeline := h.pipelineRegistry.Get(tmpl.ID)
+			if existingPipeline != nil && existingPipeline.TenantID != "" {
+				h.pipelineRegistry.RemoveFromTenant(existingPipeline.TenantID, tmpl.ID)
+				if err := h.pipelineRegistry.RegisterForTenant(existingPipeline.TenantID, revertedPipeline); err != nil {
+					logger.Warnf("template reset all: failed to revert tenant pipeline %s: %v", tmpl.ID, err)
+				} else {
+					synced++
+				}
+			} else {
+				h.pipelineRegistry.Remove(tmpl.ID)
+				if err := h.pipelineRegistry.Register(revertedPipeline); err != nil {
+					logger.Warnf("template reset all: failed to revert pipeline %s: %v", tmpl.ID, err)
+				} else {
+					synced++
+				}
+			}
+		}
+	}
+
+	// Reload templates in the handler
+	edition := os.Getenv("CENTAG_EDITION")
+	h.ReloadTemplates(edition)
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": fmt.Sprintf("synced %d non-customized pipelines, skipped %d customized", synced, skipped),
+	})
+}
+
+// AdminResetSingleTemplate resets a single template to default and reverts the pipeline data.
+// POST /api/v1/pipelines/templates/:id/reset
+func (h *PipelineHandler) AdminResetSingleTemplate(c *gin.Context) {
+	templateID := c.Param("id")
+	if templateID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "template id is required",
+		})
+		return
+	}
+
+	// Load template store
+	templateStore, err := pipeline.NewDBPipelineTemplateStore()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   fmt.Sprintf("failed to open template store: %v", err),
+		})
+		return
+	}
+
+	// Reset the is_user_modified flag
+	if err := templateStore.ResetSingleTemplate(templateID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   fmt.Sprintf("failed to reset template: %v", err),
+		})
+		return
+	}
+
+	// Find the template in h.templates and revert the pipeline in the registry
+	found := false
+	for _, tmpl := range h.templates {
+		if tmpl.ID == templateID {
+			// Create a new pipeline from the template
+			revertedPipeline := pipeline.CreatePipelineFromTemplate(tmpl, nil)
+
+			// Check if pipeline exists in registry and revert it
+			if h.pipelineRegistry.Exists(templateID) {
+				// Get the existing pipeline to preserve tenant_id
+				existingPipeline := h.pipelineRegistry.Get(templateID)
+				if existingPipeline != nil && existingPipeline.TenantID != "" {
+					// Tenant pipeline - remove old and register new
+					h.pipelineRegistry.RemoveFromTenant(existingPipeline.TenantID, templateID)
+					if err := h.pipelineRegistry.RegisterForTenant(existingPipeline.TenantID, revertedPipeline); err != nil {
+						logger.Warnf("template reset single: failed to revert tenant pipeline %s: %v", templateID, err)
+					}
+				} else {
+					// Global pipeline - remove old and register new
+					h.pipelineRegistry.Remove(templateID)
+					if err := h.pipelineRegistry.Register(revertedPipeline); err != nil {
+						logger.Warnf("template reset single: failed to revert pipeline %s: %v", templateID, err)
+					}
+				}
+			}
+			found = true
+			break
+		}
+	}
+
+	// Trigger a fresh sync from Feishu to get the latest version
+	scheduler := configsync.GetScheduler()
+	if scheduler != nil {
+		if err := scheduler.SyncNow(c.Request.Context()); err != nil {
+			logger.Warnf("template reset single: sync failed: %v", err)
+		}
+	}
+
+	// Reload templates in the handler
+	edition := os.Getenv("CENTAG_EDITION")
+	h.ReloadTemplates(edition)
+
+	if !found {
+		c.JSON(http.StatusOK, gin.H{
+			"success": true,
+			"message": fmt.Sprintf("template %s reset (flag only, template not found in remote)", templateID),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": fmt.Sprintf("template %s reset to default", templateID),
+	})
+}
+
+// AdminGetModifiedTemplates returns all templates that have been modified by Admin.
+// GET /api/v1/pipelines/templates/modified
+func (h *PipelineHandler) AdminGetModifiedTemplates(c *gin.Context) {
+	templateStore, err := pipeline.NewDBPipelineTemplateStore()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   fmt.Sprintf("failed to open template store: %v", err),
+		})
+		return
+	}
+
+	modifiedTemplates, err := templateStore.ListModified()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   fmt.Sprintf("failed to list modified templates: %v", err),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data": gin.H{
+			"templates": modifiedTemplates,
+			"count":     len(modifiedTemplates),
+		},
+	})
+}
+
+// convertToConfigsyncTemplate converts a PatternTemplate to configsync.PipelineTemplate
+func convertToConfigsyncTemplate(tmpl pipeline.PatternTemplate) *configsync.PipelineTemplate {
+	// Get edition from metadata (PatternTemplate doesn't have Edition field)
+	edition := "all"
+	if tmpl.Metadata != nil {
+		if e, ok := tmpl.Metadata["edition"].(string); ok && e != "" {
+			edition = e
+		}
+	}
+
+	result := &configsync.PipelineTemplate{
+		ID:            tmpl.ID,
+		Name:          tmpl.Name,
+		Description:   tmpl.Description,
+		ShortcutCode:  tmpl.ShortcutCode,
+		SchemaVersion: tmpl.SchemaVersion,
+		Edition:       edition,
+		Metadata:      tmpl.Metadata,
+	}
+
+	// Convert nodes
+	result.Nodes = make([]configsync.PipelineNodeConfig, len(tmpl.Nodes))
+	for i, node := range tmpl.Nodes {
+		result.Nodes[i] = configsync.PipelineNodeConfig{
+			ID:              node.ID,
+			Type:            string(node.Type),
+			Kind:            node.Kind,
+			Implementation:  node.Implementation,
+			Name:            node.Name,
+			Backend:         node.Backend,
+			Model:           node.Model,
+			Inputs:          node.Inputs,
+			Outputs:         node.Outputs,
+			ConfigSchemaRef: node.ConfigSchemaRef,
+			SecretsRef:      node.SecretsRef,
+			Permissions:     node.Permissions,
+			Timeout:         node.Timeout,
+			Condition:       node.Condition,
+			NextNodes:       node.NextNodes,
+			DependsOn:       node.DependsOn,
+		}
+
+		// Convert node config
+		result.Nodes[i].Config = configsync.NodeConfig{
+			Backend:        node.Config.Backend,
+			Model:          node.Config.Model,
+			PromptTemplate: node.Config.PromptTemplate,
+			SystemPrompt:   node.Config.SystemPrompt,
+			Temperature:    node.Config.Temperature,
+			MaxTokens:      node.Config.MaxTokens,
+			CustomConfig:   node.Config.CustomConfig,
+			TemplateVars:   node.Config.TemplateVars,
+		}
+
+		// Convert retry config
+		if node.Retry != nil {
+			result.Nodes[i].Retry = &configsync.RetryConfig{
+				MaxAttempts:     node.Retry.MaxAttempts,
+				BackoffStrategy: node.Retry.BackoffStrategy,
+				InitialDelay:    node.Retry.InitialDelay,
+				MaxDelay:        node.Retry.MaxDelay,
+			}
+		}
+
+		// Convert route config
+		if node.RouteConfig != nil {
+			result.Nodes[i].RouteConfig = &configsync.RouteConfig{
+				RouterNodeID: node.RouteConfig.RouterNodeID,
+				RouteValue:   node.RouteConfig.RouteValue,
+				IsDefault:    node.RouteConfig.IsDefault,
+			}
+		}
+	}
+
+	// Convert global config
+	if tmpl.GlobalConfig != nil {
+		result.GlobalConfig = &configsync.GlobalPipelineConfig{
+			Timeout:       tmpl.GlobalConfig.Timeout,
+			MaxRetries:    tmpl.GlobalConfig.MaxRetries,
+			BypassOnError: tmpl.GlobalConfig.BypassOnError,
+			ParallelLimit: tmpl.GlobalConfig.ParallelLimit,
+			LogLevel:      tmpl.GlobalConfig.LogLevel,
+			SystemPrompt:  tmpl.GlobalConfig.SystemPrompt,
+		}
+	}
+
+	return result
+}
+
 // GetNodePlugins 获取可用流水线节点插件描述
 // GET /api/v1/pipelines/node-plugins
 func (h *PipelineHandler) GetNodePlugins(c *gin.Context) {
@@ -1188,6 +1735,12 @@ func (h *PipelineHandler) RegisterPipelineRoutes(router *gin.RouterGroup) {
 	{
 		pipelines.GET("", h.ListPipelines)
 		pipelines.GET("/templates", h.GetTemplates)
+		pipelines.GET("/templates/sync/preview", h.SyncPipelineTemplatesPreview)
+		pipelines.POST("/templates/sync/apply", h.ApplyPipelineTemplates)
+		pipelines.POST("/templates/reset", h.AdminResetAllTemplates)
+		pipelines.POST("/templates/:id/reset", h.AdminResetSingleTemplate)
+		pipelines.GET("/templates/modified", h.AdminGetModifiedTemplates)
+		pipelines.PUT("/templates/:id", h.AdminUpdateTemplate)
 		pipelines.GET("/node-plugins", h.GetNodePlugins)
 		pipelines.GET("/node-plugins/:implementation", h.GetNodePluginByImplementation)
 		pipelines.POST("/node-plugins/:implementation/test", h.TestNodePlugin)

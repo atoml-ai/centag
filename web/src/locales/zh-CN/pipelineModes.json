@@ -11,6 +11,7 @@
   "refresh": "刷新",
   "createFromTemplate": "从模板创建",
   "importPipeline": "导入流水线",
+  "syncFromRemote": "在线同步模板",
   "createPipeline": "创建流水线",
   "empty": "暂无流水线配置，使用右侧按钮创建",
   "table": {
@@ -57,6 +58,45 @@
     "cancelImport": "取消导入",
     "skipDuplicates": "跳过重复（{count} 个）",
     "overwriteAll": "全部覆盖"
+  },
+  "syncDialog": {
+    "title": "在线同步流水线模板",
+    "hint": "以下是从远端获取的模板列表，选择要同步到本地的模板：",
+    "modifiedWarning": "检测到部分模板已被本地修改，同步将覆盖本地修改。请确认要覆盖的模板：",
+    "id": "ID",
+    "name": "名称",
+    "status": "状态",
+    "description": "描述",
+    "new": "新增",
+    "modified": "已修改",
+    "unchanged": "未变更",
+    "selectedCount": "已选择 {count} 个模板",
+    "forceOverwrite": "强制覆盖已修改的模板",
+    "confirmOverwriteModified": "选中的 {count} 个模板已被本地修改，覆盖将丢失本地修改。确定要覆盖吗？",
+    "confirmTitle": "确认覆盖",
+    "overwrite": "覆盖",
+    "cancel": "取消",
+    "apply": "应用同步",
+    "fetchFailed": "获取远端模板失败：{error}",
+    "applySuccess": "同步完成：应用 {applied} 个，跳过 {skipped} 个，失败 {failed} 个",
+    "applyFailed": "同步失败：{error}"
+  },
+  "templateSync": {
+    "syncing": "同步中...",
+    "syncComplete": "同步完成",
+    "syncFailed": "同步失败",
+    "willBeUpdated": "将更新",
+    "userModified": "已自定义",
+    "remoteVersion": "远端版本",
+    "localModified": "本地已修改"
+  },
+  "templateReset": {
+    "title": "恢复默认模板",
+    "confirmMessage": "确定要恢复所有模板为默认状态吗？这将清除所有自定义修改并重新从远端同步。",
+    "confirm": "确认恢复",
+    "cancel": "取消",
+    "resetSuccess": "已恢复所有模板为默认状态",
+    "resetFailed": "恢复失败"
   },
   "message": {
     "loadFailed": "加载流水线失败",
