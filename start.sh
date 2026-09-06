@@ -1816,7 +1816,7 @@ _debug_minimal() {
         _debug_run_desktop minimal centag-minimal
     else
         cd "$BIN_DIR"
-        CENTAG_EDITION=minimal ./centag-minimal
+        CENTAG_EDITION=minimal ./centag-minimal serve
         cd "$PROJECT_ROOT"
     fi
 }
