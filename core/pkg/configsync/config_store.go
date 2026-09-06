@@ -10,25 +10,40 @@ import (
 
 // DBConfigStore stores config data in the database.
 type DBConfigStore struct {
-	db *sql.DB
+	db      *sql.DB
+	dialect database.Dialect
 }
 
 // NewDBConfigStore creates a database-backed config store.
 func NewDBConfigStore() (*DBConfigStore, error) {
-	db := database.Get().GetDB()
-	if db == nil {
+	mgr := database.Get()
+	if mgr == nil || mgr.GetDB() == nil {
 		return nil, fmt.Errorf("database not initialized")
 	}
-	return &DBConfigStore{db: db}, nil
+	var dialect database.Dialect = &database.SQLiteDialect{}
+	if mgr.DriverName() == "postgresql" {
+		dialect = &database.PostgreSQLDialect{}
+	}
+	return &DBConfigStore{db: mgr.GetDB(), dialect: dialect}, nil
+}
+
+// getDialect returns the SQL dialect, defaulting to SQLite for zero-value
+// stores constructed directly (e.g. in tests).
+func (s *DBConfigStore) getDialect() database.Dialect {
+	if s.dialect != nil {
+		return s.dialect
+	}
+	return &database.SQLiteDialect{}
 }
 
 // Upsert inserts or updates a config entry.
 func (s *DBConfigStore) Upsert(key, value string) error {
-	query := `INSERT INTO config_store (config_key, config_value, created_at, updated_at)
-		VALUES (?, ?, ?, ?)
+	ph := func(n int) string { return s.getDialect().Placeholder(n) }
+	query := fmt.Sprintf(`INSERT INTO config_store (config_key, config_value, created_at, updated_at)
+		VALUES (%s, %s, %s, %s)
 		ON CONFLICT(config_key) DO UPDATE SET
-			config_value = excluded.config_value,
-			updated_at = excluded.updated_at`
+			config_value = EXCLUDED.config_value,
+			updated_at = EXCLUDED.updated_at`, ph(1), ph(2), ph(3), ph(4))
 
 	now := time.Now()
 	_, err := s.db.Exec(query, key, value, now, now)
@@ -41,7 +56,8 @@ func (s *DBConfigStore) Upsert(key, value string) error {
 // Get returns the value for a config key.
 func (s *DBConfigStore) Get(key string) (string, error) {
 	var value string
-	err := s.db.QueryRow("SELECT config_value FROM config_store WHERE config_key = ?", key).Scan(&value)
+	query := fmt.Sprintf("SELECT config_value FROM config_store WHERE config_key = %s", s.getDialect().Placeholder(1))
+	err := s.db.QueryRow(query, key).Scan(&value)
 	if err != nil {
 		return "", err
 	}
