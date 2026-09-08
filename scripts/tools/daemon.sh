@@ -197,6 +197,34 @@ find_service_binary() {
     return 1
 }
 
+# 其他用户启动的进程 kill 返回 EPERM（包用户无权处理），需显式诊断而非静默跳过，
+# 否则服务会因无法绑定端口而反复重启。
+warn_unstoppable() {
+    local pid="$1" owner cmd
+    owner="$(awk '/^Uid:/{print $2}' "/proc/${pid}/status" 2>/dev/null)"
+    cmd="$(tr '\0' ' ' <"/proc/${pid}/cmdline" 2>/dev/null | cut -c1-160)"
+    echo -e "${RED}❌ 无法终止 pid=${pid}（属主 uid=${owner:-未知}，需 root 处理）: ${cmd:-(cmdline 不可读)}${NC}"
+    echo -e "${YELLOW}   请在 SSH 以 root 执行: kill -9 ${pid}${NC}"
+}
+
+kill_port_term() {
+    [ -n "$1" ] || return 0
+    if kill -0 "$1" 2>/dev/null; then
+        kill -TERM "$1" 2>/dev/null || true
+    elif [ -d "/proc/$1" ]; then
+        warn_unstoppable "$1"
+    fi
+}
+
+kill_port_kill() {
+    [ -n "$1" ] || return 0
+    if kill -0 "$1" 2>/dev/null; then
+        kill -KILL "$1" 2>/dev/null || true
+    elif [ -d "/proc/$1" ]; then
+        warn_unstoppable "$1"
+    fi
+}
+
 # 通过端口查找并杀掉占用端口的进程
 kill_port_processes() {
     local port=$1
@@ -214,9 +242,7 @@ kill_port_processes() {
             echo -e "${YELLOW}   正在清理进程...${NC}"
             
             echo "$found_pids" | while IFS= read -r pid; do
-                if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
-                    kill -TERM "$pid" 2>/dev/null || true
-                fi
+                kill_port_term "$pid"
             done
             
             sleep 2
@@ -225,9 +251,7 @@ kill_port_processes() {
             if [ -n "$found_pids" ]; then
                 echo -e "${YELLOW}   强制终止进程...${NC}"
                 echo "$found_pids" | while IFS= read -r pid; do
-                    if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
-                        kill -KILL "$pid" 2>/dev/null || true
-                    fi
+                    kill_port_kill "$pid"
                 done
                 sleep 1
             fi
@@ -239,18 +263,14 @@ kill_port_processes() {
         found_pids=$(netstat -tlnp 2>/dev/null | grep ":$port " | awk '{print $7}' | cut -d'/' -f1 | grep -E '^[0-9]+$' | sort -u || true)
         if [ -n "$found_pids" ]; then
             echo "$found_pids" | while IFS= read -r pid; do
-                if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
-                    kill -TERM "$pid" 2>/dev/null || true
-                fi
+                kill_port_term "$pid"
             done
             sleep 2
             
             found_pids=$(netstat -tlnp 2>/dev/null | grep ":$port " | awk '{print $7}' | cut -d'/' -f1 | grep -E '^[0-9]+$' | sort -u || true)
             if [ -n "$found_pids" ]; then
                 echo "$found_pids" | while IFS= read -r pid; do
-                    if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
-                        kill -KILL "$pid" 2>/dev/null || true
-                    fi
+                    kill_port_kill "$pid"
                 done
             fi
         fi
@@ -261,18 +281,14 @@ kill_port_processes() {
         found_pids=$(ss -tlnp 2>/dev/null | grep ":$port " | grep -oP 'pid=\K[0-9]+' | sort -u || true)
         if [ -n "$found_pids" ]; then
             echo "$found_pids" | while IFS= read -r pid; do
-                if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
-                    kill -TERM "$pid" 2>/dev/null || true
-                fi
+                kill_port_term "$pid"
             done
             sleep 2
             
             found_pids=$(ss -tlnp 2>/dev/null | grep ":$port " | grep -oP 'pid=\K[0-9]+' | sort -u || true)
             if [ -n "$found_pids" ]; then
                 echo "$found_pids" | while IFS= read -r pid; do
-                    if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
-                        kill -KILL "$pid" 2>/dev/null || true
-                    fi
+                    kill_port_kill "$pid"
                 done
             fi
         fi

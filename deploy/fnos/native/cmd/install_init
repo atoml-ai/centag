@@ -22,6 +22,15 @@ log() {
   echo "[centag install_init] $*"
 }
 
+# 记录无法终止的进程（多为其他用户启动的残留 daemon：
+# fnOS 以包用户运行本脚本，kill 对其他用户的进程返回 EPERM）
+log_unstoppable() {
+  local pid="$1" owner cmd
+  owner="$(awk '/^Uid:/{print $2}' "/proc/${pid}/status" 2>/dev/null)"
+  cmd="$(tr '\0' ' ' <"/proc/${pid}/cmdline" 2>/dev/null | cut -c1-160)"
+  log "WARN: pid=${pid} 属主 uid=${owner:-未知}，当前用户无权终止: ${cmd:-(cmdline 不可读)}"
+}
+
 kill_pid_hard() {
   local pid="$1"
   [ -n "$pid" ] || return 0
@@ -30,6 +39,9 @@ kill_pid_hard() {
     kill -TERM "$pid" 2>/dev/null || true
     sleep 1
     kill -KILL "$pid" 2>/dev/null || true
+  elif [ -d "/proc/${pid}" ]; then
+    # kill -0 失败但进程仍存在 → 属主不同（EPERM），显式诊断而非静默跳过
+    log_unstoppable "$pid"
   fi
 }
 
@@ -90,8 +102,12 @@ rm -f \
 if command -v ss >/dev/null 2>&1 && ss -lntp 2>/dev/null | grep -q ":${PORT} "; then
   log "ERROR: port ${PORT} still occupied; refuse install"
   ss -lntp 2>/dev/null | grep ":${PORT} " || true
-  echo "端口 ${PORT} 仍被占用（多为上次卸载残留的 daemon）。请在飞牛 SSH 以 root 执行："
-  echo "  pkill -9 -f '/@appcenter/centag' ; fuser -k ${PORT}/tcp"
+  echo "端口 ${PORT} 仍被占用，无法继续安装。请按以下顺序排查："
+  echo "  1) 上次卸载/手动启动残留的 daemon（若由其他用户启动，本脚本无权终止，"
+  echo "     上方 WARN 行会列出其 pid/属主/命令行）。在飞牛 SSH 以 root 执行："
+  echo "       pkill -9 -f '/@appcenter/centag' ; fuser -k ${PORT}/tcp"
+  echo "  2) 其他应用占用了 ${PORT}：释放端口后重试，或改用其他端口重打包。"
+  echo "完整日志见宿主机 /var/log/apps/centag.log"
   exit 1
 fi
 
