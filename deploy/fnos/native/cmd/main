@@ -83,9 +83,20 @@ prepare_env() {
     mkdir -p "${LOGS_DIR}"
     mkdir -p "${APP_ROOT}/storage"
 
+    # run-as root（特权包模式）时：目录必须归包用户所有，否则降权后应用读写失败
+    if [ "$(id -u)" = "0" ] && [ -n "${TRIM_RUN_USERNAME:-}" ] && [ "${TRIM_RUN_USERNAME}" != "root" ]; then
+        chown -R "${TRIM_RUN_USERNAME:-centag}":"${TRIM_RUN_GROUPNAME:-${TRIM_RUN_USERNAME}}" \
+            "${DATA_DIR}" "${LOGS_DIR}" "${APP_ROOT}/storage" 2>/dev/null || true
+    fi
+
     load_runtime_env
     load_app_config
 
+    # SQLite 路径必须始终指向数据卷（与 bootstrap.go 48aefc8 对齐）：
+    # 即使 conf 选择 PostgreSQL，database.Init 在 PG 不可用时也会降级 sqlite，
+    # 若不预设 SQLITE_PATH，降级库会落在程序目录 bin/storage/（卸载即删），
+    # 导致「卸载保留数据」重装后全部丢失。此处强制落入持久化 DATA_DIR。
+    export SQLITE_PATH="${SQLITE_PATH:-${DATA_DIR}/centag.db}"
     if [ "${LLM_PROXY_DB_DRIVER}" = "postgresql" ]; then
         export POSTGRES_HOST="${POSTGRES_HOST:-localhost}"
         export POSTGRES_PORT="${POSTGRES_PORT:-5432}"
@@ -93,9 +104,8 @@ prepare_env() {
         export POSTGRES_PASSWORD="${POSTGRES_PASSWORD:-}"
         export POSTGRES_DB="${POSTGRES_DB:-centag}"
         export LLM_PROXY_DB_PATH="${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}"
-        log_msg "数据库: PostgreSQL ${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}"
+        log_msg "数据库: PostgreSQL ${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}（不可用时自动降级 SQLite: ${SQLITE_PATH}）"
     else
-        export SQLITE_PATH="${SQLITE_PATH:-${DATA_DIR}/centag.db}"
         export LLM_PROXY_DB_PATH="${LLM_PROXY_DB_PATH:-${SQLITE_PATH}}"
         log_msg "数据库: SQLite ${SQLITE_PATH}"
     fi
@@ -115,6 +125,42 @@ prepare_env() {
     export CENTAG_DATA_DIR="${CENTAG_DATA_DIR:-${DATA_DIR}}"
 }
 
+# run_service_cmd：以包用户身份执行服务命令。
+# privilege run-as=root 时 fnOS 以 root 运行 cmd/main，但应用不能以 root 长驻——
+# 启动后用 su/setpriv 降权到包用户（TRIM_RUN_USERNAME，缺省 centag）。
+drop_to_service_user() {
+    if [ "$(id -u)" = "0" ] && [ -n "${TRIM_RUN_USERNAME:-}" ] && [ "${TRIM_RUN_USERNAME}" != "root" ]; then
+        return 0
+    fi
+    return 1
+}
+
+# launch_as_service_user "<cmd words...>"：降权后台启动，输出子进程 PID
+launch_as_service_user() {
+    local su_cmd exec_cmd
+    exec_cmd="$*"
+    if drop_to_service_user; then
+        local uid="${TRIM_RUN_UID:-$(id -u "${TRIM_RUN_USERNAME}" 2>/dev/null)}"
+        local gid="${TRIM_RUN_GID:-$(id -g "${TRIM_RUN_USERNAME}" 2>/dev/null)}"
+        if [ -n "${uid}" ] && [ -n "${gid}" ]; then
+            exec_cmd=""
+            local w
+            for w in "$@"; do
+                exec_cmd="${exec_cmd:+${exec_cmd} }$(printf '%q' "$w")"
+            done
+            if setpriv --reuid="${uid}" --regid="${gid}" --init-groups \
+                bash -c "nohup ${exec_cmd} >> ${LOGS_DIR}/daemon.log 2>&1 & echo \$!" 2>/dev/null; then
+                return 0
+            fi
+            su -s /bin/bash "${TRIM_RUN_USERNAME}" \
+                -c "nohup ${exec_cmd} >> ${LOGS_DIR}/daemon.log 2>&1 & echo \$!"
+            return 0
+        fi
+    fi
+    nohup ${exec_cmd} >> "${LOGS_DIR}/daemon.log" 2>&1 &
+    echo $!
+}
+
 start_process() {
     if status; then
         log_msg "应用已在运行中，跳过启动"
@@ -132,8 +178,9 @@ start_process() {
     if [ -f "${DAEMON_SH}" ]; then
         chmod +x "${DAEMON_SH}" "${BINARY}" 2>/dev/null || true
         # 守护进程监督 bin/centag，并消费 storage/update_stop
-        nohup bash "${DAEMON_SH}" "${APP_ROOT}" >> "${LOGS_DIR}/daemon.log" 2>&1 &
-        local pid=$!
+        # run-as root 包模式下以包用户身份运行应用进程
+        local pid
+        pid="$(launch_as_service_user bash "${DAEMON_SH}" "${APP_ROOT}" | tail -1)"
         printf "%s" "${pid}" > "${PID_FILE}"
         sleep 2
         if ! kill -0 "${pid}" 2>/dev/null; then
@@ -147,8 +194,8 @@ start_process() {
 
     # 回退：无 daemon.sh 时直启（旧包兼容）
     log_msg "未找到 daemon.sh，回退直启二进制"
-    nohup "${BINARY}" >> "${LOGS_DIR}/centag.log" 2>&1 &
-    local pid=$!
+    local pid
+    pid="$(launch_as_service_user "${BINARY}" | tail -1)"
     printf "%s" "${pid}" > "${PID_FILE}"
     log_msg "Centag 已启动（直启），PID=${pid}"
     return 0
@@ -156,6 +203,14 @@ start_process() {
 
 # Thorough stop: PID files + process patterns + listeners on app ports.
 # Used by fnOS stop and to avoid leftover daemon blocking reinstall.
+# 记录无法终止的进程（其他用户启动时 kill 返回 EPERM，包用户无权处理）
+log_unstoppable() {
+    local pid="$1" owner cmd
+    owner="$(awk '/^Uid:/{print $2}' "/proc/${pid}/status" 2>/dev/null)"
+    cmd="$(tr '\0' ' ' <"/proc/${pid}/cmdline" 2>/dev/null | cut -c1-160)"
+    log_msg "警告: pid=${pid} 属主 uid=${owner:-未知}，当前用户无权终止: ${cmd:-(cmdline 不可读)}"
+}
+
 stop_all_centag() {
     local pids="" pid p f
     local ports="${PORT} 8080 8081 8443"
@@ -192,6 +247,8 @@ stop_all_centag() {
         if kill -0 "$pid" 2>/dev/null; then
             log_msg "停止进程 PID=${pid}"
             kill -TERM "$pid" 2>/dev/null || true
+        elif [ -d "/proc/${pid}" ]; then
+            log_unstoppable "$pid"
         fi
     done
     sleep 2
@@ -200,6 +257,8 @@ stop_all_centag() {
         if kill -0 "$pid" 2>/dev/null; then
             log_msg "强制停止 PID=${pid}"
             kill -KILL "$pid" 2>/dev/null || true
+        elif [ -d "/proc/${pid}" ]; then
+            log_unstoppable "$pid"
         fi
     done
 

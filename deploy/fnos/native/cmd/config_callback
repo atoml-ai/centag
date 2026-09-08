@@ -68,4 +68,92 @@ db_driver="${wizard_db_driver:-sqlite}"
 write_conf "${clean}" "${db_driver}"
 echo "配置已保存(向导): ${CONF_FILE} (db=${db_driver}, clean=${clean})"
 
+# ── PostgreSQL 就绪保障（切到 PostgreSQL 时建库/放行/验证，root 免密 peer 管理）─
+# fnOS 系统 PG：pg_hba admin 库 TCP 被拒、postgres 角色无密码、包用户无权管库。
+# run-as root 后经 socket peer 可直接建库/追加 pg_hba 规则/设置角色密码；
+# 失败仅告警（应用降级数据卷 SQLite，数据仍受保留保护），不阻断配置保存。
+pg_ready() {
+  [ "${db_driver}" = "postgresql" ] || return 0
+  command -v psql >/dev/null 2>&1 || { echo "[WARN] 未找到 psql，跳过 PostgreSQL 就绪检查"; return 0; }
+
+  local p u w d sock s
+  p="${wizard_pg_port:-5432}"
+  u="${wizard_pg_user:-postgres}"; w="${wizard_pg_password:-}"; d="${wizard_pg_db:-centag}"
+
+  local PSQL_ADMIN=""
+  if [ "$(id -u)" = "0" ]; then
+    for s in /var/run/postgresql /run/postgresql /tmp; do
+      [ -S "${s}/.s.PGSQL.${p}" ] || continue
+      PSQL_ADMIN="psql -h ${s} -p ${p} -U ${u}"
+      break
+    done
+  fi
+
+  # 数据库存在性检查（root peer 优先，TCP+密码兜底）
+  local exists=""
+  if [ -n "${PSQL_ADMIN}" ] && [ "$(${PSQL_ADMIN} -d postgres -Atqc \
+      "SELECT 1 FROM pg_database WHERE datname='${d}'" 2>/dev/null)" = "1" ]; then
+    exists="1"
+  else
+    exists="$(PGPASSWORD="${w}" psql -h 127.0.0.1 -p "${p}" -U "${u}" -d postgres -Atqc \
+      "SELECT 1 FROM pg_database WHERE datname='${d}'" 2>/dev/null)"
+  fi
+
+  if [ "${exists}" != "1" ]; then
+    echo "PostgreSQL 数据库 ${d} 不存在，尝试创建…"
+    local created=""
+    if [ -n "${PSQL_ADMIN}" ]; then
+      ${PSQL_ADMIN} -d postgres -c "CREATE DATABASE \"${d}\"" >/dev/null 2>&1 && created="1"
+    fi
+    if [ -z "${created}" ]; then
+      PGPASSWORD="${w}" psql -h 127.0.0.1 -p "${p}" -U "${u}" -d postgres \
+        -c "CREATE DATABASE \"${d}\"" >/dev/null 2>&1 && created="1"
+    fi
+    if [ -n "${created}" ]; then
+      echo "已创建 PostgreSQL 数据库: ${d}"
+    else
+      echo "[WARN] 无法创建 PostgreSQL 数据库 ${d}（admin 连接被 pg_hba 拒绝、权限不足或服务不可达）"
+      echo "       应用启动将降级使用数据卷 SQLite，数据仍受卸载保留保护"
+      return 0
+    fi
+  fi
+
+  # pg_hba 规则（root + 本机 PG）
+  if [ "$(id -u)" = "0" ] && { [ "${wizard_pg_host:-localhost}" = "localhost" ] || [ "${wizard_pg_host:-}" = "127.0.0.1" ]; }; then
+    local hba
+    for hba in /etc/postgresql/*/main/pg_hba.conf; do
+      [ -f "${hba}" ] || continue
+      if ! grep -qE "^host[[:space:]]+${d}\b" "${hba}"; then
+        {
+          echo "# --- managed by centag (auto-added) ---"
+          echo "host ${d} ${u} 127.0.0.1/32 scram-sha-256"
+          echo "host ${d} ${u} ::1/128         scram-sha-256"
+          echo "host ${d} ${u} 0.0.0.0/0       scram-sha-256"
+        } >> "${hba}"
+        echo "已向 ${hba} 追加 ${d} 的 TCP 放行规则"
+      fi
+    done
+    systemctl reload postgresql >/dev/null 2>&1 ||
+      pg_ctlcluster "$(ls /etc/postgresql 2>/dev/null | head -1)" main reload >/dev/null 2>&1 || true
+  fi
+
+  # 连接验证（应用同款 TCP+密码）；失败且给了密码 → 经 socket 设置角色密码
+  if PGPASSWORD="${w}" psql -h 127.0.0.1 -p "${p}" -U "${u}" -d "${d}" -Atqc "SELECT 1" >/dev/null 2>&1; then
+    echo "PostgreSQL 连接验证通过: 127.0.0.1:${p}/${d}"
+    return 0
+  fi
+  if [ -n "${w}" ] && [ -n "${PSQL_ADMIN}" ]; then
+    echo "TCP 密码登录失败，尝试为角色 ${u} 设置密码…"
+    ${PSQL_ADMIN} -d postgres -c "ALTER ROLE \"${u}\" WITH PASSWORD '${w}'" >/dev/null 2>&1 \
+      && echo "已设置角色 ${u} 的访问密码" || echo "[WARN] 无法设置角色密码（请手动执行 ALTER ROLE）"
+  fi
+  if PGPASSWORD="${w}" psql -h 127.0.0.1 -p "${p}" -U "${u}" -d "${d}" -Atqc "SELECT 1" >/dev/null 2>&1; then
+    echo "PostgreSQL 连接验证通过: 127.0.0.1:${p}/${d}"
+  else
+    echo "[WARN] PostgreSQL TCP 连接验证失败: 127.0.0.1:${p}/${d}（应用将降级数据卷 SQLite）"
+  fi
+  return 0
+}
+pg_ready
+
 exit 0

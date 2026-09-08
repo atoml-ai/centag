@@ -66,11 +66,21 @@ _centag_drop_pg() {
   case "$pg_db" in postgres|template0|template1) echo "[WARN] 拒绝删除系统库 $pg_db"; return 1;; esac
   case "$pg_db" in *[!A-Za-z0-9_]*|[0-9]*) echo "[WARN] 非法库名 $pg_db"; return 1;; esac
   echo "psql DROP DATABASE ${pg_host}:${pg_port}/${pg_db}"
-  local rc=1 admin_db
-  for admin_db in postgres template1; do
-    PGPASSWORD="$pg_password" psql -h "$pg_host" -p "$pg_port" -U "$pg_user" -d "$admin_db" -v ON_ERROR_STOP=1 \
-      -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname='${pg_db}' AND pid <> pg_backend_pid();" \
-      -c "DROP DATABASE IF EXISTS \"${pg_db}\";" && rc=0 && break
+  # 与 uninstall_init 相同：fnOS pg_hba 通常仅放行业务库 TCP，admin 库 TCP 被拒；
+  # 优先 unix socket（local all all md5），TCP 兜底。
+  local -a hosts=()
+  local s
+  for s in /var/run/postgresql /run/postgresql /tmp; do
+    [ -S "${s}/.s.PGSQL.${pg_port}" ] && hosts+=("${s}") && break
+  done
+  hosts+=("127.0.0.1" "localhost")
+  local rc=1 admin_db h
+  for h in "${hosts[@]}"; do
+    for admin_db in postgres template1; do
+      PGPASSWORD="$pg_password" psql -h "$h" -p "$pg_port" -U "$pg_user" -d "$admin_db" -v ON_ERROR_STOP=1 \
+        -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname='${pg_db}' AND pid <> pg_backend_pid();" \
+        -c "DROP DATABASE IF EXISTS \"${pg_db}\";" >/dev/null 2>&1 && rc=0 && break 2
+    done
   done
   [ "$rc" -eq 0 ] && echo "PostgreSQL 数据库已删除: $pg_db" || echo "[WARN] psql DROP DATABASE 失败（请手动确认）"
   return $rc

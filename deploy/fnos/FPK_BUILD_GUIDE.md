@@ -127,11 +127,13 @@ cp deploy/fnos/native/cmd/install_init  deploy/fnos/cmd/install_init
 
 | 字段 | Native 模式 | Docker 模式 |
 |---|---|---|
-| `run-as` | `package` | `package` |
+| `run-as` | `root` | `package` |
 | `username` | `centag` | `docker-centag` |
 | `groupname` | `centag` | `docker-centag` |
 
-- **Native 必须使用 `deploy/fnos/native/config/privilege`**（多行 JSON，username=centag）
+- **Native 使用 `run-as: root`**（多行 JSON）：生命周期脚本以 root 运行，职责包括——
+  PostgreSQL 自动建库（socket peer 免密码）、pg_hba 放行规则管理、数据目录 chown；
+  `cmd/main` 启动应用时通过 `setpriv` **降权到包用户 centag**，服务进程不以 root 运行
 - **Docker 使用基础 config**（单行 JSON，username=docker-centag）
 - JSON 格式必须合法（缩进无关紧要，key/value 正确即可）
 
@@ -273,6 +275,26 @@ checksum=<manifest 文件的 MD5>
 2. docker-compose.yaml 中 image: 标签是否正确
 3. 端口映射、卷挂载路径是否正确
 4. 如果是本地镜像确保已推送到可访问的 Registry
+```
+
+### Q3: 安装时提示「执行脚本出错且原因未知」
+
+**原因**：生命周期脚本（`install_init` 等）以包用户（`config/privilege` 的 `username`，如 `centag`）运行而非 root，任一脚本 `exit 1` 都会触发这个笼统报错。最常见的是端口被占：
+
+```
+[centag install_init] ERROR: port 20060 still occupied; refuse install
+```
+
+排查步骤：
+```
+1. 看宿主机日志定位具体脚本与原因：/var/log/apps/centag.log
+2. 端口被占时，确认占用进程属主：
+   ss -tlnp | grep 20060            # 无 users:(...) 说明是非属主查看
+   ps -o pid,user,cmd -p <pid>
+3. 残留进程由其他用户（如 SSH 手动启动的 caijun）所有时，包用户无权 kill（EPERM），
+   需以 root 清理：pkill -9 -f '/@appcenter/centag' ; fuser -k 20060/tcp
+4. 不要以其他用户身份手动启动 /vol1/@appcenter/centag 下的 daemon.sh ——
+   卸载/重装时包用户将无法终止它，导致重装被拒
 ```
 
 ### Q4: 前后端界面未加载

@@ -4,7 +4,7 @@
     "items": [
       {
         "type": "tips",
-        "helpText": "请选择元数据库类型。SQLite 为内置模式，无需额外配置；PostgreSQL 需填写可用的连接信息。安装后可随时在「应用设置」中修改。"
+        "helpText": "请选择元数据库类型。SQLite 为内置模式，无需额外配置；PostgreSQL 填写连接信息即可：库不存在时应用会自动创建并打通本机访问（使用 fnOS 系统 PG 无需手工建库）。安装后可随时在「应用设置」中修改。"
       },
       {
         "type": "radio",
