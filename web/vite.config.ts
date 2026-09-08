@@ -16,9 +16,12 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 function resolveTeamPackDir(): string {
   const isTeamBuild = process.env.CENTAG_EDITION === 'team' || !!process.env.CENTAG_TEAM_PACK
   if (isTeamBuild) {
+    // CENTAG_TEAM_PACK (per-run staging) must win: the fixed .centag-team-pack dir
+    // is a shared leftover (debug-team / lint staging) and may be stale — preferring
+    // it shipped an outdated team pack into release packages.
+    if (process.env.CENTAG_TEAM_PACK) return resolve(process.env.CENTAG_TEAM_PACK)
     const linked = resolve(__dirname, '.centag-team-pack')
     if (existsSync(linked)) return linked
-    if (process.env.CENTAG_TEAM_PACK) return resolve(process.env.CENTAG_TEAM_PACK)
   }
   return resolve(__dirname, 'src/packs/team-stub')
 }
