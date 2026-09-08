@@ -21,7 +21,23 @@ log() {
 #   1) 逻辑内联，不依赖外部 cleanup_data.sh（避免被单独抽取执行时找不到）。
 #   2) PG 连接信息优先读数据卷 centag.conf；若数据卷已被移除，则回退到安装时
 #      持久化到「程序目录」的 .pgclean（程序目录在生命周期脚本运行期间始终存在）。
-_centag_data_dir()  { printf '%s' "${TRIM_DATA_SHARE_PATHS%%:*}"; }
+_centag_data_dir() {
+  # 优先使用 TRIM_DATA_SHARE_PATHS（fnOS 注入）
+  local dd="${TRIM_DATA_SHARE_PATHS%%:*}"
+  [ -n "$dd" ] && [ -d "$dd" ] && { printf '%s' "$dd"; return; }
+  # 回退：探测已知的 fnOS 数据共享路径
+  local candidate
+  for candidate in \
+    "/vol1/@appshare/centag" \
+    "/vol1/@appshare/centag/data" \
+    "${TRIM_APPDEST:-/vol1/@appcenter/centag}/data" \
+    "/vol1/@appdata/centag/data"
+  do
+    [ -d "$candidate" ] && { printf '%s' "$candidate"; return; }
+  done
+  # 最后回退：TRIM_DATA_SHARE_PATHS 原值（即使目录不存在，供清理函数判断）
+  printf '%s' "${TRIM_DATA_SHARE_PATHS%%:*}"
+}
 _centag_pgclean()   { printf '%s' "$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)/.pgclean"; }
 
 _centag_json_get() {

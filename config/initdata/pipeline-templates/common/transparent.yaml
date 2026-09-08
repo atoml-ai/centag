@@ -29,6 +29,8 @@ nodes:
         inject_system_prompt: "{{pipeline.inject_system_prompt | default: false}}"
         redirect_policy: never
         max_redirects: 5
+        passthrough_headers:
+          - x-opencode-session
     timeout: 120
     retry:
       max_attempts: 0
@@ -58,6 +60,8 @@ nodes:
         redirect_policy: never
         max_redirects: 5
         is_fallback: true
+        passthrough_headers:
+          - x-opencode-session
     timeout: 90
     retry:
       max_attempts: 0

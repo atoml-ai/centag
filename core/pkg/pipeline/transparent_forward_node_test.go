@@ -2081,3 +2081,198 @@ func TestFilterAllowedBackend_Fallback_Denied(t *testing.T) {
 		t.Fatalf("expected fallback backend to be blocked, got backend_id=%q", bid)
 	}
 }
+
+func TestTransparentForwardNode_PassthroughHeaders(t *testing.T) {
+	client := &mockHTTPClient{status: 200, body: `{"id":"ok"}`}
+	broker := &mockCapabilityBroker{httpClient: client}
+
+	node, err := NewTransparentForwardNode(NodeConfig{
+		CustomConfig: map[string]interface{}{
+			"passthrough_headers": []interface{}{"x-opencode-session", "x-custom-tag"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("NewTransparentForwardNode: %v", err)
+	}
+	tf := node.(*TransparentForwardNode)
+	tf.BaseNode.id = "forward"
+	tf.SetCapabilityBroker(broker)
+
+	_, err = tf.Execute(context.Background(), &NodeInput{
+		Metadata: map[string]interface{}{
+			"target_url":            "https://api.example.com",
+			"request_path":          "/v1/chat/completions",
+			"raw_request_body":      `{"model":"gpt-4","messages":[]}`,
+			"forward_authorization": "Bearer sk-test",
+			"opencode_session":      "sess-123",
+			"x-custom-tag":          "tag-value",
+		},
+	})
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if client.lastReq == nil {
+		t.Fatal("lastReq is nil")
+	}
+	if got := client.lastReq.Header.Get("X-Opencode-Session"); got != "sess-123" {
+		t.Fatalf("X-Opencode-Session = %q, want %q", got, "sess-123")
+	}
+	if got := client.lastReq.Header.Get("X-Custom-Tag"); got != "tag-value" {
+		t.Fatalf("X-Custom-Tag = %q, want %q", got, "tag-value")
+	}
+	// Authorization 不应被覆盖
+	if got := client.lastReq.Header.Get("Authorization"); got != "Bearer sk-test" {
+		t.Fatalf("Authorization = %q, want %q", got, "Bearer sk-test")
+	}
+}
+
+func TestTransparentForwardNode_PassthroughHeaders_AutoOpencodeSession(t *testing.T) {
+	client := &mockHTTPClient{status: 200, body: `{"id":"ok"}`}
+	broker := &mockCapabilityBroker{httpClient: client}
+
+	// 未配置 passthrough_headers，但 x-opencode-session 应自动转发
+	node, err := NewTransparentForwardNode(NodeConfig{})
+	if err != nil {
+		t.Fatalf("NewTransparentForwardNode: %v", err)
+	}
+	tf := node.(*TransparentForwardNode)
+	tf.BaseNode.id = "forward"
+	tf.SetCapabilityBroker(broker)
+
+	_, err = tf.Execute(context.Background(), &NodeInput{
+		Metadata: map[string]interface{}{
+			"target_url":            "https://api.example.com",
+			"request_path":          "/v1/chat/completions",
+			"raw_request_body":      `{"model":"gpt-4","messages":[]}`,
+			"forward_authorization": "Bearer sk-test",
+			"opencode_session":      "auto-session-456",
+		},
+	})
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if got := client.lastReq.Header.Get("X-Opencode-Session"); got != "auto-session-456" {
+		t.Fatalf("X-Opencode-Session = %q, want %q", got, "auto-session-456")
+	}
+}
+
+func TestTransparentForwardNode_PassthroughHeaders_SkipsContentTypeAndAuth(t *testing.T) {
+	client := &mockHTTPClient{status: 200, body: `{"id":"ok"}`}
+	broker := &mockCapabilityBroker{httpClient: client}
+
+	node, err := NewTransparentForwardNode(NodeConfig{
+		CustomConfig: map[string]interface{}{
+			"passthrough_headers": []interface{}{"content-type", "authorization", "x-real-header"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("NewTransparentForwardNode: %v", err)
+	}
+	tf := node.(*TransparentForwardNode)
+	tf.BaseNode.id = "forward"
+	tf.SetCapabilityBroker(broker)
+
+	_, err = tf.Execute(context.Background(), &NodeInput{
+		Metadata: map[string]interface{}{
+			"target_url":            "https://api.example.com",
+			"request_path":          "/v1/chat/completions",
+			"raw_request_body":      `{"model":"gpt-4","messages":[]}`,
+			"forward_authorization": "Bearer sk-correct",
+			"x-real-header":         "real-value",
+		},
+	})
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	// content-type 和 authorization 不应被 passthrough 覆盖
+	if got := client.lastReq.Header.Get("Authorization"); got != "Bearer sk-correct" {
+		t.Fatalf("Authorization = %q, want %q", got, "Bearer sk-correct")
+	}
+	if got := client.lastReq.Header.Get("X-Real-Header"); got != "real-value" {
+		t.Fatalf("X-Real-Header = %q, want %q", got, "real-value")
+	}
+}
+
+func TestTransparentForwardNode_PassthroughHeaders_EmptyMetadata(t *testing.T) {
+	client := &mockHTTPClient{status: 200, body: `{"id":"ok"}`}
+	broker := &mockCapabilityBroker{httpClient: client}
+
+	node, err := NewTransparentForwardNode(NodeConfig{
+		CustomConfig: map[string]interface{}{
+			"passthrough_headers": []interface{}{"x-opencode-session"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("NewTransparentForwardNode: %v", err)
+	}
+	tf := node.(*TransparentForwardNode)
+	tf.BaseNode.id = "forward"
+	tf.SetCapabilityBroker(broker)
+
+	// metadata 中没有 opencode_session，不应设置该头
+	_, err = tf.Execute(context.Background(), &NodeInput{
+		Metadata: map[string]interface{}{
+			"target_url":       "https://api.example.com",
+			"request_path":     "/v1/chat/completions",
+			"raw_request_body": `{"model":"gpt-4","messages":[]}`,
+		},
+	})
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if got := client.lastReq.Header.Get("X-Opencode-Session"); got != "" {
+		t.Fatalf("X-Opencode-Session = %q, want empty", got)
+	}
+}
+
+func TestApplyPassthroughHeaders(t *testing.T) {
+	tests := []struct {
+		name     string
+		headers  []string
+		meta     map[string]interface{}
+		wantKeys map[string]string
+	}{
+		{
+			name:    "nil meta",
+			headers: []string{"x-test"},
+			meta:    nil,
+			wantKeys: map[string]string{},
+		},
+		{
+			name:    "auto opencode session",
+			headers: nil,
+			meta:    map[string]interface{}{"opencode_session": "s1"},
+			wantKeys: map[string]string{"X-Opencode-Session": "s1"},
+		},
+		{
+			name:    "explicit passthrough",
+			headers: []string{"x-custom"},
+			meta:    map[string]interface{}{"x-custom": "v1"},
+			wantKeys: map[string]string{"X-Custom": "v1"},
+		},
+		{
+			name:    "skip content-type and authorization",
+			headers: []string{"content-type", "authorization"},
+			meta:    map[string]interface{}{"content-type": "text/plain", "authorization": "Bearer bad"},
+			wantKeys: map[string]string{},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req, _ := http.NewRequest("POST", "https://example.com", nil)
+			applyPassthroughHeaders(req, tt.headers, tt.meta)
+			for k, want := range tt.wantKeys {
+				if got := req.Header.Get(k); got != want {
+					t.Errorf("Header(%q) = %q, want %q", k, got, want)
+				}
+			}
+			// 确认不该设置的头没有被设置
+			if _, ok := tt.wantKeys["Content-Type"]; !ok {
+				if got := req.Header.Get("Content-Type"); got != "" {
+					t.Errorf("Content-Type should not be set, got %q", got)
+				}
+			}
+		})
+	}
+}

@@ -31,6 +31,9 @@ type TransparentForwardNode struct {
 	SystemPromptStrategy promptstrategy.SystemMode
 	// AppendPosition append 模式下的插入位置
 	AppendPosition promptstrategy.AppendPosition
+	// PassthroughHeaders 需要透传到上游的客户端请求头列表（小写）。
+	// 例如 ["x-opencode-session"]。空列表 = 不透传额外头。
+	PassthroughHeaders []string
 }
 
 // accountSelectorStore 跨请求共享的账户池选择器。
@@ -124,6 +127,13 @@ func NewTransparentForwardNode(config NodeConfig) (PipelineNode, error) {
 		}
 		if s, ok := config.CustomConfig["append_position"].(string); ok {
 			node.AppendPosition = promptstrategy.AppendPosition(strings.TrimSpace(s))
+		}
+		if arr, ok := config.CustomConfig["passthrough_headers"].([]interface{}); ok {
+			for _, v := range arr {
+				if h, ok := v.(string); ok && strings.TrimSpace(h) != "" {
+					node.PassthroughHeaders = append(node.PassthroughHeaders, strings.ToLower(strings.TrimSpace(h)))
+				}
+			}
 		}
 	} else {
 		// 无 custom_config 时，使用默认映射
@@ -309,6 +319,7 @@ func (n *TransparentForwardNode) Execute(ctx context.Context, input *NodeInput) 
 		if auth != "" {
 			attemptReq.Header.Set("Authorization", auth)
 		}
+		applyPassthroughHeaders(attemptReq, n.PassthroughHeaders, meta)
 
 		currentResp, doErr := client.Do(attemptReq)
 		if doErr != nil {
@@ -749,6 +760,7 @@ func (n *TransparentForwardNode) doBillingFallbackAttempt(
 	if auth := resolveTransparentUpstreamAuth(fbBackend, meta); auth != "" {
 		req.Header.Set("Authorization", auth)
 	}
+	applyPassthroughHeaders(req, n.PassthroughHeaders, meta)
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -1288,6 +1300,38 @@ func resolveTransparentUpstreamAuth(backendID string, meta map[string]interface{
 		}
 	}
 	return strings.TrimSpace(stringMeta(meta, "forward_authorization"))
+}
+
+// applyPassthroughHeaders 将 PassthroughHeaders 和自动检测的已知头（如 x-opencode-session）
+// 从 metadata 复制到上游请求。已设置的头（Content-Type / Authorization）不会被覆盖。
+func applyPassthroughHeaders(req *http.Request, headers []string, meta map[string]interface{}) {
+	if req == nil {
+		return
+	}
+	// 自动转发 x-opencode-session（OpenCode Go 路由优化所需），
+	// 即使未在 passthrough_headers 中显式列出。
+	if v := stringMeta(meta, "opencode_session"); v != "" {
+		req.Header.Set("X-Opencode-Session", v)
+	}
+	for _, h := range headers {
+		h = strings.TrimSpace(h)
+		if h == "" {
+			continue
+		}
+		// 跳过已由网关显式设置的头，避免覆盖鉴权等关键头。
+		lower := strings.ToLower(h)
+		if lower == "content-type" || lower == "authorization" {
+			continue
+		}
+		if v := stringMeta(meta, "header_"+h); v != "" {
+			req.Header.Set(h, v)
+			continue
+		}
+		// 回退：尝试用小写 key 查找 metadata 中的通用值。
+		if v := stringMeta(meta, strings.ToLower(h)); v != "" {
+			req.Header.Set(h, v)
+		}
+	}
 }
 
 // isResponsesAPIPath 判断请求路径是否为 OpenAI Responses API（/v1/responses 等）。

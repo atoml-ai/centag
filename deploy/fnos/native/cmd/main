@@ -16,7 +16,23 @@ if [ ! -d "${STATIC_DIR}" ] && [ -d "${APP_ROOT}/webui" ]; then
 fi
 INITDATA_DIR="${APP_ROOT}/config/initdata"
 RUNTIME_ENV="${APP_ROOT}/config/runtime.env"
-DATA_DIR="${TRIM_DATA_SHARE_PATHS%%:*}"
+
+resolve_data_dir() {
+  local dd="${TRIM_DATA_SHARE_PATHS%%:*}"
+  [ -n "$dd" ] && [ -d "$dd" ] && { printf '%s' "$dd"; return; }
+  local candidate
+  for candidate in \
+    "/vol1/@appshare/centag" \
+    "/vol1/@appshare/centag/data" \
+    "${TRIM_APPDEST:-/vol1/@appcenter/centag}/data" \
+    "/vol1/@appdata/centag/data"
+  do
+    [ -d "$candidate" ] && { printf '%s' "$candidate"; return; }
+  done
+  printf '%s' "${TRIM_DATA_SHARE_PATHS%%:*}"
+}
+
+DATA_DIR="$(resolve_data_dir)"
 LOGS_DIR="${TRIM_PKGVAR}/logs"
 PORT=20060
 

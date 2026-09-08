@@ -3,7 +3,22 @@
 ### This script is called when entering the configuration page.
 ### 输出当前配置（JSON），供 fnOS 配置页渲染/用户编辑。
 
-DATA_DIR="${TRIM_DATA_SHARE_PATHS%%:*}"
+resolve_data_dir() {
+  local dd="${TRIM_DATA_SHARE_PATHS%%:*}"
+  [ -n "$dd" ] && [ -d "$dd" ] && { printf '%s' "$dd"; return; }
+  local candidate
+  for candidate in \
+    "/vol1/@appshare/centag" \
+    "/vol1/@appshare/centag/data" \
+    "${TRIM_APPDEST:-/vol1/@appcenter/centag}/data" \
+    "/vol1/@appdata/centag/data"
+  do
+    [ -d "$candidate" ] && { printf '%s' "$candidate"; return; }
+  done
+  printf '%s' "${TRIM_DATA_SHARE_PATHS%%:*}"
+}
+
+DATA_DIR="$(resolve_data_dir)"
 
 if [ -f "${DATA_DIR}/centag.conf" ]; then
     cat "${DATA_DIR}/centag.conf"

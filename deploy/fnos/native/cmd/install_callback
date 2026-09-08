@@ -5,7 +5,23 @@
 ### 供 cmd/main 启动时读取（注入 LLM_PROXY_DB_DRIVER / POSTGRES_*）。
 ### 若已存在配置文件（卸载保留后重装），则保留原配置不覆盖。
 
-DATA_DIR="${TRIM_DATA_SHARE_PATHS%%:*}"
+# 多重回退查找数据目录（与 uninstall_init / uninstall_callback 保持一致）
+resolve_data_dir() {
+  local dd="${TRIM_DATA_SHARE_PATHS%%:*}"
+  [ -n "$dd" ] && [ -d "$dd" ] && { printf '%s' "$dd"; return; }
+  local candidate
+  for candidate in \
+    "/vol1/@appshare/centag" \
+    "/vol1/@appshare/centag/data" \
+    "${TRIM_APPDEST:-/vol1/@appcenter/centag}/data" \
+    "/vol1/@appdata/centag/data"
+  do
+    [ -d "$candidate" ] && { printf '%s' "$candidate"; return; }
+  done
+  printf '%s' "${TRIM_DATA_SHARE_PATHS%%:*}"
+}
+
+DATA_DIR="$(resolve_data_dir)"
 CONF_FILE="${DATA_DIR}/centag.conf"
 # 程序目录（生命周期脚本所在）：卸载时数据卷可能已被移除，这里持久化 PG 连接信息，
 # 供 uninstall_init / uninstall_callback 在数据卷消失后仍能 DROP DATABASE。

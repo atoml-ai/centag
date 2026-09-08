@@ -28,7 +28,20 @@ if command -v fuser >/dev/null 2>&1; then
 fi
 
 # ── 内联数据清理逻辑（与 uninstall_init 保持一致）──────────────────────────
-_centag_data_dir()  { printf '%s' "${TRIM_DATA_SHARE_PATHS%%:*}"; }
+_centag_data_dir() {
+  local dd="${TRIM_DATA_SHARE_PATHS%%:*}"
+  [ -n "$dd" ] && [ -d "$dd" ] && { printf '%s' "$dd"; return; }
+  local candidate
+  for candidate in \
+    "/vol1/@appshare/centag" \
+    "/vol1/@appshare/centag/data" \
+    "${TRIM_APPDEST:-/vol1/@appcenter/centag}/data" \
+    "/vol1/@appdata/centag/data"
+  do
+    [ -d "$candidate" ] && { printf '%s' "$candidate"; return; }
+  done
+  printf '%s' "${TRIM_DATA_SHARE_PATHS%%:*}"
+}
 _centag_pgclean()   { printf '%s' "$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)/.pgclean"; }
 
 _centag_json_get() {

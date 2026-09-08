@@ -804,6 +804,15 @@ func attachTransparentRequestMetadata(c *gin.Context, metadata map[string]interf
 	if sid := strings.TrimSpace(c.GetHeader("X-Session-ID")); sid != "" {
 		metadata["session_id"] = sid
 	}
+	// OpenCode Go 要求 x-opencode-session 用于路由优化和 prompt 缓存。
+	// 客户端未发送时，自动生成稳定的会话 ID（基于 X-Session-ID 或 X-Request-ID）。
+	if osid := strings.TrimSpace(c.GetHeader("X-Opencode-Session")); osid != "" {
+		metadata["opencode_session"] = osid
+	} else if sid := strings.TrimSpace(c.GetHeader("X-Session-ID")); sid != "" {
+		metadata["opencode_session"] = sid
+	} else if rid := strings.TrimSpace(c.GetHeader("X-Request-ID")); rid != "" {
+		metadata["opencode_session"] = "req_" + rid
+	}
 	// MITM 会把 Centag egress Key 写入 Authorization，原厂 Key 放在 X-Original-Authorization。
 	// 透明转发打 Centag 后端时用后端 Key；跳板/固定出站用后端 Key 改写鉴权。
 	if orig := strings.TrimSpace(c.GetHeader("X-Original-Authorization")); orig != "" {

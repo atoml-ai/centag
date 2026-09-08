@@ -5,7 +5,22 @@
 ###   1) 旧版：$1 为 JSON 格式配置参数（centag.conf 内容），直接持久化
 ###   2) 新版：配置向导（wizard/config）值通过 wizard_* 环境变量传入，据此生成 centag.conf
 
-DATA_DIR="${TRIM_DATA_SHARE_PATHS%%:*}"
+resolve_data_dir() {
+  local dd="${TRIM_DATA_SHARE_PATHS%%:*}"
+  [ -n "$dd" ] && [ -d "$dd" ] && { printf '%s' "$dd"; return; }
+  local candidate
+  for candidate in \
+    "/vol1/@appshare/centag" \
+    "/vol1/@appshare/centag/data" \
+    "${TRIM_APPDEST:-/vol1/@appcenter/centag}/data" \
+    "/vol1/@appdata/centag/data"
+  do
+    [ -d "$candidate" ] && { printf '%s' "$candidate"; return; }
+  done
+  printf '%s' "${TRIM_DATA_SHARE_PATHS%%:*}"
+}
+
+DATA_DIR="$(resolve_data_dir)"
 CONF_FILE="${DATA_DIR}/centag.conf"
 
 mkdir -p "${DATA_DIR}"
