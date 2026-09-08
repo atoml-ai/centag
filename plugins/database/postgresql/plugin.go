@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -25,8 +26,9 @@ func NewPlugin(config map[string]interface{}) (database.DatabasePlugin, error) {
 	db, err := manager.GetSQLDB()
 	if err != nil {
 		// 检查是否是数据库不存在的错误
-		if strings.Contains(err.Error(), "database") && strings.Contains(err.Error(), "does not exist") {
-			fmt.Printf("database: database does not exist, attempting to create it\n")
+		if strings.Contains(err.Error(), "does not exist") ||
+			(strings.Contains(err.Error(), "SQLSTATE 3D000")) {
+			fmt.Printf("database: 数据库不存在，尝试自动创建\n")
 			if createErr := createDatabase(); createErr != nil {
 				return nil, fmt.Errorf("failed to create database: %w (original error: %v)", createErr, err)
 			}
@@ -37,6 +39,12 @@ func NewPlugin(config map[string]interface{}) (database.DatabasePlugin, error) {
 				return nil, err
 			}
 			fmt.Printf("database: successfully connected to newly created database\n")
+		} else if strings.Contains(err.Error(), "password authentication failed") ||
+			strings.Contains(err.Error(), "SQLSTATE 28P01") {
+			return nil, fmt.Errorf("PostgreSQL 认证失败（密码错误或角色未设置密码；请核对连接信息，fnOS 系统 PG 的 postgres 角色默认无密码）: %w", err)
+		} else if strings.Contains(err.Error(), "no pg_hba.conf entry") ||
+			strings.Contains(err.Error(), "SQLSTATE 28000") {
+			return nil, fmt.Errorf("PostgreSQL 拒绝连接（pg_hba.conf 未放行该 user/数据库/来源；fnOS 系统 PG 默认仅放行业务库）: %w", err)
 		} else {
 			return nil, err
 		}
@@ -45,50 +53,110 @@ func NewPlugin(config map[string]interface{}) (database.DatabasePlugin, error) {
 	return &plugin{db: db}, nil
 }
 
-// createDatabase 尝试创建数据库
+// createDatabase 尝试创建数据库。
+// 产品化要求：用户只需提供正确的连接信息即可开箱即用。目标库不存在时，
+// 自动建库按以下候选链逐一尝试，直到任一管理连接成功：
+//   1) TCP（用户提供的 host）
+//   2) TCP 127.0.0.1 / ::1（host 写 localhost 时部分服务器 pg_hba 仅放行 IPv4 回环）
+//   3) 本机 unix socket（探测 /var/run/postgresql 等目录下的 .s.PGSQL.<port>），
+//      pg_hba 的 `local all all md5` 对密码账号普遍放行——覆盖 fnOS 等限制 TCP admin 库的环境
+//
+// 管理库依次尝试 postgres、template1（标准 PG 默认放行这两个库）。
+// 所有路径失败时返回聚合错误，附带可操作的手工建库指引。
 func createDatabase() error {
-	// 使用 pgconn.Manager 获取配置
 	manager := pgconn.NewManager()
 	cfg := manager.GetConfig()
 
 	if cfg.Host == "" || cfg.User == "" || cfg.Database == "" {
-		return fmt.Errorf("PostgreSQL environment variables not fully configured (need PG_* or POSTGRES_*: host, user, db name)")
+		return fmt.Errorf("PostgreSQL 连接信息不完整（需要 host、user、数据库名）")
 	}
 
-	// 连接到默认的 postgres 数据库来创建新数据库
-	defaultDSN := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=postgres sslmode=disable connect_timeout=5",
-		cfg.Host, cfg.Port, cfg.User, cfg.Password)
+	// 组装候选管理连接（admin 数据库名 × 传输方式）
+	adminDBs := []string{"postgres", "template1"}
+	type candidate struct{ label, dsn string }
+	var candidates []candidate
 
-	db, err := sql.Open("pgx", defaultDSN)
-	if err != nil {
-		return fmt.Errorf("failed to connect to postgres default database: %w", err)
+	// 1) 用户提供的 host（TCP）
+	for _, adb := range adminDBs {
+		c := *cfg
+		c.Database = adb
+		candidates = append(candidates, candidate{
+			label: fmt.Sprintf("TCP(%s:%d/%s)", cfg.Host, cfg.Port, adb),
+			dsn:   c.DSN(),
+		})
 	}
-	defer db.Close()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	// 检查数据库是否已存在
-	var exists bool
-	err = db.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM pg_database WHERE datname = $1)", cfg.Database).Scan(&exists)
-	if err != nil {
-		return fmt.Errorf("failed to check if database exists: %w", err)
-	}
-
-	if !exists {
-		// 创建数据库
-		// 注意：数据库名不能使用参数绑定，需要直接拼接
-		createStmt := fmt.Sprintf("CREATE DATABASE \"%s\"", cfg.Database)
-		_, err = db.ExecContext(ctx, createStmt)
-		if err != nil {
-			return fmt.Errorf("failed to create database: %w", err)
+	// 2) localhost 时补 IPv4/IPv6 回环（pg_hba 可能只放行其一）
+	if cfg.Host == "localhost" || cfg.Host == "" {
+		for _, loop := range []string{"127.0.0.1", "::1"} {
+			for _, adb := range adminDBs {
+				c := *cfg
+				c.Host = loop
+				c.Database = adb
+				candidates = append(candidates, candidate{
+					label: fmt.Sprintf("TCP(%s:%d/%s)", loop, cfg.Port, adb),
+					dsn:   c.DSN(),
+				})
+			}
 		}
-		fmt.Printf("database: created database %s\n", cfg.Database)
-	} else {
-		fmt.Printf("database: database %s already exists\n", cfg.Database)
+	}
+	// 3) 本机 unix socket 目录（仅目标库在本机时有意义）
+	if cfg.Host == "localhost" || cfg.Host == "" || cfg.Host == "127.0.0.1" || cfg.Host == "::1" {
+		socketDirs := []string{"/var/run/postgresql", "/run/postgresql", "/tmp"}
+		for _, dir := range socketDirs {
+			sock := fmt.Sprintf("%s/.s.PGSQL.%d", dir, cfg.Port)
+			if _, err := os.Stat(sock); err != nil {
+				continue
+			}
+			for _, adb := range adminDBs {
+				c := *cfg
+				c.Host = dir
+				c.Database = adb
+				candidates = append(candidates, candidate{
+					label: fmt.Sprintf("socket(%s/%s)", dir, adb),
+					dsn:   c.DSN(),
+				})
+			}
+			break // 同一端口只取第一个存在的 socket 目录
+		}
 	}
 
-	return nil
+	var report strings.Builder
+	for _, cand := range candidates {
+		db, err := sql.Open("pgx", cand.dsn)
+		if err != nil {
+			report.WriteString(fmt.Sprintf("\n  [%s] open 失败: %v", cand.label, err))
+			continue
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+		var exists bool
+		err = db.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM pg_database WHERE datname = $1)", cfg.Database).Scan(&exists)
+		cancel()
+		if err != nil {
+			db.Close()
+			report.WriteString(fmt.Sprintf("\n  [%s] 连接/查询失败: %v", cand.label, err))
+			continue
+		}
+		if !exists {
+			// 数据库名不能用参数绑定，需拼接；插件名已在此前校验为合法标识符
+			if _, err := db.Exec("CREATE DATABASE \"" + cfg.Database + "\""); err != nil {
+				db.Close()
+				report.WriteString(fmt.Sprintf("\n  [%s] CREATE DATABASE 失败: %v", cand.label, err))
+				continue
+			}
+			fmt.Printf("database: 已创建数据库 %s\n", cfg.Database)
+		} else {
+			fmt.Printf("database: 数据库 %s 已存在\n", cfg.Database)
+		}
+		db.Close()
+		return nil
+	}
+
+	return fmt.Errorf("无法自动创建数据库 %s（已尝试的管理连接:%s）\n%s", cfg.Database, report.String(),
+		"  处理建议：\n"+
+			"  a) 先在 PostgreSQL 服务器手工建库并以管理员执行 GRANT，或在服务器为该账号授予 CREATEDB 权限：\n"+
+			fmt.Sprintf("       psql -U <管理员> -c \"CREATE DATABASE \\\"%s\\\";\"\n", cfg.Database)+
+			"     2) 检查服务器 pg_hba.conf 是否放行本机连往所填 user/数据库（fnOS 系统 PG 默认不放行 admin 库）\n"+
+			"     3) 确认密码正确（角色密码未设置时 TCP 登录会报密码错误）")
 }
 
 func (p *plugin) Name() string {

@@ -12,9 +12,12 @@ package config
 
 import (
 	"fmt"
+	"net"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 )
 
 // BootstrapConfig contains only the settings that must be known before the
@@ -121,7 +124,7 @@ func buildDSN(driver string) string {
 	}
 }
 
-// buildPGDSN 从环境变量构建 PostgreSQL DSN
+// buildPGDSN 从环境变量构建 PostgreSQL DSN（URL 形态，用户输入整体参与连接，含特殊字符不破坏解析）
 func buildPGDSN() string {
 	host := envFirst("PG_HOST", "POSTGRES_HOST", "localhost")
 	port := envFirst("PG_PORT", "POSTGRES_PORT", "5432")
@@ -130,10 +133,22 @@ func buildPGDSN() string {
 	dbname := envFirst("PG_DATABASE", "POSTGRES_DB", "centag")
 	sslmode := envFirst("PG_SSLMODE", "POSTGRES_SSLMODE", "disable")
 
-	return fmt.Sprintf(
-		"host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
-		host, port, user, password, dbname, sslmode,
-	)
+	u := url.URL{Scheme: "postgres", Path: "/" + dbname}
+	q := u.Query()
+	q.Set("port", port)
+	q.Set("sslmode", sslmode)
+	q.Set("connect_timeout", "5")
+	u.RawQuery = q.Encode()
+	if strings.HasPrefix(host, "/") {
+		// unix socket 目录
+		q.Set("host", host)
+		u.RawQuery = q.Encode()
+		u.User = url.UserPassword(user, password)
+		return u.String()
+	}
+	u.Host = net.JoinHostPort(host, port)
+	u.User = url.UserPassword(user, password)
+	return u.String()
 }
 
 // buildSQLiteDSN 从环境变量构建 SQLite DSN
