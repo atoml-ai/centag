@@ -3,11 +3,9 @@
  */
 import {
   filterPricingRules,
-  filterRulesToConfigured,
   groupRulesByBackend,
   isFreePricingRule,
   modelHasFreeTier,
-  orphanBackendRules,
   type PricingRuleFilters
 } from './pricing-rule-groups'
 
@@ -79,13 +77,6 @@ function run() {
   assert(onlyFree.length === 1, 'filter free')
   const onlyZen = filterPricingRules(rules as any, { backendId: 'zen', search: 'mimo' })
   assert(onlyZen.length === 1 && onlyZen[0].id === 1, 'filter backend+search')
-
-  const configured = new Set(['zen'])
-  const models = new Map<string, Set<string>>([['zen', new Set(['mimo-v2.5-free'])]])
-  const scoped = filterRulesToConfigured(rules as any, configured, models)
-  assert(scoped.length === 1 && scoped[0].id === 1, 'scope to configured backend+model')
-  const orphans = orphanBackendRules(rules as any, configured)
-  assert(orphans.length === 1 && orphans[0].backend_id === 'ppinfra', 'orphan backend rules')
 
   console.log('pricing-rule-groups.selftest: OK')
 }

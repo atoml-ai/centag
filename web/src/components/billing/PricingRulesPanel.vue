@@ -152,14 +152,10 @@ import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import * as billingApi from '@/api/billing'
 import type { PricingRule } from '@/api/billing'
-import { getBackends } from '@/api/backend'
 import * as costApi from '@/api/cost'
 import {
-  collectBackendModelNames,
   filterPricingRules,
-  filterRulesToConfigured,
   groupRulesByBackend,
-  orphanBackendRules,
   uniqueBackendIds,
   type FreePaidFilter,
   type PriceTypeFilter
@@ -192,8 +188,6 @@ const loading = ref(false)
 const saving = ref(false)
 const syncing = ref(false)
 const rules = ref<PricingRule[]>([])
-const configuredBackendIds = ref<Set<string>>(new Set())
-const modelsByBackend = ref<Map<string, Set<string>>>(new Map())
 const formVisible = ref(false)
 const importVisible = ref(false)
 const importText = ref('')
@@ -209,9 +203,7 @@ const savingIds = ref<Set<number>>(new Set())
 
 const priceUnit = computed(() => (displayCurrency.value === 'CNY' ? '¥' : '$'))
 
-const scopedRules = computed(() =>
-  filterRulesToConfigured(rules.value, configuredBackendIds.value, modelsByBackend.value)
-)
+const scopedRules = computed(() => rules.value)
 
 const filteredRules = computed(() =>
   filterPricingRules(scopedRules.value, {
@@ -223,11 +215,7 @@ const filteredRules = computed(() =>
 )
 
 const groups = computed(() => groupRulesByBackend(filteredRules.value))
-const backendOptions = computed(() => {
-  const fromConfig = [...configuredBackendIds.value]
-  const fromRules = uniqueBackendIds(scopedRules.value)
-  return [...new Set([...fromConfig, ...fromRules])].sort((a, b) => a.localeCompare(b))
-})
+const backendOptions = computed(() => uniqueBackendIds(scopedRules.value))
 
 watch(
   groups,
@@ -279,58 +267,13 @@ async function loadFx() {
   }
 }
 
-async function loadConfiguredBackends() {
-  try {
-    const data = await getBackends()
-    const list = Array.isArray(data) ? data : (data as { backends?: unknown[] })?.backends || []
-    const ids = new Set<string>()
-    const models = new Map<string, Set<string>>()
-    for (const raw of list as Array<Record<string, unknown>>) {
-      const id = String(raw.id || raw.backend_id || '').trim()
-      if (!id) continue
-      ids.add(id)
-      models.set(id, collectBackendModelNames(raw.supported_models))
-    }
-    configuredBackendIds.value = ids
-    modelsByBackend.value = models
-  } catch {
-    configuredBackendIds.value = new Set()
-    modelsByBackend.value = new Map()
-  }
-}
-
-/** Delete seed/orphan rules for backends that are not configured (e.g. ollama-local, bigmodel). */
-async function pruneOrphanBackendRules(allRules: PricingRule[]) {
-  if (configuredBackendIds.value.size === 0) return
-  const orphans = orphanBackendRules(allRules, configuredBackendIds.value)
-  if (!orphans.length) return
-  let deleted = 0
-  for (const r of orphans) {
-    if (r.id == null) continue
-    try {
-      await billingApi.deletePricingRule(r.id)
-      deleted++
-    } catch {
-      /* continue */
-    }
-  }
-  if (deleted > 0) {
-    ElMessage.success(t('billingRules.prunedOrphans', { count: deleted }))
-  }
-}
-
+/** Prices are decoupled from backend configuration — never auto-delete any rule. */
 async function load() {
   loading.value = true
   try {
-    await Promise.all([loadFx(), loadConfiguredBackends()])
-    let data = await billingApi.listPricingRules()
-    let list = Array.isArray(data) ? data : []
-    await pruneOrphanBackendRules(list)
-    if (configuredBackendIds.value.size > 0) {
-      data = await billingApi.listPricingRules()
-      list = Array.isArray(data) ? data : []
-    }
-    rules.value = list
+    await loadFx()
+    const data = await billingApi.listPricingRules()
+    rules.value = Array.isArray(data) ? data : []
   } catch (e: unknown) {
     ElMessage.error(e instanceof Error ? e.message : t('billingRulesDialog.message.loadFailed'))
   } finally {
