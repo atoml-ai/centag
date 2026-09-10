@@ -190,6 +190,10 @@
             <span>{{ $t('dashboard.database') }}</span>
           </div>
         </template>
+        <div v-if="dashboard.database?.degraded" class="db-degraded-banner">
+          <el-icon><WarningFilled /></el-icon>
+          <span>{{ $t('dashboard.degradedWarning', { from: formatDbDriver(dashboard.database?.requested_driver), to: formatDbDriver(dashboard.database?.driver) }) }}</span>
+        </div>
         <div class="info-rows">
           <div class="info-row">
             <span class="info-label">{{ $t('dashboard.driverType') }}</span>
@@ -454,7 +458,7 @@ import { ref, computed, watch, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
-  Document, CircleCheck, TrendCharts, Warning,
+  Document, CircleCheck, TrendCharts, Warning, WarningFilled,
   Timer, Stopwatch, Coin, Monitor, DataBoard, DataLine, DataAnalysis,
     CopyDocument, Cpu, List, Share, ChatDotRound, Plus, Upload
   } from '@element-plus/icons-vue'
@@ -1154,6 +1158,24 @@ onMounted(() => {
   align-items: center;
   gap: 6px;
   flex-wrap: wrap;
+}
+
+.db-degraded-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  margin-bottom: 12px;
+  border-radius: 6px;
+  background: #fdf6ec;
+  border: 1px solid #faecd8;
+  color: #e6a23c;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+.db-degraded-banner .el-icon {
+  font-size: 18px;
+  flex-shrink: 0;
 }
 
 .info-rows {

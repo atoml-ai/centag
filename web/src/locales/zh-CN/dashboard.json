@@ -33,6 +33,7 @@
   "connected": "已连接",
   "notConnected": "未连接",
   "connectionAddress": "连接地址",
+  "degradedWarning": "数据库已从 {from} 降级为 {to}，请检查连接配置",
   "unknown": "未知",
   "storageMiddleware": "存储中间件",
   "disabled": "禁用",

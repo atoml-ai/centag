@@ -75,7 +75,12 @@ func (s *Server) healthReady(c *gin.Context) {
 		"service": "centag",
 		"edition": s.edition.String(),
 		"checks": gin.H{
-			"database":        gin.H{"status": "ok", "driver": driver},
+			"database": gin.H{
+				"status":          "ok",
+				"driver":          driver,
+				"degraded":        db.IsDegraded(),
+				"requested_driver": db.RequestedDriver(),
+			},
 			"circuit_breaker": gin.H{"status": boolToStr(len(openBreakers) == 0, "ok", "degraded"), "open_backends": openBreakers},
 		},
 	})

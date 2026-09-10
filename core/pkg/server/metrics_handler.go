@@ -150,8 +150,10 @@ func (h *MetricsHandler) GetDashboardStats(c *gin.Context) {
 	if database.IsInitialized() {
 		dbManager := database.Get()
 		dbInfo := DatabaseInfo{
-			Driver: dbManager.DriverName(),
-			Status: "connected",
+			Driver:          dbManager.DriverName(),
+			Status:          "connected",
+			Degraded:        dbManager.IsDegraded(),
+			RequestedDriver: dbManager.RequestedDriver(),
 		}
 		
 		// 获取数据库地址信息
@@ -290,9 +292,11 @@ type CacheStatsSummary struct {
 
 // DatabaseInfo 数据库信息
 type DatabaseInfo struct {
-	Driver   string `json:"driver"`
-	Status   string `json:"status"`
-	Address  string `json:"address,omitempty"`  // 数据库地址信息
+	Driver          string `json:"driver"`
+	Status          string `json:"status"`
+	Address         string `json:"address,omitempty"`
+	Degraded        bool   `json:"degraded,omitempty"`
+	RequestedDriver string `json:"requested_driver,omitempty"`
 }
 
 // PluginStatus 插件状态

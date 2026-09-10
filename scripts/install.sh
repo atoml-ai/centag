@@ -259,6 +259,14 @@ asset_name() {
         case "$GOOS" in
           darwin) echo "centag-desktop-personal-macos-${GOARCH}.zip" ;;
           windows) echo "centag-desktop-personal-windows-${GOARCH}.zip" ;;
+          linux)
+            # fnOS native mode for Linux desktop
+            if [[ -f "${ROOT}/deploy/fnos/manifest" ]]; then
+              echo "centag-personal-native-${GOARCH}.fpk"
+            else
+              fail "--desktop is only supported on macOS / Windows (got ${GOOS})"
+            fi
+            ;;
           *) fail "--desktop is only supported on macOS / Windows (got ${GOOS})" ;;
         esac
       else
@@ -280,6 +288,10 @@ asset_name_fallbacks() {
         case "$GOOS" in
           darwin) echo "Centag-${VERSION}-macos-${GOARCH}.zip" ;;
           windows) echo "Centag-${VERSION}-windows-${GOARCH}.zip" ;;
+          linux)
+            # fnOS native fallback
+            echo "centag-personal-native-${GOARCH}.fpk"
+            ;;
         esac
       else
         echo "centag-personal-${PLATFORM_KEY}.tar.gz"

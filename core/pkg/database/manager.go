@@ -40,8 +40,9 @@ func RegisterPlugin(name string, factory PluginFactory) {
 // Manager wraps the active DatabasePlugin and exposes store accessors.
 // Only one Manager instance should exist per process; use Init / Get.
 type Manager struct {
-	plugin     DatabasePlugin
-	driverName string // e.g. "postgresql" — same key passed to Init
+	plugin          DatabasePlugin
+	driverName      string // actual driver used (e.g. "sqlite")
+	requestedDriver string // driver requested by config (e.g. "postgresql")
 }
 
 var (
@@ -88,9 +89,16 @@ func Init(ctx context.Context, driverName string, config map[string]interface{})
 				continue
 			}
 
-			globalManager = &Manager{plugin: plugin, driverName: drv}
+			globalManager = &Manager{plugin: plugin, driverName: drv, requestedDriver: driverName}
 			initErr = nil
-			logger.Infof("database: successfully initialized %s driver", drv)
+
+			if drv != driverName {
+				logger.Warnf("database: ⚠️  降级警告 — 请求驱动 %q 不可用，已降级为 %q", driverName, drv)
+				logger.Warnf("database: ⚠️  当前数据存储在 %q，而非预期的 %q", drv, driverName)
+				logger.Warnf("database: ⚠️  如需使用 %q，请检查连接配置后重启服务", driverName)
+			} else {
+				logger.Infof("database: successfully initialized %s driver", drv)
+			}
 			return
 		}
 
@@ -120,8 +128,15 @@ func resolveDrivers(driverName string) []string {
 	}
 }
 
-// DriverName returns the database plugin name passed to Init (e.g. "postgresql").
+// DriverName returns the actual database plugin name in use (e.g. "sqlite").
 func (m *Manager) DriverName() string { return m.driverName }
+
+// RequestedDriver returns the driver originally requested by configuration (e.g. "postgresql").
+func (m *Manager) RequestedDriver() string { return m.requestedDriver }
+
+// IsDegraded returns true if the actual driver differs from the requested one
+// (e.g. requested "postgresql" but fell back to "sqlite").
+func (m *Manager) IsDegraded() bool { return m.driverName != m.requestedDriver }
 
 // Get returns the global Manager. Returns nil if Init has not been called
 // successfully, so callers should always check Init's error first or use IsInitialized().

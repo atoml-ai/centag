@@ -90,6 +90,7 @@ done < <(find "$OUT_DIR" -maxdepth 1 -type f \( \
   -name 'centag-desktop-*.dmg' -o \
   -name 'centag-desktop-*.zip' -o \
   -name 'centag-personal-*.tar.gz' -o \
+  -name 'centag-personal-*.fpk' -o \
   -name 'Centag-*.dmg' -o \
   -name 'Centag-*.zip' -o \
   -name 'checksums.txt' \
@@ -125,6 +126,7 @@ Default install root: \`~/.centag\`.
 - \`centag-cli-personal-<goos>-<goarch>.tar.gz\` — CLI (install.sh default)
 - \`centag-desktop-personal-macos-<arch>.dmg\` / \`.zip\` — macOS desktop
 - \`centag-desktop-personal-windows-<arch>.zip\` — Windows desktop
+- \`centag-personal-native-<arch>.fpk\` — fnOS package (NAS)
 - \`checksums.txt\` — SHA-256 sums
 EOF
 )"

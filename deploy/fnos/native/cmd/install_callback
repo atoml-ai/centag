@@ -199,21 +199,18 @@ pg_ready() {
     [ "${reloaded}" = "1" ] && echo "已重载 PostgreSQL 配置" || echo "[WARN] 无法重载 PostgreSQL 配置（新建规则需手动 reload 生效）"
   fi
 
-  # 4) 角色密码校验：应用以 TCP+密码连接；失败且向导给了密码 → 经 socket 设置密码
+  # 4) 角色密码校验：应用以 TCP+密码连接；失败则降级 SQLite（不再自动改密码）
   if PGPASSWORD="${w}" psql -h 127.0.0.1 -p "${p}" -U "${u}" -d "${d}" -Atqc "SELECT 1" >/dev/null 2>&1; then
     echo "PostgreSQL 连接验证通过: 127.0.0.1:${p}/${d}"
   else
-    if [ -n "${w}" ] && [ "$(id -u)" = "0" ] && [ -e /var/run/postgresql/.s.PGSQL.${p} ]; then
-      echo "TCP 密码登录失败，尝试为角色 ${u} 设置密码（fnOS 系统 PG 的 postgres 角色默认无密码）…"
-      psql -h /var/run/postgresql -p "${p}" -U "${u}" -d postgres \
-        -c "ALTER ROLE \"${u}\" WITH PASSWORD '${w}'" >/dev/null 2>&1 \
-        && echo "已设置角色 ${u} 的访问密码" || echo "[WARN] 无法设置角色密码（请手动执行 ALTER ROLE）"
-    fi
-    if PGPASSWORD="${w}" psql -h 127.0.0.1 -p "${p}" -U "${u}" -d "${d}" -Atqc "SELECT 1" >/dev/null 2>&1; then
-      echo "PostgreSQL 连接验证通过: 127.0.0.1:${p}/${d}"
-    else
-      echo "[WARN] PostgreSQL TCP 连接验证失败: 127.0.0.1:${p}/${d}（应用将降级数据卷 SQLite）"
-    fi
+    echo ""
+    echo "========================================================================"
+    echo "  [WARN] PostgreSQL 密码认证失败: 127.0.0.1:${p}/${d}"
+    echo "         用户名 '${u}' 的密码不正确"
+    echo "         应用将降级使用数据卷 SQLite（${DATA_DIR}/centag.db）"
+    echo "         如需使用 PostgreSQL，请修正密码后执行配置向导重新保存"
+    echo "========================================================================"
+    echo ""
   fi
   return 0
 }

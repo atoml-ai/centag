@@ -877,7 +877,7 @@ echo "[OK] 清单校验和: ${CHECKSUM}"
 # ============================================================
 # 5. 打包为 .fpk
 # ============================================================
-FPK_FILE="${OUTPUT_DIR}/centag-${EDITION}-${MODE}-${GOARCH}.fpk"
+FPK_FILE="${OUTPUT_DIR}/centag-${EDITION}-fnos-${GOARCH}.fpk"
 rm -f "${FPK_FILE}"
 
 # fnOS 1.x / fnpack 1.2.x 新版格式：优先用官方 fnpack 完成 app.tgz 与 manifest checksum

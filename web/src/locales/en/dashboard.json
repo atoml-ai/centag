@@ -33,6 +33,7 @@
   "connected": "Connected",
   "notConnected": "Not connected",
   "connectionAddress": "Connection Address",
+  "degradedWarning": "Database degraded from {from} to {to}, please check connection config",
   "unknown": "Unknown",
   "storageMiddleware": "Storage Middleware",
   "disabled": "Disabled",
