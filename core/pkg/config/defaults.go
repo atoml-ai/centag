@@ -299,6 +299,15 @@ func DefaultBackends() []BackendConfig {
 	return nil
 }
 
+// DefaultMcpConfig 返回 MCP server（只读观测面）默认配置。
+// 安全默认：端点关闭；AllowedTools 为空表示允许全部只读工具（见 pkg/server/mcp）。
+func DefaultMcpConfig() McpConfig {
+	return McpConfig{
+		Enabled:      false,
+		AllowedTools: nil,
+	}
+}
+
 // DefaultPluginSecurityConfig 返回默认的插件安全配置
 func DefaultPluginSecurityConfig() PluginSecurityConfig {
 	return PluginSecurityConfig{

@@ -39,6 +39,7 @@ import (
 	"centag/core/pkg/agentmemory"
 	"centag/core/pkg/backend"
 	"centag/core/pkg/config"
+	mcppkg "centag/core/pkg/server/mcp"
 	"centag/core/pkg/configsync"
 	"centag/core/pkg/database"
 	"centag/core/pkg/editionmodule"
@@ -108,6 +109,7 @@ type Server struct {
 	agentHandler           *AgentHandler
 	agentProviderHandler   *agentpkg.AgentProviderHandler
 	builtinAgentHandler    *BuiltinAgentHandler
+	observationMcp         *mcppkg.ObservationServer // 需求 A：MCP 只读观测面（默认关闭）
 	mcpProxyHandler        *MCPProxyHandler
 	hookManager            *hooks.DefaultHookManager
 	conversationHandler    *ConversationHandler
@@ -659,6 +661,21 @@ func New(cfg *config.Config) *Server {
 	// 创建 MCP 代理处理器
 	mcpProxyHandler := NewMCPProxyHandler()
 
+	// 需求 A（mcp-interface-layer）：MCP 只读观测面（mcp.enabled 默认 false）。
+	// 挂载点在 setupRoutes 的 v1Protected（Bearer 鉴权），工具面复用 agent 工具正本。
+	var observationMcp *mcppkg.ObservationServer
+	if cfg.Mcp.Enabled {
+		defAgentCfg := agentpkg.DefaultAgentConfig()
+		observationMcp = mcppkg.NewObservationServer(true, mcppkg.Deps{
+			DataDir:       dataDir,
+			DBPath:        dbPath,
+			AllowedTables: firstStrings(cfg.Agent.Database.AllowedTables, defAgentCfg.Database.AllowedTables),
+			Version:       internal.GetVersion(),
+			DB:            database.Get().GetDB(),
+			Metrics:       mcppkg.NewTokenUsageVolumeProvider(tokenusage.NewService(database.Get().GetDB(), database.Get().DriverName())),
+		}, cfg.Mcp.AllowedTools)
+	}
+
 	// 创建存储配置处理器
 	storageHandler := NewStorageHandler(storageManager)
 	dataStoreHandler := NewDataStoreHandler(storageManager)
@@ -1074,6 +1091,7 @@ func New(cfg *config.Config) *Server {
 		agentHandler:           agentHandler,
 		agentProviderHandler:   agentProviderHandler,
 		builtinAgentHandler:    builtinAgentHandler,
+		observationMcp:         observationMcp,
 		mcpProxyHandler:        mcpProxyHandler,
 		hookManager:            hookManager,
 		conversationStore:      conversationStore,
@@ -1958,6 +1976,18 @@ func (s *Server) setupRoutes() {
 	if s.mcpProxyHandler != nil {
 		mcpGroup := s.router.Group("/v1/mcp", proxyAuth)
 		s.mcpProxyHandler.RegisterMCPRoutes(mcpGroup)
+	}
+
+	// 需求 A（mcp-interface-layer）：MCP 只读观测面，默认 mcp.enabled=false（不注册路由 → 404）。
+	// 复用 v1Protected Bearer 鉴权；工具面复用 agent 工具正本（单一真源）。
+	if s.observationMcp != nil {
+		obsStreamable := v1Protected.Group("/mcp")
+		obsStreamable.Handle(http.MethodGet, "/", gin.WrapF(s.observationMcp.StreamableHandler().ServeHTTP))
+		obsStreamable.Handle(http.MethodPost, "/", gin.WrapF(s.observationMcp.StreamableHandler().ServeHTTP))
+		obsStreamable.Handle(http.MethodDelete, "/", gin.WrapF(s.observationMcp.StreamableHandler().ServeHTTP))
+		obsSSE := v1Protected.Group("/mcp/sse")
+		obsSSE.Handle(http.MethodGet, "", gin.WrapF(s.observationMcp.SSEHandler().ServeHTTP))
+		obsSSE.Handle(http.MethodPost, "", gin.WrapF(s.observationMcp.SSEHandler().ServeHTTP))
 	}
 
 	logger.Info("Proxy mode middleware registered for LLM proxy routes")

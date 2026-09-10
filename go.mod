@@ -3,6 +3,7 @@ module centag
 go 1.25.0
 
 require (
+	github.com/modelcontextprotocol/go-sdk v1.7.0
 	centag/apps/wrap v0.0.0
 	centag/core v0.0.0
 	github.com/gin-gonic/gin v1.9.1

@@ -40,6 +40,8 @@ const (
 	KeyDefaultDataStores = "default_data_stores"
 	// KeyModelVariables stores the model variables config (system + user).
 	KeyModelVariables = "model_variables"
+	// KeyMcpConfig stores the MCP server (read-only observation face) config.
+	KeyMcpConfig = "mcp_config"
 )
 
 // LoadFromDB constructs a runtime Config from values stored in the database,
@@ -75,6 +77,7 @@ func LoadFromDB(ctx context.Context, bootstrap *BootstrapConfig, adminUserID int
 	cfg.QuestionSplit = dbLoadOrDefault(ctx, scs, KeyQuestionSplitConfig, GetDefaultQuestionSplitConfig())
 	cfg.Scheduler = dbLoadOrDefault(ctx, scs, KeySchedulerConfig, DefaultSchedulerConfig())
 	cfg.ModelVariables = dbLoadOrDefault(ctx, scs, KeyModelVariables, DefaultModelVariables())
+	cfg.Mcp = dbLoadOrDefault(ctx, scs, KeyMcpConfig, DefaultMcpConfig())
 
 	// 部署级配置（fnOS 等安装包）：从数据目录的 centag.conf 读取，不写入 DB。
 	cfg.Deployment = LoadDeploymentConfig()

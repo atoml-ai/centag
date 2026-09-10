@@ -122,6 +122,13 @@ type BackendStats struct {
 	SuccessRate  *float64 `json:"success_rate,omitempty"`
 }
 
+// BackendVolumeStats 请求量分桶统计（MCP read_metrics，需求 A-T3）。
+type BackendVolumeStats struct {
+	BackendID string `json:"backend_id"`
+	Requests  int64  `json:"requests"`
+	Failed    int64  `json:"failed"`
+}
+
 // NewService 创建 Token 计量服务。driver 须为 "postgresql"。
 func NewService(db *sql.DB, driver string) *Service {
 	return &Service{db: db, driver: driver}
@@ -491,6 +498,48 @@ func (s *Service) GetBackendStats(ctx context.Context, userID int64, days int) (
 	}
 
 	return stats, nil
+}
+
+// GetRequestVolumeByBackend 聚合最近 hours 小时按 backend_id 的请求量与失败计数
+// （V0.3.5 需求 A-T3：MCP read_metrics 数据源，无用户维度条件；护栏由调用方前置）。
+func (s *Service) GetRequestVolumeByBackend(ctx context.Context, hours int) ([]BackendVolumeStats, error) {
+	if s.db == nil {
+		return nil, fmt.Errorf("token usage store not configured")
+	}
+	if hours < 1 {
+		return nil, fmt.Errorf("hours must be >= 1")
+	}
+	cutoff := time.Now().UTC().Add(-time.Duration(hours) * time.Hour)
+	successExpr := "1"
+	if s.isPostgres() {
+		successExpr = "TRUE"
+	}
+	query := s.q(fmt.Sprintf(`
+		SELECT
+			backend_id,
+			COUNT(*) AS requests,
+			SUM(CASE WHEN COALESCE(success, %s) THEN 0 ELSE 1 END) AS failed
+		FROM token_usage
+		WHERE created_at >= $1
+		GROUP BY backend_id
+		ORDER BY requests DESC
+	`, successExpr))
+
+	rows, err := s.db.QueryContext(ctx, query, cutoff)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var stats []BackendVolumeStats
+	for rows.Next() {
+		stat := BackendVolumeStats{}
+		if err := rows.Scan(&stat.BackendID, &stat.Requests, &stat.Failed); err != nil {
+			return nil, err
+		}
+		stats = append(stats, stat)
+	}
+	return stats, rows.Err()
 }
 
 // GetAllUsersUsage 管理员获取所有用户使用情况

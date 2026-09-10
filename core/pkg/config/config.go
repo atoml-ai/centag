@@ -98,6 +98,15 @@ type Config struct {
 	ModelVariables    ModelVariables       `json:"model_variables"` // 模型变量配置
 	Deployment        DeploymentConfig     `json:"deployment"`      // 部署级配置（fnOS 等安装包），不写入 DB
 	Agent             AgentConfig          `json:"agent"`           // Agent配置
+	Mcp               McpConfig            `json:"mcp"`             // centag 对外 MCP server（只读观测面）
+}
+
+// McpConfig centag 自身对外暴露的 MCP server 配置（mcp-interface-layer，只读观测面）。
+// 安全默认：Enabled=false，不配置即关闭端点；AllowedTools 为空表示允许全部只读工具，
+// 非空时按白名单裁剪（运维收紧用，亦为后续套餐准入预留的扩展钩子）。
+type McpConfig struct {
+	Enabled      bool     `json:"enabled" yaml:"enabled"`
+	AllowedTools []string `json:"allowed_tools" yaml:"allowed_tools"`
 }
 
 // AgentConfig Agent配置
