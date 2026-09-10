@@ -1,6 +1,6 @@
 {
   "dialogTitle": "Billing Rules",
-  "description": "Shows unit prices only for configured backends and their models (USD / 1M tokens). Orphan rules for missing backends are pruned on load. Import/export YAML defaults to USD; display can switch to CNY (conversion only).",
+  "description": "Shows model unit prices by backend (USD / 1M tokens), from Feishu sync or manual entries — independent of whether the backend is configured. Import/export YAML defaults to USD; display can switch to CNY (conversion only).",
   "refresh": "Refresh",
   "importLocal": "Local Import",
   "export": "Export",

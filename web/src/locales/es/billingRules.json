@@ -5,7 +5,6 @@
   "openFullPage": "Abrir página completa de reglas",
   "tabRules": "Reglas de facturación",
   "savePrices": "Guardar precios",
-  "prunedOrphans": "Se eliminaron {count} regla(s) de backends no configurados",
   "syncOnline": "Sincronizar en línea",
   "confirmSyncFeishu": "Obtener los últimos precios en línea y aplicarlos a las reglas?",
   "confirmSyncFeishuTitle": "Sincronizar precios",

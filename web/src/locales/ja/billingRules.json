@@ -5,7 +5,6 @@
   "openFullPage": "請求ルールページを開く",
   "tabRules": "請求ルール",
   "savePrices": "単価を保存",
-  "prunedOrphans": "未設定バックエンドの課金ルールを {count} 件削除しました",
   "syncOnline": "オンライン同期",
   "confirmSyncFeishu": "最新モデル価格をオンラインで取得し、請求ルールに適用しますか？",
   "confirmSyncFeishuTitle": "価格を同期",

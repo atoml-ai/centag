@@ -5,7 +5,6 @@
   "openFullPage": "打开完整计费规则页",
   "tabRules": "计费规则",
   "savePrices": "保存单价",
-  "prunedOrphans": "已清理 {count} 条未配置后端的计费规则",
   "syncOnline": "在线同步",
   "confirmSyncFeishu": "在线拉取最新模型价格并应用到计费规则？",
   "confirmSyncFeishuTitle": "同步价格",

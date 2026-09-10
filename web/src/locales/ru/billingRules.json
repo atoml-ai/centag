@@ -5,7 +5,6 @@
   "openFullPage": "Открыть полную страницу правил",
   "tabRules": "Правила тарификации",
   "savePrices": "Сохранить цены",
-  "prunedOrphans": "Удалено {count} правил для ненастроенных backend",
   "syncOnline": "Онлайн-синхронизация",
   "confirmSyncFeishu": "Получить последние цены онлайн и применить к правилам?",
   "confirmSyncFeishuTitle": "Синхронизация цен",

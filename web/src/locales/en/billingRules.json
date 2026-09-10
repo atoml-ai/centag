@@ -5,7 +5,6 @@
   "openFullPage": "Open full billing rules page",
   "tabRules": "Billing Rules",
   "savePrices": "Save prices",
-  "prunedOrphans": "Removed {count} pricing rule(s) for unconfigured backends",
   "syncOnline": "Sync Online",
   "confirmSyncFeishu": "Fetch latest model prices online and apply to billing rules?",
   "confirmSyncFeishuTitle": "Sync Prices",
