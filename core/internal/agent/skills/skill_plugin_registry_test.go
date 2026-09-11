@@ -175,3 +175,37 @@ func TestSkillPluginRegistry_Names(t *testing.T) {
 		t.Fatalf("Names() = %v, want [status-check]", names)
 	}
 }
+
+func TestLoadFromSources_DuplicateAcrossBuiltinDirs(t *testing.T) {
+	dirA := t.TempDir()
+	dirB := t.TempDir()
+	manifestA := strings.Replace(validManifest, "description: 检查 centag 运行状态并生成报告", "description: 版本A", 1)
+	manifestB := strings.Replace(validManifest, "description: 检查 centag 运行状态并生成报告", "description: 版本B", 1)
+	if err := os.WriteFile(filepath.Join(dirA, "agent-skill-status-check.yaml"), []byte(manifestA), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// dirB 同名 manifest（内容漂移的另一份安装档）
+	if err := os.WriteFile(filepath.Join(dirB, "agent-skill-status-check.yaml"), []byte(manifestB), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// 另一个 manifest 仅存在于 dirB：必须照常注册
+	manifestC := strings.Replace(validManifest, "builtin.agent-skill-status-check", "builtin.agent-skill-unique-check", 1)
+	manifestC = strings.Replace(manifestC, "name: status-check", "name: unique-check", 1)
+	if err := os.WriteFile(filepath.Join(dirB, "agent-skill-unique-check.yaml"), []byte(manifestC), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	r := NewSkillPluginRegistry()
+	err := r.LoadFromSources([]ManifestSource{{Dir: dirA}, {Dir: dirB}})
+	if err != nil {
+		t.Fatalf("LoadFromSources() error = %v, want nil (builtin duplicate tolerated)", err)
+	}
+	if len(r.ListAll()) != 2 {
+		t.Fatalf("ListAll = %d, want 2 (status-check + unique-check)", len(r.ListAll()))
+	}
+	// 先注册者生效：同名 skill 保留 dirA 的定义
+	p, _ := r.Get("status-check")
+	if p.Descriptor().Implementation != "builtin.agent-skill-status-check" || strings.Contains(p.GetSkillDefinition().SystemPrompt, "版本B") {
+		t.Errorf("duplicate skill should keep first source definition")
+	}
+}

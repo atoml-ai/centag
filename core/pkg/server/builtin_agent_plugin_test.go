@@ -4,7 +4,9 @@ import (
 	"strings"
 	"testing"
 
+	agentpkg "centag/core/internal/agent"
 	"centag/core/internal/agent/skills"
+	"centag/core/internal/agent/tools"
 )
 
 func TestLoadBuiltinSkillPlugins(t *testing.T) {
@@ -14,10 +16,10 @@ func TestLoadBuiltinSkillPlugins(t *testing.T) {
 		t.Fatal("loadBuiltinSkillPlugins() = nil, want non-nil registry")
 	}
 	plugins := reg.ListAll()
-	if len(plugins) != 7 {
-		t.Fatalf("builtin skill count = %d, want 7 (status-check/config-analysis/error-diagnosis/log-analysis/strategy-recommend/billing-audit/cost-analysis)", len(plugins))
+	if len(plugins) != 10 {
+		t.Fatalf("builtin skill count = %d, want 10 (...self-evolution/evolution-smoke/evolution-dryrun)", len(plugins))
 	}
-	wantNames := []string{"status-check", "config-analysis", "error-diagnosis", "log-analysis", "strategy-recommend", "billing-audit", "cost-analysis"}
+	wantNames := []string{"status-check", "config-analysis", "error-diagnosis", "log-analysis", "strategy-recommend", "billing-audit", "cost-analysis", "self-evolution", "evolution-smoke", "evolution-dryrun"}
 	got := make(map[string]bool)
 	for _, p := range plugins {
 		if !p.Internal() {
@@ -31,6 +33,39 @@ func TestLoadBuiltinSkillPlugins(t *testing.T) {
 	for _, n := range wantNames {
 		if !got[n] {
 			t.Errorf("builtin skill %q not loaded", n)
+		}
+	}
+}
+
+func TestSelfEvolutionSkillExposesEvolutionTools(t *testing.T) {
+	t.Setenv("PROJECT_ROOT", mustFindProjectRoot(t))
+	reg := loadBuiltinSkillPlugins()
+	if reg == nil {
+		t.Fatal("loadBuiltinSkillPlugins() = nil")
+	}
+	p, ok := reg.Get("self-evolution")
+	if !ok {
+		t.Fatal("self-evolution skill not loaded")
+	}
+	if !p.Enabled() || !p.Internal() {
+		t.Fatalf("self-evolution should be enabled and internal")
+	}
+	skillDef := p.GetSkillDefinition()
+	for _, name := range []string{"propose_change", "dryrun_request", "apply_change", "measure_effect", "rollback_change", "record_learning"} {
+		if !strings.Contains(skillDef.SystemPrompt, name) {
+			t.Errorf("self-evolution prompt missing tool %q", name)
+		}
+	}
+	// 工具集 ∩ 全局白名单后，evolution 工具必须仍可注册（unionSkillTools 语义）
+	allowed := 	agentpkg.DefaultAgentConfig().Tools.Allowed
+	effective := tools.IntersectAllowedTools(skillDef.Tools, allowed)
+	got := make(map[string]bool, len(effective))
+	for _, n := range effective {
+		got[n] = true
+	}
+	for _, n := range []string{"propose_change", "dryrun_request", "measure_effect", "record_learning"} {
+		if !got[n] {
+			t.Errorf("evolution tool %q dropped after whitelist intersection", n)
 		}
 	}
 }

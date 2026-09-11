@@ -23,8 +23,8 @@ func TestBuildSkillRouterPipeline(t *testing.T) {
 	if pp.ID != centagOpsRouterPipelineID {
 		t.Errorf("pipeline id = %q, want %q", pp.ID, centagOpsRouterPipelineID)
 	}
-	// classifier + 7 skill 分支 + chat-gen
-	wantNodes := 9
+	// classifier + 10 skill 分支 + chat-gen
+	wantNodes := 12
 	if len(pp.Nodes) != wantNodes {
 		t.Fatalf("nodes = %d, want %d", len(pp.Nodes), wantNodes)
 	}
@@ -40,8 +40,8 @@ func TestBuildSkillRouterPipeline(t *testing.T) {
 		t.Errorf("classifier default_route = %q, want %q", d, agentSkillRouterChatID)
 	}
 	routes, _ := classifier.Config.CustomConfig["routes"].(map[string]interface{})
-	if len(routes) != 7 {
-		t.Errorf("classifier routes = %d, want 7", len(routes))
+	if len(routes) != 10 {
+		t.Errorf("classifier routes = %d, want 10", len(routes))
 	}
 	if routes["status-check"] != "status-check-gen" {
 		t.Errorf("routes[status-check] = %v, want status-check-gen", routes["status-check"])
@@ -60,6 +60,9 @@ func TestBuildSkillRouterPipeline(t *testing.T) {
 		"- strategy-recommend：策略调整建议",
 		"- billing-audit：计费审计",
 		"- cost-analysis：成本分析",
+		"- self-evolution：自进化闭环——诊断现状，提出并 dryrun 配置优化提案，确认后应用、度量与回滚",
+		"- evolution-smoke：自进化烟测——只读诊断基线，不注册 evolution 写操作",
+		"- evolution-dryrun：自进化 dryrun 测——propose + dryrun 验证提案，不实际应用（无 apply/rollback 工具）",
 		"- chat：问候、闲聊或与 centag 运维无关的问题；无法判断时也返回 chat",
 		"{{.input}}",
 	} {

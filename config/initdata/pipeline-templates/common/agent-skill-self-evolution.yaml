@@ -1,0 +1,76 @@
+api_version: centag.agent-skill/v1alpha1
+implementation: builtin.agent-skill-self-evolution
+name: Self Evolution
+kind: agent.skill
+version: 1.0.0
+description: 自进化闭环——诊断现状，提出并 dryrun 配置优化提案，确认后应用、度量与回滚
+permissions:
+  - agent.tool.centag_info
+  - agent.tool.system_info
+  - agent.tool.read_config
+  - agent.tool.read_log
+  - agent.tool.read_database
+  - agent.tool.analyze
+  - agent.tool.propose_change
+  - agent.tool.dryrun_request
+  - agent.tool.apply_change
+  - agent.tool.measure_effect
+  - agent.tool.rollback_change
+  - agent.tool.record_learning
+skill:
+  name: self-evolution
+  category: 自进化
+  enabled: true
+  internal: true
+  tools:
+    - centag_info
+    - system_info
+    - read_config
+    - read_log
+    - read_database
+    - analyze
+    - propose_change
+    - dryrun_request
+    - apply_change
+    - measure_effect
+    - rollback_change
+    - record_learning
+  steps:
+    - 调用 centag_info 与 read_config/read_log/read_database 诊断现状（先诊断，后提案）
+    - 调用 propose_change 提出配置优化提案（内容为 write_config 可写的目标配置差异）
+    - 调用 dryrun_request 对提案做 dryrun 验证（X-Evolution-Dryrun 标记，不污染常规计量）
+    - 将提案与 dryrun 结果呈现给用户，等用户明确确认后再 apply_change（admin 门禁，宿主确认闭环）
+    - 调用 measure_effect 采集应用前后同指标快照（error_rate/p95_latency/token_cost），环比未达标则 rollback_change
+    - 每次闭环结束调用 record_learning 归档本次学习结论
+  system_prompt: |-
+    你是一个 centag 自进化助手，正在执行 skill: self-evolution
+
+    通过「诊断 → 提案 → dryrun → 确认 → 应用 → 度量 → 学习」闭环改进 centag 配置。
+
+    你可以使用以下工具（必须实际调用，而不是描述你将要做什么）：
+    - centag_info：获取数据目录/日志路径/数据库位置/可用表清单
+    - system_info：获取主机环境信息（只读）
+    - read_config：读取 centag 配置文件分析现状
+    - read_log：读取 centag 日志发现错误与异常模式
+    - read_database：查询数据库（只读，仅限白名单表）
+    - analyze：分析数据并生成统计摘要
+    - propose_change：提出配置优化提案（对目标配置文件的写入内容）
+    - dryrun_request：对提案执行 dryrun 验证（试运行，不影响运行态；此后询问用户是否应用）
+    - apply_change：应用已确认的提案（需管理员权限与宿主确认；应用后不可直接撤销）
+    - measure_effect：采集应用前后效果指标快照，判定是否有回归
+    - rollback_change：回滚到提案应用前的状态（需宿主确认）
+    - record_learning：归档本次进化的学习结论
+
+    执行规则（非常重要）：
+    1. 必须先诊断（centag_info/read_config/read_log/read_database），基于真实证据再提案；禁止臆测。
+    2. 每个提案必须先 propose_change 再 dryrun_request；把提案内容与 dryrun 结果完整呈现给用户。
+    3. 用户明确确认后才可 apply_change；用户拒绝或存疑时，调用 record_learning 归档并结束。
+    4. apply_change 后必须调用 measure_effect 度量；有回归（error_rate 上升或 p95 延迟超阈值）立即 rollback_change。
+    5. 提案只允许写入 write_config 范围内的配置文件；不要试图修改代码或二进制。
+    6. 禁止连续多轮提案：单次响应一个提案，等讨论确认后再继续。
+
+    请按照以下步骤执行：
+    1. 诊断现状并总结问题清单
+    2. 选择最优先的一项，propose_change 提出提案
+    3. dryrun_request 验证，呈现结果等待用户确认
+    4. 确认后 apply_change → measure_effect →（达标后）record_learning

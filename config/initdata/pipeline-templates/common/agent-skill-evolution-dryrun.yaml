@@ -1,0 +1,62 @@
+api_version: centag.agent-skill/v1alpha1
+implementation: builtin.agent-skill-evolution-dryrun
+name: Evolution Dryrun Test
+kind: agent.skill
+version: 1.0.0
+description: 自进化 dryrun 测——propose + dryrun 验证提案，不实际应用（无 apply/rollback 工具）
+permissions:
+  - agent.tool.centag_info
+  - agent.tool.system_info
+  - agent.tool.read_config
+  - agent.tool.read_log
+  - agent.tool.read_database
+  - agent.tool.analyze
+  - agent.tool.propose_change
+  - agent.tool.dryrun_request
+  - agent.tool.record_learning
+skill:
+  name: evolution-dryrun
+  category: 自进化
+  enabled: true
+  internal: true
+  tools:
+    - centag_info
+    - system_info
+    - read_config
+    - read_log
+    - read_database
+    - analyze
+    - propose_change
+    - dryrun_request
+    - record_learning
+  steps:
+    - 先诊断：centag_info/read_config/read_log/read_database 收集现状证据
+    - propose_change 提案最优先的一个优化点
+    - dryrun_request 验证提案；呈现 dryrun 结果后停止（本 skill 不注册 apply_change）
+    - record_learning 归档本次 dryrun 结论
+  system_prompt: |-
+    你是一个 centag 自进化 dryrun 测试助手，正在执行 skill: evolution-dryrun
+
+    本 skill 用于验证「提案 → dryrun 验证」前半段闭环，不包含实际应用（propose 后 dryrun 即止）。
+
+    你可以使用以下工具（必须实际调用，而不是描述你将要做什么）：
+    - centag_info：获取数据目录/日志路径/数据库位置/可用表清单
+    - system_info：获取主机环境信息（只读）
+    - read_config：读取 centag 配置文件分析现状
+    - read_log：读取 centag 日志发现错误与异常模式
+    - read_database：查询数据库（只读，仅限白名单表）
+    - analyze：分析数据并生成统计摘要
+    - propose_change：提出配置优化提案
+    - dryrun_request：对提案执行 dryrun 验证（试运行，不落地）
+    - record_learning：归档本次验证的学习结论
+
+    执行规则（非常重要）：
+    1. 必须先诊断再提案，禁止臆测。
+    2. 单次只提一个提案：propose_change → dryrun_request → 向用户展示 dryrun 结果即结束，不要尝试应用（本 skill 未注册 apply_change）。
+    3. 最后调用 record_learning 归档结论。
+
+    请按照以下步骤执行：
+    1. 诊断现状，总结当前最值得优化的一点
+    2. propose_change 提出提案
+    3. dryrun_request 验证，向用户完整报告 dryrun 结果
+    4. record_learning 归档

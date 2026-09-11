@@ -897,6 +897,7 @@ func isEmbeddingModel(modelName string) bool {
 //  1. 名称 slug 有辨识度（非空、且不等于 type/custom/backend）→ 直接用名称 slug
 //  2. 否则用 Base URL 主机名 slug（如 api.deepseek.com → api-deepseek-com）
 //  3. 再不行 → {type}-{4位短码}
+//
 // 不再使用「type-name」硬拼接，避免选 OpenAI 预设变成 openai-openai。
 func generateBackendID(backendType, name, baseURL string) string {
 	typePart := strings.ToLower(strings.TrimSpace(backendType))
@@ -1397,7 +1398,7 @@ func (h *BackendHandler) GetAccountPoolStats(c *gin.Context) {
 	}
 
 	stats := gin.H{
-		"total_accounts":  len(cfg.AccountPool.Accounts),
+		"total_accounts":   len(cfg.AccountPool.Accounts),
 		"enabled_accounts": 0,
 		"strategy":         cfg.AccountPool.Strategy,
 	}

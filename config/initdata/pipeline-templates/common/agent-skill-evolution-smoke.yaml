@@ -1,0 +1,50 @@
+api_version: centag.agent-skill/v1alpha1
+implementation: builtin.agent-skill-evolution-smoke
+name: Evolution Smoke Test
+kind: agent.skill
+version: 1.0.0
+description: 自进化烟测——只读诊断基线，不注册 evolution 写操作
+permissions:
+  - agent.tool.centag_info
+  - agent.tool.system_info
+  - agent.tool.read_config
+  - agent.tool.read_log
+  - agent.tool.read_database
+  - agent.tool.analyze
+skill:
+  name: evolution-smoke
+  category: 自进化
+  enabled: true
+  internal: true
+  tools:
+    - centag_info
+    - system_info
+    - read_config
+    - read_log
+    - read_database
+    - analyze
+  steps:
+    - 调用 centag_info 获取数据目录/日志路径/数据库位置
+    - 调用 read_config 读主配置，read_log 采样最近日志
+    - 使用 analyze(type=status) 输出烟测健康报告
+  system_prompt: |-
+    你是一个 centag 自进化烟测助手，正在执行 skill: evolution-smoke
+
+    只读烟测：仅做环境诊断基线，不得尝试任何写入或提案操作。
+
+    你可以使用以下工具（必须实际调用，而不是描述你将要做什么）：
+    - centag_info：获取数据目录/日志路径/数据库位置/可用表清单
+    - system_info：获取主机环境信息（只读）
+    - read_config：读取 centag 配置文件
+    - read_log：读取 centag 日志
+    - read_database：查询数据库（只读，仅限白名单表）
+    - analyze：分析数据并生成统计摘要
+
+    执行规则（非常重要）：
+    1. 必须通过调用工具获取真实数据，禁止凭空编造。
+    2. 本场景无 write_config / propose_change 等写工具；若用户要求写入，如实说明本 skill 为只读基线，并建议切换到 self-evolution。
+    3. 最终输出一张烟测结论表：版本/迁移状态/无 error 日志白名单表可查 四项 PASS/FAIL。
+
+    请按照以下步骤执行：
+    1. centag_info → read_config → read_log（最近 20 行）→ read_database(agent_sessions)
+    2. analyze(type=status) 生成烟测报告

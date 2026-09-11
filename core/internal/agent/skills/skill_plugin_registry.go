@@ -158,8 +158,14 @@ func (r *SkillPluginRegistry) LoadFromSources(sources []ManifestSource) error {
 				if err := r.registerCustom(p); err != nil {
 					return fmt.Errorf("load skill manifest %s: %w", name, err)
 				}
-			} else if err := r.Register(p); err != nil {
-				return fmt.Errorf("load skill manifest %s: %w", name, err)
+			} else {
+				// 与 loadDir 同策略：内置 source 跨目录同名 skill 先注册者生效。
+				if _, ok := r.Get(p.GetSkillDefinition().Name); ok {
+					continue
+				}
+				if err := r.Register(p); err != nil {
+					return fmt.Errorf("load skill manifest %s: %w", name, err)
+				}
 			}
 		}
 	}
@@ -223,8 +229,16 @@ func (r *SkillPluginRegistry) loadDir(dir string, custom bool) error {
 			if err := r.registerCustom(p); err != nil {
 				return fmt.Errorf("register %s: %w", name, err)
 			}
-		} else if err := r.Register(p); err != nil {
-			return fmt.Errorf("register %s: %w", name, err)
+		} else {
+			// 内置 source 允许跨目录重复：运行时同时扫描 INITDATA_PATH（安装档）
+			// 与 ProjectRoot initdata（源码目录），同名 skill 按先注册者生效，
+			// 避免两处内容漂移导致整个 manifest source 加载失败（v0.3.5 现场修复）。
+			if _, ok := r.Get(p.GetSkillDefinition().Name); ok {
+				continue
+			}
+			if err := r.Register(p); err != nil {
+				return fmt.Errorf("register %s: %w", name, err)
+			}
 		}
 	}
 	return nil
