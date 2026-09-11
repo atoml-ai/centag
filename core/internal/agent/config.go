@@ -101,6 +101,13 @@ func DefaultAgentConfig() *AgentConfig {
 				"analyze",
 				"system_info",
 				"centag_info",
+				// self-evolution 操作面（v0.3.5 T2；内置注册，不经 MCP 对外）
+				"propose_change",
+				"dryrun_request",
+				"apply_change",
+				"measure_effect",
+				"rollback_change",
+				"record_learning",
 			},
 			Denied: []string{
 				"bash",
@@ -110,6 +117,10 @@ func DefaultAgentConfig() *AgentConfig {
 			},
 			RequireConfirm: []string{
 				"write_config",
+				// apply_change/rollback_change 不进 RequireConfirm：聚合模式无 SSE
+				// 确认通道，RequireConfirm 工具恒 autoDeny（permission.go），闭环会
+				// 死锁。自进化写面的确认由三层替代：dryrun 通过 + 会话内用户明示确认
+				// + admin 门禁（T6 evolutionAdminFor）。
 			},
 		},
 		

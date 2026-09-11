@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"strings"
 
+	"centag/core/internal/agent/evolution"
 	"centag/core/internal/auth"
 	"centag/core/internal/tokenusage"
 	"centag/core/pkg/backend"
@@ -78,6 +79,28 @@ func maybeRecordTokenUsage(c *gin.Context, output *pipeline.PipelineOutput, fall
 		Success:      output.ExecutionLog == nil || output.ExecutionLog.Success,
 		DeptTag:      deptTag,
 		Source:       source, // 038: 数据来源
+	}
+
+	// dryrun 标记请求（T4）：evol-tag 分桶（dryrun-usage.jsonl），不进常规 usage 聚合
+	//（TC-BILL-EVO-002：mock 聚合零变化）。
+	if evolution.IsDryrunHeader(c.GetHeader(evolution.HeaderEvolutionDryrun)) {
+		rec := evolution.DryrunUsageRecord{
+			UserID:           usage.UserID,
+			APIKeyID:         usage.APIKeyID,
+			SessionID:        usage.SessionID,
+			Model:            usage.Model,
+			Backend:          usage.Backend,
+			PromptTokens:     usage.InputTokens,
+			CompletionTokens: usage.OutputTokens,
+			TotalTokens:      usage.TotalTokens,
+			Success:          usage.Success,
+			DeptTag:          deptTag,
+			Source:           usage.Source,
+			RequestID:        usage.RequestID,
+		}
+		_ = evolution.AppendDryrunUsage(rec)
+		pipeline.RecordSchedulerMetricsFromOutput(output)
+		return
 	}
 
 	// 用户自建后端（TenantID 非空 = 用户私有）：用量归属到用户 scope，

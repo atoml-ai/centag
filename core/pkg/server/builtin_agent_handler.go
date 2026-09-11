@@ -89,14 +89,15 @@ func NewBuiltinAgentHandler(config *agent.AgentConfig, dataDir string, db *sql.D
 	if len(skillRegistry.ListSkills()) == 0 {
 		skills.LoadBuiltinSkills(skillRegistry)
 	}
-	
+
 	// 创建工具注册表
 	toolRegistry := tools.NewToolRegistry(dataDir, db, config.Database.AllowedTables)
 
 	// 创建 Agent 运行时引擎
 	engine := agent.NewRuntimeEngine(config, dataDir, db)
 	engine.SetDBPath(dbPath)
-	
+	engine.SetDriverName(driver)
+
 	return &BuiltinAgentHandler{
 		config:              config,
 		dataDir:             dataDir,
@@ -131,6 +132,7 @@ func (h *BuiltinAgentHandler) engineFor(session *AgentSession) *agent.RuntimeEng
 	}
 	e := agent.NewRuntimeEngine(h.config, h.dataDir, h.db)
 	e.SetDBPath(h.dbPath)
+	e.SetSessionID(session.ID)
 	h.engines[session.ID] = e
 	return e
 }
@@ -456,6 +458,7 @@ func (h *BuiltinAgentHandler) runAgent(c *gin.Context, session *AgentSession, sk
 
 	// 会话专属引擎（P0-2：隔离各会话 backend/token，杜绝跨用户串号）
 	e := h.engineFor(session)
+	e.SetEvolutionAdmin(evolutionAdminFor(auth.IsAdmin(c)))
 
 	// 构造 backend（指向 centag 自身代理）
 	token := ""
@@ -553,6 +556,23 @@ func (h *BuiltinAgentHandler) unionSkillTools() []string {
 // 兼容旧调用签名：参数不再用于单 skill 收敛。
 func (h *BuiltinAgentHandler) skillTools(skillName string) []string {
 	return h.unionSkillTools()
+}
+
+// evolutionAdminFor 判定 evolution 写操作管理员门的放行条件。
+//   - JWT admin：直接放行；
+//   - personal/minimal 单用户部署：bootstrap 特意将 owner 建为 normal 角色以对齐
+//     team 普通用户行为（seeder.go），但单用户 edition 的自进化闭环应开箱可用，
+//     此处将唯一用户视为 admin（仅作用于 evolution 工具面，不改变 JWT/scope 语义）；
+//   - team 等多用户 edition：维持 admin-only（T6 门禁）。
+func evolutionAdminFor(isAdmin bool) bool {
+	if isAdmin {
+		return true
+	}
+	switch strings.ToLower(strings.TrimSpace(os.Getenv("CENTAG_EDITION"))) {
+	case "personal", "minimal":
+		return true
+	}
+	return false
 }
 
 // defaultAgentSystemPrompt 默认运维助手提示词

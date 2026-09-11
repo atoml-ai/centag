@@ -19,10 +19,13 @@ import (
 // 一个 RuntimeEngine 绑定一个会话（单租户语义）：backend/token/pipeline/session
 // 状态由 mu 保护，且跨会话禁止共享同一实例（P0-2：历史版本全局共享导致并发串号）。
 type RuntimeEngine struct {
-	config  *AgentConfig
-	dataDir string
-	db      *sql.DB
-	dbPath  string // 数据库文件路径（用于 centag_info 工具）
+	config    *AgentConfig
+	dataDir   string
+	db        *sql.DB
+	dbPath    string // 数据库文件路径（用于 centag_info 工具）
+	driver    string // 数据库驱动（sqlite/postgresql；evolution 包推断用）
+	sessionID string // 会话 ID（evolution 提案日志归属）
+	evolutionAdmin bool // 会话调用者 admin 判定（evolution 写操作门槛）
 
 	mu sync.Mutex // 保护以下全部可变字段
 	// BackendConfig 由 server 层注入（指向 centag 自身代理）
@@ -67,6 +70,35 @@ func (e *RuntimeEngine) SetDBPath(p string) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	e.dbPath = p
+}
+
+// SetDriverName 设置数据库驱动（sqlite/postgresql）。
+func (e *RuntimeEngine) SetDriverName(driver string) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.driver = driver
+}
+
+// SetSessionID 设置会话 ID（evolution 提案归属）。
+func (e *RuntimeEngine) SetSessionID(sid string) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.sessionID = sid
+}
+
+// SetEvolutionAdmin 设置会话调用者的 admin 判定（TC-BILL-EVO-003：写操作 admin only）。
+func (e *RuntimeEngine) SetEvolutionAdmin(isAdmin bool) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.evolutionAdmin = isAdmin
+}
+
+// sessionIDValue 返回提案归属会话（缺省 "runtime"）。
+func (e *RuntimeEngine) sessionIDValue() string {
+	if e.sessionID != "" {
+		return e.sessionID
+	}
+	return "runtime"
 }
 
 // EnsureBackend 初始化 HTTP backend（指向 centag 自身代理）。
@@ -185,7 +217,11 @@ func (e *RuntimeEngine) registerTools(registry agentcore.ToolRegistry, skillTool
 	systemInfo := tools.NewSystemInfoTool()
 	centagInfo := tools.NewCentagInfoTool(e.dataDir, e.dbPath, e.config.Database.AllowedTables)
 
-	for _, tool := range []agentcore.Tool{readConfig, readLog, readDB, writeConfig, analyze, systemInfo, centagInfo} {
+	// self-evolution 操作面内置工具（不经 MCP 对外）；建表在 server 装配期 EnsureSchema。
+	evolutionTools := tools.NewEvolutionTools(tools.EvolutionRuntime(e.db, e.driver, e.dataDir), e.sessionIDValue(), e.evolutionAdmin)
+
+	all := append([]agentcore.Tool{readConfig, readLog, readDB, writeConfig, analyze, systemInfo, centagInfo}, evolutionTools...)
+	for _, tool := range all {
 		if !allowed[tool.Name()] {
 			continue
 		}

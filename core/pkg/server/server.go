@@ -15,6 +15,7 @@ import (
 	"centag/core/internal"
 	"centag/core/internal/abeval"
 	agentpkg "centag/core/internal/agent"
+	"centag/core/internal/agent/evolution"
 	"centag/core/internal/auth"
 	"centag/core/internal/billing"
 	"centag/core/internal/cache"
@@ -39,7 +40,6 @@ import (
 	"centag/core/pkg/agentmemory"
 	"centag/core/pkg/backend"
 	"centag/core/pkg/config"
-	mcppkg "centag/core/pkg/server/mcp"
 	"centag/core/pkg/configsync"
 	"centag/core/pkg/database"
 	"centag/core/pkg/editionmodule"
@@ -53,6 +53,7 @@ import (
 	pluginregistry "centag/core/pkg/plugin/registry"
 	"centag/core/pkg/processor"
 	"centag/core/pkg/proxymode"
+	mcppkg "centag/core/pkg/server/mcp"
 	"centag/core/pkg/storage"
 	"centag/core/pkg/systemupdateapi"
 	"centag/core/pkg/tokenusageapi"
@@ -641,6 +642,7 @@ func New(cfg *config.Config) *Server {
 	if dataDir == "" {
 		dataDir = os.Getenv("HOME") + "/.centag"
 	}
+	evolution.SetDataDir(dataDir)
 	builtinAgentProvider := NewAgentDataProvider(backendManager, pipelineRegistry, cfg)
 	baseURL := fmt.Sprintf("http://127.0.0.1:%d", cfg.Server.Port)
 	dbPath := resolveAgentDBPath(dataDir)
@@ -1981,18 +1983,18 @@ func (s *Server) setupRoutes() {
 	// 需求 A（mcp-interface-layer）：MCP 只读观测面，默认 mcp.enabled=false（不注册路由 → 404）。
 	// 复用 v1Protected Bearer 鉴权；工具面复用 agent 工具正本（单一真源）。
 	if s.observationMcp != nil {
-	// 标准端点径直挂 /mcp（不依赖尾斜杠重定向），SSE 兼容端点 /mcp/sse。
-	collectObserve := func(method, path string) {
-		v1Protected.Handle(method, path, gin.WrapF(s.observationMcp.StreamableHandler().ServeHTTP))
-	}
-	collectObserve(http.MethodGet, "/mcp")
-	collectObserve(http.MethodPost, "/mcp")
-	collectObserve(http.MethodDelete, "/mcp")
-	sseObserve := func(method, path string) {
-		v1Protected.Handle(method, path, gin.WrapF(s.observationMcp.SSEHandler().ServeHTTP))
-	}
-	sseObserve(http.MethodGet, "/mcp/sse")
-	sseObserve(http.MethodPost, "/mcp/sse")
+		// 标准端点径直挂 /mcp（不依赖尾斜杠重定向），SSE 兼容端点 /mcp/sse。
+		collectObserve := func(method, path string) {
+			v1Protected.Handle(method, path, gin.WrapF(s.observationMcp.StreamableHandler().ServeHTTP))
+		}
+		collectObserve(http.MethodGet, "/mcp")
+		collectObserve(http.MethodPost, "/mcp")
+		collectObserve(http.MethodDelete, "/mcp")
+		sseObserve := func(method, path string) {
+			v1Protected.Handle(method, path, gin.WrapF(s.observationMcp.SSEHandler().ServeHTTP))
+		}
+		sseObserve(http.MethodGet, "/mcp/sse")
+		sseObserve(http.MethodPost, "/mcp/sse")
 	}
 
 	logger.Info("Proxy mode middleware registered for LLM proxy routes")
