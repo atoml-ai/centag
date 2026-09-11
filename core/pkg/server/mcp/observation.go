@@ -22,7 +22,6 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -267,5 +266,3 @@ func toSDKHandler(t agentcore.Tool) gomcp.ToolHandler {
 		}, nil
 	}
 }
-
-var errUnauthorized = errors.New("unauthorized")
