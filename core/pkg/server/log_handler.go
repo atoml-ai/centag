@@ -13,9 +13,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gin-gonic/gin"
 	"centag/core/pkg/config"
 	"centag/core/pkg/logger"
+	"github.com/gin-gonic/gin"
 )
 
 // stdoutOnlyLogViewerBody 当日志只写终端时，说明 Web「日志查看」与终端数据源不一致（前缀由进程内 log.output 拼接）
@@ -23,18 +23,18 @@ const stdoutOnlyLogViewerBody = "运行中的日志只出现在启动服务的�
 
 // LogEntry 日志条目结构
 type LogEntry struct {
-	Timestamp    string  `json:"timestamp"`
-	Level        string  `json:"level"`
-	RequestID    string  `json:"request_id,omitempty"`
-	UserID       int64   `json:"user_id,omitempty"`
-	APIKeyPrefix string  `json:"api_key_prefix,omitempty"`
-	BackendID    string  `json:"backend_id,omitempty"`
-	BackendType  string  `json:"backend_type,omitempty"`
-	Model        string  `json:"model,omitempty"`
-	Strategy     string  `json:"strategy,omitempty"`
-	CacheHit     bool    `json:"cache_hit,omitempty"`
-	DurationMs   int64   `json:"duration_ms,omitempty"`
-	StatusCode   int     `json:"status_code,omitempty"`
+	Timestamp    string            `json:"timestamp"`
+	Level        string            `json:"level"`
+	RequestID    string            `json:"request_id,omitempty"`
+	UserID       int64             `json:"user_id,omitempty"`
+	APIKeyPrefix string            `json:"api_key_prefix,omitempty"`
+	BackendID    string            `json:"backend_id,omitempty"`
+	BackendType  string            `json:"backend_type,omitempty"`
+	Model        string            `json:"model,omitempty"`
+	Strategy     string            `json:"strategy,omitempty"`
+	CacheHit     bool              `json:"cache_hit,omitempty"`
+	DurationMs   int64             `json:"duration_ms,omitempty"`
+	StatusCode   int               `json:"status_code,omitempty"`
 	Message      string            `json:"message"`
 	ClientIP     string            `json:"client_ip,omitempty"`
 	Path         string            `json:"path,omitempty"`
@@ -88,9 +88,9 @@ type LogQueryResponse struct {
 
 // LogHandler 日志处理器
 type LogHandler struct {
-	logPath         string
-	stdoutOnly      bool
-	logOutputRaw    string // 启动时 cfg.Log.Output 原始值，便于与 config/secrets/.env 对照
+	logPath      string
+	stdoutOnly   bool
+	logOutputRaw string // 启动时 cfg.Log.Output 原始值，便于与 config/secrets/.env 对照
 }
 
 // NewLogHandler 创建日志处理器（路径与 zap 写入文件一致，来自 bootstrap/env 的 Log 配置）
@@ -1262,14 +1262,14 @@ func (h *LogHandler) GetLogStats(c *gin.Context) {
 	}
 
 	stats := LogStats{
-		TotalLogs:     0,
-		ErrorCount:    0,
-		WarnCount:     0,
-		InfoCount:     0,
-		DebugCount:    0,
-		BackendStats:  make(map[string]int),
-		ModelStats:    make(map[string]int),
-		HourlyStats:   make(map[string]int),
+		TotalLogs:    0,
+		ErrorCount:   0,
+		WarnCount:    0,
+		InfoCount:    0,
+		DebugCount:   0,
+		BackendStats: make(map[string]int),
+		ModelStats:   make(map[string]int),
+		HourlyStats:  make(map[string]int),
 	}
 
 	for _, logFile := range logFiles {
@@ -1448,6 +1448,7 @@ func (h *LogHandler) ClearLogs(c *gin.Context) {
 // GET /api/v1/logs/tail?offset=<bytes>&tail=<true|false>&limit=<bytes>
 //   - offset=0&tail=true：返回文件末尾最近 32KB 内容（首次打开）
 //   - offset>0：从该偏移量读取新增内容
+//
 // 返回格式化后的可读文本（JSON 行被解析为 "时间 [级别] 消息" 格式）。
 func (h *LogHandler) TailLogs(c *gin.Context) {
 	path := h.logPath

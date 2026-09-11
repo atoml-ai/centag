@@ -14,11 +14,11 @@ import (
 
 // skillForm 自定义 skill 表单（方案 §5.2）。
 type skillForm struct {
-	Name        string   `json:"name" binding:"required"`
-	Description string   `json:"description"`
-	Category    string   `json:"category"`
-	Tools       []string `json:"tools"`
-	Steps       []string `json:"steps"`
+	Name         string   `json:"name" binding:"required"`
+	Description  string   `json:"description"`
+	Category     string   `json:"category"`
+	Tools        []string `json:"tools"`
+	Steps        []string `json:"steps"`
 	SystemPrompt string   `json:"system_prompt"`
 }
 

@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"strings"
 
-	"centag/core/pkg/proxymode"
 	"centag/core/internal/session"
+	"centag/core/pkg/proxymode"
 )
 
 // ProxyModeHandler 代理模式 API 处理器
@@ -101,9 +101,9 @@ func (h *ProxyModeHandler) GetProxyMode(w http.ResponseWriter, r *http.Request) 
 	var data map[string]interface{}
 	if exists {
 		data = map[string]interface{}{
-			"mode":    sessionData.ModeKey,
-			"backend": sessionData.BackendID,
-			"model":   sessionData.ModelName,
+			"mode":       sessionData.ModeKey,
+			"backend":    sessionData.BackendID,
+			"model":      sessionData.ModelName,
 			"expires_at": sessionData.ExpiresAt,
 		}
 	} else {

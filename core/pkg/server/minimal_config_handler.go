@@ -68,17 +68,17 @@ type MinimalPipelineConfig struct {
 
 // MinimalConfigHandler 配置管理处理器
 type MinimalConfigHandler struct {
-	dataDir         string
-	mu              sync.RWMutex
-	reloadFunc      func() error
+	dataDir          string
+	mu               sync.RWMutex
+	reloadFunc       func() error
 	pipelineRegistry *pipeline.PipelineRegistry
 }
 
 // NewMinimalConfigHandler 创建配置处理器
 func NewMinimalConfigHandler(dataDir string, reloadFunc func() error, pipelineRegistry *pipeline.PipelineRegistry) *MinimalConfigHandler {
 	return &MinimalConfigHandler{
-		dataDir:         dataDir,
-		reloadFunc:      reloadFunc,
+		dataDir:          dataDir,
+		reloadFunc:       reloadFunc,
 		pipelineRegistry: pipelineRegistry,
 	}
 }
@@ -322,7 +322,7 @@ func (h *MinimalConfigHandler) DeleteBackend(c *gin.Context) {
 func (h *MinimalConfigHandler) GetPipelines(c *gin.Context) {
 	// 读取激活状态
 	activeState := h.loadPipelineActivationState()
-	
+
 	// 如果没有激活状态文件，默认所有流水线都是激活的
 	allActive := len(activeState.ActivePipelines) == 0
 
@@ -330,30 +330,30 @@ func (h *MinimalConfigHandler) GetPipelines(c *gin.Context) {
 		// 从内存注册表获取流水线
 		pipelines := h.pipelineRegistry.List()
 		result := make([]MinimalPipelineConfig, 0, len(pipelines))
-		
+
 		for _, p := range pipelines {
-		 isActive := allActive
-		 if !allActive {
-		   for _, activeID := range activeState.ActivePipelines {
-		     if activeID == p.ID {
-		       isActive = true
-		       break
-		     }
-		   }
-		 }
-		 
-		 result = append(result, MinimalPipelineConfig{
-		   ID:       p.ID,
-		   Name:     p.Name,
-		   Active:   isActive,
-		   Filename: p.ID + ".yaml",
-		 })
+			isActive := allActive
+			if !allActive {
+				for _, activeID := range activeState.ActivePipelines {
+					if activeID == p.ID {
+						isActive = true
+						break
+					}
+				}
+			}
+
+			result = append(result, MinimalPipelineConfig{
+				ID:       p.ID,
+				Name:     p.Name,
+				Active:   isActive,
+				Filename: p.ID + ".yaml",
+			})
 		}
-		
+
 		c.JSON(http.StatusOK, result)
 		return
 	}
-	
+
 	// 回退到文件系统读取
 	pipelinesDir := filepath.Join(h.dataDir, "pipeline-templates")
 
@@ -416,18 +416,18 @@ func (h *MinimalConfigHandler) loadPipelineActivationState() PipelineActivationS
 	state := PipelineActivationState{
 		ActivePipelines: []string{},
 	}
-	
+
 	if data, err := os.ReadFile(stateFile); err == nil {
 		_ = yaml.Unmarshal(data, &state)
 	}
-	
+
 	return state
 }
 
 // ActivatePipeline 激活 Pipeline
 func (h *MinimalConfigHandler) ActivatePipeline(c *gin.Context) {
 	id := c.Param("id")
-	
+
 	if h.pipelineRegistry == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "pipeline registry not available"})
 		return
@@ -454,17 +454,17 @@ func (h *MinimalConfigHandler) ActivatePipeline(c *gin.Context) {
 
 	logger.Infof("[MinimalConfig] Pipeline activated: %s (%s)", id, p.Name)
 	c.JSON(http.StatusOK, gin.H{
-		"message":  "pipeline activated",
-		"id":       id,
-		"name":     p.Name,
-		"active":   true,
+		"message": "pipeline activated",
+		"id":      id,
+		"name":    p.Name,
+		"active":  true,
 	})
 }
 
 // DeactivatePipeline 停用 Pipeline
 func (h *MinimalConfigHandler) DeactivatePipeline(c *gin.Context) {
 	id := c.Param("id")
-	
+
 	if h.pipelineRegistry == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "pipeline registry not available"})
 		return
@@ -491,10 +491,10 @@ func (h *MinimalConfigHandler) DeactivatePipeline(c *gin.Context) {
 
 	logger.Infof("[MinimalConfig] Pipeline deactivated: %s (%s)", id, p.Name)
 	c.JSON(http.StatusOK, gin.H{
-		"message":  "pipeline deactivated",
-		"id":       id,
-		"name":     p.Name,
-		"active":   false,
+		"message": "pipeline deactivated",
+		"id":      id,
+		"name":    p.Name,
+		"active":  false,
 	})
 }
 
@@ -506,16 +506,16 @@ type PipelineActivationState struct {
 // savePipelineActivationState 保存流水线激活状态到文件
 func (h *MinimalConfigHandler) savePipelineActivationState(pipelineID string, active bool) error {
 	stateFile := filepath.Join(h.dataDir, "pipeline-activation.yaml")
-	
+
 	// 读取现有状态
 	state := PipelineActivationState{
 		ActivePipelines: []string{},
 	}
-	
+
 	if data, err := os.ReadFile(stateFile); err == nil {
 		_ = yaml.Unmarshal(data, &state)
 	}
-	
+
 	// 更新状态
 	if active {
 		// 添加到激活列表（如果不存在）
@@ -539,18 +539,18 @@ func (h *MinimalConfigHandler) savePipelineActivationState(pipelineID string, ac
 		}
 		state.ActivePipelines = filtered
 	}
-	
+
 	// 确保数据目录存在
 	if err := os.MkdirAll(h.dataDir, 0755); err != nil {
 		return err
 	}
-	
+
 	// 写入文件
 	data, err := yaml.Marshal(state)
 	if err != nil {
 		return err
 	}
-	
+
 	return os.WriteFile(stateFile, data, 0644)
 }
 
@@ -584,7 +584,7 @@ func (h *MinimalConfigHandler) GetDefaultPipeline(c *gin.Context) {
 			// No file yet — return current runtime default
 			c.JSON(http.StatusOK, gin.H{
 				"default_pipeline": h.getRuntimeDefaultPipeline(),
-				"source":          "fallback",
+				"source":           "fallback",
 			})
 			return
 		}
@@ -599,7 +599,7 @@ func (h *MinimalConfigHandler) GetDefaultPipeline(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"default_pipeline": cfg.DefaultPipeline,
-		"source":          "file",
+		"source":           "file",
 	})
 }
 

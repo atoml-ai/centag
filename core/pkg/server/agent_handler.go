@@ -57,26 +57,26 @@ func buildPinnedProxyModelName(backendID, model string) string {
 // ListAgentTypes 列出所有支持的 Agent 工具类型（含配置方法与安装指引）
 func (h *AgentHandler) ListAgentTypes(c *gin.Context) {
 	type agentInfo struct {
-		Type           string               `json:"type"`
-		DisplayName    string               `json:"display_name"`
-		Description    string               `json:"description"`
-		Category       agent.AgentCategory  `json:"category"`
-		Vendor         string               `json:"vendor"`
-		WriteMode      string               `json:"write_mode"`
-		ConfigPaths    []string             `json:"config_paths"`
-		KeyFields      []string             `json:"key_fields"`
-		ConfigMethod   string               `json:"config_method"`
-		InstallURL     string               `json:"install_url"`
-		InstallHint    string               `json:"install_hint"`
-		AccessMethods  []agent.AccessMethod `json:"access_methods,omitempty"`
-		CompanionCLI   *agent.CompanionCLI  `json:"companion_cli,omitempty"`
-		UIGuide        *agent.UIGuide       `json:"ui_guide,omitempty"`
-		VerifiedWrite  bool                 `json:"verified_write"`
-		VerifiedWrap   bool                 `json:"verified_wrap"`
-		VerifiedUI     bool                 `json:"verified_ui"`
-		Verified       bool                 `json:"verified"` // 任一方式已验证（兼容/排序）
-		WrapCommand    string               `json:"wrap_command,omitempty"`
-		GuideOnly      bool                 `json:"guide_only,omitempty"`
+		Type          string               `json:"type"`
+		DisplayName   string               `json:"display_name"`
+		Description   string               `json:"description"`
+		Category      agent.AgentCategory  `json:"category"`
+		Vendor        string               `json:"vendor"`
+		WriteMode     string               `json:"write_mode"`
+		ConfigPaths   []string             `json:"config_paths"`
+		KeyFields     []string             `json:"key_fields"`
+		ConfigMethod  string               `json:"config_method"`
+		InstallURL    string               `json:"install_url"`
+		InstallHint   string               `json:"install_hint"`
+		AccessMethods []agent.AccessMethod `json:"access_methods,omitempty"`
+		CompanionCLI  *agent.CompanionCLI  `json:"companion_cli,omitempty"`
+		UIGuide       *agent.UIGuide       `json:"ui_guide,omitempty"`
+		VerifiedWrite bool                 `json:"verified_write"`
+		VerifiedWrap  bool                 `json:"verified_wrap"`
+		VerifiedUI    bool                 `json:"verified_ui"`
+		Verified      bool                 `json:"verified"` // 任一方式已验证（兼容/排序）
+		WrapCommand   string               `json:"wrap_command,omitempty"`
+		GuideOnly     bool                 `json:"guide_only,omitempty"`
 	}
 	var list []agentInfo
 	for _, at := range h.registry.List() {
@@ -492,13 +492,13 @@ func (h *AgentHandler) GenerateScript(c *gin.Context) {
 	psScript += "\nWrite-Host ''\nWrite-Host '配置完成! 请重启 Agent 工具使配置生效。' -ForegroundColor Green\n"
 
 	c.JSON(http.StatusOK, gin.H{
-		"agent_type":    req.AgentType,
-		"backend_name":  routeName,
-		"description":   tmpl.Description(),
-		"shell_script":  shellScript,
-		"ps_script":     psScript,
-		"verify_cmd":    verifyCmd,
-		"steps":         steps,
+		"agent_type":   req.AgentType,
+		"backend_name": routeName,
+		"description":  tmpl.Description(),
+		"shell_script": shellScript,
+		"ps_script":    psScript,
+		"verify_cmd":   verifyCmd,
+		"steps":        steps,
 	})
 }
 

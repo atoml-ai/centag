@@ -14,7 +14,7 @@ import (
 func TestNewProxyModeHandler(t *testing.T) {
 	modeMgr := proxymode.NewManager()
 	sessionStore := session.NewProxyModeStore()
-	
+
 	handler := NewProxyModeHandler(modeMgr, sessionStore)
 	if handler == nil {
 		t.Fatal("NewProxyModeHandler() returned nil")
@@ -129,11 +129,11 @@ func TestHandleGetProxyMode(t *testing.T) {
 
 	var resp map[string]interface{}
 	json.Unmarshal(rr.Body.Bytes(), &resp)
-	
+
 	if resp["success"] != true {
 		t.Error("Expected success=true")
 	}
-	
+
 	data, ok := resp["data"].(map[string]interface{})
 	if !ok {
 		t.Fatal("Expected data object in response")
@@ -160,11 +160,11 @@ func TestHandleGetProxyMode_NoSession(t *testing.T) {
 
 	var resp map[string]interface{}
 	json.Unmarshal(rr.Body.Bytes(), &resp)
-	
+
 	if resp["success"] != true {
 		t.Error("Expected success=true")
 	}
-	
+
 	data, ok := resp["data"].(map[string]interface{})
 	if !ok {
 		t.Fatal("Expected data object in response")
@@ -221,21 +221,21 @@ func TestHandleListModes(t *testing.T) {
 
 	var resp map[string]interface{}
 	json.Unmarshal(rr.Body.Bytes(), &resp)
-	
+
 	if resp["success"] != true {
 		t.Error("Expected success=true")
 	}
-	
+
 	data, ok := resp["data"].(map[string]interface{})
 	if !ok {
 		t.Fatal("Expected data object in response")
 	}
-	
+
 	modes, ok := data["modes"].([]interface{})
 	if !ok {
 		t.Fatal("Expected modes array")
 	}
-	
+
 	// Should have at least 6 default modes
 	if len(modes) < 6 {
 		t.Errorf("Expected at least 6 modes, got %d", len(modes))
@@ -379,10 +379,10 @@ func TestHandleDeleteMode(t *testing.T) {
 
 	// First create a custom mode
 	createBody := map[string]interface{}{
-		"key":         "#z",
-		"name":        "待删除模式",
-		"type":        "custom",
-		"enabled":     true,
+		"key":     "#z",
+		"name":    "待删除模式",
+		"type":    "custom",
+		"enabled": true,
 	}
 	createBytes, _ := json.Marshal(createBody)
 	createReq := httptest.NewRequest("POST", "/api/v1/proxy-modes", bytes.NewReader(createBytes))
@@ -497,28 +497,28 @@ func TestExtractClientID(t *testing.T) {
 
 func TestWriteJSON(t *testing.T) {
 	rr := httptest.NewRecorder()
-	
+
 	data := map[string]interface{}{
 		"success": true,
 		"data": map[string]interface{}{
 			"key": "value",
 		},
 	}
-	
+
 	writeJSON(rr, http.StatusOK, data)
-	
+
 	if rr.Code != http.StatusOK {
 		t.Errorf("Expected status 200, got %d", rr.Code)
 	}
-	
+
 	contentType := rr.Header().Get("Content-Type")
 	if contentType != "application/json" {
 		t.Errorf("Expected Content-Type application/json, got %s", contentType)
 	}
-	
+
 	var resp map[string]interface{}
 	json.Unmarshal(rr.Body.Bytes(), &resp)
-	
+
 	if resp["success"] != true {
 		t.Error("Expected success=true")
 	}
@@ -526,16 +526,16 @@ func TestWriteJSON(t *testing.T) {
 
 func TestWriteError(t *testing.T) {
 	rr := httptest.NewRecorder()
-	
+
 	writeError(rr, http.StatusBadRequest, "test error")
-	
+
 	if rr.Code != http.StatusBadRequest {
 		t.Errorf("Expected status 400, got %d", rr.Code)
 	}
-	
+
 	var resp map[string]interface{}
 	json.Unmarshal(rr.Body.Bytes(), &resp)
-	
+
 	if resp["success"] != false {
 		t.Error("Expected success=false")
 	}

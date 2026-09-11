@@ -4,9 +4,9 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/gin-gonic/gin"
 	"centag/core/internal/auth"
 	"centag/core/pkg/pipeline"
+	"github.com/gin-gonic/gin"
 )
 
 func TestExtractUserID_UsesAuthContext(t *testing.T) {
@@ -113,7 +113,7 @@ func TestSanitizeUsageModel(t *testing.T) {
 		"deepseek-v4-flash":          "deepseek-v4-flash",
 		"glm-4-flash":                "glm-4-flash",
 		"{{system.default_model}}":   "",
-		"":                          "",
+		"":                           "",
 	}
 	for in, want := range cases {
 		if got := sanitizeUsageModel(in); got != want {
@@ -121,4 +121,3 @@ func TestSanitizeUsageModel(t *testing.T) {
 		}
 	}
 }
-

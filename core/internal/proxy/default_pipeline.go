@@ -9,7 +9,7 @@ import (
 // DefaultPipelineResolver 默认流水线解析器
 // 负责在无模式指定时解析应该使用的流水线
 type DefaultPipelineResolver struct {
-	config         *config.Config
+	config           *config.Config
 	userQuotaService UserQuotaService
 }
 

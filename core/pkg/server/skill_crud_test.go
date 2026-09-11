@@ -147,7 +147,7 @@ func TestSkillCRUD(t *testing.T) {
 
 func TestNormalizeSkillName(t *testing.T) {
 	cases := map[string]string{
-		"Health Check": "health-check",
+		"Health Check":    "health-check",
 		"agent-skill-foo": "foo",
 		"Foo_Bar 2024":    "foo_bar-2024",
 		"":                "",

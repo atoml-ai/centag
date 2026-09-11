@@ -4,10 +4,10 @@ import (
 	"context"
 	"strings"
 
-	"github.com/gin-gonic/gin"
 	"centag/core/internal/auth"
-	"centag/core/pkg/pipeline"
 	"centag/core/internal/tokenusage"
+	"centag/core/pkg/pipeline"
+	"github.com/gin-gonic/gin"
 )
 
 // maybeRecordCacheSaving records estimated upstream cost avoided on pipeline cache hits.

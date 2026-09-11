@@ -76,9 +76,9 @@ func (s *Server) healthReady(c *gin.Context) {
 		"edition": s.edition.String(),
 		"checks": gin.H{
 			"database": gin.H{
-				"status":          "ok",
-				"driver":          driver,
-				"degraded":        db.IsDegraded(),
+				"status":           "ok",
+				"driver":           driver,
+				"degraded":         db.IsDegraded(),
 				"requested_driver": db.RequestedDriver(),
 			},
 			"circuit_breaker": gin.H{"status": boolToStr(len(openBreakers) == 0, "ok", "degraded"), "open_backends": openBreakers},
@@ -122,9 +122,9 @@ func (s *Server) getStats(c *gin.Context) {
 
 	c.JSON(200, gin.H{
 		// 旧版统计(向后兼容)
-		"total_requests":  monitorStats.TotalRequests,
-		"cache_hit_rate":  mon.GetCacheHitRate(),
-		"avg_latency":     mon.GetAvgLatency(),
+		"total_requests": monitorStats.TotalRequests,
+		"cache_hit_rate": mon.GetCacheHitRate(),
+		"avg_latency":    mon.GetAvgLatency(),
 
 		// 新版统一统计
 		"unified_stats": unifiedStats,
@@ -266,4 +266,3 @@ func (s *Server) handleStatus(c *gin.Context) {
 
 	c.JSON(200, resp)
 }
-

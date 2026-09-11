@@ -94,11 +94,11 @@ func TestToAPIKeyResponse_MaskedKey(t *testing.T) {
 
 func TestToAPIKeyResponse_NoEncyption(t *testing.T) {
 	key := &database.APIKey{
-		ID:          1,
-		Name:        "no-encrypt",
-		KeyPrefix:   "llmproxy_xxx",
-		Enabled:     true,
-		CreatedAt:   time.Now(),
+		ID:        1,
+		Name:      "no-encrypt",
+		KeyPrefix: "llmproxy_xxx",
+		Enabled:   true,
+		CreatedAt: time.Now(),
 		// KeySecretEnc empty — cannot reveal
 	}
 	resp := toAPIKeyResponse(key)

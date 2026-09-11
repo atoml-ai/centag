@@ -32,9 +32,9 @@ func (m *migrationTestStore) Update(p *pipeline.AgentPatternPipeline) error {
 	m.updatedIDs = append(m.updatedIDs, p.ID)
 	return nil
 }
-func (m *migrationTestStore) Delete(id string) error                                { return nil }
-func (m *migrationTestStore) DeleteForTenant(tenantID, id string) error             { return nil }
-func (m *migrationTestStore) List() ([]*pipeline.AgentPatternPipeline, error)       { return nil, nil }
+func (m *migrationTestStore) Delete(id string) error                          { return nil }
+func (m *migrationTestStore) DeleteForTenant(tenantID, id string) error       { return nil }
+func (m *migrationTestStore) List() ([]*pipeline.AgentPatternPipeline, error) { return nil, nil }
 func (m *migrationTestStore) ListByTenant(tenantID string) ([]*pipeline.AgentPatternPipeline, error) {
 	return nil, nil
 }
@@ -46,7 +46,9 @@ func (m *migrationTestStore) RecordExecution(log *pipeline.ExecutionRecord) erro
 func (m *migrationTestStore) GetExecutionHistory(pipelineID string, limit int) ([]*pipeline.ExecutionRecord, error) {
 	return nil, nil
 }
-func (m *migrationTestStore) GetExecution(id int64) (*pipeline.ExecutionRecord, error) { return nil, nil }
+func (m *migrationTestStore) GetExecution(id int64) (*pipeline.ExecutionRecord, error) {
+	return nil, nil
+}
 
 func TestMigrateRouterImplementationInPipeline(t *testing.T) {
 	p := &pipeline.AgentPatternPipeline{
@@ -182,4 +184,3 @@ func TestMigrateRouterImplementationsToBusinessPlugin_UpdateError(t *testing.T) 
 		t.Fatalf("expected migrate error")
 	}
 }
-

@@ -42,7 +42,7 @@ func (h *DataStoreHandler) ListDataStores(c *gin.Context) {
 	}()
 
 	c.JSON(http.StatusOK, gin.H{
-		"data_stores":       statuses,
+		"data_stores":         statuses,
 		"default_data_stores": defaultNames,
 		"available_storages":  availStorages,
 	})

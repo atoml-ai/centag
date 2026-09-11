@@ -403,4 +403,3 @@ func (h *StorageHandler) DeleteKVKey(c *gin.Context) {
 
 	RespondSuccessWithMessage(c, fmt.Sprintf("key '%s' deleted successfully", req.Key))
 }
-

@@ -126,7 +126,7 @@ func (h *MinimalAuthHandler) RegisterRoutes(r *gin.Engine) {
 
 func (h *MinimalAuthHandler) BootstrapStatus(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
-		"success":           true,
+		"success": true,
 		"data": gin.H{
 			"initialized": h.hasPassword(),
 			"username":    minimalAdminUsername,

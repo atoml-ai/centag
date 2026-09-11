@@ -148,10 +148,10 @@ func (h *Handler) HandleXAIMCPConfigs(c *gin.Context) {
 // HandleXAILoginConfig mocks xAI GET /v1/login-config.
 func (h *Handler) HandleXAILoginConfig(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
-		"auth_method":     "api_key",
-		"requires_login":  false,
-		"sso_enabled":     false,
-		"login_url":       "",
+		"auth_method":    "api_key",
+		"requires_login": false,
+		"sso_enabled":    false,
+		"login_url":      "",
 	})
 }
 

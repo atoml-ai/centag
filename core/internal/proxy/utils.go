@@ -80,7 +80,7 @@ func extractPipelineFromContent(r *http.Request) string {
 // DetectCacheControl 从请求中检测缓存控制
 //
 // 读/写是否参与缓存流程以 Cache 中的 EnableCacheRead / EnableCacheWrite 为准
-//（与 WebUI「启用缓存命中/写入」一致）。历史库里的 cache_control.default_read、
+// （与 WebUI「启用缓存命中/写入」一致）。历史库里的 cache_control.default_read、
 // default_write 不再覆盖上述主开关，避免界面已打开读缓存但 DB 里 default_read=false
 // 导致流式/非流式整段跳过缓存查询。
 //

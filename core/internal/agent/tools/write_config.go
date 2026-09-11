@@ -79,40 +79,40 @@ func (t *WriteConfigTool) Execute(ctx context.Context, params map[string]any) (*
 	if !ok {
 		return &agentcore.ToolResult{IsError: true, Content: "missing 'path' parameter"}, nil
 	}
-	
+
 	content, ok := params["content"].(string)
 	if !ok {
 		return &agentcore.ToolResult{IsError: true, Content: "missing 'content' parameter"}, nil
 	}
-	
+
 	// 验证JSON格式
 	var jsonContent interface{}
 	if err := json.Unmarshal([]byte(content), &jsonContent); err != nil {
 		return &agentcore.ToolResult{IsError: true, Content: fmt.Sprintf("内容不是有效的JSON格式: %v", err)}, nil
 	}
-	
+
 	// 路径隔离校验（任务9 / R03）：拒绝逃逸 dataDir 的路径
 	fullPath, err := secureResolve(t.dataDir, path)
 	if err != nil {
 		return &agentcore.ToolResult{IsError: true, Content: fmt.Sprintf("写入配置文件失败: %v", err)}, nil
 	}
-	
+
 	// 确保目录存在
 	dir := filepath.Dir(fullPath)
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return &agentcore.ToolResult{IsError: true, Content: fmt.Sprintf("创建目录失败: %v", err)}, nil
 	}
-	
+
 	// 格式化JSON
 	jsonData, err := json.MarshalIndent(jsonContent, "", "  ")
 	if err != nil {
 		return &agentcore.ToolResult{IsError: true, Content: fmt.Sprintf("格式化JSON失败: %v", err)}, nil
 	}
-	
+
 	// 写入文件
 	if err := os.WriteFile(fullPath, jsonData, 0644); err != nil {
 		return &agentcore.ToolResult{IsError: true, Content: fmt.Sprintf("写入配置文件失败: %v", err)}, nil
 	}
-	
+
 	return &agentcore.ToolResult{Content: fmt.Sprintf("成功写入配置文件: %s", path)}, nil
 }

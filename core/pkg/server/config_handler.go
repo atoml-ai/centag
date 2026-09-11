@@ -121,10 +121,10 @@ func (h *ConfigHandler) GetAllConfig(c *gin.Context) {
 		"backends":        cfg.Backends,
 		"storages":        cfg.Storages,
 		"default_storage": cfg.DefaultStorage,
-		"model_matching":  cfg.ModelMatching, // 添加模型调度配置
-		"scheduler":       cfg.Scheduler,     // 智能调度配置
+		"model_matching":  cfg.ModelMatching,  // 添加模型调度配置
+		"scheduler":       cfg.Scheduler,      // 智能调度配置
 		"model_variables": cfg.ModelVariables, // 模型变量配置
-		"deployment":      depView,           // 部署级配置（fnOS 安装包）
+		"deployment":      depView,            // 部署级配置（fnOS 安装包）
 	}
 
 	RespondSuccess(c, response)
@@ -167,7 +167,7 @@ func (h *ConfigHandler) SaveAllConfig(c *gin.Context) {
 		Storages       []config.StorageConfig      `json:"storages"`
 		DefaultStorage string                      `json:"default_storage"`
 		ModelMatching  *config.ModelMatchingConfig `json:"model_matching"`
-		Scheduler      config.SchedulerConfig      `json:"scheduler"`      // 值类型，非指针
+		Scheduler      config.SchedulerConfig      `json:"scheduler"` // 值类型，非指针
 		ModelVariables *config.ModelVariables      `json:"model_variables"`
 		Deployment     *config.DeploymentConfig    `json:"deployment"`
 	}

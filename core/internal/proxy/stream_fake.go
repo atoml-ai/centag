@@ -15,8 +15,8 @@ import (
 
 // StreamFakeConfig Stream Fake 配置
 type StreamFakeConfig struct {
-	Enabled   bool
-	MaxBytes  int64
+	Enabled  bool
+	MaxBytes int64
 }
 
 // DefaultStreamFakeConfig 返回默认配置，受环境变量控制：

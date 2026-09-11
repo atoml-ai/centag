@@ -242,12 +242,12 @@ func (h *AuthHandler) Me(c *gin.Context) {
 // UserResponse is the public JSON shape for user records (profile + admin).
 // Exported so commercial plugins (centag-pro) can reuse the same DTO without forking.
 type UserResponse struct {
-	ID          int64  `json:"id"`
-	Username    string `json:"username"`
-	Role        string `json:"role"`
-	DisplayName string `json:"display_name"`
-	Email       string `json:"email"`
-	Enabled     bool   `json:"enabled"`
+	ID                       int64  `json:"id"`
+	Username                 string `json:"username"`
+	Role                     string `json:"role"`
+	DisplayName              string `json:"display_name"`
+	Email                    string `json:"email"`
+	Enabled                  bool   `json:"enabled"`
 	DefaultPipelineID        string `json:"default_pipeline_id,omitempty"`
 	CanAddOwnBackends        bool   `json:"can_add_own_backends"`
 	CanAddOwnPipelines       bool   `json:"can_add_own_pipelines"`

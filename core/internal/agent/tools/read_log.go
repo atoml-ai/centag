@@ -85,13 +85,13 @@ func (t *ReadLogTool) ParamSchema() map[string]any {
 // Execute 执行工具
 func (t *ReadLogTool) Execute(ctx context.Context, params map[string]any) (*agentcore.ToolResult, error) {
 	path, _ := params["path"].(string)
-	
+
 	// 获取可选参数
 	lines := 100
 	if linesParam, ok := params["lines"].(float64); ok {
 		lines = int(linesParam)
 	}
-	
+
 	filter := ""
 	if filterParam, ok := params["filter"].(string); ok {
 		filter = filterParam
@@ -121,37 +121,37 @@ func (t *ReadLogTool) Execute(ctx context.Context, params map[string]any) (*agen
 		}
 	}
 	defer file.Close()
-	
+
 	// 读取文件
 	var result []string
 	scanner := bufio.NewScanner(file)
 	lineCount := 0
-	
+
 	for scanner.Scan() {
 		line := scanner.Text()
 		lineCount++
-		
+
 		// 应用过滤器
 		if filter != "" && !strings.Contains(line, filter) {
 			continue
 		}
-		
+
 		result = append(result, line)
-		
+
 		// 限制行数
 		if len(result) >= lines {
 			break
 		}
 	}
-	
+
 	if err := scanner.Err(); err != nil {
 		return &agentcore.ToolResult{IsError: true, Content: fmt.Sprintf("读取日志文件失败: %v", err)}, nil
 	}
-	
+
 	if len(result) == 0 {
 		return &agentcore.ToolResult{Content: "没有找到匹配的日志条目"}, nil
 	}
-	
+
 	return &agentcore.ToolResult{Content: strings.Join(result, "\n")}, nil
 }
 

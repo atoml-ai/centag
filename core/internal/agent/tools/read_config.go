@@ -80,26 +80,26 @@ func (t *ReadConfigTool) Execute(ctx context.Context, params map[string]any) (*a
 	if err != nil {
 		return &agentcore.ToolResult{IsError: true, Content: fmt.Sprintf("读取配置文件失败: %v", err)}, nil
 	}
-	
+
 	// 读取文件
 	data, err := os.ReadFile(fullPath)
 	if err != nil {
 		return &agentcore.ToolResult{IsError: true, Content: fmt.Sprintf("读取配置文件失败: %v", err)}, nil
 	}
-	
+
 	// 尝试解析JSON
 	var result interface{}
 	if err := json.Unmarshal(data, &result); err != nil {
 		// 如果不是JSON，直接返回文本
 		return &agentcore.ToolResult{Content: string(data)}, nil
 	}
-	
+
 	// 格式化JSON输出
 	jsonData, err := json.MarshalIndent(result, "", "  ")
 	if err != nil {
 		return &agentcore.ToolResult{Content: string(data)}, nil
 	}
-	
+
 	return &agentcore.ToolResult{Content: string(jsonData)}, nil
 }
 

@@ -78,10 +78,10 @@ type TransparentProxyTarget struct {
 
 // CacheControl 缓存控制
 type CacheControl struct {
-	Read        bool // 是否读取缓存
-	Write       bool // 是否写入缓存
-	QASplit     bool // 是否进行问答拆分
-	SaveOnly    bool // 是否是仅保存模式
+	Read     bool // 是否读取缓存
+	Write    bool // 是否写入缓存
+	QASplit  bool // 是否进行问答拆分
+	SaveOnly bool // 是否是仅保存模式
 }
 
 // ProxyContext 代理上下文

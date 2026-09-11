@@ -6,8 +6,8 @@ import (
 	"centag/core/pkg/plugin"
 )
 
-func intPtr(i int) *int       { return &i }
-func boolPtr(b bool) *bool     { return &b }
+func intPtr(i int) *int    { return &i }
+func boolPtr(b bool) *bool { return &b }
 
 func TestCopyProxyRequestFields_AllP0P1Fields(t *testing.T) {
 	src := &plugin.ProxyRequest{

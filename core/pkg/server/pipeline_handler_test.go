@@ -136,10 +136,10 @@ func TestExecutePipeline_StatusPreserved_SwitchOn(t *testing.T) {
 	body, _ := json.Marshal(map[string]interface{}{
 		"content": "hello",
 		"metadata": map[string]interface{}{
-			"backend_id":           "test-backend",
-			"target_url":           "https://api.example.com",
-			"request_path":         "/v1/chat/completions",
-			"raw_request_body":     `{"model":"test-model","messages":[{"role":"user","content":"hello"}]}`,
+			"backend_id":            "test-backend",
+			"target_url":            "https://api.example.com",
+			"request_path":          "/v1/chat/completions",
+			"raw_request_body":      `{"model":"test-model","messages":[{"role":"user","content":"hello"}]}`,
 			"forward_authorization": "Bearer sk-test",
 		},
 	})
@@ -168,10 +168,10 @@ func TestExecutePipeline_StatusPreserved_SwitchOff(t *testing.T) {
 	body, _ := json.Marshal(map[string]interface{}{
 		"content": "hello",
 		"metadata": map[string]interface{}{
-			"backend_id":           "test-backend",
-			"target_url":           "https://api.example.com",
-			"request_path":         "/v1/chat/completions",
-			"raw_request_body":     `{"model":"test-model","messages":[{"role":"user","content":"hello"}]}`,
+			"backend_id":            "test-backend",
+			"target_url":            "https://api.example.com",
+			"request_path":          "/v1/chat/completions",
+			"raw_request_body":      `{"model":"test-model","messages":[{"role":"user","content":"hello"}]}`,
 			"forward_authorization": "Bearer sk-test",
 		},
 	})
@@ -201,10 +201,10 @@ func TestExecutePipeline_200Normal(t *testing.T) {
 	body, _ := json.Marshal(map[string]interface{}{
 		"content": "hello",
 		"metadata": map[string]interface{}{
-			"backend_id":           "test-backend",
-			"target_url":           "https://api.example.com",
-			"request_path":         "/v1/chat/completions",
-			"raw_request_body":     `{"model":"test-model","messages":[{"role":"user","content":"hello"}]}`,
+			"backend_id":            "test-backend",
+			"target_url":            "https://api.example.com",
+			"request_path":          "/v1/chat/completions",
+			"raw_request_body":      `{"model":"test-model","messages":[{"role":"user","content":"hello"}]}`,
 			"forward_authorization": "Bearer sk-test",
 		},
 	})

@@ -243,18 +243,18 @@ func TestBuildAutoRoutePlan_CanaryLimitStopsEarly(t *testing.T) {
 				},
 			},
 			{
-				ID:   "code-generator",
-				Type: pipeline.NodeTypeGenerator,
+				ID:     "code-generator",
+				Type:   pipeline.NodeTypeGenerator,
 				Config: pipeline.NodeConfig{Backend: "old", Model: "old"},
 			},
 			{
-				ID:   "translate-generator",
-				Type: pipeline.NodeTypeGenerator,
+				ID:     "translate-generator",
+				Type:   pipeline.NodeTypeGenerator,
 				Config: pipeline.NodeConfig{Backend: "old", Model: "old"},
 			},
 			{
-				ID:   "summary-generator",
-				Type: pipeline.NodeTypeGenerator,
+				ID:     "summary-generator",
+				Type:   pipeline.NodeTypeGenerator,
 				Config: pipeline.NodeConfig{Backend: "old", Model: "old"},
 			},
 		},
@@ -355,4 +355,3 @@ func TestBuildAutoRoutePlan(t *testing.T) {
 		t.Fatalf("expected translate generator backend updated")
 	}
 }
-

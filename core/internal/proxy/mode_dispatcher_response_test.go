@@ -25,7 +25,9 @@ func (s *stubResponsePipelineEngine) Execute(context.Context, string, *pipeline.
 
 func (s *stubResponsePipelineEngine) HasPipeline(string) bool { return true }
 
-func (s *stubResponsePipelineEngine) RegisterPipeline(*pipeline.AgentPatternPipeline) error { return nil }
+func (s *stubResponsePipelineEngine) RegisterPipeline(*pipeline.AgentPatternPipeline) error {
+	return nil
+}
 
 func (s *stubResponsePipelineEngine) ExecuteStream(context.Context, string, *pipeline.PipelineInput) (<-chan pipeline.PipelineStreamResult, error) {
 	ch := make(chan pipeline.PipelineStreamResult)
@@ -407,7 +409,9 @@ func (s *stubStreamPipelineEngineWithToolCall) Execute(context.Context, string, 
 
 func (s *stubStreamPipelineEngineWithToolCall) HasPipeline(string) bool { return true }
 
-func (s *stubStreamPipelineEngineWithToolCall) RegisterPipeline(*pipeline.AgentPatternPipeline) error { return nil }
+func (s *stubStreamPipelineEngineWithToolCall) RegisterPipeline(*pipeline.AgentPatternPipeline) error {
+	return nil
+}
 
 func (s *stubStreamPipelineEngineWithToolCall) ExecuteStream(context.Context, string, *pipeline.PipelineInput) (<-chan pipeline.PipelineStreamResult, error) {
 	ch := make(chan pipeline.PipelineStreamResult, 2)
@@ -418,4 +422,3 @@ func (s *stubStreamPipelineEngineWithToolCall) ExecuteStream(context.Context, st
 	close(ch)
 	return ch, nil
 }
-

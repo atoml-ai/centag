@@ -13,14 +13,14 @@ import (
 
 // EvaluationHandler 评估处理器
 type EvaluationHandler struct {
-	pluginManager       *manager.Manager
-	exactMatchEnabled  bool // 精确匹配缓存是否启用
+	pluginManager     *manager.Manager
+	exactMatchEnabled bool // 精确匹配缓存是否启用
 }
 
 // NewEvaluationHandler 创建评估处理器
 func NewEvaluationHandler(pm *manager.Manager, exactMatchEnabled bool) *EvaluationHandler {
 	return &EvaluationHandler{
-		pluginManager:      pm,
+		pluginManager:     pm,
 		exactMatchEnabled: exactMatchEnabled,
 	}
 }
@@ -211,10 +211,10 @@ func (h *EvaluationHandler) GetPluginSchema(c *gin.Context) {
 
 // TestEvaluationRequest 测试评估请求
 type TestEvaluationRequest struct {
-	Question       string                `json:"question" binding:"required"`
-	Answer         string                `json:"answer" binding:"required"`
-	HistoryMessages []plugin.Message     `json:"history_messages,omitempty"`
-	IsExpanded     bool                  `json:"is_expanded,omitempty"`
+	Question        string           `json:"question" binding:"required"`
+	Answer          string           `json:"answer" binding:"required"`
+	HistoryMessages []plugin.Message `json:"history_messages,omitempty"`
+	IsExpanded      bool             `json:"is_expanded,omitempty"`
 }
 
 // TestEvaluationResponse 测试评估响应
@@ -288,10 +288,10 @@ func (h *EvaluationHandler) GetEvaluationStats(c *gin.Context) {
 
 	// 添加 enabled 字段（基于是否有启用的插件）
 	statsWithEnabled := map[string]interface{}{
-		"enabled":           h.pluginManager.HasEnabledPlugins(),
-		"total_executions": stats.TotalExecutions,
-		"enabled_plugins":  stats.EnabledPlugins,
-		"plugin_exec_times": stats.PluginExecTimes,
+		"enabled":             h.pluginManager.HasEnabledPlugins(),
+		"total_executions":    stats.TotalExecutions,
+		"enabled_plugins":     stats.EnabledPlugins,
+		"plugin_exec_times":   stats.PluginExecTimes,
 		"last_execution_time": stats.LastExecutionTime,
 		"exact_match_enabled": h.exactMatchEnabled,
 	}

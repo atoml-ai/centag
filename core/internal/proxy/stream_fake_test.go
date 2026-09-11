@@ -8,18 +8,18 @@ import (
 
 func TestStreamFakeAggregator_Feed(t *testing.T) {
 	tests := []struct {
-		name            string
-		chunks          []plugin.StreamChunk
-		maxBytes        int64
-		wantContent     string
-		wantReasoning   string
-		wantFinish      string
-		wantErr         bool
+		name          string
+		chunks        []plugin.StreamChunk
+		maxBytes      int64
+		wantContent   string
+		wantReasoning string
+		wantFinish    string
+		wantErr       bool
 	}{
 		{
-			name:     "single chunk",
-			chunks:   []plugin.StreamChunk{{Content: "Hello", FinishReason: "stop"}},
-			maxBytes: 1024,
+			name:        "single chunk",
+			chunks:      []plugin.StreamChunk{{Content: "Hello", FinishReason: "stop"}},
+			maxBytes:    1024,
 			wantContent: "Hello",
 			wantFinish:  "stop",
 		},

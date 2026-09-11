@@ -12,14 +12,14 @@ import (
 
 // ReadDatabaseTool 读取数据库工具
 type ReadDatabaseTool struct {
-	db       *sql.DB
+	db            *sql.DB
 	allowedTables []string
 }
 
 // NewReadDatabaseTool 创建读取数据库工具
 func NewReadDatabaseTool(db *sql.DB, allowedTables []string) agentcore.Tool {
 	return &ReadDatabaseTool{
-		db:       db,
+		db:            db,
 		allowedTables: allowedTables,
 	}
 }
@@ -91,7 +91,7 @@ func (t *ReadDatabaseTool) Execute(ctx context.Context, params map[string]any) (
 	if table == "" {
 		return &agentcore.ToolResult{Content: "可访问的表：\n" + strings.Join(t.allowedTables, "\n")}, nil
 	}
-	
+
 	// 检查表是否允许访问
 	allowed := false
 	for _, allowedTable := range t.allowedTables {
@@ -100,11 +100,11 @@ func (t *ReadDatabaseTool) Execute(ctx context.Context, params map[string]any) (
 			break
 		}
 	}
-	
+
 	if !allowed {
 		return &agentcore.ToolResult{IsError: true, Content: fmt.Sprintf("表 %s 不允许访问", table)}, nil
 	}
-	
+
 	// 构建查询
 	query := fmt.Sprintf("SELECT * FROM %s", table)
 	if queryParam, ok := params["query"].(string); ok && queryParam != "" {
@@ -115,66 +115,66 @@ func (t *ReadDatabaseTool) Execute(ctx context.Context, params map[string]any) (
 		}
 		query = queryParam
 	}
-	
+
 	// 添加限制
 	limit := 100
 	if limitParam, ok := params["limit"].(float64); ok {
 		limit = int(limitParam)
 	}
-	
+
 	// 执行查询
 	rows, err := t.db.QueryContext(ctx, query)
 	if err != nil {
 		return &agentcore.ToolResult{IsError: true, Content: fmt.Sprintf("查询数据库失败: %v", err)}, nil
 	}
 	defer rows.Close()
-	
+
 	// 获取列名
 	columns, err := rows.Columns()
 	if err != nil {
 		return &agentcore.ToolResult{IsError: true, Content: fmt.Sprintf("获取列名失败: %v", err)}, nil
 	}
-	
+
 	// 读取数据
 	var result []map[string]interface{}
 	rowCount := 0
-	
+
 	for rows.Next() {
 		if rowCount >= limit {
 			break
 		}
-		
+
 		// 创建值数组
 		values := make([]interface{}, len(columns))
 		valuePtrs := make([]interface{}, len(columns))
 		for i := range values {
 			valuePtrs[i] = &values[i]
 		}
-		
+
 		// 扫描行
 		if err := rows.Scan(valuePtrs...); err != nil {
 			return &agentcore.ToolResult{IsError: true, Content: fmt.Sprintf("扫描行失败: %v", err)}, nil
 		}
-		
+
 		// 创建行数据
 		row := make(map[string]interface{})
 		for i, col := range columns {
 			val := values[i]
 			row[col] = val
 		}
-		
+
 		result = append(result, row)
 		rowCount++
 	}
-	
+
 	if err := rows.Err(); err != nil {
 		return &agentcore.ToolResult{IsError: true, Content: fmt.Sprintf("读取行失败: %v", err)}, nil
 	}
-	
+
 	if len(result) == 0 {
 		return &agentcore.ToolResult{Content: "没有找到数据"}, nil
 	}
-	
+
 	// 转换为JSON字符串
 	jsonStr := fmt.Sprintf("%v", result)
 	return &agentcore.ToolResult{Content: jsonStr}, nil

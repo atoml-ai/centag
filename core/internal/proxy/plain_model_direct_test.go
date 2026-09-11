@@ -62,10 +62,10 @@ func TestMatchPlainModelBackend(t *testing.T) {
 	newPlainModelTestManager(t)
 
 	cases := []struct {
-		name      string
-		model     string
-		wantHit   bool
-		wantBID   string
+		name    string
+		model   string
+		wantHit bool
+		wantBID string
 	}{
 		{"exact declared model", "glm-4-plus", true, "backend-a"},
 		{"alias maps to same backend", "glm4p", true, "backend-a"},

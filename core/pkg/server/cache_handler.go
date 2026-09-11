@@ -19,17 +19,17 @@ import (
 
 // CacheHandler 缓存处理器
 type CacheHandler struct {
-	cacheManager  *cache.Manager
-	proxyCache    *cache.ProxyCache
-	qaSplitConfig *config.QASplitConfig
+	cacheManager   *cache.Manager
+	proxyCache     *cache.ProxyCache
+	qaSplitConfig  *config.QASplitConfig
 	backendManager *backend.Manager
 }
 
 // NewCacheHandler 创建缓存处理器
 func NewCacheHandler(cacheManager *cache.Manager, proxyCache *cache.ProxyCache, backendManager *backend.Manager) *CacheHandler {
 	return &CacheHandler{
-		cacheManager:  cacheManager,
-		proxyCache:    proxyCache,
+		cacheManager:   cacheManager,
+		proxyCache:     proxyCache,
 		backendManager: backendManager,
 	}
 }
@@ -169,7 +169,7 @@ func (h *CacheHandler) SetCacheTTL(c *gin.Context) {
 
 // CacheInfoRequest 缓存信息请求
 type CacheInfoRequest struct {
-	Key string `json:"key" binding:"required"`
+	Key  string `json:"key" binding:"required"`
 	Type string `json:"type"` // 缓存类型: exact, semantic
 }
 
@@ -595,7 +595,7 @@ func (h *CacheHandler) GetSemanticThreshold(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"data": gin.H{
-			"threshold":    threshold,
+			"threshold":   threshold,
 			"description": "语义相似度阈值 (0-1)，值越低匹配越宽松，命中率越高",
 		},
 	})
@@ -707,11 +707,11 @@ func (h *CacheHandler) SemanticSearch(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"data": gin.H{
-			"hits":                hitsCount,          // 超过阈值的命中数
-			"total_results":       len(entries),       // 总结果数（包括低于阈值的）
-			"entries":             entries,
-			"semantic_available":  semanticAvailable,
-			"threshold":           req.Threshold,
+			"hits":               hitsCount,    // 超过阈值的命中数
+			"total_results":      len(entries), // 总结果数（包括低于阈值的）
+			"entries":            entries,
+			"semantic_available": semanticAvailable,
+			"threshold":          req.Threshold,
 		},
 	})
 }
@@ -906,13 +906,13 @@ func (h *CacheHandler) GetQASplitConfig(c *gin.Context) {
 // UpdateQASplitConfig 更新问答拆分配置
 func (h *CacheHandler) UpdateQASplitConfig(c *gin.Context) {
 	var req struct {
-		Enabled     bool   `json:"enabled"`
-		Prompt      string `json:"prompt"`
-		BackendID   string `json:"backend_id"`
-		Model       string `json:"model"`
-		Timeout     int    `json:"timeout"`
+		Enabled     bool    `json:"enabled"`
+		Prompt      string  `json:"prompt"`
+		BackendID   string  `json:"backend_id"`
+		Model       string  `json:"model"`
+		Timeout     int     `json:"timeout"`
 		Temperature float64 `json:"temperature"`
-		MaxTokens   int    `json:"max_tokens"`
+		MaxTokens   int     `json:"max_tokens"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {

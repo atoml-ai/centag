@@ -4,12 +4,12 @@ import (
 	"fmt"
 	"os"
 
-	"centag/core/pkg/backend"
 	"centag/core/internal/cache"
+	"centag/core/internal/stats"
+	"centag/core/pkg/backend"
 	"centag/core/pkg/database"
 	"centag/core/pkg/metrics"
 	"centag/core/pkg/plugin"
-	"centag/core/internal/stats"
 	"centag/core/pkg/storage"
 
 	"github.com/gin-gonic/gin"
@@ -78,11 +78,11 @@ func (h *MetricsHandler) GetPluginStatus(c *gin.Context) {
 
 	for _, p := range plugins {
 		status := PluginStatus{
-			Name:        p.Name,
-			Type:        string(p.Type),
-			Version:     p.Version,
-			Enabled:     true,
-			Status:      string(p.Status),
+			Name:    p.Name,
+			Type:    string(p.Type),
+			Version: p.Version,
+			Enabled: true,
+			Status:  string(p.Status),
 		}
 		result = append(result, status)
 	}
@@ -98,13 +98,13 @@ func (h *MetricsHandler) GetDashboardStats(c *gin.Context) {
 	if metrics.GlobalMetrics != nil {
 		reqStats := metrics.GlobalMetrics.GetStats()
 		dashboard.Request = RequestStats{
-			TotalRequests:  reqStats.TotalRequests,
+			TotalRequests:   reqStats.TotalRequests,
 			SuccessRequests: reqStats.SuccessRequests,
 			ErrorRequests:   reqStats.ErrorRequests,
-			QPS:            reqStats.QPS,
-			AvgLatency:     reqStats.AvgLatency,
-			ErrorRate:      reqStats.ErrorRate,
-			Uptime:         reqStats.Uptime,
+			QPS:             reqStats.QPS,
+			AvgLatency:      reqStats.AvgLatency,
+			ErrorRate:       reqStats.ErrorRate,
+			Uptime:          reqStats.Uptime,
 		}
 		if reqStats.ModelStats != nil {
 			dashboard.ModelStats = reqStats.ModelStats
@@ -122,12 +122,12 @@ func (h *MetricsHandler) GetDashboardStats(c *gin.Context) {
 		dashboard.RecentRequests = stats.GlobalUnifiedStats.RecentRequests()
 		uniStats := stats.GlobalUnifiedStats.GetStats()
 		dashboard.Cache = CacheStatsSummary{
-			Hits:         uniStats.HitExact + uniStats.HitSemantic,
-			Misses:       uniStats.Miss,
-			HitRate:      uniStats.HitRate,
-			Entries:      cacheEntries, // 从缓存管理器获取
-			Evictions:    0, // 暂不支持淘汰统计
-			Uptime:       uniStats.Uptime,
+			Hits:          uniStats.HitExact + uniStats.HitSemantic,
+			Misses:        uniStats.Miss,
+			HitRate:       uniStats.HitRate,
+			Entries:       cacheEntries, // 从缓存管理器获取
+			Evictions:     0,            // 暂不支持淘汰统计
+			Uptime:        uniStats.Uptime,
 			TotalRequests: uniStats.TotalRequests,
 		}
 	}
@@ -155,10 +155,10 @@ func (h *MetricsHandler) GetDashboardStats(c *gin.Context) {
 			Degraded:        dbManager.IsDegraded(),
 			RequestedDriver: dbManager.RequestedDriver(),
 		}
-		
+
 		// 获取数据库地址信息
 		dbInfo.Address = getDatabaseAddress(dbManager.DriverName())
-		
+
 		dashboard.Database = dbInfo
 	} else {
 		dashboard.Database = DatabaseInfo{
@@ -227,8 +227,8 @@ func (h *MetricsHandler) GetConfigInfo(c *gin.Context) {
 		for _, s := range storages {
 			if s.Enabled {
 				enabledStorages = append(enabledStorages, gin.H{
-					"name":   s.Name,
-					"type":   s.Type,
+					"name":    s.Name,
+					"type":    s.Type,
 					"default": s.Name == h.storageManager.GetDefaultKVName(),
 				})
 			}
@@ -258,12 +258,12 @@ func (h *MetricsHandler) ResetStats(c *gin.Context) {
 
 // DashboardStats 仪表板统计
 type DashboardStats struct {
-	Request     RequestStats        `json:"request"`
-	Cache       CacheStatsSummary   `json:"cache"`
-	PluginCount int                 `json:"plugin_count"`
-	PluginRunning int               `json:"plugin_running"`
-	ModelStats  map[string]*metrics.ModelStatsSnapshot `json:"model_stats"`
-	Database    DatabaseInfo        `json:"database"`
+	Request       RequestStats                           `json:"request"`
+	Cache         CacheStatsSummary                      `json:"cache"`
+	PluginCount   int                                    `json:"plugin_count"`
+	PluginRunning int                                    `json:"plugin_running"`
+	ModelStats    map[string]*metrics.ModelStatsSnapshot `json:"model_stats"`
+	Database      DatabaseInfo                           `json:"database"`
 	// RecentRequests 窗口内最近请求（P1-11：Team Overview「实时请求」卡片数据源）
 	RecentRequests []stats.RequestRecord `json:"recent_requests,omitempty"`
 }
@@ -271,23 +271,23 @@ type DashboardStats struct {
 // RequestStats 请求统计摘要
 type RequestStats struct {
 	TotalRequests   int64   `json:"total_requests"`
-	SuccessRequests  int64   `json:"success_requests"`
-	ErrorRequests    int64   `json:"error_requests"`
-	QPS              float64 `json:"qps"`
-	AvgLatency       int64   `json:"avg_latency_ms"`
-	ErrorRate        float64 `json:"error_rate_percent"`
-	Uptime           int64   `json:"uptime_ms"`
+	SuccessRequests int64   `json:"success_requests"`
+	ErrorRequests   int64   `json:"error_requests"`
+	QPS             float64 `json:"qps"`
+	AvgLatency      int64   `json:"avg_latency_ms"`
+	ErrorRate       float64 `json:"error_rate_percent"`
+	Uptime          int64   `json:"uptime_ms"`
 }
 
 // CacheStatsSummary 缓存统计摘要
 type CacheStatsSummary struct {
-	Hits         int64   `json:"hits"`
-	Misses       int64   `json:"misses"`
-	HitRate      float64 `json:"hit_rate_percent"`
-	Entries      int64   `json:"entries"`
-	Evictions    int64   `json:"evictions"`
-	Uptime       int64   `json:"uptime_ms"`
-	TotalRequests int64  `json:"total_requests"`
+	Hits          int64   `json:"hits"`
+	Misses        int64   `json:"misses"`
+	HitRate       float64 `json:"hit_rate_percent"`
+	Entries       int64   `json:"entries"`
+	Evictions     int64   `json:"evictions"`
+	Uptime        int64   `json:"uptime_ms"`
+	TotalRequests int64   `json:"total_requests"`
 }
 
 // DatabaseInfo 数据库信息

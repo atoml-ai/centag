@@ -13,10 +13,10 @@ func TestDetectProxyModeLegacy(t *testing.T) {
 	config.Set(&config.Config{Proxy: config.ProxyConfig{AllowHeaderOverride: true}})
 
 	tests := []struct {
-		name           string
-		modeHeader     string
-		modeParam      string
-		expectedMode   ProxyMode
+		name         string
+		modeHeader   string
+		modeParam    string
+		expectedMode ProxyMode
 	}{
 		{
 			name:         "Smart scheduling from header",
@@ -235,8 +235,8 @@ func TestDetectCacheControl_ReadWriteFromCacheNotFromCacheControl(t *testing.T) 
 			SaveOnlyMode:     false,
 		},
 		CacheControl: config.CacheControlConfig{
-			Enabled:     true,
-			DefaultRead: false,
+			Enabled:      true,
+			DefaultRead:  false,
 			DefaultWrite: false,
 		},
 	}

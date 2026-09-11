@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gin-gonic/gin"
 	"centag/core/pkg/logger"
+	"github.com/gin-gonic/gin"
 )
 
 // TraceTimelineEvent 请求追踪时间轴事件

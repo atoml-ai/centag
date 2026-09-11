@@ -45,17 +45,17 @@ func TestDispatch_WithThinkSplit(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	tests := []struct {
-		name             string
-		content          string
-		wantVisible      string
-		wantReasoning    string
-		wantNoReasoning  bool
+		name            string
+		content         string
+		wantVisible     string
+		wantReasoning   string
+		wantNoReasoning bool
 	}{
 		{
-			name:            "content with think tag",
-			content:         "Hello <think>Let me think about this</think> World",
-			wantVisible:     "Hello  World",
-			wantReasoning:   "Let me think about this",
+			name:          "content with think tag",
+			content:       "Hello <think>Let me think about this</think> World",
+			wantVisible:   "Hello  World",
+			wantReasoning: "Let me think about this",
 		},
 		{
 			name:            "content without think tag",
@@ -64,16 +64,16 @@ func TestDispatch_WithThinkSplit(t *testing.T) {
 			wantNoReasoning: true,
 		},
 		{
-			name:            "only think tag",
-			content:         "<think>I am reasoning</think>",
-			wantVisible:     "",
-			wantReasoning:   "I am reasoning",
+			name:          "only think tag",
+			content:       "<think>I am reasoning</think>",
+			wantVisible:   "",
+			wantReasoning: "I am reasoning",
 		},
 		{
-			name:            "think tag at start",
-			content:         "<think>reasoning</think> Here is my answer",
-			wantVisible:     " Here is my answer",
-			wantReasoning:   "reasoning",
+			name:          "think tag at start",
+			content:       "<think>reasoning</think> Here is my answer",
+			wantVisible:   " Here is my answer",
+			wantReasoning: "reasoning",
 		},
 	}
 
@@ -268,8 +268,8 @@ func TestWriteStreamResponse_WithThinkSplit(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	tests := []struct {
-		name             string
-		chunks           []pipeline.PipelineStreamResult
+		name                  string
+		chunks                []pipeline.PipelineStreamResult
 		wantContentContains   []string
 		wantContentExcludes   []string
 		wantReasoningContains []string
@@ -303,8 +303,8 @@ func TestWriteStreamResponse_WithThinkSplit(t *testing.T) {
 				{Chunk: &plugin.StreamChunk{Content: "Hello"}},
 				{Chunk: &plugin.StreamChunk{Content: " World"}},
 			},
-			wantContentContains:   []string{`"content":"Hello"`, `"content":" World"`},
-			wantNoThinkTags:       true,
+			wantContentContains: []string{`"content":"Hello"`, `"content":" World"`},
+			wantNoThinkTags:     true,
 		},
 		{
 			name: "chunk with think tag and visible content",
@@ -390,8 +390,8 @@ func TestDispatchStream_WithThinkSplit(t *testing.T) {
 		output: &pipeline.PipelineOutput{
 			Content: "",
 			ExecutionLog: &pipeline.ExecutionLog{
-				TotalTokens:  10,
-				Success:      true,
+				TotalTokens: 10,
+				Success:     true,
 			},
 			FinishReason: "stop",
 		},

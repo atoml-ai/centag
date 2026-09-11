@@ -1000,12 +1000,12 @@ func (h *PipelineHandler) SyncPipelineTemplatesPreview(c *gin.Context) {
 
 	// Build the preview result
 	type TemplatePreview struct {
-		ID               string `json:"id"`
-		Name             string `json:"name"`
-		Description      string `json:"description"`
-		Version          string `json:"version,omitempty"`
-		IsUserModified   bool   `json:"is_user_modified"`   // Whether Admin has customized this template
-		WillBeUpdated    bool   `json:"will_be_updated"`    // Whether this template will be updated in sync
+		ID             string `json:"id"`
+		Name           string `json:"name"`
+		Description    string `json:"description"`
+		Version        string `json:"version,omitempty"`
+		IsUserModified bool   `json:"is_user_modified"` // Whether Admin has customized this template
+		WillBeUpdated  bool   `json:"will_be_updated"`  // Whether this template will be updated in sync
 	}
 
 	var previews []TemplatePreview
@@ -1131,11 +1131,11 @@ func (h *PipelineHandler) AdminUpdateTemplate(c *gin.Context) {
 	}
 
 	var req struct {
-		Name        string                     `json:"name"`
-		Description string                     `json:"description"`
-		Nodes       []configsync.PipelineNodeConfig `json:"nodes"`
+		Name         string                           `json:"name"`
+		Description  string                           `json:"description"`
+		Nodes        []configsync.PipelineNodeConfig  `json:"nodes"`
 		GlobalConfig *configsync.GlobalPipelineConfig `json:"global_config"`
-		Metadata    map[string]interface{}     `json:"metadata"`
+		Metadata     map[string]interface{}           `json:"metadata"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -1158,12 +1158,12 @@ func (h *PipelineHandler) AdminUpdateTemplate(c *gin.Context) {
 
 	// Build configsync template
 	configsyncTmpl := configsync.PipelineTemplate{
-		ID:          templateID,
-		Name:        req.Name,
-		Description: req.Description,
-		Nodes:       req.Nodes,
+		ID:           templateID,
+		Name:         req.Name,
+		Description:  req.Description,
+		Nodes:        req.Nodes,
 		GlobalConfig: req.GlobalConfig,
-		Metadata:    req.Metadata,
+		Metadata:     req.Metadata,
 	}
 
 	// Save as Admin edit (sets is_user_modified = TRUE)

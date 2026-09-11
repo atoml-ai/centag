@@ -141,18 +141,18 @@ func TestParseModelPipelinePrefix(t *testing.T) {
 
 func TestParseBackendModel(t *testing.T) {
 	tests := []struct {
-		model        string
-		wantBackend  string
-		wantActual   string
-		wantOK       bool
+		model       string
+		wantBackend string
+		wantActual  string
+		wantOK      bool
 	}{
 		{"opencode-zen/hy3-free", "opencode-zen", "hy3-free", true},
 		{" e2e-mock / centag-e2e-model ", "e2e-mock", "centag-e2e-model", true},
-		{"gpt-4", "", "", false},                                  // 裸模型名，非后端钉死
-		{"centag/direct-backend", "", "", false},                  // 流水线前缀，不算后端钉死
-		{"pipeline.smart-scheduling", "", "", false},              // 流水线前缀
-		{"opencode-zen/", "", "", false},                         // 缺模型
-		{"/hy3-free", "", "", false},                              // 缺后端
+		{"gpt-4", "", "", false},                     // 裸模型名，非后端钉死
+		{"centag/direct-backend", "", "", false},     // 流水线前缀，不算后端钉死
+		{"pipeline.smart-scheduling", "", "", false}, // 流水线前缀
+		{"opencode-zen/", "", "", false},             // 缺模型
+		{"/hy3-free", "", "", false},                 // 缺后端
 		{"", "", "", false},
 	}
 
