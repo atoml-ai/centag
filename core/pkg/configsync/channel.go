@@ -64,7 +64,7 @@ func EnvName(channel, field string) string {
 type LoadOptions struct {
 	Channel    string
 	ConfigFile string // ① explicit --config path (highest priority)
-	DefaultDir string // ③ default dotenv dir, e.g. config/secrets/configsync
+	DefaultDir string // ③ default dotenv dir, e.g. ~/.centag/configsync
 	NoSave     bool   // skip persisting wizard results
 	// Wizard is the interactive resolver (④). It receives the descriptor and
 	// the values gathered so far, and returns the final values. nil = device

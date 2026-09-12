@@ -19,7 +19,7 @@ import (
 )
 
 // stdoutOnlyLogViewerBody 当日志只写终端时，说明 Web「日志查看」与终端数据源不一致（前缀由进程内 log.output 拼接）
-const stdoutOnlyLogViewerBody = "运行中的日志只出现在启动服务的终端，不会写入日志文件；本页读取的是磁盘上的历史文件，因此可能只有旧记录（例如上次关服）或与终端不一致。若要在网页中查看与终端一致的日志，请设置环境变量 LLM_PROXY_LOG_OUTPUT=file 或 both，并确认 LLM_PROXY_LOG_PATH / LLM_PROXY_LOG_FILENAME 与 zap 写入路径一致，然后重启服务。若 config/secrets/.env 已设为 file/both 仍见本提示，说明启动时进程实际拿到的不是该值（例如某启动脚本在 load_env 后又 export 覆盖了 LLM_PROXY_LOG_OUTPUT）。"
+const stdoutOnlyLogViewerBody = "运行中的日志只出现在启动服务的终端，不会写入日志文件；本页读取的是磁盘上的历史文件，因此可能只有旧记录（例如上次关服）或与终端不一致。若要在网页中查看与终端一致的日志，请设置环境变量 LLM_PROXY_LOG_OUTPUT=file 或 both，并确认 LLM_PROXY_LOG_PATH / LLM_PROXY_LOG_FILENAME 与 zap 写入路径一致，然后重启服务。若统一配置 ~/.centag/centag.conf 已设为 file/both 仍见本提示，说明启动时进程实际拿到的不是该值（例如某启动脚本在 load_env 后又 export 覆盖了 LLM_PROXY_LOG_OUTPUT）。"
 
 // LogEntry 日志条目结构
 type LogEntry struct {
@@ -90,7 +90,7 @@ type LogQueryResponse struct {
 type LogHandler struct {
 	logPath      string
 	stdoutOnly   bool
-	logOutputRaw string // 启动时 cfg.Log.Output 原始值，便于与 config/secrets/.env 对照
+	logOutputRaw string // 启动时 cfg.Log.Output 原始值，便于与统一配置 ~/.centag/centag.conf 对照
 }
 
 // NewLogHandler 创建日志处理器（路径与 zap 写入文件一致，来自 bootstrap/env 的 Log 配置）

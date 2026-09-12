@@ -12,7 +12,7 @@ import (
 
 // DefaultProxyConfig returns sensible proxy defaults.
 // Routing fields can be overridden via environment variables
-// (config/secrets/.env 由 scripts/generate-secrets.sh 生成时会写入「四 B」节)：
+// (统一配置 ~/.centag/centag.conf 由 scripts/ops/generate-secrets.sh 生成时会写入「四 B」节)：
 //
 //	LLM_PROXY_DEFAULT_MODE              (default: transparent；各发行版首轮初始化统一透明模式)
 //	LLM_PROXY_DEFAULT_BACKEND_ID        (default: ollama-local)

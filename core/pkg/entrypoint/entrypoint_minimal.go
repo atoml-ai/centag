@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"centag/core/internal"
+	"centag/core/pkg/appenv"
 	"centag/core/pkg/backend"
 	"centag/core/pkg/bootstrap"
 	"centag/core/pkg/config"
@@ -50,6 +51,12 @@ func Run(version, buildTime string) {
 	flag.String("config", "", "Deprecated: config file path (ignored)")
 	flag.Parse()
 
+	// Step 0: Load unified config file (~/.centag/centag.conf) before any
+	// env var is read. Real environment variables always win.
+	if err := appenv.Load(); err != nil {
+		fmt.Fprintf(os.Stderr, "warn: load %s: %v\n", appenv.ConfPath(), err)
+	}
+
 	// Step 1: Bootstrap config from env vars
 	boot := config.LoadBootstrap()
 
@@ -71,6 +78,11 @@ func Run(version, buildTime string) {
 		panic("Failed to init logger: " + err.Error())
 	}
 	defer logger.Sync()
+
+	// Report deprecated legacy config files detected at startup.
+	for _, w := range appenv.LegacyWarnings() {
+		logger.Warn(w)
+	}
 
 	// Step 3: Set build info
 	internal.SetBuildInfo(Version, BuildTime)
