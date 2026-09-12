@@ -1,5 +1,5 @@
 #!/bin/bash
-# 生成 Centag 主服务所需 config/secrets/.env（不含 Redis/ES/Chroma/Ollama 等栈侧变量；见 deploy/stack）
+# 生成 Centag 主服务所需统一配置 ~/.centag/centag.conf（不含 Redis/ES/Chroma/Ollama 等栈侧变量；见 deploy/stack）
 
 set -euo pipefail
 
@@ -11,8 +11,8 @@ NC=$'\033[0m'
 
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
-readonly SECRETS_DIR="$PROJECT_ROOT/config/secrets"
-readonly SECRETS_FILE="$SECRETS_DIR/.env"
+readonly SECRETS_DIR="${CENTAG_HOME:-$HOME/.centag}"
+readonly SECRETS_FILE="$SECRETS_DIR/centag.conf"
 
 readonly DEFAULT_PG_HOST="${DEFAULT_PG_HOST:-pg.atoml.net}"
 readonly DEFAULT_PG_PORT="${DEFAULT_PG_PORT:-5432}"
@@ -81,13 +81,13 @@ generate_secrets_file() {
 
     cat > "$SECRETS_FILE" << EOF
 # =============================================================================
-# Centag — config/secrets/.env（由 scripts/ops/generate-secrets.sh 生成）
+# Centag — ~/.centag/centag.conf（由 scripts/ops/generate-secrets.sh 生成）
 # =============================================================================
 # 生成时间: $(date '+%Y-%m-%d %H:%M:%S')
 # 勿提交到 Git。
 #
 # 使用说明：
-#   - 开发调试：PG/Mem0 等中间件配置从 deploy/stack/.env 自动同步
+#   - 开发调试：PG/Mem0 等中间件配置可直接写入统一配置
 #   - 正式环境：从云服务环境变量获取（如 K8s Secret、Vault 等）
 # =============================================================================
 
@@ -104,10 +104,10 @@ LLM_PROXY_EXTERNAL_URL=${DEFAULT_EXTERNAL_URL}
 # -----------------------------------------------------------------------------
 LLM_PROXY_DB_DRIVER=sqlite
 LLM_PROXY_DB_PATH=./storage/centag.db
-# PG_HOST=          # 从 deploy/stack/.env 同步
+# PG_HOST=
 # PG_PORT=5432
 # PG_USER=postgres
-# PG_PASSWORD=      # 从 deploy/stack/.env 同步
+# PG_PASSWORD=
 # PG_DATABASE=centag
 # PG_SSL_MODE=disable
 
@@ -142,7 +142,7 @@ LLM_PROXY_LOG_MAX_AGE=0
 LLM_PROXY_LOG_COMPRESS=true
 
 # -----------------------------------------------------------------------------
-# 可选中间件（通过 deploy/stack/.env 或环境变量配置）
+# 可选中间件（通过统一配置或环境变量配置）
 # -----------------------------------------------------------------------------
 # Mem0（可选，需要时取消注释并配置）
 # MEM0_ENABLED=false
@@ -214,7 +214,7 @@ main() {
     show_secrets_summary || true
     export_secrets || true
 
-    print_success "完成。Compose 仅读取 config/secrets/.env，不再维护 deploy/docker/.env。"
+    print_success "完成。Compose 仅读取 ~/.centag/centag.conf，旧 config/secrets/.env 已废弃。"
     print_info "下一步: 在 deploy/stack 起依赖后 ./start.sh docker up"
 }
 

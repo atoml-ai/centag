@@ -10,7 +10,7 @@
 # 管理员密码（优先顺序）:
 #   1) --admin-password
 #   2) 环境变量 PACKAGE_ADMIN_PASSWORD
-#   3) config/secrets/.env 的 LLM_PROXY_ADMIN_PASSWORD
+#   3) ~/.centag/centag.conf 的 LLM_PROXY_ADMIN_PASSWORD
 #   写入包内 config/runtime.env，由 native/cmd/main 启动时加载
 #
 # Docker 模式：
@@ -37,11 +37,11 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
-# secrets 文件路径：默认本仓 config/secrets/.env；
-# 上游打包脚本（如 centag-pro team 打包）可通过 CENTAG_SECRETS_FILE 覆盖，
-# 使商业密钥留在私有仓而不落入开源仓目录。
+# secrets 文件路径：默认统一配置 ~/.centag/centag.conf；
+# 上游打包脚本（如 centag-pro team 打包）可通过 CENTAG_SECRETS_FILE 覆盖。
+# 旧路径 config/secrets/.env 已废弃，不再读取。
 secrets_file() {
-    printf '%s' "${CENTAG_SECRETS_FILE:-${REPO_ROOT}/config/secrets/.env}"
+    printf '%s' "${CENTAG_SECRETS_FILE:-${CENTAG_HOME:-$HOME/.centag}/centag.conf}"
 }
 
 # shellcheck source=scripts/lib/centag-layout.sh
@@ -181,26 +181,26 @@ resolve_admin_credentials() {
   if [ -z "${API_KEY_STORAGE_SECRET}" ]; then
     if command -v openssl >/dev/null 2>&1; then
       API_KEY_STORAGE_SECRET="$(openssl rand -hex 32)"
-      echo "[OK] 未在 .env 找到 LLM_PROXY_API_KEY_STORAGE_SECRET，已现场生成并写入 runtime.env"
+      echo "[OK] 未在统一配置找到 LLM_PROXY_API_KEY_STORAGE_SECRET，已现场生成并写入 runtime.env"
     else
       API_KEY_STORAGE_SECRET="$(head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n')"
-      echo "[OK] 未在 .env 找到 LLM_PROXY_API_KEY_STORAGE_SECRET，已用 /dev/urandom 生成并写入 runtime.env"
+      echo "[OK] 未在统一配置找到 LLM_PROXY_API_KEY_STORAGE_SECRET，已用 /dev/urandom 生成并写入 runtime.env"
     fi
     cat >&2 <<'WARN'
 
 [WARN] 重要：本次生成的存储密钥仅写入本包 runtime.env。
-       若重新打包时未通过 PACKAGE_API_KEY_STORAGE_SECRET 或 config/secrets/.env 固定同一密钥，
+       若重新打包时未通过 PACKAGE_API_KEY_STORAGE_SECRET 或统一配置 ~/.centag/centag.conf 固定同一密钥，
        密钥将被再次随机生成（轮换），导致历史 API Key 无法解密：
          - Web 界面「复制完整 API Key」失效
          - Agent 代理模式无法自动解析 Centag 密钥（需用户重建密钥）
-       建议将首次生成的值固定保存到 config/secrets/.env 的 LLM_PROXY_API_KEY_STORAGE_SECRET。
+       建议将首次生成的值固定保存到 ~/.centag/centag.conf 的 LLM_PROXY_API_KEY_STORAGE_SECRET。
 WARN
   else
     echo "[OK] API Key 存储密钥已解析（界面可反复复制完整 Key）"
   fi
 
   if [ -z "${ADMIN_PASSWORD}" ]; then
-    echo "[WARN] 未解析到管理员密码（--admin-password / PACKAGE_ADMIN_PASSWORD / config/secrets/.env）"
+    echo "[WARN] 未解析到管理员密码（--admin-password / PACKAGE_ADMIN_PASSWORD / ~/.centag/centag.conf）"
     echo "       minimal 首次需 Web 设置密码；personal/team 首轮 seed 将使用内置默认口令"
   else
     echo "[OK] 管理员密码已解析（来源: CLI/packaging.env/secrets，不会回显）用户=${ADMIN_USERNAME}"
@@ -248,7 +248,7 @@ resolve_license_key() {
     if [ "$EDITION" = "team" ] && [ "${CENTAG_ALLOW_NO_LICENSE:-0}" != "1" ]; then
       echo "[ERROR] team 发行版必须提供 CENTAG_LICENSE_KEY。"
       echo "        缺少许可证时 team 商业门禁不启用，/api/v1/admin/* 等路由不会注册（表现为 404）。"
-      echo "        请通过 PACKAGE_LICENSE_KEY 环境变量、或 secrets 文件（默认 ${REPO_ROOT}/config/secrets/.env，"
+      echo "        请通过 PACKAGE_LICENSE_KEY 环境变量、或统一配置 ~/.centag/centag.conf（"
       echo "        可用 CENTAG_SECRETS_FILE 覆盖路径）提供；"
       echo "        仅测试用的无许可证构建可设置 CENTAG_ALLOW_NO_LICENSE=1。"
       exit 1
@@ -328,7 +328,8 @@ write_runtime_env() {
                CENTAG_CONFIGSYNC_FEISHU_CLIENT_APP_ID CENTAG_CONFIGSYNC_FEISHU_CLIENT_APP_SECRET \
                CENTAG_CONFIGSYNC_FEISHU_APP_TOKEN \
                CENTAG_CONFIGSYNC_FEISHU_PRICING_TABLE_ID CENTAG_CONFIGSYNC_FEISHU_PIPELINE_TABLE_ID \
-               CENTAG_CONFIGSYNC_FEISHU_CONFIG_TABLE_ID CENTAG_CONFIGSYNC_FEISHU_BACKEND_TABLE_ID; do
+               CENTAG_CONFIGSYNC_FEISHU_CONFIG_TABLE_ID CENTAG_CONFIGSYNC_FEISHU_BACKEND_TABLE_ID \
+               CENTAG_CONFIGSYNC_FEISHU_SKILL_TABLE_ID; do
       _tv="$(printenv "$_tk" 2>/dev/null || true)"
       if [ -n "${_tv}" ]; then
         echo "${_tk}=$(shell_single_quote "${_tv}")"

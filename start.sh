@@ -1272,60 +1272,34 @@ pack() {
 }
 
 # load_env — 加载环境变量
-# 加载顺序：
-#   1. deploy/stack/.env（提供 PG/Mem0 等中间件配置）
-#   2. config/secrets/.env（本地配置，优先级更高，覆盖 stack 配置）
+# 统一配置文件：~/.centag/centag.conf（可用 CENTAG_HOME 覆盖目录）
+# 旧的 config/secrets/.env、.env.middleware、deploy/stack/.env 已废弃：
+#   不再加载，仅检测到存在时提示迁移。
 load_env() {
-    local stack_env="$PROJECT_ROOT/deploy/stack/.env"
-    local env_file="$PROJECT_ROOT/config/secrets/.env"
-    local middleware_file="$PROJECT_ROOT/config/secrets/.env.middleware"
+    local conf_dir="${CENTAG_HOME:-$HOME/.centag}"
+    local conf_file="${conf_dir}/centag.conf"
 
-    # Step 1: 优先从 deploy/stack/.env 读取中间件配置
-    if [ -f "$stack_env" ]; then
-        print_info "加载 deploy/stack 环境变量..."
+    if [ -f "$conf_file" ]; then
+        print_info "加载统一配置: ${conf_file}"
         set -a
         # shellcheck source=/dev/null
-        source "$stack_env"
+        source "$conf_file"
         set +a
-        # 同步关键 PG 配置到标准变量名
-        if [ -n "${POSTGRES_HOST:-}" ]; then
-            export PG_HOST="$POSTGRES_HOST"
-        fi
-        if [ -n "${POSTGRES_PORT:-}" ]; then
-            export PG_PORT="$POSTGRES_PORT"
-        fi
-        if [ -n "${POSTGRES_USER:-}" ]; then
-            export PG_USER="$POSTGRES_USER"
-        fi
-        if [ -n "${POSTGRES_PASSWORD:-}" ]; then
-            export PG_PASSWORD="$POSTGRES_PASSWORD"
-        fi
-        if [ -n "${POSTGRES_DB:-}" ]; then
-            export PG_DATABASE="$POSTGRES_DB"
-        fi
-        print_success "已从 deploy/stack/.env 同步 PostgreSQL 配置"
-    fi
-
-    # Step 2: 加载本地 config/secrets/.env（优先级更高，覆盖 stack 配置）
-    if [ -f "$env_file" ]; then
-        print_info "加载 config/secrets/.env（本地配置，优先级更高）..."
-        set -a
-        # shellcheck source=/dev/null
-        source "$env_file"
-        set +a
-        print_success "环境变量已加载 (config/secrets/.env)"
-    elif [ -f "$middleware_file" ]; then
-        # Step 3: 兼容旧的 config/secrets/.env.middleware
-        print_warn "未找到 config/secrets/.env，回退加载 config/secrets/.env.middleware"
-        set -a
-        # shellcheck source=/dev/null
-        source "$middleware_file"
-        set +a
-        print_success "环境变量已加载 (config/secrets/.env.middleware)"
     else
-        print_warn "未找到 config/secrets/.env，将使用程序内置默认值启动"
-        print_info "提示：执行 ./start.sh generate-secrets 可生成密钥配置文件"
+        print_info "未找到统一配置 ${conf_file}（使用内置默认值；可从 config/centag.conf.example 复制创建）"
     fi
+
+    # 检测已废弃的旧配置路径（不加载，仅提示迁移）
+    local legacy
+    for legacy in \
+        "$PROJECT_ROOT/config/secrets/.env" \
+        "$PROJECT_ROOT/config/secrets/.env.middleware" \
+        "$PROJECT_ROOT/deploy/stack/.env"
+    do
+        if [ -f "$legacy" ]; then
+            print_warn "检测到已废弃配置 ${legacy} — 不再加载，请迁移到 ${conf_file}"
+        fi
+    done
 }
 
 # stack — 独立进程加载 deploy/stack/lib（避免与主仓 readonly PROJECT_ROOT 冲突）
@@ -1350,7 +1324,7 @@ stack_cmd() {
 # Run
 run() {
     load_env
-    # personal 版始终使用 SQLite（config/secrets/.env 可能为 team 版设了 PostgreSQL）
+    # personal 版始终使用 SQLite（centag.conf 可能为 team 版设了 PostgreSQL）
     if [ "${CENTAG_EDITION:-personal}" = "personal" ]; then
         export LLM_PROXY_DB_DRIVER=sqlite
     fi
@@ -1419,7 +1393,7 @@ detect_database_mode() {
                 echo ""
                 print_info "解决方案："
                 echo "  1. 启动中间件: ./start.sh stack start base"
-                echo "  2. 或确认 PG_HOST 配置正确（检查 config/secrets/.env）"
+                echo "  2. 或确认 PG_HOST 配置正确（检查 ~/.centag/centag.conf）"
                 echo "  3. 或设置 LLM_PROXY_DB_DRIVER=sqlite 使用 SQLite 数据库"
                 echo ""
                 exit 1
@@ -1484,7 +1458,7 @@ debug() {
 
     load_env
 
-    # personal 版始终使用 SQLite（config/secrets/.env 可能为 team 版设了 PostgreSQL）
+    # personal 版始终使用 SQLite（centag.conf 可能为 team 版设了 PostgreSQL）
     export LLM_PROXY_DB_DRIVER=sqlite
 
     # 自动检测数据库模式
@@ -1714,7 +1688,7 @@ run_edition() {
     if [ -z "${LLM_PROXY_ADMIN_PASSWORD:-}" ]; then
         print_warn "未检测到 LLM_PROXY_ADMIN_PASSWORD；首轮启动将通过初始化向导设置管理员密码"
     else
-        print_info "已加载管理员口令环境变量（来自 config/secrets/.env）"
+        print_info "已加载管理员口令环境变量（来自 ~/.centag/centag.conf）"
     fi
 
     print_info "启动 desktop edition=${run_edition} platform=$(go env GOOS)/$(go env GOARCH)"
@@ -1735,7 +1709,7 @@ _debug_minimal() {
     local with_desktop="${1:-false}"
 
     load_env
-    # personal/minimal 版始终使用 SQLite（config/secrets/.env 可能为 team 版设了 PostgreSQL）
+    # personal/minimal 版始终使用 SQLite（centag.conf 可能为 team 版设了 PostgreSQL）
     if [ "${CENTAG_EDITION:-personal}" != "team" ]; then
         export LLM_PROXY_DB_DRIVER=sqlite
     fi
@@ -1867,8 +1841,9 @@ _debug_docker() {
     echo ""
 
     local env_file_args=()
-    if [ -f "${PROJECT_ROOT}/config/secrets/.env" ]; then
-        env_file_args=(--env-file "${PROJECT_ROOT}/config/secrets/.env")
+    local conf_file="${CENTAG_HOME:-$HOME/.centag}/centag.conf"
+    if [ -f "$conf_file" ]; then
+        env_file_args=(--env-file "$conf_file")
     fi
 
     exec MSYS_NO_PATHCONV=1 docker run -it --rm \
@@ -1894,7 +1869,7 @@ _debug_docker() {
 # Daemon
 daemon() {
     load_env
-    # personal 版始终使用 SQLite（config/secrets/.env 可能为 team 版设了 PostgreSQL）
+    # personal 版始终使用 SQLite（centag.conf 可能为 team 版设了 PostgreSQL）
     if [ "${CENTAG_EDITION:-personal}" = "personal" ]; then
         export LLM_PROXY_DB_DRIVER=sqlite
     fi
@@ -1905,7 +1880,7 @@ daemon() {
 # Daemon Debug
 daemon-debug() {
     load_env
-    # personal 版始终使用 SQLite（config/secrets/.env 可能为 team 版设了 PostgreSQL）
+    # personal 版始终使用 SQLite（centag.conf 可能为 team 版设了 PostgreSQL）
     if [ "${CENTAG_EDITION:-personal}" = "personal" ]; then
         export LLM_PROXY_DB_DRIVER=sqlite
     fi
@@ -1990,9 +1965,9 @@ _daemon_status() {
     fi
 }
 
-# Generate Secrets — 生成 config/secrets/.env（主服务密钥与 PG 元库）
+# Generate Secrets — 生成 ~/.centag/centag.conf（主服务密钥与 PG 元库）
 generate_secrets() {
-    print_info "Generating Centag secrets (config/secrets/.env)..."
+    print_info "Generating Centag secrets (~/.centag/centag.conf)..."
     if [ -x "${PROJECT_ROOT}/scripts/generate-secrets.sh" ]; then
         "${PROJECT_ROOT}/scripts/generate-secrets.sh" "$@"
         return $?
@@ -2005,20 +1980,20 @@ generate_secrets() {
     return 1
 }
 
-# Init Secrets - 初始化并生成 config/secrets/.env
+# Init Secrets - 初始化并生成 ~/.centag/centag.conf
 init_secrets() {
-    print_info "Initializing config/secrets/.env..."
-    
-    # 仅以 config/secrets/.env 为「已配置」判断（与 load_env 主配置一致）
-    if [ -f "$PROJECT_ROOT/config/secrets/.env" ]; then
-        print_warn "config/secrets/.env 已存在"
+    print_info "Initializing ~/.centag/centag.conf..."
+
+    # 仅以 centag.conf 为「已配置」判断（与 load_env 主配置一致）
+    if [ -f "${CENTAG_HOME:-$HOME/.centag}/centag.conf" ]; then
+        print_warn "~/.centag/centag.conf 已存在"
         read -r -p "是否重新生成并覆盖? (y/N): " confirm
         if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
             print_info "跳过生成"
             return 0
         fi
     else
-        print_info "未检测到 config/secrets/.env，将生成新密钥配置（默认直接生成，不询问）"
+        print_info "未检测到 ~/.centag/centag.conf，将生成新密钥配置（默认直接生成，不询问）"
     fi
     
     if [ -x "${PROJECT_ROOT}/scripts/generate-secrets.sh" ]; then
@@ -2170,7 +2145,7 @@ _clean_install() {
 
     print_warn "将删除已部署/安装布局（含二进制、Web 静态、运行时 DB/日志、release 产物等）:"
     echo "  $root"
-    print_info "不会触碰仓库内 config/secrets/.env"
+    print_info "不会触碰统一配置 ~/.centag/centag.conf"
     if [ "$assume_yes" != "1" ]; then
         if [ ! -t 0 ]; then
             print_error "非交互环境请加 -y/--yes 确认删除"
@@ -2696,7 +2671,7 @@ start_frontend_dev() {
 # 启动全部开发服务（后台后端 + 前台前端）
 _run_all_dev() {
     load_env
-    # personal 版始终使用 SQLite（config/secrets/.env 可能为 team 版设了 PostgreSQL）
+    # personal 版始终使用 SQLite（centag.conf 可能为 team 版设了 PostgreSQL）
     if [ "${CENTAG_EDITION:-personal}" = "personal" ]; then
         export LLM_PROXY_DB_DRIVER=sqlite
     fi
@@ -2879,7 +2854,7 @@ INITDATA_EOF
 # ── Docker 运行容器（按版本）─────────────────────────────────────────
 # 参数: dist_name port initdata_path reset_data
 #   reset_data=true 时，清空宿主机 var/docker-data/<dist_name>/storage 下的旧库/密码，
-#   让容器以当前 config/secrets/.env 的 LLM_PROXY_ADMIN_PASSWORD 重新 seed。
+#   让容器以当前 ~/.centag/centag.conf 的 LLM_PROXY_ADMIN_PASSWORD 重新 seed。
 _dist_docker_run() {
     local dist_name="${1:-minimal}"
     local port="${2:-20060}"
@@ -2942,8 +2917,9 @@ _dist_docker_run() {
     print_info "  - centag-${dist_name}-certs (MITM CA)"
     print_info "启动容器 (后台): centag-${dist_name}"
     local env_file_args=()
-    if [ -f "${PROJECT_ROOT}/config/secrets/.env" ]; then
-        env_file_args=(--env-file "${PROJECT_ROOT}/config/secrets/.env")
+    local conf_file="${CENTAG_HOME:-$HOME/.centag}/centag.conf"
+    if [ -f "$conf_file" ]; then
+        env_file_args=(--env-file "$conf_file")
     fi
     MSYS_NO_PATHCONV=1 docker run -d --rm \
         --name "centag-${dist_name}" \
@@ -2970,13 +2946,15 @@ _dist_docker_run() {
     print_info "停止容器: docker stop centag-${dist_name}"
 }
 
-# Docker Compose：附加 config/secrets/.env 作为「项目级」变量，供 compose 文件中 ${VAR} 插值（与容器内 env_file 无关）
+# Docker Compose：附加 ~/.centag/centag.conf 作为「项目级」变量，供 compose 文件中 ${VAR} 插值（与容器内 env_file 无关）
 docker_compose_invoke() {
     local compose_cmd="$1"
     shift
     local env_args=""
-    if [ -f "$PROJECT_ROOT/config/secrets/.env" ]; then
-        env_args="--env-file $PROJECT_ROOT/config/secrets/.env"
+    local conf_file="${CENTAG_HOME:-$HOME/.centag}/centag.conf"
+    if [ -f "$conf_file" ]; then
+        env_args="--env-file $conf_file"
+        export CENTAG_CONF_FILE="$conf_file"
     fi
     eval "$compose_cmd $env_args $@"
 }
@@ -2991,8 +2969,8 @@ docker_up() {
     local image="centag-${edition}:latest"
     check_docker
 
-    if [ ! -f "$PROJECT_ROOT/config/secrets/.env" ]; then
-        print_warn "未找到 config/secrets/.env，正在自动生成认证配置..."
+    if [ ! -f "${CENTAG_HOME:-$HOME/.centag}/centag.conf" ]; then
+        print_warn "未找到 ~/.centag/centag.conf，正在自动生成认证配置..."
         "${PROJECT_ROOT}/scripts/ops/generate-secrets.sh" --same-password
     fi
 
@@ -3072,12 +3050,12 @@ docker_debug() {
     check_docker
 
     # 自动检查并生成认证配置
-    if [ ! -f "$PROJECT_ROOT/config/secrets/.env" ]; then
-        print_warn "未找到 config/secrets/.env，正在自动生成认证配置..."
+    if [ ! -f "${CENTAG_HOME:-$HOME/.centag}/centag.conf" ]; then
+        print_warn "未找到 ~/.centag/centag.conf，正在自动生成认证配置..."
         "${PROJECT_ROOT}/scripts/ops/generate-secrets.sh" --same-password
     fi
 
-    # 统一加载 config/secrets/.env
+    # 统一加载 ~/.centag/centag.conf
     load_env
 
     # 检查镜像是否存在
@@ -3464,12 +3442,12 @@ LOADEOF
 
 ### 2. 配置环境变量
 
-在仓库 `config/secrets/.env` 中配置数据库与可选依赖地址后，使用 compose 的 `--env-file` 启动（与主仓库 `./start.sh docker up` 一致）。
+在统一配置 `~/.centag/centag.conf` 中配置数据库与可选依赖地址后，使用 compose 的 `--env-file` 启动（与主仓库 `./start.sh docker up` 一致）。
 
 ### 3. 启动服务
 
 ```bash
-docker compose --env-file ../config/secrets/.env up -d
+docker compose --env-file ~/.centag/centag.conf up -d
 ```
 
 ### 4. 查看日志 / 停止
@@ -4021,7 +3999,7 @@ _help_env() {
     echo -e "  ./start.sh env <子命令> [选项]"
     echo ""
     echo -e "${CYAN}子命令:${NC}"
-    echo -e "  ${GREEN}gen${NC} [--force]      生成密钥配置文件 config/secrets/.env"
+    echo -e "  ${GREEN}gen${NC} [--force]      生成密钥配置文件 ~/.centag/centag.conf"
     echo ""
     echo -e "${CYAN}示例:${NC}"
     echo -e "  ./start.sh env gen"
@@ -4071,14 +4049,14 @@ wizard_env_config() {
     echo ""
 
     # 须先于 setup/copy-files：生成 SQLite 时会读取 POSTGRES_PASSWORD 等变量
-    # 仅以 config/secrets/.env 为准（与 load_env 主配置一致）；仅有 .env.middleware 时仍视为未就绪，默认 [Y/n] 生成
-    if [ ! -f "$PROJECT_ROOT/config/secrets/.env" ]; then
-        print_message $YELLOW "⚠️  config/secrets/.env 不存在（主密钥配置缺失）"
+    # 仅以 ~/.centag/centag.conf 为准（与 load_env 主配置一致）；未就绪时默认 [Y/n] 生成
+    if [ ! -f "${CENTAG_HOME:-$HOME/.centag}/centag.conf" ]; then
+        print_message $YELLOW "⚠️  ~/.centag/centag.conf 不存在（主密钥配置缺失）"
         if wizard_confirm "是否生成密钥配置文件?" "y"; then
             generate_secrets --same-password
         fi
     else
-        print_info "config/secrets/.env 已存在，跳过生成（如需重新生成请执行: ./start.sh generate-secrets）"
+        print_info "~/.centag/centag.conf 已存在，跳过生成（如需重新生成请执行: ./start.sh generate-secrets）"
     fi
 
     # 再初始化 bin / 复制静态资源（make copy-files 可能先放入模板库）
@@ -4472,8 +4450,7 @@ wizard_finish() {
     print_message $CYAN "🔑 Web UI 登录信息:"
     echo ""
 
-    local secrets_file="$PROJECT_ROOT/config/secrets/.env"
-    [ ! -f "$secrets_file" ] && secrets_file="$PROJECT_ROOT/config/secrets/.env.middleware"
+    local secrets_file="${CENTAG_HOME:-$HOME/.centag}/centag.conf"
 
     if [ -f "$secrets_file" ]; then
         local admin_user=$(grep "^LLM_PROXY_ADMIN_USERNAME=" "$secrets_file" | cut -d'=' -f2)

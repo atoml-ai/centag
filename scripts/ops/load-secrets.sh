@@ -13,13 +13,8 @@ NC=$'\033[0m'
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
-if [ -f "$PROJECT_ROOT/config/secrets/.env" ]; then
-    SECRETS_FILE="$PROJECT_ROOT/config/secrets/.env"
-elif [ -f "$PROJECT_ROOT/config/secrets/.env.middleware" ]; then
-    SECRETS_FILE="$PROJECT_ROOT/config/secrets/.env.middleware"
-else
-    SECRETS_FILE="$PROJECT_ROOT/config/secrets/.env"
-fi
+# 统一配置：~/.centag/centag.conf（旧 config/secrets/.env 已废弃）
+SECRETS_FILE="${CENTAG_HOME:-$HOME/.centag}/centag.conf"
 
 # 显示消息
 print_info() {
@@ -46,7 +41,7 @@ check_secrets_file() {
         print_info "请运行以下命令之一:"
         echo "  1. 自动生成: ./start.sh init-secrets"
         echo "  2. 手动生成: ./start.sh generate-secrets"
-        echo "  3. 手动创建 config/secrets/.env（参考 generate-secrets 生成的结构）"
+        echo "  3. 手动创建 ~/.centag/centag.conf（参考 generate-secrets 生成的结构）"
         echo ""
         return 1
     fi
@@ -128,7 +123,7 @@ ${GREEN}使用方法:${NC}
   ${YELLOW}source scripts/load-secrets.sh${NC}
 
 方式二: 导出环境变量
-  ${YELLOW}export \$(cat config/secrets/.env | grep -v '^#' | xargs)${NC}
+  ${YELLOW}export \$(cat ~/.centag/centag.conf | grep -v '^#' | xargs)${NC}
 
 方式三: 使用 start.sh 命令
   ${YELLOW}./start.sh docker up${NC}         # 自动加载并启动
@@ -138,10 +133,10 @@ ${GREEN}相关命令:${NC}
   ${YELLOW}./start.sh generate-secrets${NC}            # 生成新的认证信息
   ${YELLOW}./start.sh generate-secrets --same-password${NC}    # 使用相同密码
   ${YELLOW}./start.sh generate-secrets --unique-passwords${NC} # 使用不同密码
-  ${YELLOW}cat config/secrets/.env${NC}                         # 查看配置文件
+  ${YELLOW}cat ~/.centag/centag.conf${NC}                      # 查看配置文件
 
 ${GREEN}安全提示:${NC}
-  - config/secrets/.env / .env.middleware 已在 .gitignore 中
+  - 旧 config/secrets/.env 已废弃；统一配置为 ~/.centag/centag.conf
   - 请勿将此文件提交到版本控制系统
   - 生产环境建议使用专业的密钥管理系统
 

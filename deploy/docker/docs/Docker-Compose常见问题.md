@@ -68,7 +68,7 @@ Docker Compose 在解析配置时会读取所有服务的 entrypoint 脚本。Ol
 
 ### 中间件与多服务
 
-在 **`deploy/stack`** 中按需启动 PostgreSQL、Redis、Elasticsearch、Ollama 等，并在本仓库 **`config/secrets/.env`** 中按需填写 `PG_*`、`REDIS_*`、`ELASTICSEARCH_*`、`OLLAMA_HOST` 等，使 Centag 容器能访问依赖。
+在 **`deploy/stack`** 中按需启动 PostgreSQL、Redis、Elasticsearch、Ollama 等，并在统一配置 **`~/.centag/centag.conf`** 中按需填写 `PG_*`、`REDIS_*`、`ELASTICSEARCH_*`、`OLLAMA_HOST` 等，使 Centag 容器能访问依赖。
 
 ```bash
 cd deploy/stack && ./start.sh help

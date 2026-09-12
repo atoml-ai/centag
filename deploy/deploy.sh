@@ -13,7 +13,8 @@ readonly NC='\033[0m'
 
 readonly PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly DOCKER_DIR="${PROJECT_ROOT}/deploy/docker"
-readonly SECRETS_DIR="${PROJECT_ROOT}/secrets"
+# 统一配置 ~/.centag/centag.conf（旧 secrets/.env 已废弃）
+readonly SECRETS_DIR="${CENTAG_HOME:-$HOME/.centag}"
 
 print_info() { echo -e "${BLUE}[INFO]${NC} $1"; }
 print_success() { echo -e "${GREEN}[SUCCESS]${NC} $1"; }
@@ -39,13 +40,13 @@ check_docker() {
 
 check_env() {
     print_info "检查环境配置..."
-    if [[ ! -f "${SECRETS_DIR}/.env" ]]; then
-        print_warn "未找到 config/secrets/.env，请从 config/secrets/.env.example 复制并填写（至少 POSTGRES_PASSWORD 等）"
+    if [[ ! -f "${SECRETS_DIR}/centag.conf" ]]; then
+        print_warn "未找到 ~/.centag/centag.conf，请从 config/centag.conf.example 复制并填写（至少 POSTGRES_PASSWORD 等）"
         exit 1
     fi
     set -a
     # shellcheck source=/dev/null
-    source "${SECRETS_DIR}/.env"
+    source "${SECRETS_DIR}/centag.conf"
     set +a
     if [[ -z "${POSTGRES_PASSWORD:-}" ]]; then
         print_warn "POSTGRES_PASSWORD 未设置，应用可能无法连接数据库"
@@ -60,7 +61,7 @@ deploy_centag() {
     if ! command -v docker-compose &> /dev/null; then
         compose_cmd="docker compose"
     fi
-    $compose_cmd --env-file "${SECRETS_DIR}/.env" up -d --build centag
+    $compose_cmd --env-file "${SECRETS_DIR}/centag.conf" up -d --build centag
 
     print_info "等待 Centag 就绪..."
     local port="${BACKEND_PORT:-${LLM_PROXY_SERVER_PORT:-20060}}"
@@ -82,7 +83,7 @@ show_status() {
     if ! command -v docker-compose &> /dev/null; then
         compose_cmd="docker compose"
     fi
-    $compose_cmd --env-file "${SECRETS_DIR}/.env" ps || true
+    $compose_cmd --env-file "${SECRETS_DIR}/centag.conf" ps || true
     local port="${BACKEND_PORT:-${LLM_PROXY_SERVER_PORT:-20060}}"
     if curl -sf "http://localhost:${port}/health" &> /dev/null; then
         print_success "Centag /health: OK"
@@ -98,7 +99,7 @@ stop_services() {
     if ! command -v docker-compose &> /dev/null; then
         compose_cmd="docker compose"
     fi
-    $compose_cmd --env-file "${SECRETS_DIR}/.env" down
+    $compose_cmd --env-file "${SECRETS_DIR}/centag.conf" down
     print_success "已停止"
 }
 

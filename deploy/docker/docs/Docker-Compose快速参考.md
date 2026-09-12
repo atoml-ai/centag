@@ -93,7 +93,7 @@ curl http://localhost:20060/health
 
 ### 场景 1：仅测试 Elasticsearch
 
-在 **deploy/stack** 启动 Elasticsearch 后，于 **`config/secrets/.env`** 配置 `ELASTICSEARCH_ADDR` 等，再 `./start.sh docker up` 启动 Centag。
+在 **deploy/stack** 启动 Elasticsearch 后，于 **`~/.centag/centag.conf`** 配置 `ELASTICSEARCH_ADDR` 等，再 `./start.sh docker up` 启动 Centag。
 
 ### 场景 2：开发环境（ES + Redis）
 
@@ -107,7 +107,7 @@ curl http://localhost:20060/health
 
 ```bash
 cd deploy/stack && ./start.sh start ollama
-# 本仓库 config/secrets/.env 中配置 OLLAMA_HOST 指向可达的 Ollama
+# 统一配置 ~/.centag/centag.conf 中配置 OLLAMA_HOST 指向可达的 Ollama
 curl "${OLLAMA_HOST:-http://localhost:21434}/api/embeddings" -d '{"model":"bge-m3","prompt":"Hello"}'
 ```
 
@@ -156,7 +156,7 @@ docker logs -f centag
 ./start.sh docker up es
 
 # 2. 修改配置
-# 在 config/secrets/.env 中设置：
+# 在 ~/.centag/centag.conf 中设置：
 ELASTICSEARCH_ENABLED=true
 
 # 3. 重启主服务

@@ -1,8 +1,8 @@
 name: centag
-# 仅编排 Centag 应用容器。运行时配置一律来自 ../../config/secrets/.env（与 ./start.sh docker … 一致）。
+# 仅编排 Centag 应用容器。运行时配置一律来自 ~/.centag/centag.conf（与 ./start.sh docker … 一致）。
 # 中间件由 deploy/stack：参见根目录 AGENTS.md。
 #
-#   cd deploy/docker && docker compose --env-file ../../config/secrets/.env up -d --build
+#   cd deploy/docker && docker compose --env-file ~/.centag/centag.conf up -d --build
 
 services:
   centag:
@@ -10,7 +10,10 @@ services:
     container_name: centag
     restart: unless-stopped
     env_file:
-      - ../../config/secrets/.env
+      # 统一配置 ~/.centag/centag.conf（由 start.sh 通过 CENTAG_CONF_FILE 注入实际路径；
+      # 未设置时回退 /dev/null 即空配置。容器内 Go 进程亦自行读取该文件）
+      - path: ${CENTAG_CONF_FILE:-/dev/null}
+        required: true
     ports:
       - "${LLM_PROXY_SERVER_PORT:-20060}:20060"
       - "${LLM_PROXY_SYSTEM_PROXY_PORT:-8081}:8081"

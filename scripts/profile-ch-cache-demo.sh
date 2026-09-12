@@ -6,13 +6,9 @@ ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 PROXY_URL="${PROXY_URL:-http://localhost:20060}"
 MODEL="${DEMO_MODEL:-glm-4-flash}"
 
-if [ -f "$ROOT/config/secrets/.env" ]; then
+if [ -f "${CENTAG_HOME:-$HOME/.centag}/centag.conf" ]; then
   # shellcheck disable=SC1091
-  source "$ROOT/config/secrets/.env"
-fi
-if [ -f "$ROOT/deploy/stack/.env" ]; then
-  # shellcheck disable=SC1091
-  source "$ROOT/deploy/stack/.env"
+  source "${CENTAG_HOME:-$HOME/.centag}/centag.conf"
 fi
 ADMIN_KEY="${LLM_PROXY_ADMIN_API_KEY:-test-key}"
 BIGMODEL_KEY="${LLM_PROXY_BIGMODEL_API_KEY:-}"
@@ -109,7 +105,7 @@ main() {
   export PG_DATABASE="${PG_DATABASE:-centag}"
   export PG_PASSWORD="${PG_PASSWORD:-${POSTGRES_PASSWORD:-}}"
   if [ -z "$PG_PASSWORD" ]; then
-    echo "[ch-demo] PG_PASSWORD not set (source deploy/stack/.env or config/secrets/.env)" >&2
+    echo "[ch-demo] PG_PASSWORD not set (source ~/.centag/centag.conf)" >&2
     exit 1
   fi
   wait_health

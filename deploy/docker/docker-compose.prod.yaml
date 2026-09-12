@@ -3,10 +3,10 @@
 # ============================================================
 # 使用方式：
 #   cd deploy/docker
-#   set -a && source ../../config/secrets/.env && set +a
+#   set -a && source ~/.centag/centag.conf && set +a
 #   HOST_IP=192.168.1.5 docker compose -f docker-compose.prod.yaml up -d
 #
-# 所有密钥通过环境变量或 ../../config/secrets/.env 注入。
+# 所有密钥通过环境变量或 ~/.centag/centag.conf 注入。
 # 中间件（PG/Redis/ES 等）由 deploy/stack 单独编排，此处仅通过 extra_hosts 解析域名。
 # ============================================================
 
@@ -19,7 +19,10 @@ services:
     container_name: centag
     restart: unless-stopped
     env_file:
-      - ../../config/secrets/.env
+      # 统一配置 ~/.centag/centag.conf（由 start.sh 通过 CENTAG_CONF_FILE 注入实际路径；
+      # 未设置时回退 /dev/null 即空配置。容器内 Go 进程亦自行读取该文件）
+      - path: ${CENTAG_CONF_FILE:-/dev/null}
+        required: true
     ports:
       - "${LLM_PROXY_SERVER_PORT:-20060}:20060"
       - "${LLM_PROXY_SYSTEM_PROXY_PORT:-8081}:8081"

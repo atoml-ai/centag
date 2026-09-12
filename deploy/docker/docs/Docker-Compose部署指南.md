@@ -15,7 +15,7 @@
 ### 路径 A — 手动分层（本文档主体）
 
 1. 在 **centag 根目录** 执行 **`./start.sh stack ensure …`**（或 `cd deploy/stack && ./start.sh start …`）。
-2. 配置 **`config/secrets/.env`**（连接地址指向 stack 容器名或宿主机端口）。
+2. 配置 **`~/.centag/centag.conf`**（连接地址指向 stack 容器名或宿主机端口）。
 3. 执行 **`./start.sh docker up`** 启动 Centag 容器。
 
 ### 本 compose 拉起的服务（主仓库）
@@ -54,7 +54,7 @@ curl "http://localhost:${LLM_PROXY_SERVER_PORT:-20060}/health"
 
 ### 环境变量配置
 
-在 **`config/secrets/.env`** 中配置运行时参数（与 compose `env_file` 一致）：
+在 **`~/.centag/centag.conf`** 中配置运行时参数（与 compose `env_file` 一致）：
 
 ```bash
 # Elasticsearch 配置（推荐：统一存储方案）
@@ -325,7 +325,7 @@ sudo systemctl restart docker
 
 ### 1. 使用 Elasticsearch 作为主存储
 
-在 **deploy/stack** 启动 Elasticsearch（及可选 Kibana、Ollama）后，于 **`config/secrets/.env`** 启用 `ELASTICSEARCH_ENABLED` 并填写可达地址，再执行：
+在 **deploy/stack** 启动 Elasticsearch（及可选 Kibana、Ollama）后，于 **`~/.centag/centag.conf`** 启用 `ELASTICSEARCH_ENABLED` 并填写可达地址，再执行：
 
 ```bash
 ./start.sh docker up

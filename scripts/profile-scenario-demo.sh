@@ -10,9 +10,9 @@ REPORT="${REPORT:-$ROOT/tmp/profile-scenario-demo-$(date +%Y%m%d-%H%M%S).md}"
 
 mkdir -p "$(dirname "$REPORT")"
 
-if [ -f "$ROOT/config/secrets/.env" ]; then
+if [ -f "${CENTAG_HOME:-$HOME/.centag}/centag.conf" ]; then
   # shellcheck disable=SC1091
-  source "$ROOT/config/secrets/.env"
+  source "${CENTAG_HOME:-$HOME/.centag}/centag.conf"
 fi
 ADMIN_KEY="${LLM_PROXY_ADMIN_API_KEY:-test-key}"
 WEBHOOK_SECRET="${WEBHOOK_SECRET:-demo-webhook-secret}"

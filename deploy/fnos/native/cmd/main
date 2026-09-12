@@ -52,6 +52,26 @@ load_runtime_env() {
     fi
 }
 
+# 首次启动时将包内 runtime.env 合并到统一配置 ~/.centag/centag.conf
+# （应用内 appenv 加载器读取该文件；env 变量优先级始终高于配置文件）
+merge_runtime_env_to_conf() {
+    local conf_dir="${CENTAG_HOME:-${DATA_DIR}/.centag}"
+    local conf_file="${conf_dir}/centag.conf"
+    export CENTAG_HOME="${conf_dir}"
+    mkdir -p "${conf_dir}"
+    if [ ! -f "${conf_file}" ] && [ -f "${RUNTIME_ENV}" ]; then
+        {
+            echo "# 由包内 runtime.env 首次合并生成（$(date '+%Y-%m-%d %H:%M:%S')）"
+            cat "${RUNTIME_ENV}"
+        } > "${conf_file}"
+        chmod 600 "${conf_file}" 2>/dev/null || true
+        log_msg "已合并 runtime.env 到统一配置: ${conf_file}"
+    fi
+    if [ "$(id -u)" = "0" ] && [ -n "${TRIM_RUN_USERNAME:-}" ] && [ "${TRIM_RUN_USERNAME}" != "root" ]; then
+        chown -R "${TRIM_RUN_USERNAME:-centag}":"${TRIM_RUN_GROUPNAME:-${TRIM_RUN_USERNAME}}" "${conf_dir}" 2>/dev/null || true
+    fi
+}
+
 # 读取配置页持久化的 centag.conf，覆盖数据库等运行配置
 # 优先级: centag.conf > runtime.env > 内置默认
 load_app_config() {
@@ -90,6 +110,7 @@ prepare_env() {
     fi
 
     load_runtime_env
+    merge_runtime_env_to_conf
     load_app_config
 
     # SQLite 路径必须始终指向数据卷（与 bootstrap.go 48aefc8 对齐）：

@@ -18,13 +18,13 @@ passed=0
 # 1. 检查配置文件
 echo -n "1. 检查 LLM_PROXY_LOG_OUTPUT 环境变量 ... "
 total=$((total + 1))
-env_file="config/secrets/.env"
+env_file="${CENTAG_HOME:-$HOME/.centag}/centag.conf"
 if [ -f "$env_file" ] && grep -q 'LLM_PROXY_LOG_OUTPUT=file' "$env_file"; then
     echo -e "${GREEN}✅ 通过${NC}"
     passed=$((passed + 1))
 else
     echo -e "${RED}❌ 失败${NC}"
-    echo "   预期: config/secrets/.env 中包含 LLM_PROXY_LOG_OUTPUT=file"
+    echo "   预期: ~/.centag/centag.conf 中包含 LLM_PROXY_LOG_OUTPUT=file"
 fi
 
 # 2. 检查logger实现

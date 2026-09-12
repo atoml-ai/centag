@@ -7,13 +7,9 @@ PROXY_URL="${PROXY_URL:-http://localhost:20060}"
 MODEL="${DEMO_MODEL:-glm-4-flash}"
 RUN_L2="${RUN_L2:-auto}"
 
-if [ -f "$ROOT/config/secrets/.env" ]; then
+if [ -f "${CENTAG_HOME:-$HOME/.centag}/centag.conf" ]; then
   # shellcheck disable=SC1091
-  source "$ROOT/config/secrets/.env"
-fi
-if [ -f "$ROOT/deploy/stack/.env" ]; then
-  # shellcheck disable=SC1091
-  source "$ROOT/deploy/stack/.env"
+  source "${CENTAG_HOME:-$HOME/.centag}/centag.conf"
 fi
 ADMIN_KEY="${LLM_PROXY_ADMIN_API_KEY:-test-key}"
 BIGMODEL_KEY="${LLM_PROXY_BIGMODEL_API_KEY:-}"

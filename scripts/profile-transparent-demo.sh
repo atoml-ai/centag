@@ -6,9 +6,9 @@ ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 PROXY_URL="${PROXY_URL:-http://localhost:20060}"
 MOCK_PORT="${MOCK_PORT:-29998}"
 
-if [ -f "$ROOT/config/secrets/.env" ]; then
+if [ -f "${CENTAG_HOME:-$HOME/.centag}/centag.conf" ]; then
   # shellcheck disable=SC1091
-  source "$ROOT/config/secrets/.env"
+  source "${CENTAG_HOME:-$HOME/.centag}/centag.conf"
 fi
 ADMIN_KEY="${LLM_PROXY_ADMIN_API_KEY:-test-key}"
 
