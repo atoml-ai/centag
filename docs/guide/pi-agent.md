@@ -77,7 +77,7 @@ curl -X POST http://localhost:20060/v1/chat/completions \
 
 ### 环境变量
 
-在 `config/secrets/.env` 中配置：
+在统一配置 `~/.centag/centag.conf` 中配置：
 
 ```bash
 # Pi Sandbox 连接

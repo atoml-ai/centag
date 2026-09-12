@@ -147,7 +147,7 @@ docker exec -it <ollama 容器名> ollama run all-minilm "Hello"
 
 ### 开发环境（快速启动）
 ```bash
-# config/secrets/.env
+# ~/.centag/centag.conf
 OLLAMA_DEFAULT_MODEL=all-minilm
 OLLAMA_AUTOLOAD_MODEL=true
 RETRY_COUNT=3
@@ -161,7 +161,7 @@ DOWNLOAD_TIMEOUT=180
 
 ### 生产环境（高质量）
 ```bash
-# config/secrets/.env
+# ~/.centag/centag.conf
 OLLAMA_DEFAULT_MODEL=bge-m3
 OLLAMA_AUTOLOAD_MODEL=true
 RETRY_COUNT=5
@@ -176,7 +176,7 @@ DOWNLOAD_TIMEOUT=600
 
 ### 网络环境较差
 ```bash
-# config/secrets/.env
+# ~/.centag/centag.conf
 OLLAMA_DEFAULT_MODEL=all-minilm
 OLLAMA_AUTOLOAD_MODEL=false  # 手动拉取
 RETRY_COUNT=10

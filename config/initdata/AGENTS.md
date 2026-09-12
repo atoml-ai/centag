@@ -11,7 +11,7 @@
 | 目录 | 用途 |
 |------|------|
 | `scripts/` | 初始化脚本 |
-| `config/secrets/` | 密钥模板（不提交真实密钥） |
+| `config/centag.conf.example` | 统一配置模板（真实配置在 `~/.centag/centag.conf`） |
 | `update/` | 更新脚本 |
 | `rule/` | 规则文件 |
 | `postgresql/` | PostgreSQL 初始化 |
@@ -31,7 +31,7 @@
 
 ## 约束
 
-- ❌ **禁止**提交真实的密钥到 `config/secrets/`
+- ❌ **禁止**提交真实的密钥（统一配置位于 `~/.centag/centag.conf`，不入仓）
 - ❌ **禁止**手动修改已加载的数据（应通过 API）
 - ✅ **允许**：添加新的初始化数据
 - ✅ **允许**：更新 `initial-backends.json`

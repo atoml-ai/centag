@@ -1,12 +1,12 @@
 # 中间件认证配置自动化指南
 
-> **2026-05**：中间件由 **`deploy/stack`** 编排；本仓库 **`./start.sh docker up`** 只启动 Centag。运行时配置**仅**使用 **`config/secrets/.env`**（compose `env_file`）；**不再生成或同步 `docker/.env`**。`scripts/ops/generate-secrets.sh` 只生成主服务与 **PG 元库**相关密钥；Redis/ES/Ollama 等栈变量请在 stack 或自行追加到 `config/secrets/.env`。
+> **2026-05**：中间件由 **`deploy/stack`** 编排；本仓库 **`./start.sh docker up`** 只启动 Centag。运行时配置**仅**使用 **`~/.centag/centag.conf`**（compose `env_file`）；**不再生成或同步 `docker/.env`**。`scripts/ops/generate-secrets.sh` 只生成主服务与 **PG 元库**相关密钥；Redis/ES/Ollama 等栈变量请在 stack 或自行追加到 `~/.centag/centag.conf`。
 
 ## 概述
 
-1. **`./start.sh docker up`**：若缺少 **`config/secrets/.env`** 会调用 **`generate-secrets`** 生成最小可用配置。
-2. **`generate-secrets`**：写入 **`config/secrets/.env`**（管理员、`PG_*`、`LLM_PROXY_*` 日志与默认路由等），**不**再包含 Elasticsearch/Redis/Chroma/Ollama 等栈侧整段模板。
-3. 与 **stack** 对齐的密码：请在 **`config/secrets/.env`** 中手动追加或从 stack 同步所需变量。
+1. **`./start.sh docker up`**：若缺少 **`~/.centag/centag.conf`** 会调用 **`generate-secrets`** 生成最小可用配置。
+2. **`generate-secrets`**：写入 **`~/.centag/centag.conf`**（管理员、`PG_*`、`LLM_PROXY_*` 日志与默认路由等），**不**再包含 Elasticsearch/Redis/Chroma/Ollama 等栈侧整段模板。
+3. 与 **stack** 对齐的密码：请在 **`~/.centag/centag.conf`** 中手动追加或从 stack 同步所需变量。
 
 ## 快速开始
 
@@ -21,7 +21,7 @@ cd ../centag
 ./start.sh docker up
 ```
 
-**说明**：`docker up` 仅在缺失时生成 **`config/secrets/.env`**；中间件在 **stack** 运行，请保证 **`config/secrets/.env`** 中连接信息与 stack 一致。
+**说明**：`docker up` 仅在缺失时生成 **`~/.centag/centag.conf`**；中间件在 **stack** 运行，请保证 **`~/.centag/centag.conf`** 中连接信息与 stack 一致。
 
 ### 方式二: 手动控制认证配置
 
@@ -41,8 +41,8 @@ cd ../centag
 
 ### 文件位置
 
-- **主配置**: `config/secrets/.env`（与 `start.sh load_env` 一致；若不存在可回退读取遗留的 `config/secrets/.env.middleware`）
-- **生成**: `./start.sh generate-secrets` 覆盖写入 **`config/secrets/.env`**
+- **主配置**: `~/.centag/centag.conf`（与 `start.sh load_env` 一致；若不存在可回退读取遗留的 `~/.centag/centag.conf.middleware`）
+- **生成**: `./start.sh generate-secrets` 覆盖写入 **`~/.centag/centag.conf`**
 
 ### `generate-secrets` 生成的字段（摘要）
 
@@ -50,7 +50,7 @@ cd ../centag
 - **`PG_*`**（元数据库）
 - 基础 **`LLM_PROXY_*`**（端口、默认路由、日志）
 
-栈侧 Redis/ES/Ollama 等请自行追加到 **`config/secrets/.env`** 或在 **deploy/stack** 管理。
+栈侧 Redis/ES/Ollama 等请自行追加到 **`~/.centag/centag.conf`** 或在 **deploy/stack** 管理。
 
 ### 密码策略
 
@@ -66,18 +66,18 @@ cd ../centag
 ```
 用户执行: ./start.sh docker up
     ↓
-检查: config/secrets/.env 是否存在?
+检查: ~/.centag/centag.conf 是否存在?
     ↓ 否
-调用 generate-secrets 生成 config/secrets/.env
+调用 generate-secrets 生成 ~/.centag/centag.conf
     ↓
 load_env
     ↓
-docker compose up（env_file=config/secrets/.env）
+docker compose up（env_file=~/.centag/centag.conf）
 ```
 
 ### 关键特性
 
-✅ **自动检测**: 缺少 `config/secrets/.env` 时生成最小配置  
+✅ **自动检测**: 缺少 `~/.centag/centag.conf` 时生成最小配置  
 ✅ **单文件真源**: 不再维护 `docker/.env`
 
 ## 使用示例
@@ -91,10 +91,10 @@ docker ps | grep -i ollama
 
 ### 示例 2: 多个中间件与 Centag
 
-在 **deploy/stack** 按需启动 Redis、Elasticsearch 等后，用 **`config/secrets/.env`** 中的密码验证连通性（端口与容器名以 stack 为准）：
+在 **deploy/stack** 按需启动 Redis、Elasticsearch 等后，用 **`~/.centag/centag.conf`** 中的密码验证连通性（端口与容器名以 stack 为准）：
 
 ```bash
-# 示例：Redis（密码来自 config/secrets/.env）
+# 示例：Redis（密码来自 ~/.centag/centag.conf）
 docker exec <redis 容器名> redis-cli -a "<REDIS_PASSWORD>" ping
 # 示例：ES
 curl -u "elastic:<ELASTICSEARCH_PASSWORD>" "http://<ES 主机>:9200/_cluster/health"
@@ -104,10 +104,10 @@ curl -u "elastic:<ELASTICSEARCH_PASSWORD>" "http://<ES 主机>:9200/_cluster/hea
 
 ```bash
 # 查看生成的认证信息
-cat config/secrets/.env
+cat ~/.centag/centag.conf
 
 # 查看正在使用的认证信息
-grep -E "(PASSWORD|API_KEY|TOKEN)" config/secrets/.env
+grep -E "(PASSWORD|API_KEY|TOKEN)" ~/.centag/centag.conf
 
 # 重新生成认证信息
 ./start.sh generate-secrets --unique-passwords
@@ -126,24 +126,24 @@ grep -E "(PASSWORD|API_KEY|TOKEN)" config/secrets/.env
 **解决方案**:
 ```bash
 # 检查认证信息是否正确生成
-cat config/secrets/.env
+cat ~/.centag/centag.conf
 
-# 检查 config/secrets/.env
-grep PASSWORD config/secrets/.env
+# 检查 ~/.centag/centag.conf
+grep PASSWORD ~/.centag/centag.conf
 
 # 重新生成认证配置
-rm -f config/secrets/.env
+rm -f ~/.centag/centag.conf
 ./start.sh docker up
 ```
 
 ### 问题 2: 环境变量未生效
 
-**症状**: `config/secrets/.env` 中关键变量为空或未加载
+**症状**: `~/.centag/centag.conf` 中关键变量为空或未加载
 
 **解决方案**:
 ```bash
 # 手动加载环境变量
-export $(cat config/secrets/.env | grep -v '^#' | xargs)
+export $(cat ~/.centag/centag.conf | grep -v '^#' | xargs)
 
 # 重新启动服务
 ./start.sh docker down
@@ -178,11 +178,11 @@ export $(cat config/secrets/.env | grep -v '^#' | xargs)
 
 ```bash
 # 确保文件权限正确
-chmod 600 config/secrets/.env
-chmod 700 config/secrets/
+chmod 600 ~/.centag/centag.conf
+chmod 700 ~/.centag/
 
 # 验证权限
-ls -la config/secrets/.env
+ls -la ~/.centag/centag.conf
 # 应该显示: -rw-------
 ```
 
@@ -207,9 +207,9 @@ ls -la config/secrets/.env
 
 ```bash
 # 1. 编辑认证配置文件
-vim config/secrets/.env
+vim ~/.centag/centag.conf
 
-# 2. 重新生成或合并变量后保存 config/secrets/.env
+# 2. 重新生成或合并变量后保存 ~/.centag/centag.conf
 ./start.sh generate-secrets
 
 # 3. 启动 Centag（中间件在 deploy/stack）
@@ -220,7 +220,7 @@ vim config/secrets/.env
 
 ```bash
 # 导出所有认证信息到环境变量
-export $(cat config/secrets/.env | grep -v '^#' | xargs)
+export $(cat ~/.centag/centag.conf | grep -v '^#' | xargs)
 
 # 查看已导出的环境变量
 env | grep -E "(ELASTICSEARCH|REDIS|CHROMADB|OLLAMA)"
@@ -253,7 +253,7 @@ A: 是的,密码使用 openssl 或 /dev/urandom 生成,包含大小写字母、�
 
 A: 查看配置文件:
 ```bash
-cat config/secrets/.env
+cat ~/.centag/centag.conf
 ```
 
 ### Q: 可以手动修改密码吗?
@@ -262,7 +262,7 @@ A: 可以,但建议使用 `./start.sh generate-secrets` 重新生成,以确保�
 
 ### Q: 认证配置会被提交到 Git 吗?
 
-A: 不会,`config/secrets/.env` 已添加到 `.gitignore`。
+A: 不会,`~/.centag/centag.conf` 已添加到 `.gitignore`。
 
 ## 相关命令速查
 
@@ -273,7 +273,7 @@ A: 不会,`config/secrets/.env` 已添加到 `.gitignore`。
 | `./start.sh generate-secrets --unique-passwords` | 生成认证配置(独立密码) |
 | `source scripts/load-secrets.sh` | 加载认证配置到当前 shell |
 | `./start.sh docker up` | 启动 Centag（缺 secrets 时自动生成） |
-| `cat config/secrets/.env` | 查看认证配置 |
+| `cat ~/.centag/centag.conf` | 查看认证配置 |
 
 ## 获取帮助
 
@@ -285,7 +285,7 @@ A: 不会,`config/secrets/.env` 已添加到 `.gitignore`。
 scripts/load-secrets.sh --help
 
 # 查看 secrets 目录说明
-cat config/secrets/README.md
+cat config/centag.conf.example
 ```
 
 ## 总结

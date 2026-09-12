@@ -195,7 +195,7 @@ npm install -g @atomlai/centag-offline
 ```bash
 git clone https://github.com/atoml-ai/centag.git
 cd centag
-cp config/secrets/.env.example config/secrets/.env   # 按需修改密钥
+mkdir -p ~/.centag && cp config/centag.conf.example ~/.centag/centag.conf   # 按需修改密钥
 ./start.sh docker build personal                     # 构建镜像
 ./start.sh docker up personal                        # 启动容器
 ```
@@ -216,7 +216,7 @@ docker build -t centag-personal:latest \
 
 # 运行
 docker run -d --name centag \
-  --env-file config/secrets/.env \
+  --env-file ~/.centag/centag.conf \
   -e CENTAG_EDITION=personal \
   -e LLM_PROXY_DB_DRIVER=sqlite \
   -e SQLITE_PATH=/app/storage/centag.db \

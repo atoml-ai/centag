@@ -72,7 +72,7 @@ psql -h localhost -p 5432 -U postgres -d centag
 
 ### 配置文件示例
 
-在 `config/secrets/.env` 中添加：
+在统一配置 `~/.centag/centag.conf` 中添加：
 
 ```bash
 POSTGRES_ENABLED=true
@@ -251,7 +251,7 @@ WITH (m = 16, ef_construction = 200);
 根据应用负载调整连接池大小：
 
 ```yaml
-# config/secrets/.env
+# ~/.centag/centag.conf
 POSTGRES_MAX_CONNS=20      # 推荐值：20-50
 POSTGRES_MIN_CONNS=5       # 推荐值：5-10
 POSTGRES_MAX_CONN_LIFETIME=3600  # 1小时

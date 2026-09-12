@@ -79,7 +79,7 @@ environment:
 **本地手动部署时**：
 
 ```bash
-export HOST_IP=192.168.1.5   # 或 source config/secrets/.env
+export HOST_IP=192.168.1.5   # 或 source ~/.centag/centag.conf
 docker compose -f deploy/docker/docker-compose.prod.yaml up -d
 ```
 

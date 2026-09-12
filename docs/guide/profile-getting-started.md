@@ -39,7 +39,7 @@
 ./start.sh profile <name> up
     │
     ├─ load_profile_env（宿主机）
-    │     deploy/stack/.env → config/profiles/<name>/.env → config/secrets/.env
+    │     统一配置 ~/.centag/centag.conf（旧 deploy/stack/.env、config/secrets/.env 注入链已废弃）
     │
     ├─ profile_resolve_stack_deps（按 manifest + OLLAMA_ENABLED 过滤）
     │
@@ -57,7 +57,7 @@
 | **宿主机 orchestration** | 三种 Profile 都链加载 `stack/.env` | `stack ensure`、过滤 Ollama 等 |
 | **容器 runtime** | 各 Profile compose 的 `env_file` 自定 | 应用进程实际读到的变量 |
 
-personal **故意不**把 `deploy/stack/.env` 注入容器，避免 `POSTGRES_*` 污染 SQLite 模式。这与 `LLM_PROXY_DB_DRIVER=sqlite` 是两条独立配置链。
+personal **故意不**注入 stack 中间件变量，避免 `POSTGRES_*` 污染 SQLite 模式。这与 `LLM_PROXY_DB_DRIVER=sqlite` 是两条独立配置链。
 
 `profile_resolve_stack_deps` 仅对 **ollama** 做运行时过滤：`OLLAMA_ENABLED=false` 时跳过；PostgreSQL / Qdrant / Mem0 在 manifest 中则始终 ensure。
 
@@ -156,7 +156,7 @@ entrypoint：`LLM_PROXY_DB_DRIVER=postgresql` → 等待 `centag-postgresql`。
 | Ollama | `centag-ollama:11434` | Embedding（`bge-m3`） |
 | Redis / Chroma | 不连接 | `REDIS_ENABLED=false` |
 
-compose 注入：`deploy/stack/.env` + `config/profiles/cached/.env` + `config/secrets/.env`。
+compose 注入：统一配置 `~/.centag/centag.conf`（旧 stack/profiles .env 注入链已废弃）。
 
 ### 4.4 initdata 与默认流水线
 
