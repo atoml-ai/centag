@@ -17,7 +17,7 @@ LLM_PROXY_DB_DRIVER=sqlite
 # PG_USER=postgres
 # PG_PASSWORD=change_me
 # PG_DATABASE=centag
-# PG_SSL_MODE=disable
+# PG_SSLMODE=disable
 
 # ── 管理员首轮 seed（可选）──────────────────────────────
 LLM_PROXY_ADMIN_USERNAME=admin
