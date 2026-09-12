@@ -23,6 +23,11 @@ func (r *SkillRegistry) GetSkill(name string) (*Skill, bool) {
 	return skill, ok
 }
 
+// RemoveSkill 从注册表移除 Skill（远程 skill 同步删除场景）。
+func (r *SkillRegistry) RemoveSkill(name string) {
+	delete(r.skills, name)
+}
+
 // ListSkills 列出所有Skill
 func (r *SkillRegistry) ListSkills() []*Skill {
 	var result []*Skill

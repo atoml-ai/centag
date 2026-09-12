@@ -60,8 +60,11 @@ export const useAgentStore = defineStore('agent', () => {
       if (skill) {
         currentSkill.value = skill
       }
+      return session
     } catch (error) {
       console.error('Failed to create session:', error)
+      ElMessage.error('创建会话失败，请检查登录状态后重试')
+      throw error
     }
   }
 

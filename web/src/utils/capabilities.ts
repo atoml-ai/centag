@@ -162,7 +162,8 @@ export function getCapabilities(edition: Edition, isAdmin = false): Capabilities
     memoryQuery: false,
     memoryFull: false,
     usageBilling: true,
-    agentSetup: false,
+    // Agent 页对 team admin 同样开放：内置 Agent 是共用能力面，不再限定为普通用户工作台
+    agentSetup: true,
     systemConfig: true,
     userAdmin: true,
     liteHome: false,

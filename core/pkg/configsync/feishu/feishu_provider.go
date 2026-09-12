@@ -28,6 +28,7 @@ type Provider struct {
 	pricingTableID  string
 	pipelineTableID string
 	backendTableID  string
+	skillTableID    string
 	httpClient      *http.Client
 	mu              sync.Mutex
 	token           string
@@ -46,6 +47,7 @@ type ProviderConfig struct {
 	PricingTableID  string // Table ID for model pricing
 	PipelineTableID string // Table ID for pipeline templates
 	BackendTableID  string // Table ID for backend configs
+	SkillTableID    string // Table ID for agent skill rows (built-in agent)
 }
 
 // NewProvider creates a new Feishu Provider.
@@ -53,11 +55,12 @@ func NewProvider(cfg ProviderConfig) *Provider {
 	return &Provider{
 		appID:           cfg.AppID,
 		appSecret:       cfg.AppSecret,
-		appToken:        cfg.AppToken,
-		configTableID:   cfg.ConfigTableID,
-		pricingTableID:  cfg.PricingTableID,
-		pipelineTableID: cfg.PipelineTableID,
-		backendTableID:  cfg.BackendTableID,
+	appToken:        cfg.AppToken,
+	configTableID:   cfg.ConfigTableID,
+	pricingTableID:  cfg.PricingTableID,
+	pipelineTableID: cfg.PipelineTableID,
+	backendTableID:  cfg.BackendTableID,
+	skillTableID:    cfg.SkillTableID,
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second,
 		},
@@ -87,6 +90,7 @@ func NewProviderFromEnv() *Provider {
 		PricingTableID:  os.Getenv("CENTAG_CONFIGSYNC_FEISHU_PRICING_TABLE_ID"),
 		PipelineTableID: os.Getenv("CENTAG_CONFIGSYNC_FEISHU_PIPELINE_TABLE_ID"),
 		BackendTableID:  os.Getenv("CENTAG_CONFIGSYNC_FEISHU_BACKEND_TABLE_ID"),
+		SkillTableID:    os.Getenv("CENTAG_CONFIGSYNC_FEISHU_SKILL_TABLE_ID"),
 	})
 }
 
@@ -320,6 +324,93 @@ func (p *Provider) FetchBackendRows(ctx context.Context) ([]configsync.Row, erro
 	}
 
 	return rows, nil
+}
+
+// FetchSkillRows returns agent skill rows from the built-in agent skill table.
+//
+// Production table schema (one row = one agent skill):
+//
+//	name / description / category / tools / steps / system_prompt /
+//	version / edition / enabled
+//
+// where tools / steps can be either a JSON array text or a comma-separated
+// list; edition accepts all / personal / team (empty = all); enabled=false
+// or a rows removed from the table leads to the local skill being dropped on
+// the next skill sync.
+func (p *Provider) FetchSkillRows(ctx context.Context) ([]configsync.RemoteSkillRow, error) {
+	if p.skillTableID == "" {
+		return nil, configsync.ErrNotSupported
+	}
+
+	records, err := p.SearchRecords(ctx, p.skillTableID, nil)
+	if err != nil {
+		return nil, fmt.Errorf("fetch skill rows: %w", err)
+	}
+
+	var rows []configsync.RemoteSkillRow
+	for _, rec := range records {
+		if row := parseSkillRow(rec); row != nil {
+			rows = append(rows, *row)
+		}
+	}
+	return rows, nil
+}
+
+// parseSkillRow parses one Bitable record into a configsync.RemoteSkillRow.
+// Rows without a name are skipped (nil).
+func parseSkillRow(rec Record) *configsync.RemoteSkillRow {
+	f := rec.Fields
+	name := TextField(f["name"])
+	if name == "" {
+		name = TextField(f["skill_name"])
+	}
+	if name == "" {
+		return nil
+	}
+
+	tools := parseSkillListField(f["tools"])
+	steps := parseSkillListField(f["steps"])
+
+	return &configsync.RemoteSkillRow{
+		Name:         name,
+		Description:  TextField(f["description"]),
+		Category:     TextField(f["category"]),
+		Tools:        tools,
+		Steps:        steps,
+		SystemPrompt: TextField(f["system_prompt"]),
+		Version:      TextField(f["version"]),
+		Edition:      TextField(f["edition"]),
+		Enabled:      BoolField(f["enabled"]),
+	}
+}
+
+// parseSkillListField parses a list column that can carry a JSON array text
+// or a comma-separated plain list. Empty field → nil.
+func parseSkillListField(v any) []string {
+	s := strings.TrimSpace(TextField(v))
+	if s == "" {
+		return nil
+	}
+	var arr []string
+	if err := json.Unmarshal([]byte(s), &arr); err == nil {
+		out := make([]string, 0, len(arr))
+		for _, item := range arr {
+			if item = strings.TrimSpace(item); item != "" {
+				out = append(out, item)
+			}
+		}
+		return out
+	}
+	// Plain comma / newline separated list
+	var out []string
+	for _, part := range strings.FieldsFunc(s, func(r rune) bool {
+		return r == ',' || r == '\n' || r == ';'
+	}) {
+		if part = strings.TrimSpace(part); part != "" {
+			out = append(out, part)
+		}
+	}
+	return out
 }
 
 // Filter represents a Feishu filter.

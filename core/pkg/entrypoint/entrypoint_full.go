@@ -4,6 +4,7 @@ package entrypoint
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
@@ -165,6 +166,8 @@ func Run(version, buildTime string) {
 
 	// Step 7b: Start configsync scheduler (if enabled).
 	startConfigsync(srv)
+	// Step 7c: Start remote skill sync from Feishu Bitable (if enabled).
+	startFeishuSkillSync(srv)
 
 	go func() {
 		if err := srv.Start(); err != nil {
@@ -398,6 +401,76 @@ func startConfigsync(srv *server.Server) {
 	configsync.SetGlobalScheduler(scheduler)
 	scheduler.Start(context.Background())
 	logger.Infof("Configsync scheduler started (public snapshot mirrors)")
+}
+
+// startFeishuSkillSync launches a periodic sync of agent skills from the
+// Feishu Bitable skill table (CENTAG_CONFIGSYNC_FEISHU_SKILL_TABLE_ID).
+// Initial sync runs immediately; afterwards every 10 minutes (table is
+// authoritative: removed rows drop the local skill on the next round).
+func startFeishuSkillSync(srv *server.Server) {
+	if !configsyncfeishu.IsConfigured() {
+		logger.Infof("feishu skill sync disabled (set CENTAG_CONFIGSYNC_FEISHU_CLIENT_APP_ID/SECRET, _APP_TOKEN, _SKILL_TABLE_ID to enable)")
+		return
+	}
+	provider := configsyncfeishu.NewProviderFromEnv()
+	if provider == nil {
+		return
+	}
+	handler := srv.GetBuiltinAgentHandler()
+	if handler == nil {
+		return
+	}
+
+	interval := 10 * time.Minute
+	if v := os.Getenv("CENTAG_CONFIGSYNC_SKILL_SYNC_INTERVAL"); v != "" {
+		if d, err := time.ParseDuration(v); err == nil && d > 0 {
+			interval = d
+		}
+	}
+
+	run := func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+		rows, err := provider.FetchSkillRows(ctx)
+		if err != nil {
+			if err != configsync.ErrNotSupported {
+				logger.Warnf("feishu skill sync: %v", err)
+			}
+			return
+		}
+		if len(rows) == 0 {
+			return
+		}
+		applied, removed := handler.ApplyRemoteSkills(toServerSkillRows(rows))
+		logger.Infof("feishu skill sync: applied=%d removed=%d", applied, removed)
+	}
+
+	go func() {
+		run()
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+		for range ticker.C {
+			run()
+		}
+	}()
+	logger.Infof("feishu skill sync started (interval %s)", interval)
+}
+
+// toServerSkillRows adapts configsync rows to the server package type
+// (identical field layout via JSON round-trip keeps the two packages decoupled).
+func toServerSkillRows(rows []configsync.RemoteSkillRow) []server.RemoteSkillRow {
+	out := make([]server.RemoteSkillRow, 0, len(rows))
+	for _, r := range rows {
+		data, err := json.Marshal(r)
+		if err != nil {
+			continue
+		}
+		var sr server.RemoteSkillRow
+		if err := json.Unmarshal(data, &sr); err == nil {
+			out = append(out, sr)
+		}
+	}
+	return out
 }
 
 // buildBackendMapper returns a BackendMapper that resolves base_url → []backend_id

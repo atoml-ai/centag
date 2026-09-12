@@ -67,7 +67,11 @@ const createSession = async () => {
 // 发送：无会话先创建，再发送
 const sendMessage = async (content: string, skill?: string, backendId?: string, model?: string) => {
   if (!currentSessionId.value) {
-    await agentStore.createSession(skill)
+    try {
+      await agentStore.createSession(skill)
+    } catch {
+      return
+    }
   }
   await agentStore.sendMessage(content, skill, backendId, model)
 }

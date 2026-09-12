@@ -1886,25 +1886,26 @@ func (s *Server) setupRoutes() {
 		}
 	}
 
-	// 内置 Agent（需要 JWT 认证；team 发行版整体收紧为管理员，/health 保留给已认证用户）
+	// 内置 Agent（需要 JWT 认证）：会话与消息对所有认证用户开放（含 team 普通用户）；
+	// skill 写操作（创建/更新/删除/复制）在 team 发行版仍限管理员。
 	if s.builtinAgentHandler != nil {
 		builtinAgent := v1Protected.Group("/builtin-agent")
 		agentAdmin := s.teamAdminWriteOnly()
 		{
 			builtinAgent.GET("/health", s.builtinAgentHandler.Health)
-			builtinAgent.POST("/sessions", agentAdmin, s.builtinAgentHandler.CreateSession)
-			builtinAgent.GET("/sessions", agentAdmin, s.builtinAgentHandler.ListSessions)
-			builtinAgent.GET("/sessions/:id", agentAdmin, s.builtinAgentHandler.GetSession)
-			builtinAgent.DELETE("/sessions/:id", agentAdmin, s.builtinAgentHandler.DeleteSession)
-			builtinAgent.POST("/sessions/:id/messages", agentAdmin, s.builtinAgentHandler.SendMessage)
-			builtinAgent.GET("/sessions/:id/messages", agentAdmin, s.builtinAgentHandler.ListMessages)
-			builtinAgent.GET("/skills", agentAdmin, s.builtinAgentHandler.ListSkills)
+			builtinAgent.POST("/sessions", s.builtinAgentHandler.CreateSession)
+			builtinAgent.GET("/sessions", s.builtinAgentHandler.ListSessions)
+			builtinAgent.GET("/sessions/:id", s.builtinAgentHandler.GetSession)
+			builtinAgent.DELETE("/sessions/:id", s.builtinAgentHandler.DeleteSession)
+			builtinAgent.POST("/sessions/:id/messages", s.builtinAgentHandler.SendMessage)
+			builtinAgent.GET("/sessions/:id/messages", s.builtinAgentHandler.ListMessages)
+			builtinAgent.GET("/skills", s.builtinAgentHandler.ListSkills)
 			builtinAgent.POST("/skills", agentAdmin, s.builtinAgentHandler.CreateSkill)
 			builtinAgent.PUT("/skills/:name", agentAdmin, s.builtinAgentHandler.UpdateSkill)
 			builtinAgent.DELETE("/skills/:name", agentAdmin, s.builtinAgentHandler.DeleteSkill)
 			builtinAgent.POST("/skills/:name/clone", agentAdmin, s.builtinAgentHandler.CloneSkill)
-			builtinAgent.POST("/sessions/:id/confirm", agentAdmin, s.builtinAgentHandler.ConfirmTool)
-			builtinAgent.POST("/sessions/:id/cancel", agentAdmin, s.builtinAgentHandler.CancelExecution)
+			builtinAgent.POST("/sessions/:id/confirm", s.builtinAgentHandler.ConfirmTool)
+			builtinAgent.POST("/sessions/:id/cancel", s.builtinAgentHandler.CancelExecution)
 		}
 	}
 
@@ -2130,6 +2131,11 @@ func (s *Server) Stop(ctx context.Context) error {
 // GetRouter 获取路由实例
 func (s *Server) GetRouter() *gin.Engine {
 	return s.router
+}
+
+// GetBuiltinAgentHandler 返回内置 Agent 处理器（远程 skill 同步等外部模块使用；可能为 nil）。
+func (s *Server) GetBuiltinAgentHandler() *BuiltinAgentHandler {
+	return s.builtinAgentHandler
 }
 
 // SetVersionProvider injects a remote version provider into the system update

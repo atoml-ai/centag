@@ -77,7 +77,11 @@ export const TEAM_ADMIN_ALLOWED_ROUTE_PREFIXES = [
   '/cost',
   '/billing',
   '/profile',
-  '/settings'
+  '/settings',
+  // 内置 Agent 对 team admin 开放（接入能力面不再区分角色）
+  '/agent',
+  '/agent-setup',
+  '/agent-providers'
 ] as const
 
 /** @deprecated 改用 isTeamAdminAllowedRoute 白名单 */

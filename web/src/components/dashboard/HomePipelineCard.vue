@@ -325,7 +325,7 @@ async function loadPipelines() {
       )
     }
   } catch (error: any) {
-    ElMessage.error(t('homePipelineCard.loadFailed', { msg: error.message || t('common.unknownError') }))
+    ElMessage.error(t('homePipelineCard.loadFailed', { msg: error.message || t('unknownError') }))
     pipelines.value = []
   } finally {
     loading.value = false
@@ -344,7 +344,7 @@ async function persistDefault(pipelineId: string) {
       found ? t('homePipelineCard.setDefaultSuccess', { name: found.name }) : t('homePipelineCard.setDefaultSuccessFallback')
     )
   } catch (error: any) {
-    ElMessage.error(t('homePipelineCard.setDefaultFailed', { msg: error.message || t('common.unknownError') }))
+    ElMessage.error(t('homePipelineCard.setDefaultFailed', { msg: error.message || t('unknownError') }))
     await loadPipelines()
   } finally {
     savingDefault.value = false

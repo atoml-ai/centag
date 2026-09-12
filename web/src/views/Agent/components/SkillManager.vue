@@ -35,7 +35,7 @@
       </div>
     </div>
     <template #footer>
-      <el-button @click="onUpdateModelValue(false)">{{ t('common.close') }}</el-button>
+      <el-button @click="onUpdateModelValue(false)">{{ t('close') }}</el-button>
     </template>
 
     <el-dialog

@@ -13,7 +13,9 @@ import {
   appGroup,
   cacheMemoryGroup,
   accessGroup,
-  systemAdminGroup
+  systemAdminGroup,
+  agentSetupNav,
+  agentNav
 } from './shared'
 
 /**
@@ -25,6 +27,14 @@ export const NAV_MENU_TEAM_ADMIN: NavItem[] = [
   pipelinesNav({ labelKey: 'nav.pipelines', requiresAdmin: true }),
   cacheManagementNavGroup(),
   userTenantGroup(),
+  // 接入：内置 Agent 对 team admin 开放（不含系统代理 — admin 无本机代理面）
+  navGroup(
+    'agent-access',
+    'nav.access',
+    'Link',
+    [agentSetupNav({ requiresAdmin: true }), agentNav({ requiresAdmin: true })],
+    '/agent'
+  ),
   navGroup(
     'system-admin',
     'nav.system',
