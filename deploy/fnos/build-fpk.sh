@@ -284,7 +284,30 @@ write_runtime_env() {
     echo "CENTAG_EDITION=$(shell_single_quote "${runtime_edition}")"
     echo "LLM_PROXY_ADMIN_USERNAME=$(shell_single_quote "${ADMIN_USERNAME}")"
     echo "LLM_PROXY_ADMIN_PASSWORD=$(shell_single_quote "${ADMIN_PASSWORD}")"
-    echo "LLM_PROXY_DB_DRIVER='sqlite'"
+    # 数据库配置走统一路径：读统一配置 ~/.centag/centag.conf 的 LLM_PROXY_DB_DRIVER / PG_*；
+    # 默认 sqlite。PG 时写入 driver + 连接键到 runtime.env（首启由 cmd/main 合并进统一配置），
+    # fnOS 应用配置页（DATA_DIR/centag.conf JSON db_driver/pg_*）仍可覆盖。
+    _conf="$(secrets_file)"
+    RUNTIME_DB_DRIVER="$(read_env_key "$_conf" "LLM_PROXY_DB_DRIVER" 2>/dev/null || true)"
+    RUNTIME_DB_DRIVER="${RUNTIME_DB_DRIVER:-sqlite}"
+    echo "LLM_PROXY_DB_DRIVER=$(shell_single_quote "${RUNTIME_DB_DRIVER}")"
+    if [ "${RUNTIME_DB_DRIVER}" != "sqlite" ]; then
+      # 读取统一配置的 PG_*（兼容 POSTGRES_* 别名；PG_DATABASE→POSTGRES_DB、PG_SSLMODE→POSTGRES_SSLMODE）
+      _pg_alias() {
+        case "$1" in
+          PG_DATABASE) echo "POSTGRES_DB" ;;
+          PG_SSLMODE)  echo "POSTGRES_SSLMODE" ;;
+          *)           echo "POSTGRES_${1#PG_}" ;;
+        esac
+      }
+      for _pk in PG_HOST PG_PORT PG_USER PG_PASSWORD PG_DATABASE PG_SSLMODE; do
+        _pv="$(read_env_key "$_conf" "$_pk" 2>/dev/null || true)"
+        [ -z "${_pv}" ] && _pv="$(read_env_key "$_conf" "$(_pg_alias "$_pk")" 2>/dev/null || true)"
+        if [ -n "${_pv}" ]; then
+          echo "${_pk}=$(shell_single_quote "${_pv}")"
+        fi
+      done
+    fi
     echo "SERVER_HOST='0.0.0.0'"
     echo "SERVER_PORT='20060'"
     echo "LLM_PROXY_SERVER_HOST='0.0.0.0'"
