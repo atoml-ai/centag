@@ -8,6 +8,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -98,6 +99,7 @@ func EnsureAPIKeyStorage(ctx context.Context) error {
 		}
 		val = secret
 	}
+	val = unwrapJSONString(val)
 
 	apiKeyStorageMu.Lock()
 	apiKeyStorageSecret = strings.TrimSpace(val)
@@ -164,6 +166,19 @@ func generateAPIKeyStorageSecret() (string, error) {
 		return "", err
 	}
 	return hex.EncodeToString(b), nil
+}
+
+// unwrapJSONString 还原 SystemConfigStore.Set 对普通字符串的 JSON 编码
+// （Set 落库为 `"hexhex…"`，Get 原样返回），避免取值带引号导致密钥派生变化。
+func unwrapJSONString(val string) string {
+	v := strings.TrimSpace(val)
+	if len(v) >= 2 && strings.HasPrefix(v, `"`) && strings.HasSuffix(v, `"`) {
+		var decoded string
+		if err := json.Unmarshal([]byte(v), &decoded); err == nil {
+			return decoded
+		}
+	}
+	return val
 }
 
 // resetAPIKeyStorageForTest clears cached storage state (unit tests only).

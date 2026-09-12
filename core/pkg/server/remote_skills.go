@@ -113,24 +113,25 @@ func (h *BuiltinAgentHandler) saveRemoteSkillManifest(p skills.SkillPlugin) erro
 }
 
 // replaceManifestVersion 将 manifest YAML 顶层 version: 值替换为来源标记。
-// 仅替换 skill 顶层 version 行（首次出现）。
+// 仅替换 skill 顶层 version 行（首个行首锚定的 "version: " 行）；
+// 必须按行首匹配，避免命中首行 "api_version: " 中的尾缀子串导致 schema 版本被写坏。
 func replaceManifestVersion(data []byte, version string) []byte {
-	s := string(data)
-	needle := "version: "
-	idx := strings.Index(s, needle)
-	if idx < 0 {
-		return data
+	lines := strings.Split(string(data), "\n")
+	for i, line := range lines {
+		trimmed := strings.TrimLeft(line, " ")
+		if !strings.HasPrefix(trimmed, "version: ") {
+			continue
+		}
+		quoter := yamlVersionQuoter{}
+		quoted, err := quoter.quote(version)
+		if err != nil {
+			return data
+		}
+		indent := line[:len(line)-len(trimmed)]
+		lines[i] = indent + "version: " + quoted
+		return []byte(strings.Join(lines, "\n"))
 	}
-	end := strings.IndexByte(s[idx:], '\n')
-	if end < 0 {
-		return data
-	}
-	quoter := yamlVersionQuoter{}
-	quoted, err := quoter.quote(version)
-	if err != nil {
-		return data
-	}
-	return []byte(s[:idx] + needle + quoted + s[idx+end:])
+	return data
 }
 
 // ApplyRemoteSkills 同步远程 skill 行到本地 skill 注册体系（飞书表格为权威来源）：

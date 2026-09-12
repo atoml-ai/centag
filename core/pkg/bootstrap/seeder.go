@@ -145,6 +145,10 @@ func SeedDefaultAdminAPIKeyFromConfig(ctx context.Context, db *database.Manager,
 	}
 
 	keyHash, keyPrefix := auth.APIKeyMetadataFromFullKey(raw)
+	// 确保存储密钥就绪，否则加密失败（返回空密文）或误清空已有密文
+	if err := auth.EnsureAPIKeyStorage(ctx); err != nil {
+		return fmt.Errorf("ensure api key storage: %w", err)
+	}
 	enc, err := auth.EncryptAPIKeyForStorage(raw)
 	if err != nil {
 		return fmt.Errorf("encrypt default admin api key: %w", err)

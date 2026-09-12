@@ -3,6 +3,7 @@ package skills
 import (
 	"bytes"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -219,7 +220,9 @@ func (r *SkillPluginRegistry) loadDir(dir string, custom bool) error {
 		}
 		p, err := ParseSkillPluginManifest(data)
 		if err != nil {
-			return fmt.Errorf("parse %s: %w", name, err)
+			// 单个 manifest 损坏只跳过该文件并告警，不再中止整个目录加载
+			slog.Warn("skip bad skill manifest", "file", name, "error", err)
+			continue
 		}
 		if custom {
 			// 自定义 skill 对普通用户可见：强制 internal=false
