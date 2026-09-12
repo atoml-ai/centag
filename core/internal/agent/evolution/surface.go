@@ -8,6 +8,9 @@ import (
 // Surface 宿主呼叫面：诊断工具（观测面）注入 + 操作面由 Runtime 内置。
 // 可与 edgeag evolution.Controller 组合驱动自进化闭环；本包 RunOnce 提供
 // 最小可用闭环（不依赖 LLM 环节）。
+//
+// 预留 API：当前生产链路走 tools/evolution_ops.go 内置工具面（不经 Surface），
+// Surface 仅供范式对齐（edgeag Controller 组合）与单测闭环使用。
 type Surface struct {
 	diag map[string]DiagnoseFn
 	rt   *Runtime

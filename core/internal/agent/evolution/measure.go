@@ -50,7 +50,8 @@ type EffectMeasure struct {
 // SetMetricSource 注入观测面（nil = 关闭度量，dryrun 保持纯方案校验）。
 func (r *Runtime) SetMetricSource(src MetricSource) { r.metric = src }
 
-// SetBudget 注入循环预算（nil = 不限；TC-EVO-008）。
+// SetBudget 覆盖循环预算（TC-EVO-008）；传 NewLoopBudget(0, 0, "") 可显式关闭。
+// NewRuntime 已注入生产默认（DefaultMaxIterations/DefaultMaxTokens）。
 func (r *Runtime) SetBudget(b *LoopBudget) { r.budget = b }
 
 // Charge 循环记账：无预算则零开销直通。

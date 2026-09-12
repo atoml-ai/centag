@@ -33,6 +33,8 @@ func NewRuntime(db *sql.DB, driver, dataDir string) *Runtime {
 		learn:      NewLearningArchive(dataDir),
 		dryruns:    make(map[string]bool),
 		thresholds: DefaultMetricThresholds(),
+		// 生产默认预算（TC-EVO-008）：每会话熔断护栏；SetBudget 可覆盖。
+		budget: NewLoopBudget(DefaultMaxIterations, DefaultMaxTokens, dataDir),
 	}
 	ensureOnce.Do(func() {
 		if err := rt.EnsureSchema(context.Background()); err != nil {

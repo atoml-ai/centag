@@ -5,6 +5,14 @@ import (
 	"fmt"
 )
 
+// DefaultLoopBudget 生产默认预算（TC-EVO-008）：NewRuntime 自动注入，
+// 每会话 50 次迭代 / 100k Token（粗粒度护栏，精确用量以 evol-tag 分桶为准）；
+// 0 值维度 = 不限，可经 SetBudget 覆盖或关闭。
+const (
+	DefaultMaxIterations = 50
+	DefaultMaxTokens     = 100000
+)
+
 // LoopBudget 单 session 循环预算（TC-EVO-008：循环次数 + Token 上限，超限熔断）。
 // 权限语义：null budget = 不限；Charge 超限→ error 并一次性落盘预算报告。
 type LoopBudget struct {

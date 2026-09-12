@@ -10,6 +10,10 @@ import (
 
 // HeaderEvolutionDryrun dryrun 标记请求头（T4：显式标记 + evol-tag 分桶，
 // 不污染常规 usage 聚合）。
+//
+// 注意：本头当前仅由 proxy 记账路径单点消费（token_usage_record.go）；
+// 未来新增任何 token/计费记账路径，必须先检查本头并分流 dryrun 用量，
+// 否则 dryrun 请求会漏入常规 usage 聚合（破坏 TC-BILL-EVO-002 口径）。
 const HeaderEvolutionDryrun = "X-Evolution-Dryrun"
 
 // TagDryrun evol-tag 分桶标记值。
