@@ -390,11 +390,3 @@ func CanServeModel(user *database.User, backends []*backend.BackendConfig, reque
 	}
 	return false
 }
-
-// DefaultBoolTrue returns true when the pointer is nil (DB default / omitted).
-func DefaultBoolTrue(v *bool) bool {
-	if v == nil {
-		return true
-	}
-	return *v
-}

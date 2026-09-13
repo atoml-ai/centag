@@ -57,7 +57,7 @@ func (e *Engine) PrepareProcessEnv(server, tokenFlag string) (*ProcessEnv, error
 	token := resolveWrapToken(tokenFlag)
 	client.Token = token
 
-	mitmHost, proxyAuthRequired, err := resolveMITM(client, api)
+	mitmHost, proxyAuthRequired, err := resolveMITM(client)
 	if err != nil {
 		return nil, err
 	}
@@ -118,7 +118,7 @@ func redactProxyURL(raw string) string {
 	return u.String()
 }
 
-func resolveMITM(client *remote.Client, api string) (mitmHost string, proxyAuthRequired bool, err error) {
+func resolveMITM(client *remote.Client) (mitmHost string, proxyAuthRequired bool, err error) {
 	if st, err := client.SetupStatus(); err == nil && strings.TrimSpace(st.MITMProxy) != "" {
 		return strings.TrimSpace(st.MITMProxy), st.ProxyAuthRequired || st.AllowLANClients, nil
 	}
@@ -130,7 +130,6 @@ func resolveMITM(client *remote.Client, api string) (mitmHost string, proxyAuthR
 	if err != nil {
 		return "", false, fmt.Errorf("resolve MITM from PAC: %w", err)
 	}
-	_ = api
 	return hostPort, false, nil
 }
 

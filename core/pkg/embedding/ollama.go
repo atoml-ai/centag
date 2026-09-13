@@ -14,7 +14,6 @@ import (
 type OllamaEmbeddingService struct {
 	config    *EmbeddingConfig
 	client    *http.Client
-	similarity Similarity
 	dimension int
 }
 
@@ -40,7 +39,6 @@ func NewOllamaEmbeddingService(config *EmbeddingConfig) (*OllamaEmbeddingService
 	return &OllamaEmbeddingService{
 		config:    config,
 		client:    client,
-		similarity: &DefaultSimilarity{},
 		dimension: 768, // nomic-embed-text 默认维度
 	}, nil
 }

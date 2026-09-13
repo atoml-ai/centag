@@ -3,7 +3,6 @@ package embedding
 import (
 	"context"
 	"fmt"
-	"math"
 	"strings"
 )
 
@@ -98,66 +97,3 @@ func NewEmbeddingService(config *EmbeddingConfig) (EmbeddingService, error) {
 	}
 }
 
-// Similarity 相似度计算接口
-type Similarity interface {
-	// Cosine 余弦相似度
-	Cosine(a, b []float32) (float32, error)
-
-	// Euclidean 欧氏距离
-	Euclidean(a, b []float32) (float32, error)
-
-	// DotProduct 点积
-	DotProduct(a, b []float32) (float32, error)
-}
-
-// DefaultSimilarity 默认相似度计算实现
-type DefaultSimilarity struct{}
-
-// Cosine 计算余弦相似度
-func (s *DefaultSimilarity) Cosine(a, b []float32) (float32, error) {
-	if len(a) != len(b) {
-		return 0, fmt.Errorf("vector dimensions do not match: %d vs %d", len(a), len(b))
-	}
-
-	var dotProduct, normA, normB float32
-	for i := range a {
-		dotProduct += a[i] * b[i]
-		normA += a[i] * a[i]
-		normB += b[i] * b[i]
-	}
-
-	if normA == 0 || normB == 0 {
-		return 0, fmt.Errorf("zero vector encountered")
-	}
-
-	return dotProduct / (float32(math.Sqrt(float64(normA))) * float32(math.Sqrt(float64(normB)))), nil
-}
-
-// Euclidean 计算欧氏距离
-func (s *DefaultSimilarity) Euclidean(a, b []float32) (float32, error) {
-	if len(a) != len(b) {
-		return 0, fmt.Errorf("vector dimensions do not match: %d vs %d", len(a), len(b))
-	}
-
-	var sum float32
-	for i := range a {
-		diff := a[i] - b[i]
-		sum += diff * diff
-	}
-
-	return float32(1.0), nil
-}
-
-// DotProduct 计算点积
-func (s *DefaultSimilarity) DotProduct(a, b []float32) (float32, error) {
-	if len(a) != len(b) {
-		return 0, fmt.Errorf("vector dimensions do not match: %d vs %d", len(a), len(b))
-	}
-
-	var dotProduct float32
-	for i := range a {
-		dotProduct += a[i] * b[i]
-	}
-
-	return dotProduct, nil
-}

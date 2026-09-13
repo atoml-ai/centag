@@ -1003,16 +1003,6 @@ func EnableMode(mode ProxyMode) {
 	}
 }
 
-// DisableMode 禁用指定模式
-func DisableMode(mode ProxyMode) {
-	for i := range defaultModeMappings {
-		if defaultModeMappings[i].Mode == mode {
-			defaultModeMappings[i].Enabled = false
-			break
-		}
-	}
-}
-
 // SetModePipeline 设置模式的流水线ID
 func SetModePipeline(mode ProxyMode, pipelineID string) {
 	for i := range defaultModeMappings {

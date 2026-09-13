@@ -16,7 +16,6 @@ import (
 type OpenAIEmbeddingService struct {
 	config    *EmbeddingConfig
 	client    *http.Client
-	similarity Similarity
 	dimension int
 }
 
@@ -45,7 +44,6 @@ func NewOpenAIEmbeddingService(config *EmbeddingConfig) (*OpenAIEmbeddingService
 	return &OpenAIEmbeddingService{
 		config:     config,
 		client:     client,
-		similarity: &DefaultSimilarity{},
 		dimension:  dimension,
 	}, nil
 }
