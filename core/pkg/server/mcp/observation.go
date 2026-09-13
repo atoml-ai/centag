@@ -49,19 +49,40 @@ type Deps struct {
 
 // ObservationServer centag 自有的 MCP 只读观测面 server。
 type ObservationServer struct {
-	deps        Deps
-	allowedList []string // mcp.allowed_tools 配置片段；nil/空 = 全部只读工具
+	deps Deps
 
-	mu  sync.Mutex // 保护 sdk（懒初始化，之后只读）
-	sdk *gomcp.Server
+	mu          sync.Mutex // 保护 on/allowedList/sdk（前两者支持运行时热切换）
+	on          bool       // mcp.enabled 运行时开关；false → 端点 404
+	allowedList []string   // mcp.allowed_tools 配置片段；nil/空 = 全部只读工具
+	sdk         *gomcp.Server
 }
 
-// NewObservationServer 装配 MCP server。enabled=false 时返回 nil（TC-MCP-SEC-001）。
+// NewObservationServer 装配 MCP server。enabled 为启动初始值；运行时可通过
+// SetEnabled 热切换（系统配置保存后生效，无需重启），关闭时端点统一 404。
 func NewObservationServer(enabled bool, deps Deps, allowedTools []string) *ObservationServer {
-	if !enabled {
-		return nil
+	return &ObservationServer{deps: deps, on: enabled, allowedList: allowedTools}
+}
+
+// SetEnabled 运行时热切换 MCP 服务启停（系统配置保存后调用，无需重启）。
+func (s *ObservationServer) SetEnabled(on bool) {
+	if s == nil {
+		return
 	}
-	return &ObservationServer{deps: deps, allowedList: allowedTools}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.on = on
+}
+
+// SetAllowedTools 运行时热更新白名单；已建立的 SDK 会话沿用旧工具面，
+// 新会话按新白名单注册（懒初始化缓存置空触发重建）。
+func (s *ObservationServer) SetAllowedTools(tools []string) {
+	if s == nil {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.allowedList = tools
+	s.sdk = nil
 }
 
 // AllowedToolNames 返回当前白名单过滤后的工具名（不依赖懒初始化状态）。
@@ -73,12 +94,16 @@ func (s *ObservationServer) AllowedToolNames() []string {
 	if s.deps.Metrics != nil {
 		base = append(base, "read_metrics")
 	}
-	if len(s.allowedList) == 0 {
+	s.mu.Lock()
+	allowed := make([]string, len(s.allowedList))
+	copy(allowed, s.allowedList)
+	s.mu.Unlock()
+	if len(allowed) == 0 {
 		sort.Strings(base)
 		return base
 	}
 	keep := map[string]bool{}
-	for _, a := range s.allowedList {
+	for _, a := range allowed {
 		keep[strings.ToLower(strings.TrimSpace(a))] = true
 	}
 	var out []string
@@ -167,6 +192,10 @@ func (s *ObservationServer) SSEHandler() http.Handler {
 // observe 包装鉴权（TC-MCP-SEC-002）与 allowed_tools 拦截（TC-MCP-SEC-003）。
 func (s *ObservationServer) observe(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !s.isEnabled() {
+			http.Error(w, "mcp service is disabled", http.StatusNotFound)
+			return
+		}
 		if s.deps.Authorize != nil && !s.deps.Authorize(r) {
 			http.Error(w, "unauthorized: mcp requires bearer auth", http.StatusUnauthorized)
 			return
@@ -177,6 +206,13 @@ func (s *ObservationServer) observe(next http.Handler) http.Handler {
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+// isEnabled 读取运行时启停开关。
+func (s *ObservationServer) isEnabled() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.on
 }
 
 // allowCall 拦截 JSON-RPC tools/call 白名单外调用（TC-MCP-SEC-003）。

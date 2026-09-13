@@ -1,6 +1,7 @@
 package mcp
 
 import (
+	"bytes"
 	"context"
 	"net/http"
 	"net/http/httptest"
@@ -26,11 +27,22 @@ func newTestDeps(t *testing.T) Deps {
 	}
 }
 
-// TC-MCP-SEC-001 mcp.enabled=false → 不实例化，挂载方不注册路由（404 由挂载方保证）。
+// TC-MCP-SEC-001 mcp.enabled=false → 实例与路由仍存在，端点统一 404（热开关）。
 func TestObservationServer_Disabled(t *testing.T) {
 	s := NewObservationServer(false, newTestDeps(t), nil)
-	if s != nil {
-		t.Fatal("expected nil server when disabled")
+	if s == nil {
+		t.Fatal("server must always be constructed (runtime hot toggle)")
+	}
+	srv := httptest.NewServer(s.StreamableHandler())
+	defer srv.Close()
+	resp, err := http.Post(srv.URL+"/mcp", "application/json",
+		bytes.NewBufferString(`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("expected 404 when disabled, got %d", resp.StatusCode)
 	}
 }
 
