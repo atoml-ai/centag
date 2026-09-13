@@ -1443,6 +1443,7 @@ func (s *Server) setupRoutes() {
 			userAPI.GET("/token-usage/daily", s.tokenUsageHandler.GetDailyUsage)
 			userAPI.GET("/token-usage/models", s.tokenUsageHandler.GetModelStats)
 			userAPI.GET("/token-usage/backends", s.tokenUsageHandler.GetBackendStats)
+			userAPI.GET("/token-usage/accounts", s.tokenUsageHandler.GetAccountStatsHandler)
 			userAPI.GET("/usage", s.tokenUsageHandler.GetUsageBreakdown)
 			userAPI.GET("/usage/sessions", s.tokenUsageHandler.GetSessionsUsage)
 			userAPI.GET("/usage/self-limit", s.tokenUsageHandler.GetSelfLimit)

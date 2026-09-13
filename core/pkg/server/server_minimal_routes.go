@@ -192,6 +192,7 @@ func (s *Server) setupMinimalRoutes(configHandler *MinimalConfigHandler, pluginR
 			userAPI.GET("/token-usage/daily", s.tokenUsageHandler.GetDailyUsage)
 			userAPI.GET("/token-usage/models", s.tokenUsageHandler.GetModelStats)
 			userAPI.GET("/token-usage/backends", s.tokenUsageHandler.GetBackendStats)
+			userAPI.GET("/token-usage/accounts", s.tokenUsageHandler.GetAccountStatsHandler)
 			// 计量计价明细（前端 useUsageTotals / UsageMetricsSummary 等共用）
 			userAPI.GET("/usage", s.tokenUsageHandler.GetUsageBreakdown)
 			userAPI.GET("/usage/sessions", s.tokenUsageHandler.GetSessionsUsage)

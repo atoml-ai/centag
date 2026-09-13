@@ -57,6 +57,14 @@ func maybeRecordTokenUsage(c *gin.Context, output *pipeline.PipelineOutput, fall
 	}
 	model = sanitizeUsageModel(model)
 
+	// 047: 上游后端账户池 Key（transparent_forward 成功最后一次出站写入）。
+	accountID := ""
+	if output.Metadata != nil {
+		if v, ok := output.Metadata["account_id"].(string); ok {
+			accountID = sanitizeUsageValue(v)
+		}
+	}
+
 	deptTag := strings.TrimSpace(c.GetHeader("X-Dept-Tag"))
 	if deptTag == "" && output.Metadata != nil {
 		if v, ok := output.Metadata["dept_tag"].(string); ok {
@@ -73,6 +81,7 @@ func maybeRecordTokenUsage(c *gin.Context, output *pipeline.PipelineOutput, fall
 		SessionID:    strings.TrimSpace(c.GetHeader("X-Session-ID")),
 		Model:        model,
 		Backend:      sanitizeUsageValue(extractBackendFromPipelineOutput(output)),
+		AccountID:    accountID,
 		InputTokens:  prompt,
 		OutputTokens: completion,
 		TotalTokens:  total,
@@ -120,6 +129,7 @@ func maybeRecordTokenUsage(c *gin.Context, output *pipeline.PipelineOutput, fall
 				UserID:           usage.UserID,
 				APIKeyID:         usage.APIKeyID,
 				BackendID:        usage.Backend,
+				AccountID:        usage.AccountID,
 				Model:            usage.Model,
 				PromptTokens:     usage.InputTokens,
 				CompletionTokens: usage.OutputTokens,

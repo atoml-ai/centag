@@ -50,7 +50,8 @@ func setupSQLiteTokenUsageDB(t *testing.T) *sql.DB {
 		agent_type TEXT,
 		group_id TEXT,
 		source TEXT NOT NULL DEFAULT 'real',
-		session_id TEXT
+		session_id TEXT,
+		account_id TEXT
 	);
 	CREATE TABLE token_usage_daily (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,

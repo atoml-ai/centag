@@ -42,10 +42,21 @@ type UsageBreakdown struct {
 // GetUsageBreakdown returns per-(backend_id, model) metering + billing rows for a
 // user within [from, to]. Success-only rows are aggregated; unit prices are the
 // highest rate recorded in the window for that (backend, model).
-func (s *Service) GetUsageBreakdown(ctx context.Context, userID int64, from, to time.Time) (*UsageBreakdown, error) {
+// accountID 可选（047）：非空时只统计该账户池 Key；"-default" 限定无 Key 记录行。
+func (s *Service) GetUsageBreakdown(ctx context.Context, userID int64, from, to time.Time, accountID ...string) (*UsageBreakdown, error) {
 	successFilter := "COALESCE(success, TRUE) = TRUE"
 	if !s.isPostgres() {
 		successFilter = "COALESCE(success, 1) = 1"
+	}
+	where := "user_id = $1 AND created_at >= $2 AND created_at <= $3"
+	args := []interface{}{userID, from, to}
+	if len(accountID) > 0 && strings.TrimSpace(accountID[0]) != "" {
+		if accountID[0] == "-default" {
+			where += " AND account_id IS NULL"
+		} else {
+			where += " AND account_id = $4"
+			args = append(args, strings.TrimSpace(accountID[0]))
+		}
 	}
 	query := s.q(fmt.Sprintf(`
 		SELECT
@@ -61,12 +72,12 @@ func (s *Service) GetUsageBreakdown(ctx context.Context, userID int64, from, to 
 			COALESCE(SUM(output_cost), 0),
 			COALESCE(SUM(cost_usd), 0)
 		FROM token_usage
-		WHERE user_id = $1 AND created_at >= $2 AND created_at <= $3 AND %s
+		WHERE %s AND %s
 		GROUP BY backend_id, model
 		ORDER BY SUM(cost_usd) DESC, SUM(total_tokens) DESC
-	`, successFilter))
+	`, where, successFilter))
 
-	rows, err := s.db.QueryContext(ctx, query, userID, from, to)
+	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("query usage breakdown: %w", err)
 	}

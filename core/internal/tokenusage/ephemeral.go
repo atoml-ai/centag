@@ -39,8 +39,10 @@ CREATE TABLE IF NOT EXISTS token_usage (
 	agent_type TEXT,
 	group_id TEXT,
 	source TEXT NOT NULL DEFAULT 'real',
-	session_id TEXT
+	session_id TEXT,
+	account_id TEXT
 );
+CREATE INDEX IF NOT EXISTS idx_token_usage_account_id ON token_usage(account_id);
 CREATE TABLE IF NOT EXISTS token_usage_daily (
 	id INTEGER PRIMARY KEY AUTOINCREMENT,
 	user_id INTEGER NOT NULL,

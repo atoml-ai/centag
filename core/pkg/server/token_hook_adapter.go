@@ -32,6 +32,7 @@ func (a *tokenUsageHookAdapter) OnTokenUsed(ctx context.Context, usage *hooks.To
 		UserID:           usage.UserID,
 		APIKeyID:         usage.APIKeyID,
 		BackendID:        usage.Backend,
+		AccountID:        usage.AccountID,
 		Model:            usage.Model,
 		PromptTokens:     usage.InputTokens,
 		CompletionTokens: usage.OutputTokens,

@@ -83,6 +83,7 @@ type UsageRecord struct {
 	AgentType          string  `json:"agent_type"`
 	Source             string  `json:"source"`     // 038: "real" or "estimated" (token usage estimation)
 	SessionID          string  `json:"session_id"` // 039: 会话 ID（对话记录关联，支持按会话查询计量计价明细）
+	AccountID          string  `json:"account_id"` // 047: 上游后端账户池 Key（AccountPool account ID），空 = 单 Key 后端/未指定
 }
 
 // UsageStats 使用统计
@@ -248,8 +249,8 @@ func (s *Service) RecordUsage(ctx context.Context, record *UsageRecord) error {
 		(user_id, api_key_id, backend_id, model, prompt_tokens, completion_tokens, total_tokens,
 		 cost_usd, input_cost, output_cost, cost_input_price, cost_output_price,
 		 revenue_usd, revenue_input_price, revenue_output_price,
-		 pricing_rule_id, success, tenant_id, group_id, dept_tag, request_id, agent_type, source, session_id)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24)
+		 pricing_rule_id, success, tenant_id, group_id, dept_tag, request_id, agent_type, source, session_id, account_id)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25)
 	`)
 	_, err = tx.ExecContext(ctx, insertQuery,
 		record.UserID, apiKeyID, record.BackendID, record.Model,
@@ -262,6 +263,7 @@ func (s *Service) RecordUsage(ctx context.Context, record *UsageRecord) error {
 		record.RequestID, normalizedAgentType,
 		sourceOrDefault(record.Source), // 038: 数据来源，空值默认为 "real"
 		nullIfEmpty(record.SessionID),  // 039: 会话 ID，空值存 NULL
+		nullIfEmpty(record.AccountID),  // 047: 账户池 Key ID，空值存 NULL
 	)
 	if err != nil {
 		return err
@@ -498,6 +500,77 @@ func (s *Service) GetBackendStats(ctx context.Context, userID int64, days int) (
 	}
 
 	return stats, nil
+}
+
+// AccountStats 账户池 Key 维度使用统计（047）
+type AccountStats struct {
+	BackendID    string   `json:"backend_id"`
+	AccountID    string   `json:"account_id"`
+	TotalTokens  int      `json:"total_tokens"`
+	RequestCount int      `json:"request_count"`
+	SuccessRate  *float64 `json:"success_rate,omitempty"`
+}
+
+// GetAccountStats 获取按账户池 Key 的使用统计（仅统计有 account_id 的行；
+// NULL = 单 Key 后端/历史行，通过 filterAccountID="" 过滤）。
+// userID > 0 时限定用户，否则全平台（admin 视图）。
+func (s *Service) GetAccountStats(ctx context.Context, userID int64, accountID string, days int) ([]AccountStats, error) {
+	cutoff := s.cutoffDaysAgo(days)
+	successExpr := "1"
+	if s.isPostgres() {
+		successExpr = "TRUE"
+	}
+	where := []string{"created_at >= $1"}
+	args := []interface{}{cutoff}
+	if userID > 0 {
+		where = append(where, fmt.Sprintf("user_id = $%d", len(args)+1))
+		args = append(args, userID)
+	}
+	// 空串 = 回显全部（含 NULL 历史行）；"-default" 保留字查 NULL 行。
+	if accountID == "-default" {
+		where = append(where, "account_id IS NULL")
+	} else if accountID != "" {
+		where = append(where, fmt.Sprintf("account_id = $%d", len(args)+1))
+		args = append(args, accountID)
+	}
+	query := s.q(fmt.Sprintf(`
+		SELECT
+			backend_id,
+			COALESCE(account_id, '') as account_id,
+			SUM(total_tokens) as total_tokens,
+			COUNT(*) as request_count,
+			CASE
+				WHEN COUNT(*) = 0 THEN NULL
+				ELSE CAST(SUM(CASE WHEN COALESCE(success, %s) THEN 1 ELSE 0 END) AS REAL) / COUNT(*)
+			END as success_rate
+		FROM token_usage
+		WHERE %s
+		GROUP BY backend_id, account_id
+		ORDER BY total_tokens DESC
+	`, successExpr, strings.Join(where, " AND ")))
+
+	rows, err := s.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var stats []AccountStats
+	for rows.Next() {
+		stat := AccountStats{}
+		var successRate sql.NullFloat64
+		if err := rows.Scan(
+			&stat.BackendID, &stat.AccountID, &stat.TotalTokens, &stat.RequestCount, &successRate,
+		); err != nil {
+			return nil, err
+		}
+		if successRate.Valid {
+			rate := successRate.Float64
+			stat.SuccessRate = &rate
+		}
+		stats = append(stats, stat)
+	}
+	return stats, rows.Err()
 }
 
 // GetRequestVolumeByBackend 聚合最近 hours 小时按 backend_id 的请求量与失败计数

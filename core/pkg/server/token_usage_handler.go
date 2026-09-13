@@ -73,6 +73,8 @@ func (h *TokenUsageHandler) GetUserUsage(c *gin.Context) {
 
 // GetUsageBreakdown GET /api/v1/user/usage — user-scoped detailed metering/billing
 // grouped per (backend_id, model), including unit prices and costs.
+// Optional query: account_id — filter by upstream backend account-pool key (047);
+// "-default" filters rows without a key attribution.
 func (h *TokenUsageHandler) GetUsageBreakdown(c *gin.Context) {
 	userID, ok := requireUserID(c)
 	if !ok {
@@ -81,13 +83,35 @@ func (h *TokenUsageHandler) GetUsageBreakdown(c *gin.Context) {
 
 	from, to := parseUsageRange(c)
 
-	breakdown, err := h.service.GetUsageBreakdown(c.Request.Context(), userID, from, to)
+	breakdown, err := h.service.GetUsageBreakdown(c.Request.Context(), userID, from, to, c.Query("account_id"))
 	if err != nil {
 		RespondError(c, http.StatusInternalServerError, err.Error())
 		return
 	}
 
 	RespondSuccess(c, breakdown)
+}
+
+// GetAccountStats GET /api/v1/user/token-usage/accounts — usage aggregated per
+// upstream backend account-pool key (047). Optional query: backend_id, account_id.
+func (h *TokenUsageHandler) GetAccountStatsHandler(c *gin.Context) {
+	userID, ok := requireUserID(c)
+	if !ok {
+		return
+	}
+	daysInt, _ := strconv.Atoi(c.DefaultQuery("days", "30"))
+	if daysInt <= 0 {
+		daysInt = 30
+	}
+	accountStats, err := h.service.GetAccountStats(c.Request.Context(), userID, c.Query("account_id"), daysInt)
+	if err != nil {
+		RespondError(c, http.StatusInternalServerError, err.Error())
+		return
+	}
+	RespondSuccess(c, gin.H{
+		"account_stats": accountStats,
+		"days":          daysInt,
+	})
 }
 
 // GetSessionsUsage GET /api/v1/user/usage/sessions — per-session metering/billing

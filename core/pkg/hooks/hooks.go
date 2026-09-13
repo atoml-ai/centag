@@ -108,6 +108,9 @@ type TokenUsage struct {
 	// Backend 后端名称
 	Backend string `json:"backend"`
 
+	// AccountID 上游后端账户池 Key ID（047；空 = 单 Key 后端/未指定）
+	AccountID string `json:"account_id,omitempty"`
+
 	// InputTokens 输入 token 数
 	InputTokens int `json:"input_tokens"`
 

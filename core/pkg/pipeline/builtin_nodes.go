@@ -4629,6 +4629,9 @@ func (n *TokenUsageNode) executeRecord(ctx context.Context, input *NodeInput) (*
 		if backendID, ok := input.Metadata["backend_id"].(string); ok && !strings.Contains(backendID, "{{") {
 			record["backend_id"] = backendID
 		}
+		if accID, ok := input.Metadata["account_id"].(string); ok && !strings.Contains(accID, "{{") {
+			record["account_id"] = accID // 047: 账户池 Key
+		}
 		if userID, ok := input.Metadata["user_id"].(string); ok {
 			record["user_id"] = userID
 		}
@@ -4780,6 +4783,9 @@ func mergeTokenUsageFromNodeMetadata(record, meta map[string]interface{}) {
 		record["backend_id"] = backendID
 	} else if backend := tokenRecordString(meta["backend"]); backend != "" && !strings.Contains(backend, "{{") {
 		record["backend_id"] = backend
+	}
+	if accID := tokenRecordString(meta["account_id"]); accID != "" && !strings.Contains(accID, "{{") {
+		record["account_id"] = accID // 047
 	}
 	total := tokenRecordInt(meta["tokens"])
 	if total == 0 {

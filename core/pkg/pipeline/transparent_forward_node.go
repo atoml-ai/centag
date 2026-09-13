@@ -260,10 +260,11 @@ func (n *TransparentForwardNode) Execute(ctx context.Context, input *NodeInput) 
 	triedAccounts := map[string]bool{}
 
 	var (
-		statusCode    int
-		contentType   string
-		respBody      []byte
-		poolExhausted bool
+		statusCode       int
+		contentType      string
+		respBody         []byte
+		poolExhausted    bool
+		successAccountID string // 047: 最后一次成功出站的账户池 Key
 	)
 	for attempt := 0; attempt < maxAttempts; attempt++ {
 		attemptReq, reqErr := http.NewRequestWithContext(ctx, method, targetURL, strings.NewReader(string(body)))
@@ -378,6 +379,7 @@ func (n *TransparentForwardNode) Execute(ctx context.Context, input *NodeInput) 
 		statusCode = currentResp.StatusCode
 		contentType = currentResp.Header.Get("Content-Type")
 		respBody = currentBody
+		successAccountID = accountID
 		break
 	}
 
@@ -431,7 +433,9 @@ func (n *TransparentForwardNode) Execute(ctx context.Context, input *NodeInput) 
 		return nil, newTransparentUpstreamError(n.id, backendID, resolvedModel, targetURL, statusCode, bodyStr, poolExhausted)
 	}
 
-	out := n.buildTransparentOutput(targetURL, statusCode, contentType, respBody, backendID, resolvedModel, clientModel, requestPath, bridgeToChat, anthropicToChat, nil)
+	out := n.buildTransparentOutput(targetURL, statusCode, contentType, respBody, backendID, resolvedModel, clientModel, requestPath, bridgeToChat, anthropicToChat, map[string]interface{}{
+		"account_id": successAccountID, // 047: 空串不落表（token_usage NULL = 单 Key 后端）
+	})
 	applyReasoningRoundtripOnResponse(meta, body, respBody, statusCode)
 
 	// 上游返回空正文（HTTP 成功但 0 token/无正文/无工具调用）视为节点失败：

@@ -30,6 +30,7 @@ func wireTokenUsagePersistence(svc *tokenusage.Service, hm hooks.HookManager) {
 			AgentType:    req.AgentType,
 			SessionID:    req.SessionID, // 039: 会话 ID
 			Source:       req.Source,    // "cache_replay" = 缓存命中回放计量
+			AccountID:    req.AccountID, // 047: 账户池 Key
 		}
 		if hm != nil {
 			_ = hm.TriggerTokenUsedHooks(ctx, usage)
