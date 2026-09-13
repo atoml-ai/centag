@@ -664,19 +664,16 @@ func New(cfg *config.Config) *Server {
 	mcpProxyHandler := NewMCPProxyHandler()
 
 	// 需求 A（mcp-interface-layer）：MCP 只读观测面（mcp.enabled 默认 false）。
-	// 挂载点在 setupRoutes 的 v1Protected（Bearer 鉴权），工具面复用 agent 工具正本。
-	var observationMcp *mcppkg.ObservationServer
-	if cfg.Mcp.Enabled {
-		defAgentCfg := agentpkg.DefaultAgentConfig()
-		observationMcp = mcppkg.NewObservationServer(true, mcppkg.Deps{
-			DataDir:       dataDir,
-			DBPath:        dbPath,
-			AllowedTables: firstStrings(cfg.Agent.Database.AllowedTables, defAgentCfg.Database.AllowedTables),
-			Version:       internal.GetVersion(),
-			DB:            database.Get().GetDB(),
-			Metrics:       mcppkg.NewTokenUsageVolumeProvider(tokenusage.NewService(database.Get().GetDB(), database.Get().DriverName())),
-		}, cfg.Mcp.AllowedTools)
-	}
+	// 无条件构造并注册路由；enabled 热开关由 ObservationServer 内部判断
+	// （关闭时端点 404），系统配置保存后 SetEnabled/SetAllowedTools 热生效。
+	observationMcp := mcppkg.NewObservationServer(cfg.Mcp.Enabled, mcppkg.Deps{
+		DataDir:       dataDir,
+		DBPath:        dbPath,
+		AllowedTables: firstStrings(cfg.Agent.Database.AllowedTables, agentpkg.DefaultAgentConfig().Database.AllowedTables),
+		Version:       internal.GetVersion(),
+		DB:            database.Get().GetDB(),
+		Metrics:       mcppkg.NewTokenUsageVolumeProvider(tokenusage.NewService(database.Get().GetDB(), database.Get().DriverName())),
+	}, cfg.Mcp.AllowedTools)
 
 	// 创建存储配置处理器
 	storageHandler := NewStorageHandler(storageManager)
@@ -684,6 +681,7 @@ func New(cfg *config.Config) *Server {
 
 	// 创建统一配置处理器
 	configHandler := NewConfigHandler(storageManager, cacheManager, backendManager)
+	configHandler.SetObservationMcp(observationMcp)
 
 	// 创建缓存处理器
 	cacheHandler := NewCacheHandler(cacheManager, proxyCache, backendManager)
@@ -1981,8 +1979,8 @@ func (s *Server) setupRoutes() {
 		s.mcpProxyHandler.RegisterMCPRoutes(mcpGroup)
 	}
 
-	// 需求 A（mcp-interface-layer）：MCP 只读观测面，默认 mcp.enabled=false（不注册路由 → 404）。
-	// 复用 v1Protected Bearer 鉴权；工具面复用 agent 工具正本（单一真源）。
+	// 需求 A（mcp-interface-layer）：MCP 只读观测面。v1Protected Bearer 鉴权；
+	// 工具面复用 agent 工具正本（单一真源）；启停热开关在 handler 内判断。
 	if s.observationMcp != nil {
 		// 标准端点径直挂 /mcp（不依赖尾斜杠重定向），SSE 兼容端点 /mcp/sse。
 		collectObserve := func(method, path string) {

@@ -242,6 +242,7 @@ func SaveConfig(cfg *Config) error {
 		{KeyDefaultStorage, cfg.DefaultStorage},
 		{KeySchedulerConfig, cfg.Scheduler},
 		{KeyModelVariables, cfg.ModelVariables},
+		{KeyMcpConfig, cfg.Mcp},
 		{KeyDataStores, cfg.DataStores},
 		{KeyDefaultDataStores, cfg.DefaultDataStores},
 	}

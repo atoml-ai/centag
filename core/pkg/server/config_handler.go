@@ -16,6 +16,7 @@ import (
 	"centag/core/pkg/config"
 	"centag/core/pkg/embedding"
 	"centag/core/pkg/logger"
+	mcppkg "centag/core/pkg/server/mcp"
 	"centag/core/pkg/processor"
 	"centag/core/pkg/storage"
 
@@ -39,6 +40,16 @@ type ConfigHandler struct {
 	mitmSyncClientProxyAuth func()
 	// proxyHandlerRefresh 刷新 PAC 生成器（advertise/listen 变更）
 	proxyHandlerRefresh func()
+	// observationMcp MCP 只读观测面 server（mcp.enabled/allowed_tools 热切换目标）
+	observationMcp *mcppkg.ObservationServer
+}
+
+// SetObservationMcp 由 Server 装配时注入 MCP 观测面实例（nil 安全）。
+func (h *ConfigHandler) SetObservationMcp(mcp *mcppkg.ObservationServer) {
+	if mcp == nil {
+		return
+	}
+	h.observationMcp = mcp
 }
 
 // NewConfigHandler 创建统一配置处理器
@@ -124,6 +135,7 @@ func (h *ConfigHandler) GetAllConfig(c *gin.Context) {
 		"model_matching":  cfg.ModelMatching,  // 添加模型调度配置
 		"scheduler":       cfg.Scheduler,      // 智能调度配置
 		"model_variables": cfg.ModelVariables, // 模型变量配置
+		"mcp":             cfg.Mcp,            // MCP 只读观测面配置（启动开关 + 工具白名单）
 		"deployment":      depView,            // 部署级配置（fnOS 安装包）
 	}
 
@@ -169,6 +181,7 @@ func (h *ConfigHandler) SaveAllConfig(c *gin.Context) {
 		ModelMatching  *config.ModelMatchingConfig `json:"model_matching"`
 		Scheduler      config.SchedulerConfig      `json:"scheduler"` // 值类型，非指针
 		ModelVariables *config.ModelVariables      `json:"model_variables"`
+		Mcp            *config.McpConfig           `json:"mcp"`
 		Deployment     *config.DeploymentConfig    `json:"deployment"`
 	}
 
@@ -193,6 +206,7 @@ func (h *ConfigHandler) SaveAllConfig(c *gin.Context) {
 	oldSystemProxyAdvertise := cfg.SystemProxy.AdvertiseHost
 	oldHostProxyHTTPPort := cfg.HostProxy.HTTPPort
 	oldHostProxyHTTPSPort := cfg.HostProxy.HTTPSPort
+	oldMcpEnabled := cfg.Mcp.Enabled
 
 	// 更新配置
 	if req.Server != nil {
@@ -557,6 +571,11 @@ func (h *ConfigHandler) SaveAllConfig(c *gin.Context) {
 		}
 	}
 
+	if req.Mcp != nil {
+		cfg.Mcp.Enabled = req.Mcp.Enabled
+		cfg.Mcp.AllowedTools = req.Mcp.AllowedTools
+	}
+
 	// 保存配置到数据库
 	if err := config.SaveConfig(cfg); err != nil {
 		logger.Errorf("Failed to save config: %v", err)
@@ -569,6 +588,14 @@ func (h *ConfigHandler) SaveAllConfig(c *gin.Context) {
 	// ---- 热更新：将配置变化传播到正在运行的组件 ----
 
 	// 1. Host 代理启用状态热切换（不需要重启）
+	if req.Mcp != nil && h.observationMcp != nil {
+		h.observationMcp.SetEnabled(cfg.Mcp.Enabled)
+		h.observationMcp.SetAllowedTools(cfg.Mcp.AllowedTools)
+		if cfg.Mcp.Enabled != oldMcpEnabled {
+			logger.Infof("MCP observation service hot-updated: enabled=%v", cfg.Mcp.Enabled)
+		}
+		logger.Infof("MCP observation allowed_tools hot-updated: %v", cfg.Mcp.AllowedTools)
+	}
 	if req.HostProxy != nil && cfg.HostProxy.Enabled != oldHostProxyEnabled && h.hostProxyServer != nil {
 		h.hostProxyServer.SetEnabled(cfg.HostProxy.Enabled)
 		logger.Infof("Host proxy enabled status hot-updated: %v", cfg.HostProxy.Enabled)
