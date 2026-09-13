@@ -18,5 +18,9 @@
   "tokenColumn": "Token",
   "requestColumn": "Requests",
   "groupByBackendLabel": "Backend",
-  "groupByModelLabel": "Model"
+  "groupByModelLabel": "Model",
+  "keyDetail": "Per-Key usage (last 30 days)",
+  "colKey": "Key",
+  "colSuccessRate": "Success Rate",
+  "noKeyUsage": "No per-Key usage recorded"
 }

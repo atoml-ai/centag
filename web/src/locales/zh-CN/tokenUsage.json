@@ -19,5 +19,13 @@
   "modelUsage": "模型使用",
   "loadDailyTrendFailed": "加载每日趋势失败",
   "loadModelStatsFailed": "加载模型统计失败",
-  "loadBackendStatsFailed": "加载后端统计失败"
+  "loadBackendStatsFailed": "加载后端统计失败",
+  "loadAccountStatsFailed": "加载后端统计失败",
+  "accountTop5": "Key 使用 TOP5",
+  "allBackends": "全部后端",
+  "keyDetail": "Key 用量明细（近 30 天）",
+  "colKey": "Key",
+  "colRequests": "请求数",
+  "colTokens": "Token 数",
+  "colSuccessRate": "成功率"
 }

@@ -16,7 +16,11 @@
     "outputTokens": "출력",
     "inputPrice": "입력 단가",
     "outputPrice": "출력 단가",
-    "totalCost": "비용"
+    "totalCost": "비용",
+    "account": "키",
+    "requestCount": "요청",
+    "totalTokens": "총 토큰",
+    "successRate": "성공률"
   },
   "selfLimit": {
     "title": "자체 한도 (읽기 전용)",
@@ -31,5 +35,6 @@
   },
   "message": {
     "loadFailed": "사용량 데이터를 불러오지 못했습니다"
-  }
+  },
+  "accountUsage": "키별 사용량(최근 30일)"
 }

@@ -16,7 +16,11 @@
     "outputTokens": "Salida",
     "inputPrice": "Precio de entrada",
     "outputPrice": "Precio de salida",
-    "totalCost": "Coste"
+    "totalCost": "Coste",
+    "account": "Clave",
+    "requestCount": "Solicitudes",
+    "totalTokens": "Tokens totales",
+    "successRate": "Tasa de éxito"
   },
   "selfLimit": {
     "title": "Autolímite (solo lectura)",
@@ -31,5 +35,6 @@
   },
   "message": {
     "loadFailed": "No se pudieron cargar los datos de uso"
-  }
+  },
+  "accountUsage": "Uso por clave (últimos 30 días)"
 }

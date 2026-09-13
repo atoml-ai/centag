@@ -19,5 +19,13 @@
   "modelUsage": "모델 사용",
   "loadDailyTrendFailed": "일별 추세 로드 실패",
   "loadModelStatsFailed": "모델 통계 로드 실패",
-  "loadBackendStatsFailed": "백엔드 통계 로드 실패"
+  "loadBackendStatsFailed": "백엔드 통계 로드 실패",
+  "loadAccountStatsFailed": "백엔드 통계 로드 실패",
+  "accountTop5": "키 사용 TOP5",
+  "allBackends": "모든 백엔드",
+  "keyDetail": "키별 사용량(최근 30일)",
+  "colKey": "키",
+  "colRequests": "요청",
+  "colTokens": "토큰",
+  "colSuccessRate": "성공률"
 }

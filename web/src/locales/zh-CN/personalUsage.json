@@ -16,7 +16,11 @@
     "outputTokens": "输出",
     "inputPrice": "输入单价",
     "outputPrice": "输出单价",
-    "totalCost": "费用"
+    "totalCost": "费用",
+    "account": "Key",
+    "requestCount": "请求数",
+    "totalTokens": "总 Token 数",
+    "successRate": "成功率"
   },
   "selfLimit": {
     "title": "自我限额（只读）",
@@ -31,5 +35,6 @@
   },
   "message": {
     "loadFailed": "加载用量数据失败"
-  }
+  },
+  "accountUsage": "Key 用量（近 30 天）"
 }

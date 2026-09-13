@@ -19,5 +19,13 @@
   "modelUsage": "Uso de modelos",
   "loadDailyTrendFailed": "Error al cargar la tendencia diaria",
   "loadModelStatsFailed": "Error al cargar las estadísticas de modelos",
-  "loadBackendStatsFailed": "Error al cargar las estadísticas de backends"
+  "loadBackendStatsFailed": "Error al cargar las estadísticas de backends",
+  "loadAccountStatsFailed": "Error al cargar las estadísticas de backends",
+  "accountTop5": "Uso de claves TOP5",
+  "allBackends": "Todos los backends",
+  "keyDetail": "Uso por clave (últimos 30 días)",
+  "colKey": "Clave",
+  "colRequests": "Solicitudes",
+  "colTokens": "Tokens",
+  "colSuccessRate": "Tasa de éxito"
 }

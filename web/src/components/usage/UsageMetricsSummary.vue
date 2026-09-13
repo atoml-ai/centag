@@ -55,7 +55,27 @@
     <div class="distribution-row">
       <div v-if="backendGroups.length" class="groups-block">
         <div class="block-title">{{ t('usageMetricsSummary.byBackend') }}</div>
-        <el-table :data="backendGroups" size="small" stripe :max-height="mode === 'compact' ? 180 : 320">
+        <el-table :data="backendGroups" size="small" stripe :max-height="mode === 'compact' ? 180 : 320" @expand-change="onBackendExpand">
+          <el-table-column type="expand">
+            <template #default="{ row }">
+              <div v-if="expandBackend === row.key" class="account-expand">
+                <div class="expand-title">{{ t('usageMetricsSummary.keyDetail') }}</div>
+                <el-table v-if="keyRowsFor(row.key).length" :data="keyRowsFor(row.key)" size="small" max-height="220">
+                  <el-table-column prop="account_id" :label="t('usageMetricsSummary.colKey')" min-width="140" />
+                  <el-table-column prop="request_count" :label="t('usageMetricsSummary.requestColumn')" width="80" />
+                  <el-table-column :label="t('usageMetricsSummary.tokenColumn')" width="100">
+                    <template #default="{ row: s }">{{ formatTokens(s.total_tokens) }}</template>
+                  </el-table-column>
+                  <el-table-column v-if="keyRowsHaveRate(row.key)" :label="t('usageMetricsSummary.colSuccessRate')" width="100">
+                    <template #default="{ row: s }">
+                      {{ s.success_rate == null ? '-' : (s.success_rate * 100).toFixed(1) + '%' }}
+                    </template>
+                  </el-table-column>
+                </el-table>
+                <div v-else class="expand-empty">{{ t('usageMetricsSummary.noKeyUsage') }}</div>
+              </div>
+            </template>
+          </el-table-column>
           <el-table-column prop="key" :label="t('usageMetricsSummary.groupByBackendLabel')" min-width="120" />
           <el-table-column :label="t('usageMetricsSummary.costColumn')" width="110">
             <template #default="{ row }">{{ currencySymbol }}{{ formatCost(row.cost_usd) }}</template>
@@ -88,7 +108,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { getUserUsage, getUsageBreakdown } from '@/api/token-usage'
+import { getUserUsage, getUsageBreakdown, getAccountStats } from '@/api/token-usage'
 import * as costApi from '@/api/cost'
 import { useAuthStore } from '@/stores/auth'
 import { useEdition } from '@/composables/useEdition'
@@ -151,6 +171,42 @@ const summary = ref<costApi.CostSummary>({
 
 const backendGroups = ref<costApi.CostGroup[]>([])
 const modelGroups = ref<costApi.CostGroup[]>([])
+
+// 后端行展开：按 (backend, key) 的计量明细（/el 047）。数据统一为最近 30 天窗口。
+const expandBackend = ref('')
+const accountStats = ref<any[]>([])
+const accountLoaded = ref(false)
+const accountLoading = ref(false)
+
+async function loadAccountStats() {
+  if (accountLoaded.value || accountLoading.value) return
+  accountLoading.value = true
+  try {
+    const res: any = await getAccountStats({ days: 30 })
+    accountStats.value = res?.account_stats ?? []
+    accountLoaded.value = true
+  } catch {
+    /* 无 key 计量（单 Key 后端/历史数据）时展示空态即可 */
+  } finally {
+    accountLoading.value = false
+  }
+}
+
+function onBackendExpand(row: { key?: string }, expandedRows: unknown[]) {
+  const isOpen = Array.isArray(expandedRows) && expandedRows.some((r) => (r as { key?: string })?.key === row?.key)
+  expandBackend.value = isOpen ? String(row?.key || '') : ''
+  if (isOpen) void loadAccountStats()
+}
+
+function keyRowsFor(backend: string | undefined): any[] {
+  return accountStats.value
+    .filter((s) => String(s.account_id || '').trim() && String(s.backend_id || '') === String(backend || ''))
+    .sort((a, b) => (b.total_tokens ?? 0) - (a.total_tokens ?? 0))
+}
+
+function keyRowsHaveRate(backend: string | undefined): boolean {
+  return keyRowsFor(backend).some((r) => r.success_rate != null)
+}
 
 const displayCurrency = ref<DisplayCurrency>(getDisplayCurrency())
 const usdToCny = computed(() => summary.value.usd_to_cny || 7.2)
@@ -366,6 +422,19 @@ defineExpose({
   font-size: 13px;
   font-weight: 600;
   margin-bottom: 6px;
+}
+.account-expand {
+  padding: 4px 12px 8px 48px;
+}
+.expand-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--el-text-color-secondary);
+  margin-bottom: 4px;
+}
+.expand-empty {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
 }
 .hint {
   margin: 0;

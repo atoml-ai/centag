@@ -16,7 +16,11 @@
     "outputTokens": "Выход",
     "inputPrice": "Входная цена",
     "outputPrice": "Выходная цена",
-    "totalCost": "Стоимость"
+    "totalCost": "Стоимость",
+    "account": "Ключ",
+    "requestCount": "Запросов",
+    "totalTokens": "Всего токенов",
+    "successRate": "Успешность"
   },
   "selfLimit": {
     "title": "Самоограничение (только чтение)",
@@ -31,5 +35,6 @@
   },
   "message": {
     "loadFailed": "Не удалось загрузить данные об использовании"
-  }
+  },
+  "accountUsage": "Использование по ключам (30 дней)"
 }

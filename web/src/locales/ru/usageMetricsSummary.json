@@ -17,5 +17,9 @@
   "tokenColumn": "Токены",
   "requestColumn": "Запросы",
   "groupByBackendLabel": "Бэкенд",
-  "groupByModelLabel": "Модель"
+  "groupByModelLabel": "Модель",
+  "keyDetail": "Использование по ключам (30 дней)",
+  "colKey": "Ключ",
+  "colSuccessRate": "Успешность",
+  "noKeyUsage": "Нет записей по ключам"
 }

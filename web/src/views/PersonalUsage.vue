@@ -77,6 +77,31 @@
       </el-table>
     </el-card>
 
+    <!-- Per-Key Usage Card (aggregated over the last 30 days) -->
+    <el-card v-if="accountRecords.length > 0" shadow="never" class="account-card">
+      <template #header>
+        <div class="card-header">
+          <span>{{ t('personalUsage.accountUsage') }}</span>
+          <el-button type="primary" link size="small" @click="loadAccountUsage">
+            {{ t('personalUsage.refresh') }}
+          </el-button>
+        </div>
+      </template>
+      <el-table :data="accountRecords" stripe size="small" max-height="300">
+        <el-table-column prop="backend_id" :label="t('personalUsage.table.backend')" width="140" />
+        <el-table-column prop="account_id" :label="t('personalUsage.table.account')" min-width="160" />
+        <el-table-column prop="request_count" :label="t('personalUsage.table.requestCount')" width="110" />
+        <el-table-column :label="t('personalUsage.table.totalTokens')" width="120">
+          <template #default="{ row }">{{ formatNumber(row.total_tokens) }}</template>
+        </el-table-column>
+        <el-table-column v-if="rowHasSuccessRate" :label="t('personalUsage.table.successRate')" width="110">
+          <template #default="{ row }">
+            {{ row.success_rate == null ? '-' : (row.success_rate * 100).toFixed(1) + '%' }}
+          </template>
+        </el-table-column>
+      </el-table>
+    </el-card>
+
     <!-- Self Limit Card -->
     <el-card shadow="never" class="self-limit-card">
       <template #header>
@@ -127,10 +152,10 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { onMounted, computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
-import { getUsageBreakdown, getSelfLimit } from '@/api/token-usage'
+import { getUsageBreakdown, getSelfLimit, getAccountStats } from '@/api/token-usage'
 import { formatTokens } from '@/utils/format'
 
 const { t } = useI18n()
@@ -166,6 +191,16 @@ interface SelfLimit {
 }
 
 const usageRecords = ref<UsageRecord[]>([])
+
+interface AccountRecord {
+  backend_id: string
+  account_id: string
+  total_tokens: number
+  request_count: number
+  success_rate?: number | null
+}
+const accountRecords = ref<AccountRecord[]>([])
+const rowHasSuccessRate = computed(() => accountRecords.value.some((r) => r.success_rate != null))
 const usageSummary = ref<UsageSummary>({
   total_input_tokens: 0,
   total_output_tokens: 0,
@@ -208,8 +243,20 @@ async function loadUsage() {
   }
 }
 
+async function loadAccountUsage() {
+  try {
+    const res = await getAccountStats({ days: 30 })
+    accountRecords.value = (res.account_stats ?? []).filter(
+      (r: AccountRecord) => !!String(r.account_id || '').trim()
+    )
+  } catch {
+    /* the card is hidden when key statistics are unavailable */
+  }
+}
+
 onMounted(() => {
   loadUsage()
+  loadAccountUsage()
 })
 </script>
 

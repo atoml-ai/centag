@@ -19,5 +19,13 @@
   "modelUsage": "モデル使用",
   "loadDailyTrendFailed": "日別傾向の読み込みに失敗しました",
   "loadModelStatsFailed": "モデル統計の読み込みに失敗しました",
-  "loadBackendStatsFailed": "バックエンド統計の読み込みに失敗しました"
+  "loadBackendStatsFailed": "バックエンド統計の読み込みに失敗しました",
+  "loadAccountStatsFailed": "バックエンド統計の読み込みに失敗しました",
+  "accountTop5": "キー使用 TOP5",
+  "allBackends": "すべてのバックエンド",
+  "keyDetail": "キー別使用量（直近30日）",
+  "colKey": "キー",
+  "colRequests": "リクエスト",
+  "colTokens": "トークン",
+  "colSuccessRate": "成功率"
 }

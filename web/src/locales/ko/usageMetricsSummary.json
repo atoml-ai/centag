@@ -17,5 +17,9 @@
   "tokenColumn": "토큰",
   "requestColumn": "요청",
   "groupByBackendLabel": "백엔드",
-  "groupByModelLabel": "모델"
+  "groupByModelLabel": "모델",
+  "keyDetail": "키별 사용량(최근 30일)",
+  "colKey": "키",
+  "colSuccessRate": "성공률",
+  "noKeyUsage": "키별 사용 기록이 없습니다"
 }

@@ -33,6 +33,15 @@ export function getBackendStats(params?: { days?: number }) {
   })
 }
 
+// 账户池 Key 维度用量（047）：返回该用户最近 days 天各 key 的聚合
+export function getAccountStats(params?: { days?: number }) {
+  return api({
+    url: '/api/v1/user/token-usage/accounts',
+    method: 'get',
+    params,
+  })
+}
+
 // 用户计量计价明细：按 (backend_id, model) 聚合，含单价与成本
 export function getUsageBreakdown(params?: { from?: string; to?: string }) {
   return api({

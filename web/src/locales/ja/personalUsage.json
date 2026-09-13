@@ -16,7 +16,11 @@
     "outputTokens": "出力",
     "inputPrice": "入力単価",
     "outputPrice": "出力単価",
-    "totalCost": "費用"
+    "totalCost": "費用",
+    "account": "キー",
+    "requestCount": "リクエスト",
+    "totalTokens": "合計トークン",
+    "successRate": "成功率"
   },
   "selfLimit": {
     "title": "自己制限（読み取り専用）",
@@ -31,5 +35,6 @@
   },
   "message": {
     "loadFailed": "利用データの読み込みに失敗しました"
-  }
+  },
+  "accountUsage": "キー別使用量（直近30日）"
 }

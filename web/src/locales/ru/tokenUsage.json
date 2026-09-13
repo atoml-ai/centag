@@ -19,5 +19,13 @@
   "modelUsage": "Использование моделей",
   "loadDailyTrendFailed": "Не удалось загрузить ежедневный тренд",
   "loadModelStatsFailed": "Не удалось загрузить статистику моделей",
-  "loadBackendStatsFailed": "Не удалось загрузить статистику бэкендов"
+  "loadBackendStatsFailed": "Не удалось загрузить статистику бэкендов",
+  "loadAccountStatsFailed": "Не удалось загрузить статистику бэкендов",
+  "accountTop5": "Использование ключей TOP5",
+  "allBackends": "Все бэкенды",
+  "keyDetail": "Использование по ключам (30 дней)",
+  "colKey": "Ключ",
+  "colRequests": "Запросов",
+  "colTokens": "Токены",
+  "colSuccessRate": "Успешность"
 }

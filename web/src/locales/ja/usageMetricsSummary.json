@@ -17,5 +17,9 @@
   "tokenColumn": "トークン",
   "requestColumn": "リクエスト",
   "groupByBackendLabel": "バックエンド",
-  "groupByModelLabel": "モデル"
+  "groupByModelLabel": "モデル",
+  "keyDetail": "キー別使用量（直近30日）",
+  "colKey": "キー",
+  "colSuccessRate": "成功率",
+  "noKeyUsage": "キー別の使用記録はありません"
 }

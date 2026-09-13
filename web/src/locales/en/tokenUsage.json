@@ -19,5 +19,13 @@
   "modelUsage": "Model Usage",
   "loadDailyTrendFailed": "Failed to load daily trend",
   "loadModelStatsFailed": "Failed to load model statistics",
-  "loadBackendStatsFailed": "Failed to load backend statistics"
+  "loadBackendStatsFailed": "Failed to load backend statistics",
+  "loadAccountStatsFailed": "Failed to load backend statistics",
+  "accountTop5": "Key Usage TOP5",
+  "allBackends": "All backends",
+  "keyDetail": "Per-Key usage (last 30 days)",
+  "colKey": "Key",
+  "colRequests": "Requests",
+  "colTokens": "Tokens",
+  "colSuccessRate": "Success Rate"
 }

@@ -16,7 +16,11 @@
     "outputTokens": "Output",
     "inputPrice": "Input Price",
     "outputPrice": "Output Price",
-    "totalCost": "Cost"
+    "totalCost": "Cost",
+    "account": "Key",
+    "requestCount": "Requests",
+    "totalTokens": "Total Tokens",
+    "successRate": "Success Rate"
   },
   "selfLimit": {
     "title": "Self Limit (Read-only)",
@@ -31,5 +35,6 @@
   },
   "message": {
     "loadFailed": "Failed to load usage data"
-  }
+  },
+  "accountUsage": "Key Usage (last 30 days)"
 }

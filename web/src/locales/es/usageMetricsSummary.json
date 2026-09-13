@@ -17,5 +17,9 @@
   "tokenColumn": "Token",
   "requestColumn": "Solicitudes",
   "groupByBackendLabel": "Backend",
-  "groupByModelLabel": "Modelo"
+  "groupByModelLabel": "Modelo",
+  "keyDetail": "Uso por clave (últimos 30 días)",
+  "colKey": "Clave",
+  "colSuccessRate": "Tasa de éxito",
+  "noKeyUsage": "No hay uso registrado por clave"
 }

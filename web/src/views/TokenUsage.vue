@@ -51,7 +51,55 @@
               <el-button type="primary" link size="small" @click="loadBackendStats">{{ $t('tokenUsage.refresh') }}</el-button>
             </div>
           </template>
-          <v-chart :option="backendChartOption" style="height: 300px" autoresize />
+          <v-chart :option="backendChartOption" style="height: 300px" autoresize @click="onBackendChartClick" />
+          <div v-if="expandedBackend" class="account-detail">
+            <div class="detail-title">
+              {{ expandedBackend }} · {{ $t('tokenUsage.keyDetail') }}
+            </div>
+            <el-table :data="expandedAccountRows" stripe size="small" max-height="240">
+              <el-table-column prop="account_id" :label="$t('tokenUsage.colKey')" min-width="160" />
+              <el-table-column prop="request_count" :label="$t('tokenUsage.colRequests')" width="110" />
+              <el-table-column :label="$t('tokenUsage.colTokens')" width="120">
+                <template #default="{ row }">{{ formatTokenCount(row.total_tokens) }}</template>
+              </el-table-column>
+              <el-table-column v-if="expandedHasSuccessRate" :label="$t('tokenUsage.colSuccessRate')" width="110">
+                <template #default="{ row }">
+                  {{ row.success_rate == null ? '-' : (row.success_rate * 100).toFixed(1) + '%' }}
+                </template>
+              </el-table-column>
+            </el-table>
+          </div>
+        </el-card>
+      </el-col>
+    </el-row>
+
+    <el-row :gutter="20" class="chart-row">
+      <el-col :span="12">
+        <el-card class="chart-card">
+          <template #header>
+            <div class="card-header">
+              <span>{{ $t('tokenUsage.accountTop5') }}</span>
+              <div class="card-header-actions">
+                <el-select
+                  v-model="accountBackend"
+                  clearable
+                  filterable
+                  size="small"
+                  :placeholder="$t('tokenUsage.allBackends')"
+                  style="width: 160px"
+                >
+                  <el-option
+                    v-for="b in accountBackendOptions"
+                    :key="b"
+                    :label="b"
+                    :value="b"
+                  />
+                </el-select>
+                <el-button type="primary" link size="small" @click="loadAccountStats">{{ $t('tokenUsage.refresh') }}</el-button>
+              </div>
+            </div>
+          </template>
+          <v-chart :option="accountChartOption" style="height: 300px" autoresize />
         </el-card>
       </el-col>
     </el-row>
@@ -114,6 +162,7 @@ const chartDays = ref('30')
 const dailyStats = ref<any[]>([])
 const modelStats = ref<any[]>([])
 const backendStats = ref<any[]>([])
+const accountStats = ref<any[]>([])
 
 const dailyChartOption = computed(() => {
   const rows = [...dailyStats.value].reverse()
@@ -263,6 +312,87 @@ const backendChartOption = computed(() => ({
   ]
 }))
 
+const accountBackend = ref('')
+// 点击后端条形图展开该后端下的各 Key 计量明细（数据与 Key 卡片同源、同一 30 天窗口）
+const expandedBackend = ref('')
+const expandedAccountRows = computed(() => {
+  if (!expandedBackend.value) return []
+  return accountStats.value
+    .filter((s) => String(s.account_id || '').trim() && String(s.backend_id || '') === expandedBackend.value)
+    .sort((a, b) => (b.total_tokens ?? 0) - (a.total_tokens ?? 0))
+})
+const expandedHasSuccessRate = computed(() =>
+  expandedAccountRows.value.some((r) => r.success_rate != null)
+)
+
+function formatTokenCount(n: number): string {
+  if (n == null) return '0'
+  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M'
+  if (n >= 1_000) return (n / 1_000).toFixed(1) + 'k'
+  return String(n)
+}
+
+function onBackendChartClick(params: { name?: string }) {
+  const name = String(params?.name ?? '').trim()
+  if (!name) return
+  expandedBackend.value = expandedBackend.value === name ? '' : name
+}
+const accountBackendOptions = computed(() =>
+  [...new Set(accountStats.value.filter((s) => String(s.account_id || '').trim()).map((s) => String(s.backend_id || '')))]
+    .filter(Boolean)
+    .sort()
+)
+
+// 只统计真正归属某个 Key 的行（account_id 为空的行是该后端未按 Key 计量的
+// 合计，不属于 "Key 使用 TOP5" 语义）。
+const accountRows = computed(() => {
+  const scope = accountBackend.value?.trim()
+  return accountStats.value.filter(
+    (s) => String(s.account_id || '').trim() && (!scope || String(s.backend_id || '') === scope)
+  )
+})
+
+// 图表恒为全局 Token 数 Top5 的 Key，横轴标签固定 "key · backend" 以表明归属
+const accountTopRows = computed(() =>
+  [...accountRows.value].sort((a, b) => (b.total_tokens ?? 0) - (a.total_tokens ?? 0)).slice(0, 5)
+)
+
+const accountChartOption = computed(() => ({
+  tooltip: {
+    trigger: 'axis',
+    axisPointer: { type: 'shadow' }
+  },
+  grid: {
+    left: '3%',
+    right: '4%',
+    bottom: '3%',
+    containLabel: true
+  },
+  xAxis: {
+    type: 'value',
+    name: t('tokenUsage.tokenCount')
+  },
+  yAxis: {
+    type: 'category',
+    data: accountTopRows.value
+      .map((s) => `${s.account_id} · ${s.backend_id}`)
+      .reverse()
+  },
+  series: [
+    {
+      name: t('tokenUsage.totalToken'),
+      type: 'bar',
+      data: accountTopRows.value.map((s) => s.total_tokens).reverse(),
+      itemStyle: {
+        color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [
+          { offset: 0, color: '#83e6c0' },
+          { offset: 1, color: '#2fbf71' }
+        ])
+      }
+    }
+  ]
+}))
+
 const loadDailyUsage = async () => {
   try {
     const res = await tokenApi.getDailyUsage({ days: parseInt(chartDays.value) })
@@ -290,11 +420,21 @@ const loadBackendStats = async () => {
   }
 }
 
+const loadAccountStats = async () => {
+  try {
+    const res = await tokenApi.getAccountStats({ days: 30 })
+    accountStats.value = res.account_stats ?? []
+  } catch (error: any) {
+    ElMessage.error(t('tokenUsage.loadAccountStatsFailed') + '：' + error.message)
+  }
+}
+
 onMounted(() => {
   metricsRef.value?.reload()
   loadDailyUsage()
   loadModelStats()
   loadBackendStats()
+  loadAccountStats()
 })
 </script>
 
@@ -321,6 +461,25 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+
+.card-header-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.account-detail {
+  margin-top: 8px;
+  border-top: 1px solid #ebeef5;
+  padding-top: 8px;
+}
+
+.detail-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #606266;
+  margin-bottom: 6px;
 }
 
 @media (max-width: 768px) {
