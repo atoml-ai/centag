@@ -84,7 +84,7 @@
                 <div class="setting-label">{{ t('config.mcpEnabled') }}</div>
                 <p class="form-tip">{{ t('config.mcpEnabledDesc') }}</p>
               </div>
-              <el-switch v-model="config.mcp.enabled" />
+              <el-switch v-model="config.mcp.enabled" @change="save" />
             </div>
             <div v-if="config.mcp.enabled" class="setting-row">
               <div class="setting-copy">
@@ -96,6 +96,7 @@
                 multiple
                 collapse-tags
                 style="width: 320px"
+                @change="save"
               >
                 <el-option
                   v-for="tool in mcpToolOptions"
@@ -104,6 +105,33 @@
                   :value="tool"
                 />
               </el-select>
+            </div>
+            <div v-if="config.mcp.enabled" class="setting-row">
+              <div class="setting-copy">
+                <div class="setting-label">{{ t('config.mcpToken') }}</div>
+                <p class="form-tip">{{ t('config.mcpTokenDesc') }}</p>
+              </div>
+              <div class="mcp-token-actions">
+                <el-tag v-if="mcpTokenActive" type="success" size="small">{{ t('config.mcpTokenActive') }}</el-tag>
+                <el-tag v-else type="info" size="small">{{ t('config.mcpTokenNotIssued') }}</el-tag>
+                <el-button size="small" type="primary" :loading="mcpTokenBusy" @click="handleIssueMCPToken">
+                  {{ t('config.mcpTokenIssue') }}
+                </el-button>
+                <el-button v-if="mcpTokenActive" size="small" :loading="mcpTokenBusy" @click="handleRevokeMCPToken">
+                  {{ t('config.mcpTokenRevoke') }}
+                </el-button>
+              </div>
+            </div>
+            <div v-if="config.mcp.enabled && mcpToken" class="setting-row mcp-token-result">
+              <div class="setting-copy" style="width: 100%">
+                <div class="setting-label">{{ t('config.mcpHeaders') }}</div>
+                <p class="form-tip">{{ t('config.mcpHeadersDesc') }}</p>
+                <div class="mcp-headers-box" @click="copyMCPHeaders">
+                  <pre>Content-Type=application/json
+Authorization=Bearer {{ mcpToken }}</pre>
+                </div>
+                <p class="form-tip">{{ t('config.mcpTokenOnceTip') }}</p>
+              </div>
             </div>
             <p class="form-tip">{{ t('config.mcpServiceDesc') }}</p>
           </div>
@@ -557,11 +585,12 @@ import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Refresh, Check, Monitor, Connection, Switch, ArrowRight, Upload, UploadFilled, Clock, Document, RefreshLeft, Delete, MoreFilled, Search, Download, Box, FolderOpened } from '@element-plus/icons-vue'
-import { getConfig, saveConfig } from '@/api'
+import { getConfig, saveConfig, getMCPTokenStatus, issueMCPToken, revokeMCPToken } from '@/api'
 import { useEdition } from '@/composables/useEdition'
 import { useAuthStore } from '@/stores/auth'
 import { getCapabilities } from '@/utils/capabilities'
 import api from '@/api/index'
+import { copyToClipboard } from '@/utils/clipboard'
 import FallbackPolicyView from '@/views/FallbackPolicy.vue'
 import type { UploadInstance, UploadFile } from 'element-plus'
 
@@ -595,6 +624,64 @@ const navItems = computed(() => {
 const loading = ref(false)
 const saving = ref(false)
 const activeSection = ref<ConfigSection>('overview')
+
+// ── MCP 专用 token ──────────────────────────────────────────────────────────
+const mcpToken = ref('')
+const mcpTokenActive = ref(false)
+const mcpTokenBusy = ref(false)
+
+async function refreshMCPTokenStatus() {
+  try {
+    // axios 响应拦截器已解包 {success, data} → 这里 res 即 data 本体
+    const res: any = await getMCPTokenStatus()
+    mcpTokenActive.value = !!(res?.active ?? res?.data?.active)
+    if (!mcpTokenActive.value) mcpToken.value = ''
+  } catch {
+    /* 静默：状态获取失败不阻塞配置页 */
+  }
+}
+
+async function handleIssueMCPToken() {
+  mcpTokenBusy.value = true
+  try {
+    const res: any = await issueMCPToken()
+    mcpToken.value = res?.token || res?.data?.token || ''
+    if (!mcpToken.value) throw new Error('empty token in response')
+    mcpTokenActive.value = true
+    ElMessage.success(t('config.mcpTokenIssued'))
+  } catch (error: any) {
+    ElMessage.error(t('config.saveFailed') + ': ' + (error.message || t('config.unknownError')))
+  } finally {
+    mcpTokenBusy.value = false
+  }
+}
+
+async function handleRevokeMCPToken() {
+  try {
+    await ElMessageBox.confirm(t('config.mcpTokenRevokeConfirm'), t('config.mcpTokenRevoke'), {
+      type: 'warning',
+    })
+  } catch {
+    return
+  }
+  mcpTokenBusy.value = true
+  try {
+    await revokeMCPToken()
+    mcpToken.value = ''
+    mcpTokenActive.value = false
+    ElMessage.success(t('config.mcpTokenRevoked'))
+  } catch (error: any) {
+    ElMessage.error(t('config.saveFailed') + ': ' + (error.message || t('config.unknownError')))
+  } finally {
+    mcpTokenBusy.value = false
+  }
+}
+
+async function copyMCPHeaders() {
+  const text = `Content-Type=application/json\nAuthorization=Bearer ${mcpToken.value}`
+  if (await copyToClipboard(text)) ElMessage.success(t('config.mcpHeadersCopied'))
+  else ElMessage.warning(t('config.copyFailed'))
+}
 
 const mcpToolOptions = ['centag_info', 'read_log', 'read_database', 'read_metrics']
 
@@ -765,6 +852,11 @@ async function load() {
     if (typeof config.value.proxy.response_trace_banner !== 'boolean') {
       config.value.proxy.response_trace_banner = false
     }
+    // 后端 AllowedTools 为空/nil 语义是「放开全部」，在多选框里显式回填为全选，
+    // 避免 UI 显示成「一个工具都没勾」
+    if (!Array.isArray(config.value.mcp.allowed_tools) || config.value.mcp.allowed_tools.length === 0) {
+      config.value.mcp.allowed_tools = [...mcpToolOptions]
+    }
   } catch (error: any) {
     console.error('Failed to load config:', error)
     ElMessage.error(t('config.loadFailed') + ': ' + (error.message || t('config.unknownError')))
@@ -794,6 +886,7 @@ watch(
 onMounted(() => {
   applyRouteQuery()
   void load()
+  void refreshMCPTokenStatus()
 })
 
 // ── 配置导出 ──────────────────────────────────────────────────────────────────
@@ -1459,5 +1552,39 @@ function formatSuTime(raw: string): string {
   background: var(--el-fill-color-light);
   padding: 2px 8px;
   border-radius: 4px;
+}
+
+.mcp-token-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.mcp-token-result {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.mcp-headers-box {
+  cursor: pointer;
+  background: var(--el-fill-color-light);
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 6px;
+  padding: 10px 12px;
+  margin-top: 6px;
+
+  pre {
+    margin: 0;
+    font-family: 'Menlo', 'Monaco', 'Consolas', monospace;
+    font-size: .8125rem;
+    white-space: pre-wrap;
+    word-break: break-all;
+    color: var(--el-text-color-regular);
+  }
+
+  &:hover {
+    border-color: var(--el-color-primary-light-5);
+  }
 }
 </style>

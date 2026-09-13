@@ -51,6 +51,14 @@ var (
 	initErr       error
 )
 
+// ResetForTest clears the singleton so a subsequent Init can run again.
+// Only for use in tests.
+func ResetForTest() {
+	initOnce = sync.Once{}
+	globalManager = nil
+	initErr = nil
+}
+
 // Init creates and initialises the global Manager using the named plugin.
 // It runs all pending migrations before returning.
 // Init is idempotent: subsequent calls are no-ops and return the original

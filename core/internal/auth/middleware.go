@@ -20,6 +20,10 @@ import (
 type AuthConfig struct {
 	RateLimiter RateLimiter
 	IsDesktop   bool // true for SQLite (Desktop Edition) — skips rate/budget/model checks
+	// AllowMCPToken validates a dedicated long-lived MCP token (purpose=mcp)
+	// against the request path; such tokens are only honored for MCP endpoints.
+	// When nil, such tokens are rejected everywhere (LLM proxy paths stay clean).
+	AllowMCPToken func(path, token string) bool
 }
 
 // JWTMiddleware validates the Bearer token from the Authorization header and
@@ -213,6 +217,17 @@ func ProxyAuthMiddleware(cfg *AuthConfig) gin.HandlerFunc {
 			}
 			logger.Warnf("Proxy auth rejected: %s (path=%s, client=%s); tip: Bearer llmproxy_* or valid JWT", msg, c.Request.URL.Path, c.ClientIP())
 			c.AbortWithStatusJSON(status, gin.H{"success": false, "error": msg})
+			return
+		}
+		// MCP 专用长期 token（purpose=mcp）：仅用于 MCP 观测端点，
+		// 且必须与 system_config 中存储的哈希匹配（可吊销）。
+		if claims.Purpose == "mcp" {
+			if cfg != nil && cfg.AllowMCPToken != nil && cfg.AllowMCPToken(c.Request.URL.Path, token) {
+				SetUserContext(c, claims)
+				c.Next()
+				return
+			}
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"success": false, "error": "invalid token"})
 			return
 		}
 		SetUserContext(c, claims)

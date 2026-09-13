@@ -763,3 +763,39 @@ func (h *ConfigHandler) BindSystemProxyEgress(c *gin.Context) {
 		"api_key_id": req.APIKeyID,
 	})
 }
+
+// IssueMCPToken handles POST /api/v1/config/mcp-token
+// Issues a long-lived dedicated MCP observation token (admin-only).  Any
+// previously issued token is revoked because only one hash is stored.
+func (h *ConfigHandler) IssueMCPToken(c *gin.Context) {
+	username, _ := c.Get(auth.CtxKeyUsername)
+	name, _ := username.(string)
+	tok, err := h.IssueMCPObservationToken(c.Request.Context(), name)
+	if err != nil {
+		RespondInternalError(c, "issue mcp token: "+err.Error())
+		return
+	}
+	RespondSuccess(c, gin.H{
+		"token":      tok,
+		"expires_in": int(auth.MCPTokenTTL.Seconds()),
+	})
+}
+
+// GetMCPTokenStatus handles GET /api/v1/config/mcp-token
+// Reports whether a dedicated MCP token has been issued (never returns the
+// token itself — only its presence).
+func (h *ConfigHandler) GetMCPTokenStatus(c *gin.Context) {
+	RespondSuccess(c, gin.H{
+		"active": h.MCPObservationTokenActive(c.Request.Context()),
+	})
+}
+
+// RevokeMCPToken handles DELETE /api/v1/config/mcp-token
+// Revokes the dedicated MCP observation token immediately.
+func (h *ConfigHandler) RevokeMCPToken(c *gin.Context) {
+	if err := h.RevokeMCPObservationToken(c.Request.Context()); err != nil {
+		RespondInternalError(c, "revoke mcp token: "+err.Error())
+		return
+	}
+	RespondSuccessWithMessage(c, "MCP token revoked")
+}

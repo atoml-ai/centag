@@ -47,6 +47,19 @@ export function saveConfig(payload: any) {
   return api.put('/api/v1/config', payload)
 }
 
+// MCP dedicated long-lived token API
+export function getMCPTokenStatus() {
+  return api.get('/api/v1/config/mcp-token')
+}
+
+export function issueMCPToken() {
+  return api.post('/api/v1/config/mcp-token')
+}
+
+export function revokeMCPToken() {
+  return api.delete('/api/v1/config/mcp-token')
+}
+
 // Cache API
 export function getCacheStats() {
   return api.get('/api/v1/cache/stats')

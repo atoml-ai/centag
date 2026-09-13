@@ -1547,6 +1547,10 @@ func (s *Server) setupRoutes() {
 	proxyAuth := auth.ProxyAuthMiddleware(&auth.AuthConfig{
 		RateLimiter: auth.NewRateLimiter(s.cfg.Redis),
 		IsDesktop:   isDesktop,
+		// MCP 专用长期 token 仅允许命中 MCP 观测端点（由 configHandler 校验存储哈希）
+		AllowMCPToken: func(path, token string) bool {
+			return strings.HasPrefix(path, "/api/v1/mcp") && s.configHandler.ValidateMCPObservationToken(token)
+		},
 	})
 
 	// API v1
@@ -1574,6 +1578,10 @@ func (s *Server) setupRoutes() {
 			config.GET("/model-variables", s.modelConfigHandler.GetModelVariables)
 			config.PUT("/model-variables", s.modelConfigHandler.UpdateModelVariables)
 			config.DELETE("/model-variables/:name", s.modelConfigHandler.DeleteUserVariable)
+			// MCP 专用长期 token（管理员签发/吊销；仅存哈希）
+			config.GET("/mcp-token", s.configHandler.GetMCPTokenStatus)
+			config.POST("/mcp-token", s.configHandler.IssueMCPToken)
+			config.DELETE("/mcp-token", s.configHandler.RevokeMCPToken)
 		}
 
 		// 监控统计

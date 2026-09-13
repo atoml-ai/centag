@@ -25,6 +25,9 @@ const (
 	AccessTokenTTL = 24 * time.Hour
 	// RefreshTokenTTL is the lifetime of a refresh token stored in the DB.
 	RefreshTokenTTL = 7 * 24 * time.Hour
+	// MCPTokenTTL is the lifetime of a dedicated MCP observation token.
+	// Long-lived by design: generated once in the settings page, revocable.
+	MCPTokenTTL = 365 * 24 * time.Hour
 
 	systemKeyJWTSecret = "jwt_secret"
 )
@@ -35,6 +38,7 @@ type Claims struct {
 	Username string `json:"sub"`
 	Role     string `json:"role"`
 	TenantID string `json:"tid,omitempty"` // 多租户：租户 ID
+	Purpose  string `json:"purpose,omitempty"` // 专用 token 用途（如 "mcp"）；普通 access token 为空
 	jwt.RegisteredClaims
 }
 
@@ -127,6 +131,38 @@ func IssueAccessToken(userID int64, username, role, tenantID string) (string, er
 	}
 	tok := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	return tok.SignedString(jwtSecret)
+}
+
+// IssueMCPToken creates a long-lived dedicated JWT for the MCP observation
+// endpoint.  It is scoped via the Purpose claim so it can be distinguished
+// from ordinary access tokens and validated against a stored hash.
+func IssueMCPToken(username string) (string, error) {
+	if len(jwtSecret) == 0 {
+		return "", ErrSecretMissing
+	}
+	now := time.Now()
+	claims := Claims{
+		Username: username,
+		Role:     "admin",
+		Purpose:  "mcp",
+		RegisteredClaims: jwt.RegisteredClaims{
+			Subject:   username,
+			IssuedAt:  jwt.NewNumericDate(now),
+			ExpiresAt: jwt.NewNumericDate(now.Add(MCPTokenTTL)),
+			Issuer:    "centag",
+			ID:        randomJTI(),
+		},
+	}
+	tok := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	return tok.SignedString(jwtSecret)
+}
+
+func randomJTI() string {
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		return ""
+	}
+	return hex.EncodeToString(b)
 }
 
 // ValidateAccessToken parses and validates a JWT string, returning the embedded
