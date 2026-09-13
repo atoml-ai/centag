@@ -77,6 +77,39 @@
 
           <div class="overview-block">
             <div class="overview-block-head">
+              <span class="overview-block-title">{{ t('config.mcpService') }}</span>
+            </div>
+            <div class="setting-row">
+              <div class="setting-copy">
+                <div class="setting-label">{{ t('config.mcpEnabled') }}</div>
+                <p class="form-tip">{{ t('config.mcpEnabledDesc') }}</p>
+              </div>
+              <el-switch v-model="config.mcp.enabled" />
+            </div>
+            <div v-if="config.mcp.enabled" class="setting-row">
+              <div class="setting-copy">
+                <div class="setting-label">{{ t('config.mcpAllowedTools') }}</div>
+                <p class="form-tip">{{ t('config.mcpAllowedToolsDesc') }}</p>
+              </div>
+              <el-select
+                v-model="config.mcp.allowed_tools"
+                multiple
+                collapse-tags
+                style="width: 320px"
+              >
+                <el-option
+                  v-for="tool in mcpToolOptions"
+                  :key="tool"
+                  :label="tool"
+                  :value="tool"
+                />
+              </el-select>
+            </div>
+            <p class="form-tip">{{ t('config.mcpServiceDesc') }}</p>
+          </div>
+
+          <div class="overview-block">
+            <div class="overview-block-head">
               <span class="overview-block-title">{{ t('config.relatedEntries') }}</span>
             </div>
             <div class="link-cards">
@@ -563,6 +596,8 @@ const loading = ref(false)
 const saving = ref(false)
 const activeSection = ref<ConfigSection>('overview')
 
+const mcpToolOptions = ['centag_info', 'read_log', 'read_database', 'read_metrics']
+
 const showSystemProxyLink = computed(
   () => getCapabilities(edition.value, authStore.isAdmin).localProxy
 )
@@ -646,6 +681,10 @@ const config = ref<any>({
     http_port: 8081,
     https_port: 8082,
   },
+  mcp: {
+    enabled: false,
+    allowed_tools: ['centag_info', 'read_log', 'read_database', 'read_metrics'],
+  },
   qa_split: {
     enabled: false,
     backend_id: '',
@@ -712,6 +751,7 @@ async function load() {
       proxy: { ...config.value.proxy, ...data.proxy },
       system_proxy: { ...config.value.system_proxy, ...data.system_proxy },
       host_proxy: { ...config.value.host_proxy, ...data.host_proxy },
+      mcp: { ...config.value.mcp, ...(data.mcp || {}) },
       qa_split: { ...config.value.qa_split, ...data.qa_split },
       question_split: { ...config.value.question_split, ...(data.question_split || {}) },
       embedding: { ...config.value.embedding, ...data.embedding },
