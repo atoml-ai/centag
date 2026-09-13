@@ -58,6 +58,10 @@ centag_layout_use_edition() {
   CENTAG_RELEASE_DIR="${CENTAG_VAR_DIR}/release"
   CENTAG_CROSS_DIR="${CENTAG_VAR_DIR}/cross"
   CENTAG_SERVER_BIN="centag-${CENTAG_EDITION}"
+  # Windows (MSYS2/MINGW/Cygwin) requires .exe suffix for exec.Command.
+  case "$(uname -s 2>/dev/null || echo unknown)" in
+    MINGW*|MSYS*|CYGWIN*|Windows_NT) CENTAG_SERVER_BIN="${CENTAG_SERVER_BIN}.exe" ;;
+  esac
 
   export CENTAG_INSTALL_ROOT CENTAG_BIN_DIR CENTAG_LIB_DIR CENTAG_VAR_DIR
   export CENTAG_EDITION_LIB CENTAG_STATIC_DIR
@@ -71,7 +75,13 @@ centag_layout_init() {
 
 centag_bin_name() {
   local edition="${1:-${CENTAG_EDITION:-personal}}"
-  printf 'centag-%s' "$edition"
+  local name
+  name="$(printf 'centag-%s' "$edition")"
+  # Windows (MSYS2/MINGW/Cygwin) requires .exe suffix for exec.Command.
+  case "$(uname -s 2>/dev/null || echo unknown)" in
+    MINGW*|MSYS*|CYGWIN*|Windows_NT) name="${name}.exe" ;;
+  esac
+  printf '%s' "$name"
 }
 
 centag_edition_lib() {
@@ -159,6 +169,12 @@ centag_install_edition_links() {
   local ext="${2:-}"
   local lib bin_path
   lib="$(centag_edition_lib "$edition")"
+  # Auto-detect .exe on Windows if ext not provided.
+  if [[ -z "$ext" ]]; then
+    case "$(uname -s 2>/dev/null || echo unknown)" in
+      MINGW*|MSYS*|CYGWIN*|Windows_NT) ext=".exe" ;;
+    esac
+  fi
   bin_path="${lib}/centag-${edition}${ext}"
   mkdir -p "${CENTAG_BIN_DIR}" "$lib"
   if [[ -e "$bin_path" || -L "$bin_path" ]]; then

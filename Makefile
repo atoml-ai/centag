@@ -11,7 +11,20 @@ BIN_DIR=$(CENTAG_LIB_DIR)/$(CENTAG_EDITION)
 STATIC_DIR=$(BIN_DIR)/static
 PATH_BIN_DIR=$(CENTAG_BIN_DIR)
 PACKAGES_DIR=$(CENTAG_VAR_DIR)/packages
-BINARY_NAME=centag-$(CENTAG_EDITION)
+# Windows (MSYS2/MINGW/Cygwin) requires .exe suffix for exec.Command.
+UNAME_S := $(shell uname -s 2>/dev/null || echo unknown)
+ifneq (,$(findstring MINGW,$(UNAME_S)))
+  EXE_EXT := .exe
+else ifneq (,$(findstring MSYS,$(UNAME_S)))
+  EXE_EXT := .exe
+else ifneq (,$(findstring CYGWIN,$(UNAME_S)))
+  EXE_EXT := .exe
+else ifneq (,$(findstring Windows_NT,$(UNAME_S)))
+  EXE_EXT := .exe
+else
+  EXE_EXT :=
+endif
+BINARY_NAME=centag-$(CENTAG_EDITION)$(EXE_EXT)
 CMD_DIR=cmd
 MAIN_FILE=$(CMD_DIR)/centag/main.go
 # Product version for `centag version`: prefer version branch (feature/v0.2.7 → v0.2.7),
@@ -127,7 +140,10 @@ daemon-debug: build
 clean:
 	@echo "Cleaning $(CENTAG_INSTALL_ROOT) build artifacts..."
 	rm -rf $(CENTAG_LIB_DIR)/personal $(CENTAG_LIB_DIR)/minimal
-	rm -f $(PATH_BIN_DIR)/centag $(PATH_BIN_DIR)/centag-personal $(PATH_BIN_DIR)/centag-minimal $(PATH_BIN_DIR)/centag.cmd
+	rm -f $(PATH_BIN_DIR)/centag $(PATH_BIN_DIR)/centag.exe \
+		$(PATH_BIN_DIR)/centag-personal $(PATH_BIN_DIR)/centag-personal.exe \
+		$(PATH_BIN_DIR)/centag-minimal $(PATH_BIN_DIR)/centag-minimal.exe \
+		$(PATH_BIN_DIR)/centag.cmd
 	rm -rf $(CENTAG_VAR_DIR)/packages $(CENTAG_VAR_DIR)/release $(CENTAG_VAR_DIR)/cross
 	rm -rf bin/server bin/packages bin/release
 	@echo "Clean complete"

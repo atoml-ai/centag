@@ -560,6 +560,16 @@ _compile_go_binary() {
     # 更新依赖
     go mod tidy 2>/dev/null || true
 
+    # Windows (MSYS2/MINGW/Cygwin) requires .exe suffix for exec.Command.
+    case "$(uname -s 2>/dev/null || echo unknown)" in
+        MINGW*|MSYS*|CYGWIN*|Windows_NT)
+            case "$output_name" in
+                *.exe) ;;
+                *) output_name="${output_name}.exe" ;;
+            esac
+            ;;
+    esac
+
     # 组装 -tags 参数
     local tags_arg=""
     [ -n "$build_tags" ] && tags_arg="-tags '$build_tags'"
@@ -574,6 +584,8 @@ _compile_go_binary() {
         centag) edition="${CENTAG_EDITION:-personal}"; output_name="centag-${edition}" ;;
         *) edition="${CENTAG_EDITION:-personal}" ;;
     esac
+    # Strip .exe suffix from edition name (only binary names need .exe).
+    edition="${edition%.exe}"
     local out_dir
     out_dir="$(centag_edition_lib "$edition")"
     mkdir -p "$out_dir"
@@ -638,12 +650,18 @@ edition_to_dist() {
 }
 
 edition_to_sidecar() {
+    local name
     case "$1" in
-        personal) echo "centag-personal" ;;
-        minimal) echo "centag-minimal" ;;
-        team) echo "centag-team" ;;
-        *) echo "centag-$1" ;;
+        personal) name="centag-personal" ;;
+        minimal) name="centag-minimal" ;;
+        team) name="centag-team" ;;
+        *) name="centag-$1" ;;
     esac
+    # Windows (MSYS2/MINGW/Cygwin) requires .exe suffix for exec.Command.
+    case "$(uname -s 2>/dev/null || echo unknown)" in
+        MINGW*|MSYS*|CYGWIN*|Windows_NT) name="${name}.exe" ;;
+    esac
+    echo "$name"
 }
 
 # Resolve current-host launcher binary (auto-detect GOOS/GOARCH).
@@ -875,7 +893,11 @@ build_all() {
 # 返回编译后的二进制路径；失败则 exit 1。
 _ota_cross_build() {
     local edition="$1" goos="$2" goarch="$3" out_dir="$4"
-    local out_bin="${out_dir}/centag-${edition}"
+    local out_ext=""
+    case "$goos" in
+        windows) out_ext=".exe" ;;
+    esac
+    local out_bin="${out_dir}/centag-${edition}${out_ext}"
     mkdir -p "$out_dir"
 
     local ver_ldflags="-X 'main.Version=${CENTAG_VERSION}' -X 'main.BuildTime=${BUILD_TIME}'"
@@ -1786,11 +1808,13 @@ _debug_minimal() {
     print_info "════════════════════════════════════════"
     echo ""
 
+    local sidecar_name
+    sidecar_name="$(edition_to_sidecar minimal)"
     if [ "$with_desktop" = "true" ]; then
-        _debug_run_desktop minimal centag-minimal
+        _debug_run_desktop minimal "$sidecar_name"
     else
         cd "$BIN_DIR"
-        CENTAG_EDITION=minimal ./centag-minimal serve
+        CENTAG_EDITION=minimal "./$sidecar_name" serve
         cd "$PROJECT_ROOT"
     fi
 }
