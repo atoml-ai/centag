@@ -2,6 +2,7 @@ package engine
 
 import (
 	"fmt"
+	"net"
 	"os"
 	"strings"
 
@@ -29,17 +30,117 @@ func resolveWrapToken(flagToken string) string {
 	return strings.TrimSpace(os.Getenv("CENTAG_WRAP_TOKEN"))
 }
 
-func (e *Engine) Enable(server, token string) error {
+// isCentagProxy reports whether a captured proxy state is actually Centag's own
+// takeover (PAC pointing at /api/v1/proxy/pac, or a manual proxy on Centag's
+// loopback ports). It must never be stored as the "original" proxy, otherwise
+// disable would restore the machine to Centag itself.
+func isCentagProxy(p snapshot.ProxyState) bool {
+	if p.Mode == "pac" && strings.Contains(strings.ToLower(p.PACURL), "/api/v1/proxy/pac") {
+		return true
+	}
+	for _, hp := range []string{p.HTTP, p.HTTPS, p.PACURL} {
+		if hp != "" && hostPortIsCentag(hp) {
+			return true
+		}
+	}
+	return false
+}
+
+func hostPortIsCentag(raw string) bool {
+	raw = strings.ToLower(strings.TrimSpace(raw))
+	raw = strings.TrimPrefix(raw, "http://")
+	raw = strings.TrimPrefix(raw, "https://")
+	raw = strings.TrimPrefix(raw, "socks5://")
+	if i := strings.IndexAny(raw, "/?#"); i >= 0 {
+		raw = raw[:i]
+	}
+	host, port, err := net.SplitHostPort(raw)
+	if err != nil {
+		return false
+	}
+	switch host {
+	case "127.0.0.1", "localhost", "::1", "0.0.0.0":
+	default:
+		return false
+	}
+	switch port {
+	case "8081", "8080", "20060", "20061":
+		return true
+	}
+	return false
+}
+
+// captureOriginalProxy returns the value to persist as the pre-takeover proxy.
+// When the live state already points at Centag, it prefers the previously
+// stored snapshot (if it holds a real external proxy) and otherwise falls back
+// to "off" rather than recording Centag as the original.
+func captureOriginalProxy(live snapshot.ProxyState, hasSnapshot bool) snapshot.ProxyState {
+	if !isCentagProxy(live) {
+		return live
+	}
+	if hasSnapshot {
+		if old, err := snapshot.Load(); err == nil && !isCentagProxy(old.Proxy) {
+			return old.Proxy
+		}
+	}
+	// Recover the manual proxy Centag's PAC takeover displaced: on Windows the
+	// registry keeps ProxyServer even after ProxyEnable is cleared.
+	if hp := firstNonSelfManual(live); hp != "" {
+		return snapshot.ProxyState{Mode: "manual", HTTP: hp, HTTPS: hp}
+	}
+	return snapshot.ProxyState{Mode: "off"}
+}
+
+func firstNonSelfManual(p snapshot.ProxyState) string {
+	for _, hp := range []string{p.HTTP, p.HTTPS} {
+		if hp != "" && !hostPortIsCentag(hp) {
+			return hp
+		}
+	}
+	return ""
+}
+
+func (e *Engine) Enable(server, token string, force bool) error {
 	server = strings.TrimSpace(server)
 	token = resolveWrapToken(token)
 	if server == "" {
-		return e.enableLocal(token)
+		return e.enableLocal(token, force)
 	}
-	return e.enableRemote(server, token)
+	return e.enableRemote(server, token, force)
 }
 
-func (e *Engine) enableLocal(token string) error {
-	if snapshot.Exists() {
+// EnableCAOnly installs the Centag CA into the OS trust store and ensures the
+// server-side MITM is running, WITHOUT taking over the OS system proxy. Used for
+// Chromium/Electron GUI apps that get a per-process --proxy-server, so other
+// applications keep their own proxy settings. Repeat-safe (no snapshot takeover).
+func (e *Engine) EnableCAOnly(server, token string) error {
+	api := ResolveAPIBase(server)
+	client, err := remote.New(api)
+	if err != nil {
+		return err
+	}
+	client.Token = resolveWrapToken(token)
+
+	_ = ensureLocalMITM(client)
+
+	caPEM, err := client.DownloadCA()
+	if err != nil {
+		return fmt.Errorf("download CA: %w", err)
+	}
+	fp, err := e.OS.InstallCA(caPEM)
+	if err != nil {
+		return fmt.Errorf("install CA: %w", err)
+	}
+	fmt.Printf("ca installed (system proxy untouched): api=%s fp=%s\n", api, short(fp))
+	return nil
+}
+
+// enableLocal/enableRemote: force=true「接管」——快照已存在且系统代理被其他
+// 程序（VPN/TUN 等）改写时，重新写入 Centag PAC；快照 Proxy 则更新为当前
+// 状态，保证后续 disable 恢复到对方的设置而不是最初的状态。
+func (e *Engine) enableLocal(token string, force bool) error {
+	snapshotExisted := snapshot.Exists()
+	if snapshotExisted && !force {
 		return fmt.Errorf("already enabled (snapshot exists); run disable first")
 	}
 	api := envOr("CENTAG_API_BASE", defaultLocalAPI)
@@ -53,6 +154,7 @@ func (e *Engine) enableLocal(token string) error {
 	if err != nil {
 		return fmt.Errorf("read proxy: %w", err)
 	}
+	prev = captureOriginalProxy(prev, snapshotExisted)
 	snap := &snapshot.Snapshot{
 		ClientMode: "local",
 		Proxy:      prev,
@@ -64,7 +166,10 @@ func (e *Engine) enableLocal(token string) error {
 
 	rollback := func() {
 		_ = e.OS.RestoreProxy(prev)
-		_ = snapshot.Remove()
+		// force 接管失败时保留原有快照，避免误删之前的恢复点。
+		if !snapshotExisted {
+			_ = snapshot.Remove()
+		}
 	}
 
 	// Ensure MITM enabled via config API when token present (best-effort).
@@ -111,8 +216,9 @@ func (e *Engine) enableLocal(token string) error {
 	return nil
 }
 
-func (e *Engine) enableRemote(server, token string) error {
-	if snapshot.Exists() {
+func (e *Engine) enableRemote(server, token string, force bool) error {
+	hasSnapshot := snapshot.Exists()
+	if hasSnapshot && !force {
 		return fmt.Errorf("already enabled (snapshot exists); run disable first")
 	}
 	client, err := remote.New(server)
@@ -121,10 +227,11 @@ func (e *Engine) enableRemote(server, token string) error {
 	}
 	client.Token = token
 
-	prev, err := e.OS.ReadProxy()
+	live, err := e.OS.ReadProxy()
 	if err != nil {
 		return err
 	}
+	prev := captureOriginalProxy(live, hasSnapshot)
 	snap := &snapshot.Snapshot{
 		ClientMode: "remote",
 		Proxy:      prev,

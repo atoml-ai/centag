@@ -45,16 +45,26 @@ func regQuery(name string) string {
 
 func (windowsBackend) ReadProxy() (snapshot.ProxyState, error) {
 	state := snapshot.ProxyState{Mode: "off"}
+	manual := regQuery("ProxyServer")
+	enableReg := regQuery("ProxyEnable")
+	enabled := enableReg == "0x1" || enableReg == "1"
+
 	if pac := regQuery("AutoConfigURL"); pac != "" {
 		state.Mode = "pac"
 		state.PACURL = pac
-	}
-	if regQuery("ProxyEnable") == "0x1" || regQuery("ProxyEnable") == "1" {
-		if state.Mode == "off" {
-			state.Mode = "manual"
+		// Centag's PAC takeover clears ProxyEnable, but ProxyServer keeps the
+		// user's original manual proxy. Preserve it so upstream egress can be
+		// recovered from the snapshot on disable/force re-enable.
+		if manual != "" {
+			state.HTTP = manual
+			state.HTTPS = manual
 		}
-		state.HTTP = regQuery("ProxyServer")
-		state.HTTPS = state.HTTP
+		return state, nil
+	}
+	if enabled {
+		state.Mode = "manual"
+		state.HTTP = manual
+		state.HTTPS = manual
 	}
 	return state, nil
 }
@@ -101,19 +111,23 @@ func (windowsBackend) InstallCA(certPEM []byte) (string, error) {
 		return "", err
 	}
 	defer os.Remove(tmp)
-	cmd := exec.Command("certutil", "-addstore", "-f", "Root", tmp)
-	if out, err := cmd.CombinedOutput(); err != nil {
-		return "", fmt.Errorf("certutil: %v (%s)", err, strings.TrimSpace(string(out)))
+	// CurrentUser store (-user): no admin required, and it is what Schannel/
+	// WinINET-based clients use for the logged-in user. Matches the desktop
+	// launcher's ensureCATrusted.
+	if out, err := exec.Command("certutil", "-user", "-addstore", "-f", "Root", tmp).CombinedOutput(); err != nil {
+		return "", fmt.Errorf("certutil -user Root: %v (%s)", err, strings.TrimSpace(string(out)))
 	}
+	_ = exec.Command("certutil", "-user", "-addstore", "-f", "CA", tmp).Run()
 	return fp, nil
 }
 
 func (windowsBackend) UninstallCA(fingerprint string) error {
-	cmd := exec.Command("certutil", "-delstore", "Root", "Centag CA")
+	cmd := exec.Command("certutil", "-user", "-delstore", "Root", "Centag CA")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("certutil -delstore: %v (%s) fingerprint=%s",
+		return fmt.Errorf("certutil -user -delstore: %v (%s) fingerprint=%s",
 			err, strings.TrimSpace(string(out)), fingerprint)
 	}
+	_ = exec.Command("certutil", "-user", "-delstore", "CA", "Centag CA").Run()
 	return nil
 }

@@ -38,6 +38,8 @@ type commonFlags struct {
 	Token     string
 	Install   bool
 	Uninstall bool
+	Force     bool
+	CAOnly    bool
 }
 
 // Run executes wrap with a fixed subcommand whitelist.
@@ -63,7 +65,10 @@ func Run(args []string) error {
 		if err != nil {
 			return err
 		}
-		return eng.Enable(f.Server, f.Token)
+		if f.CAOnly {
+			return eng.EnableCAOnly(f.Server, f.Token)
+		}
+		return eng.Enable(f.Server, f.Token, f.Force)
 	case "disable":
 		return eng.Disable()
 	case "status":
@@ -125,6 +130,10 @@ func parseCommonFlags(args []string) (commonFlags, error) {
 			f.Install = true
 		case a == "--uninstall":
 			f.Uninstall = true
+		case a == "--force":
+			f.Force = true
+		case a == "--ca-only":
+			f.CAOnly = true
 		case a == "--help" || a == "-h":
 			continue
 		default:
