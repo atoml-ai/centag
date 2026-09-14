@@ -4,6 +4,7 @@ import (
 	"os"
 
 	wrapcli "centag/apps/wrap/cli"
+	"centag/core/pkg/agentcatalog"
 	"centag/core/pkg/entrypoint"
 
 	_ "centag/plugins/backend/anthropic"
@@ -24,6 +25,7 @@ var (
 
 func init() {
 	wrapcli.SetProgramName("centag wrap")
+	wrapcli.SetAppCatalogJSON(agentcatalog.JSON)
 	entrypoint.SetWrapCLI(wrapcli.Run)
 }
 

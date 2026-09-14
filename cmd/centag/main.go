@@ -4,6 +4,7 @@ import (
 	"os"
 
 	wrapcli "centag/apps/wrap/cli"
+	"centag/core/pkg/agentcatalog"
 	"centag/core/pkg/entrypoint"
 
 	// Core LLM backends + protocols (business plugins: external go.mod)
@@ -37,6 +38,7 @@ var (
 
 func init() {
 	wrapcli.SetProgramName("centag wrap")
+	wrapcli.SetAppCatalogJSON(agentcatalog.JSON)
 	entrypoint.SetWrapCLI(wrapcli.Run)
 }
 

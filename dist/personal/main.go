@@ -4,6 +4,7 @@ import (
 	"os"
 
 	wrapcli "centag/apps/wrap/cli"
+	"centag/core/pkg/agentcatalog"
 	"centag/core/pkg/entrypoint"
 
 	// Configsync is wired via entrypoint_full.go when CENTAG_CONFIGSYNC_SNAPSHOT_URL
@@ -41,6 +42,7 @@ var (
 
 func init() {
 	wrapcli.SetProgramName("centag wrap")
+	wrapcli.SetAppCatalogJSON(agentcatalog.JSON)
 	entrypoint.SetWrapCLI(wrapcli.Run)
 }
 
