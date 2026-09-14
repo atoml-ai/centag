@@ -199,6 +199,23 @@ func (p *sidecarProcess) stop() error {
 	return nil
 }
 
+// pickFreePort returns the first free loopback TCP port at or after start.
+// Works on all platforms (unlike start.sh's lsof-based check, which is
+// unavailable on Windows). Returns start if none are free within the range.
+func pickFreePort(start int) int {
+	if start <= 0 {
+		start = defaultPort
+	}
+	for p := start; p < start+100; p++ {
+		ln, err := net.Listen("tcp", net.JoinHostPort("127.0.0.1", fmt.Sprintf("%d", p)))
+		if err == nil {
+			_ = ln.Close()
+			return p
+		}
+	}
+	return start
+}
+
 func terminateListenerOnPort(port int) error {
 	ln, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", port))
 	if err == nil {

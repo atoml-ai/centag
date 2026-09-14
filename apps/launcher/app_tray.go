@@ -57,8 +57,39 @@ func (a *launcherApp) onReady() {
 	openItem := systray.AddMenuItem("打开管理界面", "在系统浏览器中打开")
 	openItem.Click(func() { _ = openBrowser(a.cfg.baseURL()) })
 
-	runItem := systray.AddMenuItem("代理启动应用", "选择本机应用，经 centag wrap 通过 Centag 代理启动（用于大模型）")
-	runItem.Click(func() { runAgentViaWrap(a) })
+	runItem := systray.AddMenuItem("代理启动应用", "列出本机已安装、可经 Centag 代理的应用")
+	if apps, err := listCatalogAppsCached(a.hub.binary); err != nil {
+		fmt.Fprintf(os.Stderr, "centag-launcher: list catalog: %v\n", err)
+		mi := runItem.AddSubMenuItem("目录不可用（手动选择程序）", err.Error())
+		mi.Click(func() { runAgentViaWrap(a) })
+	} else {
+		installed := installedApps(apps)
+		if len(installed) == 0 {
+			runItem.AddSubMenuItem("未检测到已安装应用", "在 Web 管理界面查看安装指引")
+		} else {
+			for _, app := range installed {
+				app := app
+				mi := runItem.AddSubMenuItem(app.DisplayName, "经 centag 代理启动 "+app.ID)
+				mi.Click(func() { runAgentByApp(a, app) })
+			}
+		}
+	}
+	manualItem := runItem.AddSubMenuItem("手动选择程序…", "选择任意本机程序并代理启动")
+	manualItem.Click(func() { runAgentViaWrap(a) })
+
+	writeCfgItem := systray.AddMenuItemCheckbox("启动前写入模型配置",
+		"将应用模型写为 centag/默认流水线（可选；默认依赖透明模式映射）", writeConfigOnLaunch)
+	writeCfgItem.Click(func() {
+		writeConfigOnLaunch = !writeConfigOnLaunch
+		if writeConfigOnLaunch {
+			writeCfgItem.Check()
+		} else {
+			writeCfgItem.Uncheck()
+		}
+	})
+
+	doctorItem := systray.AddMenuItem("代理诊断", "检查 CA / MITM / 出口 Key 等就绪状态")
+	doctorItem.Click(func() { runDoctorNow(a) })
 
 	cliItem := systray.AddMenuItem("安装命令行工具", "将 centag 命令安装到 PATH（终端可用 centag wrap）")
 	cliItem.Click(func() {

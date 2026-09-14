@@ -25,9 +25,10 @@ type Config struct {
 	Port      int
 	DataDir   string
 	NoOpen    bool
-	NoSidecar bool   // connect to an already-running sidecar instead of starting one (debug)
-	Headless  bool   // no system menu / systray (CI)
-	Supervise bool   // restart sidecar on crash (default on except debug)
+	NoSidecar bool // connect to an already-running sidecar instead of starting one (debug)
+	Headless  bool // no system menu / systray (CI)
+	Supervise bool // restart sidecar on crash (default on except debug)
+	ListApps  bool // print the proxy-launch app catalog (installed) and exit
 }
 
 func parseConfig(args []string) (Config, error) {
@@ -39,6 +40,7 @@ func parseConfig(args []string) (Config, error) {
 	noOpen := fs.Bool("no-open", false, "do not open the system browser on start")
 	headless := fs.Bool("headless", envOr("CENTAG_LAUNCHER_HEADLESS", "") == "1", "run sidecar only (no system menu; useful for CI)")
 	noSidecar := fs.Bool("no-sidecar", false, "connect to an already-running sidecar instead of starting one (debug)")
+	listApps := fs.Bool("list-apps", false, "print the proxy-launch app catalog (installed) and exit")
 
 	if err := fs.Parse(args); err != nil {
 		return Config{}, err
@@ -63,6 +65,7 @@ func parseConfig(args []string) (Config, error) {
 		NoSidecar: *noSidecar,
 		Headless:  *headless,
 		Supervise: launcherSuperviseEnabled(),
+		ListApps:  *listApps,
 	}, nil
 }
 

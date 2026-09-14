@@ -34,6 +34,17 @@
 ./scripts/build-launcher.sh --desktop   # → centag-desktop
 ```
 
+## 列出可代理应用
+
+托盘「代理启动应用」子菜单会列出本机已安装、可经 Centag 代理的 AI/Agent 应用。命令行快速查看：
+
+```bash
+# 打印目录 + 本机安装状态后退出（不启动 sidecar/托盘）
+centag-desktop --bin /path/to/centag-personal --list-apps
+```
+
+数据来源：sidecar 二进制的 `centag wrap apps --json`（离线 Agent 注册表 + 本机检测），桌面壳不依赖 Centag core。
+
 ## 产物路径
 
 ```
@@ -59,7 +70,7 @@ desktop 因 systray 依赖 **CGO**，请在目标系统上本地构建；不保�
 2. **桌面包（dmg/zip）首启动安装**：把 bundle 内 sidecar payload（二进制 + static + config）安装到 `~/.centag/lib/<edition>/`；payload `VERSION` 比已装版本新时自动升级（原子替换二进制，不动 storage/logs 运行数据）。app bundle 只是 GUI 壳 + payload。
 3. 启动 sidecar，健康检查通过后显示托盘。
 4. **非 debug**：托盘监督 sidecar，异常退出后自动拉起（退避重试）。可用 `CENTAG_LAUNCHER_SUPERVISE=0` 关闭；`LLM_PROXY_SERVER_MODE=debug`（`./start.sh debug … --desktop`）默认不自动拉起。
-5. 菜单：**打开管理界面**、**运行**（原生对话框选本地程序 → `centag wrap run` 在终端里代理启动）、**安装命令行工具**（写 `~/.centag/bin/centag` 入口 + `~/.centag/env` PATH 提示文件；`~/.centag/bin` 不在 PATH 时 macOS 兜底软链 `/usr/local/bin/centag`（osascript 管理员授权）、Linux 软链 `~/.local/bin`、Windows 写 WindowsApps shim）、**退出**（停止监督并结束）。
+5. 菜单：**打开管理界面**、**代理启动应用**（子菜单列出本机已安装、可经 Centag 代理的应用，点击即 `centag wrap run` 代理启动；末尾「手动选择程序…」保留原生对话框回退）、**启动前写入模型配置**（可选：写为 `centag/<默认流水线>`，默认关闭、依赖透明模式映射）、**代理诊断**（检查 CA/MITM/出口 Key 就绪状态）、**安装命令行工具**（写 `~/.centag/bin/centag` 入口 + `~/.centag/env` PATH 提示文件；`~/.centag/bin` 不在 PATH 时 macOS 兜底软链 `/usr/local/bin/centag`（osascript 管理员授权）、Linux 软链 `~/.local/bin`、Windows 写 WindowsApps shim）、**信任 CA 证书**、**退出**（停止监督并结束）。
 6. `./start.sh run … --desktop` 会先 `load_env`，把 `~/.centag/centag.conf` 中的管理员口令传给 sidecar。
 7. **本迭代不做桌面应用内 OTA**（升级请重装 dmg/zip，首启动自动升级 `~/.centag/lib` 里的 sidecar）。
 

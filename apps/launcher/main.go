@@ -28,6 +28,25 @@ func main() {
 		os.Exit(1)
 	}
 
+	// --list-apps: print the proxy-launch catalog and exit (no sidecar/tray).
+	if cfg.ListApps {
+		if err := runListApps(binary); err != nil {
+			fmt.Fprintf(os.Stderr, "centag-launcher: %v\n", err)
+			os.Exit(1)
+		}
+		return
+	}
+
+	// If something already holds the requested port, fall back to the next free
+	// one and use it consistently everywhere (sidecar env, browser URL, and the
+	// `--server` passed to `centag wrap run`). --no-sidecar keeps the given port.
+	if !cfg.NoSidecar {
+		if chosen := pickFreePort(cfg.Port); chosen != cfg.Port {
+			fmt.Fprintf(os.Stderr, "centag-launcher: port %d is busy, using %d\n", cfg.Port, chosen)
+			cfg.Port = chosen
+		}
+	}
+
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 
