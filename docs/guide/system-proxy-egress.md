@@ -28,6 +28,19 @@ centag wrap env --server http://<advertise_host>:20060
 # 或: eval "$(centag wrap env --server …)"
 ```
 
+### 桌面壳与应用目录（本机已装应用）
+
+桌面壳（macOS/Windows）托盘「代理启动应用」会列出**本机已安装、可经 Centag 代理**的 AI/Agent 应用，点击即代理启动；「代理诊断」检查 CA/MITM/出口 Key 就绪状态。列表真源为 Agent 注册表（`core/internal/agent`），本机安装检测在客户端完成。
+
+```bash
+centag wrap apps             # 列出可代理应用 + 本机是否已安装
+centag wrap apps --installed # 仅已安装
+centag wrap apps --json      # 机器可读（含 installed/path）
+```
+
+- 模型名默认由**透明模式兜底**（未命中模型回落系统默认）；也可在桌面壳勾选「启动前写入模型配置」或 Web「本机代理启动」页写入 `centag/<pipeline>`。
+- 本地控制接口（回环免鉴权，非回环需鉴权）：`GET /api/v1/wrap/apps`、`POST /api/v1/wrap/apps/:id/prepare`、`GET /api/v1/wrap/doctor`。
+
 **不要**把 `HTTPS_PROXY` 写进 `~/.zshrc`。Agent **不需要**知道 Centag API Key（由服务端 MITM 注入）。
 
 鉴权：
