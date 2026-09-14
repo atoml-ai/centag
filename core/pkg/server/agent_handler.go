@@ -260,6 +260,10 @@ func (h *AgentHandler) WriteConfig(c *gin.Context) {
 	if pinnedProxyDefaults && !guideExported {
 		msg += "系统默认后端/模型已更新为所选项，透明流水线将使用该后端与模型出站。"
 	}
+	if !restart && !guideExported {
+		// 需求 5：写配置路径稳定，只需把「怎么验证 / 失败怎么办」讲清楚。
+		msg += " 可在客户端发起一次对话验证；若失败，运行 centag wrap doctor 或查看「本机代理启动」页的代理诊断。"
+	}
 
 	c.JSON(http.StatusOK, agent.WriteConfigResponse{
 		AgentType:       req.AgentType,
@@ -347,11 +351,24 @@ func (h *AgentHandler) GetConfigPreview(c *gin.Context) {
 		model = "gpt-4o"
 	}
 
+	// Derive host/port from the request Host so previews match the actual
+	// listening port (instead of a hardcoded 20060).
+	host, port := "localhost", 0
+	if c != nil && c.Request != nil && c.Request.Host != "" {
+		if h, p, err := net.SplitHostPort(c.Request.Host); err == nil && h != "" {
+			host, port = h, p2i(p)
+		} else {
+			host = c.Request.Host
+		}
+	}
+	if port == 0 {
+		port = 20060
+	}
 	info := &agent.BackendInfo{
 		Name:  "custom",
 		Model: model,
-		Host:  "localhost",
-		Port:  20060,
+		Host:  host,
+		Port:  port,
 	}
 	if baseURL != "" {
 		info.BaseURL = baseURL
