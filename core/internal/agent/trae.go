@@ -50,6 +50,13 @@ func (t *TraeTemplate) Meta() AgentSetupMeta {
 			RestartHint:    "添加成功后若列表未刷新，完全退出并重启 TRAE",
 		},
 		VerifiedUI: true,
+		DesktopEditions: []DesktopEdition{{
+			ID:          "trae-desktop",
+			DisplayName: "TRAE",
+			MacApps:     []string{"Trae"},
+			WinExes:     []string{"Trae"},
+			Aliases:     []string{"trae", "Trae"},
+		}},
 	}
 }
 

@@ -198,6 +198,28 @@ type AgentSetupMeta struct {
 	VerifiedWrap bool `json:"verified_wrap,omitempty"`
 	// VerifiedUI 表示「UI 指引」接入方式已通过维护者本地验证。
 	VerifiedUI bool `json:"verified_ui,omitempty"`
+	// DesktopEditions 描述该应用的桌面 GUI 形态（与 CLI 形态分开列目录项）。
+	// 每一项在代理启动目录中独立出现，launch_mode=system_proxy。
+	DesktopEditions []DesktopEdition `json:"desktop_editions,omitempty"`
+}
+
+// DesktopEdition 一个桌面 GUI 形态：用于 wrap 目录独立列出 + 本机安装检测。
+// 检测采用「已安装应用索引 + 别名匹配」，故 Aliases/MacApps/WinExes 填品牌名/应用名，
+// 不要求精确可执行文件路径。
+type DesktopEdition struct {
+	ID          string   `json:"id"`           // 目录项 id，如 opencode-desktop
+	DisplayName string   `json:"display_name"` // 展示名，如 OpenCode Desktop
+	MacApps     []string `json:"mac_apps,omitempty"` // macOS .app 名称（不含 .app）
+	WinExes     []string `json:"win_exes,omitempty"` // Windows 可执行/开始菜单名
+	// WinMSIX Windows 商店应用（MSIX/Appx）的 PackageFamilyName 前缀，如 "OpenAI.Codex_"。
+	// 在 %LOCALAPPDATA%\Packages\ 下按前缀匹配，命中时目录的 Path 为 AUMID。
+	WinMSIX []string `json:"win_msix,omitempty"`
+	// WinChromium Chromium 内核桌面应用：启动器在启动命令里注入
+	// --proxy-server=<MITM>，代理解析与应用进程绑定，不受系统代理
+	// 被 VPN 等改写影响。
+	WinChromium bool `json:"win_chromium,omitempty"`
+	Aliases []string `json:"aliases,omitempty"`  // 通用别名（用于索引模糊匹配）
+	Note    string   `json:"note,omitempty"`
 }
 
 // AgentTemplate 各 Agent 工具的配置模板接口

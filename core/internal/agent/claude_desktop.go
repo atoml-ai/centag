@@ -43,6 +43,13 @@ func (t *ClaudeDesktopTemplate) Meta() AgentSetupMeta {
 		InstallURL:    "https://claude.ai/download",
 		InstallHint:   "从官网下载 Claude Desktop 桌面应用（非 CLI）",
 		AccessMethods: []AccessMethod{AccessWriteConfig},
+		DesktopEditions: []DesktopEdition{{
+			ID:          "claude-desktop",
+			DisplayName: "Claude Desktop",
+			MacApps:     []string{"Claude"},
+			WinExes:     []string{"Claude"},
+			Aliases:     []string{"claude", "Claude"},
+		}},
 	}
 }
 

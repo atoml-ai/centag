@@ -60,6 +60,13 @@ func (t *CodeBuddyTemplate) Meta() AgentSetupMeta {
 		AccessMethods: []AccessMethod{AccessWriteConfig, AccessWrapCLI},
 		CompanionCLI:  NewDesktopCompanionCLI("codebuddy", "https://www.codebuddy.ai/docs/zh/cli/installation", "npm i -g @tencent-ai/codebuddy-code 或 brew install codebuddy-code"),
 		VerifiedWrite: true,
+		DesktopEditions: []DesktopEdition{{
+			ID:          "codebuddy-desktop",
+			DisplayName: "CodeBuddy Desktop",
+			MacApps:     []string{"CodeBuddy"},
+			WinExes:     []string{"CodeBuddy"},
+			Aliases:     []string{"codebuddy", "CodeBuddy"},
+		}},
 	}
 }
 
@@ -145,6 +152,13 @@ func (t *WorkBuddyTemplate) Meta() AgentSetupMeta {
 			RestartHint:    "添加成功后若列表未刷新，重启 WorkBuddy 再选用",
 		},
 		VerifiedUI: true,
+		DesktopEditions: []DesktopEdition{{
+			ID:          "workbuddy",
+			DisplayName: "WorkBuddy",
+			MacApps:     []string{"WorkBuddy"},
+			WinExes:     []string{"WorkBuddy"},
+			Aliases:     []string{"workbuddy", "WorkBuddy"},
+		}},
 	}
 }
 

@@ -6,7 +6,7 @@ import "fmt"
 type OpenCodeTemplate struct{}
 
 func (t *OpenCodeTemplate) AgentType() AgentType { return AgentOpenCode }
-func (t *OpenCodeTemplate) DisplayName() string  { return "OpenCode（CLI/Desktop）" }
+func (t *OpenCodeTemplate) DisplayName() string  { return "OpenCode (CLI)" }
 func (t *OpenCodeTemplate) Description() string  { return "AI 编程助手，支持 CLI 与 Desktop 模式 (opencode.ai)" }
 
 func (t *OpenCodeTemplate) Meta() AgentSetupMeta {
@@ -31,6 +31,13 @@ func (t *OpenCodeTemplate) Meta() AgentSetupMeta {
 		CompanionCLI:  NewCLICompanion("opencode", "https://opencode.ai", "curl -fsSL https://opencode.ai/install | bash；或 npm i -g opencode-ai"),
 		VerifiedWrite: true,
 		VerifiedWrap:  true,
+		DesktopEditions: []DesktopEdition{{
+			ID:          "opencode-desktop",
+			DisplayName: "OpenCode Desktop",
+			MacApps:     []string{"OpenCode"},
+			WinExes:     []string{"OpenCode"},
+			Aliases:     []string{"opencode", "OpenCode"},
+		}},
 	}
 }
 

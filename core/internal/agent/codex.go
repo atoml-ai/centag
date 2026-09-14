@@ -33,6 +33,16 @@ func (t *CodexTemplate) Meta() AgentSetupMeta {
 		AccessMethods: []AccessMethod{AccessWriteConfig, AccessWrapCLI},
 		CompanionCLI:  NewCLICompanion("codex", "https://github.com/openai/codex", "curl -fsSL https://chatgpt.com/codex/install.sh | sh；或 npm i -g @openai/codex"),
 		VerifiedWrite: true, // wrap/系统代理方式尚未维护者验证
+		DesktopEditions: []DesktopEdition{{
+			ID:          "codex-desktop",
+			DisplayName: "Codex Desktop",
+			// Windows 商店版（MSIX）：包 OpenAI.Codex，开始磁贴名为 ChatGPT，
+			// 不产生 .lnk 且未建 AppExecutionAlias，故用包目录前缀探测 + AUMID 启动。
+			WinMSIX: []string{"OpenAI.Codex_"},
+			WinChromium: true, // ChatGPT.exe 内核为 Chromium：启动注入 --proxy-server 硬绑定 Centag
+			Aliases: []string{"codex", "chatgpt"},
+			Note:    "Windows 版为 MSIX（商店包 OpenAI.Codex，磁贴名 ChatGPT）；macOS 为 Codex/ChatGPT 桌面应用。",
+		}},
 	}
 }
 
