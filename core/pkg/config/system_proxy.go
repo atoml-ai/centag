@@ -47,6 +47,7 @@ func NormalizeSystemProxyConfig(c *SystemProxyConfig) {
 	if len(c.PathPatterns) == 0 {
 		c.PathPatterns = append([]string(nil), DefaultMITMPathPatterns()...)
 	}
+	NormalizeUpstreamProxyConfig(&c.Upstream)
 	if !c.AllowLANClients {
 		if RunningInContainer() {
 			if strings.TrimSpace(c.ListenAddr) == "" || IsLoopbackHost(c.ListenAddr) {

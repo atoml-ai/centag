@@ -36,6 +36,8 @@ type ConfigHandler struct {
 	mitmForceRestart func()
 	// mitmSyncEgress 将当前出口 API Key 热同步到运行中的 MITM
 	mitmSyncEgress func()
+	// mitmSyncUpstream 将上游出口（auto/manual/direct）热同步到运行中的 MITM
+	mitmSyncUpstream func()
 	// mitmSyncClientProxyAuth 热更新 RequireClientProxyAuth 标志
 	mitmSyncClientProxyAuth func()
 	// proxyHandlerRefresh 刷新 PAC 生成器（advertise/listen 变更）
@@ -84,6 +86,11 @@ func (h *ConfigHandler) SetMitmForceRestart(fn func()) {
 // SetMitmSyncEgress 注册 MITM 出口 Key 热同步回调
 func (h *ConfigHandler) SetMitmSyncEgress(fn func()) {
 	h.mitmSyncEgress = fn
+}
+
+// SetMitmSyncUpstream 注册 MITM 上游出口热同步回调
+func (h *ConfigHandler) SetMitmSyncUpstream(fn func()) {
+	h.mitmSyncUpstream = fn
 }
 
 // SetMitmSyncClientProxyAuth 注册 MITM 客户端认证热更新回调
@@ -462,6 +469,10 @@ func (h *ConfigHandler) SaveAllConfig(c *gin.Context) {
 		if k := strings.TrimSpace(req.SystemProxy.EgressAPIKey); k != "" && k != "***" {
 			cfg.SystemProxy.EgressAPIKey = k
 		}
+		// 上游出口：仅在显式提供 mode 时更新（空 mode 表示未提供，保留原值）
+		if m := strings.TrimSpace(req.SystemProxy.Upstream.Mode); m != "" {
+			cfg.SystemProxy.Upstream = req.SystemProxy.Upstream
+		}
 		if err := config.ValidateSystemProxyConfig(&cfg.SystemProxy); err != nil {
 			RespondBadRequest(c, "Invalid system_proxy config: "+err.Error())
 			return
@@ -650,6 +661,12 @@ func (h *ConfigHandler) SaveAllConfig(c *gin.Context) {
 	if req.SystemProxy != nil && cfg.SystemProxy.Enabled && h.mitmSyncClientProxyAuth != nil {
 		h.mitmSyncClientProxyAuth()
 		logger.Infof("MITM RequireClientProxyAuth hot-updated: %v", cfg.SystemProxy.RequireClientProxyAuth)
+	}
+
+	// 3b5. 上游出口（auto/manual/direct）变更时热更新 MITM
+	if req.SystemProxy != nil && cfg.SystemProxy.Enabled && h.mitmSyncUpstream != nil {
+		h.mitmSyncUpstream()
+		logger.Infof("MITM upstream egress hot-updated: mode=%s", cfg.SystemProxy.Upstream.Mode)
 	}
 
 	// 3c. Host 代理端口变更 → 热重启 HTTP/HTTPS 监听器

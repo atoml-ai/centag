@@ -1132,6 +1132,7 @@ func New(cfg *config.Config) *Server {
 	configHandler.SetMitmToggle(srv.toggleMITM)
 	configHandler.SetMitmForceRestart(srv.forceRestartMITM)
 	configHandler.SetMitmSyncEgress(srv.syncMITMEgressAuth)
+	configHandler.SetMitmSyncUpstream(srv.syncMITMUpstream)
 	configHandler.SetMitmSyncClientProxyAuth(srv.syncMITMClientProxyAuth)
 	configHandler.SetProxyHandlerRefresh(srv.refreshProxyHandlerPAC)
 
@@ -2424,6 +2425,7 @@ func buildMITMConfig(cfg *config.Config, backendHost string) *mitm.Config {
 		BackendAuthToken:       config.ResolveSystemProxyEgressAPIKey(&cfg.SystemProxy),
 		RequireClientProxyAuth: requireProxyAuth,
 		ClientTokenValidator:   validator,
+		Upstream:               cfg.SystemProxy.Upstream,
 	}
 }
 
@@ -2436,6 +2438,19 @@ func (s *Server) syncMITMEgressAuth() {
 	token := config.ResolveSystemProxyEgressAPIKey(&s.cfg.SystemProxy)
 	s.mitmServer.SetBackendAuthToken(token)
 	logger.Infof("MITM egress API key synced (configured=%v)", token != "")
+}
+
+// syncMITMUpstream 将上游出口配置热同步到运行中的 MITM。
+func (s *Server) syncMITMUpstream() {
+	s.mitmMu.Lock()
+	defer s.mitmMu.Unlock()
+	if s.mitmServer == nil || s.cfg == nil {
+		return
+	}
+	up := s.cfg.SystemProxy.Upstream
+	self := []string{s.cfg.SystemProxy.MITMListenAddr()}
+	s.mitmServer.SetUpstream(up, self)
+	logger.Infof("MITM upstream egress synced (mode=%s url=%s)", up.Mode, up.URL)
 }
 
 func (s *Server) syncMITMClientProxyAuth() {

@@ -1,6 +1,9 @@
 package config
 
-import "testing"
+import (
+	"encoding/json"
+	"testing"
+)
 
 func TestNormalizeSystemProxyConfig_Table(t *testing.T) {
 	t.Setenv("CENTAG_IN_DOCKER", "0")
@@ -164,6 +167,45 @@ func TestPublicAPIBase_DefaultPort(t *testing.T) {
 	c := SystemProxyConfig{AllowLANClients: false}
 	if got := c.PublicAPIBase(0); got != "http://127.0.0.1:20060" {
 		t.Fatalf("got %q", got)
+	}
+}
+
+func TestNormalizeUpstreamProxyConfig(t *testing.T) {
+	tests := []struct {
+		name     string
+		inMode   string
+		inURL    string
+		wantMode string
+	}{
+		{"empty defaults to auto", "", "", "auto"},
+		{"trim and lower", "  AUTO ", "", "auto"},
+		{"manual without url falls back to auto", "manual", "", "auto"},
+		{"manual keeps url", "manual", " http://127.0.0.1:12000 ", "manual"},
+		{"direct", "direct", "", "direct"},
+		{"unknown defaults to auto", "bogus", "http://x", "auto"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := UpstreamProxyConfig{Mode: tt.inMode, URL: tt.inURL}
+			NormalizeUpstreamProxyConfig(&c)
+			if c.Mode != tt.wantMode {
+				t.Fatalf("Mode=%q want %q", c.Mode, tt.wantMode)
+			}
+			if tt.wantMode == "manual" && c.URL != "http://127.0.0.1:12000" {
+				t.Fatalf("URL=%q not trimmed", c.URL)
+			}
+		})
+	}
+}
+
+func TestSystemProxyUpstreamDefaultsAutoOnLoad(t *testing.T) {
+	var c SystemProxyConfig
+	if err := json.Unmarshal([]byte(`{"enabled":true,"listen_port":8081}`), &c); err != nil {
+		t.Fatal(err)
+	}
+	NormalizeSystemProxyConfig(&c)
+	if c.Upstream.Mode != "auto" {
+		t.Fatalf("Upstream.Mode=%q want auto (legacy config without upstream)", c.Upstream.Mode)
 	}
 }
 

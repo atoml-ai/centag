@@ -11,6 +11,7 @@
 package config
 
 import (
+	"strings"
 	"sync"
 	"time"
 )
@@ -662,6 +663,54 @@ type PluginsConfig struct {
 	Enabled []string `json:"enabled"`
 }
 
+// UpstreamProxyConfig selects the egress proxy MITM uses for traffic it does
+// NOT terminate locally (non-whitelisted CONNECT tunnels, and pass-through
+// requests on whitelisted hosts that are not LLM API calls).
+//
+// Modes:
+//   - auto   (default): detect the OS/WinINET proxy that the host had before
+//     Centag took over (wrap snapshot, then live registry), skipping Centag's
+//     own proxy to avoid a loop; fall back to direct dial when none is found.
+//   - manual: always use URL.
+//   - direct: never use an upstream proxy (dial targets directly).
+type UpstreamProxyConfig struct {
+	Mode string `json:"mode"` // auto | manual | direct
+	// URL is an HTTP CONNECT (http://host:port) or SOCKS5 (socks5://host:port)
+	// upstream endpoint. Required when Mode=manual.
+	URL string `json:"url,omitempty"`
+	// NoProxy lists hosts/CIDRs that must bypass the upstream (comma or slice).
+	NoProxy []string `json:"no_proxy,omitempty"`
+}
+
+// GetDefaultUpstreamProxyConfig returns the default upstream egress config.
+func GetDefaultUpstreamProxyConfig() UpstreamProxyConfig {
+	return UpstreamProxyConfig{Mode: "auto"}
+}
+
+// NormalizeUpstreamProxyConfig applies safe defaults and trims fields.
+func NormalizeUpstreamProxyConfig(c *UpstreamProxyConfig) {
+	if c == nil {
+		return
+	}
+	switch strings.ToLower(strings.TrimSpace(c.Mode)) {
+	case "manual", "direct", "auto":
+		c.Mode = strings.ToLower(strings.TrimSpace(c.Mode))
+	default:
+		c.Mode = "auto"
+	}
+	c.URL = strings.TrimSpace(c.URL)
+	if c.Mode == "manual" && c.URL == "" {
+		c.Mode = "auto"
+	}
+	out := c.NoProxy[:0]
+	for _, h := range c.NoProxy {
+		if h = strings.TrimSpace(h); h != "" {
+			out = append(out, h)
+		}
+	}
+	c.NoProxy = out
+}
+
 // SystemProxyConfig configures the MITM proxy.
 type SystemProxyConfig struct {
 	Enabled         bool     `json:"enabled"`
@@ -683,6 +732,9 @@ type SystemProxyConfig struct {
 	// RequireClientProxyAuth requires LAN clients to send Proxy-Authorization header.
 	// Disable for Bun-based agents (e.g. opencode) that don't extract auth from HTTPS_PROXY URL.
 	RequireClientProxyAuth bool `json:"require_client_proxy_auth"`
+	// Upstream is the egress proxy for non-LLM traffic (CONNECT tunnels,
+	// pass-through requests). Zero value normalizes to Mode=auto.
+	Upstream UpstreamProxyConfig `json:"upstream,omitempty"`
 }
 
 // GetDefaultSystemProxyConfig returns the default MITM proxy config.
@@ -699,6 +751,7 @@ func GetDefaultSystemProxyConfig() SystemProxyConfig {
 		CertDir:                "./certs/domains",
 		CertValidDays:          90,
 		RequireClientProxyAuth: true, // default: require auth for LAN clients
+		Upstream:               GetDefaultUpstreamProxyConfig(),
 		// Domains/PathPatterns: see mitm_default_domains.go (catalog + global providers).
 		Domains:      append([]string(nil), DefaultMITMDomains()...),
 		PathPatterns: append([]string(nil), DefaultMITMPathPatterns()...),

@@ -8,6 +8,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -35,6 +36,9 @@ type Server struct {
 	clientTokenValidator       ClientTokenValidator
 	// sharedTransport 进程级复用 HTTP Transport，避免每请求新建 Transport 导致连接碎片化。
 	sharedTransport *http.Transport
+	// upstream 决定非 LLM 流量（CONNECT 隧道 / 非 LLM 直通请求）的出口：
+	// 上游代理或直连（热更新）。
+	upstream *egressUpstream
 }
 
 // Config MITM服务器配置
@@ -51,6 +55,11 @@ type Config struct {
 	// RequireClientProxyAuth enables Proxy-Authorization for non-loopback peers (LAN).
 	RequireClientProxyAuth bool
 	ClientTokenValidator   ClientTokenValidator
+	// Upstream selects the egress proxy for traffic MITM does not terminate
+	// locally (non-whitelisted CONNECT tunnels, non-LLM pass-through).
+	Upstream config.UpstreamProxyConfig
+	// SelfAddrs are Centag's own host:port listeners; never proxy to them.
+	SelfAddrs []string
 }
 
 // NewServer 创建MITM服务器
@@ -93,9 +102,19 @@ func NewServer(config *Config) (*Server, error) {
 	}
 
 	// 进程级共享 HTTP Transport，避免每请求新建 Transport 导致连接碎片化。
-	// Proxy=nil 确保 MITM 不走系统代理（防止请求循环回本服务器）。
+	// Proxy 由上游出口解析器决定：非 LLM 流量可按需走用户原有系统代理；
+	// 自环地址（本 MITM/后端/回环）始终直连，避免请求循环回本服务器。
+	selfAddrs := append([]string{config.Addr, config.BackendAddr}, config.SelfAddrs...)
+	upstream := newEgressUpstream(
+		config.Upstream.Mode,
+		config.Upstream.URL,
+		config.Upstream.NoProxy,
+		selfAddrs,
+	)
 	sharedTransport := &http.Transport{
-		Proxy:                 nil,
+		Proxy: func(req *http.Request) (*url.URL, error) {
+			return upstream.proxyFor(req.URL.Host), nil
+		},
 		MaxIdleConns:          100,
 		MaxIdleConnsPerHost:   20,
 		IdleConnTimeout:       90 * time.Second,
@@ -109,6 +128,7 @@ func NewServer(config *Config) (*Server, error) {
 		backendAddr:     config.BackendAddr,
 		tlsConfig:       tlsConfig,
 		sharedTransport: sharedTransport,
+		upstream:        upstream,
 	}
 	s.SetRoutingRules(config.Domains, config.PathPatterns)
 	s.SetBackendAuthToken(config.BackendAuthToken)
@@ -124,6 +144,15 @@ func (s *Server) SetBackendAuthToken(token string) {
 	s.mu.Lock()
 	s.backendAuthToken = strings.TrimSpace(token)
 	s.mu.Unlock()
+}
+
+// SetUpstream hot-updates the egress proxy used for non-LLM traffic.
+func (s *Server) SetUpstream(up config.UpstreamProxyConfig, selfAddrs []string) {
+	if s == nil || s.upstream == nil {
+		return
+	}
+	merged := append([]string{s.addr, s.backendAddr}, selfAddrs...)
+	s.upstream.configure(up.Mode, up.URL, up.NoProxy, merged)
 }
 
 // SetClientProxyAuth hot-updates whether non-loopback clients must authenticate.
@@ -412,13 +441,17 @@ func (s *Server) handleCONNECT(w http.ResponseWriter, r *http.Request) {
 
 // handleCONNECTTunnel 对非白名单主机建立纯 TCP 隧道（不签发证书、不解密）。
 // 使进程级 HTTPS_PROXY 指向本 MITM 时，Agent 的 WebFetch/git/npm 等非 LLM 流量仍可正常直达目标。
+// 出口经 upstream 解析器：存在非自身系统代理时改为经其转发，否则直连。
 func (s *Server) handleCONNECTTunnel(w http.ResponseWriter, r *http.Request, host string) {
 	dest := host
 	if !strings.Contains(dest, ":") {
 		dest = dest + ":443"
 	}
 
-	targetConn, err := net.DialTimeout("tcp", dest, 30*time.Second)
+	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+	defer cancel()
+
+	targetConn, err := s.upstream.dialContext(ctx, "tcp", dest)
 	if err != nil {
 		logger.Error("CONNECT tunnel dial failed", zap.String("host", dest), zap.Error(err))
 		http.Error(w, "Bad Gateway", http.StatusBadGateway)
