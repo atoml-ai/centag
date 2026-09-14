@@ -1182,7 +1182,9 @@ async function saveUpstreamConfig() {
         upstream: {
           mode: upstreamMode.value,
           url: upstreamMode.value === 'manual' ? upstreamURL.value.trim() : '',
-          no_proxy: upstreamMode.value === 'manual' ? upstreamNoProxy.value.trim() : ''
+          no_proxy: upstreamMode.value === 'manual'
+            ? upstreamNoProxy.value.split(',').map((h) => h.trim()).filter(Boolean)
+            : []
         }
       }
     })
@@ -1211,7 +1213,7 @@ const load = async (opts?: { skipAutoEgress?: boolean }) => {
       if (up) {
         upstreamMode.value = (up.mode as typeof upstreamMode.value) || 'auto'
         upstreamURL.value = up.url || ''
-        upstreamNoProxy.value = up.no_proxy || ''
+        upstreamNoProxy.value = Array.isArray(up.no_proxy) ? up.no_proxy.join(', ') : (up.no_proxy || '')
       }
     }
     if (configData.server?.port) {
