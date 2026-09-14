@@ -134,6 +134,16 @@ func (s *agentSessionStore) AppendMessage(ctx context.Context, m *AgentMessage) 
 	return err
 }
 
+// messageOrder 返回确定性的消息排序子句。SQLite 用 rowid（插入顺序）作为
+// tiebreaker：created_at 在粗时钟分辨率下可能并列，而消息 id 是随机 UUID，
+// 仅按 id 会让同刻消息顺序不确定。PostgreSQL 无 rowid，回退到 id（至少确定）。
+func (s *agentSessionStore) messageOrder() string {
+	if _, ok := s.dialect.(*database.SQLiteDialect); ok {
+		return "created_at ASC, rowid ASC"
+	}
+	return "created_at ASC, id ASC"
+}
+
 // ListMessages 按时间正序返回会话消息；会话不存在时返回 (nil, false, nil)。
 func (s *agentSessionStore) ListMessages(ctx context.Context, sessionID string) ([]*AgentMessage, bool, error) {
 	var exists int
@@ -146,7 +156,7 @@ func (s *agentSessionStore) ListMessages(ctx context.Context, sessionID string) 
 
 	rows, err := s.db.QueryContext(ctx, s.q(`
 		SELECT id, session_id, role, content, skill, tool_name, tool_params, tool_result, created_at
-		FROM agent_messages WHERE session_id = $1 ORDER BY created_at ASC, id ASC`), sessionID)
+		FROM agent_messages WHERE session_id = $1 ORDER BY `+s.messageOrder()), sessionID)
 	if err != nil {
 		return nil, false, err
 	}

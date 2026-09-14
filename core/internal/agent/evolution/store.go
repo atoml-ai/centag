@@ -51,7 +51,7 @@ applied_at, effect_measure, rollback_of FROM agent_evolution_log WHERE id = %s`,
 func (s *Store) LatestByTarget(ctx context.Context, target string) (*LogRow, error) {
 	q := fmt.Sprintf(`SELECT id, session_id, target, proposal, status,
 applied_at, effect_measure, rollback_of
-FROM agent_evolution_log WHERE target = %s ORDER BY created_at DESC LIMIT 1`, s.ph(1))
+FROM agent_evolution_log WHERE target = %s ORDER BY created_at DESC, id DESC LIMIT 1`, s.ph(1))
 	row := s.db.QueryRowContext(ctx, q, target)
 	r, err := s.scan(row)
 	if err == sql.ErrNoRows {
@@ -91,7 +91,7 @@ func (s *Store) ListBySession(ctx context.Context, sessionID string, limit int) 
 	}
 	q := fmt.Sprintf(`SELECT id, session_id, target, proposal, status,
 applied_at, effect_measure, rollback_of
-FROM agent_evolution_log WHERE session_id = %s ORDER BY created_at DESC LIMIT %d`, s.ph(1), limit)
+FROM agent_evolution_log WHERE session_id = %s ORDER BY created_at DESC, id DESC LIMIT %d`, s.ph(1), limit)
 	rows, err := s.db.QueryContext(ctx, q, sessionID)
 	if err != nil {
 		return nil, fmt.Errorf("list evolution log: %w", err)

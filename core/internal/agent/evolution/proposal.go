@@ -3,6 +3,7 @@ package evolution
 import (
 	"encoding/json"
 	"fmt"
+	"sync/atomic"
 	"time"
 ) // Omega 提案目标常量（工具名即契约的目标面；与任务计划 manifest 例一致）。
 const (
@@ -98,9 +99,14 @@ func ValidateTarget(target string, params map[string]any) error {
 	return fn(params)
 }
 
+// proposeSeq 进程内单调计数器，保证同一纳秒内的提案 ID 不冲突。
+var proposeSeq atomic.Uint64
+
 // proposeID 生成本地唯一提案 ID。
+// 前缀为 UnixNano（时间有序，供按 id 的确定性排序兜底），后缀为进程内计数器
+// （Windows 等粗时钟平台两次 UnixNano 可能相同，仅靠时间戳会 ID 冲突）。
 func proposeID() string {
-	return fmt.Sprintf("egno-%d", time.Now().UnixNano())
+	return fmt.Sprintf("egno-%d-%08d", time.Now().UnixNano(), proposeSeq.Add(1))
 }
 
 // marshalProposal 提案 JSON 序列化。

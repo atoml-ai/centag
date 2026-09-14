@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -119,6 +120,35 @@ func TestAgentSessionStoreRoundtrip(t *testing.T) {
 	}
 	if _, ok, _ := store.ListMessages(ctx, sess.ID); ok {
 		t.Fatal("messages must be gone after delete")
+	}
+}
+
+// Messages appended with an identical created_at (coarse clock) must still come
+// back in insertion order; SQLite uses rowid as the tiebreaker.
+func TestAgentMessagesOrderStableOnEqualTimestamp(t *testing.T) {
+	store := newAgentSessionStore(setupAgentSessionsDB(t), "sqlite")
+	ctx := context.Background()
+	sess := newTestAgentSession(1)
+	if err := store.Create(ctx, sess); err != nil {
+		t.Fatal(err)
+	}
+	ts := time.Now()
+	for i := 0; i < 5; i++ {
+		if err := store.AppendMessage(ctx, &AgentMessage{
+			ID: uuid.New().String(), SessionID: sess.ID, Role: "user",
+			Content: fmt.Sprintf("m%d", i), CreatedAt: ts,
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	msgs, ok, err := store.ListMessages(ctx, sess.ID)
+	if err != nil || !ok || len(msgs) != 5 {
+		t.Fatalf("list: ok=%v n=%d err=%v", ok, len(msgs), err)
+	}
+	for i, m := range msgs {
+		if m.Content != fmt.Sprintf("m%d", i) {
+			t.Fatalf("order broken: index %d = %q", i, m.Content)
+		}
 	}
 }
 
