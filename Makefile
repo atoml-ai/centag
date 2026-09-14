@@ -2,6 +2,10 @@
 
 # Install-compatible layout (same as scripts/install.sh / scripts/lib/centag-layout.sh)
 CENTAG_INSTALL_ROOT ?= $(HOME)/.centag
+# Normalize Windows backslashes → forward slashes. Recipe shells treat "\" as an
+# escape char, so an unquoted `-o C:\Users\...` would be mangled (see git-bash
+# HOME on Windows); forward slashes work for both MSYS and native tools.
+CENTAG_INSTALL_ROOT := $(subst \,/,$(CENTAG_INSTALL_ROOT))
 CENTAG_EDITION ?= personal
 # Derive layout from INSTALL_ROOT only — ignore stale CENTAG_*_DIR exported in the shell.
 CENTAG_BIN_DIR := $(CENTAG_INSTALL_ROOT)/bin
@@ -13,18 +17,21 @@ PATH_BIN_DIR=$(CENTAG_BIN_DIR)
 PACKAGES_DIR=$(CENTAG_VAR_DIR)/packages
 # Windows (MSYS2/MINGW/Cygwin) requires .exe suffix for exec.Command.
 UNAME_S := $(shell uname -s 2>/dev/null || echo unknown)
-ifneq (,$(findstring MINGW,$(UNAME_S)))
-  EXE_EXT := .exe
-else ifneq (,$(findstring MSYS,$(UNAME_S)))
-  EXE_EXT := .exe
-else ifneq (,$(findstring CYGWIN,$(UNAME_S)))
-  EXE_EXT := .exe
-else ifneq (,$(findstring Windows_NT,$(UNAME_S)))
-  EXE_EXT := .exe
-else
-  EXE_EXT :=
+ifeq (,$(EXE_EXT))
+  ifneq (,$(findstring MINGW,$(UNAME_S)))
+    EXE_EXT := .exe
+  endif
+  ifneq (,$(findstring MSYS,$(UNAME_S)))
+    EXE_EXT := .exe
+  endif
+  ifneq (,$(findstring CYGWIN,$(UNAME_S)))
+    EXE_EXT := .exe
+  endif
+  ifneq (,$(findstring Windows_NT,$(UNAME_S)))
+    EXE_EXT := .exe
+  endif
 endif
-BINARY_NAME=centag-$(CENTAG_EDITION)$(EXE_EXT)
+BINARY_NAME := centag-$(CENTAG_EDITION)$(EXE_EXT)
 CMD_DIR=cmd
 MAIN_FILE=$(CMD_DIR)/centag/main.go
 # Product version for `centag version`: prefer version branch (feature/v0.2.7 → v0.2.7),

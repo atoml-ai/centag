@@ -46,6 +46,20 @@ centag_set_edition() {
     SERVER_BIN="${CENTAG_SERVER_BIN}"
 }
 
+# Resolve the actual server binary on disk (handles .exe suffix discrepancies
+# on Windows/MSYS2 where the build may produce a binary without .exe).
+resolve_server_bin() {
+    local base="centag-${1:-${CENTAG_EDITION:-personal}}"
+    if [ -f "$BIN_DIR/$SERVER_BIN" ]; then
+        return 0
+    fi
+    if [ -f "$BIN_DIR/${base}.exe" ]; then
+        SERVER_BIN="${base}.exe"
+    elif [ -f "$BIN_DIR/${base}" ]; then
+        SERVER_BIN="${base}"
+    fi
+}
+
 # Allow Go to automatically download required toolchain
 export GOTOOLCHAIN=auto
 
@@ -225,6 +239,14 @@ resolve_backend_port() {
             fi
         fi
 
+        # Portable fallback when lsof is unavailable (e.g. Git Bash on Windows):
+        # bash /dev/tcp connect succeeds iff the port is in use.
+        if ! $in_use && ! command -v lsof >/dev/null 2>&1; then
+            if (exec 3<>"/dev/tcp/127.0.0.1/$candidate") 2>/dev/null; then
+                in_use=true
+            fi
+        fi
+
         if ! $in_use && command -v lsof >/dev/null 2>&1; then
             if lsof -ti ":$candidate" 2>/dev/null | grep -q .; then
                 # 检查是否只有 Docker 代理进程残留（无对应运行容器）
@@ -305,7 +327,10 @@ cleanup_residual_processes() {
 }
 
 # 显示消息（统一风格）
-print_message() { echo -e "${1}${2}${NC}"; }
+# NB: use printf and print the message with %s (not echo -e) so that Windows
+# paths containing backslash sequences (e.g. C:\Users\...\caiju) are not
+# interpreted as escapes — `\c` in particular would truncate the line.
+print_message() { printf '%b%s%b\n' "${1}" "${2}" "${NC}"; }
 print_info()    { print_message "$BLUE" "[INFO] $1"; }
 print_success() { print_message "$GREEN" "[SUCCESS] $1"; }
 print_error()   { print_message "$RED" "[ERROR] $1"; }
@@ -846,6 +871,26 @@ build_backend() {
     CENTAG_INSTALL_ROOT="${CENTAG_INSTALL_ROOT}" CENTAG_EDITION="${CENTAG_EDITION}" make build
     centag_install_edition_links "${CENTAG_EDITION}"
 
+    # 诊断：列出构建产物目录的实际文件
+    print_info "Build diagnostics: BIN_DIR=$BIN_DIR, SERVER_BIN=$SERVER_BIN"
+    ls -la "$BIN_DIR"/centag-* 2>/dev/null || true
+
+    # 检测实际构建产物（Windows/MSYS2 可能无 .exe 后缀）
+    resolve_server_bin
+
+    # Windows 兜底：如果 .exe 后缀的文件不存在，但无后缀版本存在，复制一份
+    if [[ "$OSTYPE" == msys* || "$OSTYPE" == cygwin* || "$OSTYPE" == win32 ]]; then
+        local want_exe="centag-${CENTAG_EDITION}.exe"
+        local have_noext="centag-${CENTAG_EDITION}"
+        if [ ! -f "$BIN_DIR/$want_exe" ] && [ -f "$BIN_DIR/$have_noext" ]; then
+            print_warn "Windows fallback: copying $have_noext → $want_exe"
+            cp "$BIN_DIR/$have_noext" "$BIN_DIR/$want_exe"
+            SERVER_BIN="$want_exe"
+        fi
+    fi
+
+    print_info "Resolved server binary: $BIN_DIR/$SERVER_BIN"
+
     # 检查守护进程是否在运行
     local daemon_pid_file="$BIN_DIR/storage/centag.daemon.pid"
     local service_pid_file="$BIN_DIR/storage/centag.pid"
@@ -1352,6 +1397,8 @@ run() {
     fi
     resolve_backend_port || return 1
     [ ! -f "$BIN_DIR/$SERVER_BIN" ] && build
+    # 检测实际构建产物（Windows/MSYS2 可能无 .exe 后缀）
+    resolve_server_bin
     print_test_examples
     cd "$BIN_DIR"
     print_info "Starting backend service from: $BIN_DIR (port: $BACKEND_PORT)..."
@@ -1615,8 +1662,9 @@ _debug_run_desktop() {
     print_info "  desktop: ${desktop_bin}"
     print_info "  sidecar: ${sidecar}"
     print_info "  日志:    debug → 控制台 + sidecar 日志文件（launcher 用户数据目录）"
-    # 继承 centag_export_debug_console_env；launcher 不再覆盖 LOG_OUTPUT/FORMAT
-    "$desktop_bin" -edition="$edition" -bin="$sidecar"
+    # 继承 centag_export_debug_console_env；launcher 不再覆盖 LOG_OUTPUT/FORMAT。
+    # 传 -port 使 launcher/sidecar 与 start.sh 解析出的端口一致（占用时 launcher 仍会再兜底递增）。
+    "$desktop_bin" -edition="$edition" -bin="$sidecar" -port "$BACKEND_PORT"
 }
 
 # ./start.sh run <personal|minimal> [--desktop]
@@ -2670,6 +2718,7 @@ start_backend_foreground() {
     load_env
     resolve_backend_port || return 1
     [ ! -f "$BIN_DIR/$SERVER_BIN" ] && build backend >/dev/null 2>&1
+    resolve_server_bin
     print_test_examples
     cd "$BIN_DIR"
     print_info "Starting backend from: $BIN_DIR (port: $BACKEND_PORT)..."
@@ -2682,6 +2731,7 @@ start_backend_background() {
     load_env
     resolve_backend_port || return 1
     [ ! -f "$BIN_DIR/$SERVER_BIN" ] && build backend >/dev/null 2>&1
+    resolve_server_bin
     print_test_examples
     print_info "Starting daemon from: $BIN_DIR..."
     "${PROJECT_ROOT}/scripts/tools/daemon.sh" "$BIN_DIR"
@@ -2704,6 +2754,7 @@ _run_all_dev() {
 
     resolve_backend_port || return 1
     [ ! -f "$BIN_DIR/$SERVER_BIN" ] && build backend >/dev/null 2>&1
+    resolve_server_bin
 
     print_info "Starting backend in background (port: $BACKEND_PORT)..."
     cd "$BIN_DIR"

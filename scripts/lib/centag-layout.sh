@@ -33,6 +33,18 @@ centag_layout_resolve_home() {
   printf '%s' "$(cd ~ && pwd)"
 }
 
+# centag_layout_normalize_path 把 Windows 反斜杠路径规范化为正斜杠：
+#   C:\Users\me\.centag → C:/Users/me/.centag
+# 两者在 MSYS/Git Bash 与原生工具都可用；但反斜杠会被 Make recipe / sh 当作转义
+# 字符吞掉（如 `-o C:\Users\...` → `C:Users...`），导致产物写到错误位置或变量变空。
+centag_layout_normalize_path() {
+  local p="${1:-}"
+  if [[ "$p" == *\\* ]]; then
+    p="${p//\\//}"
+  fi
+  printf '%s' "$p"
+}
+
 # Populate path variables for the active edition (default: personal).
 centag_layout_use_edition() {
   local edition="${1:-${CENTAG_EDITION:-personal}}"
@@ -40,13 +52,17 @@ centag_layout_use_edition() {
   export CENTAG_EDITION
 
   local home
-  home="$(centag_layout_resolve_home)"
-  CENTAG_INSTALL_ROOT="${CENTAG_INSTALL_ROOT:-${home}/.centag}"
+  home="$(centag_layout_normalize_path "$(centag_layout_resolve_home)")"
+  if [[ -n "${CENTAG_INSTALL_ROOT:-}" ]]; then
+    CENTAG_INSTALL_ROOT="$(centag_layout_normalize_path "$CENTAG_INSTALL_ROOT")"
+  else
+    CENTAG_INSTALL_ROOT="${home}/.centag"
+  fi
   # Always re-bind paths to the active INSTALL_ROOT so a stale CENTAG_BIN_DIR
   # from a previous shell/session cannot point outside the new root.
   # Optional override: CENTAG_BIN_DIR_OVERRIDE=<dir>
   if [[ -n "${CENTAG_BIN_DIR_OVERRIDE:-}" ]]; then
-    CENTAG_BIN_DIR="${CENTAG_BIN_DIR_OVERRIDE}"
+    CENTAG_BIN_DIR="$(centag_layout_normalize_path "$CENTAG_BIN_DIR_OVERRIDE")"
   else
     CENTAG_BIN_DIR="${CENTAG_INSTALL_ROOT}/bin"
   fi
