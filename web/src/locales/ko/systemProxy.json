@@ -125,6 +125,23 @@
     "bindFailed": "바인딩 실패",
     "notConfigured": "출력 키 미설정(MITM이 인증을 주입할 수 없음)"
   },
+  "upstream": {
+    "title": "업스트림 출구",
+    "hint": "비 LLM 트래픽(및 화이트리스트 도메인의 비 LLM 경로)이 Centag를 떠나는 방식. 자동=시스템 프록시를 따름, 직접=시스템 프록시 무시.",
+    "save": "출구 저장",
+    "saved": "업스트림 출구가 업데이트되었습니다(핫 리로드)",
+    "urlRequired": "수동 모드에는 업스트림 프록시 URL을 입력하세요",
+    "urlPlaceholder": "http://127.0.0.1:12000 또는 socks5://host:1080",
+    "noProxyPlaceholder": "프록시 제외 호스트(쉼표 구분, 선택)",
+    "mode": {
+      "auto": "자동",
+      "manual": "수동",
+      "direct": "직접",
+      "autoHint": "현재 시스템 프록시를 자동 감지합니다(없으면 직접 연결). 권장.",
+      "manualHint": "항상 아래 프록시 URL을 통해 라우팅합니다.",
+      "directHint": "항상 직접 연결하며 시스템 프록시를 무시합니다."
+    }
+  },
   "form": {
     "mitmService": "MITM 서비스",
     "allowLan": "LAN 허용",

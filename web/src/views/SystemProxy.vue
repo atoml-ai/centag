@@ -230,6 +230,43 @@
                   </el-button>
                 </el-space>
               </div>
+
+              <div class="upstream-tools mt-sm">
+                <div class="sub-label">{{ t('systemProxy.upstream.title') }}</div>
+                <p class="form-hint">{{ t('systemProxy.upstream.hint') }}</p>
+                <el-radio-group v-model="upstreamMode" size="small" class="mt-xs">
+                  <el-radio-button value="auto">{{ t('systemProxy.upstream.mode.auto') }}</el-radio-button>
+                  <el-radio-button value="manual">{{ t('systemProxy.upstream.mode.manual') }}</el-radio-button>
+                  <el-radio-button value="direct">{{ t('systemProxy.upstream.mode.direct') }}</el-radio-button>
+                </el-radio-group>
+                <div class="form-hint mt-xs">{{ t(`systemProxy.upstream.mode.${upstreamMode}Hint`) }}</div>
+                <div class="upstream-fields mt-xs">
+                  <el-input
+                    v-if="upstreamMode === 'manual'"
+                    v-model="upstreamURL"
+                    size="small"
+                    :placeholder="t('systemProxy.upstream.urlPlaceholder')"
+                    style="max-width: 280px"
+                  />
+                  <el-input
+                    v-if="upstreamMode === 'manual'"
+                    v-model="upstreamNoProxy"
+                    size="small"
+                    :placeholder="t('systemProxy.upstream.noProxyPlaceholder')"
+                    style="max-width: 220px"
+                    class="ml-sm"
+                  />
+                  <el-button
+                    type="primary"
+                    size="small"
+                    class="ml-sm"
+                    :loading="savingUpstream"
+                    @click="saveUpstreamConfig"
+                  >
+                    {{ t('systemProxy.upstream.save') }}
+                  </el-button>
+                </div>
+              </div>
             </el-collapse-item>
           </el-collapse>
         </el-card>
@@ -668,6 +705,10 @@ const employeeServer = ref('')
 const selectedEgressKeyId = ref<number | undefined>()
 const apiKeyOptions = ref<APIKey[]>([])
 const egressConfigured = computed(() => !!setupStatus.value?.egress_api_key_configured)
+const upstreamMode = ref<'auto' | 'manual' | 'direct'>('auto')
+const upstreamURL = ref('')
+const upstreamNoProxy = ref('')
+const savingUpstream = ref(false)
 const status = ref<SystemProxyStatus>({
   enabled: false,
   pac_enabled: true,
@@ -1122,6 +1163,38 @@ async function saveLanConfig(opts?: { field?: 'lan' | 'auth' }) {
   }
 }
 
+async function saveUpstreamConfig() {
+  if (upstreamMode.value === 'manual' && !upstreamURL.value.trim()) {
+    ElMessage.warning(t('systemProxy.upstream.urlRequired'))
+    return
+  }
+  savingUpstream.value = true
+  try {
+    await api.put('/api/v1/config', {
+      system_proxy: {
+        enabled: status.value.enabled,
+        listen_port: listenPort.value,
+        pac_enabled: status.value.pac_enabled,
+        allow_lan_clients: allowLanClients.value,
+        require_client_proxy_auth: requireClientProxyAuth.value,
+        listen_addr: allowLanClients.value ? listenAddr.value || '0.0.0.0' : '127.0.0.1',
+        advertise_host: allowLanClients.value ? advertiseHost.value.trim() : '',
+        upstream: {
+          mode: upstreamMode.value,
+          url: upstreamMode.value === 'manual' ? upstreamURL.value.trim() : '',
+          no_proxy: upstreamMode.value === 'manual' ? upstreamNoProxy.value.trim() : ''
+        }
+      }
+    })
+    ElMessage.success(t('systemProxy.upstream.saved'))
+    await load()
+  } catch (error: any) {
+    ElMessage.error(t('systemProxy.message.saveFailed') + ': ' + error.message)
+  } finally {
+    savingUpstream.value = false
+  }
+}
+
 const load = async (opts?: { skipAutoEgress?: boolean }) => {
   loading.value = true
   try {
@@ -1134,6 +1207,12 @@ const load = async (opts?: { skipAutoEgress?: boolean }) => {
       requireClientProxyAuth.value = configData.system_proxy.require_client_proxy_auth !== false
       advertiseHost.value = configData.system_proxy.advertise_host || ''
       listenAddr.value = configData.system_proxy.listen_addr || '127.0.0.1'
+      const up = configData.system_proxy.upstream
+      if (up) {
+        upstreamMode.value = (up.mode as typeof upstreamMode.value) || 'auto'
+        upstreamURL.value = up.url || ''
+        upstreamNoProxy.value = up.no_proxy || ''
+      }
     }
     if (configData.server?.port) {
       apiPort.value = configData.server.port

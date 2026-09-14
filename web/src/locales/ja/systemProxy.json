@@ -125,6 +125,23 @@
     "bindFailed": "バインド失敗",
     "notConfigured": "出力キー未設定（MITMが認証を注入できない）"
   },
+  "upstream": {
+    "title": "アップストリーム出口",
+    "hint": "非LLMトラフィック（およびホワイトリスト内の非LLMパス）がCentagからどのように出るか。自動=システムプロキシに追従、直接=システムプロキシを無視。",
+    "save": "出口を保存",
+    "saved": "アップストリーム出口を更新しました（ホットリロード）",
+    "urlRequired": "手動モードではアップストリームプロキシURLを入力してください",
+    "urlPlaceholder": "http://127.0.0.1:12000 または socks5://host:1080",
+    "noProxyPlaceholder": "プロキシ除外ホスト（カンマ区切り、任意）",
+    "mode": {
+      "auto": "自動",
+      "manual": "手動",
+      "direct": "直接",
+      "autoHint": "現在のシステムプロキシを自動検出（なければ直接接続）。推奨。",
+      "manualHint": "常に以下のプロキシURL経由で転送します。",
+      "directHint": "常に直接接続し、システムプロキシを無視します。"
+    }
+  },
   "form": {
     "mitmService": "MITMサービス",
     "allowLan": "LAN許可",

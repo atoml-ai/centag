@@ -125,6 +125,23 @@
     "bindFailed": "绑定失败",
     "notConfigured": "出口 Key 未配置（MITM 无法注入鉴权）"
   },
+  "upstream": {
+    "title": "上游出口",
+    "hint": "非 LLM 流量（以及白名单域名中非 LLM 路径的请求）如何离开 Centag。自动=跟随系统代理；直连=忽略系统代理。",
+    "save": "保存上游",
+    "saved": "上游出口已更新（热生效）",
+    "urlRequired": "手动模式需填写上游代理地址",
+    "urlPlaceholder": "http://127.0.0.1:12000 或 socks5://host:1080",
+    "noProxyPlaceholder": "不走代理的主机（逗号分隔，可选）",
+    "mode": {
+      "auto": "自动",
+      "manual": "手动",
+      "direct": "直连",
+      "autoHint": "自动探测当前系统代理（无则直连）。推荐。",
+      "manualHint": "始终经下方代理地址转发。",
+      "directHint": "始终直连，忽略任何系统代理。"
+    }
+  },
   "form": {
     "mitmService": "MITM 服务",
     "allowLan": "允许局域网",

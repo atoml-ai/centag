@@ -10,7 +10,7 @@
       </div>
     </div>
 
-    <el-tabs v-model="activeTab" class="setup-tabs">
+    <el-tabs v-model="activeTab" class="setup-tabs" @tab-change="onTabChange">
       <!-- Tab 1: 快速接入 -->
       <el-tab-pane :label="$t('agentSetup.quickSetup')" name="setup">
         <div class="section-block">
@@ -259,6 +259,47 @@
               </el-col>
             </el-row>
           </div>
+        </div>
+      </el-tab-pane>
+
+      <!-- Tab: 本机代理启动（应用目录 + 写配置/复制命令/诊断） -->
+      <el-tab-pane label="本机代理启动" name="localapps">
+        <div class="section-block">
+          <p class="section-hint section-hint--multiline">
+            可经 Centag 代理启动的 AI/Agent 应用。桌面壳托盘「代理启动应用」会按本机已安装情况过滤；此处展示全部支持项与安装指引。
+          </p>
+          <div class="wrap-apps-actions">
+            <el-button size="small" :loading="wrapAppsLoading" @click="loadWrapApps">刷新</el-button>
+            <el-button size="small" @click="runWrapDoctor">代理诊断</el-button>
+            <span v-if="wrapDoctorSummary" class="wrap-doctor-summary">诊断：{{ wrapDoctorSummary }}</span>
+          </div>
+          <el-table :data="wrapApps" v-loading="wrapAppsLoading" stripe>
+            <el-table-column prop="display_name" label="应用" min-width="160" />
+            <el-table-column prop="vendor" label="厂商" width="120" />
+            <el-table-column prop="launch_mode" label="方式" width="120" />
+            <el-table-column label="安装指引" min-width="240">
+              <template #default="{ row }">
+                <span class="wrap-install-hint">{{ row.install_hint || '—' }}</span>
+                <a
+                  v-if="row.install_url"
+                  class="wrap-dep-link"
+                  :href="row.install_url"
+                  target="_blank"
+                  rel="noopener"
+                >文档</a>
+              </template>
+            </el-table-column>
+            <el-table-column label="操作" width="240">
+              <template #default="{ row }">
+                <el-button link type="primary" size="small" @click="copyWrapAppCommand(row)">
+                  复制启动命令
+                </el-button>
+                <el-button link type="primary" size="small" @click="writeWrapAppConfig(row)">
+                  写入模型配置
+                </el-button>
+              </template>
+            </el-table-column>
+          </el-table>
         </div>
       </el-tab-pane>
 
@@ -795,6 +836,13 @@ import { copyToClipboard } from '@/utils/clipboard'
 import { useAuthStore } from '@/stores/auth'
 import { listAPIKeys } from '@/api/user'
 import { getProxySetupStatus, type ProxySetupStatus } from '@/api/system-proxy'
+import {
+  listWrapApps,
+  prepareWrapApp,
+  wrapDoctor,
+  buildWrapRunCopyCommand,
+  type WrapApp,
+} from '@/api/wrap'
 import api from '@/api'
 
 const { t, te } = useI18n()
@@ -900,6 +948,57 @@ const proxySetupLoaded = ref(false)
 const wrapAvailable = computed(() =>
   !!proxySetup.value?.mitm_enabled && !!proxySetup.value?.egress_api_key_configured
 )
+
+// ── 本机代理启动：应用目录 / 写入模型配置 / 代理诊断 ──
+const wrapApps = ref<WrapApp[]>([])
+const wrapAppsLoading = ref(false)
+const wrapDoctorSummary = ref('')
+
+function onTabChange(name: string | number) {
+  if (name === 'localapps' && wrapApps.value.length === 0) {
+    void loadWrapApps()
+  }
+}
+
+async function loadWrapApps() {
+  wrapAppsLoading.value = true
+  try {
+    const res = await listWrapApps()
+    wrapApps.value = res.apps || []
+  } catch (e: any) {
+    ElMessage.error(e?.message || '加载应用目录失败')
+  } finally {
+    wrapAppsLoading.value = false
+  }
+}
+
+async function copyWrapAppCommand(row: WrapApp) {
+  const cmd = buildWrapRunCopyCommand(row.argv || [row.id])
+  await copyToClipboard(cmd)
+  ElMessage.success('已复制启动命令：' + cmd)
+}
+
+async function writeWrapAppConfig(row: WrapApp) {
+  try {
+    const res = await prepareWrapApp(row.id, true)
+    const warn = (res.warnings || []).join('；')
+    ElMessage.success(warn ? `已写入模型配置（${warn}）` : `已写入模型配置：${res.model}`)
+  } catch (e: any) {
+    ElMessage.error(e?.message || '写入模型配置失败')
+  }
+}
+
+async function runWrapDoctor() {
+  try {
+    const res = await wrapDoctor()
+    const failed = (res.checks || []).filter((c) => !c.ok)
+    wrapDoctorSummary.value = failed.length
+      ? failed.map((c) => c.message + (c.action ? ` → ${c.action}` : '')).join('；')
+      : '全部就绪'
+  } catch (e: any) {
+    wrapDoctorSummary.value = e?.message || '诊断失败'
+  }
+}
 const wrapUnavailableReason = computed(() => {
   if (!proxySetupLoaded.value) return t('agentSetup.wrapChecking')
   if (!proxySetup.value) return t('agentSetup.wrapStatusUnknown')

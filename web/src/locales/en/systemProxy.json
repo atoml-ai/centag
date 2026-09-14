@@ -125,6 +125,23 @@
     "bindFailed": "Bind failed",
     "notConfigured": "Egress Key not configured (MITM cannot inject auth)"
   },
+  "upstream": {
+    "title": "Upstream Egress",
+    "hint": "How non-LLM traffic (and whitelisted domains outside LLM paths) leaves Centag. Auto follows your system proxy; Direct ignores it.",
+    "save": "Save Upstream",
+    "saved": "Upstream egress updated (hot reload)",
+    "urlRequired": "Enter an upstream proxy URL for manual mode",
+    "urlPlaceholder": "http://127.0.0.1:12000 or socks5://host:1080",
+    "noProxyPlaceholder": "No-proxy hosts (comma separated, optional)",
+    "mode": {
+      "auto": "Auto",
+      "manual": "Manual",
+      "direct": "Direct",
+      "autoHint": "Detect the current system proxy automatically (falls back to direct when none). Recommended.",
+      "manualHint": "Always route through the proxy URL below.",
+      "directHint": "Always connect directly, ignoring any system proxy."
+    }
+  },
   "form": {
     "mitmService": "MITM Service",
     "allowLan": "Allow LAN",

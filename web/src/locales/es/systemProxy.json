@@ -125,6 +125,23 @@
     "bindFailed": "Vinculación fallida",
     "notConfigured": "Clave de salida no configurada (MITM no puede inyectar autenticación)"
   },
+  "upstream": {
+    "title": "Salida ascendente",
+    "hint": "Cómo sale el tráfico no-LLM (y dominios en lista blanca fuera de rutas LLM) de Centag. Automático sigue tu proxy del sistema; Directo lo ignora.",
+    "save": "Guardar salida",
+    "saved": "Salida ascendente actualizada (recarga en caliente)",
+    "urlRequired": "Introduce una URL de proxy ascendente para el modo manual",
+    "urlPlaceholder": "http://127.0.0.1:12000 o socks5://host:1080",
+    "noProxyPlaceholder": "Hosts sin proxy (separados por comas, opcional)",
+    "mode": {
+      "auto": "Automático",
+      "manual": "Manual",
+      "direct": "Directo",
+      "autoHint": "Detecta el proxy del sistema actual automáticamente (si no hay, directo). Recomendado.",
+      "manualHint": "Siempre enruta por la URL de proxy de abajo.",
+      "directHint": "Siempre conecta directamente, ignorando cualquier proxy del sistema."
+    }
+  },
   "form": {
     "mitmService": "Servicio MITM",
     "allowLan": "Permitir LAN",
