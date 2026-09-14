@@ -5,6 +5,8 @@
 ```bash
 centag wrap run -- opencode
 centag wrap doctor
+centag wrap apps            # 列出可代理 AI/Agent 应用 + 本机安装检测
+centag wrap apps --installed --json
 ```
 
 （不起网关；GitHub Release 只发 personal，已内含该子命令。）
@@ -13,6 +15,7 @@ centag wrap doctor
 
 1. **进程代理包装（推荐）**：下载 CA、设置 `HTTPS_PROXY` / `NODE_EXTRA_CA_CERTS`，再启动第三方 Agent（OpenCode 等多数 CLI 不读系统 PAC）。
 2. **系统 PAC + CA**：写入系统自动代理（仅认 PAC 的桌面客户端需要）。
+3. **应用目录 `apps`**：列出可经 Centag 代理的 AI/Agent 应用并做本机安装检测（桌面壳托盘与 Web 共用同一目录）。离线通过内嵌 Agent 注册表（主二进制）；独立 `centag-wrap` 可 `--server` 走 sidecar API。
 
 独立 `go.mod`，**不**依赖 Centag core。Centag API Key **不会**注入到 Agent 环境；由服务端 MITM 注入出口 Key。
 

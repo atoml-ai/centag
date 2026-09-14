@@ -26,6 +26,7 @@ var allowed = map[string]bool{
 	"doctor":  true,
 	"run":     true,
 	"env":     true,
+	"apps":    true,
 	"help":    true,
 	"-h":      true,
 	"--help":  true,
@@ -86,6 +87,8 @@ func Run(args []string) error {
 		default:
 			return eng.Env(f.Server, f.Token)
 		}
+	case "apps":
+		return runApps(rest)
 	case "run":
 		f, argv, err := parseRunArgs(rest)
 		if err != nil {
@@ -176,9 +179,10 @@ func printHelp() {
 	fmt.Printf(`%s — Centag system PAC / process-proxy helper
 
 Usage:
-  %s enable  [--server URL] [--token KEY]
+  %s enable  [--server URL] [--token KEY] [--force] [--ca-only]
   %s disable
   %s status
+  %s apps    [--server URL] [--token KEY] [--installed] [--json]
   %s doctor  [--server URL] [--token KEY]
   %s env     [--server URL] [--token KEY] [--install | --uninstall]
   %s run     [--server URL] [--token KEY] -- <command> [args...]
@@ -189,6 +193,16 @@ Flags:
                      Required for LAN MITM proxy auth
       --install      (env) persist proxy env into your shell profile
       --uninstall    (env) remove the persisted proxy env
+      --installed    (apps) only show apps detected on this machine
+      --json         (apps) machine-readable output
+      --force        (enable) re-assert the PAC when another program overwrote it
+      --ca-only      (enable) trust the CA but leave the OS system proxy untouched
+                     (used by GUI/Chromium launches with a per-process proxy)
+
+Apps catalog (which local AI/agent apps Centag can proxy):
+  %s apps prints the supported app catalog with best-effort local install
+  detection (--installed filters to installed only; --json for machines).
+  Offline via the embedded Agent registry; --server falls back to the sidecar API.
 
 Process proxy (recommended for OpenCode / CLI agents):
   Downloads CA, sets HTTPS_PROXY (+ proxy auth when LAN) + NODE_EXTRA_CA_CERTS,
@@ -203,7 +217,7 @@ Examples:
   %s run -- opencode
   %s run --server http://192.168.1.4:20060 --token llmproxy_xxx -- opencode
   eval "$(%s env --server http://192.168.1.4:20060 --token llmproxy_xxx)"
-`, name, name, name, name, name, name, name, name, name, name, name, name)
+`, name, name, name, name, name, name, name, name, name, name, name, name, name, name)
 	if name == "centag-wrap" {
 		fmt.Print(`
 Note: prefer "centag wrap …" when using the main Centag binary (same subcommands).
