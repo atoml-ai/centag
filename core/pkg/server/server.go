@@ -1923,6 +1923,15 @@ func (s *Server) setupRoutes() {
 		wrapAPI.POST("/run", s.RunWrapAgent)
 	}
 
+	// wrap 本地控制（回环免鉴权，桌面壳；非回环仍走 proxyAuth）
+	wrapLocal := v1.Group("/wrap")
+	wrapLocal.Use(newWrapLocalGuard(proxyAuth))
+	{
+		wrapLocal.GET("/apps", s.ListWrapApps)
+		wrapLocal.POST("/apps/:id/prepare", s.PrepareWrapApp)
+		wrapLocal.GET("/doctor", s.WrapDoctor)
+	}
+
 	// Agent 供应商配置管理（需要 JWT 认证）
 	if s.agentProviderHandler != nil {
 		agentProv := v1Protected.Group("/agent-providers")
