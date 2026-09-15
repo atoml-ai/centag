@@ -55,6 +55,7 @@ func (t *TraeTemplate) Meta() AgentSetupMeta {
 			DisplayName: "TRAE",
 			MacApps:     []string{"Trae"},
 			WinExes:     []string{"Trae"},
+			WinChromium: true,
 			Aliases:     []string{"trae", "Trae"},
 		}},
 	}

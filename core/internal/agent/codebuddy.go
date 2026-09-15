@@ -65,6 +65,7 @@ func (t *CodeBuddyTemplate) Meta() AgentSetupMeta {
 			DisplayName: "CodeBuddy Desktop",
 			MacApps:     []string{"CodeBuddy"},
 			WinExes:     []string{"CodeBuddy"},
+			WinChromium: true,
 			Aliases:     []string{"codebuddy", "CodeBuddy"},
 		}},
 	}
@@ -157,6 +158,7 @@ func (t *WorkBuddyTemplate) Meta() AgentSetupMeta {
 			DisplayName: "WorkBuddy",
 			MacApps:     []string{"WorkBuddy"},
 			WinExes:     []string{"WorkBuddy"},
+			WinChromium: true,
 			Aliases:     []string{"workbuddy", "WorkBuddy"},
 		}},
 	}

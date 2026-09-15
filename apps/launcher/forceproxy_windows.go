@@ -65,7 +65,7 @@ func proxyEnv(mitm string) []string {
 
 // openAppChromium launches a Chromium/Electron desktop app with the Centag
 // force-proxy switches. MSIX store apps are resolved to their inner exe via
-// AppxManifest; anything we cannot resolve falls back to the system-proxy
+// AppxManifest; anything we cannot resolve falls back to the process-proxy
 // launch path (explorer/cmd start), which still covers MITM + whitelist if the
 // OS proxy is held by Centag.
 func openAppChromium(app catalogApp) error {

@@ -22,6 +22,11 @@ func trustCACert(cfg Config) (string, error) {
 	return "", fmt.Errorf("trust CA unsupported on this OS")
 }
 
+// untrustCACert is unsupported on this OS.
+func untrustCACert(cfg Config) error {
+	return fmt.Errorf("untrust CA unsupported on this OS")
+}
+
 // locateCentagCA finds the sidecar's root CA on disk.
 func locateCentagCA(cfg Config) string {
 	return filepath.Join(cfg.DataDir, "certs", "ca.crt")

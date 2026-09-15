@@ -115,6 +115,16 @@ func (a *launcherApp) onReady() {
 		notifyUser("Centag", "Centag CA 已安装到系统钥匙串，被代理应用即可发起 HTTPS 请求")
 	})
 
+	untrustItem := systray.AddMenuItem("移除 CA 信任", "从系统钥匙串移除 Centag CA（不再信任 Centag 的 MITM 证书）")
+	untrustItem.Click(func() {
+		if err := untrustCACert(a.cfg); err != nil {
+			fmt.Fprintf(os.Stderr, "centag-launcher: untrust ca failed: %v\n", err)
+			notifyUser("Centag", "CA 移除失败: "+err.Error())
+			return
+		}
+		notifyUser("Centag", "Centag CA 已从系统钥匙串移除")
+	})
+
 	systray.AddSeparator()
 
 	quitItem := systray.AddMenuItem("退出", "停止 sidecar 并退出")

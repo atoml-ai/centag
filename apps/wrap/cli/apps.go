@@ -301,5 +301,5 @@ func printAppTable(w io.Writer, rows []appRow) {
 		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\n", r.ID, r.DisplayName, mode, status, path)
 	}
 	_ = tw.Flush()
-	fmt.Fprintf(w, "\n%d/%d installed. CLI/TUI: `centag wrap run -- <app>`; GUI: 系统 PAC 启动（tray）\n", installed, len(rows))
+	fmt.Fprintf(w, "\n%d/%d installed. CLI/TUI: `centag wrap run -- <app>`; GUI: 进程级代理启动（tray）\n", installed, len(rows))
 }

@@ -183,6 +183,33 @@ func trustCACert(cfg Config) (string, error) {
 	return caPath, nil
 }
 
+// untrustCACert removes the Centag CA from the Windows certificate stores
+// (CurrentUser Root + CA) via certutil. It matches by the "Centag CA" subject
+// common name and removes all matching certificates.
+func untrustCACert(cfg Config) error {
+	for _, store := range []string{"Root", "CA"} {
+		out, err := exec.Command("certutil", "-user", "-store", store).CombinedOutput()
+		if err != nil {
+			continue
+		}
+		// Find and delete Centag CA entries
+		lines := strings.Split(string(out), "\n")
+		for _, line := range lines {
+			if strings.Contains(line, "Centag CA") {
+				// Extract the serial number from the line before "Centag CA"
+				parts := strings.SplitN(line, "  ", 2)
+				if len(parts) >= 1 {
+					serial := strings.TrimSpace(parts[0])
+					if serial != "" {
+						_ = exec.Command("certutil", "-user", "-delstore", store, serial).Run()
+					}
+				}
+			}
+		}
+	}
+	return nil
+}
+
 // locateCentagCA finds the sidecar's root CA on disk.
 func locateCentagCA(cfg Config) string {
 	for _, p := range []string{

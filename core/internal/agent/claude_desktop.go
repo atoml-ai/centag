@@ -48,6 +48,7 @@ func (t *ClaudeDesktopTemplate) Meta() AgentSetupMeta {
 			DisplayName: "Claude Desktop",
 			MacApps:     []string{"Claude"},
 			WinExes:     []string{"Claude"},
+			WinChromium: true,
 			Aliases:     []string{"claude", "Claude"},
 		}},
 	}

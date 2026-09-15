@@ -36,6 +36,7 @@ func (t *OpenCodeTemplate) Meta() AgentSetupMeta {
 			DisplayName: "OpenCode Desktop",
 			MacApps:     []string{"OpenCode"},
 			WinExes:     []string{"OpenCode"},
+			WinChromium: true,
 			Aliases:     []string{"opencode", "OpenCode"},
 		}},
 	}

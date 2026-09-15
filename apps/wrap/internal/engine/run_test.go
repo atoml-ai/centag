@@ -29,7 +29,7 @@ func TestPrepareProcessEnv_FromPAC(t *testing.T) {
 	defer srv.Close()
 
 	e := New()
-	pe, err := e.PrepareProcessEnv(srv.URL, "")
+	pe, err := e.PrepareProcessEnv(srv.URL, "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -69,7 +69,7 @@ func TestPrepareProcessEnv_AllowsLoopbackWhenServerIsLocal(t *testing.T) {
 	defer srv.Close()
 
 	e := New()
-	pe, err := e.PrepareProcessEnv(srv.URL, "")
+	pe, err := e.PrepareProcessEnv(srv.URL, "", "")
 	if err != nil {
 		t.Fatalf("local server + loopback MITM should be allowed: %v", err)
 	}
@@ -96,12 +96,12 @@ func TestPrepareProcessEnv_LANRequiresToken(t *testing.T) {
 	defer srv.Close()
 
 	e := New()
-	if _, err := e.PrepareProcessEnv(srv.URL, ""); err == nil {
+	if _, err := e.PrepareProcessEnv(srv.URL, "", ""); err == nil {
 		t.Fatal("expected error without CENTAG_WRAP_TOKEN")
 	}
 
 	t.Setenv("CENTAG_WRAP_TOKEN", "llmproxy_test_key")
-	pe, err := e.PrepareProcessEnv(srv.URL, "")
+	pe, err := e.PrepareProcessEnv(srv.URL, "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -114,7 +114,7 @@ func TestPrepareProcessEnv_LANRequiresToken(t *testing.T) {
 
 	// CLI --token overrides env
 	t.Setenv("CENTAG_WRAP_TOKEN", "llmproxy_from_env")
-	pe, err = e.PrepareProcessEnv(srv.URL, "llmproxy_from_flag")
+	pe, err = e.PrepareProcessEnv(srv.URL, "llmproxy_from_flag", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -167,7 +167,7 @@ func TestRun_ResolvesAppBundle(t *testing.T) {
 	}
 
 	e := New()
-	if err := e.Run(srv.URL, "", []string{bundle}); err != nil {
+	if err := e.Run(srv.URL, "", "", []string{bundle}); err != nil {
 		t.Fatalf("Run should resolve and exec the .app bundle: %v", err)
 	}
 	if _, err := os.Stat(marker); err != nil {
@@ -208,7 +208,7 @@ func TestEnvInstallUninstall_Idempotent(t *testing.T) {
   defer srv.Close()
 
   e := New()
-  if err := e.EnvInstall(srv.URL, "llmproxy_test_key"); err != nil {
+  if err := e.EnvInstall(srv.URL, "llmproxy_test_key", ""); err != nil {
     t.Fatal(err)
   }
   profile := filepath.Join(home, ".zshrc")
@@ -236,7 +236,7 @@ func TestEnvInstallUninstall_Idempotent(t *testing.T) {
   }
 
   // Idempotent: installing again must not duplicate the block.
-  if err := e.EnvInstall(srv.URL, "llmproxy_test_key"); err != nil {
+  if err := e.EnvInstall(srv.URL, "llmproxy_test_key", ""); err != nil {
     t.Fatal(err)
   }
   again, _ := os.ReadFile(profile)
@@ -245,7 +245,7 @@ func TestEnvInstallUninstall_Idempotent(t *testing.T) {
   }
 
   // Uninstall removes both.
-  if err := e.EnvUninstall(srv.URL, "llmproxy_test_key"); err != nil {
+  if err := e.EnvUninstall(srv.URL, "llmproxy_test_key", ""); err != nil {
     t.Fatal(err)
   }
   after, _ := os.ReadFile(profile)

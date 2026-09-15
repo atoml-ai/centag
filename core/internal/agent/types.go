@@ -194,7 +194,7 @@ type AgentSetupMeta struct {
 	UIGuide       *UIGuide       `json:"ui_guide,omitempty"`
 	// VerifiedWrite 表示「写入配置」接入方式已通过维护者本地验证。
 	VerifiedWrite bool `json:"verified_write,omitempty"`
-	// VerifiedWrap 表示「wrap / 系统代理」接入方式已通过维护者本地验证。
+	// VerifiedWrap 表示「wrap / 进程级代理」接入方式已通过维护者本地验证。
 	VerifiedWrap bool `json:"verified_wrap,omitempty"`
 	// VerifiedUI 表示「UI 指引」接入方式已通过维护者本地验证。
 	VerifiedUI bool `json:"verified_ui,omitempty"`

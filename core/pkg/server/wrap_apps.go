@@ -2,6 +2,7 @@ package server
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -215,6 +216,29 @@ func (s *Server) WrapDoctor(c *gin.Context) {
 		} else {
 			checks = append(checks, wrapCheck{ID: "app", OK: false, Message: "未知应用: " + id,
 				Action: "调用 GET /api/v1/wrap/apps 获取可用应用"})
+		}
+	}
+
+	// Certificate pinning detection
+	if s.mitmServer != nil {
+		if domain := strings.TrimSpace(c.Query("domain")); domain != "" {
+			if s.mitmServer.CheckCertPinning(domain) {
+				checks = append(checks, wrapCheck{
+					ID:      "cert_pinning",
+					OK:      false,
+					Message: "疑似证书固定: " + domain,
+					Action:  "该应用可能使用了证书固定，无法通过 MITM 代理。建议使用「写配置」方式配置模型",
+				})
+			} else {
+				tlsFails, totalFails := s.mitmServer.GetDomainFailureStats(domain)
+				if totalFails > 0 {
+					checks = append(checks, wrapCheck{
+						ID:      "cert_pinning",
+						OK:      true,
+						Message: fmt.Sprintf("域名 %s 有 %d 次失败（TLS: %d）", domain, totalFails, tlsFails),
+					})
+				}
+			}
 		}
 	}
 

@@ -278,3 +278,27 @@ func TestWrapLocalGuard(t *testing.T) {
 		})
 	}
 }
+
+// TestWriteConfigPrompt covers TC-API-010: write_config failure path.
+func TestWriteConfigPrompt(t *testing.T) {
+	s := &Server{cfg: &config.Config{}}
+
+	// Test that write_config=true with missing egress key produces warning
+	code, body := doPrepare(t, s, "opencode", `{"write_config":true}`)
+	if code != http.StatusOK {
+		t.Fatalf("code=%d", code)
+	}
+	if body["ok"] != true {
+		t.Fatalf("expected ok=true, got %v", body["ok"])
+	}
+	warnings, _ := body["warnings"].([]any)
+	if len(warnings) == 0 {
+		t.Fatal("expected warning when write_config=true and no egress key")
+	}
+
+	// Verify warning mentions the reason
+	warningStr, _ := warnings[0].(string)
+	if !strings.Contains(warningStr, "出口") && !strings.Contains(warningStr, "Key") {
+		t.Fatalf("warning should mention missing key, got: %s", warningStr)
+	}
+}

@@ -106,6 +106,21 @@ func launchWrapped(commandLine, label string) (string, error) {
 	return "", openTerminal(commandLine)
 }
 
+// untrustCACert removes the Centag CA from the user NSS/CA store.
+func untrustCACert(cfg Config) error {
+	if p, err := exec.LookPath("update-ca-trust"); err == nil {
+		dst := "/etc/pki/ca-trust/source/anchors/centag-ca.crt"
+		if out, err := exec.Command("pkexec", "rm", dst).CombinedOutput(); err != nil {
+			return fmt.Errorf("pkexec rm: %w (%s)", err, strings.TrimSpace(string(out)))
+		}
+		if out, err := exec.Command(p, "extract").CombinedOutput(); err != nil {
+			return fmt.Errorf("update-ca-trust: %w (%s)", err, strings.TrimSpace(string(out)))
+		}
+		return nil
+	}
+	return fmt.Errorf("请手动从系统信任中移除 Centag CA（未找到 update-ca-trust）")
+}
+
 // trustCACert installs the Centag CA into the user NSS/CA store via
 // update-ca-trust or certutil when available.
 func trustCACert(cfg Config) (string, error) {

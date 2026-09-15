@@ -39,6 +39,8 @@ type Server struct {
 	// upstream 决定非 LLM 流量（CONNECT 隧道 / 非 LLM 直通请求）的出口：
 	// 上游代理或直连（热更新）。
 	upstream *egressUpstream
+	// failureSignals collects MITM failure signals for certificate pinning detection.
+	failureSignals *FailureSignals
 }
 
 // Config MITM服务器配置
@@ -129,6 +131,7 @@ func NewServer(config *Config) (*Server, error) {
 		tlsConfig:       tlsConfig,
 		sharedTransport: sharedTransport,
 		upstream:        upstream,
+		failureSignals:  NewFailureSignals(5, 5*time.Minute), // 5 failures in 5 minutes triggers warning
 	}
 	s.SetRoutingRules(config.Domains, config.PathPatterns)
 	s.SetBackendAuthToken(config.BackendAuthToken)
@@ -164,6 +167,30 @@ func (s *Server) SetClientProxyAuth(required bool, validate ClientTokenValidator
 	s.requireClientProxyAuthFlag = required
 	s.clientTokenValidator = validate
 	s.mu.Unlock()
+}
+
+// CheckCertPinning checks if there are signs of certificate pinning for a domain.
+func (s *Server) CheckCertPinning(domain string) bool {
+	if s == nil || s.failureSignals == nil {
+		return false
+	}
+	return s.failureSignals.CheckCertPinning(domain)
+}
+
+// GetDomainFailureStats returns failure statistics for a domain.
+func (s *Server) GetDomainFailureStats(domain string) (tlsFailures, totalFailures int) {
+	if s == nil || s.failureSignals == nil {
+		return 0, 0
+	}
+	return s.failureSignals.GetDomainStats(domain)
+}
+
+// GetRecentFailureSignals returns recent failure signals (for diagnostic output).
+func (s *Server) GetRecentFailureSignals(limit int) []FailureSignal {
+	if s == nil || s.failureSignals == nil {
+		return nil
+	}
+	return s.failureSignals.GetRecentSignals(limit)
 }
 
 func (s *Server) backendAuthTokenLocked() string {
@@ -393,7 +420,14 @@ func (s *Server) handleCONNECT(w http.ResponseWriter, r *http.Request) {
 
 	// 执行TLS握手
 	if err := tlsConn.Handshake(); err != nil {
-		logger.Error("TLS handshake failed", zap.Error(err))
+		// Record failure signal for certificate pinning detection
+		errMsg := err.Error()
+		sigType := FailureTLSHandshake
+		if strings.Contains(errMsg, "unknown authority") {
+			sigType = FailureUnknownAuthority
+		}
+		s.failureSignals.Record(sigType, host, errMsg)
+		logger.Error("TLS handshake failed", zap.Error(err), zap.String("host", host))
 		return
 	}
 

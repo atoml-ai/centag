@@ -133,6 +133,26 @@ func trustCACert(cfg Config) (string, error) {
 	return caPath, nil
 }
 
+// untrustCACert removes the Centag CA from the macOS System keychain
+// via an admin-authorization dialog.
+func untrustCACert(cfg Config) error {
+	caPath := locateCentagCA(cfg)
+	if caPath == "" {
+		return fmt.Errorf("未找到 CA 证书")
+	}
+	script := fmt.Sprintf(
+		`do shell script "security remove-trusted-cert -d %s" with administrator privileges`,
+		shellQuote(caPath),
+	)
+	if out, err := exec.Command("osascript", "-e", script).CombinedOutput(); err != nil {
+		if ee, ok := err.(*exec.ExitError); ok && ee.ExitCode() == 128 {
+			return nil // cancelled
+		}
+		return fmt.Errorf("security remove-trusted-cert: %w (%s)", err, strings.TrimSpace(string(out)))
+	}
+	return nil
+}
+
 // locateCentagCA finds the sidecar's root CA, preferring the lib install over
 // the wrap download cache.
 func locateCentagCA(cfg Config) string {

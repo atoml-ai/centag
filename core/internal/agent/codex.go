@@ -32,7 +32,7 @@ func (t *CodexTemplate) Meta() AgentSetupMeta {
 		InstallHint:   "curl -fsSL https://chatgpt.com/codex/install.sh | sh；或 npm i -g @openai/codex",
 		AccessMethods: []AccessMethod{AccessWriteConfig, AccessWrapCLI},
 		CompanionCLI:  NewCLICompanion("codex", "https://github.com/openai/codex", "curl -fsSL https://chatgpt.com/codex/install.sh | sh；或 npm i -g @openai/codex"),
-		VerifiedWrite: true, // wrap/系统代理方式尚未维护者验证
+		VerifiedWrite: true, // wrap/进程级代理方式尚未维护者验证
 		DesktopEditions: []DesktopEdition{{
 			ID:          "codex-desktop",
 			DisplayName: "Codex Desktop",

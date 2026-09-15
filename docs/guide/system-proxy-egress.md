@@ -8,7 +8,7 @@
 | 优先级 | 方式 | 适用 |
 |--------|------|------|
 | **首选** | `centag wrap run -- …` | OpenCode 等多数 CLI（不读系统 PAC）；主二进制子命令，**不起网关** |
-| 可选 | `centag wrap enable` + 系统 PAC | 认「自动代理」的桌面客户端 |
+| 可选 | `centag wrap enable --system-proxy` | 认「自动代理」的桌面客户端 |
 | 后续 | Clash TUN 等 | 都不认的硬编码客户端 |
 
 员工侧 **一条命令**（自动下 CA、设 `HTTPS_PROXY` + `NODE_EXTRA_CA_CERTS`、启动 Agent）：
@@ -40,6 +40,29 @@ centag wrap apps --json      # 机器可读（含 installed/path）
 
 - 模型名默认由**透明模式兜底**（未命中模型回落系统默认）；也可在桌面壳勾选「启动前写入模型配置」或 Web「本机代理启动」页写入 `centag/<pipeline>`。
 - 本地控制接口（回环免鉴权，非回环需鉴权）：`GET /api/v1/wrap/apps`、`POST /api/v1/wrap/apps/:id/prepare`、`GET /api/v1/wrap/doctor`。
+
+### Wrap Doctor 端点
+
+`GET /api/v1/wrap/doctor` 可选查询参数：
+
+| 参数 | 说明 |
+|------|------|
+| `app_id` | 检查指定应用是否存在 |
+| `domain` | 检查域名是否有证书固定嫌疑 |
+
+示例响应：
+```json
+{
+  "ok": true,
+  "checks": [
+    {"id": "sidecar", "ok": true, "message": "sidecar 运行中"},
+    {"id": "ca", "ok": true, "message": "CA 证书存在: /path/to/ca.crt"},
+    {"id": "mitm", "ok": true, "message": "MITM 代理已启用"},
+    {"id": "egress_key", "ok": true, "message": "出口 API Key 已配置"},
+    {"id": "cert_pinning", "ok": false, "message": "疑似证书固定: api.openai.com", "action": "该应用可能使用了证书固定，无法通过 MITM 代理。建议使用「写配置」方式配置模型"}
+  ]
+}
+```
 
 **不要**把 `HTTPS_PROXY` 写进 `~/.zshrc`。Agent **不需要**知道 Centag API Key（由服务端 MITM 注入）。
 
@@ -100,12 +123,30 @@ centag wrap doctor
 ## 系统 PAC（可选）
 
 ```bash
+# 默认仅生成 CA 证书并信任，不修改系统代理设置
 centag wrap enable [--server http://<advertise>:20060]
+
+# 需要修改系统代理设置时，显式传入 --system-proxy
+centag wrap enable --system-proxy [--server http://<advertise>:20060]
+
 centag wrap doctor [--server …]
 centag wrap disable   # 远端模式不关服务器 MITM
 ```
 
 若 `setup/status` 需登录：`CENTAG_WRAP_TOKEN=<Bearer>`。
+
+### NO_PROXY 默认值
+
+`centag wrap run` 默认包含以下 NO_PROXY 值（可通过 `--no-proxy` 扩展）：
+
+- `localhost,127.0.0.1,::1`
+- `10.0.0.0/8,172.16.0.0/12,192.168.0.0/16`（RFC1918 私有地址）
+- `.localhost,.local,.lan,.example,.invalid`
+
+```bash
+# 示例：追加自定义 NO_PROXY
+centag wrap run --no-proxy "*.internal.com,10.0.0.0/8" -- opencode
+```
 
 ## 手写环境变量（等价于 run，一般不必）
 
@@ -125,13 +166,33 @@ opencode
 2. 非白名单域名：MITM 只做 CONNECT 隧道，不解密。  
 3. 白名单 LLM API 才进 Centag；出口 Key 仅在服务端注入。
 
+## 证书固定检测
+
+当 MITM 代理检测到 TLS 握手失败或连接重置时，会记录失败信号。如果同一域名在 5 分钟内出现 5 次以上 TLS 握手失败，系统会提示「疑似证书固定」。
+
+诊断命令：
+```bash
+# 检查域名是否被疑似证书固定
+curl -s "http://localhost:20060/api/v1/wrap/doctor?domain=api.openai.com"
+```
+
+如果检测到证书固定，建议使用「写配置」方式配置模型，而非依赖透明代理模式。
+
 ## Agent 适用矩阵
 
 | 类型 | 例子 | 推荐 |
 |------|------|------|
-| 忽略 PAC | OpenCode 等 | `centag wrap run` |
-| 认系统 PAC | 部分桌面客户端 | `centag wrap enable` |
+| 进程级代理 | OpenCode 等 | `centag wrap run`（默认，CA-only） |
+| 认系统 PAC | 部分桌面客户端 | `centag wrap run` 或 `centag wrap enable --system-proxy` |
+| Electron/Chromium | Claude Desktop, CodeBuddy 等 | `centag wrap run`（自动设置 WinChromium） |
 | 都不认 | 部分 Electron | Clash TUN（后续） |
+
+### CA 证书管理
+
+- `centag wrap enable` 默认仅生成 CA 证书并信任，**不修改系统代理设置**
+- 需要系统 PAC 时显式传入 `--system-proxy`
+- 菜单「移除 CA 信任」可从 Root/CA 存储中移除证书
+- 桌面壳托盘提供「信任 CA 证书」和「移除 CA 信任」入口
 
 ## 鉴权与模型
 

@@ -34,12 +34,14 @@ var allowed = map[string]bool{
 
 // commonFlags holds shared wrap flags.
 type commonFlags struct {
-	Server    string
-	Token     string
-	Install   bool
-	Uninstall bool
-	Force     bool
-	CAOnly    bool
+	Server      string
+	Token       string
+	Install     bool
+	Uninstall   bool
+	Force       bool
+	CAOnly      bool
+	SystemProxy bool
+	NoProxy     string
 }
 
 // Run executes wrap with a fixed subcommand whitelist.
@@ -68,7 +70,7 @@ func Run(args []string) error {
 		if f.CAOnly {
 			return eng.EnableCAOnly(f.Server, f.Token)
 		}
-		return eng.Enable(f.Server, f.Token, f.Force)
+		return eng.Enable(f.Server, f.Token, f.Force, f.SystemProxy)
 	case "disable":
 		return eng.Disable()
 	case "status":
@@ -86,11 +88,11 @@ func Run(args []string) error {
 		}
 		switch {
 		case f.Uninstall:
-			return eng.EnvUninstall(f.Server, f.Token)
+			return eng.EnvUninstall(f.Server, f.Token, f.NoProxy)
 		case f.Install:
-			return eng.EnvInstall(f.Server, f.Token)
+			return eng.EnvInstall(f.Server, f.Token, f.NoProxy)
 		default:
-			return eng.Env(f.Server, f.Token)
+			return eng.Env(f.Server, f.Token, f.NoProxy)
 		}
 	case "apps":
 		return runApps(rest)
@@ -99,7 +101,7 @@ func Run(args []string) error {
 		if err != nil {
 			return err
 		}
-		return eng.Run(f.Server, f.Token, argv)
+		return eng.Run(f.Server, f.Token, f.NoProxy, argv)
 	default:
 		return fmt.Errorf("unknown command %q", cmd)
 	}
@@ -134,6 +136,16 @@ func parseCommonFlags(args []string) (commonFlags, error) {
 			f.Force = true
 		case a == "--ca-only":
 			f.CAOnly = true
+		case a == "--system-proxy":
+			f.SystemProxy = true
+		case a == "--no-proxy":
+			if i+1 >= len(args) {
+				return f, fmt.Errorf("%s requires a value", a)
+			}
+			i++
+			f.NoProxy = strings.TrimSpace(args[i])
+		case strings.HasPrefix(a, "--no-proxy="):
+			f.NoProxy = strings.TrimSpace(strings.TrimPrefix(a, "--no-proxy="))
 		case a == "--help" || a == "-h":
 			continue
 		default:
@@ -143,7 +155,7 @@ func parseCommonFlags(args []string) (commonFlags, error) {
 	return f, nil
 }
 
-// parseRunArgs: [--server URL] [--token KEY] -- <cmd> [args...]
+// parseRunArgs: [--server URL] [--token KEY] [--no-proxy LIST] -- <cmd> [args...]
 func parseRunArgs(args []string) (commonFlags, []string, error) {
 	var f commonFlags
 	i := 0
@@ -172,6 +184,16 @@ func parseRunArgs(args []string) (commonFlags, []string, error) {
 		case strings.HasPrefix(a, "--token="):
 			f.Token = strings.TrimSpace(strings.TrimPrefix(a, "--token="))
 			i++
+		case a == "--no-proxy":
+			if i+1 >= len(args) {
+				return f, nil, fmt.Errorf("%s requires a value", a)
+			}
+			i++
+			f.NoProxy = strings.TrimSpace(args[i])
+			i++
+		case strings.HasPrefix(a, "--no-proxy="):
+			f.NoProxy = strings.TrimSpace(strings.TrimPrefix(a, "--no-proxy="))
+			i++
 		case a == "--help" || a == "-h":
 			i++
 		case strings.HasPrefix(a, "-"):
@@ -185,16 +207,16 @@ func parseRunArgs(args []string) (commonFlags, []string, error) {
 
 func printHelp() {
 	name := programName
-	fmt.Printf(`%s — Centag system PAC / process-proxy helper
+	fmt.Printf(`%s — Centag process-proxy helper (no system proxy by default)
 
 Usage:
-  %s enable  [--server URL] [--token KEY] [--force] [--ca-only]
+  %s enable  [--server URL] [--token KEY] [--force] [--system-proxy]
   %s disable
   %s status
   %s apps    [--server URL] [--token KEY] [--installed] [--json]
   %s doctor  [--server URL] [--token KEY]
-  %s env     [--server URL] [--token KEY] [--install | --uninstall]
-  %s run     [--server URL] [--token KEY] -- <command> [args...]
+  %s env     [--server URL] [--token KEY] [--install | --uninstall] [--no-proxy LIST]
+  %s run     [--server URL] [--token KEY] [--no-proxy LIST] -- <command> [args...]
 
 Flags:
   -s, --server URL   Centag API base (default: local or CENTAG_API_BASE)
@@ -205,8 +227,12 @@ Flags:
       --installed    (apps) only show apps detected on this machine
       --json         (apps) machine-readable output
       --force        (enable) re-assert the PAC when another program overwrote it
-      --ca-only      (enable) trust the CA but leave the OS system proxy untouched
-                     (used by GUI/Chromium launches with a per-process proxy)
+      --system-proxy (enable) ALSO take over the OS system proxy (PAC).
+                     By default, enable only trusts the CA and ensures MITM,
+                     leaving the OS system proxy untouched.
+      --no-proxy     (run/env) comma-separated hosts/domains to bypass the proxy.
+                     Appended to the default list (localhost,127.0.0.1,::1,
+                     RFC1918 ranges,.localhost,.local,.lan,.example,.invalid).
 
 Apps catalog (which local AI/agent apps Centag can proxy):
   %s apps prints the supported app catalog with best-effort local install
@@ -225,8 +251,9 @@ Persistent env (remote / repeated use):
 Examples:
   %s run -- opencode
   %s run --server http://192.168.1.4:20060 --token llmproxy_xxx -- opencode
+  %s run --no-proxy ".mycompany.com,10.0.0.0/8" -- opencode
   eval "$(%s env --server http://192.168.1.4:20060 --token llmproxy_xxx)"
-`, name, name, name, name, name, name, name, name, name, name, name, name, name, name)
+`, name, name, name, name, name, name, name, name, name, name, name, name, name, name, name)
 	if name == "centag-wrap" {
 		fmt.Print(`
 Note: prefer "centag wrap …" when using the main Centag binary (same subcommands).

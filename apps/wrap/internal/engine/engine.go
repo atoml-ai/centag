@@ -100,13 +100,19 @@ func firstNonSelfManual(p snapshot.ProxyState) string {
 	return ""
 }
 
-func (e *Engine) Enable(server, token string, force bool) error {
+// Enable sets up Centag CA trust and (optionally) system proxy.
+// When systemProxy is false (the default), only CA is installed and MITM is
+// ensured — the OS system proxy is NOT modified. This is the process-proxy
+// default: Chromium/GUI apps get per-process --proxy-server, CLI apps get
+// HTTPS_PROXY via `wrap run`. Pass systemProxy=true to ALSO take over the OS
+// system proxy (legacy PAC behaviour).
+func (e *Engine) Enable(server, token string, force bool, systemProxy bool) error {
 	server = strings.TrimSpace(server)
 	token = resolveWrapToken(token)
 	if server == "" {
-		return e.enableLocal(token, force)
+		return e.enableLocal(token, force, systemProxy)
 	}
-	return e.enableRemote(server, token, force)
+	return e.enableRemote(server, token, force, systemProxy)
 }
 
 // EnableCAOnly installs the Centag CA into the OS trust store and ensures the
@@ -138,7 +144,7 @@ func (e *Engine) EnableCAOnly(server, token string) error {
 // enableLocal/enableRemote: force=true「接管」——快照已存在且系统代理被其他
 // 程序（VPN/TUN 等）改写时，重新写入 Centag PAC；快照 Proxy 则更新为当前
 // 状态，保证后续 disable 恢复到对方的设置而不是最初的状态。
-func (e *Engine) enableLocal(token string, force bool) error {
+func (e *Engine) enableLocal(token string, force bool, systemProxy bool) error {
 	snapshotExisted := snapshot.Exists()
 	if snapshotExisted && !force {
 		return fmt.Errorf("already enabled (snapshot exists); run disable first")
@@ -203,20 +209,24 @@ func (e *Engine) enableLocal(token string, force bool) error {
 	snap.Centag.MITMProxy = st.MITMProxy
 	_ = snapshot.Save(snap)
 
-	pacURL := st.PACURL
-	if pacURL == "" {
-		pacURL = api + "/api/v1/proxy/pac"
+	if systemProxy {
+		pacURL := st.PACURL
+		if pacURL == "" {
+			pacURL = api + "/api/v1/proxy/pac"
+		}
+		if err := e.OS.WritePAC(pacURL); err != nil {
+			_ = e.OS.UninstallCA(fp)
+			rollback()
+			return fmt.Errorf("write PAC: %w", err)
+		}
+		fmt.Printf("enabled local mode: pac=%s ca_fp=%s\n", pacURL, short(fp))
+	} else {
+		fmt.Printf("enabled (CA only, system proxy untouched): ca_fp=%s\n", short(fp))
 	}
-	if err := e.OS.WritePAC(pacURL); err != nil {
-		_ = e.OS.UninstallCA(fp)
-		rollback()
-		return fmt.Errorf("write PAC: %w", err)
-	}
-	fmt.Printf("enabled local mode: pac=%s ca_fp=%s\n", pacURL, short(fp))
 	return nil
 }
 
-func (e *Engine) enableRemote(server, token string, force bool) error {
+func (e *Engine) enableRemote(server, token string, force bool, systemProxy bool) error {
 	hasSnapshot := snapshot.Exists()
 	if hasSnapshot && !force {
 		return fmt.Errorf("already enabled (snapshot exists); run disable first")
@@ -283,13 +293,17 @@ func (e *Engine) enableRemote(server, token string, force bool) error {
 	snap.Centag.MITMProxy = mitmProxy
 	_ = snapshot.Save(snap)
 
-	if err := e.OS.WritePAC(pacURL); err != nil {
-		_ = e.OS.UninstallCA(fp)
-		rollback()
-		return err
+	if systemProxy {
+		if err := e.OS.WritePAC(pacURL); err != nil {
+			_ = e.OS.UninstallCA(fp)
+			rollback()
+			return err
+		}
+		fmt.Printf("enabled remote mode: server=%s pac=%s ca_fp=%s\n", server, pacURL, short(fp))
+		fmt.Println("note: disable will only restore this machine; remote MITM stays up")
+	} else {
+		fmt.Printf("enabled (CA only, system proxy untouched): server=%s ca_fp=%s\n", server, short(fp))
 	}
-	fmt.Printf("enabled remote mode: server=%s pac=%s ca_fp=%s\n", server, pacURL, short(fp))
-	fmt.Println("note: disable will only restore this machine; remote MITM stays up")
 	return nil
 }
 

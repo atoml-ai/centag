@@ -16,7 +16,7 @@ import (
 	"centag/apps/wrap/internal/snapshot"
 )
 
-const defaultNoProxy = "localhost,127.0.0.1,::1"
+const defaultNoProxy = "localhost,127.0.0.1,::1,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,.localhost,.local,.lan,.example,.invalid"
 
 // ProcessEnv holds proxy + CA env for wrapping a third-party Agent.
 type ProcessEnv struct {
@@ -48,7 +48,8 @@ func ResolveAPIBase(server string) string {
 // When the server requires MITM proxy auth (LAN), embeds the wrap token in
 // HTTPS_PROXY userinfo so clients send Proxy-Authorization automatically.
 // tokenFlag comes from CLI --token; empty falls back to CENTAG_WRAP_TOKEN.
-func (e *Engine) PrepareProcessEnv(server, tokenFlag string) (*ProcessEnv, error) {
+// extraNoProxy is appended to the default NO_PROXY list (comma-separated).
+func (e *Engine) PrepareProcessEnv(server, tokenFlag, extraNoProxy string) (*ProcessEnv, error) {
 	api := ResolveAPIBase(server)
 	client, err := remote.New(api)
 	if err != nil {
@@ -82,13 +83,17 @@ func (e *Engine) PrepareProcessEnv(server, tokenFlag string) (*ProcessEnv, error
 	}
 
 	proxyURL := buildProxyURL(mitmHost, token, proxyAuthRequired)
+	noProxy := defaultNoProxy
+	if extra := strings.TrimSpace(extraNoProxy); extra != "" {
+		noProxy = noProxy + "," + extra
+	}
 	vars := map[string]string{
 		"HTTPS_PROXY":         proxyURL,
 		"HTTP_PROXY":          proxyURL,
 		"https_proxy":         proxyURL,
 		"http_proxy":          proxyURL,
-		"NO_PROXY":            defaultNoProxy,
-		"no_proxy":            defaultNoProxy,
+		"NO_PROXY":            noProxy,
+		"no_proxy":            noProxy,
 		"NODE_EXTRA_CA_CERTS": caPath,
 		"SSL_CERT_FILE":       caPath,
 	}
@@ -150,8 +155,8 @@ func writeCAFile(pem []byte) (string, error) {
 }
 
 // Env prints export lines for eval / debugging.
-func (e *Engine) Env(server, token string) error {
-	pe, err := e.PrepareProcessEnv(server, token)
+func (e *Engine) Env(server, token, extraNoProxy string) error {
+	pe, err := e.PrepareProcessEnv(server, token, extraNoProxy)
 	if err != nil {
 		return err
 	}
@@ -168,8 +173,8 @@ func (e *Engine) Env(server, token string) error {
 // EnvInstall persists the proxy env into a shell profile so future Agent launches
 // (e.g. a plain `opencode` in a new terminal) automatically use the Centag MITM.
 // The CA is already written to a stable path by PrepareProcessEnv.
-func (e *Engine) EnvInstall(server, token string) error {
-	pe, err := e.PrepareProcessEnv(server, token)
+func (e *Engine) EnvInstall(server, token, extraNoProxy string) error {
+	pe, err := e.PrepareProcessEnv(server, token, extraNoProxy)
 	if err != nil {
 		return err
 	}
@@ -213,9 +218,10 @@ func (e *Engine) EnvInstall(server, token string) error {
 }
 
 // EnvUninstall removes the managed block from the shell profile and deletes the env file.
-func (e *Engine) EnvUninstall(server, token string) error {
+func (e *Engine) EnvUninstall(server, token, extraNoProxy string) error {
 	_ = server
 	_ = token
+	_ = extraNoProxy
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return fmt.Errorf("home dir: %w", err)
@@ -296,11 +302,11 @@ func removeSourceBlock(profile string) error {
 }
 
 // Run wraps argv with process proxy env and executes it (replaces current process via Wait).
-func (e *Engine) Run(server, token string, argv []string) error {
+func (e *Engine) Run(server, token, extraNoProxy string, argv []string) error {
 	if len(argv) == 0 {
 		return fmt.Errorf("run requires a command after -- (example: centag wrap run --server URL --token KEY -- opencode)")
 	}
-	pe, err := e.PrepareProcessEnv(server, token)
+	pe, err := e.PrepareProcessEnv(server, token, extraNoProxy)
 	if err != nil {
 		return err
 	}

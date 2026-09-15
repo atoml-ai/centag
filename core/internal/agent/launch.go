@@ -9,10 +9,10 @@ import (
 type LaunchMode string
 
 const (
-	// LaunchWrapRun 进程级代理：等价 `centag wrap run`（CLI 类，忽略系统 PAC）。
+	// LaunchWrapRun 进程级代理：等价 `centag wrap run`（CLI 类，不修改系统代理）。
 	LaunchWrapRun LaunchMode = "wrap_run"
-	// LaunchSystemProxy 系统级代理：信任 CA + 系统 PAC 后正常启动（桌面 GUI 类）。
-	// 需安装检测线索，M1 暂不派生，后续里程碑启用。
+	// LaunchSystemProxy 进程级代理（桌面 GUI 类）：信任 CA + 进程级代理注入启动。
+	// 不修改系统代理，仅影响该应用的大模型服务访问。
 	LaunchSystemProxy LaunchMode = "system_proxy"
 )
 

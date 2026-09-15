@@ -128,7 +128,7 @@ func TestEnableRemote_SuccessAndDisableDoesNotNeedServer(t *testing.T) {
 		fp:        "abc123fingerprint",
 	}
 	e := &Engine{OS: mos}
-	if err := e.Enable(srv.URL, "", false); err != nil {
+	if err := e.Enable(srv.URL, "", false, true); err != nil {
 		t.Fatalf("enable: %v", err)
 	}
 	if mos.writePACURL != "http://192.168.1.50:20060/api/v1/proxy/pac" {
@@ -173,7 +173,7 @@ func TestEnableRemote_RejectsLoopbackPAC(t *testing.T) {
 	defer srv.Close()
 
 	e := &Engine{OS: &mockOS{supported: true}}
-	err := e.Enable(srv.URL, "", false)
+	err := e.Enable(srv.URL, "", false, true)
 	if err == nil || !strings.Contains(err.Error(), "127.0.0.1") {
 		t.Fatalf("expected loopback PAC error, got %v", err)
 	}
@@ -198,7 +198,7 @@ func TestEnableRemote_RejectsWhenLANDisabled(t *testing.T) {
 	defer srv.Close()
 
 	e := &Engine{OS: &mockOS{supported: true}}
-	if err := e.Enable(srv.URL, "", false); err == nil || !strings.Contains(err.Error(), "allow_lan_clients") {
+	if err := e.Enable(srv.URL, "", false, true); err == nil || !strings.Contains(err.Error(), "allow_lan_clients") {
 		t.Fatalf("got %v", err)
 	}
 }
@@ -207,7 +207,7 @@ func TestEnable_AlreadyEnabled(t *testing.T) {
 	testHome(t)
 	_ = snapshot.Save(&snapshot.Snapshot{ClientMode: "local"})
 	e := &Engine{OS: &mockOS{supported: true}}
-	if err := e.Enable("", "", false); err == nil || !strings.Contains(err.Error(), "already enabled") {
+	if err := e.Enable("", "", false, false); err == nil || !strings.Contains(err.Error(), "already enabled") {
 		t.Fatalf("got %v", err)
 	}
 }
@@ -236,14 +236,14 @@ func TestEnable_ForceReclaims(t *testing.T) {
 
 	mos := &mockOS{supported: true, fp: "fp1", proxy: snapshot.ProxyState{Mode: "off"}}
 	e := &Engine{OS: mos}
-	if err := e.Enable("", "", false); err != nil {
+	if err := e.Enable("", "", false, true); err != nil {
 		t.Fatal(err)
 	}
 
 	// Foreign program（如 iKuuu）改写系统代理为手动模式。
 	mos.proxy = snapshot.ProxyState{Mode: "manual", HTTP: "127.0.0.1:12000", HTTPS: "127.0.0.1:12000"}
 
-	if err := e.Enable("", "", true); err != nil {
+	if err := e.Enable("", "", true, true); err != nil {
 		t.Fatalf("force enable: %v", err)
 	}
 	if mos.writePACURL == "" {
@@ -297,6 +297,51 @@ func TestEnableCAOnly_DoesNotTouchSystemProxy(t *testing.T) {
 	}
 }
 
+// TestEnable_DefaultCATouchesNoSystemProxy verifies that `wrap enable` (without
+// --system-proxy) installs the CA but does NOT write a PAC, matching the new
+// process-proxy default behaviour. Uses CENTAG_API_BASE env to trigger local path.
+func TestEnable_DefaultCATouchesNoSystemProxy(t *testing.T) {
+	testHome(t)
+	ca := mustCA(t)
+	var base string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/v1/proxy/ca.crt":
+			_, _ = w.Write(ca)
+		case "/api/v1/proxy/pac":
+			_, _ = w.Write([]byte(`PROXY 127.0.0.1:8081`))
+		case "/api/v1/proxy/setup/status":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = fmt.Fprintf(w, `{"allow_lan_clients":false,"pac_url":"%s/api/v1/proxy/pac","mitm_proxy":"127.0.0.1:8081"}`, base)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+	base = srv.URL
+	t.Setenv("CENTAG_API_BASE", srv.URL)
+
+	mos := &mockOS{
+		supported: true,
+		fp:        "defaultcafp",
+		proxy:     snapshot.ProxyState{Mode: "manual", HTTP: "127.0.0.1:12000", HTTPS: "127.0.0.1:12000"},
+	}
+	e := &Engine{OS: mos}
+	// systemProxy=false (the default): only CA, no PAC — empty server triggers local path
+	if err := e.Enable("", "", false, false); err != nil {
+		t.Fatalf("enable: %v", err)
+	}
+	if len(mos.installedPEM) == 0 {
+		t.Fatal("expected CA installed")
+	}
+	if mos.writePACURL != "" {
+		t.Fatalf("system proxy must not be touched by default, WritePAC=%q", mos.writePACURL)
+	}
+	if mos.proxy.Mode != "manual" || mos.proxy.HTTP != "127.0.0.1:12000" {
+		t.Fatalf("system proxy mutated: %+v", mos.proxy)
+	}
+}
+
 func TestEnableCAOnly_InstallCAFail(t *testing.T) {
 	testHome(t)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -337,7 +382,7 @@ func TestEnableLocal_Success(t *testing.T) {
 
 	mos := &mockOS{supported: true, fp: "localfp", proxy: snapshot.ProxyState{Mode: "off"}}
 	e := &Engine{OS: mos}
-	if err := e.Enable("", "", false); err != nil {
+	if err := e.Enable("", "", false, true); err != nil {
 		t.Fatal(err)
 	}
 	if mos.writePACURL != base+"/api/v1/proxy/pac" {
@@ -368,7 +413,7 @@ func TestEnableLocal_RollbackOnWritePACFail(t *testing.T) {
 	t.Setenv("CENTAG_API_BASE", srv.URL)
 	mos := &mockOS{supported: true, fp: "f", writeErr: fmt.Errorf("denied")}
 	e := &Engine{OS: mos}
-	if err := e.Enable("", "", false); err == nil || !strings.Contains(err.Error(), "write PAC") {
+	if err := e.Enable("", "", false, true); err == nil || !strings.Contains(err.Error(), "write PAC") {
 		t.Fatalf("got %v", err)
 	}
 	if snapshot.Exists() {
@@ -398,7 +443,7 @@ func TestEnableLocal_RollbackOnCAFail(t *testing.T) {
 
 	mos := &mockOS{supported: true, installErr: fmt.Errorf("no sudo"), proxy: snapshot.ProxyState{Mode: "off"}}
 	e := &Engine{OS: mos}
-	if err := e.Enable("", "", false); err == nil || !strings.Contains(err.Error(), "install CA") {
+	if err := e.Enable("", "", false, true); err == nil || !strings.Contains(err.Error(), "install CA") {
 		t.Fatalf("got %v", err)
 	}
 	if snapshot.Exists() {
@@ -466,7 +511,7 @@ func TestEnableRemote_RollbackOnWritePACFail(t *testing.T) {
 
 	mos := &mockOS{supported: true, writeErr: fmt.Errorf("permission denied"), fp: "x"}
 	e := &Engine{OS: mos}
-	if err := e.Enable(srv.URL, "", false); err == nil {
+	if err := e.Enable(srv.URL, "", false, true); err == nil {
 		t.Fatal("expected write PAC error")
 	}
 	if snapshot.Exists() {
