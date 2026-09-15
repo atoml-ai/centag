@@ -63,6 +63,10 @@ func hostPortIsCentag(raw string) bool {
 	default:
 		return false
 	}
+	// Core Centag ports that the wrap CLI may connect to.
+	// NOTE: core/internal/mitm/egress.go has a broader set (20062-20064)
+	// for MITM self-loop prevention — that's intentional as the MITM server
+	// handles all service ports while the CLI only targets the main API.
 	switch port {
 	case "8081", "8080", "20060", "20061":
 		return true

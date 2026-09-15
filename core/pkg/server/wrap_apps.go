@@ -126,6 +126,15 @@ func (s *Server) writeAppModelConfig(app agent.ProxyApp, model string) (string, 
 	if app.ModelConfig.AgentType == "" {
 		return "该应用不支持本地写配置，已依赖透明模式映射模型", false
 	}
+
+	// system_proxy 模式（桌面 GUI/Chromium 应用）不应写入 loopback base_url：
+	// Chromium 的 --proxy-server 指向 MITM (:8081)，若 base_url 写入
+	// 127.0.0.1:20060（后端），请求会绕过 MITM 直达后端，导致 401。
+	// 让应用保持默认 API 地址（如 https://api.openai.com），流量经 MITM 代理转换。
+	if app.LaunchMode == "system_proxy" {
+		return "桌面 GUI 应用使用系统代理模式，已跳过写配置（请通过 Web 页面手动配置模型）", false
+	}
+
 	tmpl, ok := agent.NewTemplateRegistry().Get(agent.AgentType(app.ModelConfig.AgentType))
 	if !ok {
 		return "未找到应用模板，已跳过写配置", false

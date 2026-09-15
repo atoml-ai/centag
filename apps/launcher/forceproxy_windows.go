@@ -47,7 +47,6 @@ func mitmAddress() string {
 func chromiumProxyArgs(mitm string) []string {
 	return []string{
 		"--proxy-server=http://" + mitm,
-		"--proxy-bypass-list=<local>",
 		"--no-first-run",
 	}
 }
@@ -59,7 +58,7 @@ func proxyEnv(mitm string) []string {
 	return []string{
 		"HTTP_PROXY=" + p,
 		"HTTPS_PROXY=" + p,
-		"NO_PROXY=localhost,127.0.0.1,::1,<local>",
+		"NO_PROXY=localhost,127.0.0.1,::1",
 	}
 }
 

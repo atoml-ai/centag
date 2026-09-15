@@ -13,8 +13,12 @@ func TestChromiumProxyArgs(t *testing.T) {
 	if got[0] != "--proxy-server=http://127.0.0.1:8081" {
 		t.Fatalf("got %v", got)
 	}
-	if got[1] != "--proxy-bypass-list=<local>" {
-		t.Fatalf("got %v", got)
+	// --proxy-bypass-list=<local> removed: all traffic (including loopback)
+	// must route through MITM to ensure egress key injection for system_proxy apps.
+	for _, arg := range got {
+		if arg == "--proxy-bypass-list=<local>" {
+			t.Fatalf("--proxy-bypass-list=<local> should be removed, got %v", got)
+		}
 	}
 }
 

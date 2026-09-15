@@ -2,7 +2,10 @@
 
 package main
 
-import "fmt"
+import (
+	"fmt"
+	"path/filepath"
+)
 
 func selectExecutable() (string, error) {
 	return "", fmt.Errorf("file picker unsupported on this OS")

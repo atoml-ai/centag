@@ -188,21 +188,29 @@ func trustCACert(cfg Config) (string, error) {
 // common name and removes all matching certificates.
 func untrustCACert(cfg Config) error {
 	for _, store := range []string{"Root", "CA"} {
+		// Use -splitutf to get structured output we can parse reliably
 		out, err := exec.Command("certutil", "-user", "-store", store).CombinedOutput()
 		if err != nil {
 			continue
 		}
-		// Find and delete Centag CA entries
-		lines := strings.Split(string(out), "\n")
-		for _, line := range lines {
-			if strings.Contains(line, "Centag CA") {
-				// Extract the serial number from the line before "Centag CA"
-				parts := strings.SplitN(line, "  ", 2)
-				if len(parts) >= 1 {
-					serial := strings.TrimSpace(parts[0])
+		text := string(out)
+		// Split into certificate blocks by the separator line
+		blocks := strings.Split(text, "Certificate:")
+		for _, block := range blocks {
+			// Only process blocks that contain Centag CA as the Subject
+			if !strings.Contains(block, "Centag CA") {
+				continue
+			}
+			// Extract serial number - look for "Serial Number:" line
+			for _, line := range strings.Split(block, "\n") {
+				line = strings.TrimSpace(line)
+				if strings.HasPrefix(line, "Serial Number:") {
+					serial := strings.TrimSpace(strings.TrimPrefix(line, "Serial Number:"))
 					if serial != "" {
+						// Attempt deletion; ignore errors (certificate may not exist)
 						_ = exec.Command("certutil", "-user", "-delstore", store, serial).Run()
 					}
+					break
 				}
 			}
 		}
