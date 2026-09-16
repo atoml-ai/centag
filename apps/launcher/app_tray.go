@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"runtime"
+	"strings"
 
 	"github.com/energye/systray"
 )
@@ -69,7 +70,12 @@ func (a *launcherApp) onReady() {
 		} else {
 			for _, app := range installed {
 				app := app
-				mi := runItem.AddSubMenuItem(app.DisplayName, "经 centag 代理启动 "+app.ID)
+				tooltip := "经 centag 代理启动 " + app.ID
+				// WorkBuddy/CodeBuddy: LLM requests use certificate pinning and cannot be proxied via MITM
+				if isWorkBuddyApp(app) {
+					tooltip = "⚠️ WorkBuddy LLM 请求使用证书固定，无法通过 MITM 代理。需手动配置代理: ~/.workbuddy/settings.json"
+				}
+				mi := runItem.AddSubMenuItem(app.DisplayName, tooltip)
 				mi.Click(func() { runAgentByApp(a, app) })
 			}
 		}
@@ -152,4 +158,12 @@ func quitMenu(enabled bool) {
 	if enabled {
 		systray.Quit()
 	}
+}
+
+// isWorkBuddyApp checks if the app is WorkBuddy/CodeBuddy
+func isWorkBuddyApp(app catalogApp) bool {
+	id := strings.ToLower(app.ID)
+	name := strings.ToLower(app.DisplayName)
+	return strings.Contains(id, "workbuddy") || strings.Contains(id, "codebuddy") ||
+		strings.Contains(name, "workbuddy") || strings.Contains(name, "codebuddy")
 }
