@@ -348,6 +348,33 @@ func startConfigsync(srv *server.Server) {
 		logger.Warnf("failed to create database skill store: %v", err)
 	}
 
+	// Create system_config KV store (M2 B-tier)
+	systemConfigStore, err := configsync.NewSystemConfigStore()
+	if err != nil {
+		logger.Warnf("failed to create system_config store: %v", err)
+	}
+
+	// Create MITM domains store (M2 C-tier)
+	mitmDomainsStore, err := configsync.NewMITMDomainsStore()
+	if err != nil {
+		logger.Warnf("failed to create mitm_domains store: %v", err)
+	}
+
+	// Wire up exchange rate applier (billing.SetUSDToCNY)
+	configsync.SetExchangeRateApplier(func(rate float64) {
+		billing.SetUSDToCNY(rate)
+	})
+
+	// Wire up scheduler weights applier (config.Scheduler.Weights)
+	configsync.SetSchedulerWeightsApplier(func(weights map[string]int) {
+		cfg := config.Get()
+		if cfg != nil && cfg.Scheduler.Weights != nil {
+			for k, v := range weights {
+				cfg.Scheduler.Weights[k] = v
+			}
+		}
+	})
+
 	// Create generic applier for config data
 	genericApplier := configsync.NewGenericApplier()
 
@@ -393,6 +420,19 @@ func startConfigsync(srv *server.Server) {
 				applied, removed := handler.ApplyRemoteSkills(toServerSkillRows(dbSkills))
 				logger.Infof("configsync: startup skill apply: applied=%d removed=%d", applied, removed)
 			}
+		}
+	}
+
+	// Apply system_config KV from DB on startup (M2)
+	if systemConfigStore != nil {
+		configsync.ApplySystemConfig(systemConfigStore)
+	}
+
+	// Apply MITM domains from DB on startup (M2)
+	if mitmDomainsStore != nil {
+		if domains, dErr := mitmDomainsStore.GetEnabledDomains(); dErr == nil && len(domains) > 0 {
+			logger.Infof("configsync: loading %d MITM domains from database", len(domains))
+			applyMITMDomainsToServer(srv, domains)
 		}
 	}
 
@@ -457,6 +497,28 @@ func startConfigsync(srv *server.Server) {
 					}
 				}
 			}
+			// Apply system_config KV from snapshot (M2 B-tier)
+			if systemConfigStore != nil {
+				if err := systemConfigStore.SyncFromSnapshot(snap.Tables["system_config"]); err != nil {
+					logger.Warnf("configsync: sync system_config failed: %v", err)
+				}
+				configsync.ApplySystemConfig(systemConfigStore)
+			}
+			// Apply MITM domains from snapshot (M2 C-tier, full table coverage)
+			if mitmDomainsStore != nil {
+				var domains []configsync.MITMDomainRow
+				if data, ok := snap.Tables["mitm_domains"]; ok && len(data) > 0 {
+					_ = json.Unmarshal(data, &domains)
+				}
+				if len(domains) == 0 {
+					domains = configsync.DefaultMITMDomains()
+				}
+				if err := mitmDomainsStore.SyncFromSnapshot(domains); err != nil {
+					logger.Warnf("configsync: sync mitm_domains failed: %v", err)
+				} else if enabledDomains, dErr := mitmDomainsStore.GetEnabledDomains(); dErr == nil {
+					applyMITMDomainsToServer(srv, enabledDomains)
+				}
+			}
 			srv.InvalidatePricingCache()
 		},
 	})
@@ -464,6 +526,15 @@ func startConfigsync(srv *server.Server) {
 	configsync.SetGlobalScheduler(scheduler)
 	scheduler.Start(context.Background())
 	logger.Infof("Configsync scheduler started (public snapshot mirrors)")
+}
+
+// applyMITMDomainsToServer applies the MITM domain whitelist to the server's
+// routing rules. This is a hot-update — no restart required.
+func applyMITMDomainsToServer(srv *server.Server, domains []string) {
+	if srv == nil || len(domains) == 0 {
+		return
+	}
+	srv.SyncMITMDomains(domains)
 }
 
 // startFeishuSkillSync launches a periodic sync of agent skills from the

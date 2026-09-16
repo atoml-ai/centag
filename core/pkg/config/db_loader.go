@@ -70,21 +70,10 @@ func LoadFromDB(ctx context.Context, bootstrap *BootstrapConfig, adminUserID int
 	cfg.Vector = dbLoadOrDefault(ctx, scs, KeyVectorConfig, DefaultVectorConfig())
 	cfg.Plugins = dbLoadOrDefault(ctx, scs, KeyPluginsConfig, DefaultPluginsConfig())
 	cfg.SystemProxy = dbLoadOrDefault(ctx, scs, KeySystemProxyConfig, GetDefaultSystemProxyConfig())
-	// Merge any new default domains that may have been added in code but not yet
-	// present in the DB-stored config. This ensures new LLM API domains are
-	// automatically MITM'd without requiring manual API calls or DB cleanup.
-	if cfg.SystemProxy.Domains != nil {
-		defaults := DefaultMITMDomains()
-		existing := make(map[string]bool, len(cfg.SystemProxy.Domains))
-		for _, d := range cfg.SystemProxy.Domains {
-			existing[d] = true
-		}
-		for _, d := range defaults {
-			if !existing[d] {
-				cfg.SystemProxy.Domains = append(cfg.SystemProxy.Domains, d)
-			}
-		}
-	}
+	// NOTE: MITM domain merge logic removed (§3.5 D5).
+	// Full table coverage is now handled by the sync framework (mitm_domains_store.go).
+	// On first startup with no remote data, DefaultMITMDomains() seeds the config.
+	// After sync, the remote table is authoritative — no union/merge with code defaults.
 	cfg.HostProxy = dbLoadOrDefault(ctx, scs, KeyHostProxyConfig, GetDefaultHostProxyConfig())
 	normalizeProxyPathFields(cfg)
 	cfg.ModelMatching = dbLoadOrDefault(ctx, scs, KeyModelMatching, DefaultModelMatchingConfig())

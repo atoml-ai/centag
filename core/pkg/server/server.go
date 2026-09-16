@@ -2470,6 +2470,18 @@ func (s *Server) syncMITMClientProxyAuth() {
 	logger.Infof("MITM client proxy auth synced: required=%v", required)
 }
 
+// SyncMITMDomains hot-updates the MITM domain whitelist (§5.2).
+// Called by the configsync OnUpdate callback when remote MITM domains change.
+func (s *Server) SyncMITMDomains(domains []string) {
+	s.mitmMu.Lock()
+	defer s.mitmMu.Unlock()
+	if s.mitmServer == nil || len(domains) == 0 {
+		return
+	}
+	s.mitmServer.SetRoutingRules(domains, nil)
+	logger.Infof("MITM domains synced: %d domains", len(domains))
+}
+
 func (s *Server) refreshProxyHandlerPAC() {
 	if s == nil || s.proxyHandlerExt == nil || s.cfg == nil {
 		return
