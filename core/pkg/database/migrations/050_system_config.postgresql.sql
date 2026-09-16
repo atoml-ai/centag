@@ -1,5 +1,9 @@
 -- System config KV table (B-tier, §4.6)
-CREATE TABLE IF NOT EXISTS system_config (
+-- Handles existing table from migration 001 (columns: config_key, config_value)
+-- by creating a new table, migrating data, and dropping the old one.
+
+-- Step 1: Create new table with correct schema
+CREATE TABLE IF NOT EXISTS system_config_new (
     key         TEXT PRIMARY KEY,
     value       TEXT NOT NULL DEFAULT '',
     value_type  TEXT NOT NULL DEFAULT 'string',
@@ -10,7 +14,20 @@ CREATE TABLE IF NOT EXISTS system_config (
     updated_at  TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
--- Seed built-in keys with defaults
+-- Step 2: Migrate data from old table if it exists
+INSERT INTO system_config_new (key, value, value_type, scope, description, updated_at)
+SELECT config_key, config_value::text, 'string', 'core', COALESCE(description, ''), updated_at
+FROM system_config
+WHERE config_key IS NOT NULL
+ON CONFLICT (key) DO NOTHING;
+
+-- Step 3: Drop old table
+DROP TABLE IF EXISTS system_config;
+
+-- Step 4: Rename new table
+ALTER TABLE system_config_new RENAME TO system_config;
+
+-- Step 5: Seed built-in keys with defaults (only if not already present)
 INSERT INTO system_config (key, value, value_type, scope, description) VALUES
     ('billing.usd_to_cny',            '7.2',   'number', 'core', 'USD to CNY exchange rate'),
     ('scheduler.price_weight',        '20',    'int',    'core', 'Scheduler price weight'),
