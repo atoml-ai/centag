@@ -9,6 +9,7 @@ import (
 	"os"
 	"runtime"
 	"strings"
+	"time"
 
 	"github.com/energye/systray"
 )
@@ -170,10 +171,23 @@ func needsManualAgentConfig(app catalogApp) bool {
 		strings.Contains(name, "workbuddy") || strings.Contains(name, "codebuddy")
 }
 
-// showManualAgentConfigDialog opens the agent setup page in the browser
-// for apps that need manual agent configuration due to certificate pinning.
+// showManualAgentConfigDialog explains the limitation and opens the agent setup page.
 func showManualAgentConfigDialog(a *launcherApp, app catalogApp) {
-	agentSetupURL := a.cfg.baseURL() + "/static/agent-setup"
-	_ = openBrowser(agentSetupURL)
-	notifyUser("Centag", fmt.Sprintf("已打开 %s Agent 配置页面，请按指引添加自定义后端和模型", app.DisplayName))
+	msg := fmt.Sprintf(`%s 的 LLM 请求使用了证书固定 (Certificate Pinning)，
+无法通过 Centag 代理自动转发。
+
+请使用写入应用配置或手动配置自定义后端和模型的方式接入。
+现在打开配置页面…`, app.DisplayName)
+
+	switch runtime.GOOS {
+	case "darwin":
+		script := fmt.Sprintf(`display dialog "%s" with title "Centag" buttons {"取消", "打开配置"} default button "打开配置"`, strings.ReplaceAll(msg, `"`, `\"`))
+		out, err := runCommand(30*time.Second, "osascript", "-e", script)
+		if err == nil || strings.Contains(out, "打开配置") {
+			_ = openBrowser(a.cfg.baseURL() + "/static/agent-setup")
+		}
+	default:
+		notifyUser("Centag", msg)
+		_ = openBrowser(a.cfg.baseURL() + "/static/agent-setup")
+	}
 }
