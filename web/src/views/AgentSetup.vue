@@ -43,6 +43,7 @@
                 class="agent-card-col"
               >
                 <div
+                  :id="'agent-card-' + agent.type"
                   class="agent-card"
                   :class="{ 'agent-card--verified': agentHasAnyVerified(agent) }"
                 >
@@ -825,7 +826,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import {
   Link, DocumentCopy, Plus, Search,
   Monitor, ChatDotRound, DataLine, Connection, Cpu
@@ -847,6 +848,7 @@ import api from '@/api'
 
 const { t, te } = useI18n()
 const router = useRouter()
+const route = useRoute()
 const authStore = useAuthStore()
 const isAdmin = computed(() => authStore.isAdmin)
 
@@ -1720,11 +1722,24 @@ async function handleHotSwap(provider: AgentProviderConfig) {
 
 // ===================== Init =====================
 
-onMounted(() => {
-  loadAgentTypes()
+onMounted(async () => {
+  await loadAgentTypes()
   loadProxySetupStatus()
   if (isAdmin.value) {
     loadProviders()
+  }
+
+  // Auto-scroll to agent card if ?agent= query param is present
+  const targetAgentType = route.query.agent
+  if (targetAgentType && typeof targetAgentType === 'string') {
+    // Wait for DOM to update after agentTypes are loaded
+    setTimeout(() => {
+      const el = document.getElementById('agent-card-' + targetAgentType)
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        el.classList.add('agent-card--highlight')
+      }
+    }, 100)
   }
 })
 </script>
@@ -1838,6 +1853,11 @@ onMounted(() => {
 
 .agent-card--verified:hover {
   border-color: var(--el-color-success);
+}
+
+.agent-card--highlight {
+  border-color: var(--el-color-primary);
+  box-shadow: 0 0 0 2px var(--el-color-primary-light-3);
 }
 
 .agent-card-head {

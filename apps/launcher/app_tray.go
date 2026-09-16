@@ -179,15 +179,17 @@ func showManualAgentConfigDialog(a *launcherApp, app catalogApp) {
 请使用写入应用配置或手动配置自定义后端和模型的方式接入。
 现在打开配置页面…`, app.DisplayName)
 
+	agentURL := a.cfg.baseURL() + "/static/agent-setup?agent=" + strings.ToLower(app.ID)
+
 	switch runtime.GOOS {
 	case "darwin":
 		script := fmt.Sprintf(`display dialog "%s" with title "Centag" buttons {"取消", "打开配置"} default button "打开配置"`, strings.ReplaceAll(msg, `"`, `\"`))
 		out, err := runCommand(30*time.Second, "osascript", "-e", script)
 		if err == nil || strings.Contains(out, "打开配置") {
-			_ = openBrowser(a.cfg.baseURL() + "/static/agent-setup")
+			_ = openBrowser(agentURL)
 		}
 	default:
 		notifyUser("Centag", msg)
-		_ = openBrowser(a.cfg.baseURL() + "/static/agent-setup")
+		_ = openBrowser(agentURL)
 	}
 }
