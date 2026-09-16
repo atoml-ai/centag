@@ -9,7 +9,6 @@ import (
 	"os"
 	"runtime"
 	"strings"
-	"time"
 
 	"github.com/energye/systray"
 )
@@ -171,36 +170,10 @@ func needsManualAgentConfig(app catalogApp) bool {
 		strings.Contains(name, "workbuddy") || strings.Contains(name, "codebuddy")
 }
 
-// showManualAgentConfigDialog shows a dialog guiding users to configure the agent
-// through centag's backend/model configuration instead of HTTP proxy.
+// showManualAgentConfigDialog opens the agent setup page in the browser
+// for apps that need manual agent configuration due to certificate pinning.
 func showManualAgentConfigDialog(a *launcherApp, app catalogApp) {
-	msg := fmt.Sprintf(`%s 的 LLM 请求使用了证书固定 (Certificate Pinning)，
-无法通过 Centag MITM 代理自动拦截。
-
-请使用 Centag 的 Agent 配置能力手动接入：
-
-1. 打开 %s → 设置 → 模型 → 自定义 API
-2. 填写以下参数：
-   - 请求地址: http://127.0.0.1:20060/v1
-   - 模型 ID: centag/<流水线名称>
-   - API Key: <Centag API Key>
-
-3. 保存后在对话中选择 Centag 模型即可
-
-详细文档: https://www.codebuddy.ai/docs/zh/workbuddy/From-Beginner-to-Expert-Guide/Function-Description/Model
-
-是否打开设置页面？`, app.DisplayName, app.DisplayName)
-
-	switch runtime.GOOS {
-	case "darwin":
-		script := fmt.Sprintf(`display dialog "%s" with title "Centag - Agent 配置指引" buttons {"取消", "打开设置"} default button "打开设置"`, strings.ReplaceAll(msg, `"`, `\"`))
-		out, err := runCommand(30*time.Second, "osascript", "-e", script)
-		if err == nil && strings.Contains(out, "打开设置") {
-			// Open the doc URL
-			_, _ = runCommand(5*time.Second, "open", "https://www.codebuddy.ai/docs/zh/workbuddy/From-Beginner-to-Expert-Guide/Function-Description/Model")
-		}
-	case "windows":
-		notifyUser("Centag - Agent 配置指引",
-			fmt.Sprintf("%s 需手动配置 Agent。请在设置 → 模型 → 自定义 API 中添加 centag 后端。", app.DisplayName))
-	}
+	agentSetupURL := a.cfg.baseURL() + "/static/agent-setup"
+	_ = openBrowser(agentSetupURL)
+	notifyUser("Centag", fmt.Sprintf("已打开 %s Agent 配置页面，请按指引添加自定义后端和模型", app.DisplayName))
 }
