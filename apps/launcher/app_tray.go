@@ -69,14 +69,61 @@ func (a *launcherApp) onReady() {
 		if len(installed) == 0 {
 			runItem.AddSubMenuItem("未检测到已安装应用", "在 Web 管理界面查看安装指引")
 		} else {
+			// 按应用分组：codebuddy + codebuddy-desktop → 一个子菜单
+			type appGroup struct {
+				name string
+				apps []catalogApp
+			}
+			var groups []appGroup
+			groupMap := make(map[string]*appGroup)
 			for _, app := range installed {
-				app := app
-				if needsManualAgentConfig(app) {
-					mi := runItem.AddSubMenuItem(app.DisplayName, "⚠️ 无法自动代理，需手动配置 Agent")
-					mi.Click(func() { showManualAgentConfigDialog(a, app) })
+				// 提取基础应用名（去掉 -desktop/-cli 等后缀）
+				baseName := app.ID
+				if idx := strings.LastIndex(baseName, "-desktop"); idx > 0 {
+					baseName = baseName[:idx]
+				} else if idx := strings.LastIndex(baseName, "-cli"); idx > 0 {
+					baseName = baseName[:idx]
+				}
+				if _, ok := groupMap[baseName]; !ok {
+					// 清理显示名：去掉 (CLI)/(Desktop) 等后缀
+					groupName := app.DisplayName
+					groupName = strings.TrimSuffix(groupName, " (CLI)")
+					groupName = strings.TrimSuffix(groupName, " (cli)")
+					groupName = strings.TrimSuffix(groupName, " (Desktop)")
+					groups = append(groups, appGroup{name: groupName})
+					groupMap[baseName] = &groups[len(groups)-1]
+				}
+				groupMap[baseName].apps = append(groupMap[baseName].apps, app)
+			}
+
+			for _, g := range groups {
+				if len(g.apps) == 1 {
+					// 只有一个变体，直接显示
+					app := g.apps[0]
+					if needsManualAgentConfig(app) {
+						mi := runItem.AddSubMenuItem(app.DisplayName, "⚠️ 无法自动代理，需手动配置 Agent")
+						mi.Click(func() { showManualAgentConfigDialog(a, app) })
+					} else {
+						mi := runItem.AddSubMenuItem(app.DisplayName, "经 centag 代理启动 "+app.ID)
+						mi.Click(func() { runAgentByApp(a, app) })
+					}
 				} else {
-					mi := runItem.AddSubMenuItem(app.DisplayName, "经 centag 代理启动 "+app.ID)
-					mi.Click(func() { runAgentByApp(a, app) })
+					// 多个变体（CLI + Desktop），创建子菜单
+					subItem := runItem.AddSubMenuItem(g.name, "")
+					for _, app := range g.apps {
+						app := app
+						label := "CLI"
+						if app.Category == "desktop" {
+							label = "Desktop"
+						}
+						if needsManualAgentConfig(app) {
+							mi := subItem.AddSubMenuItem(label, "⚠️ 无法自动代理，需手动配置 Agent")
+							mi.Click(func() { showManualAgentConfigDialog(a, app) })
+						} else {
+							mi := subItem.AddSubMenuItem(label, "经 centag 代理启动 "+app.ID)
+							mi.Click(func() { runAgentByApp(a, app) })
+						}
+					}
 				}
 			}
 		}
@@ -108,7 +155,8 @@ func (a *launcherApp) onReady() {
 		notifyUser("Centag", "centag 命令已安装，终端可直接使用 centag wrap")
 	})
 
-	trustItem := systray.AddMenuItem("信任 CA 证书", "将 Centag CA 安装到系统钥匙串（被代理应用信任 MITM 证书，一次即可）")
+	caItem := systray.AddMenuItem("管理 CA 证书", "安装或移除 Centag CA 证书")
+	trustItem := caItem.AddSubMenuItem("安装 CA", "将 Centag CA 安装到系统钥匙串（被代理应用信任 MITM 证书，一次即可）")
 	trustItem.Click(func() {
 		caPath, err := trustCACert(a.cfg)
 		if err != nil {
@@ -121,8 +169,7 @@ func (a *launcherApp) onReady() {
 		}
 		notifyUser("Centag", "Centag CA 已安装到系统钥匙串，被代理应用即可发起 HTTPS 请求")
 	})
-
-	untrustItem := systray.AddMenuItem("移除 CA 信任", "从系统钥匙串移除 Centag CA（不再信任 Centag 的 MITM 证书）")
+	untrustItem := caItem.AddSubMenuItem("移除 CA", "从系统钥匙串移除 Centag CA（不再信任 Centag 的 MITM 证书）")
 	untrustItem.Click(func() {
 		if err := untrustCACert(a.cfg); err != nil {
 			fmt.Fprintf(os.Stderr, "centag-launcher: untrust ca failed: %v\n", err)
