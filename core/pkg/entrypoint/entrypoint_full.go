@@ -342,15 +342,39 @@ func startConfigsync(srv *server.Server) {
 	}
 	dbConfigApplier := configsync.NewDBConfigApplier(dbConfigStore)
 
+	// Create skill store for persisting remote skill rows (R13)
+	skillStore, err := configsync.NewDBSkillStore()
+	if err != nil {
+		logger.Warnf("failed to create database skill store: %v", err)
+	}
+
 	// Create generic applier for config data
 	genericApplier := configsync.NewGenericApplier()
 
 	// Create provider catalog applier for provider types (not actual backends)
-	providerCatalogStore := configsync.NewInMemoryProviderCatalogStore()
+	var providerCatalogStore configsync.ProviderCatalogStore
+	if dbStore, err := configsync.NewDBProviderCatalogStore(); err != nil {
+		logger.Warnf("failed to create database provider catalog store, using in-memory: %v", err)
+		providerCatalogStore = configsync.NewInMemoryProviderCatalogStore()
+	} else {
+		providerCatalogStore = dbStore
+	}
 	providerCatalogApplier := configsync.NewProviderCatalogApplier(providerCatalogStore)
 
 	// Store the provider catalog globally for API access
 	configsync.SetGlobalProviderCatalogStore(providerCatalogStore)
+
+	// Load provider catalog from DB on startup (R14); apply defaults if empty
+	if dbEntries := providerCatalogStore.GetAll(); len(dbEntries) > 0 {
+		logger.Infof("configsync: loading %d provider catalog entries from database", len(dbEntries))
+	} else {
+		defaults := configsync.DefaultProviderCatalogEntries()
+		if err := providerCatalogStore.UpsertBatch(defaults); err != nil {
+			logger.Warnf("configsync: seed default provider catalog failed: %v", err)
+		} else {
+			logger.Infof("configsync: seeded %d default provider catalog entries", len(defaults))
+		}
+	}
 
 	// Load config from database if available (keep the last-good snapshot on restart)
 	if dbConfigStore != nil {
@@ -358,6 +382,17 @@ func startConfigsync(srv *server.Server) {
 		if count > 0 {
 			logger.Infof("configsync: loading %d config entries from database", count)
 			dbConfigApplier.LoadFromDB(genericApplier)
+		}
+	}
+
+	// Load remote skills from database on startup (R13) and apply immediately
+	if skillStore != nil {
+		if dbSkills, sErr := skillStore.GetAll(); sErr == nil && len(dbSkills) > 0 {
+			logger.Infof("configsync: loading %d remote skills from database", len(dbSkills))
+			if handler := srv.GetBuiltinAgentHandler(); handler != nil {
+				applied, removed := handler.ApplyRemoteSkills(toServerSkillRows(dbSkills))
+				logger.Infof("configsync: startup skill apply: applied=%d removed=%d", applied, removed)
+			}
 		}
 	}
 
@@ -405,6 +440,22 @@ func startConfigsync(srv *server.Server) {
 				logger.Infof("configsync: pipeline templates applied=%d", len(snap.PipelineTemplates))
 				// Reload templates in the server to use the newly synced ones
 				srv.ReloadPipelineTemplates(os.Getenv("CENTAG_EDITION"))
+			}
+			// Apply remote skills and persist to DB (R13)
+			if len(snap.Skills) > 0 {
+				if handler := srv.GetBuiltinAgentHandler(); handler != nil {
+					applied, removed := handler.ApplyRemoteSkills(toServerSkillRows(snap.Skills))
+					logger.Infof("configsync: remote skills applied=%d removed=%d", applied, removed)
+				}
+				if skillStore != nil {
+					if err := skillStore.Clear(); err != nil {
+						logger.Warnf("configsync: clear skill store failed: %v", err)
+					} else if err := skillStore.UpsertBatch(snap.Skills); err != nil {
+						logger.Warnf("configsync: persist skills failed: %v", err)
+					} else {
+						logger.Infof("configsync: %d skills persisted to database", len(snap.Skills))
+					}
+				}
 			}
 			srv.InvalidatePricingCache()
 		},

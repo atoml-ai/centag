@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"centag/core/pkg/logger"
@@ -61,6 +62,12 @@ type Snapshot struct {
 	Config            []Row              `json:"config"`
 	Prices            []ProviderPrice    `json:"prices,omitempty"`
 	PipelineTemplates []PipelineTemplate `json:"pipeline_templates,omitempty"`
+	Skills            []RemoteSkillRow   `json:"skills,omitempty"`
+
+	// Tables holds generic table data keyed by logical table name (§4.4).
+	// New table types (MITM domains, plan templates, system_config KV, etc.)
+	// go here instead of adding dedicated top-level fields.
+	Tables map[string]json.RawMessage `json:"tables,omitempty"`
 }
 
 const snapshotSchema = 1
@@ -124,7 +131,7 @@ type ConfigScheduler struct {
 	runOnce  bool
 
 	mu            sync.Mutex
-	snap          *Snapshot
+	snap          atomic.Pointer[Snapshot] // 读侧无锁；写侧构建新对象后单次 Store
 	status        Status
 	failCount     int
 	lastRatelimit *RateLimitError
@@ -132,6 +139,12 @@ type ConfigScheduler struct {
 
 	stopCh  chan struct{}
 	stopOne sync.Once
+}
+
+// Current returns the latest Snapshot (read-lock-free via atomic load).
+// The returned Snapshot is read-only; consumers must not mutate it.
+func (s *ConfigScheduler) Current() *Snapshot {
+	return s.snap.Load()
 }
 
 // SchedulerConfig configures the ConfigScheduler.
@@ -161,7 +174,7 @@ func NewScheduler(cfg SchedulerConfig) *ConfigScheduler {
 	}
 	if cfg.StateDir != "" {
 		if snap, err := ReadSnapshot(cfg.StateDir); err == nil {
-			s.snap = snap
+			s.snap.Store(snap)
 		}
 	}
 	return s
@@ -218,9 +231,7 @@ func (s *ConfigScheduler) Status() Status {
 
 // Snapshot returns the last-good snapshot (may be nil).
 func (s *ConfigScheduler) Snapshot() *Snapshot {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.snap
+	return s.snap.Load()
 }
 
 // SyncNow triggers one sync immediately. Concurrent calls are single-flight:
@@ -305,9 +316,16 @@ func (s *ConfigScheduler) doSync(ctx context.Context) error {
 		FetchBackendRows(ctx context.Context) ([]Row, error)
 	}
 
+	// fetchSkillRows is an optional provider extension that surfaces
+	// remote agent skill rows (Feishu skill table).
+	type fetchSkillRows interface {
+		FetchSkillRows(ctx context.Context) ([]RemoteSkillRow, error)
+	}
+
 	var rows []Row
 	var prices []ProviderPrice
 	var pipelineTemplates []PipelineTemplate
+	var skills []RemoteSkillRow
 	var err error
 
 	// Build query with edition and version from environment
@@ -326,6 +344,11 @@ func (s *ConfigScheduler) doSync(ctx context.Context) error {
 			return err
 		}
 		prices, err = s.provider.FetchModelPrices(ctx)
+		if err != nil && !errors.Is(err, ErrNotSupported) {
+			logger.Warnf("configsync: fetch model prices failed, continuing without prices: %v", err)
+			prices = nil
+			err = nil
+		}
 	}
 	if err != nil && !errors.Is(err, ErrNotSupported) {
 		s.recordFailure(err)
@@ -351,6 +374,15 @@ func (s *ConfigScheduler) doSync(ctx context.Context) error {
 			rows = append(rows, backendRows...)
 		}
 	}
+	// Fetch remote agent skill rows if provider supports it (R13).
+	if fsr, ok := s.provider.(fetchSkillRows); ok {
+		fetchedSkills, sErr := fsr.FetchSkillRows(ctx)
+		if sErr != nil && !errors.Is(sErr, ErrNotSupported) {
+			logger.Warnf("configsync: fetch skill rows failed, continuing without skills: %v", sErr)
+		} else {
+			skills = fetchedSkills
+		}
+	}
 	if err := ValidateRows(rows); err != nil {
 		err = fmt.Errorf("invalid batch rejected: %w", err)
 		s.recordFailure(err)
@@ -364,7 +396,7 @@ func (s *ConfigScheduler) doSync(ctx context.Context) error {
 		}
 	}
 	// Empty batch: keep cache, count as success (nothing to do).
-	if len(rows) == 0 && len(prices) == 0 && len(pipelineTemplates) == 0 {
+	if len(rows) == 0 && len(prices) == 0 && len(pipelineTemplates) == 0 && len(skills) == 0 {
 		s.mu.Lock()
 		s.status.LastSyncTime = time.Now()
 		s.status.LastSyncOK = true
@@ -380,6 +412,7 @@ func (s *ConfigScheduler) doSync(ctx context.Context) error {
 		Config:            rows,
 		Prices:            prices,
 		PipelineTemplates: pipelineTemplates,
+		Skills:            skills,
 	}
 	if s.stateDir != "" {
 		if err := WriteSnapshot(s.stateDir, snap); err != nil {
@@ -389,7 +422,7 @@ func (s *ConfigScheduler) doSync(ctx context.Context) error {
 		}
 	}
 	s.mu.Lock()
-	s.snap = snap
+	s.snap.Store(snap)
 	s.status.LastSyncTime = time.Now()
 	s.status.LastSyncOK = true
 	s.status.LastError = ""
