@@ -702,7 +702,7 @@ type sqliteSystemConfigStore struct {
 }
 
 func (s *sqliteSystemConfigStore) Get(ctx context.Context, key string) (string, error) {
-	query := `SELECT config_value FROM system_config WHERE config_key = ?`
+	query := `SELECT value FROM system_config WHERE key = ?`
 
 	var value string
 	err := s.db.QueryRowContext(ctx, query, key).Scan(&value)
@@ -718,20 +718,20 @@ func (s *sqliteSystemConfigStore) Set(ctx context.Context, key string, value str
 		return err
 	}
 
-	query := `INSERT OR REPLACE INTO system_config (config_key, config_value, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)`
+	query := `INSERT OR REPLACE INTO system_config (key, value, value_type, scope, updated_at) VALUES (?, ?, 'string', 'core', CURRENT_TIMESTAMP)`
 
 	_, err = s.db.ExecContext(ctx, query, key, jsonValue)
 	return err
 }
 
 func (s *sqliteSystemConfigStore) Delete(ctx context.Context, key string) error {
-	query := `DELETE FROM system_config WHERE config_key = ?`
+	query := `DELETE FROM system_config WHERE key = ?`
 	_, err := s.db.ExecContext(ctx, query, key)
 	return err
 }
 
 func (s *sqliteSystemConfigStore) List(ctx context.Context) (map[string]string, error) {
-	query := `SELECT config_key, config_value FROM system_config ORDER BY config_key`
+	query := `SELECT key, value FROM system_config ORDER BY key`
 
 	rows, err := s.db.QueryContext(ctx, query)
 	if err != nil {

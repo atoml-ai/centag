@@ -747,42 +747,38 @@ type pgSystemConfigStore struct {
 }
 
 func (s *pgSystemConfigStore) Get(ctx context.Context, key string) (string, error) {
-	query := `SELECT config_value FROM system_config WHERE config_key = $1`
+	query := `SELECT value FROM system_config WHERE key = $1`
 
-	var raw []byte
-	err := s.db.QueryRowContext(ctx, query, key).Scan(&raw)
+	var value string
+	err := s.db.QueryRowContext(ctx, query, key).Scan(&value)
 	if err == sql.ErrNoRows {
 		return "", database.ErrNotFound
 	}
 	if err != nil {
 		return "", err
 	}
-	return decodeJSONBConfigBytes(raw)
+	return value, nil
 }
 
 func (s *pgSystemConfigStore) Set(ctx context.Context, key string, value string) error {
-	jv, err := ensureJSONBConfigValue(value)
-	if err != nil {
-		return err
-	}
 	query := `
-		INSERT INTO system_config (config_key, config_value)
-		VALUES ($1, $2::jsonb)
-		ON CONFLICT (config_key) DO UPDATE SET config_value = EXCLUDED.config_value, updated_at = CURRENT_TIMESTAMP
+		INSERT INTO system_config (key, value, value_type, scope)
+		VALUES ($1, $2, 'string', 'core')
+		ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = CURRENT_TIMESTAMP
 	`
 
-	_, err = s.db.ExecContext(ctx, query, key, jv)
+	_, err := s.db.ExecContext(ctx, query, key, value)
 	return err
 }
 
 func (s *pgSystemConfigStore) Delete(ctx context.Context, key string) error {
-	query := `DELETE FROM system_config WHERE config_key = $1`
+	query := `DELETE FROM system_config WHERE key = $1`
 	_, err := s.db.ExecContext(ctx, query, key)
 	return err
 }
 
 func (s *pgSystemConfigStore) List(ctx context.Context) (map[string]string, error) {
-	query := `SELECT config_key, config_value FROM system_config ORDER BY config_key`
+	query := `SELECT key, value FROM system_config ORDER BY key`
 
 	rows, err := s.db.QueryContext(ctx, query)
 	if err != nil {
@@ -792,16 +788,11 @@ func (s *pgSystemConfigStore) List(ctx context.Context) (map[string]string, erro
 
 	result := make(map[string]string)
 	for rows.Next() {
-		var key string
-		var raw []byte
-		if err := rows.Scan(&key, &raw); err != nil {
+		var key, value string
+		if err := rows.Scan(&key, &value); err != nil {
 			return nil, err
 		}
-		v, err := decodeJSONBConfigBytes(raw)
-		if err != nil {
-			return nil, err
-		}
-		result[key] = v
+		result[key] = value
 	}
 
 	return result, rows.Err()
@@ -816,19 +807,14 @@ type pgUserConfigStore struct {
 func (s *pgUserConfigStore) Get(ctx context.Context, userID int64) (*database.UserConfig, error) {
 	// UserConfig 存储在 system_config 中，key 为 user_{userID}_config
 	key := fmt.Sprintf("user_%d_config", userID)
-	query := `SELECT config_value FROM system_config WHERE config_key = $1`
+	query := `SELECT value FROM system_config WHERE key = $1`
 
-	var raw []byte
-	err := s.db.QueryRowContext(ctx, query, key).Scan(&raw)
+	var value string
+	err := s.db.QueryRowContext(ctx, query, key).Scan(&value)
 	if err == sql.ErrNoRows {
 		// 返回空配置而不是错误
 		return &database.UserConfig{UserID: userID}, nil
 	}
-	if err != nil {
-		return nil, err
-	}
-
-	value, err := decodeJSONBConfigBytes(raw)
 	if err != nil {
 		return nil, err
 	}
@@ -848,17 +834,13 @@ func (s *pgUserConfigStore) Upsert(ctx context.Context, cfg *database.UserConfig
 	}
 
 	key := fmt.Sprintf("user_%d_config", cfg.UserID)
-	jv, err := ensureJSONBConfigValue(string(data))
-	if err != nil {
-		return err
-	}
 	query := `
-		INSERT INTO system_config (config_key, config_value)
-		VALUES ($1, $2::jsonb)
-		ON CONFLICT (config_key) DO UPDATE SET config_value = EXCLUDED.config_value, updated_at = CURRENT_TIMESTAMP
+		INSERT INTO system_config (key, value, value_type, scope)
+		VALUES ($1, $2, 'json', 'core')
+		ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = CURRENT_TIMESTAMP
 	`
 
-	_, err = s.db.ExecContext(ctx, query, key, jv)
+	_, err = s.db.ExecContext(ctx, query, key, string(data))
 	return err
 }
 
