@@ -116,25 +116,47 @@ func (darwinBackend) InstallCA(certPEM []byte) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	// Check if CA is already installed and trusted in the System keychain.
+	// Use verify-cert to avoid unnecessary admin privilege prompts.
 	tmp := filepath.Join(os.TempDir(), "centag-ca-"+fp[:12]+".crt")
 	if err := os.WriteFile(tmp, certPEM, 0o644); err != nil {
 		return "", err
 	}
 	defer os.Remove(tmp)
-	cmd := exec.Command("security", "add-trusted-cert", "-d", "-r", "trustRoot",
-		"-k", "/Library/Keychains/System.keychain", tmp)
-	if out, err := cmd.CombinedOutput(); err != nil {
+	if out, err := exec.Command("security", "verify-cert", "-c", tmp, "-p", "ssl", "-k", "/Library/Keychains/System.keychain").CombinedOutput(); err == nil {
+		_ = out
+		// CA already installed and trusted
+		return fp, nil
+	}
+	// CA not found or not trusted — install with admin privileges.
+	script := fmt.Sprintf(
+		`do shell script "security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain %s" with administrator privileges`,
+		shellQuote(tmp),
+	)
+	if out, err := exec.Command("osascript", "-e", script).CombinedOutput(); err != nil {
+		if ee, ok := err.(*exec.ExitError); ok && ee.ExitCode() == 128 {
+			return "", fmt.Errorf("user cancelled CA installation")
+		}
 		return "", fmt.Errorf("security add-trusted-cert: %v (%s)", err, strings.TrimSpace(string(out)))
 	}
 	return fp, nil
 }
 
+// shellQuote wraps s in single quotes for safe embedding in shell scripts.
+func shellQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", "'\\''") + "'"
+}
+
 func (darwinBackend) UninstallCA(fingerprint string) error {
 	// Best-effort by common CN; fingerprint-selective delete needs cert hash tooling.
-	cmd := exec.Command("security", "delete-certificate", "-c", "Centag CA",
-		"/Library/Keychains/System.keychain")
-	out, err := cmd.CombinedOutput()
-	if err != nil {
+	// Use osascript to elevate privileges for deleting from System keychain.
+	script := fmt.Sprintf(
+		`do shell script "security delete-certificate -c 'Centag CA' /Library/Keychains/System.keychain" with administrator privileges`,
+	)
+	if out, err := exec.Command("osascript", "-e", script).CombinedOutput(); err != nil {
+		if ee, ok := err.(*exec.ExitError); ok && ee.ExitCode() == 128 {
+			return nil // user cancelled, treat as best-effort success
+		}
 		return fmt.Errorf("security delete-certificate: %v (%s) fingerprint=%s",
 			err, strings.TrimSpace(string(out)), fingerprint)
 	}
