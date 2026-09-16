@@ -35,6 +35,7 @@ func DefaultMITMDomains() []string {
 		"dashscope.aliyuncs.com",
 		"hunyuan.tencentcloudapi.com",
 		"tokenhub-intl.tencentcloudmaas.com",
+		"copilot.tencent.com",
 		"integrate.api.nvidia.com",
 		"open.bigmodel.cn",
 		"api.bigmodel.cn",
@@ -207,8 +208,6 @@ func DefaultMITMPathPatterns() []string {
 		"/v1/batches",
 		"/v1beta",
 		"/v1beta/openai",
-		"/v2",
-		"/v3",
 		"/v3/openai/chat/completions",
 		"/v4",
 		"/api",
@@ -227,6 +226,8 @@ func DefaultMITMPathPatterns() []string {
 		"/anthropic/v1",
 		"/model",
 		"/models",
+		// WorkBuddy / Tencent Hunyuan chat completions
+		"/v2/chat/completions",
 	}
 }
 
