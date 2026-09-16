@@ -264,6 +264,12 @@ func (s *Server) isWhitelistedHost(host string) bool {
 // ShouldRouteToBackend reports whether host+path should be forwarded to Centag (:20060).
 // Domain must be whitelisted; path matches configured prefixes OR looks like a generic LLM API.
 func (s *Server) ShouldRouteToBackend(host, path string) bool {
+	return s.ShouldRouteToBackendWithMethod(host, path, "", "")
+}
+
+// ShouldRouteToBackendWithMethod is like ShouldRouteToBackend but also considers HTTP method
+// and Content-Type for additional validation when path matching is ambiguous.
+func (s *Server) ShouldRouteToBackendWithMethod(host, path, method, contentType string) bool {
 	if s == nil {
 		return false
 	}
@@ -290,14 +296,29 @@ func (s *Server) ShouldRouteToBackend(host, path string) bool {
 			return false
 		}
 	}
+
+	// Check explicit path patterns first (high confidence)
 	for _, pattern := range s.pathPatterns {
 		if pattern != "" && strings.HasPrefix(path, pattern) {
 			return true
 		}
 	}
-	// Domain already classified as LLM provider → accept common API shapes without
-	// per-agent path entries (e.g. /zen/v1/responses on opencode.ai).
-	return looksLikeLLMAPIPath(path)
+
+	// For looksLikeLLMAPIPath matches, add additional validation to reduce false positives.
+	// LLM API calls are almost always POST with JSON content type.
+	if looksLikeLLMAPIPath(path) {
+		// If we have method info, validate it's a POST (LLM APIs are POST-only)
+		if method != "" && method != http.MethodPost {
+			return false
+		}
+		// If we have Content-Type info, validate it's JSON
+		if contentType != "" && !strings.Contains(contentType, "application/json") {
+			return false
+		}
+		return true
+	}
+
+	return false
 }
 
 // Start 启动MITM服务器
@@ -553,27 +574,93 @@ func isKnownNonLLMPath(path string) bool {
 	if strings.Contains(path, "/cli/changelogs/") || strings.Contains(path, "/cli/stable") {
 		return true
 	}
+
+	// Common non-LLM endpoints that should never be routed to Centag backend
+	nonLLMPrefixes := []string{
+		// Health / readiness
+		"/health", "/healthz", "/ready", "/readyz", "/livez", "/ping",
+		// Metrics / status
+		"/metrics", "/status", "/version", "/info", "/debug",
+		// Auth / OAuth
+		"/auth", "/login", "/logout", "/oauth", "/sso", "/callback",
+		// Dashboard / UI
+		"/dashboard", "/settings", "/admin", "/portal",
+		// Static assets
+		"/static", "/assets", "/favicon.ico", "/robots.txt",
+		// Billing / subscription (non-LLM)
+		"/billing", "/subscription", "/payment", "/invoice",
+		// User management
+		"/user", "/users", "/profile", "/account", "/team", "/organization",
+		// Documentation
+		"/docs", "/api-docs", "/swagger", "/openapi",
+		// Webhooks (non-LLM)
+		"/webhook", "/webhooks",
+		// Reporting / analytics
+		"/report", "/reports", "/analytics", "/tracking",
+		// Configuration
+		"/config", "/configs", "/settings",
+		// Version-specific non-LLM paths (v2, v3, etc.)
+		"/v2", "/v3",
+		// Edge cloud / credentials
+		"/edge-cloud",
+	}
+
+	pathLower := strings.ToLower(path)
+	for _, prefix := range nonLLMPrefixes {
+		if strings.HasPrefix(pathLower, prefix) || pathLower == prefix {
+			return true
+		}
+	}
+
 	return false
 }
 
 // looksLikeLLMAPIPath reports whether path looks like an LLM provider API call.
 // Used together with domain whitelist — not for arbitrary internet traffic.
+// Uses segment-based matching to avoid false positives (e.g., "/user/models/page" should NOT match "/models").
 func looksLikeLLMAPIPath(path string) bool {
-	if strings.Contains(path, "/v1/") || path == "/v1" {
-		return true
+	// Split path into segments for precise matching
+	segments := strings.Split(strings.Trim(path, "/"), "/")
+	if len(segments) == 0 {
+		return false
 	}
+
+	// Match /v1/chat/completions, /v1/completions, /v1/embeddings (OpenAI-compatible format)
+	// These are the canonical LLM API endpoints
+	if segments[0] == "v1" && len(segments) >= 2 {
+		secondSegment := segments[1]
+		// Only match known LLM endpoint types, not all /v1/* paths
+		switch secondSegment {
+		case "chat", "completions", "embeddings", "models", "messages":
+			return true
+		}
+	}
+
+	// Match known LLM path markers using segment suffix matching
 	for _, m := range knownLLMPathMarkers {
-		if path == m.suffix || strings.HasSuffix(path, m.suffix) || strings.Contains(path, m.suffix+"/") {
-			return true
-		}
-		if strings.Contains(path, m.suffix+"?") { // unlikely in URL.Path but cheap
-			return true
-		}
-		if strings.Contains(path, m.suffix) {
+		if matchLLMPathSuffix(segments, m.suffix) {
 			return true
 		}
 	}
+
 	return false
+}
+
+// matchLLMPathSuffix checks if path segments end with the given suffix pattern.
+// For example, segments=["api","v1","chat","completions"] matches suffix="/chat/completions".
+func matchLLMPathSuffix(segments []string, suffix string) bool {
+	suffixSegments := strings.Split(strings.Trim(suffix, "/"), "/")
+	if len(segments) < len(suffixSegments) {
+		return false
+	}
+	// Check if the last N segments match the suffix
+	offset := len(segments) - len(suffixSegments)
+	for i, s := range suffixSegments {
+		if segments[offset+i] != s {
+			return false
+		}
+	}
+	return true
 }
 
 // convertBackendPath maps any vendor LLM path onto Centag's canonical /v1/* surface.
@@ -760,7 +847,8 @@ func (w *responseWriter) WriteHeader(statusCode int) {
 
 // shouldProxyToBackend 判断请求是否应该转发到LLM Proxy后端
 func (s *Server) shouldProxyToBackend(r *http.Request) bool {
-	return s.ShouldRouteToBackend(r.Host, r.URL.Path)
+	contentType := r.Header.Get("Content-Type")
+	return s.ShouldRouteToBackendWithMethod(r.Host, r.URL.Path, r.Method, contentType)
 }
 
 // applyBackendAuth replaces Agent Authorization with Centag egress key.
