@@ -2155,6 +2155,14 @@ func (s *Server) GetBuiltinAgentHandler() *BuiltinAgentHandler {
 	return s.builtinAgentHandler
 }
 
+// SetAgentAppsOverlay injects the remote agent apps overlay for hot-updating
+// display/guide/sort fields without restart (§5.4 M3).
+func (s *Server) SetAgentAppsOverlay(overlay *configsync.AgentAppsOverlay) {
+	if s.agentHandler != nil {
+		s.agentHandler.SetAgentAppsOverlay(overlay)
+	}
+}
+
 // SetVersionProvider injects a remote version provider into the system update
 // handler. When set, /update/check queries this provider first, falling back
 // to the GitHub OTA client on error.

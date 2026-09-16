@@ -322,10 +322,17 @@ func (s *ConfigScheduler) doSync(ctx context.Context) error {
 		FetchSkillRows(ctx context.Context) ([]RemoteSkillRow, error)
 	}
 
+	// fetchAgentAppRows is an optional provider extension that surfaces
+	// remote agent app catalog rows (Feishu agent_apps table, §5.4).
+	type fetchAgentAppRows interface {
+		FetchAgentAppRows(ctx context.Context) ([]AgentAppRow, error)
+	}
+
 	var rows []Row
 	var prices []ProviderPrice
 	var pipelineTemplates []PipelineTemplate
 	var skills []RemoteSkillRow
+	var agentApps []AgentAppRow
 	var err error
 
 	// Build query with edition and version from environment
@@ -383,6 +390,15 @@ func (s *ConfigScheduler) doSync(ctx context.Context) error {
 			skills = fetchedSkills
 		}
 	}
+	// Fetch remote agent app catalog rows if provider supports it (M3 §5.4).
+	if faa, ok := s.provider.(fetchAgentAppRows); ok {
+		fetchedApps, aaErr := faa.FetchAgentAppRows(ctx)
+		if aaErr != nil && !errors.Is(aaErr, ErrNotSupported) {
+			logger.Warnf("configsync: fetch agent app rows failed, continuing without agent apps: %v", aaErr)
+		} else {
+			agentApps = fetchedApps
+		}
+	}
 	if err := ValidateRows(rows); err != nil {
 		err = fmt.Errorf("invalid batch rejected: %w", err)
 		s.recordFailure(err)
@@ -396,7 +412,7 @@ func (s *ConfigScheduler) doSync(ctx context.Context) error {
 		}
 	}
 	// Empty batch: keep cache, count as success (nothing to do).
-	if len(rows) == 0 && len(prices) == 0 && len(pipelineTemplates) == 0 && len(skills) == 0 {
+	if len(rows) == 0 && len(prices) == 0 && len(pipelineTemplates) == 0 && len(skills) == 0 && len(agentApps) == 0 {
 		s.mu.Lock()
 		s.status.LastSyncTime = time.Now()
 		s.status.LastSyncOK = true
@@ -413,6 +429,15 @@ func (s *ConfigScheduler) doSync(ctx context.Context) error {
 		Prices:            prices,
 		PipelineTemplates: pipelineTemplates,
 		Skills:            skills,
+	}
+	// Serialize agent apps into Tables["agent_apps"] (§5.4)
+	if len(agentApps) > 0 {
+		if data, err := json.Marshal(agentApps); err == nil {
+			if snap.Tables == nil {
+				snap.Tables = make(map[string]json.RawMessage)
+			}
+			snap.Tables["agent_apps"] = data
+		}
 	}
 	if s.stateDir != "" {
 		if err := WriteSnapshot(s.stateDir, snap); err != nil {

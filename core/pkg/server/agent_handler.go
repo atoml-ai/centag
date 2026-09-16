@@ -14,6 +14,7 @@ import (
 	"centag/core/internal/agent"
 	"centag/core/internal/auth"
 	"centag/core/pkg/backend"
+	"centag/core/pkg/configsync"
 	"centag/core/pkg/database"
 
 	"github.com/gin-gonic/gin"
@@ -21,8 +22,9 @@ import (
 
 // AgentHandler Agent 配置快速接入处理器
 type AgentHandler struct {
-	registry   *agent.TemplateRegistry
-	backendMgr *backend.Manager
+	registry      *agent.TemplateRegistry
+	backendMgr    *backend.Manager
+	agentAppsOverlay *configsync.AgentAppsOverlay // remote overlay (§5.4)
 }
 
 var errNoUsableProxyAPIKey = errors.New("no usable proxy api key")
@@ -33,6 +35,12 @@ func NewAgentHandler(registry *agent.TemplateRegistry, backendMgr *backend.Manag
 		registry:   registry,
 		backendMgr: backendMgr,
 	}
+}
+
+// SetAgentAppsOverlay injects the remote agent apps overlay for hot-updating
+// display/guide/sort fields without restart (§5.4).
+func (h *AgentHandler) SetAgentAppsOverlay(overlay *configsync.AgentAppsOverlay) {
+	h.agentAppsOverlay = overlay
 }
 
 // resolveModelName 构建最终模型名：
@@ -74,9 +82,10 @@ func (h *AgentHandler) ListAgentTypes(c *gin.Context) {
 		VerifiedWrite bool                 `json:"verified_write"`
 		VerifiedWrap  bool                 `json:"verified_wrap"`
 		VerifiedUI    bool                 `json:"verified_ui"`
-		Verified      bool                 `json:"verified"` // 任一方式已验证（兼容/排序）
+		Verified      bool                 `json:"verified"`
 		WrapCommand   string               `json:"wrap_command,omitempty"`
 		GuideOnly     bool                 `json:"guide_only,omitempty"`
+		SortOrder     int                  `json:"sort_order,omitempty"`
 	}
 	var list []agentInfo
 	for _, at := range h.registry.List() {
@@ -85,26 +94,71 @@ func (h *AgentHandler) ListAgentTypes(c *gin.Context) {
 			continue
 		}
 		meta := t.Meta().Normalize()
+
+		// Apply remote overlay (§5.4): only display/guide/sort fields are overridden
+		displayName := t.DisplayName()
+		description := t.Description()
+		vendor := meta.Vendor
+		category := meta.Category
+		installURL := meta.InstallURL
+		installHint := meta.InstallHint
+		enabled := true
+		sortOrder := 0
+		uiGuide := meta.UIGuide
+		verifiedWrite := meta.VerifiedWrite
+		verifiedWrap := meta.VerifiedWrap
+		verifiedUI := meta.VerifiedUI
+
+		if h.agentAppsOverlay != nil {
+			if ov := h.agentAppsOverlay.Get(string(at)); ov != nil {
+				if ov.DisplayName != "" {
+					displayName = ov.DisplayName
+				}
+				if ov.Description != "" {
+					description = ov.Description
+				}
+				if ov.Vendor != "" {
+					vendor = ov.Vendor
+				}
+				if ov.Category != "" {
+					category = agent.AgentCategory(ov.Category)
+				}
+				if ov.InstallURL != "" {
+					installURL = ov.InstallURL
+				}
+				if ov.InstallHint != "" {
+					installHint = ov.InstallHint
+				}
+				enabled = ov.Enabled
+				sortOrder = ov.Sort
+			}
+		}
+
+		if !enabled {
+			continue // skip disabled apps
+		}
+
 		info := agentInfo{
 			Type:          string(at),
-			DisplayName:   t.DisplayName(),
-			Description:   t.Description(),
-			Category:      meta.Category,
-			Vendor:        meta.Vendor,
+			DisplayName:   displayName,
+			Description:   description,
+			Category:      category,
+			Vendor:        vendor,
 			WriteMode:     meta.WriteMode,
 			ConfigPaths:   meta.ConfigPaths,
 			KeyFields:     meta.KeyFields,
 			ConfigMethod:  meta.ConfigMethod,
-			InstallURL:    meta.InstallURL,
-			InstallHint:   meta.InstallHint,
+			InstallURL:    installURL,
+			InstallHint:   installHint,
 			AccessMethods: meta.AccessMethods,
 			CompanionCLI:  meta.CompanionCLI,
-			UIGuide:       meta.UIGuide,
-			VerifiedWrite: meta.VerifiedWrite,
-			VerifiedWrap:  meta.VerifiedWrap,
-			VerifiedUI:    meta.VerifiedUI,
+			UIGuide:       uiGuide,
+			VerifiedWrite: verifiedWrite,
+			VerifiedWrap:  verifiedWrap,
+			VerifiedUI:    verifiedUI,
 			Verified:      meta.AnyVerified(),
 			GuideOnly:     meta.GuideOnly(),
+			SortOrder:     sortOrder,
 		}
 		if meta.HasAccess(agent.AccessWrapCLI) {
 			if argv := meta.WrapArgv(); len(argv) > 0 {
@@ -115,8 +169,14 @@ func (h *AgentHandler) ListAgentTypes(c *gin.Context) {
 		}
 		list = append(list, info)
 	}
-	// 已验证方式更多的靠前，其次写配置已验证，再按 type
+	// Sort: remote sort_order first (§5.4 overlay), then verified score, then type
 	sort.Slice(list, func(i, j int) bool {
+		// Remote sort_order (overlay) takes priority if non-zero
+		if list[i].SortOrder != 0 || list[j].SortOrder != 0 {
+			if list[i].SortOrder != list[j].SortOrder {
+				return list[i].SortOrder < list[j].SortOrder
+			}
+		}
 		score := func(a agentInfo) int {
 			n := 0
 			if a.VerifiedWrite {

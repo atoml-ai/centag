@@ -360,6 +360,13 @@ func startConfigsync(srv *server.Server) {
 		logger.Warnf("failed to create mitm_domains store: %v", err)
 	}
 
+	// Create agent apps overlay (M3)
+	agentAppsOverlay := configsync.NewAgentAppsOverlay()
+	agentAppsStore, err := configsync.NewAgentAppsStore()
+	if err != nil {
+		logger.Warnf("failed to create agent_apps store: %v", err)
+	}
+
 	// Wire up exchange rate applier (billing.SetUSDToCNY)
 	configsync.SetExchangeRateApplier(func(rate float64) {
 		billing.SetUSDToCNY(rate)
@@ -433,6 +440,16 @@ func startConfigsync(srv *server.Server) {
 		if domains, dErr := mitmDomainsStore.GetEnabledDomains(); dErr == nil && len(domains) > 0 {
 			logger.Infof("configsync: loading %d MITM domains from database", len(domains))
 			applyMITMDomainsToServer(srv, domains)
+		}
+	}
+
+	// Load agent apps overlay from DB on startup (M3)
+	if agentAppsStore != nil {
+		if dbApps, aErr := agentAppsStore.GetAll(); aErr == nil && len(dbApps) > 0 {
+			data, _ := json.Marshal(dbApps)
+			agentAppsOverlay.LoadFromSnapshot(data)
+			srv.SetAgentAppsOverlay(agentAppsOverlay)
+			logger.Infof("configsync: loading %d agent apps from database", len(dbApps))
 		}
 	}
 
@@ -517,6 +534,20 @@ func startConfigsync(srv *server.Server) {
 					logger.Warnf("configsync: sync mitm_domains failed: %v", err)
 				} else if enabledDomains, dErr := mitmDomainsStore.GetEnabledDomains(); dErr == nil {
 					applyMITMDomainsToServer(srv, enabledDomains)
+				}
+			}
+			// Apply agent apps overlay from snapshot (M3)
+			if agentAppsStore != nil {
+				var apps []configsync.AgentAppRow
+				if data, ok := snap.Tables["agent_apps"]; ok && len(data) > 0 {
+					_ = json.Unmarshal(data, &apps)
+				}
+				if err := agentAppsStore.SyncFromSnapshot(apps); err != nil {
+					logger.Warnf("configsync: sync agent_apps failed: %v", err)
+				} else {
+					agentAppsOverlay.LoadFromSnapshot(snap.Tables["agent_apps"])
+					srv.SetAgentAppsOverlay(agentAppsOverlay)
+					logger.Infof("configsync: agent apps overlay updated (%d entries)", len(apps))
 				}
 			}
 			srv.InvalidatePricingCache()

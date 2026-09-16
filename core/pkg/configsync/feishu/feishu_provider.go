@@ -21,18 +21,19 @@ import (
 // Provider implements configsync.Provider backed by Feishu Bitable.
 // It uses a read-only Client App with bitable:app:readonly permission.
 type Provider struct {
-	appID           string
-	appSecret       string
-	appToken        string
-	configTableID   string
-	pricingTableID  string
-	pipelineTableID string
-	backendTableID  string
-	skillTableID    string
-	httpClient      *http.Client
-	mu              sync.Mutex
-	token           string
-	tokenExp        time.Time
+	appID            string
+	appSecret        string
+	appToken         string
+	configTableID    string
+	pricingTableID   string
+	pipelineTableID  string
+	backendTableID   string
+	skillTableID     string
+	agentAppTableID  string
+	httpClient       *http.Client
+	mu               sync.Mutex
+	token            string
+	tokenExp         time.Time
 }
 
 // ProviderConfig holds the configuration for the Feishu Provider.
@@ -48,19 +49,21 @@ type ProviderConfig struct {
 	PipelineTableID string // Table ID for pipeline templates
 	BackendTableID  string // Table ID for backend configs
 	SkillTableID    string // Table ID for agent skill rows (built-in agent)
+	AgentAppTableID string // Table ID for agent app catalog (§5.4)
 }
 
 // NewProvider creates a new Feishu Provider.
 func NewProvider(cfg ProviderConfig) *Provider {
 	return &Provider{
-		appID:           cfg.AppID,
-		appSecret:       cfg.AppSecret,
-	appToken:        cfg.AppToken,
-	configTableID:   cfg.ConfigTableID,
-	pricingTableID:  cfg.PricingTableID,
-	pipelineTableID: cfg.PipelineTableID,
-	backendTableID:  cfg.BackendTableID,
-	skillTableID:    cfg.SkillTableID,
+		appID:            cfg.AppID,
+		appSecret:        cfg.AppSecret,
+		appToken:         cfg.AppToken,
+		configTableID:    cfg.ConfigTableID,
+		pricingTableID:   cfg.PricingTableID,
+		pipelineTableID:  cfg.PipelineTableID,
+		backendTableID:   cfg.BackendTableID,
+		skillTableID:     cfg.SkillTableID,
+		agentAppTableID:  cfg.AgentAppTableID,
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second,
 		},
@@ -83,14 +86,15 @@ func NewProviderFromEnv() *Provider {
 		return nil
 	}
 	return NewProvider(ProviderConfig{
-		AppID:           os.Getenv("CENTAG_CONFIGSYNC_FEISHU_CLIENT_APP_ID"),
-		AppSecret:       os.Getenv("CENTAG_CONFIGSYNC_FEISHU_CLIENT_APP_SECRET"),
-		AppToken:        os.Getenv("CENTAG_CONFIGSYNC_FEISHU_APP_TOKEN"),
-		ConfigTableID:   os.Getenv("CENTAG_CONFIGSYNC_FEISHU_CONFIG_TABLE_ID"),
-		PricingTableID:  os.Getenv("CENTAG_CONFIGSYNC_FEISHU_PRICING_TABLE_ID"),
-		PipelineTableID: os.Getenv("CENTAG_CONFIGSYNC_FEISHU_PIPELINE_TABLE_ID"),
-		BackendTableID:  os.Getenv("CENTAG_CONFIGSYNC_FEISHU_BACKEND_TABLE_ID"),
-		SkillTableID:    os.Getenv("CENTAG_CONFIGSYNC_FEISHU_SKILL_TABLE_ID"),
+		AppID:            os.Getenv("CENTAG_CONFIGSYNC_FEISHU_CLIENT_APP_ID"),
+		AppSecret:        os.Getenv("CENTAG_CONFIGSYNC_FEISHU_CLIENT_APP_SECRET"),
+		AppToken:         os.Getenv("CENTAG_CONFIGSYNC_FEISHU_APP_TOKEN"),
+		ConfigTableID:    os.Getenv("CENTAG_CONFIGSYNC_FEISHU_CONFIG_TABLE_ID"),
+		PricingTableID:   os.Getenv("CENTAG_CONFIGSYNC_FEISHU_PRICING_TABLE_ID"),
+		PipelineTableID:  os.Getenv("CENTAG_CONFIGSYNC_FEISHU_PIPELINE_TABLE_ID"),
+		BackendTableID:   os.Getenv("CENTAG_CONFIGSYNC_FEISHU_BACKEND_TABLE_ID"),
+		SkillTableID:     os.Getenv("CENTAG_CONFIGSYNC_FEISHU_SKILL_TABLE_ID"),
+		AgentAppTableID:  os.Getenv("CENTAG_CONFIGSYNC_FEISHU_AGENT_APP_TABLE_ID"),
 	})
 }
 
@@ -356,6 +360,56 @@ func (p *Provider) FetchSkillRows(ctx context.Context) ([]configsync.RemoteSkill
 	return rows, nil
 }
 
+// FetchAgentAppRows returns agent app catalog rows from the Bitable agent_apps table.
+//
+// Production table schema (one row = one agent app):
+//
+//	type_id / display_name / description / vendor / category /
+//	enabled / sort / install_url / install_hint / meta_json
+//
+// Only display/guide/sort fields are synced; behavior fields stay in code (§5.4).
+func (p *Provider) FetchAgentAppRows(ctx context.Context) ([]configsync.AgentAppRow, error) {
+	if p.agentAppTableID == "" {
+		return nil, configsync.ErrNotSupported
+	}
+
+	records, err := p.SearchRecords(ctx, p.agentAppTableID, nil)
+	if err != nil {
+		return nil, fmt.Errorf("fetch agent app rows: %w", err)
+	}
+
+	var rows []configsync.AgentAppRow
+	for _, rec := range records {
+		if row := parseAgentAppRow(rec); row != nil {
+			rows = append(rows, *row)
+		}
+	}
+	return rows, nil
+}
+
+// parseAgentAppRow parses one Bitable record into a configsync.AgentAppRow.
+// Rows without a type_id are skipped (nil).
+func parseAgentAppRow(rec Record) *configsync.AgentAppRow {
+	f := rec.Fields
+	typeID := TextField(f["type_id"])
+	if typeID == "" {
+		return nil
+	}
+
+	return &configsync.AgentAppRow{
+		TypeID:      typeID,
+		DisplayName: TextField(f["display_name"]),
+		Description: TextField(f["description"]),
+		Vendor:      TextField(f["vendor"]),
+		Category:    TextField(f["category"]),
+		Enabled:     BoolField(f["enabled"]),
+		Sort:        IntField(f["sort"]),
+		InstallURL:  TextField(f["install_url"]),
+		InstallHint: TextField(f["install_hint"]),
+		MetaJSON:    json.RawMessage(TextField(f["meta_json"])),
+	}
+}
+
 // parseSkillRow parses one Bitable record into a configsync.RemoteSkillRow.
 // Rows without a name are skipped (nil).
 func parseSkillRow(rec Record) *configsync.RemoteSkillRow {
@@ -528,6 +582,29 @@ func BoolField(v any) bool {
 		return val == "true" || val == "1"
 	default:
 		return false
+	}
+}
+
+// IntField extracts an integer value from a Feishu record field.
+func IntField(v any) int {
+	if v == nil {
+		return 0
+	}
+	switch val := v.(type) {
+	case float64:
+		return int(val)
+	case int:
+		return val
+	case string:
+		n := 0
+		for _, c := range val {
+			if c >= '0' && c <= '9' {
+				n = n*10 + int(c-'0')
+			}
+		}
+		return n
+	default:
+		return 0
 	}
 }
 
