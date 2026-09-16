@@ -38,6 +38,23 @@ func runListApps(binary string) error {
 
 	fmt.Fprintf(os.Stdout, "\n%d/%d installed. Tray: 「代理启动应用」子菜单；CLI: centag wrap run -- <app>\n",
 		len(installed), len(apps))
+
+	// Show WorkBuddy limitation warning if installed
+	for _, a := range installed {
+		if isWorkBuddyCatalogApp(a) {
+			fmt.Fprintf(os.Stdout, "\n⚠️  WorkBuddy/CodeBuddy 限制:\n")
+			fmt.Fprintf(os.Stdout, "    LLM 请求使用证书固定，无法通过 MITM 代理拦截。\n")
+			fmt.Fprintf(os.Stdout, "    如需代理，请手动配置 ~/.workbuddy/settings.json:\n")
+			fmt.Fprintf(os.Stdout, "    {\n")
+			fmt.Fprintf(os.Stdout, "      \"env\": {\n")
+			fmt.Fprintf(os.Stdout, "        \"HTTP_PROXY\": \"http://127.0.0.1:8081\",\n")
+			fmt.Fprintf(os.Stdout, "        \"HTTPS_PROXY\": \"http://127.0.0.1:8081\"\n")
+			fmt.Fprintf(os.Stdout, "      }\n")
+			fmt.Fprintf(os.Stdout, "    }\n")
+			break
+		}
+	}
+
 	return nil
 }
 

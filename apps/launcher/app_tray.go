@@ -9,6 +9,7 @@ import (
 	"os"
 	"runtime"
 	"strings"
+	"time"
 
 	"github.com/energye/systray"
 )
@@ -70,13 +71,13 @@ func (a *launcherApp) onReady() {
 		} else {
 			for _, app := range installed {
 				app := app
-				tooltip := "经 centag 代理启动 " + app.ID
-				// WorkBuddy/CodeBuddy: LLM requests use certificate pinning and cannot be proxied via MITM
 				if isWorkBuddyApp(app) {
-					tooltip = "⚠️ WorkBuddy LLM 请求使用证书固定，无法通过 MITM 代理。需手动配置代理: ~/.workbuddy/settings.json"
+					mi := runItem.AddSubMenuItem(app.DisplayName, "⚠️ LLM 请求无法通过 MITM 代理")
+					mi.Click(func() { showWorkBuddyLimitationDialog(a) })
+				} else {
+					mi := runItem.AddSubMenuItem(app.DisplayName, "经 centag 代理启动 "+app.ID)
+					mi.Click(func() { runAgentByApp(a, app) })
 				}
-				mi := runItem.AddSubMenuItem(app.DisplayName, tooltip)
-				mi.Click(func() { runAgentByApp(a, app) })
 			}
 		}
 	}
@@ -166,4 +167,37 @@ func isWorkBuddyApp(app catalogApp) bool {
 	name := strings.ToLower(app.DisplayName)
 	return strings.Contains(id, "workbuddy") || strings.Contains(id, "codebuddy") ||
 		strings.Contains(name, "workbuddy") || strings.Contains(name, "codebuddy")
+}
+
+// showWorkBuddyLimitationDialog shows a dialog warning about WorkBuddy's certificate pinning
+// and offers to open the settings.json file for manual configuration.
+func showWorkBuddyLimitationDialog(a *launcherApp) {
+	msg := "WorkBuddy 的 LLM 请求使用了证书固定 (Certificate Pinning)，\n" +
+		"无法通过 Centag MITM 代理拦截。\n\n" +
+		"如需通过 Centag 代理 WorkBuddy 的 LLM 请求，\n" +
+		"请手动配置 ~/.workbuddy/settings.json:\n\n" +
+		"{\n" +
+		"  \"env\": {\n" +
+		"    \"HTTP_PROXY\": \"http://127.0.0.1:8081\",\n" +
+		"    \"HTTPS_PROXY\": \"http://127.0.0.1:8081\"\n" +
+		"  }\n" +
+		"}\n\n" +
+		"是否打开配置文件？"
+
+	switch runtime.GOOS {
+	case "darwin":
+		script := fmt.Sprintf(`display dialog "%s" with title "Centag - WorkBuddy 代理限制" buttons {"取消", "打开配置文件"} default button "打开配置文件"`, strings.ReplaceAll(msg, `"`, `\"`))
+		out, err := runCommand(30*time.Second, "osascript", "-e", script)
+		if err == nil && strings.Contains(out, "打开配置文件") {
+			// Open settings.json in default editor
+			home, _ := os.UserHomeDir()
+			settingsPath := home + "/.workbuddy/settings.json"
+			_, _ = runCommand(5*time.Second, "open", settingsPath)
+		}
+	case "windows":
+		// Windows: show notification with instructions
+		notifyUser("Centag - WorkBuddy 代理限制",
+			"WorkBuddy LLM 请求使用证书固定，无法通过 MITM 代理。"+
+				"请手动配置 ~/.workbuddy/settings.json")
+	}
 }
