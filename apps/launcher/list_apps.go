@@ -29,8 +29,8 @@ func runListApps(binary string) error {
 			status, path = "yes", a.Path
 		}
 		notes := ""
-		if isWorkBuddyCatalogApp(a) {
-			notes = "⚠️ LLM需手动配置代理"
+		if needsManualAgentConfigCatalog(a) {
+			notes = "⚠️ 需手动配置 Agent"
 		}
 		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\n", a.ID, a.DisplayName, mode, status, path, notes)
 	}
@@ -39,18 +39,17 @@ func runListApps(binary string) error {
 	fmt.Fprintf(os.Stdout, "\n%d/%d installed. Tray: 「代理启动应用」子菜单；CLI: centag wrap run -- <app>\n",
 		len(installed), len(apps))
 
-	// Show WorkBuddy limitation warning if installed
+	// Show manual agent config warning for apps that need it
 	for _, a := range installed {
-		if isWorkBuddyCatalogApp(a) {
-			fmt.Fprintf(os.Stdout, "\n⚠️  WorkBuddy/CodeBuddy 限制:\n")
-			fmt.Fprintf(os.Stdout, "    LLM 请求使用证书固定，无法通过 MITM 代理拦截。\n")
-			fmt.Fprintf(os.Stdout, "    如需代理，请手动配置 ~/.workbuddy/settings.json:\n")
-			fmt.Fprintf(os.Stdout, "    {\n")
-			fmt.Fprintf(os.Stdout, "      \"env\": {\n")
-			fmt.Fprintf(os.Stdout, "        \"HTTP_PROXY\": \"http://127.0.0.1:8081\",\n")
-			fmt.Fprintf(os.Stdout, "        \"HTTPS_PROXY\": \"http://127.0.0.1:8081\"\n")
-			fmt.Fprintf(os.Stdout, "      }\n")
-			fmt.Fprintf(os.Stdout, "    }\n")
+		if needsManualAgentConfigCatalog(a) {
+			fmt.Fprintf(os.Stdout, "\n⚠️  %s 配置指引:\n", a.DisplayName)
+			fmt.Fprintf(os.Stdout, "    该应用的 LLM 请求使用证书固定，无法通过 MITM 代理自动拦截。\n")
+			fmt.Fprintf(os.Stdout, "    请使用 Centag 的 Agent 配置能力手动接入：\n")
+			fmt.Fprintf(os.Stdout, "    1. 打开 %s → 设置 → 模型 → 自定义 API\n", a.DisplayName)
+			fmt.Fprintf(os.Stdout, "    2. 请求地址: http://127.0.0.1:20060/v1\n")
+			fmt.Fprintf(os.Stdout, "    3. 模型 ID: centag/<流水线名称>\n")
+			fmt.Fprintf(os.Stdout, "    4. API Key: <Centag API Key>\n")
+			fmt.Fprintf(os.Stdout, "    文档: https://www.codebuddy.ai/docs/zh/workbuddy/From-Beginner-to-Expert-Guide/Function-Description/Model\n")
 			break
 		}
 	}
@@ -58,8 +57,8 @@ func runListApps(binary string) error {
 	return nil
 }
 
-// isWorkBuddyCatalogApp checks if the catalog app is WorkBuddy/CodeBuddy
-func isWorkBuddyCatalogApp(app catalogApp) bool {
+// needsManualAgentConfigCatalog checks if the catalog app needs manual agent configuration
+func needsManualAgentConfigCatalog(app catalogApp) bool {
 	id := strings.ToLower(app.ID)
 	name := strings.ToLower(app.DisplayName)
 	return strings.Contains(id, "workbuddy") || strings.Contains(id, "codebuddy") ||

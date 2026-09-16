@@ -71,9 +71,9 @@ func (a *launcherApp) onReady() {
 		} else {
 			for _, app := range installed {
 				app := app
-				if isWorkBuddyApp(app) {
-					mi := runItem.AddSubMenuItem(app.DisplayName, "⚠️ LLM 请求无法通过 MITM 代理")
-					mi.Click(func() { showWorkBuddyLimitationDialog(a) })
+				if needsManualAgentConfig(app) {
+					mi := runItem.AddSubMenuItem(app.DisplayName, "⚠️ 无法自动代理，需手动配置 Agent")
+					mi.Click(func() { showManualAgentConfigDialog(a, app) })
 				} else {
 					mi := runItem.AddSubMenuItem(app.DisplayName, "经 centag 代理启动 "+app.ID)
 					mi.Click(func() { runAgentByApp(a, app) })
@@ -161,43 +161,46 @@ func quitMenu(enabled bool) {
 	}
 }
 
-// isWorkBuddyApp checks if the app is WorkBuddy/CodeBuddy
-func isWorkBuddyApp(app catalogApp) bool {
+// needsManualAgentConfig checks if the app needs manual agent configuration
+// because its LLM requests use certificate pinning and cannot be proxied via MITM.
+func needsManualAgentConfig(app catalogApp) bool {
 	id := strings.ToLower(app.ID)
 	name := strings.ToLower(app.DisplayName)
+	// WorkBuddy/CodeBuddy: LLM requests use certificate pinning
 	return strings.Contains(id, "workbuddy") || strings.Contains(id, "codebuddy") ||
 		strings.Contains(name, "workbuddy") || strings.Contains(name, "codebuddy")
 }
 
-// showWorkBuddyLimitationDialog shows a dialog warning about WorkBuddy's certificate pinning
-// and offers to open the settings.json file for manual configuration.
-func showWorkBuddyLimitationDialog(a *launcherApp) {
-	msg := "WorkBuddy 的 LLM 请求使用了证书固定 (Certificate Pinning)，\n" +
-		"无法通过 Centag MITM 代理拦截。\n\n" +
-		"如需通过 Centag 代理 WorkBuddy 的 LLM 请求，\n" +
-		"请手动配置 ~/.workbuddy/settings.json:\n\n" +
-		"{\n" +
-		"  \"env\": {\n" +
-		"    \"HTTP_PROXY\": \"http://127.0.0.1:8081\",\n" +
-		"    \"HTTPS_PROXY\": \"http://127.0.0.1:8081\"\n" +
-		"  }\n" +
-		"}\n\n" +
-		"是否打开配置文件？"
+// showManualAgentConfigDialog shows a dialog guiding users to configure the agent
+// through centag's backend/model configuration instead of HTTP proxy.
+func showManualAgentConfigDialog(a *launcherApp, app catalogApp) {
+	msg := fmt.Sprintf(`%s 的 LLM 请求使用了证书固定 (Certificate Pinning)，
+无法通过 Centag MITM 代理自动拦截。
+
+请使用 Centag 的 Agent 配置能力手动接入：
+
+1. 打开 %s → 设置 → 模型 → 自定义 API
+2. 填写以下参数：
+   - 请求地址: http://127.0.0.1:20060/v1
+   - 模型 ID: centag/<流水线名称>
+   - API Key: <Centag API Key>
+
+3. 保存后在对话中选择 Centag 模型即可
+
+详细文档: https://www.codebuddy.ai/docs/zh/workbuddy/From-Beginner-to-Expert-Guide/Function-Description/Model
+
+是否打开设置页面？`, app.DisplayName, app.DisplayName)
 
 	switch runtime.GOOS {
 	case "darwin":
-		script := fmt.Sprintf(`display dialog "%s" with title "Centag - WorkBuddy 代理限制" buttons {"取消", "打开配置文件"} default button "打开配置文件"`, strings.ReplaceAll(msg, `"`, `\"`))
+		script := fmt.Sprintf(`display dialog "%s" with title "Centag - Agent 配置指引" buttons {"取消", "打开设置"} default button "打开设置"`, strings.ReplaceAll(msg, `"`, `\"`))
 		out, err := runCommand(30*time.Second, "osascript", "-e", script)
-		if err == nil && strings.Contains(out, "打开配置文件") {
-			// Open settings.json in default editor
-			home, _ := os.UserHomeDir()
-			settingsPath := home + "/.workbuddy/settings.json"
-			_, _ = runCommand(5*time.Second, "open", settingsPath)
+		if err == nil && strings.Contains(out, "打开设置") {
+			// Open the doc URL
+			_, _ = runCommand(5*time.Second, "open", "https://www.codebuddy.ai/docs/zh/workbuddy/From-Beginner-to-Expert-Guide/Function-Description/Model")
 		}
 	case "windows":
-		// Windows: show notification with instructions
-		notifyUser("Centag - WorkBuddy 代理限制",
-			"WorkBuddy LLM 请求使用证书固定，无法通过 MITM 代理。"+
-				"请手动配置 ~/.workbuddy/settings.json")
+		notifyUser("Centag - Agent 配置指引",
+			fmt.Sprintf("%s 需手动配置 Agent。请在设置 → 模型 → 自定义 API 中添加 centag 后端。", app.DisplayName))
 	}
 }
