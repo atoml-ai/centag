@@ -227,35 +227,42 @@
         <ApiAccessPanel :base-url="baseUrl" :compact="sections.accessCompact" />
       </el-card>
 
-      <el-card v-if="sections.backends" class="info-card config-card dash-card dash-card--backends">
-        <template #header>
-          <div class="card-head">
-            <el-icon class="card-icon backend-color"><DataBoard /></el-icon>
-            <span>{{ $t('dashboard.backendConfig') }}</span>
-            <span class="card-badge">{{ $t('dashboard.items', { count: backends.length }) }}</span>
-          </div>
-        </template>
-        <DashboardBackendList
-          ref="backendListRef"
-          :backends="backends"
-          @backend-updated="patchBackend"
-          @refresh="loadBackendsOnly"
-        />
-      </el-card>
-
-      <el-card v-if="sections.pipelines" class="info-card config-card dash-card dash-card--pipelines">
-        <template #header>
-          <div class="card-head">
-            <span>{{ $t('dashboard.pipelineConfig') }}</span>
-            <span v-if="sections.pipelineCreateButton" class="card-badge">{{ $t('dashboard.items', { count: pipelineCount }) }}</span>
-          </div>
-        </template>
-        <HomePipelineCard
-          ref="pipelinePanelRef"
-          :show-create-button="sections.pipelineCreateButton"
-          @update:count="pipelineCount = $event"
-          @test="openPipelineChat"
-        />
+      <el-card
+        v-if="sections.backends || sections.pipelines"
+        class="info-card config-card dash-card dash-card--config"
+      >
+        <el-tabs v-model="configTab" class="config-tabs">
+          <el-tab-pane v-if="sections.backends" name="backends">
+            <template #label>
+              <span class="config-tab-label">
+                <el-icon class="card-icon backend-color"><DataBoard /></el-icon>
+                <span>{{ $t('dashboard.backendConfig') }}</span>
+                <span class="card-badge">{{ $t('dashboard.items', { count: backends.length }) }}</span>
+              </span>
+            </template>
+            <DashboardBackendList
+              ref="backendListRef"
+              :backends="backends"
+              @backend-updated="patchBackend"
+              @refresh="loadBackendsOnly"
+            />
+          </el-tab-pane>
+          <el-tab-pane v-if="sections.pipelines" name="pipelines">
+            <template #label>
+              <span class="config-tab-label">
+                <el-icon class="card-icon pipeline-color"><Share /></el-icon>
+                <span>{{ $t('dashboard.pipelineConfig') }}</span>
+                <span v-if="sections.pipelineCreateButton" class="card-badge">{{ $t('dashboard.items', { count: pipelineCount }) }}</span>
+              </span>
+            </template>
+            <HomePipelineCard
+              ref="pipelinePanelRef"
+              :show-create-button="sections.pipelineCreateButton"
+              @update:count="pipelineCount = $event"
+              @test="openPipelineChat"
+            />
+          </el-tab-pane>
+        </el-tabs>
       </el-card>
     </div>
 
@@ -272,9 +279,15 @@
           <MinimalUsagePanel
             ref="usagePanelRef"
             :hint="usageHint"
+            :metrics-only="sections.usageMetricsOnly"
+            :analytics="sections.usageAnalytics"
           />
         </el-collapse-item>
       </el-collapse>
+    </el-card>
+
+    <el-card v-if="sections.recentSessions" class="info-card mt-card">
+      <SessionBrowser ref="recentSessionsRef" />
     </el-card>
 
     <el-card v-if="sections.opsStats" class="info-card mt-card stats-card">
@@ -479,6 +492,7 @@ import HomePipelineCard from '@/components/dashboard/HomePipelineCard.vue'
 import DashboardBackendList from '@/components/dashboard/DashboardBackendList.vue'
 import MinimalChat from '@/views/MinimalChat.vue'
 import MinimalUsagePanel from '@/components/dashboard/MinimalUsagePanel.vue'
+import SessionBrowser from '@/components/usage/SessionBrowser.vue'
 import { mergeBackendUpdate } from '@/utils/backendTest'
 import { getPipelineDefaults } from '@/api/pipeline'
 import { useRouter } from 'vue-router'
@@ -517,11 +531,13 @@ const pipelinePanelRef = ref<{
 } | null>(null)
 const backendListRef = ref<{ openCreate: () => void; reloadDefault: () => void } | null>(null)
 const usagePanelRef = ref<{ reload: () => void } | null>(null)
+const recentSessionsRef = ref<{ reload: () => void } | null>(null)
 const pipelineCount = ref(0)
 const securityDialogVisible = ref(false)
 const chatDialogVisible = ref(false)
 const chatPipelineId = ref('')
 const usageCollapse = ref<string[]>(['usage'])
+const configTab = ref<'backends' | 'pipelines'>('backends')
 
 async function openPipelineChat(pipelineId = '') {
   let id = (pipelineId || '').trim()
@@ -542,6 +558,7 @@ watch(chatDialogVisible, (open, wasOpen) => {
   if (wasOpen && !open) {
     chatPipelineId.value = ''
     usagePanelRef.value?.reload()
+    recentSessionsRef.value?.reload()
   }
 })
 
@@ -976,14 +993,14 @@ onMounted(() => {
   grid-template-columns: 1fr 1fr;
   grid-template-areas:
     "access access"
-    "backends pipelines";
+    "config config";
 }
 
 .dash-main--personal {
   grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
   grid-template-areas:
     "status access"
-    "backends pipelines";
+    "config config";
 }
 
 .dash-main--team {
@@ -993,8 +1010,7 @@ onMounted(() => {
 
 .dash-card--status { grid-area: status; }
 .dash-card--access { grid-area: access; }
-.dash-card--backends { grid-area: backends; }
-.dash-card--pipelines { grid-area: pipelines; }
+.dash-card--config { grid-area: config; height: 480px; }
 
 @media (max-width: 960px) {
   .dash-main--lite,
@@ -1004,8 +1020,7 @@ onMounted(() => {
     grid-template-areas:
       "status"
       "access"
-      "backends"
-      "pipelines";
+      "config";
   }
 }
 
@@ -1103,12 +1118,46 @@ onMounted(() => {
 
 .config-card :deep(.el-card__body) {
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
 .config-card :deep(.home-pipeline-card),
 .config-card :deep(.backend-list) {
   height: 100%;
   min-height: 0;
+}
+
+.config-tabs {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.config-tabs :deep(.el-tabs__header) {
+  margin-bottom: 8px;
+}
+
+.config-tabs :deep(.el-tabs__content) {
+  flex: 1;
+  min-height: 0;
+}
+
+.config-tabs :deep(.el-tab-pane) {
+  height: 100%;
+  overflow: auto;
+}
+
+.config-tab-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.config-tab-label .card-badge {
+  margin-left: 2px;
 }
 
 .card-head {
