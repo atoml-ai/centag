@@ -141,6 +141,8 @@ func (s *FileStore) ListSessions(ctx context.Context, q ListSessionsQuery) ([]*S
 		if !q.Until.IsZero() && sess.UpdatedAt.After(q.Until) {
 			continue
 		}
+		role, status := s.lastMessageRoleStatus(sess.ID)
+		sess.Ended = sessionEnded(role, status)
 		out = append(out, sess)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].UpdatedAt.After(out[j].UpdatedAt) })
@@ -159,7 +161,33 @@ func (s *FileStore) ListSessions(ctx context.Context, q ListSessionsQuery) ([]*S
 }
 
 func (s *FileStore) GetSession(ctx context.Context, id string) (*Session, error) {
-	return s.readSessionMeta(filepath.Join(s.sessionDir(id), "session.json"))
+	sess, err := s.readSessionMeta(filepath.Join(s.sessionDir(id), "session.json"))
+	if err != nil || sess == nil {
+		return sess, err
+	}
+	role, status := s.lastMessageRoleStatus(id)
+	sess.Ended = sessionEnded(role, status)
+	return sess, nil
+}
+
+func (s *FileStore) lastMessageRoleStatus(id string) (string, int) {
+	data, err := os.ReadFile(filepath.Join(s.sessionDir(id), "messages.jsonl"))
+	if err != nil {
+		return "", 0
+	}
+	lines := strings.Split(string(data), "\n")
+	for i := len(lines) - 1; i >= 0; i-- {
+		line := strings.TrimSpace(lines[i])
+		if line == "" {
+			continue
+		}
+		var m Message
+		if json.Unmarshal([]byte(line), &m) != nil {
+			continue
+		}
+		return m.Role, m.StatusCode
+	}
+	return "", 0
 }
 
 func (s *FileStore) ListMessages(ctx context.Context, sessionID string, q PageQuery) ([]*Message, error) {

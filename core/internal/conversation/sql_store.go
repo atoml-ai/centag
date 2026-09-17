@@ -150,7 +150,12 @@ func (s *SQLStore) ListSessions(ctx context.Context, q ListSessionsQuery) ([]*Se
 		where = strings.Join(conds, " AND ")
 	}
 	query := fmt.Sprintf(`SELECT id, user_id, tenant_id, title, category, pipeline_id, proxy_mode,
-		message_count, created_at, updated_at FROM conversation_sessions WHERE %s
+		message_count, created_at, updated_at,
+		(SELECT cm.role FROM conversation_messages cm WHERE cm.session_id = conversation_sessions.id
+		 ORDER BY cm.created_at DESC, cm.id DESC LIMIT 1) AS last_role,
+		(SELECT cm.status_code FROM conversation_messages cm WHERE cm.session_id = conversation_sessions.id
+		 ORDER BY cm.created_at DESC, cm.id DESC LIMIT 1) AS last_status
+		FROM conversation_sessions WHERE %s
 		ORDER BY updated_at DESC LIMIT ? OFFSET ?`, where)
 	args = append(args, limit, q.Offset)
 	rows, err := s.db.QueryContext(ctx, s.rebind(query), args...)
@@ -163,7 +168,12 @@ func (s *SQLStore) ListSessions(ctx context.Context, q ListSessionsQuery) ([]*Se
 
 func (s *SQLStore) GetSession(ctx context.Context, id string) (*Session, error) {
 	q := s.rebind(`SELECT id, user_id, tenant_id, title, category, pipeline_id, proxy_mode,
-		message_count, created_at, updated_at FROM conversation_sessions WHERE id = ?`)
+		message_count, created_at, updated_at,
+		(SELECT cm.role FROM conversation_messages cm WHERE cm.session_id = conversation_sessions.id
+		 ORDER BY cm.created_at DESC, cm.id DESC LIMIT 1) AS last_role,
+		(SELECT cm.status_code FROM conversation_messages cm WHERE cm.session_id = conversation_sessions.id
+		 ORDER BY cm.created_at DESC, cm.id DESC LIMIT 1) AS last_status
+		FROM conversation_sessions WHERE id = ?`)
 	row := s.db.QueryRowContext(ctx, q, id)
 	sess, err := scanSession(row)
 	if err == sql.ErrNoRows {
@@ -368,13 +378,17 @@ type scannable interface {
 func scanSession(row scannable) (*Session, error) {
 	var sess Session
 	var created, updated interface{}
+	var lastRole sql.NullString
+	var lastStatus sql.NullInt64
 	err := row.Scan(&sess.ID, &sess.UserID, &sess.TenantID, &sess.Title, &sess.Category,
-		&sess.PipelineID, &sess.ProxyMode, &sess.MessageCount, &created, &updated)
+		&sess.PipelineID, &sess.ProxyMode, &sess.MessageCount, &created, &updated,
+		&lastRole, &lastStatus)
 	if err != nil {
 		return nil, err
 	}
 	sess.CreatedAt = asTime(created)
 	sess.UpdatedAt = asTime(updated)
+	sess.Ended = sessionEnded(lastRole.String, int(lastStatus.Int64))
 	return &sess, nil
 }
 

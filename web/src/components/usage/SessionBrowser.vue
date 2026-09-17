@@ -1,181 +1,107 @@
 <template>
-  <div class="session-browser" :class="mode">
-    <template v-if="mode === 'compact'">
-      <div class="session-head">
-        <span>{{ t('sessionBrowser.compactTitle') }}</span>
-        <el-button text type="primary" size="small" :loading="loading" @click="reload">{{ t('sessionBrowser.refresh') }}</el-button>
+  <div class="session-browser full">
+    <div class="page-header">
+      <div>
+        <h2>{{ t('sessionBrowser.pageTitle') }}</h2>
+        <p class="subtitle">{{ t('sessionBrowser.pageSubtitle') }}</p>
       </div>
-
-      <el-empty
-        v-if="!loading && sessions.length === 0"
-        :description="t('sessionBrowser.noSessions')"
-        :image-size="64"
-      />
-      <template v-else>
-        <ul class="session-list compact-list">
-          <li
-            v-for="s in pagedSessions"
-            :key="s.id"
-            class="session-item"
-            :class="{ active: s.id === selectedId }"
-            @click="toggleSession(s.id)"
-          >
-            <div class="session-title">
-              <el-icon class="expand-icon">
-                <ArrowDown v-if="s.id === selectedId" />
-                <ArrowRight v-else />
-              </el-icon>
-              {{ s.title || s.id }}
-              <el-button
-                class="compact-delete"
-                text
-                type="danger"
-                size="small"
-                :aria-label="t('sessionBrowser.delete')"
-                @click.stop="deleteOneSession(s)"
-              >
-                <el-icon><Delete /></el-icon>
-              </el-button>
-            </div>
-            <div class="session-meta">
-              <span>{{ s.category || t('sessionBrowser.categoryGeneral') }}</span>
-              <span>{{ t('sessionBrowser.messagesCount', { count: s.message_count || 0 }) }}</span>
-            </div>
-            <div v-if="sessionUsage[s.id]" class="session-usage">
-              <span class="usage-item">
-                <span class="usage-label">{{ t('sessionBrowser.inputTokens') }}</span>
-                {{ formatTokens(sessionUsage[s.id].input_tokens) }}
-              </span>
-              <span class="usage-item">
-                <span class="usage-label">{{ t('sessionBrowser.outputTokens') }}</span>
-                {{ formatTokens(sessionUsage[s.id].output_tokens) }}
-              </span>
-              <span class="usage-item">
-                <span class="usage-label">{{ t('sessionBrowser.inputPrice') }}</span>
-                ${{ formatPrice(sessionUsage[s.id].cost_input_price) }}
-              </span>
-              <span class="usage-item">
-                <span class="usage-label">{{ t('sessionBrowser.outputPrice') }}</span>
-                ${{ formatPrice(sessionUsage[s.id].cost_output_price) }}
-              </span>
-              <span class="usage-item usage-cost">
-                <span class="usage-label">{{ t('sessionBrowser.totalCost') }}</span>
-                ${{ formatCost(sessionUsage[s.id].total_cost) }}
-              </span>
-            </div>
-          </li>
-        </ul>
-
-        <div class="pager">
-          <el-pagination
-            v-model:current-page="page"
-            v-model:page-size="pageSize"
-            :total="sessions.length"
-            :page-sizes="[5, 10, 20]"
-            layout="total, sizes, prev, pager, next, jumper"
-            size="small"
-            background
-          />
-        </div>
-
-        <div v-if="selectedId" class="messages compact-messages">
-          <div class="messages-head">
-            <span>{{ t('sessionBrowser.messagesDetail') }}</span>
-            <el-button text size="small" @click="collapseSession">{{ t('sessionBrowser.collapse') }}</el-button>
-          </div>
-          <div v-if="messagesLoading" class="msg-loading">{{ t('sessionBrowser.loading') }}</div>
-          <template v-else>
-            <div v-for="m in messages" :key="m.id" class="msg" :class="m.role">
-              <span class="role">{{ roleLabel(m.role) }}</span>
-              <pre>{{ displayContent(m) }}</pre>
-            </div>
-            <el-empty
-              v-if="messages.length === 0"
-              :description="emptyDetailHint"
-              :image-size="48"
-            />
-          </template>
-        </div>
-      </template>
-    </template>
-
-    <template v-else>
-      <div class="page-header">
-        <div>
-          <h2>{{ t('sessionBrowser.pageTitle') }}</h2>
-          <p class="subtitle">{{ t('sessionBrowser.pageSubtitle') }}</p>
-        </div>
-        <div class="header-actions">
-          <el-select
-            v-model="category"
-            clearable
-            :placeholder="t('sessionBrowser.allCategories')"
-            style="width: 150px"
-            @change="onFilterChange"
-          >
-            <el-option v-for="c in categories" :key="c" :label="c" :value="c" />
-          </el-select>
-          <el-date-picker
-            v-model="dateRange"
-            type="datetimerange"
-            range-separator="~"
-            :start-placeholder="t('sessionBrowser.since')"
-            :end-placeholder="t('sessionBrowser.until')"
-            :shortcuts="dateShortcuts"
-            style="width: 280px"
-            @change="onFilterChange"
-          />
-          <el-button type="danger" plain :disabled="!hasFilter" @click="deleteFilteredSessions">
-            {{ t('sessionBrowser.deleteFiltered') }}
-          </el-button>
-          <el-button type="primary" :loading="loading" @click="reload">{{ t('sessionBrowser.refresh') }}</el-button>
-        </div>
+      <div class="header-actions">
+        <el-select
+          v-model="category"
+          clearable
+          :placeholder="t('sessionBrowser.allCategories')"
+          style="width: 150px"
+          @change="onFilterChange"
+        >
+          <el-option v-for="c in categories" :key="c" :label="c" :value="c" />
+        </el-select>
+        <el-date-picker
+          v-model="dateRange"
+          type="datetimerange"
+          range-separator="~"
+          :start-placeholder="t('sessionBrowser.since')"
+          :end-placeholder="t('sessionBrowser.until')"
+          :shortcuts="dateShortcuts"
+          style="width: 280px"
+          @change="onFilterChange"
+        />
+        <el-button type="danger" plain :disabled="!hasFilter" @click="deleteFilteredSessions">
+          {{ t('sessionBrowser.deleteFiltered') }}
+        </el-button>
+        <el-button type="primary" :loading="loading" @click="reload">{{ t('sessionBrowser.refresh') }}</el-button>
       </div>
+    </div>
 
-      <el-row :gutter="16" class="body-row">
-        <el-col :xs="24" :md="10" :lg="9">
-          <el-card shadow="never" class="list-card">
-            <template #header>
-              <div class="list-head">
-                <div class="list-title">
-                  <span>{{ t('sessionBrowser.sessionList') }}</span>
-                  <span class="muted">{{ t('sessionBrowser.totalCount', { count: sessions.length }) }}</span>
-                </div>
-                <div class="list-actions">
-                  <el-checkbox
-                    v-model="allSessionsChecked"
-                    :indeterminate="someSessionsChecked"
-                    size="small"
-                  >
-                    {{ t('sessionBrowser.selectAll') }}
-                  </el-checkbox>
-                  <el-button
-                    type="danger"
-                    plain
-                    size="small"
-                    :disabled="checkedSessionIds.length === 0"
-                    @click="deleteSelectedSessions"
-                  >
-                    {{ t('sessionBrowser.deleteSelected') }}
-                  </el-button>
-                </div>
+    <el-row :gutter="16" class="body-row">
+      <el-col :xs="24" :md="10" :lg="9">
+        <el-card shadow="never" class="list-card">
+          <template #header>
+            <div class="list-head">
+              <div class="list-title">
+                <span>{{ t('sessionBrowser.sessionList') }}</span>
+                <span class="muted">{{ t('sessionBrowser.totalCount', { count: sessions.length }) }}</span>
               </div>
-            </template>
-            <el-empty v-if="!loading && sessions.length === 0" :description="t('sessionBrowser.noSessionsFull')" />
-            <div v-else class="session-list full-list">
+              <div class="list-actions">
+                <el-checkbox
+                  v-model="allSessionsChecked"
+                  :indeterminate="someSessionsChecked"
+                  size="small"
+                >
+                  {{ t('sessionBrowser.selectAll') }}
+                </el-checkbox>
+                <el-button
+                  type="danger"
+                  plain
+                  size="small"
+                  :disabled="checkedSessionIds.length === 0"
+                  @click="deleteSelectedSessions"
+                >
+                  {{ t('sessionBrowser.deleteSelected') }}
+                </el-button>
+              </div>
+            </div>
+          </template>
+          <el-empty v-if="!loading && sessions.length === 0" :description="t('sessionBrowser.noSessionsFull')" />
+          <template v-else>
+            <div class="session-list full-list">
               <div
-                v-for="s in sessions"
+                v-for="s in pagedSessions"
                 :key="s.id"
                 class="session-row"
-                :class="{ active: selectedId === s.id }"
+                :class="{ active: selectedId === s.id, 'is-ended': s.ended, 'is-ongoing': !s.ended }"
               >
                 <el-checkbox v-model="checkedSessionIds" :value="s.id" size="small" class="row-checkbox" @click.stop />
-                <button type="button" class="session-item button-item" @click="selectSession(s)">
+                <button type="button" class="button-item" @click="selectSession(s)">
                   <div class="session-title">{{ s.title || s.id }}</div>
                   <div class="session-meta">
-                    <el-tag size="small" type="info">{{ s.category || 'general' }}</el-tag>
+                    <el-tag size="small" type="info">{{ s.category || t('sessionBrowser.categoryGeneral') }}</el-tag>
+                    <el-tag size="small" :type="s.ended ? 'success' : 'warning'">
+                      {{ s.ended ? t('sessionBrowser.ended') : t('sessionBrowser.ongoing') }}
+                    </el-tag>
                     <span>{{ t('sessionBrowser.messagesCount', { count: s.message_count }) }}</span>
                     <span>{{ formatTime(s.updated_at) }}</span>
+                  </div>
+                  <div v-if="sessionUsage[s.id]" class="session-usage">
+                    <span class="usage-item">
+                      <span class="usage-label">{{ t('sessionBrowser.inputTokens') }}</span>
+                      {{ formatTokens(sessionUsage[s.id].input_tokens) }}
+                    </span>
+                    <span class="usage-item">
+                      <span class="usage-label">{{ t('sessionBrowser.outputTokens') }}</span>
+                      {{ formatTokens(sessionUsage[s.id].output_tokens) }}
+                    </span>
+                    <span class="usage-item">
+                      <span class="usage-label">{{ t('sessionBrowser.inputPrice') }}</span>
+                      ${{ formatPrice(sessionUsage[s.id].cost_input_price) }}
+                    </span>
+                    <span class="usage-item">
+                      <span class="usage-label">{{ t('sessionBrowser.outputPrice') }}</span>
+                      ${{ formatPrice(sessionUsage[s.id].cost_output_price) }}
+                    </span>
+                    <span class="usage-item usage-cost">
+                      <span class="usage-label">{{ t('sessionBrowser.totalCost') }}</span>
+                      ${{ formatCost(sessionUsage[s.id].total_cost) }}
+                    </span>
                   </div>
                 </button>
                 <el-button
@@ -190,102 +116,114 @@
                 </el-button>
               </div>
             </div>
-          </el-card>
-        </el-col>
 
-        <el-col :xs="24" :md="14" :lg="15">
-          <el-card shadow="never" class="detail-card">
-            <template #header>
-              <div class="detail-header">
-                <div>
-                  <span>{{ t('sessionBrowser.messagesTitle') }}</span>
-                  <span v-if="selected" class="muted">{{ selected.id }}</span>
-                </div>
-                <div class="detail-actions">
-                  <el-checkbox
-                    v-if="selectedId"
-                    v-model="allMessagesChecked"
-                    :indeterminate="someMessagesChecked"
-                    size="small"
-                  >
-                    {{ t('sessionBrowser.selectAllMessages') }}
-                  </el-checkbox>
-                  <el-button
-                    v-if="selectedId"
-                    text
-                    type="danger"
-                    size="small"
-                    :disabled="checkedMessageIds.length === 0"
-                    @click="deleteSelectedMessages"
-                  >
-                    {{ t('sessionBrowser.deleteSelected') }}
-                  </el-button>
-                  <el-select
-                    v-if="selectedId"
-                    v-model="messageRoleFilter"
-                    :placeholder="t('sessionBrowser.allRoles')"
-                    size="small"
-                    clearable
-                    style="width: 110px"
-                  >
-                    <el-option :label="t('sessionBrowser.roleUser')" value="user" />
-                    <el-option :label="t('sessionBrowser.roleAssistant')" value="assistant" />
-                  </el-select>
-                  <el-button
-                    v-if="selectedId"
-                    text
-                    type="danger"
-                    size="small"
-                    :disabled="!messageRoleFilter"
-                    @click="deleteMessagesByRole"
-                  >
-                    {{ t('sessionBrowser.deleteByRole') }}
-                  </el-button>
-                  <el-button
-                    v-if="selectedId"
-                    text
-                    type="primary"
-                    size="small"
-                    @click="openRelatedCache"
-                  >
-                    {{ t('sessionBrowser.viewRelatedCache') }}
-                  </el-button>
-                </div>
-              </div>
-            </template>
-            <el-empty v-if="!selectedId" :description="t('sessionBrowser.selectSessionHint')" />
-            <div v-else v-loading="messagesLoading" class="message-list">
-              <div v-for="m in messages" :key="m.id" class="message" :class="m.role">
-                <div class="message-head">
-                  <div class="message-role">{{ roleLabel(m.role) }}</div>
-                  <el-checkbox v-model="checkedMessageIds" :value="m.id" size="small" @click.stop />
-                </div>
-                <pre class="message-content">{{ displayContent(m) }}</pre>
-                <div class="message-meta">
-                  <span v-if="m.model">{{ m.model }}</span>
-                  <span v-if="m.backend">{{ m.backend }}</span>
-                  <span>{{ formatTime(m.created_at) }}</span>
-                  <el-button
-                    class="msg-delete"
-                    text
-                    type="danger"
-                    size="small"
-                    :aria-label="t('sessionBrowser.delete')"
-                    @click="deleteOneMessage(m)"
-                  >
-                    <el-icon><Delete /></el-icon>
-                  </el-button>
-                </div>
-              </div>
-              <el-empty
-                v-if="!messagesLoading && messages.length === 0"
-                :description="emptyDetailHint"
+            <div class="pager">
+              <el-pagination
+                v-model:current-page="page"
+                v-model:page-size="pageSize"
+                :total="sessions.length"
+                :page-sizes="[5, 10, 20, 50]"
+                layout="total, sizes, prev, pager, next, jumper"
+                size="small"
+                background
               />
             </div>
-          </el-card>
-        </el-col>
-      </el-row>
-    </template>
+          </template>
+        </el-card>
+      </el-col>
+
+      <el-col :xs="24" :md="14" :lg="15">
+        <el-card shadow="never" class="detail-card">
+          <template #header>
+            <div class="detail-header">
+              <div>
+                <span>{{ t('sessionBrowser.messagesTitle') }}</span>
+                <span v-if="selected" class="muted">{{ selected.id }}</span>
+              </div>
+              <div class="detail-actions">
+                <el-checkbox
+                  v-if="selectedId"
+                  v-model="allMessagesChecked"
+                  :indeterminate="someMessagesChecked"
+                  size="small"
+                >
+                  {{ t('sessionBrowser.selectAllMessages') }}
+                </el-checkbox>
+                <el-button
+                  v-if="selectedId"
+                  text
+                  type="danger"
+                  size="small"
+                  :disabled="checkedMessageIds.length === 0"
+                  @click="deleteSelectedMessages"
+                >
+                  {{ t('sessionBrowser.deleteSelected') }}
+                </el-button>
+                <el-select
+                  v-if="selectedId"
+                  v-model="messageRoleFilter"
+                  :placeholder="t('sessionBrowser.allRoles')"
+                  size="small"
+                  clearable
+                  style="width: 110px"
+                >
+                  <el-option :label="t('sessionBrowser.roleUser')" value="user" />
+                  <el-option :label="t('sessionBrowser.roleAssistant')" value="assistant" />
+                </el-select>
+                <el-button
+                  v-if="selectedId"
+                  text
+                  type="danger"
+                  size="small"
+                  :disabled="!messageRoleFilter"
+                  @click="deleteMessagesByRole"
+                >
+                  {{ t('sessionBrowser.deleteByRole') }}
+                </el-button>
+                <el-button
+                  v-if="selectedId"
+                  text
+                  type="primary"
+                  size="small"
+                  @click="openRelatedCache"
+                >
+                  {{ t('sessionBrowser.viewRelatedCache') }}
+                </el-button>
+              </div>
+            </div>
+          </template>
+          <el-empty v-if="!selectedId" :description="t('sessionBrowser.selectSessionHint')" />
+          <div v-else v-loading="messagesLoading" class="message-list">
+            <div v-for="m in messages" :key="m.id" class="message" :class="m.role">
+              <div class="message-head">
+                <div class="message-role">{{ roleLabel(m.role) }}</div>
+                <el-checkbox v-model="checkedMessageIds" :value="m.id" size="small" @click.stop />
+              </div>
+              <pre class="message-content">{{ displayContent(m) }}</pre>
+              <div class="message-meta">
+                <span v-if="m.model">{{ m.model }}</span>
+                <span v-if="m.backend">{{ m.backend }}</span>
+                <span>{{ formatTime(m.created_at) }}</span>
+                <el-button
+                  class="msg-delete"
+                  text
+                  type="danger"
+                  size="small"
+                  :aria-label="t('sessionBrowser.delete')"
+                  @click="deleteOneMessage(m)"
+                >
+                  <el-icon><Delete /></el-icon>
+                </el-button>
+              </div>
+            </div>
+            <el-empty
+              v-if="!messagesLoading && messages.length === 0"
+              :description="emptyDetailHint"
+            />
+          </div>
+        </el-card>
+      </el-col>
+    </el-row>
   </div>
 </template>
 
@@ -293,7 +231,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
-import { ArrowDown, ArrowRight, Delete } from '@element-plus/icons-vue'
+import { Delete } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import * as convApi from '@/api/conversations'
 import { getSessionsUsageBreakdown } from '@/api/token-usage'
@@ -302,13 +240,6 @@ import type { ConversationMessage, ConversationSession } from '@/api/conversatio
 
 const { t } = useI18n()
 const router = useRouter()
-
-const props = withDefaults(
-  defineProps<{
-    mode?: 'compact' | 'full'
-  }>(),
-  { mode: 'compact' }
-)
 
 const loading = ref(false)
 const messagesLoading = ref(false)
@@ -319,13 +250,12 @@ const selectedId = ref('')
 const selected = ref<ConversationSession | null>(null)
 const messages = ref<ConversationMessage[]>([])
 const page = ref(1)
-const pageSize = ref(5)
+const pageSize = ref(10)
 const dateRange = ref<[Date, Date] | null>(null)
 const checkedSessionIds = ref<string[]>([])
 const checkedMessageIds = ref<string[]>([])
 const messageRoleFilter = ref('')
 
-// 每个会话的计量计价汇总（键为 session_id，来自批量接口）
 interface SessionUsageSummary {
   session_id: string
   request_count: number
@@ -400,7 +330,10 @@ const pagedSessions = computed(() => {
 })
 
 async function loadSessionUsage() {
-  if (props.mode !== 'compact' || pagedSessions.value.length === 0) return
+  if (pagedSessions.value.length === 0) {
+    sessionUsage.value = {}
+    return
+  }
   try {
     const data: any = await getSessionsUsageBreakdown(pagedSessions.value.map((s) => s.id))
     sessionUsage.value = data?.sessions ?? {}
@@ -430,7 +363,7 @@ watch(
 
 function filterParams() {
   const params: { category?: string; since?: string; until?: string } = {}
-  if (props.mode === 'full' && category.value) params.category = category.value
+  if (category.value) params.category = category.value
   if (dateRange.value && dateRange.value[0] && dateRange.value[1]) {
     params.since = new Date(dateRange.value[0]).toISOString()
     params.until = new Date(dateRange.value[1]).toISOString()
@@ -440,6 +373,7 @@ function filterParams() {
 
 function onFilterChange() {
   checkedSessionIds.value = []
+  page.value = 1
   reload()
 }
 
@@ -499,7 +433,6 @@ function displayContent(m: ConversationMessage) {
 }
 
 async function loadCategories() {
-  if (props.mode !== 'full') return
   try {
     const res = await convApi.listCategories()
     categories.value = res.categories ?? []
@@ -512,7 +445,7 @@ async function reload() {
   try {
     const res = await convApi.listSessions({
       ...filterParams(),
-      limit: props.mode === 'compact' ? 500 : 100,
+      limit: 500,
       offset: 0
     })
     sessions.value = res?.sessions ?? []
@@ -526,31 +459,9 @@ async function reload() {
     void loadSessionUsage()
   } catch (e: any) {
     sessions.value = []
-    if (props.mode === 'full') {
-      ElMessage.error(t('loadSessionsFailed') + ' ' + (e?.message || e))
-    }
+    ElMessage.error(t('loadSessionsFailed') + ' ' + (e?.message || e))
   } finally {
     loading.value = false
-  }
-}
-
-async function toggleSession(id: string) {
-  if (selectedId.value === id) {
-    collapseSession()
-    return
-  }
-  selectedId.value = id
-  checkedMessageIds.value = []
-  messagesLoading.value = true
-  messages.value = []
-  try {
-    const res = await convApi.listMessages(id, { limit: 100 })
-    messages.value = res?.messages ?? []
-  } catch (e: any) {
-    messages.value = []
-    ElMessage.error(t('loadMessagesFailed') + ' ' + (e?.message || e))
-  } finally {
-    messagesLoading.value = false
   }
 }
 
@@ -701,10 +612,9 @@ async function deleteMessagesByRole() {
 
 async function reloadKeepSelection() {
   await reload()
-  if (selectedId.value && props.mode === 'compact') {
-    const id = selectedId.value
-    selectedId.value = ''
-    await toggleSession(id)
+  if (selectedId.value) {
+    const s = sessions.value.find((x) => x.id === selectedId.value)
+    if (s) await selectSession(s)
   }
 }
 
@@ -717,127 +627,8 @@ defineExpose({ reload: reloadKeepSelection })
 </script>
 
 <style scoped>
-.session-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 8px;
-  font-weight: 600;
-}
-.compact-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  max-height: 220px;
-  overflow: auto;
-  border: 1px solid var(--el-border-color-lighter);
-  border-radius: 8px;
-}
-.session-item {
-  padding: 8px 10px;
-  cursor: pointer;
-  border-bottom: 1px solid var(--el-border-color-extra-light);
-}
-.session-item:last-child {
-  border-bottom: none;
-}
-.session-item:hover,
-.session-item.active {
-  background: var(--el-fill-color-light);
-}
-.session-title {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 13px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.expand-icon {
-  flex-shrink: 0;
-  color: var(--el-text-color-secondary);
-}
-.session-meta {
-  margin-top: 2px;
-  margin-left: 18px;
-  display: flex;
-  gap: 10px;
-  font-size: 12px;
-  color: var(--el-text-color-secondary);
-}
-.session-usage {
-  margin-top: 4px;
-  margin-left: 18px;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 12px;
-  font-size: 11px;
-  color: var(--el-text-color-secondary);
-  line-height: 1.6;
-}
-.usage-item {
-  white-space: nowrap;
-}
-.usage-label {
-  margin-right: 2px;
-  color: var(--el-text-color-placeholder);
-}
-.usage-cost {
-  font-weight: 600;
-  color: var(--el-text-color-primary);
-}
-.pager {
-  margin-top: 8px;
-  display: flex;
-  justify-content: flex-end;
-}
-.compact-messages {
-  margin-top: 10px;
-  max-height: 240px;
-  overflow: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  border: 1px solid var(--el-border-color-lighter);
-  border-radius: 8px;
-  padding: 8px;
-}
-.messages-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--el-text-color-secondary);
-}
-.msg-loading {
-  font-size: 12px;
-  color: var(--el-text-color-secondary);
-}
-.msg {
-  border-radius: 8px;
-  padding: 8px 10px;
-  background: var(--el-fill-color-lighter);
-}
-.msg.assistant {
-  background: var(--el-color-primary-light-9);
-}
-.msg .role {
-  font-size: 11px;
-  color: var(--el-text-color-secondary);
-  text-transform: uppercase;
-}
-.msg pre {
-  margin: 4px 0 0;
-  white-space: pre-wrap;
-  word-break: break-word;
-  font-family: inherit;
-  font-size: 13px;
-}
-
 .session-browser.full {
-  padding: 16px 20px 32px;
+  padding: 0;
 }
 .page-header {
   display: flex;
@@ -910,15 +701,16 @@ defineExpose({ reload: reloadKeepSelection })
   color: var(--el-text-color-secondary);
   font-size: 0.85rem;
 }
-.compact-delete {
-  flex-shrink: 0;
-  margin-left: auto;
+.pager {
+  margin-top: 12px;
+  display: flex;
+  justify-content: flex-end;
 }
 .full-list {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  max-height: 70vh;
+  max-height: 60vh;
   overflow: auto;
 }
 .session-row {
@@ -936,15 +728,6 @@ defineExpose({ reload: reloadKeepSelection })
 .msg-delete {
   margin-left: auto;
 }
-.message-meta {
-  margin-top: 6px;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  font-size: 0.75rem;
-  color: var(--el-text-color-secondary);
-  align-items: center;
-}
 .button-item {
   text-align: left;
   border: 1px solid var(--el-border-color-lighter);
@@ -960,6 +743,12 @@ defineExpose({ reload: reloadKeepSelection })
   border-color: var(--el-color-primary);
   background: var(--el-color-primary-light-9);
 }
+.session-row.is-ended .button-item {
+  border-left: 3px solid var(--el-color-success);
+}
+.session-row.is-ongoing .button-item {
+  border-left: 3px solid var(--el-color-warning);
+}
 .button-item .session-title {
   font-weight: 600;
   margin-bottom: 6px;
@@ -971,11 +760,31 @@ defineExpose({ reload: reloadKeepSelection })
   flex-wrap: wrap;
   gap: 8px;
 }
+.session-usage {
+  margin-top: 6px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  font-size: 11px;
+  color: var(--el-text-color-secondary);
+  line-height: 1.6;
+}
+.usage-item {
+  white-space: nowrap;
+}
+.usage-label {
+  margin-right: 2px;
+  color: var(--el-text-color-placeholder);
+}
+.usage-cost {
+  font-weight: 600;
+  color: var(--el-text-color-primary);
+}
 .message-list {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  max-height: 70vh;
+  max-height: 60vh;
   overflow: auto;
 }
 .message {
@@ -994,6 +803,11 @@ defineExpose({ reload: reloadKeepSelection })
   font-weight: 600;
   margin-bottom: 4px;
   color: var(--el-text-color-secondary);
+}
+.message-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 .message-content {
   margin: 0;

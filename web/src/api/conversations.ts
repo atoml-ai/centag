@@ -9,6 +9,7 @@ export interface ConversationSession {
   pipeline_id?: string
   proxy_mode?: string
   message_count: number
+  ended?: boolean
   created_at: string
   updated_at: string
 }

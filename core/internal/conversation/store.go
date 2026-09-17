@@ -15,8 +15,13 @@ type Session struct {
 	PipelineID   string    `json:"pipeline_id,omitempty"`
 	ProxyMode    string    `json:"proxy_mode,omitempty"`
 	MessageCount int       `json:"message_count"`
+	Ended        bool      `json:"ended"`
 	CreatedAt    time.Time `json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`
+}
+
+func sessionEnded(lastRole string, lastStatus int) bool {
+	return lastRole == "assistant" && lastStatus < 400
 }
 
 // Message is one turn (user or assistant) inside a session.

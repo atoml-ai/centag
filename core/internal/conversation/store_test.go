@@ -278,6 +278,63 @@ func testDeleteMessages(t *testing.T, store Store) {
 	}
 }
 
+func TestStore_EndedFlag(t *testing.T) {
+	t.Run("file", func(t *testing.T) {
+		testEndedFlag(t, NewFileStore(t.TempDir()))
+	})
+	t.Run("sqlite", func(t *testing.T) {
+		testEndedFlag(t, newSQLStore(t))
+	})
+}
+
+func testEndedFlag(t *testing.T, store Store) {
+	t.Helper()
+	ctx := context.Background()
+
+	done, err := store.EnsureSession(ctx, &Session{UserID: 7, Category: "done"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = store.AppendMessage(ctx, &Message{SessionID: done.ID, Role: "user", Content: "q"})
+	_ = store.AppendMessage(ctx, &Message{SessionID: done.ID, Role: "assistant", Content: "a", StatusCode: 200})
+
+	pending, err := store.EnsureSession(ctx, &Session{UserID: 7, Category: "pending"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = store.AppendMessage(ctx, &Message{SessionID: pending.ID, Role: "user", Content: "q"})
+
+	failed, err := store.EnsureSession(ctx, &Session{UserID: 7, Category: "failed"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = store.AppendMessage(ctx, &Message{SessionID: failed.ID, Role: "user", Content: "q"})
+	_ = store.AppendMessage(ctx, &Message{SessionID: failed.ID, Role: "assistant", Content: "err", StatusCode: 502})
+
+	list, err := store.ListSessions(ctx, ListSessionsQuery{UserID: 7, Limit: 100})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]*Session{}
+	for _, s := range list {
+		got[s.ID] = s
+	}
+	if s := got[done.ID]; s == nil || !s.Ended {
+		t.Fatalf("done session ended=%v, want true", s)
+	}
+	if s := got[pending.ID]; s == nil || s.Ended {
+		t.Fatalf("pending session ended=%v, want false", s)
+	}
+	if s := got[failed.ID]; s == nil || s.Ended {
+		t.Fatalf("failed session ended=%v, want false", s)
+	}
+
+	one, err := store.GetSession(ctx, pending.ID)
+	if err != nil || one == nil || one.Ended {
+		t.Fatalf("GetSession pending ended=%v err=%v, want false", one, err)
+	}
+}
+
 func newSQLStore(t *testing.T) Store {
 	t.Helper()
 	db, err := sql.Open("sqlite", "file:conv_del?mode=memory&cache=shared")
