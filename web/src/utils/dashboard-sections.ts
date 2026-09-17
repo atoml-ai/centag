@@ -37,6 +37,10 @@ export interface DashboardSections {
   pipelineCreateButton: boolean
   /** 用量与会话（含计费规则入口） */
   usageBilling: boolean
+  usageMetricsOnly: boolean
+  /** 概览内嵌用量分析（趋势 + 按后端模型/Key）；minimal 除外 */
+  usageAnalytics: boolean
+  recentSessions: boolean
   /** 用量提示：进程内 ephemeral */
   usageEphemeralHint: boolean
   /** 流水线「测试」用的精简 AI 对话抽屉（与 minimal 共用 MinimalChat） */
@@ -63,7 +67,10 @@ export function sectionsFromCapabilities(caps: Capabilities): DashboardSections 
       backends: caps.homeBackendsPanel,
       pipelines: caps.homePipelinesPanel,
       pipelineCreateButton: true,
-      usageBilling: caps.usageBilling,
+      usageBilling: caps.role !== 'minimal',
+      usageMetricsOnly: caps.role === 'minimal',
+      usageAnalytics: caps.role !== 'minimal',
+      recentSessions: true,
       usageEphemeralHint: caps.role === 'minimal',
       liteChatDrawer: caps.pipelineTestChat,
       opsStats: false
@@ -87,6 +94,9 @@ export function sectionsFromCapabilities(caps: Capabilities): DashboardSections 
     pipelines: caps.homePipelinesPanel,
     pipelineCreateButton: false,
     usageBilling: caps.usageBilling,
+    usageMetricsOnly: false,
+    usageAnalytics: false,
+    recentSessions: false,
     usageEphemeralHint: false,
     liteChatDrawer: caps.pipelineTestChat,
     opsStats: caps.opsStats

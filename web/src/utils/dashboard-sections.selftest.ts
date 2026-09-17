@@ -26,6 +26,9 @@ function run() {
         liteChatDrawer: true,
         accessQuickLinks: false,
         usageBilling: true,
+        usageMetricsOnly: false,
+        usageAnalytics: true,
+        recentSessions: true,
         accessPanel: true
       }
     },
@@ -38,6 +41,9 @@ function run() {
         liteChatDrawer: true,
         accessQuickLinks: false,
         usageBilling: true,
+        usageMetricsOnly: false,
+        usageAnalytics: true,
+        recentSessions: true,
         databaseInfo: false
       }
     },
@@ -52,6 +58,9 @@ function run() {
         backends: false,
         pipelines: false,
         usageBilling: true,
+        usageMetricsOnly: false,
+        usageAnalytics: false,
+        recentSessions: false,
         opsStats: true,
         pipelineCreateButton: false,
         teamAccessInStatus: true,
@@ -65,7 +74,10 @@ function run() {
       expect: {
         layout: 'lite',
         headerActions: true,
-        liteChatDrawer: false,
+        liteChatDrawer: true,
+        usageBilling: false,
+        usageMetricsOnly: true,
+        recentSessions: true,
         usageEphemeralHint: true,
         accessQuickLinks: false
       }

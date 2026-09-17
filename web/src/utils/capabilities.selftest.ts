@@ -61,6 +61,7 @@ function run() {
         memoryFull: false,
         navHostProxyTools: false,
         navFallbackPolicy: false,
+        usageBilling: false,
         systemConfig: true,
         localProxy: true,
         liteHome: true
@@ -92,7 +93,7 @@ function run() {
       edition: 'minimal',
       isAdmin: false,
       flags: {
-        pipelineTestChat: false,
+        pipelineTestChat: true,
         navChatPage: false,
         storageConfig: false,
         navMoreMenu: false,
@@ -110,7 +111,7 @@ function run() {
     expectFlags(row.label, getCapabilities(row.edition, row.isAdmin), row.flags)
   }
 
-  // All roles: no independent chat nav; pipeline test chat except minimal (概览-only)
+  // All roles: no independent chat nav; pipeline test chat for all editions
   for (const [edition, admin] of [
     ['personal', true],
     ['team', false],
@@ -119,7 +120,7 @@ function run() {
   ] as const) {
     const caps = getCapabilities(edition, admin)
     assert(caps.navChatPage === false, `${edition}/${admin}: navChatPage must be false`)
-    assert(caps.pipelineTestChat === (edition !== 'minimal'), `${edition}/${admin}: pipelineTestChat must be ${edition !== 'minimal'}`)
+    assert(caps.pipelineTestChat === true, `${edition}/${admin}: pipelineTestChat must be true`)
   }
 
   console.log('capabilities.selftest: OK')

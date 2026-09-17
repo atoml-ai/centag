@@ -53,10 +53,12 @@ function run() {
       name: 'personal worker',
       edition: 'personal',
       isAdmin: true,
-      // 顶栏仅首页/用量/接入；更多整体隐藏；系统配置走用户菜单
-      mustHave: ['dashboard', 'usage', 'access'],
+      // 顶栏仅首页/接入；用量分析已并入概览，更多整体隐藏；系统配置走用户菜单
+      mustHave: ['dashboard', 'access'],
       mustNot: [
         'chat',
+        'usage',
+        'token-usage',
         'backends',
         'pipelines',
         'personal-config',
@@ -79,10 +81,12 @@ function run() {
       name: 'team_user worker',
       edition: 'team',
       isAdmin: false,
-      // 与 personal 对齐：顶栏仅概览/统计管理/接入管理；更多/记忆等随 personal 暂隐
-      mustHave: ['dashboard', 'usage', 'access', 'metering-billing'],
+      // 与 personal 对齐：顶栏仅概览/接入管理；统计管理已移除
+      mustHave: ['dashboard', 'access'],
       mustNot: [
         'chat',
+        'usage',
+        'metering-billing',
         'backends',
         'pipelines',
         'storage-config',
@@ -146,11 +150,11 @@ function run() {
     }
   }
 
-  // personal 顶栏不再含 more；与 team_user 顶栏不必完全一致
+  // personal 顶栏不再含 more；用量分析已并入概览
   const personalTop = getNavMenu('personal', true).map((n) => n.id)
   assert(
-    JSON.stringify(personalTop) === JSON.stringify(['dashboard', 'usage', 'access']),
-    'personal top-level nav should be dashboard/usage/access'
+    JSON.stringify(personalTop) === JSON.stringify(['dashboard', 'access']),
+    'personal top-level nav should be dashboard/access'
   )
 
   // personal 更多结构仍收纳实验入口（虽不挂顶栏）
