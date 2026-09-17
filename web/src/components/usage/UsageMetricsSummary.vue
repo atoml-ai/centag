@@ -2,6 +2,7 @@
   <div class="usage-metrics" :class="mode">
     <div class="filter-bar">
       <el-date-picker
+        v-if="!metricsOnly"
         v-model="dateRange"
         type="daterange"
         size="small"
@@ -13,18 +14,29 @@
         @change="reload"
       />
       <el-button size="small" :loading="loading" @click="reload">{{ t('usageMetricsSummary.refresh') }}</el-button>
-      <el-button v-if="effectiveShowBilling" size="small" type="primary" plain @click="emit('open-billing')">
+      <el-button
+        v-if="!metricsOnly && effectiveShowBilling"
+        size="small"
+        type="primary"
+        plain
+        @click="emit('open-billing')"
+      >
         {{ t('usageMetricsSummary.billingRules') }}
       </el-button>
-      <el-radio-group v-model="displayCurrency" size="small" @change="onDisplayCurrencyChange">
+      <el-radio-group
+        v-if="!metricsOnly"
+        v-model="displayCurrency"
+        size="small"
+        @change="onDisplayCurrencyChange"
+      >
         <el-radio-button value="USD">{{ t('usageMetricsSummary.currencyUSD') }}</el-radio-button>
         <el-radio-button value="CNY">{{ t('usageMetricsSummary.currencyCNY') }}</el-radio-button>
       </el-radio-group>
       <slot name="actions" />
     </div>
 
-    <div class="usage-stats">
-      <div class="stat">
+    <div class="usage-stats" :class="{ 'usage-stats--metrics-only': metricsOnly }">
+      <div v-if="!metricsOnly" class="stat">
         <div class="stat-value">{{ currencySymbol }}{{ formatCost(summary.total_cost_usd) }}</div>
         <div class="stat-label">
           {{
@@ -52,7 +64,7 @@
       </div>
     </div>
 
-    <div class="distribution-row">
+    <div v-if="!metricsOnly" class="distribution-row">
       <div v-if="backendGroups.length" class="groups-block">
         <div class="block-title">{{ t('usageMetricsSummary.byBackend') }}</div>
         <el-table :data="backendGroups" size="small" stripe :max-height="mode === 'compact' ? 180 : 320" @expand-change="onBackendExpand">
@@ -128,11 +140,13 @@ const props = withDefaults(
     mode?: 'compact' | 'full'
     hint?: string
     showBillingButton?: boolean
+    metricsOnly?: boolean
   }>(),
   {
     mode: 'compact',
     hint: '',
-    showBillingButton: true
+    showBillingButton: true,
+    metricsOnly: false
   }
 )
 
@@ -342,7 +356,11 @@ function groupRecords(records: any[], keyOf: (r: any) => string | undefined): co
 async function reload() {
   loading.value = true
   try {
-    await Promise.all([loadUsage(), loadCostSummary()])
+    if (props.metricsOnly) {
+      await loadUsage()
+    } else {
+      await Promise.all([loadUsage(), loadCostSummary()])
+    }
     emit('loaded')
   } finally {
     loading.value = false
@@ -379,6 +397,9 @@ defineExpose({
 }
 .usage-metrics.full .usage-stats {
   gap: 16px;
+}
+.usage-stats--metrics-only {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 .stat {
   background: var(--el-fill-color-light);
