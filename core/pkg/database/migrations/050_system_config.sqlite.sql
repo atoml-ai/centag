@@ -1,8 +1,10 @@
 -- System config KV table (B-tier, §4.6)
 -- Handles existing table from migration 001 (columns: config_key, config_value)
 -- by creating a new table, migrating data, and dropping the old one.
+--
+-- @skip_if_table_has_columns system_config key,value,value_type,scope,enabled,description,created_at,updated_at
 
--- Step 1: Create new table with correct schema
+-- Step 1: Create new table with correct schema (IF NOT EXISTS makes this safe)
 CREATE TABLE IF NOT EXISTS system_config_new (
     key         TEXT PRIMARY KEY,
     value       TEXT NOT NULL DEFAULT '',
@@ -14,7 +16,7 @@ CREATE TABLE IF NOT EXISTS system_config_new (
     updated_at  DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
--- Step 2: Migrate data from old table if it exists
+-- Step 2: Migrate data from old table (columns: config_key, config_value, description, updated_at)
 INSERT OR IGNORE INTO system_config_new (key, value, value_type, scope, description, updated_at)
 SELECT config_key, config_value, 'string', 'core', COALESCE(description, ''), updated_at
 FROM system_config

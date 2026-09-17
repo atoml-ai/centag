@@ -33,6 +33,10 @@ type Migration struct {
 	Created     time.Time
 	UpSQL       string
 	DownSQL     string
+
+	// SkipIfTableHasColumns 表示若指定表已包含所有列出的列，则跳过该迁移。
+	// 格式: "table_name:col1,col2,col3"  用于表重建类迁移的幂等检测。
+	SkipIfTableHasColumns string
 }
 
 // Migrator 数据库迁移器
@@ -359,6 +363,14 @@ func (m *Migrator) parseMigrationFile(filename string) (Migration, error) {
 		migration.DownSQL = ""
 	}
 
+	// 解析 @skip_if_table_has_columns 指令（支持放在文件任意位置）
+	re := regexp.MustCompile(`--\s*@skip_if_table_has_columns\s+(\w+)\s+([\w,\s]+)`)
+	if match := re.FindStringSubmatch(contentStr); len(match) == 3 {
+		table := strings.TrimSpace(match[1])
+		cols := strings.TrimSpace(match[2])
+		migration.SkipIfTableHasColumns = table + ":" + cols
+	}
+
 	return migration, nil
 }
 
@@ -374,6 +386,22 @@ func (m *Migrator) applyMigration(migration Migration) error {
 		return err
 	}
 	defer tx.Rollback()
+
+	// 幂等检测：若 SkipIfTableHasColumns 指定的列已存在，跳过整个迁移。
+	if migration.SkipIfTableHasColumns != "" {
+		if skip, err := tableHasColumns(tx, m.dbType, migration.SkipIfTableHasColumns); err != nil {
+			return err
+		} else if skip {
+			migratorInfof("[MIGRATE] 跳过迁移 %s - %s（目标表已有新 schema）", migration.Version, migration.Name)
+			// 仍然记录为已执行，避免下次重跑
+			insertQuery := `INSERT OR IGNORE INTO schema_migrations (version, name) VALUES (?, ?)`
+			if m.dbType != "sqlite" {
+				insertQuery = `INSERT INTO schema_migrations (version, name) VALUES ($1, $2) ON CONFLICT DO NOTHING`
+			}
+			_, _ = tx.Exec(insertQuery, migration.Version, migration.Name)
+			return tx.Commit()
+		}
+	}
 
 	// 执行 Up SQL
 	if err := m.executeSQLInTx(tx, migration.UpSQL); err != nil {
@@ -500,6 +528,44 @@ func columnExists(tx *sql.Tx, dbType, stmt string) (bool, error) {
 		return false, fmt.Errorf("failed to check column %s.%s existence: %w", table, column, err)
 	}
 	return n > 0, nil
+}
+
+// tableHasColumns 判断指定表是否已包含所有列出的列。
+// 用于表重建类迁移的幂等检测：若目标表已有新 schema，则整个迁移可跳过。
+func tableHasColumns(tx *sql.Tx, dbType, directive string) (bool, error) {
+	parts := strings.SplitN(directive, ":", 2)
+	if len(parts) != 2 {
+		return false, nil
+	}
+	table := parts[0]
+	cols := strings.Split(parts[1], ",")
+
+	for _, col := range cols {
+		col = strings.TrimSpace(col)
+		if col == "" {
+			continue
+		}
+		var n int
+		var err error
+		if dbType == "sqlite" {
+			err = tx.QueryRow(
+				`SELECT COUNT(*) FROM pragma_table_info(?) WHERE name = ?`,
+				table, col,
+			).Scan(&n)
+		} else {
+			err = tx.QueryRow(
+				`SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = $1 AND column_name = $2`,
+				table, col,
+			).Scan(&n)
+		}
+		if err != nil {
+			return false, fmt.Errorf("failed to check column %s.%s existence: %w", table, col, err)
+		}
+		if n == 0 {
+			return false, nil
+		}
+	}
+	return true, nil
 }
 
 // removeMigrationRecord 从记录表中删除迁移
