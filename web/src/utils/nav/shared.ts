@@ -66,10 +66,6 @@ export function chatNav(): NavItem {
   return { id: 'chat', labelKey: 'nav.chat', icon: 'ChatDotRound', path: '/chat' }
 }
 
-export function conversationsNav(): NavItem {
-  return { id: 'conversations', labelKey: 'nav.conversations', icon: 'ChatLineSquare', path: '/conversations' }
-}
-
 export function tokenUsageNav(labelKey = 'nav.tokenUsage'): NavItem {
   return { id: 'token-usage', labelKey, icon: 'TrendCharts', path: '/token-usage' }
 }
@@ -168,22 +164,25 @@ export function navGroup(
   }
 }
 
-/** 用量：会话记录 → 计量计费（Team 合并页）/ 用量统计（Personal） */
-export function usageNavGroup(caps?: { role?: string }): NavItem {
+/** 用量：计量计费（Team 合并页）；Personal 用量分析已并入概览首页，无独立导航 */
+export function usageNavGroup(caps?: { role?: string }): NavItem | null {
   const isTeam = caps?.role === 'team_user' || caps?.role === 'team_admin'
-  const children: NavItem[] = [conversationsNav()]
-  if (isTeam) {
-    children.push({
-      id: 'metering-billing',
-      labelKey: 'nav.meteringBilling',
-      icon: 'Wallet',
-      path: '/metering-billing',
-      requiresTeam: true
-    })
-  } else {
-    children.push(tokenUsageNav('nav.tokenUsage'))
-  }
-  return navGroup('usage', 'nav.usage', 'TrendCharts', children, children[0]?.path)
+  if (!isTeam) return null
+  return navGroup(
+    'usage',
+    'nav.usage',
+    'TrendCharts',
+    [
+      {
+        id: 'metering-billing',
+        labelKey: 'nav.meteringBilling',
+        icon: 'Wallet',
+        path: '/metering-billing',
+        requiresTeam: true
+      }
+    ],
+    '/metering-billing'
+  )
 }
 
 /** 接入：系统代理 + Agent 配置 + 内置 Agent 助手（Skill 管理已改为 Agent 页内对话框） */
@@ -320,7 +319,8 @@ export function buildWorkerNav(caps: Capabilities): NavItem[] {
   const items: NavItem[] = [dashboardNav('nav.dashboard')]
 
   if (caps.usageBilling) {
-    items.push(usageNavGroup(caps))
+    const usage = usageNavGroup(caps)
+    if (usage) items.push(usage)
   }
   if (caps.localProxy || caps.agentSetup) {
     items.push(accessNavGroup())
@@ -370,8 +370,8 @@ export function personalAppGroup(): NavItem {
     'personal-app',
     'nav.application',
     'Grid',
-    [conversationsNav(), tokenUsageNav('nav.tokenUsage'), logsNav()],
-    '/conversations'
+    [tokenUsageNav('nav.tokenUsage'), logsNav()],
+    '/token-usage'
   )
 }
 
@@ -435,7 +435,6 @@ export function appGroup(options?: { tokenUsageLabel?: string }): NavItem {
     icon: 'Grid',
     path: '/token-usage',
     children: [
-      conversationsNav(),
       tokenUsageNav(options?.tokenUsageLabel ?? 'nav.tokenUsage'),
       costDashboardNav(),
       abComparisonNav(),

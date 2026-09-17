@@ -133,6 +133,10 @@ function run() {
 
   // 计量计费（套餐与对账）仅 team 发行版：personal/minimal 一律踢回概览
   assert(
+    resolveEditionRouteRedirect('/token-usage', 'personal', true) === '/dashboard',
+    'edition: personal token-usage merged into dashboard'
+  )
+  assert(
     resolveEditionRouteRedirect('/metering-billing', 'personal', false) === '/dashboard',
     'edition: personal metering-billing blocked'
   )

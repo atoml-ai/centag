@@ -25,11 +25,9 @@ const ClashRules = () => import('@/views/ClashRules.vue')
 const LogViewer = () => import('@/views/LogViewer.vue')
 const RequestTrace = () => import('@/views/RequestTrace.vue')
 const TokenUsage = () => import('@/views/TokenUsage.vue')
-const Conversations = () => import('@/views/Conversations.vue')
 const CostDashboard = () => import('@/views/CostDashboard.vue')
 const BillingRules = () => import('@/views/BillingRules.vue')
 const PersonalConfig = () => import('@/views/PersonalConfig.vue')
-const PersonalUsage = () => import('@/views/PersonalUsage.vue')
 const Memory = () => import('@/views/Memory.vue')
 const ProxyModes = () => import('@/views/ProxyModes.vue')
 const SessionMode = () => import('@/views/SessionMode.vue')
@@ -149,13 +147,6 @@ const routes = [
         }
       ]),
   {
-    path: '/conversations',
-    name: 'Conversations',
-    component: Conversations,
-    meta: { titleKey: 'route.conversations' }
-  },
-
-  {
     path: '/billing',
     name: 'BillingRules',
     component: BillingRules,
@@ -166,12 +157,6 @@ const routes = [
     name: 'PersonalConfig',
     component: PersonalConfig,
     meta: { titleKey: 'route.personalConfig' }
-  },
-  {
-    path: '/personal-usage',
-    name: 'PersonalUsage',
-    component: PersonalUsage,
-    meta: { titleKey: 'route.personalUsage' }
   },
   {
     path: '/cost',

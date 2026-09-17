@@ -87,7 +87,6 @@ export const TEAM_ADMIN_ALLOWED_ROUTE_PREFIXES = [
 /** @deprecated 改用 isTeamAdminAllowedRoute 白名单 */
 export const TEAM_ADMIN_BUSINESS_ROUTE_PREFIXES = [
   '/chat',
-  '/conversations',
   '/token-usage',
   '/billing'
 ] as const
@@ -220,6 +219,10 @@ export function resolveEditionRouteRedirect(
   if (path === '/login' || path.startsWith('/login')) return null
 
   if (edition === 'personal' && isTeamOnlyRoute(path)) {
+    return '/dashboard'
+  }
+
+  if (edition === 'personal' && (path === '/token-usage' || path.startsWith('/token-usage/'))) {
     return '/dashboard'
   }
 
