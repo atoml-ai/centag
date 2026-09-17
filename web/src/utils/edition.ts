@@ -183,6 +183,9 @@ export function resolveCapabilityRouteRedirect(
   }
 
   if (!caps.storageConfig && isStorageConfigPath(path)) {
+    // /cache is always allowed (read-only data view, linked from SessionBrowser)
+    const p = normalizePath(path)
+    if (p === '/cache' || p.startsWith('/cache/')) return null
     return '/dashboard'
   }
 
