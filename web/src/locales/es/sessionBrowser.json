@@ -1,5 +1,7 @@
 {
   "compactTitle": "Conversaciones recientes",
+  "ended": "Finalizada",
+  "ongoing": "En curso",
   "refresh": "Actualizar",
   "noSessions": "No hay sesiones. Inicie una conversación con IA primero",
   "categoryGeneral": "general",

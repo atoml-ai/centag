@@ -34,7 +34,6 @@ import billingRulesDialog from './billingRulesDialog.json'
 import billingRules from './billingRules.json'
 import pricingSync from './pricingSync.json'
 import personalConfig from './personalConfig.json'
-import personalUsage from './personalUsage.json'
 import modelSelector from './modelSelector.json'
 import pipelineNode from './pipelineNode.json'
 import securitySettingsDialog from './securitySettingsDialog.json'
@@ -103,7 +102,6 @@ const ja = {
   billingRules,
   pricingSync,
   personalConfig,
-  personalUsage,
   nodeConfig,
   modelSelector,
   pipelineNode,

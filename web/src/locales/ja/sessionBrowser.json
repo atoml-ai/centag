@@ -1,5 +1,7 @@
 {
   "compactTitle": "最近の会話",
+  "ended": "終了",
+  "ongoing": "進行中",
   "refresh": "更新",
   "noSessions": "セッションがありません。AI との会話を開始してください",
   "categoryGeneral": "一般",

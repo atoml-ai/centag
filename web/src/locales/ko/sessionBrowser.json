@@ -1,5 +1,7 @@
 {
   "compactTitle": "최근 대화",
+  "ended": "종료됨",
+  "ongoing": "진행 중",
   "refresh": "새로고침",
   "noSessions": "세션이 없습니다. AI 대화를 시작하세요",
   "categoryGeneral": "일반",

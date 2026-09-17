@@ -1,5 +1,7 @@
 {
   "compactTitle": "最近对话",
+  "ended": "已结束",
+  "ongoing": "进行中",
   "refresh": "刷新",
   "noSessions": "暂无会话，先发起一次 AI 对话",
   "categoryGeneral": "general",

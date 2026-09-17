@@ -1,5 +1,7 @@
 {
   "compactTitle": "Недавние разговоры",
+  "ended": "Завершён",
+  "ongoing": "В процессе",
   "refresh": "Обновить",
   "noSessions": "Нет сессий. Начните разговор с AI",
   "categoryGeneral": "общий",
