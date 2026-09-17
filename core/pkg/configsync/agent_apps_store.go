@@ -249,6 +249,16 @@ var allowedInstallURLHosts = map[string]bool{
 	"marketplace.visualstudio.com": true,
 	"chromewebstore.google.com":    true,
 	"apps.apple.com":     true,
+	// AI vendor official sites
+	"anthropic.com":      true,
+	"claude.ai":          true,
+	"openai.com":         true,
+	"google.com":         true,
+	"gemini.google.com":  true,
+	"tencent.com":        true,
+	"codebuddy.tencent.com": true,
+	"trae.ai":            true,
+	"bytedance.com":      true,
 }
 
 // isValidInstallURL checks that the URL uses https and the host is in the allowlist.

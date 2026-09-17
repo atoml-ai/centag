@@ -1,0 +1,124 @@
+# Agent Apps 初始化数据
+# 用于 configsync 飞书同步时的默认数据
+# Schema 参见 core/pkg/configsync/agent_apps_store.go AgentAppRow
+
+- type_id: claude-code
+  display_name: Claude Code
+  description: Anthropic 官方 CLI 编程助手，支持终端内代码生成、编辑与对话
+  vendor: Anthropic
+  category: cli
+  enabled: true
+  sort: 100
+  install_url: https://docs.anthropic.com/en/docs/claude-code/overview
+  install_hint: npm install -g @anthropic-ai/claude-code
+  meta_json: '{"ui_guide":{"settings_path":"~/.claude/settings.json","env_vars":["ANTHROPIC_API_KEY"]},"companion_cli":{"install_only":true},"verified_write":true,"verified_wrap":true,"verified_ui":false}'
+
+- type_id: claude-desktop
+  display_name: Claude Desktop
+  description: Anthropic 官方桌面客户端，支持 MCP 协议与本地工具集成
+  vendor: Anthropic
+  category: desktop
+  enabled: true
+  sort: 90
+  install_url: https://claude.ai/download
+  install_hint: 从官网下载安装包
+  meta_json: '{"ui_guide":{"settings_path":"~/Library/Application Support/Claude/claude_desktop_config.json","env_vars":[]},"verified_write":false,"verified_wrap":true,"verified_ui":true}'
+
+- type_id: codex
+  display_name: Codex CLI
+  description: OpenAI 官方 CLI 编程助手，支持代码生成与终端交互
+  vendor: OpenAI
+  category: cli
+  enabled: true
+  sort: 80
+  install_url: https://github.com/openai/codex
+  install_hint: npm install -g @openai/codex
+  meta_json: '{"ui_guide":{"settings_path":"~/.codex/config.yaml","env_vars":["OPENAI_API_KEY"]},"companion_cli":{"install_only":true},"verified_write":true,"verified_wrap":true,"verified_ui":false}'
+
+- type_id: gemini-cli
+  display_name: Gemini CLI
+  description: Google 官方 CLI 编程助手，支持 Gemini 模型交互
+  vendor: Google
+  category: cli
+  enabled: true
+  sort: 70
+  install_url: https://github.com/google-gemini/gemini-cli
+  install_hint: npm install -g @anthropic-ai/gemini-cli
+  meta_json: '{"ui_guide":{"settings_path":"~/.gemini/settings.json","env_vars":["GOOGLE_API_KEY"]},"companion_cli":{"install_only":true},"verified_write":true,"verified_wrap":true,"verified_ui":false}'
+
+- type_id: opencode
+  display_name: OpenCode
+  description: 开源交互式 CLI 工具，支持多模型切换与 Agent 编排
+  vendor: Community
+  category: cli
+  enabled: true
+  sort: 60
+  install_url: https://github.com/opencode-ai/opencode
+  install_hint: go install github.com/opencode-ai/opencode@latest
+  meta_json: '{"ui_guide":{"settings_path":"~/.config/opencode/config.json","env_vars":["OPENAI_API_KEY"]},"companion_cli":{"install_only":true},"verified_write":true,"verified_wrap":true,"verified_ui":false}'
+
+- type_id: codebuddy
+  display_name: CodeBuddy
+  description: 腾讯云 AI 编程助手，支持 IDE 插件与 CLI 模式
+  vendor: Tencent Cloud
+  category: cli
+  enabled: true
+  sort: 50
+  install_url: https://codebuddy.tencent.com
+  install_hint: 从官网下载安装
+  meta_json: '{"ui_guide":{"settings_path":"~/.codebuddy/config.json","env_vars":["TENCENT_API_KEY"]},"verified_write":true,"verified_wrap":true,"verified_ui":false}'
+
+- type_id: trae
+  display_name: Trae
+  description: 字节跳动 AI 编程助手，支持 IDE 插件与 Agent 模式
+  vendor: ByteDance
+  category: cli
+  enabled: true
+  sort: 40
+  install_url: https://trae.ai
+  install_hint: 从官网下载安装
+  meta_json: '{"ui_guide":{"settings_path":"~/.trae/config.json","env_vars":["ARCO_API_KEY"]},"verified_write":true,"verified_wrap":true,"verified_ui":false}'
+
+- type_id: coding-tui
+  display_name: Coding TUI
+  description: 终端用户界面编程助手，支持交互式代码生成与调试
+  vendor: Centag
+  category: tui
+  enabled: true
+  sort: 30
+  install_url: ""
+  install_hint: 内置功能，无需额外安装
+  meta_json: '{"verified_write":true,"verified_wrap":true,"verified_ui":false}'
+
+- type_id: education-tui
+  display_name: Education TUI
+  description: 教育场景终端助手，支持教学问答与知识辅导
+  vendor: Centag
+  category: tui
+  enabled: true
+  sort: 25
+  install_url: ""
+  install_hint: 内置功能，无需额外安装
+  meta_json: '{"verified_write":true,"verified_wrap":true,"verified_ui":false}'
+
+- type_id: coding-web
+  display_name: Coding Web
+  description: 浏览器端编程助手，支持 Web IDE 与实时预览
+  vendor: Centag
+  category: web
+  enabled: true
+  sort: 20
+  install_url: ""
+  install_hint: 内置功能，无需额外安装
+  meta_json: '{"verified_write":true,"verified_wrap":true,"verified_ui":true}'
+
+- type_id: education-web
+  display_name: Education Web
+  description: 教育场景 Web 助手，支持在线学习与互动问答
+  vendor: Centag
+  category: web
+  enabled: true
+  sort: 15
+  install_url: ""
+  install_hint: 内置功能，无需额外安装
+  meta_json: '{"verified_write":true,"verified_wrap":true,"verified_ui":true}'
