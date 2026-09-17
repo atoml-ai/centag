@@ -157,6 +157,9 @@ func (s *Server) setupMinimalRoutes(configHandler *MinimalConfigHandler, pluginR
 			backends.PUT("/:id/accounts/:accountId", s.backendHandler.UpdateBackendAccount)
 			backends.DELETE("/:id/accounts/:accountId", s.backendHandler.DeleteBackendAccount)
 			backends.POST("/:id/accounts/:accountId/reset-breaker", s.backendHandler.ResetAccountBreaker)
+
+			backends.GET("/circuit-breaker", s.backendHandler.GetCircuitBreakerStatus)
+			backends.POST("/circuit-breaker/:id/reset", s.backendHandler.ResetCircuitBreaker)
 		}
 
 		if s.pipelineHandler != nil {

@@ -19,6 +19,9 @@ type DBPipelineTemplateStore struct {
 
 // NewDBPipelineTemplateStore creates a database-backed pipeline template store.
 func NewDBPipelineTemplateStore() (*DBPipelineTemplateStore, error) {
+	if !database.IsInitialized() {
+		return nil, fmt.Errorf("database not initialized")
+	}
 	mgr := database.Get()
 	if mgr == nil || mgr.GetDB() == nil {
 		return nil, fmt.Errorf("database not initialized")
