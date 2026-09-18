@@ -21,19 +21,21 @@ import (
 // Provider implements configsync.Provider backed by Feishu Bitable.
 // It uses a read-only Client App with bitable:app:readonly permission.
 type Provider struct {
-	appID            string
-	appSecret        string
-	appToken         string
-	configTableID    string
-	pricingTableID   string
-	pipelineTableID  string
-	backendTableID   string
-	skillTableID     string
-	agentAppTableID  string
-	httpClient       *http.Client
-	mu               sync.Mutex
-	token            string
-	tokenExp         time.Time
+	appID               string
+	appSecret           string
+	appToken            string
+	configTableID       string
+	pricingTableID      string
+	pipelineTableID     string
+	backendTableID      string
+	skillTableID        string
+	agentAppTableID     string
+	systemConfigTableID string
+	mitmDomainTableID   string
+	httpClient          *http.Client
+	mu                  sync.Mutex
+	token               string
+	tokenExp            time.Time
 }
 
 // ProviderConfig holds the configuration for the Feishu Provider.
@@ -50,20 +52,25 @@ type ProviderConfig struct {
 	BackendTableID  string // Table ID for backend configs
 	SkillTableID    string // Table ID for agent skill rows (built-in agent)
 	AgentAppTableID string // Table ID for agent app catalog (§5.4)
+
+	SystemConfigTableID string // Table ID for system_config KV rows (P0-3)
+	MITMDomainTableID   string // Table ID for MITM domain rows (P0-3)
 }
 
 // NewProvider creates a new Feishu Provider.
 func NewProvider(cfg ProviderConfig) *Provider {
 	return &Provider{
-		appID:            cfg.AppID,
-		appSecret:        cfg.AppSecret,
-		appToken:         cfg.AppToken,
-		configTableID:    cfg.ConfigTableID,
-		pricingTableID:   cfg.PricingTableID,
-		pipelineTableID:  cfg.PipelineTableID,
-		backendTableID:   cfg.BackendTableID,
-		skillTableID:     cfg.SkillTableID,
-		agentAppTableID:  cfg.AgentAppTableID,
+		appID:               cfg.AppID,
+		appSecret:           cfg.AppSecret,
+		appToken:            cfg.AppToken,
+		configTableID:       cfg.ConfigTableID,
+		pricingTableID:      cfg.PricingTableID,
+		pipelineTableID:     cfg.PipelineTableID,
+		backendTableID:      cfg.BackendTableID,
+		skillTableID:        cfg.SkillTableID,
+		agentAppTableID:     cfg.AgentAppTableID,
+		systemConfigTableID: cfg.SystemConfigTableID,
+		mitmDomainTableID:   cfg.MITMDomainTableID,
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second,
 		},
@@ -86,15 +93,18 @@ func NewProviderFromEnv() *Provider {
 		return nil
 	}
 	return NewProvider(ProviderConfig{
-		AppID:            os.Getenv("CENTAG_CONFIGSYNC_FEISHU_CLIENT_APP_ID"),
-		AppSecret:        os.Getenv("CENTAG_CONFIGSYNC_FEISHU_CLIENT_APP_SECRET"),
-		AppToken:         os.Getenv("CENTAG_CONFIGSYNC_FEISHU_APP_TOKEN"),
-		ConfigTableID:    os.Getenv("CENTAG_CONFIGSYNC_FEISHU_CONFIG_TABLE_ID"),
-		PricingTableID:   os.Getenv("CENTAG_CONFIGSYNC_FEISHU_PRICING_TABLE_ID"),
-		PipelineTableID:  os.Getenv("CENTAG_CONFIGSYNC_FEISHU_PIPELINE_TABLE_ID"),
-		BackendTableID:   os.Getenv("CENTAG_CONFIGSYNC_FEISHU_BACKEND_TABLE_ID"),
-		SkillTableID:     os.Getenv("CENTAG_CONFIGSYNC_FEISHU_SKILL_TABLE_ID"),
-		AgentAppTableID:  os.Getenv("CENTAG_CONFIGSYNC_FEISHU_AGENT_APP_TABLE_ID"),
+		AppID:           os.Getenv("CENTAG_CONFIGSYNC_FEISHU_CLIENT_APP_ID"),
+		AppSecret:       os.Getenv("CENTAG_CONFIGSYNC_FEISHU_CLIENT_APP_SECRET"),
+		AppToken:        os.Getenv("CENTAG_CONFIGSYNC_FEISHU_APP_TOKEN"),
+		ConfigTableID:   os.Getenv("CENTAG_CONFIGSYNC_FEISHU_CONFIG_TABLE_ID"),
+		PricingTableID:  os.Getenv("CENTAG_CONFIGSYNC_FEISHU_PRICING_TABLE_ID"),
+		PipelineTableID: os.Getenv("CENTAG_CONFIGSYNC_FEISHU_PIPELINE_TABLE_ID"),
+		BackendTableID:  os.Getenv("CENTAG_CONFIGSYNC_FEISHU_BACKEND_TABLE_ID"),
+		SkillTableID:    os.Getenv("CENTAG_CONFIGSYNC_FEISHU_SKILL_TABLE_ID"),
+		AgentAppTableID: os.Getenv("CENTAG_CONFIGSYNC_FEISHU_AGENT_APP_TABLE_ID"),
+
+		SystemConfigTableID: os.Getenv("CENTAG_CONFIGSYNC_FEISHU_SYSTEM_CONFIG_TABLE_ID"),
+		MITMDomainTableID:   os.Getenv("CENTAG_CONFIGSYNC_FEISHU_MITM_DOMAIN_TABLE_ID"),
 	})
 }
 
@@ -385,6 +395,97 @@ func (p *Provider) FetchAgentAppRows(ctx context.Context) ([]configsync.AgentApp
 		}
 	}
 	return rows, nil
+}
+
+// FetchSystemConfigRows returns system_config KV rows from the Bitable
+// system_config table (P0-3). Returns ErrNotSupported when the table is not
+// configured so the scheduler keeps last-good.
+//
+// Production table schema (one row = one KV entry):
+//
+//	key / value / value_type / scope / enabled / description
+func (p *Provider) FetchSystemConfigRows(ctx context.Context) ([]configsync.KVRow, error) {
+	if p.systemConfigTableID == "" {
+		return nil, configsync.ErrNotSupported
+	}
+	records, err := p.SearchRecords(ctx, p.systemConfigTableID, nil)
+	if err != nil {
+		return nil, fmt.Errorf("fetch system_config rows: %w", err)
+	}
+	var rows []configsync.KVRow
+	for _, rec := range records {
+		row := parseKVRow(rec)
+		if row != nil {
+			rows = append(rows, *row)
+		}
+	}
+	return rows, nil
+}
+
+// FetchMITMDomainsRows returns MITM domain rows from the Bitable mitm_domains
+// table (P0-3). Returns ErrNotSupported when the table is not configured.
+//
+// Production table schema (one row = one domain):
+//
+//	domain / category / enabled / remark
+func (p *Provider) FetchMITMDomainsRows(ctx context.Context) ([]configsync.MITMDomainRow, error) {
+	if p.mitmDomainTableID == "" {
+		return nil, configsync.ErrNotSupported
+	}
+	records, err := p.SearchRecords(ctx, p.mitmDomainTableID, nil)
+	if err != nil {
+		return nil, fmt.Errorf("fetch mitm_domains rows: %w", err)
+	}
+	var rows []configsync.MITMDomainRow
+	for _, rec := range records {
+		row := parseMITMDomainRow(rec)
+		if row != nil {
+			rows = append(rows, *row)
+		}
+	}
+	return rows, nil
+}
+
+// parseKVRow parses one Bitable record into a configsync.KVRow.
+// Rows without a key are skipped (nil).
+func parseKVRow(rec Record) *configsync.KVRow {
+	f := rec.Fields
+	key := TextField(f["key"])
+	if key == "" {
+		return nil
+	}
+	enabled := true
+	if _, ok := f["enabled"]; ok {
+		enabled = BoolField(f["enabled"])
+	}
+	return &configsync.KVRow{
+		Key:         key,
+		Value:       TextField(f["value"]),
+		ValueType:   TextField(f["value_type"]),
+		Scope:       TextField(f["scope"]),
+		Enabled:     enabled,
+		Description: TextField(f["description"]),
+	}
+}
+
+// parseMITMDomainRow parses one Bitable record into a configsync.MITMDomainRow.
+// Rows without a domain are skipped (nil).
+func parseMITMDomainRow(rec Record) *configsync.MITMDomainRow {
+	f := rec.Fields
+	domain := TextField(f["domain"])
+	if domain == "" {
+		return nil
+	}
+	enabled := true
+	if _, ok := f["enabled"]; ok {
+		enabled = BoolField(f["enabled"])
+	}
+	return &configsync.MITMDomainRow{
+		Domain:   domain,
+		Category: TextField(f["category"]),
+		Enabled:  enabled,
+		Remark:   TextField(f["remark"]),
+	}
 }
 
 // parseAgentAppRow parses one Bitable record into a configsync.AgentAppRow.

@@ -2,6 +2,7 @@ package configsync
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"sync"
@@ -13,10 +14,10 @@ import (
 
 // MITMDomainRow represents a single MITM domain entry.
 type MITMDomainRow struct {
-	Domain    string `json:"domain"`
-	Category  string `json:"category"`
-	Enabled   bool   `json:"enabled"`
-	Remark    string `json:"remark"`
+	Domain   string `json:"domain"`
+	Category string `json:"category"`
+	Enabled  bool   `json:"enabled"`
+	Remark   string `json:"remark"`
 }
 
 // MITMDomainsStore manages the MITM domain whitelist in the database.
@@ -93,24 +94,156 @@ func (s *MITMDomainsStore) GetEnabledDomains() ([]string, error) {
 	return domains, rows.Err()
 }
 
-// SyncFromSnapshot applies a full-table-coverage MITM domains snapshot.
-// This replaces all existing domains (not union/merge).
-// Protection: format validation, dedup, count limits, deletion circuit breaker.
+// MITMSyncReason conveys why a MITM domain sync was triggered (§3.2 Step 3).
+// It decides the empty-input policy so a missing/failed table never wipes the
+// authoritative last-good configuration.
+type MITMSyncReason string
+
+const (
+	// MITMSyncSnapshot: a valid table was present in the snapshot.
+	MITMSyncSnapshot MITMSyncReason = "snapshot"
+	// MITMSyncAbsent: the snapshot did not contain the table → keep last-good.
+	MITMSyncAbsent MITMSyncReason = "absent"
+	// MITMSyncFetchError: the provider fetch failed → keep last-good.
+	MITMSyncFetchError MITMSyncReason = "fetch_error"
+)
+
+// MITMSyncResult reports the outcome of a MITM domain sync.
+type MITMSyncResult struct {
+	Reason       MITMSyncReason
+	Applied      int
+	Deleted      int
+	Existing     int
+	DeletionRate float64
+	Rejected     bool
+}
+
+// SyncFromSnapshot applies a full-table-coverage MITM domains snapshot,
+// treating an empty input as an explicit "delete all" (reason snapshot).
+// Kept for callers that only have the snapshot path.
 func (s *MITMDomainsStore) SyncFromSnapshot(data []MITMDomainRow) error {
+	_, err := s.SyncFromSnapshotReason(data, MITMSyncSnapshot)
+	return err
+}
+
+// SyncFromSnapshotReason applies a full-table MITM snapshot and explicitly
+// distinguishes the three trigger reasons (§3.2 Step 3):
+//
+//	snapshot    — valid table present; an empty table means "delete all" (warn)
+//	absent      — table missing from snapshot → keep last-good, never wipe
+//	fetch_error — provider fetch failed → keep last-good, never wipe
+//
+// Protection on the snapshot path: format validation, dedup, count limits and
+// a deletion circuit breaker (>50% and >10 enabled dropped) for non-empty
+// updates. An explicit empty table intentionally bypasses the breaker (that is
+// exactly the remote "no domains" signal) but is logged at warn level.
+func (s *MITMDomainsStore) SyncFromSnapshotReason(data []MITMDomainRow, reason MITMSyncReason) (MITMSyncResult, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	// Protection: count limits
-	if len(data) == 0 {
-		logger.Warnf("mitm_domains: empty snapshot rejected, keeping existing data")
-		return nil
+	res := MITMSyncResult{Reason: reason}
+
+	if reason == MITMSyncAbsent || reason == MITMSyncFetchError {
+		res.Rejected = true
+		logger.Warnf("mitm_domains: sync reason=%s, keeping last-good table", reason)
+		return res, nil
 	}
+
+	// Count existing enabled domains up front for rate + reporting.
+	var existingEnabled int
+	_ = s.db.QueryRow("SELECT COUNT(*) FROM mitm_domains WHERE enabled = 1").Scan(&existingEnabled)
+	var existingTotal int
+	_ = s.db.QueryRow("SELECT COUNT(*) FROM mitm_domains").Scan(&existingTotal)
+
+	explicitEmpty := len(data) == 0
+
 	if len(data) > 500 {
 		logger.Warnf("mitm_domains: snapshot too large (%d domains), capping at 500", len(data))
 		data = data[:500]
 	}
 
-	// Protection: dedup and format validation
+	validated := validateMITMDomains(data)
+	// A non-empty table that validates to nothing is corruption, not an
+	// intentional wipe → reject and keep last-good.
+	if !explicitEmpty && len(validated) == 0 {
+		res.Rejected = true
+		logger.Warnf("mitm_domains: snapshot had %d rows but none valid, keeping last-good", len(data))
+		return res, fmt.Errorf("mitm_domains: all %d rows invalid", len(data))
+	}
+
+	newEnabledCount := 0
+	for _, r := range validated {
+		if r.Enabled {
+			newEnabledCount++
+		}
+	}
+	if existingEnabled > 0 {
+		dropped := existingEnabled - newEnabledCount
+		if dropped < 0 {
+			dropped = 0
+		}
+		res.DeletionRate = float64(dropped) / float64(existingEnabled)
+		if !explicitEmpty && dropped > 10 && res.DeletionRate > 0.5 {
+			res.Rejected = true
+			logger.Warnf("mitm_domains: deletion circuit breaker (existing=%d, new_enabled=%d, dropped=%d, rate=%.2f), rejecting snapshot",
+				existingEnabled, newEnabledCount, dropped, res.DeletionRate)
+			return res, fmt.Errorf("mitm_domains: deletion circuit breaker: dropped %d of %d (>50%% and >10)", dropped, existingEnabled)
+		}
+	}
+
+	if explicitEmpty {
+		logger.Warnf("mitm_domains: remote explicitly empty → deleting all %d domain rows", existingTotal)
+	} else if res.DeletionRate > 0.5 {
+		logger.Warnf("mitm_domains: large deletion %.0f%% (%d of %d enabled) accepted", res.DeletionRate*100, existingEnabled-newEnabledCount, existingEnabled)
+	}
+
+	// Full table coverage: DELETE all, then INSERT new set.
+	tx, err := s.db.Begin()
+	if err != nil {
+		return res, err
+	}
+	defer tx.Rollback()
+
+	if _, err := tx.Exec("DELETE FROM mitm_domains"); err != nil {
+		return res, fmt.Errorf("clear mitm_domains: %w", err)
+	}
+
+	stmt, err := tx.Prepare(fmt.Sprintf(`INSERT INTO mitm_domains (domain, category, enabled, remark, created_at, updated_at)
+		VALUES (%s, %s, %s, %s, %s, %s)`,
+		s.ph(1), s.ph(2), s.ph(3), s.ph(4), s.ph(5), s.ph(6)))
+	if err != nil {
+		return res, err
+	}
+	defer stmt.Close()
+
+	now := time.Now()
+	for _, r := range validated {
+		enabled := 0
+		if r.Enabled {
+			enabled = 1
+		}
+		if _, err := stmt.Exec(r.Domain, r.Category, enabled, r.Remark, now, now); err != nil {
+			return res, fmt.Errorf("insert domain %s: %w", r.Domain, err)
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return res, err
+	}
+
+	res.Applied = len(validated)
+	res.Existing = existingTotal
+	res.Deleted = existingTotal - len(validated)
+	if res.Deleted < 0 {
+		res.Deleted = 0
+	}
+	logger.Infof("mitm_domains: synced reason=%s applied=%d deleted=%d existing=%d deletion_rate=%.2f",
+		reason, res.Applied, res.Deleted, res.Existing, res.DeletionRate)
+	return res, nil
+}
+
+// validateMITMDomains normalizes, dedups and format-checks rows.
+func validateMITMDomains(data []MITMDomainRow) []MITMDomainRow {
 	seen := make(map[string]bool, len(data))
 	var validated []MITMDomainRow
 	for _, r := range data {
@@ -118,12 +251,10 @@ func (s *MITMDomainsStore) SyncFromSnapshot(data []MITMDomainRow) error {
 		if domain == "" {
 			continue
 		}
-		// Format: must contain at least one dot
 		if !strings.Contains(domain, ".") {
 			logger.Warnf("mitm_domains: invalid domain %q (no dot), skipped", domain)
 			continue
 		}
-		// Dedup
 		if seen[domain] {
 			continue
 		}
@@ -135,62 +266,82 @@ func (s *MITMDomainsStore) SyncFromSnapshot(data []MITMDomainRow) error {
 			Remark:   r.Remark,
 		})
 	}
+	return validated
+}
 
-	// Protection: deletion circuit breaker
-	// Count existing enabled domains
-	var existingCount int
-	_ = s.db.QueryRow("SELECT COUNT(*) FROM mitm_domains WHERE enabled = 1").Scan(&existingCount)
-	newEnabledCount := 0
-	for _, r := range validated {
-		if r.Enabled {
-			newEnabledCount++
-		}
+// EnsureSeeded inserts seed domains when the table is empty. When seed is
+// omitted, the built-in defaults are used. This restores the fresh-install
+// seed that the old fallback provided, without re-introducing the "missing
+// table wipes existing config" bug.
+func (s *MITMDomainsStore) EnsureSeeded(seed ...MITMDomainRow) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	var count int
+	if err := s.db.QueryRow("SELECT COUNT(*) FROM mitm_domains").Scan(&count); err != nil {
+		return 0, err
 	}
-	// If deletion rate > 50% AND absolute drop > 10, reject
-	if existingCount > 0 {
-		dropped := existingCount - newEnabledCount
-		if dropped > 10 && float64(dropped)/float64(existingCount) > 0.5 {
-			logger.Warnf("mitm_domains: deletion circuit breaker triggered (existing=%d, new_enabled=%d, dropped=%d), rejecting snapshot", existingCount, newEnabledCount, dropped)
-			return fmt.Errorf("mitm_domains: deletion circuit breaker: dropped %d of %d domains (>50%% and >10)", dropped, existingCount)
-		}
+	if count > 0 {
+		return 0, nil
 	}
 
-	// Full table coverage: DELETE all, then INSERT new set
+	if len(seed) == 0 {
+		seed = DefaultMITMDomains()
+	}
+	rows := validateMITMDomains(seed)
+	if len(rows) == 0 {
+		return 0, nil
+	}
+
 	tx, err := s.db.Begin()
 	if err != nil {
-		return err
+		return 0, err
 	}
 	defer tx.Rollback()
-
-	if _, err := tx.Exec("DELETE FROM mitm_domains"); err != nil {
-		return fmt.Errorf("clear mitm_domains: %w", err)
-	}
 
 	stmt, err := tx.Prepare(fmt.Sprintf(`INSERT INTO mitm_domains (domain, category, enabled, remark, created_at, updated_at)
 		VALUES (%s, %s, %s, %s, %s, %s)`,
 		s.ph(1), s.ph(2), s.ph(3), s.ph(4), s.ph(5), s.ph(6)))
 	if err != nil {
-		return err
+		return 0, err
 	}
 	defer stmt.Close()
 
 	now := time.Now()
-	for _, r := range validated {
+	for _, r := range rows {
 		enabled := 0
 		if r.Enabled {
 			enabled = 1
 		}
 		if _, err := stmt.Exec(r.Domain, r.Category, enabled, r.Remark, now, now); err != nil {
-			return fmt.Errorf("insert domain %s: %w", r.Domain, err)
+			return 0, fmt.Errorf("seed domain %s: %w", r.Domain, err)
 		}
 	}
-
 	if err := tx.Commit(); err != nil {
-		return err
+		return 0, err
 	}
+	logger.Infof("mitm_domains: seeded %d built-in domains (fresh install)", len(rows))
+	return len(rows), nil
+}
 
-	logger.Infof("mitm_domains: synced %d domains (full table coverage, %d existing dropped)", len(validated), existingCount)
-	return nil
+// ResolveMITMDomains extracts the MITM table from a snapshot and classifies the
+// trigger reason (§3.2 Step 3): key present → snapshot (an empty result is an
+// explicit "delete all"); key absent or undecodable → absent (keep last-good).
+func ResolveMITMDomains(snap *Snapshot) ([]MITMDomainRow, MITMSyncReason) {
+	if snap == nil || snap.Tables == nil {
+		return nil, MITMSyncAbsent
+	}
+	data, ok := snap.Tables["mitm_domains"]
+	if !ok {
+		return nil, MITMSyncAbsent
+	}
+	rows := []MITMDomainRow{}
+	if len(data) > 0 {
+		if err := json.Unmarshal(data, &rows); err != nil {
+			return nil, MITMSyncAbsent
+		}
+	}
+	return rows, MITMSyncSnapshot
 }
 
 // SnapshotData returns all MITM domains as a flat list for Snapshot.Tables["mitm_domains"].

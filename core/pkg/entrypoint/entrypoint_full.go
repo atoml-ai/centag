@@ -176,10 +176,9 @@ func Run(version, buildTime string) {
 	// Step 7: Start the HTTP server
 	srv := server.New(cfg)
 
-	// Step 7b: Start configsync scheduler (if enabled).
+	// Step 7b: Start configsync scheduler (if enabled), which now owns the
+	// periodic remote skill poll too (§3.3: single scheduler + shared switch).
 	startConfigsync(srv)
-	// Step 7c: Start remote skill sync from Feishu Bitable (if enabled).
-	startFeishuSkillSync(srv)
 
 	go func() {
 		if err := srv.Start(); err != nil {
@@ -367,6 +366,31 @@ func startConfigsync(srv *server.Server) {
 		logger.Warnf("failed to create agent_apps store: %v", err)
 	}
 
+	// P0-3: system_config KV 表注册 + orchestrator（真实 applier 接线）
+	kvRegistry := configsync.NewRegistry()
+	if err := kvRegistry.RegisterSystemConfig(); err != nil {
+		logger.Warnf("configsync: register system_config table failed: %v", err)
+	}
+	kvOrchestrator := configsync.NewOrchestrator(kvRegistry)
+
+	// P0-3 §3.2 Step 4: last-good 快照一致性健康检查（启动时一次）
+	consistencyChecker := configsync.NewConsistencyChecker()
+	if res := consistencyChecker.CheckLastGood(stateDir); !res.OK {
+		logger.Warnf("configsync: last-good snapshot 一致性检查失败: %v (counts=%v)", res.Err(), res.Counts)
+	}
+
+	if systemConfigStore != nil {
+		store := systemConfigStore
+		configsync.SetKVApplier(func(_ context.Context, rows []configsync.KVRow) (configsync.ApplyResult, error) {
+			if err := store.UpsertBatch(rows); err != nil {
+				logger.Warnf("configsync: system_config 应用失败 failed=%d: %v", len(rows), err)
+				return configsync.ApplyResult{Failed: len(rows)}, err
+			}
+			logger.Infof("configsync: system_config 应用成功 applied=%d", len(rows))
+			return configsync.ApplyResult{Applied: len(rows)}, nil
+		})
+	}
+
 	// Wire up exchange rate applier (billing.SetUSDToCNY)
 	configsync.SetExchangeRateApplier(func(rate float64) {
 		billing.SetUSDToCNY(rate)
@@ -437,6 +461,21 @@ func startConfigsync(srv *server.Server) {
 
 	// Apply MITM domains from DB on startup (M2)
 	if mitmDomainsStore != nil {
+		// Fresh install: seed the effective config domains (falling back to the
+		// built-in defaults) so an enabled MITM/PAC config is never left with an
+		// empty allowlist (P0-4 T4). On upgrade from file-based config this also
+		// migrates custom domains into the DB instead of overwriting them.
+		var seedRows []configsync.MITMDomainRow
+		if cfg := config.Get(); cfg != nil && len(cfg.SystemProxy.Domains) > 0 {
+			for _, d := range cfg.SystemProxy.Domains {
+				seedRows = append(seedRows, configsync.MITMDomainRow{Domain: d, Category: "default", Enabled: true})
+			}
+		}
+		if seeded, sErr := mitmDomainsStore.EnsureSeeded(seedRows...); sErr != nil {
+			logger.Warnf("configsync: seed MITM domains failed: %v", sErr)
+		} else if seeded > 0 {
+			logger.Infof("configsync: seeded %d default MITM domains", seeded)
+		}
 		if domains, dErr := mitmDomainsStore.GetEnabledDomains(); dErr == nil && len(domains) > 0 {
 			logger.Infof("configsync: loading %d MITM domains from database", len(domains))
 			applyMITMDomainsToServer(srv, domains)
@@ -498,40 +537,47 @@ func startConfigsync(srv *server.Server) {
 				// Reload templates in the server to use the newly synced ones
 				srv.ReloadPipelineTemplates(os.Getenv("CENTAG_EDITION"))
 			}
-			// Apply remote skills and persist to DB (R13)
-			if len(snap.Skills) > 0 {
+			// Apply remote skills and persist to DB (R13, §3.3 Step 2).
+			// SkillsFetched distinguishes "remote returned an (empty) table"
+			// from "table absent": an explicit empty table clears local skills
+			// and the DB; absent/failed keeps last-good.
+			if snap.SkillsFetched {
 				if handler := srv.GetBuiltinAgentHandler(); handler != nil {
 					applied, removed := handler.ApplyRemoteSkills(toServerSkillRows(snap.Skills))
-					logger.Infof("configsync: remote skills applied=%d removed=%d", applied, removed)
+					if len(snap.Skills) == 0 {
+						logger.Info("configsync: remote skill table empty → cleared local skills")
+					} else {
+						logger.Infof("configsync: remote skills applied=%d removed=%d", applied, removed)
+					}
 				}
 				if skillStore != nil {
 					if err := skillStore.Clear(); err != nil {
 						logger.Warnf("configsync: clear skill store failed: %v", err)
-					} else if err := skillStore.UpsertBatch(snap.Skills); err != nil {
-						logger.Warnf("configsync: persist skills failed: %v", err)
+					} else if len(snap.Skills) > 0 {
+						if err := skillStore.UpsertBatch(snap.Skills); err != nil {
+							logger.Warnf("configsync: persist skills failed: %v", err)
+						} else {
+							logger.Infof("configsync: %d skills persisted to database", len(snap.Skills))
+						}
 					} else {
-						logger.Infof("configsync: %d skills persisted to database", len(snap.Skills))
+						logger.Info("configsync: skill store cleared (remote empty)")
 					}
 				}
 			}
-			// Apply system_config KV from snapshot (M2 B-tier)
-			if systemConfigStore != nil {
-				if err := systemConfigStore.SyncFromSnapshot(snap.Tables["system_config"]); err != nil {
-					logger.Warnf("configsync: sync system_config failed: %v", err)
+			// Apply system_config KV from snapshot via registry/orchestrator (P0-3)
+			if kvOrchestrator != nil && systemConfigStore != nil {
+				for _, te := range kvOrchestrator.Apply(context.Background(), snap) {
+					logger.Warnf("configsync: %v", te)
 				}
 				configsync.ApplySystemConfig(systemConfigStore)
 			}
-			// Apply MITM domains from snapshot (M2 C-tier, full table coverage)
+			// Apply MITM domains from snapshot (M2 C-tier, full table coverage).
+			// Reason-aware so an absent/failed table keeps last-good while an
+			// explicit empty table means "delete all" (§3.2 Step 3, P0-4).
 			if mitmDomainsStore != nil {
-				var domains []configsync.MITMDomainRow
-				if data, ok := snap.Tables["mitm_domains"]; ok && len(data) > 0 {
-					_ = json.Unmarshal(data, &domains)
-				}
-				if len(domains) == 0 {
-					domains = configsync.DefaultMITMDomains()
-				}
-				if err := mitmDomainsStore.SyncFromSnapshot(domains); err != nil {
-					logger.Warnf("configsync: sync mitm_domains failed: %v", err)
+				domains, reason := configsync.ResolveMITMDomains(snap)
+				if _, err := mitmDomainsStore.SyncFromSnapshotReason(domains, reason); err != nil {
+					logger.Warnf("configsync: sync mitm_domains failed (reason=%s): %v", reason, err)
 				} else if enabledDomains, dErr := mitmDomainsStore.GetEnabledDomains(); dErr == nil {
 					applyMITMDomainsToServer(srv, enabledDomains)
 				}
@@ -550,6 +596,11 @@ func startConfigsync(srv *server.Server) {
 					logger.Infof("configsync: agent apps overlay updated (%d entries)", len(apps))
 				}
 			}
+			// P0-3 §3.2 Step 4: 一致性不通过时阻止"应用成功"状态上报
+			if res := consistencyChecker.VerifySnapshot(snap); !res.OK {
+				logger.Warnf("configsync: snapshot 一致性检查失败，不更新成功状态: %v (counts=%v)", res.Err(), res.Counts)
+				return
+			}
 			srv.InvalidatePricingCache()
 		},
 	})
@@ -557,6 +608,20 @@ func startConfigsync(srv *server.Server) {
 	configsync.SetGlobalScheduler(scheduler)
 	scheduler.Start(context.Background())
 	logger.Infof("Configsync scheduler started (public snapshot mirrors)")
+
+	// §3.3 Step 1: skills share this scheduler + provider instead of a separate
+	// goroutine, and inherit the same CENTAG_CONFIGSYNC=off gate (checked at
+	// the top of startConfigsync). Only providers with a skill channel poll.
+	skillInterval := 10 * time.Minute
+	if v := os.Getenv("CENTAG_CONFIGSYNC_SKILL_SYNC_INTERVAL"); v != "" {
+		if d, err := time.ParseDuration(v); err == nil && d > 0 {
+			skillInterval = d
+		}
+	}
+	if provider != nil {
+		scheduler.StartSkillPoll(context.Background(), skillInterval)
+		logger.Infof("configsync: skill poll scheduled (interval %s)", skillInterval)
+	}
 }
 
 // applyMITMDomainsToServer applies the MITM domain whitelist to the server's
@@ -566,59 +631,6 @@ func applyMITMDomainsToServer(srv *server.Server, domains []string) {
 		return
 	}
 	srv.SyncMITMDomains(domains)
-}
-
-// startFeishuSkillSync launches a periodic sync of agent skills from the
-// Feishu Bitable skill table (CENTAG_CONFIGSYNC_FEISHU_SKILL_TABLE_ID).
-// Initial sync runs immediately; afterwards every 10 minutes (table is
-// authoritative: removed rows drop the local skill on the next round).
-func startFeishuSkillSync(srv *server.Server) {
-	if !configsyncfeishu.IsConfigured() {
-		logger.Infof("feishu skill sync disabled (set CENTAG_CONFIGSYNC_FEISHU_CLIENT_APP_ID/SECRET, _APP_TOKEN, _SKILL_TABLE_ID to enable)")
-		return
-	}
-	provider := configsyncfeishu.NewProviderFromEnv()
-	if provider == nil {
-		return
-	}
-	handler := srv.GetBuiltinAgentHandler()
-	if handler == nil {
-		return
-	}
-
-	interval := 10 * time.Minute
-	if v := os.Getenv("CENTAG_CONFIGSYNC_SKILL_SYNC_INTERVAL"); v != "" {
-		if d, err := time.ParseDuration(v); err == nil && d > 0 {
-			interval = d
-		}
-	}
-
-	run := func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-		defer cancel()
-		rows, err := provider.FetchSkillRows(ctx)
-		if err != nil {
-			if err != configsync.ErrNotSupported {
-				logger.Warnf("feishu skill sync: %v", err)
-			}
-			return
-		}
-		if len(rows) == 0 {
-			return
-		}
-		applied, removed := handler.ApplyRemoteSkills(toServerSkillRows(rows))
-		logger.Infof("feishu skill sync: applied=%d removed=%d", applied, removed)
-	}
-
-	go func() {
-		run()
-		ticker := time.NewTicker(interval)
-		defer ticker.Stop()
-		for range ticker.C {
-			run()
-		}
-	}()
-	logger.Infof("feishu skill sync started (interval %s)", interval)
 }
 
 // toServerSkillRows adapts configsync rows to the server package type

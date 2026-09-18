@@ -63,6 +63,11 @@ type Snapshot struct {
 	Prices            []ProviderPrice    `json:"prices,omitempty"`
 	PipelineTemplates []PipelineTemplate `json:"pipeline_templates,omitempty"`
 	Skills            []RemoteSkillRow   `json:"skills,omitempty"`
+	// SkillsFetched records that the provider implemented and successfully
+	// returned the skill table (possibly empty). An explicit empty table means
+	// "remote has no skills → clear local"; an absent/failed table keeps
+	// last-good (§3.3 Step 2).
+	SkillsFetched bool `json:"skills_fetched,omitempty"`
 
 	// Tables holds generic table data keyed by logical table name (§4.4).
 	// New table types (MITM domains, plan templates, system_config KV, etc.)
@@ -253,6 +258,72 @@ func (s *ConfigScheduler) SyncNow(ctx context.Context) error {
 	return s.doSync(ctx)
 }
 
+// StartSkillPoll runs a periodic skill-only fetch on the same scheduler and
+// provider, honouring the shared stopCh (so Stop() ends it too). This replaces
+// the former standalone startFeishuSkillSync goroutine: skills stay on the
+// unified config-sync path and share the CENTAG_CONFIGSYNC=off switch (§3.3).
+// The first poll runs immediately; when interval <= 0 it defaults to 10m.
+func (s *ConfigScheduler) StartSkillPoll(ctx context.Context, interval time.Duration) {
+	if interval <= 0 {
+		interval = 10 * time.Minute
+	}
+	go func() {
+		_ = s.SyncSkillsNow(ctx)
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-s.stopCh:
+				return
+			case <-ticker.C:
+				_ = s.SyncSkillsNow(ctx)
+			}
+		}
+	}()
+}
+
+// SyncSkillsNow fetches only the remote skill table and delivers a minimal
+// snapshot to onUpdate. It never touches config/prices/etc. so it cannot
+// overwrite the last-good config snapshot. An explicit empty remote table is
+// surfaced with SkillsFetched=true so the consumer can clear local skills.
+func (s *ConfigScheduler) SyncSkillsNow(ctx context.Context) error {
+	type fetchSkillRows interface {
+		FetchSkillRows(ctx context.Context) ([]RemoteSkillRow, error)
+	}
+	fsr, ok := s.provider.(fetchSkillRows)
+	if !ok {
+		return nil
+	}
+	skills, err := fsr.FetchSkillRows(ctx)
+	if errors.Is(err, ErrNotSupported) {
+		return nil
+	}
+	if err != nil {
+		logger.Warnf("configsync: skill poll failed, keeping last-good: %v", err)
+		s.recordFailure(err)
+		return err
+	}
+	if s.onUpdate != nil {
+		s.onUpdate(&Snapshot{
+			Schema:        snapshotSchema,
+			GeneratedAt:   time.Now(),
+			Skills:        skills,
+			SkillsFetched: true,
+		})
+	}
+	s.mu.Lock()
+	s.status.LastSyncTime = time.Now()
+	s.status.LastFetchOK = true
+	// Skill poll does not persist/apply the full snapshot, so it must not
+	// advertise persist/apply success for the main config path.
+	s.status.LastSyncOK = true
+	s.status.LastError = ""
+	s.mu.Unlock()
+	return nil
+}
+
 func (s *ConfigScheduler) run(ctx context.Context) {
 	// RunOnce mode: sync immediately and return (no polling).
 	if s.runOnce {
@@ -287,6 +358,7 @@ func (s *ConfigScheduler) run(ctx context.Context) {
 func (s *ConfigScheduler) recordFailure(err error) {
 	s.mu.Lock()
 	s.status.LastSyncOK = false
+	s.status.LastFetchOK = false
 	s.status.LastError = err.Error()
 	s.status.ErrorCount++
 	s.failCount++
@@ -328,11 +400,31 @@ func (s *ConfigScheduler) doSync(ctx context.Context) error {
 		FetchAgentAppRows(ctx context.Context) ([]AgentAppRow, error)
 	}
 
+	// fetchSystemConfigRows is an optional provider extension that surfaces
+	// remote system_config KV rows (§5.4 P0-3).
+	type fetchSystemConfigRows interface {
+		FetchSystemConfigRows(ctx context.Context) ([]KVRow, error)
+	}
+
+	// fetchMITMDomainsRows is an optional provider extension that surfaces
+	// remote MITM domain rows (§5.4 P0-3).
+	type fetchMITMDomainsRows interface {
+		FetchMITMDomainsRows(ctx context.Context) ([]MITMDomainRow, error)
+	}
+
 	var rows []Row
 	var prices []ProviderPrice
 	var pipelineTemplates []PipelineTemplate
 	var skills []RemoteSkillRow
+	var skillsFetched bool
 	var agentApps []AgentAppRow
+	var systemConfig []KVRow
+	var mitmDomains []MITMDomainRow
+	// mitmFetched records that the provider implemented and successfully
+	// returned the mitm_domains table (possibly empty). Used to distinguish an
+	// explicit empty table ("delete all") from an absent/failed table (keep
+	// last-good) — §3.2 Step 3 P0-4.
+	var mitmFetched bool
 	var err error
 
 	// Build query with edition and version from environment
@@ -384,10 +476,14 @@ func (s *ConfigScheduler) doSync(ctx context.Context) error {
 	// Fetch remote agent skill rows if provider supports it (R13).
 	if fsr, ok := s.provider.(fetchSkillRows); ok {
 		fetchedSkills, sErr := fsr.FetchSkillRows(ctx)
-		if sErr != nil && !errors.Is(sErr, ErrNotSupported) {
-			logger.Warnf("configsync: fetch skill rows failed, continuing without skills: %v", sErr)
-		} else {
+		switch {
+		case sErr == nil:
 			skills = fetchedSkills
+			skillsFetched = true
+		case errors.Is(sErr, ErrNotSupported):
+			// Provider has no skill channel → treat as absent (keep last-good).
+		default:
+			logger.Warnf("configsync: fetch skill rows failed, keeping last-good: %v", sErr)
 		}
 	}
 	// Fetch remote agent app catalog rows if provider supports it (M3 §5.4).
@@ -397,6 +493,28 @@ func (s *ConfigScheduler) doSync(ctx context.Context) error {
 			logger.Warnf("configsync: fetch agent app rows failed, continuing without agent apps: %v", aaErr)
 		} else {
 			agentApps = fetchedApps
+		}
+	}
+	// Fetch remote system_config KV rows if provider supports it (P0-3 §5.4).
+	if fsc, ok := s.provider.(fetchSystemConfigRows); ok {
+		fetchedSC, scErr := fsc.FetchSystemConfigRows(ctx)
+		if scErr != nil && !errors.Is(scErr, ErrNotSupported) {
+			logger.Warnf("configsync: fetch system_config rows failed, continuing without system_config: %v", scErr)
+		} else {
+			systemConfig = fetchedSC
+		}
+	}
+	// Fetch remote MITM domain rows if provider supports it (P0-3 §5.4).
+	if fmd, ok := s.provider.(fetchMITMDomainsRows); ok {
+		fetchedMD, mdErr := fmd.FetchMITMDomainsRows(ctx)
+		switch {
+		case mdErr == nil:
+			mitmDomains = fetchedMD
+			mitmFetched = true
+		case errors.Is(mdErr, ErrNotSupported):
+			// Provider has no mitm_domains channel → treat as absent.
+		default:
+			logger.Warnf("configsync: fetch mitm_domains rows failed, keeping last-good: %v", mdErr)
 		}
 	}
 	if err := ValidateRows(rows); err != nil {
@@ -411,12 +529,17 @@ func (s *ConfigScheduler) doSync(ctx context.Context) error {
 			return err
 		}
 	}
-	// Empty batch: keep cache, count as success (nothing to do).
-	if len(rows) == 0 && len(prices) == 0 && len(pipelineTemplates) == 0 && len(skills) == 0 && len(agentApps) == 0 {
+	// Empty batch: keep cache, count as success (nothing to do). Nothing was
+	// fetched that needs persisting or applying, but the fetch itself (an empty
+	// successful response) is recorded as OK.
+	if len(rows) == 0 && len(prices) == 0 && len(pipelineTemplates) == 0 && len(skills) == 0 && len(agentApps) == 0 && len(systemConfig) == 0 && len(mitmDomains) == 0 && !mitmFetched && !skillsFetched {
 		s.mu.Lock()
 		s.status.LastSyncTime = time.Now()
 		s.status.LastSyncOK = true
 		s.status.LastError = ""
+		s.status.LastFetchOK = true
+		s.status.LastPersistOK = true
+		s.status.LastApplyOK = false
 		s.status.SyncCount++
 		s.failCount = 0
 		s.mu.Unlock()
@@ -429,6 +552,7 @@ func (s *ConfigScheduler) doSync(ctx context.Context) error {
 		Prices:            prices,
 		PipelineTemplates: pipelineTemplates,
 		Skills:            skills,
+		SkillsFetched:     skillsFetched,
 	}
 	// Serialize agent apps into Tables["agent_apps"] (§5.4)
 	if len(agentApps) > 0 {
@@ -439,23 +563,64 @@ func (s *ConfigScheduler) doSync(ctx context.Context) error {
 			snap.Tables["agent_apps"] = data
 		}
 	}
+	// Serialize system_config KV into Tables["system_config"] (P0-3)
+	if len(systemConfig) > 0 {
+		if data, err := json.Marshal(systemConfig); err == nil {
+			if snap.Tables == nil {
+				snap.Tables = make(map[string]json.RawMessage)
+			}
+			snap.Tables["system_config"] = data
+		}
+	}
+	// Serialize MITM domains into Tables["mitm_domains"] (P0-3/P0-4).
+	// When the provider returned the table, persist it even if empty so the
+	// consumer can distinguish "explicit empty (delete all)" from "absent".
+	if mitmFetched {
+		if mitmDomains == nil {
+			mitmDomains = []MITMDomainRow{}
+		}
+		if data, err := json.Marshal(mitmDomains); err == nil {
+			if snap.Tables == nil {
+				snap.Tables = make(map[string]json.RawMessage)
+			}
+			snap.Tables["mitm_domains"] = data
+		}
+	}
+	// Fetch stage succeeded: we have a validated snapshot in memory.
+	persistOK := true
+	var persistErr error
 	if s.stateDir != "" {
 		if err := WriteSnapshot(s.stateDir, snap); err != nil {
-			s.mu.Lock()
-			s.status.LastError = "snapshot write: " + err.Error()
-			s.mu.Unlock()
+			persistOK = false
+			persistErr = err
 		}
+	}
+	// Apply stage: invoke the host consumer, then record. onUpdate has no
+	// error return, so LastApplyOK reflects "the consumer ran"; a consumer that
+	// needs to veto success must do so via its own gate (e.g. consistency).
+	applyOK := s.onUpdate != nil
+	if s.onUpdate != nil {
+		s.onUpdate(snap)
 	}
 	s.mu.Lock()
 	s.snap.Store(snap)
 	s.status.LastSyncTime = time.Now()
-	s.status.LastSyncOK = true
-	s.status.LastError = ""
-	s.status.SyncCount++
-	s.failCount = 0
-	s.mu.Unlock()
-	if s.onUpdate != nil {
-		s.onUpdate(snap)
+	s.status.LastFetchOK = true
+	s.status.LastPersistOK = persistOK
+	s.status.LastApplyOK = applyOK
+	// A failed persist must not be reported as a clean sync (P2-2). The
+	// in-memory snapshot still advances (fail-open) so runtime behaviour keeps
+	// using the latest data, but the error stays visible.
+	s.status.LastSyncOK = persistOK
+	if persistOK {
+		s.status.LastError = ""
+		s.status.SyncCount++
+		s.failCount = 0
+	} else {
+		s.status.LastError = "snapshot write: " + persistErr.Error()
+		s.status.ErrorCount++
+		s.failCount++
 	}
+	s.mu.Unlock()
 	return nil
 }

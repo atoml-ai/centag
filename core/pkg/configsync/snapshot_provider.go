@@ -71,6 +71,47 @@ func (p *SnapshotProvider) FetchPipelineTemplates(ctx context.Context) ([]Pipeli
 	return snap.PipelineTemplates, nil
 }
 
+// FetchAgentAppRows surfaces agent app catalog rows from Snapshot.Tables["agent_apps"].
+// The snapshot channel is the default for all editions, so this is what makes the
+// M3 agent-app overlay sync work without Feishu (Table key absent → no rows).
+func (p *SnapshotProvider) FetchAgentAppRows(ctx context.Context) ([]AgentAppRow, error) {
+	return fetchSnapshotTable[AgentAppRow](ctx, p, "agent_apps")
+}
+
+// FetchSystemConfigRows surfaces system_config KV rows from
+// Snapshot.Tables["system_config"] (P0-3).
+func (p *SnapshotProvider) FetchSystemConfigRows(ctx context.Context) ([]KVRow, error) {
+	return fetchSnapshotTable[KVRow](ctx, p, "system_config")
+}
+
+// FetchMITMDomainsRows surfaces MITM domain rows from
+// Snapshot.Tables["mitm_domains"] (P0-3).
+func (p *SnapshotProvider) FetchMITMDomainsRows(ctx context.Context) ([]MITMDomainRow, error) {
+	return fetchSnapshotTable[MITMDomainRow](ctx, p, "mitm_domains")
+}
+
+// fetchSnapshotTable decodes one logical table stored in Snapshot.Tables.
+// A missing/empty table yields (nil, nil) — "no data provided" rather than an
+// error — so the scheduler keeps last-good and never treats absence as a wipe.
+func fetchSnapshotTable[T any](ctx context.Context, p *SnapshotProvider, table string) ([]T, error) {
+	snap, err := p.fetchSnapshot(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if snap.Tables == nil {
+		return nil, nil
+	}
+	raw, ok := snap.Tables[table]
+	if !ok || len(raw) == 0 {
+		return nil, nil
+	}
+	var out []T
+	if err := json.Unmarshal(raw, &out); err != nil {
+		return nil, fmt.Errorf("snapshot table %s decode: %w", table, err)
+	}
+	return out, nil
+}
+
 func (p *SnapshotProvider) fetchSnapshot(ctx context.Context) (*Snapshot, error) {
 	var lastErr error
 	for _, u := range p.urls {

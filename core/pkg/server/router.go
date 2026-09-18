@@ -254,13 +254,16 @@ func (s *Server) handleStatus(c *gin.Context) {
 	if s.configsyncScheduler != nil {
 		csStatus := s.configsyncScheduler.Status()
 		resp["configsync"] = gin.H{
-			"last_sync_time": csStatus.LastSyncTime.Format(time.RFC3339),
-			"last_sync_ok":   csStatus.LastSyncOK,
-			"sync_count":     csStatus.SyncCount,
-			"error_count":    csStatus.ErrorCount,
-			"price_applied":  csStatus.PriceApplied,
-			"price_skipped":  csStatus.PriceSkipped,
-			"last_error":     csStatus.LastError,
+			"last_sync_time":  csStatus.LastSyncTime.Format(time.RFC3339),
+			"last_sync_ok":    csStatus.LastSyncOK,
+			"last_fetch_ok":   csStatus.LastFetchOK,
+			"last_persist_ok": csStatus.LastPersistOK,
+			"last_apply_ok":   csStatus.LastApplyOK,
+			"sync_count":      csStatus.SyncCount,
+			"error_count":     csStatus.ErrorCount,
+			"price_applied":   csStatus.PriceApplied,
+			"price_skipped":   csStatus.PriceSkipped,
+			"last_error":      csStatus.LastError,
 		}
 	}
 

@@ -674,7 +674,8 @@ func (h *BuiltinAgentHandler) ListSkills(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"skills": views})
 }
 
-// ConfirmTool 确认工具执行
+// ConfirmTool 确认工具执行：从会话 Agent 的 ConfirmChannel 读取挂起请求，
+// 根据用户 confirm 决定回传 Approved/Denied。
 func (h *BuiltinAgentHandler) ConfirmTool(c *gin.Context) {
 	sessionID := c.Param("id")
 
@@ -699,9 +700,49 @@ func (h *BuiltinAgentHandler) ConfirmTool(c *gin.Context) {
 		return
 	}
 
-	// TODO: 处理工具确认逻辑
+	h.coresMu.Lock()
+	ag := h.cores[sessionID]
+	h.coresMu.Unlock()
+	if ag == nil {
+		c.JSON(http.StatusConflict, gin.H{"error": "no active agent for session"})
+		return
+	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "tool confirmed"})
+	ch := ag.ConfirmChannel()
+	if ch == nil {
+		c.JSON(http.StatusConflict, gin.H{"error": "confirm channel not available"})
+		return
+	}
+
+	// 非阻塞读取挂起的确认请求（超时 200ms）。
+	select {
+	case cr := <-ch:
+		if req.ToolID != "" && cr.ToolName != req.ToolID {
+			// ToolID 不匹配：直接拒绝该请求，防止阻塞其他确认。
+			ag.SubmitConfirmResult(agentcore.ConfirmResult{
+				ID:       cr.ID,
+				Approved: false,
+				Reason:   fmt.Sprintf("tool_id mismatch: requested %s, pending %s", req.ToolID, cr.ToolName),
+			})
+			c.JSON(http.StatusConflict, gin.H{
+				"error":        "tool_id mismatch, pending request denied",
+				"pending_tool": cr.ToolName,
+			})
+			return
+		}
+		ag.SubmitConfirmResult(agentcore.ConfirmResult{
+			ID:       cr.ID,
+			Approved: req.Confirm,
+			Reason:   "",
+		})
+		c.JSON(http.StatusOK, gin.H{
+			"message":  "confirm submitted",
+			"approved": req.Confirm,
+			"tool":     cr.ToolName,
+		})
+	case <-time.After(200 * time.Millisecond):
+		c.JSON(http.StatusConflict, gin.H{"error": "no pending confirm request"})
+	}
 }
 
 // CancelExecution 取消执行

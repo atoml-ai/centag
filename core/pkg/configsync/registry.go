@@ -31,13 +31,13 @@ type Source interface {
 // TableSpec defines how to fetch, parse, validate, and apply a logical table.
 // Type safety is enforced at registration time via closures; internally everything is any.
 type TableSpec struct {
-	Name      string
-	Fetch     func(ctx context.Context, src Source) ([]Record, error)
-	Parse     func(r Record) (any, bool)
-	Validate  func(item any) error
-	Apply     func(ctx context.Context, items []any) error
-	Default   func() []any
-	Serialize func(items []any) (json.RawMessage, error)
+	Name        string
+	Fetch       func(ctx context.Context, src Source) ([]Record, error)
+	Parse       func(r Record) (any, bool)
+	Validate    func(item any) error
+	Apply       func(ctx context.Context, items []any) error
+	Default     func() []any
+	Serialize   func(items []any) (json.RawMessage, error)
 	Deserialize func(data json.RawMessage) ([]any, error)
 }
 
@@ -77,13 +77,13 @@ func (r *Registry) Register(spec TableSpec) error {
 func (r *Registry) RegisterKV(spec KeyValueSpec) error {
 	kvAdapter := &kvTableAdapter{spec: spec}
 	return r.Register(TableSpec{
-		Name:      spec.Key,
-		Fetch:     kvAdapter.fetch,
-		Parse:     kvAdapter.parse,
-		Validate:  kvAdapter.validate,
-		Apply:     kvAdapter.apply,
-		Default:   kvAdapter.defaultValue,
-		Serialize: kvAdapter.serialize,
+		Name:        spec.Key,
+		Fetch:       kvAdapter.fetch,
+		Parse:       kvAdapter.parse,
+		Validate:    kvAdapter.validate,
+		Apply:       kvAdapter.apply,
+		Default:     kvAdapter.defaultValue,
+		Serialize:   kvAdapter.serialize,
 		Deserialize: kvAdapter.deserialize,
 	})
 }
@@ -136,13 +136,44 @@ type KeyValueSpec struct {
 	Default func() any
 }
 
+// systemConfigTable is the canonical logical table name shared with
+// Snapshot.Tables["system_config"].
+const systemConfigTable = "system_config"
+
+// ApplyResult reports how many rows were persisted vs rejected by an applier (§3.2 Step 2).
+type ApplyResult struct {
+	Applied int
+	Failed  int
+}
+
+// kvApplier persists a batch of KV rows. It is wired by the entrypoint to the
+// live SystemConfigStore (P0-3); when unset, apply fails closed.
+var (
+	kvApplierMu sync.RWMutex
+	kvApplier   func(ctx context.Context, rows []KVRow) (ApplyResult, error)
+)
+
+// SetKVApplier wires the persistence sink for the system_config KV table.
+func SetKVApplier(fn func(ctx context.Context, rows []KVRow) (ApplyResult, error)) {
+	kvApplierMu.Lock()
+	defer kvApplierMu.Unlock()
+	kvApplier = fn
+}
+
+// currentKVApplier returns the wired sink (nil when not configured).
+func currentKVApplier() func(ctx context.Context, rows []KVRow) (ApplyResult, error) {
+	kvApplierMu.RLock()
+	defer kvApplierMu.RUnlock()
+	return kvApplier
+}
+
 // kvTableAdapter adapts a KeyValueSpec to the TableSpec interface.
 type kvTableAdapter struct {
 	spec KeyValueSpec
 }
 
 func (a *kvTableAdapter) fetch(ctx context.Context, src Source) ([]Record, error) {
-	return src.Fetch(ctx, "system_config")
+	return src.Fetch(ctx, systemConfigTable)
 }
 
 func (a *kvTableAdapter) parse(r Record) (any, bool) {
@@ -150,39 +181,144 @@ func (a *kvTableAdapter) parse(r Record) (any, bool) {
 	if !ok {
 		return nil, false
 	}
-	// Type coercion happens in validate/apply
-	return map[string]string{
-		"key":   r.Key,
-		"value": val,
-	}, true
+	key := r.Key
+	if key == "" {
+		key = r.Fields["key"]
+	}
+	if key == "" {
+		return nil, false
+	}
+	row := KVRow{
+		Key:         key,
+		Value:       val,
+		ValueType:   r.Fields["value_type"],
+		Scope:       r.Fields["scope"],
+		Description: r.Fields["description"],
+		Enabled:     true,
+	}
+	if _, ok := r.Fields["enabled"]; ok {
+		row.Enabled = parseBoolField(r.Fields["enabled"])
+	}
+	return row, true
 }
 
 func (a *kvTableAdapter) validate(item any) error {
-	return nil // validated during apply
+	row, ok := item.(KVRow)
+	if !ok {
+		return fmt.Errorf("kv: unexpected item type %T", item)
+	}
+	if row.Key == "" {
+		return fmt.Errorf("kv: empty key")
+	}
+	return nil
 }
 
 func (a *kvTableAdapter) apply(ctx context.Context, items []any) error {
-	// Placeholder: will be wired to actual KV consumers in M2
-	return nil
+	applier := currentKVApplier()
+	if applier == nil {
+		return fmt.Errorf("kvTableAdapter: KV applier 未接线（P0-3）")
+	}
+	rows := make([]KVRow, 0, len(items))
+	for _, it := range items {
+		switch v := it.(type) {
+		case KVRow:
+			rows = append(rows, v)
+		case map[string]any:
+			rows = append(rows, kvRowFromMap(v))
+		default:
+			return fmt.Errorf("kv: unexpected item type %T", it)
+		}
+	}
+	if len(rows) == 0 {
+		return nil
+	}
+	_, err := applier(ctx, rows)
+	return err
 }
 
 func (a *kvTableAdapter) defaultValue() []any {
 	if a.spec.Default == nil {
 		return nil
 	}
-	return []any{a.spec.Default()}
+	return []any{KVRow{Key: a.spec.Key, Value: fmt.Sprintf("%v", a.spec.Default()), ValueType: string(a.spec.Type), Scope: string(a.spec.Scope), Enabled: true}}
 }
 
 func (a *kvTableAdapter) serialize(items []any) (json.RawMessage, error) {
-	return json.Marshal(items)
+	rows := make([]KVRow, 0, len(items))
+	for _, it := range items {
+		switch v := it.(type) {
+		case KVRow:
+			rows = append(rows, v)
+		case map[string]any:
+			rows = append(rows, kvRowFromMap(v))
+		default:
+			return nil, fmt.Errorf("kv: unexpected item type %T", it)
+		}
+	}
+	return json.Marshal(rows)
 }
 
 func (a *kvTableAdapter) deserialize(data json.RawMessage) ([]any, error) {
-	var items []any
-	if err := json.Unmarshal(data, &items); err != nil {
+	var rows []KVRow
+	if err := json.Unmarshal(data, &rows); err != nil {
 		return nil, err
 	}
+	items := make([]any, len(rows))
+	for i := range rows {
+		items[i] = rows[i]
+	}
 	return items, nil
+}
+
+// kvRowFromMap normalizes an untyped JSON object into a KVRow.
+func kvRowFromMap(m map[string]any) KVRow {
+	row := KVRow{}
+	if v, ok := m["key"].(string); ok {
+		row.Key = v
+	}
+	if v, ok := m["value"].(string); ok {
+		row.Value = v
+	}
+	if v, ok := m["value_type"].(string); ok {
+		row.ValueType = v
+	}
+	if v, ok := m["scope"].(string); ok {
+		row.Scope = v
+	}
+	if v, ok := m["description"].(string); ok {
+		row.Description = v
+	}
+	if v, ok := m["enabled"].(bool); ok {
+		row.Enabled = v
+	}
+	return row
+}
+
+// parseBoolField coerces common truthy string forms.
+func parseBoolField(s string) bool {
+	switch s {
+	case "1", "true", "TRUE", "True", "yes", "on":
+		return true
+	default:
+		return false
+	}
+}
+
+// RegisterSystemConfig registers the system_config KV table under the canonical
+// name "system_config", matching Snapshot.Tables["system_config"]. This is the
+// production entry point for the KV table adapter (P0-3).
+func (r *Registry) RegisterSystemConfig() error {
+	a := &kvTableAdapter{spec: KeyValueSpec{Key: systemConfigTable, Type: KVJSON, Scope: KVScopeCore}}
+	return r.Register(TableSpec{
+		Name:        systemConfigTable,
+		Fetch:       a.fetch,
+		Parse:       a.parse,
+		Validate:    a.validate,
+		Apply:       a.apply,
+		Default:     a.defaultValue,
+		Serialize:   a.serialize,
+		Deserialize: a.deserialize,
+	})
 }
 
 // --- Orchestrator ---

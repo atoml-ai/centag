@@ -73,6 +73,11 @@ type Provider interface {
 var ErrNotSupported = fmt.Errorf("configsync: not supported by this channel")
 
 // Status holds the current sync state for display on management endpoints.
+//
+// The success flags are deliberately split (P2-2): a round can fetch remote
+// data successfully yet fail to persist it locally, or persist it yet have the
+// host reject the apply. LastSyncOK is true only when every stage that ran
+// succeeded, so a failed snapshot write is never reported as a clean sync.
 type Status struct {
 	LastSyncTime time.Time         `json:"last_sync_time"`
 	LastSyncOK   bool              `json:"last_sync_ok"`
@@ -82,4 +87,12 @@ type Status struct {
 	ConfigValues map[string]string `json:"config_values,omitempty"` // key → current value summary
 	PriceApplied int               `json:"price_applied"`
 	PriceSkipped int               `json:"price_skipped_manual"`
+
+	// LastFetchOK: provider fetch (config/prices/optional tables) succeeded.
+	LastFetchOK bool `json:"last_fetch_ok"`
+	// LastPersistOK: the snapshot was written to stateDir (true when no
+	// stateDir is configured, since nothing needs persisting).
+	LastPersistOK bool `json:"last_persist_ok"`
+	// LastApplyOK: the host OnUpdate consumer was invoked for this round.
+	LastApplyOK bool `json:"last_apply_ok"`
 }
