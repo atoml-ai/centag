@@ -194,6 +194,26 @@ func (b *Backend) findFallbackBackend(primary *backend.BackendConfig, req *plugi
 	return nil, false
 }
 
+// applyProxyHeaders 将 ProxyRequest.Headers 中的自定义头透传到上游请求。
+// Content-Type / Authorization / Accept 由调用方显式设置，不允许被覆盖；
+// Host / Content-Length 等 HTTP 控制头一律忽略，避免请求伪造。
+func applyProxyHeaders(httpReq *http.Request, headers map[string]string) {
+	if httpReq == nil || len(headers) == 0 {
+		return
+	}
+	for name, value := range headers {
+		name = strings.TrimSpace(name)
+		if name == "" {
+			continue
+		}
+		switch strings.ToLower(name) {
+		case "content-type", "authorization", "accept", "host", "content-length", "connection", "transfer-encoding":
+			continue
+		}
+		httpReq.Header.Set(name, value)
+	}
+}
+
 // CallModel 调用模型 (非流式)
 func (b *Backend) CallModel(ctx context.Context, req *plugin.ProxyRequest) (*plugin.ProxyResponse, error) {
 	// 获取后端配置
@@ -288,6 +308,7 @@ func (b *Backend) CallModel(ctx context.Context, req *plugin.ProxyRequest) (*plu
 		if apiKey != "" {
 			httpReq.Header.Set("Authorization", "Bearer "+apiKey)
 		}
+		applyProxyHeaders(httpReq, req.Headers)
 
 		// 发送请求
 		resp, doErr := b.client.Do(httpReq)
@@ -495,6 +516,7 @@ func (b *Backend) CallModelStream(ctx context.Context, req *plugin.ProxyRequest)
 			if apiKey != "" {
 				httpReq.Header.Set("Authorization", "Bearer "+apiKey)
 			}
+			applyProxyHeaders(httpReq, req.Headers)
 
 			var doErr error
 			resp, doErr = b.client.Do(httpReq)
