@@ -45,9 +45,15 @@ VALUES ('t','s','x','{}','proposed','2026-01-01T00:00:00Z','2026-01-01T00:00:00Z
 }
 
 // newTestRuntime 建好 schema + 归档目录的运行时。
+// 测试环境：注册全部目标的 fake 适配器并放开指标要求（fail-closed 语义
+// 由 TestRequireMetricDefaultClosed / TestApplyFailsClosedWithoutAdapter 单独覆盖）。
 func newTestRuntime(t *testing.T) (*Runtime, string) {
 	t.Helper()
+	for _, tg := range []string{TargetPipelineWeight, TargetRetryPolicy, TargetCacheTTL, TargetBackendSwitch} {
+		registerTestApplier(t, tg)
+	}
 	rt := NewRuntime(testDB(t), "sqlite", t.TempDir())
+	rt.RequireMetric(false)
 	if err := rt.EnsureSchema(context.Background()); err != nil {
 		t.Fatalf("EnsureSchema: %v", err)
 	}

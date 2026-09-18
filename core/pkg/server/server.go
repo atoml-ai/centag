@@ -371,6 +371,8 @@ func New(cfg *config.Config) *Server {
 	wireSchedulerBackend(appScheduler)
 	wireSchedulerMetricsFeedback(appScheduler)
 	wireTransparentBackend(backendManager)
+	// P0-1: 注册自进化宿主面真实适配器（Apply/Rollback 才会改动运行组件）
+	WireEvolutionHost(appScheduler, backendManager, cacheManager)
 	if appScheduler != nil {
 		logger.Infof("[Scheduler] Initialized and wired to pipeline (intent_recognition=%v, task_strategies=%d)",
 			cfg.Scheduler.EnableIntentRecognition, len(cfg.Scheduler.TaskStrategies))

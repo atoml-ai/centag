@@ -63,6 +63,15 @@ func NewManager(config *CacheConfig) (*Manager, error) {
 	return manager, nil
 }
 
+// SetDefaultTTL 更新默认 TTL（自进化 cache_ttl 宿主面）。
+// 精确缓存与 Manager 共享同一 *CacheConfig，因此即时生效。
+func (m *Manager) SetDefaultTTL(ttl time.Duration) {
+	if m == nil || m.config == nil || ttl <= 0 {
+		return
+	}
+	m.config.DefaultTTL = ttl
+}
+
 // Get 获取缓存
 func (m *Manager) Get(ctx context.Context, key string) (*CacheEntry, error) {
 	if !m.config.Enabled {

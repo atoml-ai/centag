@@ -320,6 +320,29 @@ func (m *Manager) Save() error {
 	return nil
 }
 
+// SetAllMaxRetries 统一设置所有后端的最大重试次数并持久化（自进化 retry_policy 宿主面）。
+// 返回实际发生变更的后端数量。
+func (m *Manager) SetAllMaxRetries(n int) (int, error) {
+	if n < 1 {
+		return 0, fmt.Errorf("max_retries must be >= 1, got %d", n)
+	}
+
+	m.mu.Lock()
+	changed := 0
+	for _, b := range m.backends {
+		if b.MaxRetries != n {
+			b.MaxRetries = n
+			changed++
+		}
+	}
+	m.mu.Unlock()
+
+	if err := m.Save(); err != nil {
+		return changed, err
+	}
+	return changed, nil
+}
+
 // Add 添加后端配置
 func (m *Manager) Add(cfg *BackendConfig) error {
 	m.mu.Lock()

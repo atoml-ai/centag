@@ -125,11 +125,15 @@ func TestDryrunMetricSourceError(t *testing.T) {
 	if err := rt.Apply(ctx, p.ID, true); err == nil {
 		t.Fatal("度量失败后 apply 应被禁止")
 	}
-	// 未注入观测面 → 纯方案校验路径仍可 dryrun。
-	rt2, _ := newTestRuntime(t)
+	// 未注入观测面 → 生产默认 fail-closed 拒绝；显式降级后纯校验路径可 dryrun。
+	rt2 := bareRuntime(t)
 	p2, _ := rt2.Propose(ctx, "s", TargetRetryPolicy, map[string]any{"max_retries": float64(2)}, "")
+	if err := rt2.Dryrun(ctx, p2.ID); err == nil {
+		t.Fatal("默认无观测面 dryrun 应拒绝（P0-2 fail-closed）")
+	}
+	rt2.RequireMetric(false)
 	if err := rt2.Dryrun(ctx, p2.ID); err != nil {
-		t.Fatalf("无观测面 dryrun: %v", err)
+		t.Fatalf("降级后 dryrun: %v", err)
 	}
 	// 未注入观测面 → MeasureEffects 报错。
 	if _, err := rt2.MeasureEffects(ctx, p2.ID, "post"); err == nil {

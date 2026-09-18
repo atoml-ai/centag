@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sync"
 )
 
 // TC-EVO-006 口径：同指标/同窗口的快照可计算 delta。
@@ -47,8 +48,33 @@ type EffectMeasure struct {
 	Verdict string             `json:"verdict"` // pass / regression
 }
 
-// SetMetricSource 注入观测面（nil = 关闭度量，dryrun 保持纯方案校验）。
+// defaultMetric 进程级默认观测面：生产 wiring 启动时注入一次，
+// 之后 NewRuntime 构造的实例自动继承（P0-2：生产路径不再"无度量放行"）。
+var (
+	defaultMetricMu sync.RWMutex
+	defaultMetric   MetricSource
+)
+
+// SetDefaultMetricSource 设置进程级默认观测面（传 nil 清除，测试隔离用）。
+func SetDefaultMetricSource(src MetricSource) {
+	defaultMetricMu.Lock()
+	defer defaultMetricMu.Unlock()
+	defaultMetric = src
+}
+
+// DefaultMetricSource 返回当前进程级默认观测面（供 wiring 幂等判断与测试）。
+func DefaultMetricSource() MetricSource {
+	defaultMetricMu.RLock()
+	defer defaultMetricMu.RUnlock()
+	return defaultMetric
+}
+
+// SetMetricSource 注入观测面（nil 不再允许：生产路径 fail-closed，
+// dryrun/MeasureEffects 无指标源时直接拒绝）。
 func (r *Runtime) SetMetricSource(src MetricSource) { r.metric = src }
+
+// RequireMetric 控制生产路径是否强制指标源；默认 true（P0-2）。
+func (r *Runtime) RequireMetric(required bool) { r.requireMetric = required }
 
 // SetBudget 覆盖循环预算（TC-EVO-008）；传 NewLoopBudget(0, 0, "") 可显式关闭。
 // NewRuntime 已注入生产默认（DefaultMaxIterations/DefaultMaxTokens）。
@@ -99,6 +125,7 @@ func round2(v float64) float64 { return float64(int(v*100)) / 100 }
 
 // MeasureEffects 快照落位：应用前后同指标快照对齐存 effect_measure（TC-EVO-006）。
 // phase: "dryrun"（试算前基线）/ "apply"（试算后预测）/ "post"（实际观测回填）。
+// P0-2：无指标源时拒绝（生产路径 fail-closed）。
 func (r *Runtime) MeasureEffects(ctx context.Context, proposalID, phase string) (*effectSnapshot, error) {
 	row, err := r.store.Get(ctx, proposalID)
 	if err != nil {
@@ -108,8 +135,12 @@ func (r *Runtime) MeasureEffects(ctx context.Context, proposalID, phase string) 
 	if err := unmarshalProposal(row.Proposal, &p); err != nil {
 		return nil, err
 	}
+	// P0-2：生产路径无指标源拒绝。
+	if r.metric == nil && r.requireMetric {
+		return nil, fmt.Errorf("未注入 MetricSource，无法度量（P0-2 fail-closed）")
+	}
 	if r.metric == nil {
-		return nil, fmt.Errorf("未注入 MetricSource，无法度量")
+		return nil, fmt.Errorf("未注入 MetricSource")
 	}
 	snap, err := r.metric.Snapshot(ctx)
 	if err != nil {

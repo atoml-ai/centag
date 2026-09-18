@@ -184,6 +184,9 @@ func NewMinimal(cfg *config.Config) *Server {
 		proxyCache = cache.NewProxyCache(cacheManager, false)
 	}
 
+	// P0-1: 注册自进化宿主面真实适配器（与完整版 server.go 对齐）
+	WireEvolutionHost(appScheduler, backendManager, cacheManager)
+
 	// Create backend handler
 	backendHandler := NewBackendHandler(backendManager)
 

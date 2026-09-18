@@ -16,9 +16,11 @@ type Runtime struct {
 	state      *TargetStateStore
 	learn      *LearningArchive
 	dryruns    map[string]bool // 已通过 dryrun 的提案 ID（dryrun_required 守卫）
-	metric     MetricSource
-	thresholds MetricThresholds
-	budget     *LoopBudget
+	metric MetricSource
+	// requireMetric 生产默认 true：无 MetricSource 时 dryrun 失败（P0-2）。
+	requireMetric bool
+	thresholds    MetricThresholds
+	budget        *LoopBudget
 }
 
 // NewRuntime 构造运行时（driver: "sqlite"/"postgresql"；空则从 db 推断）。
@@ -32,9 +34,12 @@ func NewRuntime(db *sql.DB, driver, dataDir string) *Runtime {
 		state:      NewTargetStateStore(dataDir),
 		learn:      NewLearningArchive(dataDir),
 		dryruns:    make(map[string]bool),
+		metric:     DefaultMetricSource(),
 		thresholds: DefaultMetricThresholds(),
 		// 生产默认预算（TC-EVO-008）：每会话熔断护栏；SetBudget 可覆盖。
 		budget: NewLoopBudget(DefaultMaxIterations, DefaultMaxTokens, dataDir),
+		// P0-2：生产路径 fail-closed，无 MetricSource 时 dryrun 拒绝。
+		requireMetric: true,
 	}
 	ensureOnce.Do(func() {
 		if err := rt.EnsureSchema(context.Background()); err != nil {
@@ -46,6 +51,18 @@ func NewRuntime(db *sql.DB, driver, dataDir string) *Runtime {
 
 // EnsureSchema 幂等建表入口（wiring 调用；TC-DB-EVO-001）。
 func (r *Runtime) EnsureSchema(ctx context.Context) error { return r.store.ensure(ctx) }
+
+// JournalRow 返回提案的审计记录（状态/效果/回滚点），供宿主诊断与端到端
+// 验收读取；提案不存在时返回错误。
+func (r *Runtime) JournalRow(ctx context.Context, id string) (*LogRow, error) {
+	return r.store.Get(ctx, id)
+}
+
+// SetTargetState 写入目标的当前生效参数快照（宿主启动时用于把真实配置面
+// 镜像进 evolution 域，使首次提案的回滚点能恢复正确的宿主值）。
+func (r *Runtime) SetTargetState(target string, state TargetKeyState) error {
+	return r.state.Set(target, state)
+}
 
 // Propose 产出结构化提案（TC-EVO-001）：回滚点对本轮生效参数齐照快照；
 // 目标白名单 + 参数 schema 校验失败则拒绝（不落库）。
@@ -91,9 +108,9 @@ func (r *Runtime) Propose(ctx context.Context, sessionID, target string, params 
 	return p, nil
 }
 
-// Dryrun 试算（不落任何 mutation）：无观测面注入时纯方案校验；
-// 注入 MetricSource 后为"同窗口基线快照 + 试算指标"两读（TC-EVO-005：
-// 指标回退超标 → dryrun 失败，dryrun 位不被置位，apply 被禁）。
+// Dryrun 试算（不落任何 mutation）：无观测面注入时**拒绝**（P0-2 fail-closed，
+// 防止"无度量放行"破坏闭环）；注入 MetricSource 后为"同窗口基线快照 + 试算指标"
+// 两读（TC-EVO-005：指标回退超标 → dryrun 失败，dryrun 位不被置位，apply 被禁）。
 func (r *Runtime) Dryrun(ctx context.Context, id string) error {
 	p, err := r.load(ctx, id, StatusProposed)
 	if err != nil {
@@ -101,6 +118,11 @@ func (r *Runtime) Dryrun(ctx context.Context, id string) error {
 	}
 	if err := ValidateTarget(p.Target, p.Params); err != nil {
 		return err
+	}
+	// P0-2：无指标源时 dryrun 必须失败（生产路径 fail-closed；测试可用
+	// RequireMetric(false) 或注入 FakeMetricSource 规避）。
+	if r.metric == nil && r.requireMetric {
+		return fmt.Errorf("未注入 MetricSource，dryrun 拒绝（P0-2 fail-closed）")
 	}
 	if r.metric != nil {
 		before, err := r.metric.Snapshot(ctx)
@@ -145,6 +167,16 @@ func (r *Runtime) Apply(ctx context.Context, id string, dryrunRequired bool) err
 	if err := r.state.Set(p.Target, TargetKeyState(p.Params)); err != nil {
 		return err
 	}
+	// P0-1：通过适配器写入真实宿主配置面；无适配器或应用失败均阻止状态迁移。
+	if ap := HostAppliers.Get(p.Target); ap != nil {
+		if err := ap.Apply(ctx, TargetKeyState(p.Params)); err != nil {
+			_ = r.state.Set(p.Target, TargetKeyState(p.ParamsBefore))
+			return fmt.Errorf("宿主应用失败（target=%s）: %w", p.Target, err)
+		}
+	} else {
+		_ = r.state.Set(p.Target, TargetKeyState(p.ParamsBefore))
+		return noApplierError(p.Target)
+	}
 	return r.store.UpdateStatus(ctx, id, StatusApplied, now(), "")
 }
 
@@ -173,6 +205,12 @@ func (r *Runtime) Rollback(ctx context.Context, appliedID string) error {
 	}
 	if err := r.state.Set(p.Target, TargetKeyState(p.ParamsBefore)); err != nil {
 		return err
+	}
+	// P0-1：回滚同样走适配器，真实恢复宿主配置面。
+	if ap := HostAppliers.Get(p.Target); ap != nil {
+		if err := ap.Rollback(ctx, TargetKeyState(p.ParamsBefore)); err != nil {
+			return fmt.Errorf("宿主回滚失败（target=%s）: %w", p.Target, err)
+		}
 	}
 	return r.store.UpdateStatus(ctx, appliedID, StatusRolledBack, "", appliedID)
 }
