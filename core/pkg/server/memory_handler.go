@@ -550,7 +550,7 @@ type MemoryVersionItem struct {
 func (h *MemoryHandler) getOllamaEmbedding(text string) ([]float32, error) {
 	// 优先使用配置的 embedding 服务
 	if h.embeddingSvc != nil {
-		return h.embeddingSvc.GetEmbedding(context.TODO(), text)
+		return h.embeddingSvc.GetEmbedding(context.Background(), text)
 	}
 
 	// 回退到直接调用 Ollama
@@ -634,7 +634,7 @@ func (h *MemoryHandler) indexMemoryFile(userID, agentID, filePath string) (int, 
 
 		// 存入向量存储（带 user_id 元数据用于隔离）
 		if h.vectorStore != nil {
-			err := h.vectorStore.Insert(context.TODO(), []storage.Vector{{
+			err := h.vectorStore.Insert(context.Background(), []storage.Vector{{
 				ID:     vectorID,
 				Vector: emb,
 				Metadata: map[string]interface{}{
@@ -819,7 +819,7 @@ func (h *MemoryHandler) Search(c *gin.Context) {
 	queryEmb, embErr := h.getOllamaEmbedding(query)
 
 	if h.vectorStore != nil && embErr == nil {
-		results, err := h.vectorStore.Search(context.TODO(), queryEmb, limit, map[string]interface{}{
+		results, err := h.vectorStore.Search(c.Request.Context(), queryEmb, limit, map[string]interface{}{
 			"user_id":  userID,
 			"agent_id": agentID,
 		})
@@ -1786,7 +1786,7 @@ func (h *MemoryHandler) deleteVectorsForFile(userID, agentID, filePath string) e
 	}
 
 	// 列出所有向量（简化处理：获取全部）
-	allVectors, _, err := h.vectorStore.ListAll(context.TODO(), "", 10000, 0)
+	allVectors, _, err := h.vectorStore.ListAll(context.Background(), "", 10000, 0)
 	if err != nil {
 		return err
 	}
@@ -1802,7 +1802,7 @@ func (h *MemoryHandler) deleteVectorsForFile(userID, agentID, filePath string) e
 	}
 
 	if len(idsToDelete) > 0 {
-		return h.vectorStore.Delete(context.TODO(), idsToDelete)
+		return h.vectorStore.Delete(context.Background(), idsToDelete)
 	}
 
 	return nil
