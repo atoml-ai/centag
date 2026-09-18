@@ -54,6 +54,8 @@ function baseRouterPipeline(): Pipeline {
         type: 'router',
         name: 'router',
         config: {
+          backend: '',
+          model: '',
           custom_config: {
             default_route: 'gen-a',
             routes: { hello: 'gen-a', world: 'gen-b' }

@@ -76,11 +76,15 @@ function getInitialLocale(): AppLocale {
   return detectBrowserLocale()
 }
 
-const i18n = createI18n({
+// Deeply-nested merged locale objects cannot satisfy vue-i18n's recursive
+// LocaleMessage type; the runtime shape is validated by i18n.selftest.ts.
+// `Legacy = false` keeps `global.locale` a writable ref; the messages cast keeps
+// `t(key: string)` usable without an excessively deep instantiation.
+const i18n = createI18n<false>({
   legacy: false,
   locale: getInitialLocale(),
   fallbackLocale: 'en',
-  messages,
+  messages: messages as never,
   missingWarn: import.meta.env.DEV,
   fallbackWarn: import.meta.env.DEV
 })

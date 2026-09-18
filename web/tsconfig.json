@@ -10,7 +10,13 @@
     "isolatedModules": true,
     "esModuleInterop": true,
     "lib": ["ES2020", "DOM", "DOM.Iterable"],
-    "types": ["node"]
+    "types": ["node"],
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/*"],
+      "@shared/*": ["shared/*"]
+    },
+    "skipLibCheck": true
   },
   "include": ["src/**/*", "env.d.ts"]
 }

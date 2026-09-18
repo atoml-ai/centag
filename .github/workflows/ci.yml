@@ -51,6 +51,10 @@ jobs:
           cache: npm
           cache-dependency-path: web/package-lock.json
       - run: npm ci
+      - name: Lint
+        run: npm run lint:ci
+      - name: Typecheck
+        run: npm run typecheck
       - run: npm run test:ui-caps
       - name: Build personal/minimal host (no team pack)
         run: npm run build

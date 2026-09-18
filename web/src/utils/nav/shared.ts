@@ -327,17 +327,18 @@ export function buildWorkerNav(caps: Capabilities): NavItem[] {
   }
 
   // 系统设置：配置 + 模型配置 + 计费规则
-  // personal 走右上角用户菜单，不进侧栏（与 buildMoreNavChildren 一致）
+  // personal 走右上角用户菜单，不进侧栏（与 buildMoreNavChildren 一致）；
+  // role 已在此分支收窄为非 personal，故 requiresAdmin 恒为 true。
   if (caps.systemConfig && caps.role !== 'personal') {
     const sysChildren: NavItem[] = [
-      configNav({ requiresAdmin: caps.role !== 'personal' }),
-      modelConfigNav({ requiresAdmin: caps.role !== 'personal' }),
+      configNav({ requiresAdmin: true }),
+      modelConfigNav({ requiresAdmin: true }),
       {
         id: 'billing-rules',
         labelKey: 'nav.billingRules',
         icon: 'Coin',
         path: '/billing',
-        requiresAdmin: caps.role !== 'personal'
+        requiresAdmin: true
       }
     ]
     items.push(navGroup('system-admin', 'nav.systemAdmin', 'Setting', sysChildren, '/config'))
@@ -401,7 +402,8 @@ export function personalMoreGroup(options?: { teamUser?: boolean }): NavItem {
     agentSetup: true,
     systemConfig: !options?.teamUser,
     userAdmin: false,
-    liteHome: true
+    liteHome: true,
+    opsStats: false
   })
   return navGroup('more', 'nav.more', 'MoreFilled', children, children[0]?.path)
 }

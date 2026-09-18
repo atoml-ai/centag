@@ -14,6 +14,7 @@
     "preview": "vite preview",
     "lint": "eslint \"src/**/*.{vue,ts}\" --fix",
     "lint:ci": "eslint \"src/**/*.{vue,ts}\" --max-warnings 0",
+    "typecheck": "tsc --noEmit",
     "test:capability-slots": "npx --yes tsx src/utils/capabilitySlots.selftest.ts",
     "test:capabilities": "npx --yes tsx src/utils/capabilities.selftest.ts",
     "test:edition-routes": "npx --yes tsx src/utils/edition.route.selftest.ts",

@@ -18,6 +18,7 @@
 9. [健康检查 API](#9-健康检查-api)
 10. [Clash 规则 API](#10-clash-规则-api)
 11. [对话记录 API](#12-对话记录-api-v022)
+12. [Wrap 本地控制 API](#13-wrap-本地控制-api)
 
 ---
 
@@ -745,6 +746,68 @@ func listBusinessPlugins(c *gin.Context) {
 
 ### GET /clash/subscribe/:token
 Clash 订阅端点（外部访问）
+
+---
+
+## 13. Wrap 本地控制 API
+
+> 桌面壳 / Web「本机代理」页使用的本机控制面，挂在 `/api/v1/wrap`。
+> **鉴权**：`wrapLocalGuard` 中间件对**回环**（loopback）客户端免 JWT；非回环请求委托 `proxyAuth`（A1 默认 + A2 管理员口令换 JWT 备选）。
+> 业务层 `ensureWrapRunAllowed`（personal/minimal 或回环）继续二次校验。
+
+### GET /api/v1/wrap/apps
+返回可经 Centag 代理启动的应用目录（`wrap_cli` 目标），供桌面壳 / Web 展示。只读元数据；**本机安装检测由客户端完成**。
+
+响应：`{"apps": [ProxyApp...]}`（无数据时为 `[]`）。
+
+`ProxyApp` 主要字段：
+- `id`、`display_name`、`vendor`、`category`、`launch_mode`（`wrap_run` / `system_proxy`）
+- `argv`：`centag wrap run` 的目标命令行
+- `install`：安装检测线索（`cli_binaries` / `mac_apps` / `win_exes` / `aliases` / `win_msix` / `win_chromium`）
+- `install_url`、`install_hint`、`verified`、`note`
+- `model_config`：`agent_type` / `env_keys` / `requires`
+
+### POST /api/v1/wrap/apps/:id/prepare
+解析应用的 Centag 模型名，并可选写入应用本地模型配置，返回**启动计划**（实际启动仍由 `centag wrap run` 执行）。
+
+请求体（可选，空体 → 系统默认 Pipeline；**不接受客户端 argv**）：
+```json
+{"backend_id":"<可选>","pipeline_id":"<可选>","model":"<可选>","via_proxy":false,"write_config":false}
+```
+
+响应：
+```json
+{
+  "ok": true,
+  "app_id": "claude_code",
+  "display_name": "Claude Code",
+  "launch_mode": "wrap_run",
+  "argv": ["opencode"],
+  "model": "centag/default",
+  "pipeline_id": "default",
+  "env": {"ANTHROPIC_MODEL": "centag/default"},
+  "server": "http://127.0.0.1:20060",
+  "token": "<LAN 出口 Key，可空>",
+  "warnings": ["..."],
+  "restart_required": false
+}
+```
+
+- `model` 解析：`pipeline_id` → `centag/<pipeline>`；`backend_id` → `<backend>/<model>`（`model` 空则默认 `gpt-4o`）；均空 → 系统默认 Pipeline（透明）。
+- `write_config=true` 时按模板 `ConfigFiles` 尽力写入；失败降级为 `warnings`，仍返回启动计划。`system_proxy` 模式跳过写配置。
+- 未知 `:id` → `404 {"error": "unknown app id: ..."}`；非法 JSON → `400`。
+
+### GET /api/v1/wrap/doctor
+代理就绪检查，返回可执行建议，供桌面壳在启动前后给出「明确提示」。
+
+Query（可选）：`app_id`（校验应用存在）、`domain`（证书固定检测）。
+
+响应：`{"ok": bool, "checks": [{"id":"...","ok":bool,"message":"...","action":"..."}]}`
+
+检查项：`sidecar`、`ca`（CA 证书存在）、`mitm`（MITM 已启用）、`egress_key`（出口 Key 已配置）、`lan`（LAN/advertise_host 一致）、`app`（可选）、`cert_pinning`（可选）。
+
+### GET /api/v1/wrap/presets 、 POST /api/v1/wrap/run
+既有接口，行为不变：`presets` 列出可经 wrap 启动的 CLI Agent 预设；`run` 打开系统终端执行 `centag wrap run -- <argv>`（需登录；personal/minimal 或回环）。
 
 ---
 

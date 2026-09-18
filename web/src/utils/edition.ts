@@ -40,8 +40,8 @@ export function isTeamEdition(): boolean {
 }
 
 /** Apply edition from /api/v1/status (authoritative when HTML injection is absent). */
-export function syncEditionFromStatus(status: { edition?: string } | null | undefined) {
-  const edition = status?.edition
+export function syncEditionFromStatus(status: unknown) {
+  const edition = (status as { edition?: string } | null | undefined)?.edition
   if (edition === 'personal' || edition === 'team' || edition === 'minimal') {
     document.documentElement.setAttribute(EDITION_ATTR, edition)
     editionRef.value = edition

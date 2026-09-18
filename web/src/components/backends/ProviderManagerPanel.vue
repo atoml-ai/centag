@@ -154,13 +154,13 @@
               {{ t('providerManager.keysCount', { enabled: b.account_pool_summary.enabled_accounts, total: b.account_pool_summary.total_accounts }) }}
             </span>
             <el-tag
-              v-if="b.circuit_state && b.circuit_state !== 'closed'"
+              v-if="circuitStateOf(b.id) !== 'closed'"
               size="small"
-              :type="b.circuit_state === 'open' ? 'danger' : 'warning'"
+              :type="circuitStateOf(b.id) === 'open' ? 'danger' : 'warning'"
               effect="dark"
               class="circuit-tag"
             >
-              {{ b.circuit_state === 'open' ? t('backends.circuitBreakerPanel.stateOpen') : t('backends.circuitBreakerPanel.stateHalfOpen') }}
+              {{ circuitLabel(circuitStateOf(b.id)) }}
             </el-tag>
           </div>
           <div class="default-model-row">

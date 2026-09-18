@@ -93,8 +93,8 @@ function run() {
     'user: data-stores → dashboard'
   )
   assert(
-    resolveCapabilityRouteRedirect('/cache', userCaps, 'team') === '/dashboard',
-    'user: cache → dashboard'
+    resolveCapabilityRouteRedirect('/cache', userCaps, 'team') === null,
+    'user: cache → 放行（只读数据视图，不受 storageConfig 限制）'
   )
   assert(
     resolveCapabilityRouteRedirect('/evaluation', userCaps, 'team') === '/dashboard',
