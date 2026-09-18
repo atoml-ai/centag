@@ -2945,6 +2945,23 @@ type llmClient struct {
 	model         string
 }
 
+// attachOpencodeSessionHeader 从执行上下文提取会话 ID 并写入 ProxyRequest.Headers，
+// 由后端插件透传到上游。上游 openCode Go 缺失 x-opencode-session 会返回
+// 400 MissingSessionID，故 capability broker 路径也需携带。
+func attachOpencodeSessionHeader(ctx context.Context, proxyReq *plugin.ProxyRequest) {
+	if proxyReq == nil {
+		return
+	}
+	sid := OpencodeSessionFromContext(ctx)
+	if sid == "" {
+		return
+	}
+	if proxyReq.Headers == nil {
+		proxyReq.Headers = make(map[string]string, 1)
+	}
+	proxyReq.Headers["X-Opencode-Session"] = sid
+}
+
 // Chat 调用 LLM（非流式）
 func (c *llmClient) Chat(ctx context.Context, req *LLMRequest) (*LLMResponse, error) {
 	// 构建 ProxyRequest
@@ -2961,6 +2978,7 @@ func (c *llmClient) Chat(ctx context.Context, req *LLMRequest) (*LLMResponse, er
 	rawBody := buildRawBodyFromLLMRequest(req, false)
 	applyResolvedModelToRawBody(rawBody, c.model)
 	proxyReq.RawBody = rawBody
+	attachOpencodeSessionHeader(ctx, proxyReq)
 
 	// 调用后端插件
 	resp, err := c.backendPlugin.CallModel(ctx, proxyReq)
@@ -3030,6 +3048,7 @@ func (c *llmClient) ChatStream(ctx context.Context, req *LLMRequest) (<-chan plu
 	rawBody := buildRawBodyFromLLMRequest(req, true)
 	applyResolvedModelToRawBody(rawBody, c.model)
 	proxyReq.RawBody = rawBody
+	attachOpencodeSessionHeader(ctx, proxyReq)
 
 	return c.backendPlugin.CallModelStream(ctx, proxyReq)
 }

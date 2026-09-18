@@ -24,6 +24,7 @@ import (
 	"centag/core/pkg/useraccess"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"gopkg.in/yaml.v3"
 )
 
@@ -700,6 +701,39 @@ func (h *PipelineHandler) ClonePipeline(c *gin.Context) {
 	})
 }
 
+// ensurePipelineRequestMeta 为流水线调试入口补齐 request_id 与 opencode_session。
+// 上游 OpenCode Go 缺失 x-opencode-session 会返回 400 MissingSessionID；
+// 取值顺序与 mode_dispatcher.attachTransparentRequestMetadata 对齐。
+func ensurePipelineRequestMeta(c *gin.Context, meta map[string]interface{}) {
+	if c == nil || meta == nil {
+		return
+	}
+	rid := strings.TrimSpace(c.GetHeader("X-Request-ID"))
+	if rid == "" {
+		if existing, ok := meta["request_id"].(string); ok {
+			rid = strings.TrimSpace(existing)
+		}
+	}
+	if rid == "" {
+		rid = uuid.NewString()
+	}
+	if _, ok := meta["request_id"]; !ok {
+		meta["request_id"] = rid
+	}
+	if _, ok := meta["opencode_session"]; ok {
+		return
+	}
+	if v := strings.TrimSpace(c.GetHeader("X-Opencode-Session")); v != "" {
+		meta["opencode_session"] = v
+		return
+	}
+	if v := strings.TrimSpace(c.GetHeader("X-Session-ID")); v != "" {
+		meta["opencode_session"] = v
+		return
+	}
+	meta["opencode_session"] = "req_" + rid
+}
+
 // ExecutePipeline 测试执行流水线（租户隔离）
 // POST /api/v1/pipelines/:id/execute
 func (h *PipelineHandler) ExecutePipeline(c *gin.Context) {
@@ -775,13 +809,15 @@ func (h *PipelineHandler) ExecutePipeline(c *gin.Context) {
 	// 标记后 transparent_forward 的结构判定兜底与引擎假成功安全网均跳过，
 	// 代理主路径（/v1/chat/completions 等）不受影响，仍正常触发降级。
 	meta["raw_error_body_passthrough"] = true
+	ensurePipelineRequestMeta(c, meta)
+	sessionID, _ := meta["opencode_session"].(string)
 
 	input := &pipeline.PipelineInput{
 		Content:   req.Content,
 		Messages:  req.Messages,
 		Metadata:  meta,
 		UserID:    "",
-		SessionID: c.GetHeader("X-Request-ID"),
+		SessionID: sessionID,
 	}
 
 	// 流水线执行使用独立 context，不与 HTTP 请求绑定。
@@ -852,12 +888,14 @@ func (h *PipelineHandler) ExecutePipelineDirect(c *gin.Context) {
 		req.Metadata = map[string]interface{}{}
 	}
 	req.Metadata["raw_error_body_passthrough"] = true
+	ensurePipelineRequestMeta(c, req.Metadata)
+	sessionID, _ := req.Metadata["opencode_session"].(string)
 
 	input := &pipeline.PipelineInput{
 		Content:   req.Content,
 		Metadata:  req.Metadata,
 		UserID:    "",
-		SessionID: c.GetHeader("X-Request-ID"),
+		SessionID: sessionID,
 	}
 
 	// 注入 RouteConfig，防止前端传递的流水线缺少 RouteConfig
