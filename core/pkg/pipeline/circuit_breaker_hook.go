@@ -136,12 +136,41 @@ func isFixedEgressNodeConfig(cfg NodeConfig) bool {
 	return false
 }
 
+// isClientRequestError 判断错误是否为请求/配置类 4xx（400/404/405/409/422）。
+// 这类错误重试同一后端不会恢复，属请求侧问题而非后端故障；若计入熔断，
+// 一个缺失必需请求头（如 OpenCode Go 的 x-opencode-session → 400 MissingSessionID）
+// 的配置问题会把健康后端整体打成 open，波及所有正常流量。
+// 401/403/429 不在豁免范围：鉴权失效、额度耗尽、限流仍需反映后端健康度
+// （限流另有 isTransientRateLimitError 单独处理）。
+func isClientRequestError(err error) bool {
+	if err == nil {
+		return false
+	}
+	typ, code, _ := classifyNodeError(err)
+	if typ != "http_status" {
+		return false
+	}
+	switch code {
+	case http.StatusBadRequest, http.StatusNotFound, http.StatusMethodNotAllowed,
+		http.StatusConflict, http.StatusUnprocessableEntity:
+		return true
+	}
+	// 401/404 也可能是上游「模型不存在/不支持」（如 OpenCode Go 用 401 + ModelError
+	// 表达「模型不支持」）：同属请求侧问题，不计熔断。
+	return config.IsModelNotSupportedFailure(code, err.Error())
+}
+
 func recordNodeCircuitOutcome(backendID, model string, success bool, skippedDueToCircuit bool, err error) {
 	if backendID == "" || RecordCircuitOutcome == nil || skippedDueToCircuit {
 		return
 	}
-	if !success && isTransientRateLimitError(err, model) {
-		return
+	if !success {
+		if isTransientRateLimitError(err, model) {
+			return
+		}
+		if isClientRequestError(err) {
+			return
+		}
 	}
 	RecordCircuitOutcome(backendID, success)
 }
