@@ -548,21 +548,7 @@ func resolveTransparentAccountPool(backendID string) *backend.AccountPoolConfig 
 }
 
 func isUpstreamModelOrPlaceholderError(body string) bool {
-	lower := strings.ToLower(body)
-	if strings.Contains(lower, "modelerror") ||
-		strings.Contains(lower, "model_not_found") ||
-		strings.Contains(lower, "is not supported") ||
-		strings.Contains(lower, "does not exist") ||
-		strings.Contains(body, "模型不存在") ||
-		strings.Contains(body, "模型代码") ||
-		strings.Contains(lower, `"code":"1211"`) ||
-		strings.Contains(lower, `"code": 1211`) {
-		return true
-	}
-	// 字面量占位符被当成模型名发给上游
-	return strings.Contains(body, "{{requested_model}}") ||
-		strings.Contains(body, "{{system.fallback_model}}") ||
-		strings.Contains(body, "{{system.default_model}}")
+	return config.IsModelNotSupportedFailure(0, body)
 }
 
 // isUpstreamRouterUnavailable OpenCode Zen 等网关对暂不可达模型返回 Router.Unavailable。

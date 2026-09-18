@@ -1420,6 +1420,11 @@ func convertToolCallsInJSON(rawJSON []byte, toolCalls []plugin.ToolCall, cleaned
 
 // shouldRotateOpenAIAccount：同后端多 key 时，限额/鉴权/上游错误优先换本后端其它 key。
 func shouldRotateOpenAIAccount(statusCode int, body string) bool {
+	// 模型不存在/不支持是请求侧问题：换 Key、换账户均不会恢复，若照常轮换会把
+	// 所有账户临时禁用（account pool exhausted），一个无效模型名即可打挂整个后端。
+	if config.IsModelNotSupportedFailure(statusCode, body) {
+		return false
+	}
 	if statusCode == http.StatusBadRequest {
 		return config.IsBillingOrQuotaFailure(statusCode, body)
 	}

@@ -38,6 +38,52 @@ func IsBillingOrQuotaFailure(statusCode int, bodyOrMsg string) bool {
 	}
 }
 
+// IsModelNotSupportedFailure 判断是否为上游「模型不存在/不支持」类错误（请求侧问题）。
+// 这类错误换 Key、换账户都不会恢复，也不应计入熔断：一个无效模型名会把健康后端的
+// 账户池与熔断器一并打挂（OpenCode Go 用 401 + ModelError 表达「模型不支持」）。
+// 允许的状态码为 400/401/404/422 或 0（仅按文本判断）。
+func IsModelNotSupportedFailure(statusCode int, bodyOrMsg string) bool {
+	if statusCode != 0 && statusCode != 400 && statusCode != 401 &&
+		statusCode != 404 && statusCode != 422 {
+		return false
+	}
+	return looksLikeModelNotSupportedMessage(bodyOrMsg)
+}
+
+// looksLikeModelNotSupportedMessage 识别各上游的「模型不存在/不支持」文案与错误码。
+func looksLikeModelNotSupportedMessage(msg string) bool {
+	lower := strings.ToLower(strings.TrimSpace(msg))
+	if lower == "" {
+		return false
+	}
+	keywords := []string{
+		"modelerror",
+		"model_not_found",
+		"model not found",
+		"is not supported",
+		"does not exist",
+		"unsupported model",
+		"unknown model",
+		"invalid model",
+		`"code":"1211"`,
+		`"code": 1211`,
+	}
+	for _, kw := range keywords {
+		if strings.Contains(lower, kw) {
+			return true
+		}
+	}
+	for _, kw := range []string{"模型不存在", "模型代码"} {
+		if strings.Contains(msg, kw) {
+			return true
+		}
+	}
+	// 字面量占位符被当成模型名发给上游
+	return strings.Contains(msg, "{{requested_model}}") ||
+		strings.Contains(msg, "{{system.fallback_model}}") ||
+		strings.Contains(msg, "{{system.default_model}}")
+}
+
 func looksLikeBillingOrQuotaMessage(msg string) bool {
 	lower := strings.ToLower(strings.TrimSpace(msg))
 	if lower == "" {

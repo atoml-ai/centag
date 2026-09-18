@@ -2934,8 +2934,35 @@ func (p *DefaultLLMProvider) createClientFromConfig(cfg *backend.BackendConfig, 
 	return &llmClient{
 		backendPlugin: backendPlugin,
 		backendConfig: cfg,
-		model:         model,
+		model:         resolveBackendSupportedModel(cfg, model),
 	}, nil
+}
+
+// resolveBackendSupportedModel 将请求模型对齐到后端支持的模型。
+// 当后端已探测到 supported_models 且请求模型（精确或松匹配）不在其中时，回退到
+// 首选默认模型，与透明代理的模型改写行为保持一致：避免把无效模型名透传上游触发
+// 401/400（ModelError），进而误禁账户池、误开熔断。
+// 仅在 supported_models 非空时生效（未探测到列表的后端保持原样，避免误改写）。
+func resolveBackendSupportedModel(cfg *backend.BackendConfig, model string) string {
+	m := strings.TrimSpace(model)
+	if cfg == nil || m == "" || len(cfg.SupportedModels) == 0 {
+		return model
+	}
+	if strings.EqualFold(strings.TrimSpace(cfg.Type), "ollama") {
+		return model
+	}
+	if backend.FindLooseModelMapping(m, cfg) != nil {
+		return model
+	}
+	preferred := strings.TrimSpace(backend.PreferredDefaultModel(cfg))
+	if preferred == "" || strings.EqualFold(preferred, m) {
+		return model
+	}
+	logger.Warn("requested model not in backend supported_models; falling back to preferred model",
+		logger.GetField("backend_id", cfg.ID),
+		logger.GetField("requested_model", m),
+		logger.GetField("fallback_model", preferred))
+	return preferred
 }
 
 // llmClient LLM 客户端实现
