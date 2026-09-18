@@ -74,7 +74,7 @@ func wireSchedulerBackend(sched *scheduler.Scheduler) {
 
 		// 解析模板变量（如 {{system.classify_backend}}）
 		resolvedClassifyBackend, _ := pipeline.ResolveVirtualVarsContext(context.Background(), req.ClassifyBackend, "")
-		resolvedClassifyModel, _ := pipeline.ResolveVirtualVarsContext(context.Background(), "", req.ClassifyModel)
+		_, resolvedClassifyModel := pipeline.ResolveVirtualVarsContext(context.Background(), "", req.ClassifyModel)
 
 		// 如果请求中指定了分类配置，使用带分类配置的调度
 		if resolvedClassifyBackend != "" {

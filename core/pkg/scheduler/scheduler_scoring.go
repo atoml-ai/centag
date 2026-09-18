@@ -54,6 +54,11 @@ func (s *Scheduler) recommendByScoring(intent *ClassificationResult, requestedMo
 		if b == nil || !b.Enabled {
 			continue
 		}
+		// 偏好模型收口：无法服务 requestedModel 的后端不参与评分，
+		// 避免声明了空模型列表或模型不兼容的后端（如遗留测试后端）被选中。
+		if !backendServesModel(b, requestedModel) {
+			continue
+		}
 		scores = append(scores, s.scorer.Score(&ScoreRequest{
 			Backend:      b,
 			Model:        requestedModel,
@@ -102,6 +107,40 @@ func (s *Scheduler) recommendByScoring(intent *ClassificationResult, requestedMo
 		})
 	}
 	return decision
+}
+
+// backendServesModel 判断后端能否服务偏好模型 requestedModel。
+// requestedModel 为空表示无偏好，不做收口。判断顺序：
+// 精确匹配 supported_models → probe_model → ollama 动态模型 → ModelMatcher 兼容匹配。
+// 既无精确匹配也无兼容模型的 openai 兼容后端（含 supported_models 为空的遗留后端）返回 false。
+func backendServesModel(cfg *backend.BackendConfig, requestedModel string) bool {
+	if cfg == nil {
+		return false
+	}
+	rm := strings.TrimSpace(requestedModel)
+	if rm == "" {
+		return true
+	}
+	for _, m := range cfg.SupportedModels {
+		if strings.EqualFold(m.RequestedModel, rm) || strings.EqualFold(m.ActualModel, rm) {
+			return true
+		}
+	}
+	if p := strings.TrimSpace(cfg.ProbeModel); p != "" && strings.EqualFold(p, rm) {
+		return true
+	}
+	if cfg.Type == "ollama" {
+		return true
+	}
+	llmModels := filterLLMGenerationModels(cfg.SupportedModels)
+	if len(llmModels) > 0 {
+		matcher := backend.NewModelMatcher(backend.DefaultModelMatchingConfig())
+		if result := matcher.Match(rm, []*backend.BackendConfig{cfg}); result != nil && !isEmbeddingModel(result.ActualModel) {
+			return true
+		}
+		return false
+	}
+	return false
 }
 
 func findBackendByID(backends []*backend.BackendConfig, id string) *backend.BackendConfig {

@@ -378,6 +378,34 @@ func TestBackendCandidate_DisabledNotScored(t *testing.T) {
 	}
 }
 
+func TestBackendServesModel(t *testing.T) {
+	llmBackend := func(models ...backend.ModelMapping) *backend.BackendConfig {
+		return &backend.BackendConfig{ID: "b", Type: "openai", SupportedModels: models}
+	}
+	tests := []struct {
+		name      string
+		cfg       *backend.BackendConfig
+		requested string
+		want      bool
+	}{
+		{"nil cfg", nil, "gpt-4o", false},
+		{"empty requested passes", llmBackend(), "", true},
+		{"exact requested match", llmBackend(backend.ModelMapping{RequestedModel: "gpt-4o", ActualModel: "gpt-4o-actual"}), "gpt-4o", true},
+		{"exact actual match", llmBackend(backend.ModelMapping{RequestedModel: "alias", ActualModel: "gpt-4o"}), "gpt-4o", true},
+		{"probe model match", &backend.BackendConfig{ID: "b", Type: "openai", ProbeModel: "probe-x"}, "probe-x", true},
+		{"ollama dynamic allowed", &backend.BackendConfig{ID: "b", Type: "ollama"}, "llama3", true},
+		{"legacy empty models rejected", llmBackend(), "deepseek-v4.1-flash", false},
+		{"unrelated model rejected", llmBackend(backend.ModelMapping{RequestedModel: "gpt-4o", ActualModel: "gpt-4o"}), "claude-3", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := backendServesModel(tt.cfg, tt.requested); got != tt.want {
+				t.Errorf("backendServesModel(%+v, %q) = %v, want %v", tt.cfg, tt.requested, got, tt.want)
+			}
+		})
+	}
+}
+
 func testBackendConfig(id, name string, enabled bool) *backend.BackendConfig {
 	return &backend.BackendConfig{
 		ID:      id,
