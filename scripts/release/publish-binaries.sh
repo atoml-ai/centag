@@ -137,10 +137,9 @@ if gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1; then
   log "uploading assets to existing release ${TAG}"
   gh release upload "$TAG" --repo "$REPO" --clobber "${ASSETS[@]}"
 else
-  log "creating draft release ${TAG}"
+  log "creating release ${TAG}"
   gh release create "$TAG" \
     --repo "$REPO" \
-    --draft \
     --title "Centag ${VERSION}" \
     --notes "$NOTES" \
     "${ASSETS[@]}"
