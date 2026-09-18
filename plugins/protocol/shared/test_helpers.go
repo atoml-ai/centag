@@ -8,12 +8,15 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 
 	"centag/core/pkg/plugin"
 
 	"github.com/gin-gonic/gin"
 )
+
+var ginTestModeOnce sync.Once
 
 // MockBackend 模拟后端，捕获请求并返回预设响应
 type MockBackend struct {
@@ -109,7 +112,7 @@ func NewProtocolTestRunner(t *testing.T, protocol plugin.ProtocolPlugin) *Protoc
 func (r *ProtocolTestRunner) RunRequestResponseTest(tc TestCase) {
 	r.T.Run(tc.Name, func(t *testing.T) {
 		// 1. 创建 HTTP 请求
-		gin.SetMode(gin.TestMode)
+		ginTestModeOnce.Do(func() { gin.SetMode(gin.TestMode) })
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
 		c.Request = httptest.NewRequest(http.MethodPost, "/test", strings.NewReader(tc.RequestJSON))
@@ -160,7 +163,7 @@ func (r *ProtocolTestRunner) RunRequestResponseTest(tc TestCase) {
 func (r *ProtocolTestRunner) RunStreamTest(tc TestCase) {
 	r.T.Run(tc.Name, func(t *testing.T) {
 		// 1. 创建 HTTP 请求
-		gin.SetMode(gin.TestMode)
+		ginTestModeOnce.Do(func() { gin.SetMode(gin.TestMode) })
 		w := httptest.NewRecorder()
 		c, _ := gin.CreateTestContext(w)
 		c.Request = httptest.NewRequest(http.MethodPost, "/test", strings.NewReader(tc.RequestJSON))
@@ -268,7 +271,7 @@ func ParseJSONResponse(t *testing.T, body []byte) map[string]interface{} {
 
 // CreateTestGinContext 创建测试用 Gin 上下文
 func CreateTestGinContext(body string) (*gin.Context, *httptest.ResponseRecorder) {
-	gin.SetMode(gin.TestMode)
+	ginTestModeOnce.Do(func() { gin.SetMode(gin.TestMode) })
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
 	c.Request = httptest.NewRequest(http.MethodPost, "/test", strings.NewReader(body))
