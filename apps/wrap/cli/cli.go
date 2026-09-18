@@ -40,6 +40,7 @@ type commonFlags struct {
 	Uninstall   bool
 	Force       bool
 	CAOnly      bool
+	ProxyOnly   bool
 	SystemProxy bool
 	NoProxy     string
 }
@@ -72,7 +73,14 @@ func Run(args []string) error {
 		}
 		return eng.Enable(f.Server, f.Token, f.Force, f.SystemProxy)
 	case "disable":
-		return eng.Disable()
+		f, err := parseCommonFlags(rest)
+		if err != nil {
+			return err
+		}
+		return eng.DisableWithOptions(engine.DisableOptions{
+			CAOnly:    f.CAOnly,
+			ProxyOnly: f.ProxyOnly,
+		})
 	case "status":
 		return eng.Status()
 	case "doctor":
@@ -136,6 +144,8 @@ func parseCommonFlags(args []string) (commonFlags, error) {
 			f.Force = true
 		case a == "--ca-only":
 			f.CAOnly = true
+		case a == "--proxy-only":
+			f.ProxyOnly = true
 		case a == "--system-proxy":
 			f.SystemProxy = true
 		case a == "--no-proxy":
@@ -211,7 +221,7 @@ func printHelp() {
 
 Usage:
   %s enable  [--server URL] [--token KEY] [--force] [--system-proxy]
-  %s disable
+  %s disable  [--ca-only | --proxy-only]
   %s status
   %s apps    [--server URL] [--token KEY] [--installed] [--json]
   %s doctor  [--server URL] [--token KEY]
@@ -230,6 +240,8 @@ Flags:
       --system-proxy (enable) ALSO take over the OS system proxy (PAC).
                      By default, enable only trusts the CA and ensures MITM,
                      leaving the OS system proxy untouched.
+      --ca-only      (disable) only remove the CA certificate, keep OS proxy
+      --proxy-only   (disable) only restore OS proxy, keep CA certificate
       --no-proxy     (run/env) comma-separated hosts/domains to bypass the proxy.
                      Appended to the default list (localhost,127.0.0.1,::1,
                      RFC1918 ranges,.localhost,.local,.lan,.example,.invalid).

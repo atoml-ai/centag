@@ -3,6 +3,10 @@
 package main
 
 import (
+	"crypto/sha256"
+	"crypto/x509"
+	"encoding/hex"
+	"encoding/pem"
 	"fmt"
 	"os"
 	"os/exec"
@@ -184,38 +188,78 @@ func trustCACert(cfg Config) (string, error) {
 }
 
 // untrustCACert removes the Centag CA from the Windows certificate stores
-// (CurrentUser Root + CA) via certutil. It matches by the "Centag CA" subject
-// common name and removes all matching certificates.
+// (CurrentUser Root + CA). Removal is by SHA-256 fingerprint, not by subject
+// substring (P1-3): the subject match could delete an unrelated certificate
+// that merely shares the "Centag CA" text, and certutil's textual labels are
+// localized (e.g. zh-CN), so parsing English headers is unreliable.
+//
+// Strategy: enumerate the store with PowerShell (locale-independent) and delete
+// the certificate whose SHA-256 hash equals the on-disk CA's fingerprint. The
+// SHA-256 hash is computed in-process from the CA PEM; no output parsing is
+// involved. When the CA file is missing, fall back to matching the exact
+// subject common name "Centag CA" via .NET so a stale store entry is still
+// cleaned up.
 func untrustCACert(cfg Config) error {
-	for _, store := range []string{"Root", "CA"} {
-		// Use -splitutf to get structured output we can parse reliably
-		out, err := exec.Command("certutil", "-user", "-store", store).CombinedOutput()
-		if err != nil {
-			continue
-		}
-		text := string(out)
-		// Split into certificate blocks by the separator line
-		blocks := strings.Split(text, "Certificate:")
-		for _, block := range blocks {
-			// Only process blocks that contain Centag CA as the Subject
-			if !strings.Contains(block, "Centag CA") {
-				continue
-			}
-			// Extract serial number - look for "Serial Number:" line
-			for _, line := range strings.Split(block, "\n") {
-				line = strings.TrimSpace(line)
-				if strings.HasPrefix(line, "Serial Number:") {
-					serial := strings.TrimSpace(strings.TrimPrefix(line, "Serial Number:"))
-					if serial != "" {
-						// Attempt deletion; ignore errors (certificate may not exist)
-						_ = exec.Command("certutil", "-user", "-delstore", store, serial).Run()
-					}
-					break
-				}
-			}
+	caPath := locateCentagCA(cfg)
+	fingerprint := ""
+	if caPath != "" {
+		if fp, err := sha256FingerprintOfPEMFile(caPath); err == nil {
+			fingerprint = fp
 		}
 	}
+
+	// PowerShell finds matching certs by SHA-256 hash (exact) and deletes them
+	// from both CurrentUser\Root and CurrentUser\CA. `-WhatIf` is not used: we
+	// delete by exact hash. Errors per-store are tolerated (cert may be absent).
+	script := `param([string]$Sha256, [string]$Subject)
+$ErrorActionPreference = 'SilentlyContinue'
+$stores = @('Root','CA')
+foreach ($s in $stores) {
+  $path = "Cert:\CurrentUser\$s"
+  if (-not (Test-Path $path)) { continue }
+  Get-ChildItem $path | ForEach-Object {
+    $match = $false
+    if ($Sha256 -and $Sha256.Length -gt 0) {
+      $h = [System.Security.Cryptography.SHA256]::Create()
+      $bytes = $h.ComputeHash($_.RawData)
+      $hex = ([System.BitConverter]::ToString($bytes)).Replace('-','').ToLowerInvariant()
+      if ($hex -eq $Sha256.ToLowerInvariant()) { $match = $true }
+    }
+    if (-not $match -and $Subject -and $_.Subject -eq $Subject) { $match = $true }
+    if ($match) { Remove-Item -Path $_.PSPath -Force }
+  }
+}
+`
+	args := []string{"-NoProfile", "-NonInteractive", "-Command", script, "-Sha256", fingerprint}
+	if fingerprint == "" {
+		args = append(args, "-Subject", "CN=Centag CA")
+	} else {
+		args = append(args, "-Subject", "")
+	}
+	out, err := exec.Command("powershell", args...).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("powershell remove CA: %w (%s)", err, strings.TrimSpace(string(out)))
+	}
 	return nil
+}
+
+// sha256FingerprintOfPEMFile returns the lowercase hex SHA-256 fingerprint of
+// the first certificate in a PEM file. Empty on any parse error.
+func sha256FingerprintOfPEMFile(path string) (string, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+	block, _ := pem.Decode(data)
+	if block == nil || block.Type != "CERTIFICATE" {
+		return "", fmt.Errorf("not a PEM certificate: %s", path)
+	}
+	cert, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		return "", err
+	}
+	sum := sha256.Sum256(cert.Raw)
+	return hex.EncodeToString(sum[:]), nil
 }
 
 // locateCentagCA finds the sidecar's root CA on disk.

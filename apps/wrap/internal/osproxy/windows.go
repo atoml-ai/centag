@@ -121,13 +121,32 @@ func (windowsBackend) InstallCA(certPEM []byte) (string, error) {
 	return fp, nil
 }
 
+// UninstallCA removes the CA by SHA-256 fingerprint instead of the "Centag CA"
+// subject substring (P1-3). certutil's textual output is locale-dependent, so we
+// enumerate the store with PowerShell and compare each certificate's SHA-256
+// hash to the requested fingerprint. When the fingerprint is empty we fall back
+// to the exact subject common name so a stale entry is still cleaned up.
 func (windowsBackend) UninstallCA(fingerprint string) error {
-	cmd := exec.Command("certutil", "-user", "-delstore", "Root", "Centag CA")
-	out, err := cmd.CombinedOutput()
+	fingerprint = strings.ToLower(strings.TrimSpace(fingerprint))
+	script := `param([string]$Sha256)
+$ErrorActionPreference = 'SilentlyContinue'
+foreach ($s in @('Root','CA')) {
+  $path = "Cert:\CurrentUser\$s"
+  if (-not (Test-Path $path)) { continue }
+  Get-ChildItem $path | ForEach-Object {
+    if ($Sha256.Length -gt 0) {
+      $h = [System.Security.Cryptography.SHA256]::Create()
+      $hex = ([System.BitConverter]::ToString($h.ComputeHash($_.RawData))).Replace('-','').ToLowerInvariant()
+      if ($hex -eq $Sha256) { Remove-Item -Path $_.PSPath -Force }
+    } elseif ($_.Subject -eq 'CN=Centag CA') {
+      Remove-Item -Path $_.PSPath -Force
+    }
+  }
+}
+`
+	out, err := exec.Command("powershell", "-NoProfile", "-NonInteractive", "-Command", script, "-Sha256", fingerprint).CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("certutil -user -delstore: %v (%s) fingerprint=%s",
-			err, strings.TrimSpace(string(out)), fingerprint)
+		return fmt.Errorf("powershell remove CA: %v (%s) fingerprint=%s", err, strings.TrimSpace(string(out)), fingerprint)
 	}
-	_ = exec.Command("certutil", "-user", "-delstore", "CA", "Centag CA").Run()
 	return nil
 }

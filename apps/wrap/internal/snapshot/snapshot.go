@@ -20,6 +20,12 @@ type Snapshot struct {
 	Proxy      ProxyState `json:"proxy"`
 	CA         CAState   `json:"ca"`
 	Centag     CentagRef `json:"centag"`
+	// ProxyTakenOver is true only when this snapshot was created by an enable
+	// that actually took over the OS system proxy (--system-proxy). CA-only
+	// enables leave it false and must NOT record a proxy restore point, so a
+	// later disable never clobbers a proxy the user changed meanwhile (§3.4).
+	// Older snapshots (pre-field) fall back to Proxy.Mode != "" for compat.
+	ProxyTakenOver bool `json:"proxy_taken_over,omitempty"`
 }
 
 type ProxyState struct {

@@ -160,22 +160,30 @@ func (e *Engine) enableLocal(token string, force bool, systemProxy bool) error {
 	}
 	client.Token = token
 
-	prev, err := e.OS.ReadProxy()
-	if err != nil {
-		return fmt.Errorf("read proxy: %w", err)
-	}
-	prev = captureOriginalProxy(prev, snapshotExisted)
 	snap := &snapshot.Snapshot{
-		ClientMode: "local",
-		Proxy:      prev,
-		Centag:     snapshot.CentagRef{APIBase: api, ServerLabel: "local"},
+		ClientMode:     "local",
+		ProxyTakenOver: systemProxy,
+		Centag:         snapshot.CentagRef{APIBase: api, ServerLabel: "local"},
+	}
+	// Only capture a proxy restore point when this enable actually takes over
+	// the OS system proxy. CA-only enable must not record one (§3.4 Step 1).
+	var prev snapshot.ProxyState
+	if systemProxy {
+		read, rErr := e.OS.ReadProxy()
+		if rErr != nil {
+			return fmt.Errorf("read proxy: %w", rErr)
+		}
+		prev = captureOriginalProxy(read, snapshotExisted)
+		snap.Proxy = prev
 	}
 	if err := snapshot.Save(snap); err != nil {
 		return fmt.Errorf("save snapshot: %w", err)
 	}
 
 	rollback := func() {
-		_ = e.OS.RestoreProxy(prev)
+		if systemProxy {
+			_ = e.OS.RestoreProxy(prev)
+		}
 		// force 接管失败时保留原有快照，避免误删之前的恢复点。
 		if !snapshotExisted {
 			_ = snapshot.Remove()
@@ -241,21 +249,27 @@ func (e *Engine) enableRemote(server, token string, force bool, systemProxy bool
 	}
 	client.Token = token
 
-	live, err := e.OS.ReadProxy()
-	if err != nil {
-		return err
-	}
-	prev := captureOriginalProxy(live, hasSnapshot)
 	snap := &snapshot.Snapshot{
-		ClientMode: "remote",
-		Proxy:      prev,
-		Centag:     snapshot.CentagRef{APIBase: strings.TrimRight(server, "/"), ServerLabel: "team"},
+		ClientMode:     "remote",
+		ProxyTakenOver: systemProxy,
+		Centag:         snapshot.CentagRef{APIBase: strings.TrimRight(server, "/"), ServerLabel: "team"},
+	}
+	var prev snapshot.ProxyState
+	if systemProxy {
+		live, err := e.OS.ReadProxy()
+		if err != nil {
+			return err
+		}
+		prev = captureOriginalProxy(live, hasSnapshot)
+		snap.Proxy = prev
 	}
 	if err := snapshot.Save(snap); err != nil {
 		return err
 	}
 	rollback := func() {
-		_ = e.OS.RestoreProxy(prev)
+		if systemProxy {
+			_ = e.OS.RestoreProxy(prev)
+		}
 		_ = snapshot.Remove()
 	}
 
@@ -311,24 +325,75 @@ func (e *Engine) enableRemote(server, token string, force bool, systemProxy bool
 	return nil
 }
 
+// DisableOptions 控制 disable 的选择性恢复。
+type DisableOptions struct {
+	CAOnly    bool // 仅移除 CA，不恢复系统代理
+	ProxyOnly bool // 仅恢复系统代理，不移除 CA
+}
+
 func (e *Engine) Disable() error {
+	return e.DisableWithOptions(DisableOptions{})
+}
+
+// DisableWithOptions 按选项选择性恢复：CAOnly/ProxyOnly 互斥（后者优先），
+// 均为 false 时行为与旧 Disable() 一致（全量恢复）。
+func (e *Engine) DisableWithOptions(opts DisableOptions) error {
 	snap, err := snapshot.Load()
 	if err != nil {
 		return fmt.Errorf("no snapshot to restore: %w", err)
 	}
-	if err := e.OS.RestoreProxy(snap.Proxy); err != nil {
-		return fmt.Errorf("restore proxy: %w", err)
+
+	// Only restore the OS proxy if this snapshot actually recorded a takeover
+	// (§3.4 Step 1). CA-only enables leave ProxyTakenOver=false so a disable
+	// never clobbers a proxy the user changed after enabling. Old snapshots
+	// (pre-flag) fall back to a non-empty Proxy.
+	proxyRecorded := snap.ProxyTakenOver || snap.Proxy.Mode != ""
+	if !opts.CAOnly && proxyRecorded {
+		if err := e.OS.RestoreProxy(snap.Proxy); err != nil {
+			return fmt.Errorf("restore proxy: %w", err)
+		}
 	}
-	if snap.CA.InstalledByUs && snap.CA.FingerprintSHA256 != "" {
-		if err := e.OS.UninstallCA(snap.CA.FingerprintSHA256); err != nil {
-			fmt.Fprintf(os.Stderr, "warning: uninstall CA: %v\n", err)
+	if !opts.ProxyOnly {
+		if snap.CA.InstalledByUs && snap.CA.FingerprintSHA256 != "" {
+			if err := e.OS.UninstallCA(snap.CA.FingerprintSHA256); err != nil {
+				fmt.Fprintf(os.Stderr, "warning: uninstall CA: %v\n", err)
+			}
 		}
 	}
 	// remote mode: never call server to disable MITM
-	if snap.ClientMode == "local" {
+	switch {
+	case opts.ProxyOnly:
+		fmt.Println("proxy-only: OS proxy restored; CA left installed")
+	case opts.CAOnly:
+		fmt.Println("ca-only: CA removed; OS proxy left untouched")
+	case !proxyRecorded:
+		fmt.Println("CA-only takeover: CA removed; OS proxy was never taken over, left untouched")
+	case snap.ClientMode == "local":
 		fmt.Println("local mode: OS proxy restored; stop MITM from Centag Web if desired")
-	} else {
+	default:
 		fmt.Println("remote mode: OS proxy restored; team server MITM left running")
+	}
+
+	// Selective disable leaves the snapshot in place with the handled part
+	// cleared, so a later disable can finish the remaining part without
+	// clobbering anything (a --proxy-only run must still remember the CA; a
+	// --ca-only run must still remember the proxy). A full disable removes it.
+	switch {
+	case opts.ProxyOnly:
+		snap.Proxy = snapshot.ProxyState{}
+		snap.ProxyTakenOver = false
+		if err := snapshot.Save(snap); err != nil {
+			return err
+		}
+		fmt.Println("snapshot kept (CA still installed); run `wrap disable --ca-only` to finish")
+		return nil
+	case opts.CAOnly:
+		snap.CA = snapshot.CAState{}
+		if err := snapshot.Save(snap); err != nil {
+			return err
+		}
+		fmt.Println("snapshot kept (proxy still taken over); run `wrap disable --proxy-only` to finish")
+		return nil
 	}
 	if err := snapshot.Remove(); err != nil {
 		return err
