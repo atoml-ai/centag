@@ -102,7 +102,8 @@ func sseClassify(body string) UpstreamVerdict {
 				continue
 			}
 			// 首个 data 行必须解析（建立成功/失败基线）；其余仅错误候选行解析。
-			if successSeen && !strings.Contains(payload, "error") {
+			// 用 "error": 作 JSON key 候选匹配，避免 "error mention" 等普通文本触发 JSON 解析。
+			if successSeen && !strings.Contains(payload, `"error"`) {
 				continue
 			}
 			var top map[string]json.RawMessage
