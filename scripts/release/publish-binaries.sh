@@ -104,12 +104,12 @@ NOTES="$(cat <<EOF
 
 \`\`\`bash
 # CLI on all platforms (default)
-curl -fsSL https://raw.githubusercontent.com/${REPO}/${TAG}/scripts/install.sh | bash -s ${VERSION} && . "\$HOME/.centag/env"
+curl -fsSL https://raw.githubusercontent.com/${REPO}/${TAG}/scripts/install.sh | bash -s personal ${VERSION} && . "\$HOME/.centag/env"
 \`\`\`
 
 \`\`\`bash
 # Win/mac desktop (optional)
-curl -fsSL https://raw.githubusercontent.com/${REPO}/${TAG}/scripts/install.sh | bash -s -- --desktop ${VERSION}
+curl -fsSL https://raw.githubusercontent.com/${REPO}/${TAG}/scripts/install.sh | bash -s -- --desktop personal ${VERSION}
 \`\`\`
 
 \`\`\`bash
@@ -117,8 +117,10 @@ curl -fsSL https://raw.githubusercontent.com/${REPO}/${TAG}/scripts/install.sh |
 npm install -g centag
 \`\`\`
 
-Default install root: \`~/.centag\`.  
-**GitHub / install.sh**: CLI by default on every OS; \`--desktop\` for desktop on Win/mac.  
+> **网络提示**：如果 \`raw.githubusercontent.com\` 不可达，可通过代理或镜像下载 \`install.sh\` 后本地执行。安装包也可从本页 Assets 手动下载解压。
+
+Default install root: \`~/.centag\`.
+**GitHub / install.sh**: CLI by default on every OS; \`--desktop\` for desktop on Win/mac.
 **npm**: CLI on all platforms.
 
 ### Artifacts
