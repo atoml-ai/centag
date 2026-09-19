@@ -3,6 +3,7 @@ package server
 import (
 	"net/http"
 	"net/http/httptest"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -87,6 +88,16 @@ func TestBuildWrapRunUserCommand(t *testing.T) {
 }
 
 func TestShellQuote(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		// cmd.exe: double quotes, embedded quotes doubled.
+		if got := shellQuote(`C:\Program Files\centag-personal.exe`); got != `"C:\Program Files\centag-personal.exe"` {
+			t.Fatalf("windows path: %q", got)
+		}
+		if got := shellQuote(`a"b`); got != `"a""b"` {
+			t.Fatalf("windows quote escape: %q", got)
+		}
+		return
+	}
 	if shellQuote("opencode") != "opencode" {
 		t.Fatalf("simple: %q", shellQuote("opencode"))
 	}

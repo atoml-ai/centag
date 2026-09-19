@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"unicode"
 
@@ -178,6 +179,14 @@ func resolveWrapExecutable() (string, error) {
 }
 
 func shellQuote(s string) string {
+	// cmd.exe (Windows) does not understand POSIX single quotes; wrap in double
+	// quotes there so the generated line survives being handed to cmd.exe /k.
+	if runtime.GOOS == "windows" {
+		if s == "" {
+			return `""`
+		}
+		return `"` + strings.ReplaceAll(s, `"`, `""`) + `"`
+	}
 	if s == "" {
 		return "''"
 	}
