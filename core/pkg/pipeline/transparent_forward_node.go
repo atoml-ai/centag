@@ -417,6 +417,12 @@ func (n *TransparentForwardNode) Execute(ctx context.Context, input *NodeInput) 
 		return nil, newTransparentUpstreamError(n.id, backendID, resolvedModel, targetURL, statusCode, bodyStr, poolExhausted)
 	}
 
+	// 纯鉴权 401/403（池已穷尽或单 Key）：返回错误触发 FallbackGroups 降级。
+	// 避免鉴权错误被当作成功输出（节点被标 StatusSuccess、fallback skipped、统计记成功）。
+	if (statusCode == http.StatusUnauthorized || statusCode == http.StatusForbidden) && poolExhausted {
+		return nil, newTransparentUpstreamError(n.id, backendID, resolvedModel, targetURL, statusCode, bodyStr, poolExhausted)
+	}
+
 	// 结构判定兜底（技术方案 §3.2）：billing/model 专用分支未认领的错误体，
 	// 只要 body 是显式错误结构（顶层 error 键 / type:"error" / SSE error 事件），
 	// 一律判失败并上抛——交给 FallbackGroups / 策略降级，杜绝「假成功」（节点被标

@@ -1423,6 +1423,74 @@ func TestTransparentForwardNode_AccountPoolRotatesOnPlain401(t *testing.T) {
 	}
 }
 
+func TestTransparentForwardNode_AccountPoolAll401ReturnsError(t *testing.T) {
+	prevCfg := config.Get()
+	config.Set(&config.Config{
+		Proxy: config.ProxyConfig{
+			DefaultBackendID:  "primary-all401",
+			DefaultModel:      "m1",
+			FallbackBackendID: "other-all401",
+			FallbackModel:     "m2",
+		},
+	})
+	t.Cleanup(func() { config.Set(prevCfg) })
+
+	pool := &backend.AccountPoolConfig{
+		Strategy: "round_robin",
+		Accounts: []backend.BackendAccount{
+			{ID: "k1-all401", APIKey: "sk-1", Enabled: true, Weight: 1},
+			{ID: "k2-all401", APIKey: "sk-2", Enabled: true, Weight: 1},
+		},
+	}
+	prevEP := ResolveBackendEndpoint
+	t.Cleanup(func() { ResolveBackendEndpoint = prevEP })
+	ResolveBackendEndpoint = func(backendID string) (*BackendEndpoint, error) {
+		return &BackendEndpoint{
+			BaseURL:     "https://primary-all401.example.com/v1",
+			APIKey:      "sk-fallback",
+			AccountPool: pool,
+		}, nil
+	}
+
+	errorBody := `{"type":"error","error":{"type":"AuthError","message":"Invalid API key."}}`
+	seq := &sequenceHTTPClient{
+		resps: []struct {
+			status int
+			body   string
+		}{
+			{401, errorBody},
+			{401, errorBody},
+		},
+	}
+	broker := &mockCapabilityBroker{httpClient: seq}
+
+	node, err := NewTransparentForwardNode(NodeConfig{
+		Backend: "primary-all401",
+		CustomConfig: map[string]interface{}{
+			"route_policy": "fixed",
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	tf := node.(*TransparentForwardNode)
+	tf.BaseNode.id = "forward"
+	tf.SetCapabilityBroker(broker)
+
+	_, err = tf.Execute(context.Background(), &NodeInput{
+		Metadata: map[string]interface{}{
+			"request_path":     "/v1/chat/completions",
+			"raw_request_body": `{"model":"m1","messages":[{"role":"user","content":"hi"}]}`,
+		},
+	})
+	if err == nil {
+		t.Fatal("all pool keys 401 should return error for FallbackGroups")
+	}
+	if seq.calls != 2 {
+		t.Fatalf("calls=%d want 2 (both pool keys attempted)", seq.calls)
+	}
+}
+
 func TestRetryableAccountFailure_Plain401(t *testing.T) {
 	if !retryableAccountFailure(401, `{"error":{"type":"AuthError","message":"Invalid API key."}}`) {
 		t.Fatal("plain 401 should be retryable for account pool rotation")
