@@ -297,6 +297,10 @@ func (n *TransparentForwardNode) Execute(ctx context.Context, input *NodeInput) 
 					// 首次即无可用账户：退化为单 Key 出站一次，再交给跨模型/跨后端降级。
 					accountID = ""
 				} else {
+					// 已轮换过至少一把 Key 且池内再无可用账户：显式标记池耗尽。
+					// 不能依赖 statusCode 推导——若上一轮是网络错误，statusCode 仍为 0，
+					// 会被误判为「成功空输出」而跳过降级组。
+					poolExhausted = true
 					break
 				}
 			}
@@ -372,6 +376,12 @@ func (n *TransparentForwardNode) Execute(ctx context.Context, input *NodeInput) 
 				logger.GetField("attempt", attempt+1),
 				logger.GetField("max_attempts", maxAttempts),
 			)
+			// 保留本次失败响应：若下一轮选号即耗尽（没有新的 HTTP 响应），
+			// 循环外的降级判定仍需用这把 Key 的真实状态码/错误体，
+			// 否则 statusCode 保持零值，会被误判为「成功空输出」而跳过降级组。
+			statusCode = currentResp.StatusCode
+			contentType = currentResp.Header.Get("Content-Type")
+			respBody = currentBody
 			selector.DisableAccountTemporarily(pool, accountID, backendID)
 			continue
 		}
@@ -391,6 +401,14 @@ func (n *TransparentForwardNode) Execute(ctx context.Context, input *NodeInput) 
 	}
 
 	bodyStr := string(respBody)
+
+	// 账户池已耗尽但未捕获到任何上游响应（例如网络错误后下一轮选号即耗尽）：
+	// statusCode 保持零值，无法命中下方任何错误分支，必须显式上抛，
+	// 否则节点会被标为「成功空输出」而跳过 FallbackGroups 降级。
+	if poolExhausted && statusCode == 0 {
+		return nil, newTransparentUpstreamError(n.id, backendID, resolvedModel, targetURL, http.StatusBadGateway,
+			"account pool exhausted without an upstream response")
+	}
 
 	// 账户池已耗尽（或未配置）后：billing 失败只试一次 system 兜底，未命中立即上抛；
 	// model-not-found / Router.Unavailable 走完整的 system fallback 候选链（用户显式

@@ -1491,6 +1491,80 @@ func TestTransparentForwardNode_AccountPoolAll401ReturnsError(t *testing.T) {
 	}
 }
 
+// 回归：账户池在冷却状态下进入「第二轮请求」时，轮换掉最后一个健康 Key 后
+// 下一轮选号即耗尽（没有新的 HTTP 响应）。修复前 statusCode 保持零值，节点被
+// 误判为「成功空输出」，导致 FallbackGroups 被跳过、客户端收到 200 空响应。
+func TestTransparentForwardNode_AccountPoolExhaustedAfterCooldownReturnsError(t *testing.T) {
+	prevCfg := config.Get()
+	config.Set(&config.Config{
+		Proxy: config.ProxyConfig{
+			DefaultBackendID:  "primary-cooldown",
+			DefaultModel:      "m1",
+			FallbackBackendID: "other-cooldown",
+			FallbackModel:     "m2",
+		},
+	})
+	t.Cleanup(func() { config.Set(prevCfg) })
+
+	pool := &backend.AccountPoolConfig{
+		Strategy: "round_robin",
+		Accounts: []backend.BackendAccount{
+			{ID: "k1-cooldown", APIKey: "sk-1", Enabled: true, Weight: 1},
+			{ID: "k2-cooldown", APIKey: "sk-2", Enabled: true, Weight: 1},
+		},
+	}
+	prevEP := ResolveBackendEndpoint
+	t.Cleanup(func() { ResolveBackendEndpoint = prevEP })
+	ResolveBackendEndpoint = func(backendID string) (*BackendEndpoint, error) {
+		return &BackendEndpoint{
+			BaseURL:     "https://primary-cooldown.example.com/v1",
+			APIKey:      "sk-fallback",
+			AccountPool: pool,
+		}, nil
+	}
+
+	// 模拟上一轮请求已把 k1 打进 30s 冷却：本轮只剩 k2 健康。
+	sel := getAccountSelector("primary-cooldown", pool)
+	sel.DisableAccountTemporarily(pool, "k1-cooldown", "primary-cooldown")
+
+	errorBody := `{"type":"error","error":{"type":"AuthError","message":"Invalid API key."}}`
+	seq := &sequenceHTTPClient{
+		resps: []struct {
+			status int
+			body   string
+		}{
+			{401, errorBody},
+		},
+	}
+	broker := &mockCapabilityBroker{httpClient: seq}
+
+	node, err := NewTransparentForwardNode(NodeConfig{
+		Backend: "primary-cooldown",
+		CustomConfig: map[string]interface{}{
+			"route_policy": "fixed",
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	tf := node.(*TransparentForwardNode)
+	tf.BaseNode.id = "forward"
+	tf.SetCapabilityBroker(broker)
+
+	_, err = tf.Execute(context.Background(), &NodeInput{
+		Metadata: map[string]interface{}{
+			"request_path":     "/v1/chat/completions",
+			"raw_request_body": `{"model":"m1","messages":[{"role":"user","content":"hi"}]}`,
+		},
+	})
+	if err == nil {
+		t.Fatal("pool exhausted after cooldown should return error (not fake empty success) for FallbackGroups")
+	}
+	if seq.calls != 1 {
+		t.Fatalf("calls=%d want 1 (only the healthy key is attempted before selection is exhausted)", seq.calls)
+	}
+}
+
 func TestRetryableAccountFailure_Plain401(t *testing.T) {
 	if !retryableAccountFailure(401, `{"error":{"type":"AuthError","message":"Invalid API key."}}`) {
 		t.Fatal("plain 401 should be retryable for account pool rotation")
