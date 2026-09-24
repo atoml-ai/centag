@@ -451,7 +451,7 @@ setup() {
 
     # Copy configuration files and scripts to bin directory
     print_info "Copying configuration files and scripts..."
-    make copy-files
+    _centag_copy_runtime_files "$BIN_DIR"
 
     print_success "Environment setup complete"
 }
@@ -631,6 +631,48 @@ _compile_go_binary() {
     print_info "二进制: ${out_dir}/${output_name}"
 
     cd "$PROJECT_ROOT"
+}
+
+# ── 共享：首次 SQLite seed（与 Makefile `make build` / `make copy-files` 对齐）──
+# 仅首次（storage/centag.db 不存在）且非 PostgreSQL 模式时，从 config/initdata 复制种子库。
+_centag_seed_sqlite() {
+    local bin_dir="$1"
+    [ -f "config/initdata/data/centag.db" ] || return 0
+    [ -f "${bin_dir}/storage/centag.db" ] && return 0
+
+    local ddb_line
+    ddb_line="$( (grep -E '^[[:space:]]*(export[[:space:]]+)?LLM_PROXY_DB_DRIVER[[:space:]]*=' config/secrets/.env 2>/dev/null; grep -E '^[[:space:]]*(export[[:space:]]+)?LLM_PROXY_DB_DRIVER[[:space:]]*=' config/secrets/.env.middleware 2>/dev/null) | tail -1)"
+    if echo "$ddb_line" | grep -qiE '=[[:space:]]*(postgresql|postgres|pg)([[:space:]]|$)'; then
+        print_info "Skip SQLite seed (LLM_PROXY_DB_DRIVER is PostgreSQL)"
+        return 0
+    fi
+    mkdir -p "${bin_dir}/storage"
+    cp "config/initdata/data/centag.db" "${bin_dir}/storage/centag.db" \
+        && print_info "Seeded ${bin_dir}/storage/centag.db from config/initdata (first time only)"
+}
+
+# ── 共享：复制运行时文件到 edition lib 目录（与 Makefile `make copy-files` 对齐）──
+_centag_copy_runtime_files() {
+    local bin_dir="$1"
+    mkdir -p "${bin_dir}/static" "${bin_dir}/storage"
+    _centag_seed_sqlite "$bin_dir"
+
+    print_info "Copying initdata/scripts to ${bin_dir}..."
+    if [ -d "config/initdata/scripts" ]; then
+        mkdir -p "${bin_dir}/scripts" && cp -r config/initdata/scripts/* "${bin_dir}/scripts/" 2>/dev/null || true
+    fi
+    if [ -d "config/initdata/update" ]; then
+        mkdir -p "${bin_dir}/update" && cp -r config/initdata/update/* "${bin_dir}/update/" 2>/dev/null || true
+    fi
+    if [ -d "config/initdata/rule" ]; then
+        mkdir -p "${bin_dir}/rule" && cp -r config/initdata/rule/* "${bin_dir}/rule/" 2>/dev/null || true
+    fi
+    if [ -d "scripts" ]; then
+        mkdir -p "${bin_dir}/scripts"
+        cp scripts/*.sh "${bin_dir}/scripts/" 2>/dev/null || true
+        chmod +x "${bin_dir}/scripts/"*.sh 2>/dev/null || true
+    fi
+    print_info "Runtime files copied to ${bin_dir}/"
 }
 
 # Build
@@ -868,7 +910,13 @@ build_distribution() {
 build_backend() {
     centag_set_edition "${CENTAG_EDITION:-personal}"
     mkdir -p "$BIN_DIR"
-    CENTAG_INSTALL_ROOT="${CENTAG_INSTALL_ROOT}" CENTAG_EDITION="${CENTAG_EDITION}" make build
+
+    # 直接编译 Go 后端，避免依赖 make（Windows Git Bash 默认不含 make）。
+    # 等价于 Makefile `make build`：相同 -tags / -ldflags，且保留首次 SQLite seed。
+    local ver_ldflags="-X 'main.Version=${CENTAG_VERSION}' -X 'main.BuildTime=${BUILD_TIME}'"
+    _centag_seed_sqlite "$BIN_DIR"
+    _compile_go_binary "." "cmd/centag/main.go" "centag-${CENTAG_EDITION}" "$(_get_dist_tags "${CENTAG_EDITION}")" "${ver_ldflags}"
+
     centag_install_edition_links "${CENTAG_EDITION}"
 
     # 诊断：列出构建产物目录的实际文件
@@ -3231,7 +3279,7 @@ docker_debug() {
     echo ""
 echo "  本地二进制: $BIN_DIR/centag"
     echo ""
-    echo "  1. 本地修改代码 -> make build  # → ~/.centag/lib/personal/centag-personal"
+    echo "  1. 本地修改代码 -> ./start.sh build backend  # → ~/.centag/lib/personal/centag-personal"
     echo "  2. ./start.sh docker restart"
     echo ""
 
