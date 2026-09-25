@@ -943,8 +943,10 @@ func (m *Manager) TestConnectionWithContext(ctx context.Context, cfg *BackendCon
 	normKey := NormalizeOpenAICompatibleAPIKey(cfg.APIKey)
 	logger.Infof("TestConnection 检查: id=%s, type=%s, api_key_len=%d",
 		cfg.ID, cfg.Type, len(normKey))
-	// Ollama 可无密钥；OpenAI 兼容 / 其他云端接口必须先配置 API Key
-	if cfg.Type != "ollama" && normKey == "" {
+	// Ollama 可无密钥；OpenAI 兼容 / 其他云端接口必须先配置 API Key；
+	// keyless（零配置）免费后端（如 freellm 注册的免费层）无需 API Key 也可探测。
+	isKeyless := cfg.Metadata != nil && cfg.Metadata["auth_type"] == "keyless"
+	if cfg.Type != "ollama" && normKey == "" && !isKeyless {
 		return fmt.Errorf("未配置 API Key，无法探测。请在 WebUI 保存密钥，或在 config/initdata/initial-backends.json 对应后端填写非空 \"api_key\" 后重启；令牌勿含 \"Bearer \" 前缀")
 	}
 
@@ -1173,7 +1175,9 @@ func (m *Manager) ProbeAllBackends(ctx context.Context, fetchModels bool) ([]*Pr
 			continue
 		}
 		normKey := NormalizeOpenAICompatibleAPIKey(cfg.APIKey)
-		if normKey != "" {
+		// keyless（零配置）免费后端无需 API Key 也可探测（如 freellm 注册的免费层）
+		isKeyless := cfg.Metadata != nil && cfg.Metadata["auth_type"] == "keyless"
+		if normKey != "" || isKeyless {
 			probeable = append(probeable, cfg)
 		}
 	}
