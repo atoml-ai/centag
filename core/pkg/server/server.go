@@ -1641,8 +1641,13 @@ func (s *Server) setupRoutes() {
 			backends.GET("/types", s.backendHandler.ListBackendTypes)
 			backends.GET("/export", adminSensitive, s.backendHandler.ExportBackends)
 			backends.POST("/import", adminSensitive, s.backendHandler.ImportBackends)
-			backends.POST("/fetch-models", s.backendHandler.FetchModels)
-			backends.POST("", s.backendHandler.CreateBackend)
+		backends.POST("/fetch-models", s.backendHandler.FetchModels)
+		backends.POST("", s.backendHandler.CreateBackend)
+
+		// 免费 LLM 自动获取（对标 freellmapi / OmniRoute 的免费 provider catalog）
+		backends.GET("/free", s.backendHandler.ListFreeProviders)
+		backends.POST("/free/register", s.backendHandler.RegisterFreeProvider)
+		backends.POST("/free/scan", s.backendHandler.ScanFreeProviders)
 			backends.POST("/test", s.backendHandler.TestConnection)
 			backends.POST("/probe-all", adminSensitive, s.backendHandler.ProbeAllBackends)
 			backends.POST("/probe-all-sse", adminSensitive, s.backendHandler.ProbeAllBackendsSSE)

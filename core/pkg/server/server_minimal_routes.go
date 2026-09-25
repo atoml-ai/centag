@@ -136,8 +136,13 @@ func (s *Server) setupMinimalRoutes(configHandler *MinimalConfigHandler, pluginR
 			backends.GET("/types", s.backendHandler.ListBackendTypes)
 			backends.GET("/export", s.backendHandler.ExportBackends)
 			// 静态路径必须在 /:id 之前，否则会被当成 id（与完整版 setupRoutes 对齐）
-			backends.POST("/fetch-models", s.backendHandler.FetchModels)
-			backends.POST("/test", s.backendHandler.TestConnection)
+		backends.POST("/fetch-models", s.backendHandler.FetchModels)
+		backends.POST("/test", s.backendHandler.TestConnection)
+
+		// 免费 LLM 自动获取（与完整版 setupRoutes 对齐）
+		backends.GET("/free", s.backendHandler.ListFreeProviders)
+		backends.POST("/free/register", s.backendHandler.RegisterFreeProvider)
+		backends.POST("/free/scan", s.backendHandler.ScanFreeProviders)
 			backends.POST("/probe-all", s.backendHandler.ProbeAllBackends)
 			backends.POST("/probe-all-sse", s.backendHandler.ProbeAllBackendsSSE)
 			backends.POST("/import", s.backendHandler.ImportBackends)

@@ -12,6 +12,7 @@ import (
 	"centag/core/internal/auth"
 	"centag/core/internal/edition"
 	"centag/core/pkg/backend"
+	"centag/core/pkg/freellm"
 	"centag/core/pkg/circuitbreaker"
 	"centag/core/pkg/database"
 	"centag/core/pkg/logger"
@@ -234,6 +235,70 @@ func (h *BackendHandler) CreateBackend(c *gin.Context) {
 	}
 
 	RespondCreated(c, cfg)
+}
+
+// ListFreeProviders 返回内置的免费 LLM 后端目录（对标 freellmapi / OmniRoute 的 provider catalog）。
+// 可选 query 参数 auth_type=keyless|apikey|oauth 过滤。keyless 条目可零配置一键注册。
+func (h *BackendHandler) ListFreeProviders(c *gin.Context) {
+	authType := c.Query("auth_type")
+	RespondSuccess(c, gin.H{
+		"providers": freellm.ListCatalog(authType),
+		"count":     len(freellm.ListCatalog(authType)),
+	})
+}
+
+// RegisterFreeProvider 将目录中的某个免费 provider 注册为 centag 后端。
+// 请求体：{"platform": "pollinations", "api_key": "可选，仅 keyed/oauth 需要"}。
+// keyless 条目无需 api_key；注册后复用 centag 既有 AutoFetchModels + FallbackBackends + AccountPool 能力。
+func (h *BackendHandler) RegisterFreeProvider(c *gin.Context) {
+	if user := h.accessUser(c); user != nil && !user.CanAddOwnBackends {
+		RespondError(c, http.StatusForbidden, "adding or modifying own backends is disabled for this user")
+		return
+	}
+
+	var req struct {
+		Platform string `json:"platform"`
+		APIKey   string `json:"api_key"`
+	}
+	if !BindJSON(c, &req) {
+		return
+	}
+	if req.Platform == "" {
+		RespondBadRequest(c, "platform is required")
+		return
+	}
+
+	entry, ok := freellm.FindEntry(req.Platform)
+	if !ok {
+		RespondBadRequest(c, "unknown free provider platform: "+req.Platform)
+		return
+	}
+
+	cfg, err := freellm.Register(h.backendManager, entry, req.APIKey, h.getTenantID(c))
+	if err != nil {
+		RespondBadRequest(c, err.Error())
+		return
+	}
+	RespondCreated(c, cfg.ToResponse())
+}
+
+// ScanFreeProviders 一键注册全部 keyless（零配置）免费后端。
+// 这是“自动获取免费大模型”的最直接入口：无需任何密钥即可把多个免费 chat 后端接入 centag。
+func (h *BackendHandler) ScanFreeProviders(c *gin.Context) {
+	if user := h.accessUser(c); user != nil && !user.CanAddOwnBackends {
+		RespondError(c, http.StatusForbidden, "adding or modifying own backends is disabled for this user")
+		return
+	}
+
+	ids, err := freellm.ScanKeyless(h.backendManager, h.getTenantID(c))
+	if err != nil {
+		RespondInternalError(c, "scan free providers failed: "+err.Error())
+		return
+	}
+	RespondSuccess(c, gin.H{
+		"registered": ids,
+		"count":      len(ids),
+	})
 }
 
 // UpdateBackend 更新后端配置（角色感知：普通用户仅可改自有后端）
