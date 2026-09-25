@@ -77,6 +77,8 @@
       </div>
     </div>
 
+    <FreeProviderDiscovery v-if="canWrite" @registered="emit('refresh')" />
+
     <div class="backend-grid">
       <div
         v-for="b in filteredBackends"
@@ -286,6 +288,7 @@ import { Plus, Upload, Download, Connection, Setting, Star, StarFilled, MoreFill
 import { ElMessage, ElMessageBox } from 'element-plus'
 import * as yaml from 'js-yaml'
 import BackendEditorDialog from '@/components/backends/BackendEditorDialog.vue'
+import FreeProviderDiscovery from '@/components/backends/FreeProviderDiscovery.vue'
 import { updateBackend, deleteBackend } from '@/api'
 import { getBackendTestMessage, testBackendConnection } from '@/utils/backendTest'
 import {

@@ -43,5 +43,30 @@
     "cardClosed": "熔断正常",
     "resetShort": "恢复",
     "tooltipTitle": "熔断器状态"
+  },
+  "freeProviders": {
+    "title": "发现免费大模型",
+    "subtitle": "一键接入各 LLM 后端提供的免费模型（零配置或免费额度）",
+    "scanAll": "一键接入所有零配置后端",
+    "scanAllDone": "已接入 {count} 个免费后端",
+    "tabAll": "全部",
+    "tabKeyless": "零配置",
+    "tabKeyed": "需密钥",
+    "items": "个",
+    "authKeyless": "零配置",
+    "authApikey": "需 API Key",
+    "add": "添加",
+    "added": "已添加",
+    "addTitle": "添加免费后端",
+    "apiKeyLabel": "API Key（免费层，通常无需信用卡）",
+    "apiKeyPlaceholder": "粘贴你的 API Key",
+    "docLink": "文档",
+    "modelsLabel": "免费模型",
+    "registerSuccess": "已添加 {name} 到后端列表",
+    "registerFailed": "添加失败：{msg}",
+    "scanFailed": "一键接入失败：{msg}",
+    "fetchFailed": "获取免费后端目录失败",
+    "cancel": "取消",
+    "empty": "暂无免费后端目录"
   }
 }

@@ -43,5 +43,30 @@
     "cardClosed": "Breaker OK",
     "resetShort": "Recover",
     "tooltipTitle": "Circuit breaker"
+  },
+  "freeProviders": {
+    "title": "Discover Free LLMs",
+    "subtitle": "One-click connect to free models from various LLM backends (keyless or free tier)",
+    "scanAll": "Connect all keyless backends",
+    "scanAllDone": "Connected {count} free backends",
+    "tabAll": "All",
+    "tabKeyless": "Keyless",
+    "tabKeyed": "Needs key",
+    "items": "items",
+    "authKeyless": "Keyless",
+    "authApikey": "Needs API Key",
+    "add": "Add",
+    "added": "Added",
+    "addTitle": "Add free backend",
+    "apiKeyLabel": "API Key (free tier, usually no credit card)",
+    "apiKeyPlaceholder": "Paste your API Key",
+    "docLink": "Docs",
+    "modelsLabel": "Free models",
+    "registerSuccess": "Added {name} to backend list",
+    "registerFailed": "Add failed: {msg}",
+    "scanFailed": "Connect-all failed: {msg}",
+    "fetchFailed": "Failed to fetch free backend catalog",
+    "cancel": "Cancel",
+    "empty": "No free backend catalog available"
   }
 }
